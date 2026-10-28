@@ -39,19 +39,23 @@ import {
   GRAPH_CONTROLS_CLASS,
   GRAPH_DOTS,
 } from "../chain-constants";
+import {
+  EXIT_ROW_H,
+  exitRowTop,
+  FLOW_MAX_H,
+  FLOW_TOP,
+  sankeyViewHeight,
+} from "./sankey-geometry";
 
-// ViewBox geometry — rendered 1:1 on the canvas; React Flow handles zoom.
+// ViewBox geometry — rendered 1:1 on the canvas; React Flow handles zoom. The
+// height follows the exit rows (see sankey-geometry.ts).
 const VIEW_W = 1040;
-const VIEW_H = 480;
 const COLUMN_XS = [80, 373, 666, 960];
 const BAR_W = 20;
-const FLOW_TOP = 84;
-const FLOW_MAX_H = 230;
 /** Non-zero masses always render visibly even next to a dominant column. */
 const MIN_BAR_H = 3;
 const EXIT_STUB_W = 12;
 const EXIT_STUB_H = 26;
-const EXIT_ROW_H = 46;
 /** Invisible hit zone widening each clickable column / exit target. */
 const HIT_PAD_X = 40;
 
@@ -149,6 +153,7 @@ function interactiveProps(
 function SankeyDiagramNode({ data }: NodeProps) {
   const { sankey, batchCode, onElementClick } = data as SankeyNodeData;
   const { columns, exits } = sankey;
+  const viewH = sankeyViewHeight(exits);
 
   const exitsFor = (key: SankeyColumnKey) =>
     exits.filter((exit) => exit.fromColumn === key);
@@ -168,8 +173,8 @@ function SankeyDiagramNode({ data }: NodeProps) {
   return (
     <svg
       width={VIEW_W}
-      height={VIEW_H}
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      height={viewH}
+      viewBox={`0 0 ${VIEW_W} ${viewH}`}
       role="img"
       aria-label={`Mass balance for credit batch ${batchCode}`}
     >
@@ -314,8 +319,7 @@ function SankeyDiagramNode({ data }: NodeProps) {
 
             {/* Labeled exits below the column they leave from */}
             {exitsFor(column.key).map((exit, exitIndex) => {
-              const exitTop =
-                FLOW_TOP + FLOW_MAX_H + 24 + exitIndex * EXIT_ROW_H;
+              const exitTop = exitRowTop(exitIndex);
               const tone = exitTone(exit);
               const exitAnchor = anchor;
               const exitTextX =
@@ -519,7 +523,7 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
             type: "sankeyDiagram",
             position: { x: 0, y: 0 },
             width: VIEW_W,
-            height: VIEW_H,
+            height: sankeyViewHeight(sankey.exits),
             draggable: false,
             selectable: false,
             // Non-interactive nodes get pointer-events:none from React Flow;

@@ -38,7 +38,6 @@ const testEnvDefaults: Record<string, string> = {
   BETTER_AUTH_SECRET: "test-secret-32-chars-minimum-length",
   RESEND_API_KEY: "",
   RESEND_FROM_EMAIL: "",
-  ALLOW_SELF_SIGNUP: "false",
   ADMIN_EMAIL: "admin@example.com",
   CREDENTIALS_ENCRYPTION_KEY: "00".repeat(32),
   STORAGE_PROVIDER: "local-fs",
@@ -60,4 +59,11 @@ if (underVitest) {
   process.env.DB_POOL_LOCK_TIMEOUT_MS = TEST_LOCK_TIMEOUT_MS;
   // Last, so it judges the URL every suite will actually connect to.
   assertThrowawayTestDatabase(process.env.DATABASE_URL!);
+}
+
+// jsdom has no layout and no scrollIntoView. The form error summary scrolls
+// the first refused field into view after a save, from a timer, so a form
+// test that submits invalid input would otherwise end in an uncaught error.
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
 }

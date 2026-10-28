@@ -13,43 +13,43 @@ import { DropIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CSSProperties, ReactNode } from "react";
 import { MASS_CATEGORY_FILLS, formatCompositionMass, type MassCategory, type MassSegment } from "@/components/forms/composition-ledger";
 import { SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
+import { STOCK_PART_MIN_KG } from "@/config/output-stock";
 import { formatFacilityTime } from "@/lib/date-utils";
+import { ESTIMATED_WATER_LABEL, INGREDIENT_SOLIDS_LABEL } from "@/lib/output-stock/labels";
 import type { OutputSubBin } from "@/types/output-stock";
-import { formatWetEstimate } from "./stock-preview-shared";
-import { DetailsTooltip, SubBinTooltip, subBinMoistureText } from "./sub-bin-card";
+import { estimateKg } from "./output-stock-history-days";
+import { formatWetEstimate, outputStockFigure } from "./stock-preview-shared";
+import { stockParts, subBinFigures, type StockPart } from "@/lib/output-stock/stock-parts";
+import { DetailsTooltip, SubBinTooltip, partLabel, subBinMoistureText } from "./sub-bin-card";
 
 /** How much of a batch accent a bay's fill carries, so the figure on it stays legible. */
 const BAY_TINT_PERCENT = 32;
 const SHARES_LABEL = "Dry biochar by batch";
-/** Below this a part is rounding, not one worth a key entry. */
-const PART_MIN_KG = 0.05;
 /** Batches listed beside a pile before the rest fold into one line. */
 const PILE_LIST_LIMIT = 6;
 /** Bays are narrow; the day added is enough, the full time sits in its details. */
 const BAY_DATE_FORMAT = "MMM d";
 const PERCENT = 100;
-const WATER_LABEL = "Water, estimated";
-const INGREDIENTS_LABEL = "Ingredients, dry";
 
 function bayTint(index: number): string {
   return `color-mix(in srgb, ${batchAccentFill(index)} ${BAY_TINT_PERCENT}%, transparent)`;
 }
 
-/** The mass a bay is sized by: the wet estimate, or solids when nothing dates the moisture. */
-function bayMassKg(subBin: OutputSubBin): number {
-  return subBin.wetEstimateKg ?? subBin.solidsKg;
+/** A bay's displayed parts: the one rule every bin surface shares. */
+function bayParts(subBin: OutputSubBin) {
+  return stockParts(subBinFigures(subBin));
 }
 
-function bayWaterKg(subBin: OutputSubBin): number {
-  return subBin.wetEstimateKg === null ? 0 : Math.max(subBin.wetEstimateKg - subBin.solidsKg, 0);
+/** The swatch a listed part takes: water and ingredients their category fill, dry biochar the bay's tint. */
+function partSwatch(part: StockPart): Pick<PartRow, "swatchClassName" | "swatchStyle" | "estimated"> {
+  if (part.kind === "water") return { swatchClassName: MASS_CATEGORY_FILLS["existing-water"], estimated: true };
+  if (part.kind === "ingredient") return { swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] };
+  return { swatchStyle: { background: bayTint(0) } };
 }
 
-function bayIngredientsKg(subBin: OutputSubBin): number {
-  return Math.max(subBin.solidsKg - subBin.dryMassKg, 0);
-}
-
-function bayFigure(subBin: OutputSubBin): string {
-  return subBin.wetEstimateKg === null ? `${formatWetEstimate(subBin.dryMassKg)} dry` : formatWetEstimate(subBin.wetEstimateKg);
+/** The bay face: the wet estimate, or the known dry biochar when there is none, never a placeholder. */
+export function bayFigure(subBin: OutputSubBin): string {
+  return subBin.wetEstimateKg === null ? outputStockFigure(null, subBin.dryMassKg) : formatWetEstimate(subBin.wetEstimateKg);
 }
 
 /**
@@ -72,6 +72,13 @@ interface PartRow {
   details?: PileBand["details"];
   swatchClassName?: string;
   swatchStyle?: CSSProperties;
+  /** Water by the records: an estimate, read in whole kg like the wet mass it is part of. */
+  estimated?: boolean;
+}
+
+/** A part's mass as the legends read it: estimated water in whole kg, the rest as the composition does. */
+export function legendMass(mass: number, estimated: boolean): string {
+  return estimated ? estimateKg(mass) : formatCompositionMass(mass);
 }
 
 /** The parts beside a lone bin, top to bottom in the order they sit in it, each with its mass and share. */
@@ -84,10 +91,13 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
           <dt className="flex min-w-0 items-center gap-8 text-[var(--color-text-secondary)]">
             <span aria-hidden="true" className={`h-12 w-12 shrink-0 border border-[var(--color-border-secondary)] ${row.swatchClassName ?? ""}`} style={row.swatchStyle} />
             {row.details ? <DetailsTooltip title={row.label} rows={row.details} trigger={
-              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0 body-caption normal-case" aria-label={`${row.label} details`}><span className="truncate">{row.label}</span></Button>
+              <Button type="button" variant="noOutline" className="h-auto min-h-44 min-w-0 justify-start p-0" aria-label={`${row.label} details`}>
+                {/* The button's own label type is mono caps; the part reads like the rows without details. */}
+                <span className="truncate body-caption normal-case text-[var(--color-text-secondary)]">{row.label}</span>
+              </Button>
             } /> : <span className="truncate">{row.label}</span>}
           </dt>
-          <dd className="text-right font-medium">{formatCompositionMass(row.kg)}</dd>
+          <dd className="text-right font-medium">{legendMass(row.kg, row.estimated === true)}</dd>
           <dd className="w-40 text-right text-[var(--color-text-tertiary)]">{totalKg > 0 ? `${Math.round((Math.max(row.kg, 0) / totalKg) * PERCENT)}%` : ""}</dd>
         </div>
       ))}
@@ -96,8 +106,10 @@ function BinParts({ rows, label }: { rows: PartRow[]; label: string }) {
 }
 
 /** One sub-bin as a bin: water on top, then ingredient solids, then its dry biochar. */
-function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: OutputSubBin; index: number; percent: number; nextOut: boolean; timeZone: string }) {
-  const totalKg = bayMassKg(subBin);
+function SubBinBay({ subBin, parts, index, percent, nextOut, timeZone }: { subBin: OutputSubBin; parts: ReturnType<typeof bayParts>; index: number; percent: number; nextOut: boolean; timeZone: string }) {
+  const totalKg = parts.sizeKg;
+  const waterKg = parts.waterKg ?? 0;
+  const ingredientsKg = parts.ingredientSolidsKg ?? 0;
   const share = (kg: number) => (totalKg > 0 ? (kg / totalKg) * PERCENT : 0);
   return (
     <span className="flex w-[120px] min-w-0 max-w-full flex-col gap-4">
@@ -109,8 +121,8 @@ function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: Outp
           <BinVessel>
             <span className="absolute inset-x-0 top-4 text-center body-caption font-medium">{bayFigure(subBin)}</span>
             <span aria-hidden="true" className="flex flex-col" style={{ height: `${percent}%` }}>
-              {bayWaterKg(subBin) > 0 && <span className={`block border-b border-[var(--color-border-secondary)] ${MASS_CATEGORY_FILLS["existing-water"]}`} style={{ height: `${share(bayWaterKg(subBin))}%` }} />}
-              {bayIngredientsKg(subBin) > 0 && <span className={`block ${MASS_CATEGORY_FILLS["ingredient-solids"]}`} style={{ height: `${share(bayIngredientsKg(subBin))}%` }} />}
+              {waterKg > 0 && <span className={`block border-b border-[var(--color-border-secondary)] ${MASS_CATEGORY_FILLS["existing-water"]}`} style={{ height: `${share(waterKg)}%` }} />}
+              {ingredientsKg > 0 && <span className={`block ${MASS_CATEGORY_FILLS["ingredient-solids"]}`} style={{ height: `${share(ingredientsKg)}%` }} />}
               <span className="block flex-1" style={{ background: bayTint(index) }} />
             </span>
           </BinVessel>
@@ -119,7 +131,7 @@ function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: Outp
             <span className="inline-flex items-center gap-2 body-caption text-[var(--color-text-tertiary)]">
               <DropIcon size={12} aria-label="Estimated moisture" />{subBinMoistureText(subBin)}
             </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">{formatFacilityTime(new Date(subBin.placedAt), timeZone, BAY_DATE_FORMAT)}</span>
+            <span className="body-caption normal-case text-[var(--color-text-tertiary)]">{formatFacilityTime(new Date(subBin.placedAt), timeZone, BAY_DATE_FORMAT)}</span>
           </span>
         </Button>
       } />
@@ -129,37 +141,34 @@ function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: Outp
 
 /** A split bin's sub-bins as bins, in default draw order: the first is the next one out. Hover or tap a bin for its details. */
 export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: OutputSubBin[]; timeZone: string; label: string; capacityKg?: number | null }) {
-  const ingredientsKg = subBins.reduce((sum, subBin) => sum + bayIngredientsKg(subBin), 0);
-  const waterKg = subBins.reduce((sum, subBin) => sum + bayWaterKg(subBin), 0);
+  const allParts = subBins.map(bayParts);
+  const ingredientsKg = allParts.reduce((sum, parts) => sum + (parts.ingredientSolidsKg ?? 0), 0);
+  const waterKg = allParts.reduce((sum, parts) => sum + (parts.waterKg ?? 0), 0);
   if (subBins.length === 1) {
     const [subBin] = subBins;
     return (
       <div className="flex flex-wrap items-center gap-x-16 gap-y-12">
-        <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(bayMassKg(subBin) / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
-        <BinParts label={`${subBin.code} contents`} rows={[
-          ...(waterKg >= PART_MIN_KG ? [{ label: WATER_LABEL, kg: waterKg, swatchClassName: MASS_CATEGORY_FILLS["existing-water"] }] : []),
-          ...(ingredientsKg >= PART_MIN_KG ? [{ label: INGREDIENTS_LABEL, kg: ingredientsKg, swatchClassName: MASS_CATEGORY_FILLS["ingredient-solids"] }] : []),
-          { label: "Biochar, dry", kg: subBin.dryMassKg, swatchStyle: { background: bayTint(0) } },
-        ]} />
+        <ul aria-label={label} className="tabular-nums"><li><SubBinBay subBin={subBin} parts={allParts[0]} index={0} percent={capacityKg && capacityKg > 0 ? Math.min(allParts[0].sizeKg / capacityKg, 1) * PERCENT : PERCENT} nextOut={false} timeZone={timeZone} /></li></ul>
+        <BinParts label={`${subBin.code} contents`} rows={allParts[0].rows.map((part) => ({ label: partLabel(part), kg: part.kg, ...partSwatch(part) }))} />
       </div>
     );
   }
-  const largestKg = Math.max(...subBins.map(bayMassKg), 0);
+  const largestKg = Math.max(...allParts.map((parts) => parts.sizeKg), 0);
   // The batch codes name themselves under each bin; the key covers the parts every bin shares.
   const sharedParts: MassSegment[] = [
-    { label: INGREDIENTS_LABEL, mass: ingredientsKg, category: "ingredient-solids" as const },
-    { label: WATER_LABEL, mass: waterKg, category: "existing-water" as const },
-  ].filter((part) => part.mass >= PART_MIN_KG);
+    { label: INGREDIENT_SOLIDS_LABEL, mass: ingredientsKg, category: "ingredient-solids" as const },
+    { label: ESTIMATED_WATER_LABEL, mass: waterKg, category: "existing-water" as const },
+  ].filter((part) => part.mass >= STOCK_PART_MIN_KG);
   return (
     <div className="flex flex-col gap-8">
       <ul aria-label={label} className="flex flex-wrap gap-x-8 gap-y-16 tabular-nums">
         {subBins.map((subBin, index) => (
           <li key={subBin.layerId} className="flex min-w-0">
-            <SubBinBay subBin={subBin} index={index} percent={largestKg > 0 ? (bayMassKg(subBin) / largestKg) * PERCENT : 0} nextOut={index === 0} timeZone={timeZone} />
+            <SubBinBay subBin={subBin} parts={allParts[index]} index={index} percent={largestKg > 0 ? (allParts[index].sizeKg / largestKg) * PERCENT : 0} nextOut={index === 0} timeZone={timeZone} />
           </li>
         ))}
       </ul>
-      {sharedParts.length > 0 && <SegmentKey segments={sharedParts} />}
+      {sharedParts.length > 0 && <SegmentKey segments={sharedParts} formatSegment={(mass, segment) => legendMass(mass, segment.category === "existing-water")} />}
     </div>
   );
 }
@@ -171,6 +180,8 @@ export interface PileBand {
   details: { label: string; value: string }[];
   /** A part that is not a batch (ingredient solids, water) takes its category's fill; batches take a batch accent. */
   category?: Exclude<MassCategory, "dry-batch">;
+  /** An estimate (an output bin's water), read in whole kg in the pile list. Feedstock bins weigh theirs and leave this off. */
+  estimated?: boolean;
 }
 
 function bandSwatch(band: PileBand, index: number): Pick<PartRow, "swatchClassName" | "swatchStyle"> {
@@ -193,7 +204,7 @@ export function MixPileBay({ bands, label = SHARES_LABEL, capacityKg = null }: {
   const listed = batches.slice(0, PILE_LIST_LIMIT);
   const folded = batches.slice(PILE_LIST_LIMIT);
   const rows: PartRow[] = [
-    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, ...bandSwatch(band, index) })),
+    ...[...parts, ...listed].toSorted((a, b) => b.index - a.index).map(({ band, index }) => ({ label: band.label, kg: band.kg, details: band.details, estimated: band.estimated, ...bandSwatch(band, index) })),
     ...(folded.length > 0 ? [{ label: `${folded.length} older batches`, kg: folded.reduce((sum, { band }) => sum + band.kg, 0), swatchClassName: "bg-[var(--clr-dark-purple-10)]", details: folded.map(({ band }) => ({ label: band.label, value: formatCompositionMass(band.kg) })) }] : []),
   ];
   return (

@@ -1,8 +1,10 @@
 /**
  * HeroKpiBand — the Flow Hero's 4-stat band: one bordered strip divided into
  * equal cells (mono micro label over a bold value), per the hero design.
- * "Not available" means no data in range, never a fabricated zero; the delta vs the
- * previous equal period rides along as a quiet mono suffix.
+ * A null value means no data in the period, never a fabricated zero: the
+ * cell's detail line ("no measured runs in period") moves into the value slot
+ * as the reason, so the cell says it once. The delta vs the previous equal
+ * period rides along as a quiet mono suffix.
  *
  * Cells avoid <p>/<h*> elements — the global element type rules are unlayered
  * and would override the band's utility sizing (see globals.css typography).
@@ -11,13 +13,16 @@
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
 import { InfoHint } from "@/components/ui/tooltip";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Pinned so server and client format the number identically (no hydration drift). */
 const NUMBER_LOCALE = "en-US";
 
-function formatValue(kpi: DashboardKpi): string {
-  if (kpi.value == null) return MISSING_VALUE.notAvailable;
+/** The detail line as the reason in the value slot: sentence case, like any value. */
+function reasonOf(detail: string): string {
+  return detail.charAt(0).toUpperCase() + detail.slice(1);
+}
+
+function formatValue(kpi: DashboardKpi & { value: number }): string {
   const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
   return kpi.value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,
@@ -76,7 +81,9 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
             )}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
-            {formatValue(kpi)}
+            {kpi.value == null ? (
+              <span className="body-small font-normal text-[var(--color-text-tertiary)]">{reasonOf(kpi.detail)}</span>
+            ) : formatValue({ ...kpi, value: kpi.value })}
             {kpi.value != null && (
               // The type class resets margins, so the gap sits on a wrapper.
               <span className="ml-4">
@@ -99,11 +106,13 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
               </span>
             )}
           </div>
-          <div className="mt-4">
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              {kpi.detail}
-            </p>
-          </div>
+          {kpi.value != null && (
+            <div className="mt-4">
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {kpi.detail}
+              </p>
+            </div>
+          )}
         </div>
       ))}
     </div>

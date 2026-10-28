@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
+import { UNKNOWN_FACILITY_TIMEZONE as VIEW_TIME_ZONE } from "@/lib/date-utils";
 import { activityFieldLines } from "./activity-change-lines";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
@@ -59,9 +59,9 @@ describe("who made the change", () => {
     expect(activityActorDisplay(item({ actor: null, source: "script" }))).toMatchObject({ name: "Script" });
   });
 
-  it("uses the shared token for a person whose name cannot be read", () => {
+  it("names an unknown user when the person's name cannot be read", () => {
     expect(activityActorDisplay(item({ actor: { id: "gone", name: null } }))).toEqual({
-      name: MISSING_VALUE.notAvailable, missing: true, channel: null,
+      name: "Unknown user", missing: true, channel: null,
     });
   });
 });
@@ -86,7 +86,7 @@ describe("changed field names", () => {
   });
 
   it("drops bookkeeping fields and repeats", () => {
-    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] })))
+    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "changed", key: "notes", label: "Notes" }]);
   });
 });
@@ -122,7 +122,7 @@ describe("record links", () => {
     expect(activityRecordHref(item({ entityType: "application", entityId: "a-1" }), CONTEXT)).toBe("/applications?facility=facility-1&application=a-1");
     expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/certification/removals?facility=facility-1&removal=r-1");
     expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/certification/ghg-statements?facility=facility-1&statement=g-1");
-    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches?facility=facility-1&batch=other");
+    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches/other?facility=facility-1");
     expect(activityRecordHref(item({ entityType: "order", entityId: "o-1" }), CONTEXT)).toBe("/orders?facility=facility-1&order=o-1");
   });
 

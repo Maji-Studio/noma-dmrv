@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
@@ -8,14 +8,18 @@ import { orders } from "@/db/schema";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, ACTION_STATUS, jsonPointer } from "@/lib/api/problem";
 import { DomainError } from "@/lib/domain-errors";
+import { ActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { toolFailure } from "@/lib/mcp/results";
+import type { ApiRouteContext } from "@/lib/api/route";
 import { SafeError } from "@/lib/errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import {
-  orderArchived, orderCustomerLocationMismatch, orderHasDeliveries,
+  ORDER_DELIVERY_NAME_CAP, orderArchived, orderCustomerLocationMismatch, orderHasDeliveries,
   orderQuantityBelowAllocated, orderReferenceNotFound, orderRelationshipFrozen,
 } from "./order-domain-errors";
 
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const options = { fallbackMessage: "Failed to save order", log: { message: "test" } };
 
 describe("order errors", () => {
@@ -52,7 +56,7 @@ describe("order errors", () => {
     const error = await withFeedstockErrors(async () => { throw new SafeError(message); }, "certification_locked", ["orderId"]).catch((failure: unknown) => failure);
     expect(error).toMatchObject({ code: "certification_locked", message, issues: [{ path: ["orderId"], code: "certification_locked", message }] });
     expect(ACTION_STATUS.certification_locked).toBe(409);
-    const typed = orderHasDeliveries({ id: "delivery-id", code: "DL-1" });
+    const typed = orderHasDeliveries([{ id: "delivery-id", code: "DL-1" }], "OR-1");
     await expect(withFeedstockErrors(async () => { throw typed; })).rejects.toBe(typed);
   });
 
@@ -79,9 +83,45 @@ describe("order errors", () => {
     }
   });
 
-  it("refuses deletion with deliveries and mismatched customer locations", () => {
-    expect(orderHasDeliveries({ id: "delivery-id", code: "DL-1" })).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked" }] });
-    expect(orderHasDeliveries({ id: "delivery-id", code: "DL-1" }).message).not.toContain("Remove deliveries first");
+  it("requires the order code in the refusal signature", () => {
+    expectTypeOf(orderHasDeliveries).parameters.toEqualTypeOf<[
+      deliveries: readonly { id: string; code: string }[], orderCode: string, totalCount?: number,
+    ]>();
+  });
+
+  it("never lets a total below the named deliveries drop names or go negative", () => {
+    const deliveries = [{ id: "a", code: "DL-1" }, { id: "b", code: "DL-2" }, { id: "c", code: "DL-3" }];
+    expect(orderHasDeliveries(deliveries, "OR-1", 1).message).toBe(orderHasDeliveries(deliveries, "OR-1").message);
+    expect(orderHasDeliveries(deliveries, "OR-1", 0).message).toContain("3 deliveries still use it: DL-1, DL-2 and DL-3.");
+  });
+
+  it.each([
+    [1, "Order OR-1 was not deleted because delivery DL-1 still uses it. Delete that delivery first, or keep this order."],
+    [2, "Order OR-1 was not deleted because 2 deliveries still use it: DL-1 and DL-2. Delete those deliveries first, or keep this order."],
+    [3, "Order OR-1 was not deleted because 3 deliveries still use it: DL-1, DL-2 and DL-3. Delete those deliveries first, or keep this order."],
+    [5, "Order OR-1 was not deleted because 5 deliveries still use it: DL-1, DL-2, DL-3 and 2 more. Delete those deliveries first, or keep this order."],
+  ] as const)("marks a %i-delivery delete refusal across client, REST and MCP without changing metadata", async (totalCount, message) => {
+    const deliveries = Array.from({ length: totalCount }, (_, index) => ({ id: index === 0 ? "delivery-id" : `delivery-${index + 1}`, code: `DL-${index + 1}` }));
+    const error = orderHasDeliveries(deliveries, "OR-1");
+    expect(error.message).toBe(message);
+    const capped = orderHasDeliveries(deliveries.slice(0, ORDER_DELIVERY_NAME_CAP), "OR-1", totalCount);
+    expect(capped.message).toBe(message);
+    expect(capped.issues).toEqual(error.issues);
+    expect(error).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
+    expect(error.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" });
+    const failure = toActionFailure(error, options);
+    expect(isInUseDeleteRefusal(new ActionError(failure))).toBe(true);
+    const response = actionFailureResponse(failure, "/api/v1/orders/order-id", "request-id");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "certification_locked", errors: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }] });
+    const context = { ctx, instance: "/api/mcp", requestId: "request-id" } as ApiRouteContext;
+    expect(await toolFailure(error, context, "delete_order")).toMatchObject({ isError: true, structuredContent: {
+      code: "certification_locked", detail: error.message,
+      issues: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: "DL-1", deliveryId: "delivery-id" } }],
+    } });
+  });
+
+  it("refuses mismatched customer locations", () => {
     expect(orderCustomerLocationMismatch()).toMatchObject({ code: "validation_failed", issues: [{ path: ["customerLocationId"], code: "validation_failed" }] });
     expect(ACTION_STATUS.validation_failed).toBe(422);
   });

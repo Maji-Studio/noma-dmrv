@@ -50,7 +50,7 @@ describe("production-run feedstock draw boundary", () => {
 });
 
 it("points missing lower-id draws at their submitted index after repeated normalization", async () => {
-  const ctx = { organizationId: "org-test", userId: "user-test", orgRole: "owner", isPlatformAdmin: false } satisfies OrgContext;
+  const ctx = { organizationId: "org-test", userId: "user-test", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
   const tx = { select: () => ({ from: () => ({ leftJoin: () => ({ where: async () => [
     { id: BIN_B, facilityId: "facility", type: "feedstock_bin", feedstockTypeId: "type", feedstockTypeUsage: "pyrolysis" },
   ] }) }) }) } as unknown as DbTransaction;

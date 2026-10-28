@@ -154,6 +154,30 @@ test.describe("Certification — New-Removal wizard", () => {
     }
   });
 
+  test("opens the wizard from a create link, as the credit batch page's Start Removal does", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const facilityId = seededData.facility.id;
+    const mapping = await seedCertifierMapping(facilityId, { externalProjectId: FAKE_PROJECT_ID });
+
+    try {
+      await page.goto(`/certification/removals?facility=${facilityId}&create=true`);
+      const dialog = page.getByRole("dialog");
+      await expect(
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      // The intent is consumed, so closing does not reopen it.
+      await expect(page).not.toHaveURL(/[?&]create=/);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    } finally {
+      await mapping.cleanup();
+    }
+  });
+
   test("redirects the legacy review route into the wizard resume step", async ({
     adminPage: page,
     seededData,
@@ -223,19 +247,20 @@ test.describe("Certification — New-Removal wizard", () => {
     }
   });
 
-  // The one readiness source (Phase 0) renders this neutral requirement label
-  // — from `CERT_REQUIREMENT_META` — on every surface. A runless batch is
-  // deterministically missing its production data, so this row is always open.
-  const PRODUCTION_REQUIREMENT = "Linked production data";
-  // The retired problem-phrased headline the batch page used to show for this
-  // same gap — its absence proves the migration to the shared requirement label.
+  // The one readiness source renders an unmet check by its named problem
+  // (`unmetLabel` in `CERT_REQUIREMENT_META`) on every surface. A runless batch
+  // is deterministically missing its production data, so this row is always open.
+  const PRODUCTION_REQUIREMENT = "No production run linked";
+  // The neutral requirement label; it names a passing check only, never an open one.
+  const NEUTRAL_PRODUCTION_LABEL = "Linked production data";
+  // The retired problem-phrased headline from before the shared labels.
   const OLD_PRODUCTION_HEADLINE = "Production data not linked";
   // Phase 1 tucks the raw protocol reasoning behind an ⓘ "Why?" so the primary
   // requirement label stays plain. Distinctive substring of the production
   // check's `whyDetail` (from CERT_REQUIREMENT_META), only present once opened.
   const PRODUCTION_WHY_DETAIL = "trace back to at least one production run";
 
-  test("batch checklist shows the neutral requirement label, not the old contradictory copy (Phase 0)", async ({
+  test("batch open items name the problem for an unmet check, from the shared labels", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -259,12 +284,13 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByTestId("batch-health-strip");
-      // The open gap reads as the plain requirement…
+      const healthStrip = page.getByRole("region", { name: "Open to-dos" });
+      // The open gap reads as the named problem…
       await expect(healthStrip).toContainText(PRODUCTION_REQUIREMENT, {
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
-      // …never the old problem-phrased headline (or an affirmative "…complete").
+      // …never the neutral requirement or the retired headline.
+      await expect(healthStrip).not.toContainText(NEUTRAL_PRODUCTION_LABEL);
       await expect(healthStrip).not.toContainText(OLD_PRODUCTION_HEADLINE);
     } finally {
       await batch?.cleanup();
@@ -280,7 +306,7 @@ test.describe("Certification — New-Removal wizard", () => {
 
     const facilityId = seededData.facility.id;
     const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
-    // Same hermetic seed as the Phase 0 test above (no certifier mapping → no
+    // Same hermetic seed as the test above (no certifier mapping → no
     // Isometric call), so this runs in PR CI.
     let batch: SeededIncompleteBatch | undefined;
 
@@ -293,8 +319,8 @@ test.describe("Certification — New-Removal wizard", () => {
       await page.goto(
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
-      const healthStrip = page.getByTestId("batch-health-strip");
-      // The open production gap renders as a plain requirement row…
+      const healthStrip = page.getByRole("region", { name: "Open to-dos" });
+      // The open production gap renders as a named problem row…
       const productionRow = healthStrip.locator("li", {
         hasText: PRODUCTION_REQUIREMENT,
       });
@@ -327,7 +353,7 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
   );
 
-  const PRODUCTION_REQUIREMENT = "Linked production data";
+  const PRODUCTION_REQUIREMENT = "No production run linked";
 
   test("shows the same plain-language gap string on the batch page and the wizard", async ({
     adminPage: page,
@@ -346,16 +372,8 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     try {
       batch = await seedNotReadyListedBatch(seededData, testRunId);
 
-      // Surface 1 — the credit-batch detail page's certification checklist.
-      await page.goto(
-        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
-      );
-      await expect(page.getByTestId("batch-health-strip")).toContainText(
-        PRODUCTION_REQUIREMENT,
-        { timeout: COLD_COMPILE_TIMEOUT_MS },
-      );
-
-      // Surface 2 — the New-Removal wizard's selection card for the SAME batch.
+      // Surface 1: the New-Removal wizard's box for the batch names its first
+      // open check, as the batch page names it.
       await page.goto(`/certification/removals?facility=${facilityId}`);
       await page
         .getByRole("button", { name: "New Removal", exact: true })
@@ -365,13 +383,23 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      // `exact` — readiness gap strings quote the batch code too, so a
-      // substring match resolves to both the card label and the gap sentence.
-      await expect(
-        dialog.getByText(`Credit batch ${batch.code}`, { exact: true }),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      // The identical requirement string appears in the wizard too.
-      await expect(dialog.getByText(PRODUCTION_REQUIREMENT).first()).toBeVisible();
+      const box = dialog.getByRole("listitem").filter({ hasText: batch.code });
+      const status = box.getByText(/^\d+ issues?: /);
+      await expect(status).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      const firstGap = (await status.innerText()).replace(/^\d+ issues?: /, "").replace(/ and \d+ more$/, "");
+      expect(firstGap.length).toBeGreaterThan(0);
+
+      // Surface 2: the credit batch page's open items carry the same string.
+      await page.goto(
+        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
+      );
+      await expect(page.getByRole("region", { name: "Open to-dos" })).toContainText(
+        firstGap,
+        { timeout: COLD_COMPILE_TIMEOUT_MS },
+      );
+      await expect(page.getByRole("region", { name: "Open to-dos" })).toContainText(
+        PRODUCTION_REQUIREMENT,
+      );
     } finally {
       try {
         await batch?.cleanup();
@@ -382,20 +410,18 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
   });
 });
 
-// @live — the readiness workspace (Phase 2) lives on the wizard's selection
-// step, which needs a linked registry to render batches. Excluded from PR CI
-// (--grep-invert @live); the CI-safe requirement-label + ⓘ halves are covered by
-// the hermetic batch-page tests above. Verifies the workspace reshape: with no
-// ready batch, the not-ready batches collapse under "Not ready yet (N)" (opened
-// by default so it isn't a dead-end), and every gap carries its own deep link to
-// the exact fix — no single "go fix it elsewhere" hop.
-test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace)", { tag: "@live" }, () => {
+// @live: the selection step needs a linked registry to render batches, so this
+// runs in the nightly e2e-live workflow, not PR CI (--grep-invert @live). A
+// batch that is not ready is one box (#1202): its code, one status line with
+// the count and the first open check, and a link to its open to-dos on the batch
+// page. The full list of gaps and their fix links live there, not here.
+test.describe("Certification — New-Removal wizard (one box per batch)", { tag: "@live" }, () => {
   test.skip(
     !SANDBOX_PROJECT_ID,
     "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
   );
 
-  test("collapses not-ready batches and gives every gap its own deep-link fix", async ({
+  test("shows a not-ready batch as one box with a link to its open to-dos", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -410,9 +436,8 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
     let batch: SeededReadyBatch | undefined;
 
     try {
-      // A batch with an application slice but no lab samples or production-run
-      // link is deterministically not-ready, so it lands in the collapsed
-      // "Not ready yet" group.
+      // An application slice without lab samples or a production-run link:
+      // listed in the wizard, deterministically not ready.
       batch = await seedNotReadyListedBatch(seededData, testRunId);
 
       await page.goto(`/certification/removals?facility=${facilityId}`);
@@ -426,50 +451,19 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
         dialog.getByRole("heading", { name: "Select credit batches" }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 
-      // With nothing ready, the step names the situation instead of dead-ending
-      // on a disabled Continue…
-      await expect(
-        dialog.getByText("No batches have complete data yet", { exact: false }),
-      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      // …and the not-ready batch is grouped under the disclosure (open by
-      // default here, so its gaps are visible).
-      await expect(
-        dialog.getByText(/Not ready yet \(\d+\)/),
-      ).toBeVisible();
-      // `exact` — the batch's own gap strings quote the code (see above).
-      await expect(
-        dialog.getByText(`Credit batch ${batch.code}`, { exact: true }),
-      ).toBeVisible();
+      const box = dialog.getByRole("listitem").filter({ hasText: batch.code });
+      // One status line with the count; no checkbox, no inline gap list.
+      await expect(box.getByText(/^\d+ issues?: .+/)).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(box.getByRole("checkbox")).toHaveCount(0);
+      await expect(dialog.getByRole("link", { name: "Link production data" })).toHaveCount(0);
+      await expect(dialog.getByText(/Not ready yet/)).toHaveCount(0);
 
-      // Production lineage and sample completeness are independent: fixing the
-      // application path must not reveal a previously hidden lab blocker.
-      await expect(
-        dialog.getByText("Linked production data").first(),
-      ).toBeVisible();
-      await expect(
-        dialog.getByText("Lab chemistry results").first(),
-      ).toBeVisible();
-      // …and carries its own deep link to the exact fix (this batch has no
-      // linked production run → Production runs), mirroring the batch page's own
-      // health strip. New tab so this workspace stays put while the operator
-      // resolves it.
-      const fixLink = dialog.getByRole("link", { name: "Link production data" });
-      await expect(fixLink).toBeVisible();
-      await expect(fixLink).toHaveAttribute(
+      const checklist = box.getByRole("link", { name: `Open to-dos for ${batch.code}` });
+      await expect(checklist).toHaveAttribute(
         "href",
-        new RegExp(`/production-runs\\?facility=${facilityId}`),
+        new RegExp(`/credit-batches/${batch.creditBatchId}\\?facility=${facilityId}`),
       );
-      await expect(fixLink).toHaveAttribute("target", "_blank");
-
-      // The whole-batch overview link is still one click away.
-      await expect(
-        dialog.getByRole("link", { name: "Open full checklist on batch page" }),
-      ).toHaveAttribute(
-        "href",
-        new RegExp(
-          `/credit-batches\\?facility=${facilityId}&batch=${batch.creditBatchId}`,
-        ),
-      );
+      await expect(checklist).toHaveAttribute("target", "_blank");
     } finally {
       try {
         await batch?.cleanup();

@@ -1,9 +1,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }) }));
 import type { StorageLocationWithFacility } from '@/data-access/storage-locations';
 const preview = vi.hoisted(() => vi.fn(() => ({ data: undefined, error: undefined })));
 vi.mock('@/hooks/use-output-stock', () => ({ useOutputStockBalance: preview }));
 vi.mock('@/components/ui', () => ({ RowActionsMenu: () => null }));
+import { SecondaryFigure } from '@/components/ui/secondary-figure';
 import { StorageBinTile } from './storage-bin-tile';
 
 const bin = { id: 'bin', facilityId: 'facility', name: 'Fixture bin', code: 'BIN', type: 'biochar_bin', archivedAt: new Date(),
@@ -17,13 +19,102 @@ describe('archived storage board tile', () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('100 kg');
     await act(async () => renderer.unmount());
   });
-  it('shows unavailable stock without calling it empty or adding a mass unit', async () => {
+  it('leaves out a stock figure it does not have, without calling it empty or adding a mass unit', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, biocharInventory: { ...bin.biocharInventory, dryMassKg: null } }} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain('Not available');
+    expect(text).not.toContain('Not available');
+    expect(text).not.toContain(' kg');
     expect(text).not.toContain('Empty');
     expect(text).not.toContain('dry biochar');
     await act(async () => renderer.unmount());
   });
+  it('leads an active output bin with its wet estimate and keeps dry biochar as the secondary figure', async () => {
+    preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: 200 }, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'product_bin', productInventory: { formulationNames: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    expect(JSON.stringify(renderer.toJSON())).toContain('200 kg wet mass');
+    expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: 'Dry biochar', value: '90 kg' });
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('never calls a bin with positive wet stock empty, even when its dry biochar rounds to zero', async () => {
+    preview.mockReturnValue({ data: { beforeDryKg: 0, beforeEstimatedWetKg: 3 }, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('3 kg wet mass');
+    expect(text).not.toContain('Empty');
+    expect(renderer.root.findByType('article').props.className).not.toContain('opacity-70');
+    expect(renderer.root.findByType(SecondaryFigure).props).toMatchObject({ label: 'Dry biochar', value: '0 kg' });
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('shows no figure while an active output bin is still loading', async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).not.toMatch(/Not available|Empty|kg/);
+    expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
+    await act(async () => renderer.unmount());
+  });
+  it('shows the known dry biochar, never a placeholder, if a wet figure is ever missing', async () => {
+    preview.mockReturnValue({ data: { beforeDryKg: 90, beforeEstimatedWetKg: null }, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('90 kg dry biochar');
+    expect(text).not.toContain('Not available');
+    expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('names a feedstock bin\'s stock as wet mass with no dry figure under it', async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 400, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('400 kg wet mass');
+    expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
+    await act(async () => renderer.unmount());
+  });
+  it('exposes the bin through one link and leaves the tile without a role or tab stop', async () => {
+    const onView = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={bin} actions={[]} onView={onView} onReconcile={vi.fn()} />); });
+    const tile = renderer.root.findByType('article');
+    expect(tile.props.role).toBeUndefined();
+    expect(tile.props.tabIndex).toBeUndefined();
+    expect(tile.props.onKeyDown).toBeUndefined();
+    const buttons = renderer.root.findAllByType('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.props['aria-label']).toMatch(/, Fixture bin$/);
+    const stopPropagation = vi.fn();
+    await act(async () => buttons[0]!.props.onClick({ stopPropagation }));
+    expect(onView).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalled();
+    await act(async () => renderer.unmount());
+  });
+  it('shows the lock chip only once the bin is Sent', async () => {
+    const lockAt = (level: 'open' | 'inUse' | 'sent') => ({ level, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] });
+    const textFor = async (level: 'open' | 'inUse' | 'sent') => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(<StorageBinTile bin={bin} lock={lockAt(level)} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+      const text = JSON.stringify(renderer.toJSON());
+      await act(async () => renderer.unmount());
+      return text;
+    };
+    expect(await textFor('open')).not.toContain('data-record-lock');
+    expect(await textFor('inUse')).not.toContain('data-record-lock');
+    expect(await textFor('sent')).toContain('"data-record-lock":"sent"');
+  });
+});
+
+it("shows bin activity on its facility calendar and clock", async () => {
+  const lastActivity = { type: "in" as const, date: new Date("2026-10-21T21:30:00Z"), massKg: 50, massDryKg: 40, label: "Added" };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, lastActivity }} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+  const activity = renderer.root.findAllByType("p").find(node => node.props.title?.includes("Added"));
+  expect(activity?.props.title).toContain("Oct 22, 2026, 00:30");
+  expect(activity?.children.join("")).toBe("Last activity: Oct 22, 2026");
+  await act(async () => renderer.unmount());
 });

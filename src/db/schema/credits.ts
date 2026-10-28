@@ -40,14 +40,14 @@ export const creditBatches = pgTable(
       .notNull(),
     // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
-    // feedstock, facility-scoped. noma conservatively caps it at <=1 month
-    // (ADR 0016). feedstockTypeId is declared at creation and asserted
+    // feedstock, facility-scoped. noma conservatively caps it at less than one month
+    // under Isometric (ADR 0016). feedstockTypeId is declared at creation and asserted
     // against every member run.
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    // The (facility, feedstock) process epoch this batch is one <=1-month slice
-    // of. Auto-found-or-created when the batch is built.
+    // The (facility, feedstock) process epoch containing this batch.
+    // Auto-found-or-created when the batch is built.
     productionProcessId: uuid('production_process_id')
       .notNull()
       .references(() => productionProcesses.id),
@@ -135,7 +135,7 @@ export const creditBatches = pgTable(
     check(
       'credit_batches_isometric_max_one_month',
       sql`${table.certifier} is distinct from 'isometric'
-        or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
+        or ${table.endDate} < (${table.startDate} + interval '1 month')::date`
     ),
     // Indexes the production-emissions claim FK (issue #349, ADR 0020) —
     // same rationale: Postgres does not auto-index foreign keys.

@@ -42,7 +42,7 @@ describe("DashboardAttentionRow", () => {
   it("omits the date separator when the record date is missing or invalid", () => {
     expect(formatDashboardRecordMetadata("FS-26-0042", null)).toBe("FS-26-0042");
     expect(formatDashboardRecordMetadata("FS-26-0042", "not-a-date")).toBe(
-      "FS-26-0042 · Not available",
+      "FS-26-0042 · Unreadable date",
     );
   });
 
@@ -76,4 +76,8 @@ describe("DashboardAttentionRow", () => {
     expect(html).not.toContain("from blocking checks");
     expect(html).toContain("Showing first 2 of 3");
   });
+});
+
+it("keeps UTC-midnight business dates on their saved calendar", () => {
+  expect(formatDashboardRecordMetadata("FS-1", new Date("2026-10-21T00:00:00Z"))).toBe("FS-1 · Oct 21, 2026");
 });

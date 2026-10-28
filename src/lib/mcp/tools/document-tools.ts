@@ -45,6 +45,11 @@ const annotations = { readOnlyHint: false, openWorldHint: false, destructiveHint
 
 function access(kind: "read" | "write") {
   return {
+    requiredScopes(args: unknown) {
+      const parsed = ownerSchema.safeParse(args);
+      if (!parsed.success) throw validationFailed(parsed.error);
+      return [API_DOCUMENT_OWNERS[parsed.data.ownerType][kind === "read" ? "readScope" : "writeScope"]];
+    },
     visible: (ctx: ApiContext) => API_DOCUMENT_OWNER_TYPES.some(owner => canAccessOwnerDocuments(ctx, owner, kind)),
     authorize(ctx: ApiContext, args: unknown) {
       if (kind === "read") parseQueryInput(args, ownerSchema);
@@ -93,7 +98,7 @@ export const documentWriteTools: WriteTool[] = [
   {
     kind: "write", name: "request_document_upload", ...access("write"), input: requestInput,
     output: documentUploadEnvelopeSchema, annotations,
-    description: `Request an upload for one document. requestKey is required. No dry run is available. Repeat the same requestKey to receive a fresh link while pending. ${DOCUMENT_GUIDANCE}`,
+    description: `Request an upload for one document. requestKey is required. No dry run is available. Repeat the same requestKey to receive a fresh link while pending. If you cannot make an HTTP PUT, tell the person to attach the file to the record in noma. ${DOCUMENT_GUIDANCE}`,
     async execute(context, raw) {
       const { input, dryRun, requestKey } = parseControls(raw, requestContract);
       noDryRun(dryRun);

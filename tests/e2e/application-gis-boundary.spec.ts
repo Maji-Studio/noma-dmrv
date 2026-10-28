@@ -135,10 +135,10 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
   await waitForSideSheetClose(page);
 
   await page.getByLabel("Search applications").fill(fieldIdentifier);
-  await expect(page.locator("table tbody tr[tabindex='0']")).toHaveCount(1, {
+  await expect(page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") })).toHaveCount(1, {
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
+  const applicationRow = page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") }).first();
   await applicationRow.click();
   await waitForSideSheet(page);
   // The saved panel prints the file name twice: once as the reference summary's
@@ -177,7 +177,8 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Update application" })
     .click();
-  await expect(page.getByText("Add a boundary file, or choose Customer location.")).toBeVisible();
+  // The field's own message; the error summary above Save repeats it.
+  await expect(page.locator("#gisBoundary-error")).toHaveText("Add a boundary file, or choose Customer location.");
   await expect(page.locator('[role="dialog"]')).toBeVisible();
 
   // The sheet reopens from the URL in view mode, showing the stored boundary.

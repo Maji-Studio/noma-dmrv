@@ -1,6 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { conflictCode } from "@/lib/conflict-ref";
+import { ActionError } from "@/lib/action-error";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 const INITIAL_VERSION = 1;
@@ -16,11 +18,13 @@ vi.mock("@/hooks/use-production-runs", () => ({
 }));
 vi.mock("@/hooks/use-biochar-products", () => ({
   useBiocharProducts: () => ({ data: { items: [state.row], totalPages: 1 } }),
+  useBiocharProductStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useBiocharProduct: () => ({}), useCreateBiocharProduct: () => ({}), useUpdateBiocharProduct: () => ({}),
   useDeleteBiocharProduct: () => ({ mutateAsync: state.remove }),
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({ useCreditBatches: () => ({ data: [] }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: string) => value }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 25, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),
@@ -50,8 +54,19 @@ vi.mock("@/lib/biochar-composition", async () => import("@/lib/biochar-compositi
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: () => null }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
-  DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => Promise<void> }) =>
-    isOpen ? <button aria-label="Confirm delete" onClick={onConfirm} /> : null,
+  DeleteConfirmDialog: ({ isOpen, onConfirm, errorMessage }: { isOpen: boolean; onConfirm: () => Promise<void>; errorMessage?: string }) =>
+    isOpen ? (
+      <div>
+        <button aria-label="Confirm delete" onClick={onConfirm} />
+        {errorMessage && <p data-testid="dialog-delete-error">{errorMessage}</p>}
+      </div>
+    ) : null,
+}));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({
+  InUseDeleteDialog: ({ label, children }: { label: string; children?: ReactNode }) => (
+    <div data-testid="in-use-dialog"><b>{label}</b>{children}</div>
+  ),
+  InUseReference: ({ href, code }: { href: string; code: string }) => <a href={href}>{code}</a>,
 }));
 vi.mock("@/components/certification/entity-certify-readiness-badge", () => ({ EntityCertifyReadinessBadge: () => null }));
 vi.mock("./production-run-form", () => ({ ProductionRunForm: () => null }));
@@ -89,6 +104,9 @@ for (const [label, entity, idKey, Component] of [
         expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(0);
         expect(renderer.root.findByProps({ "data-testid": "delete-error" }).children).toEqual([staleDeleteMessage(`${label} ${state.row.code}`)]);
         await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
+        // The old stale notice must not follow the operator into the fresh dialog.
+        expect(renderer.root.findAllByProps({ "data-testid": "delete-error" })).toHaveLength(0);
+        expect(renderer.root.findAllByProps({ "data-testid": "dialog-delete-error" })).toHaveLength(0);
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(state.remove).toHaveBeenLastCalledWith({ [idKey]: state.row.id, expectedVersion: REFRESHED_VERSION });
       } finally { await act(async () => renderer.unmount()); }
@@ -102,8 +120,31 @@ for (const [label, entity, idKey, Component] of [
         await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(1);
-        expect(renderer.root.findByProps({ "data-testid": "delete-error" }).children).toEqual(["Deletion is blocked by linked records."]);
+        expect(renderer.root.findByProps({ "data-testid": "dialog-delete-error" }).children).toEqual(["Deletion is blocked by linked records."]);
+        expect(renderer.root.findAllByProps({ "data-testid": "delete-error" })).toHaveLength(0);
       } finally { await act(async () => renderer.unmount()); }
     });
   });
 }
+
+describe("Production run in-use delete refusal", () => {
+  it("shows the in-use dialog instead of the confirm dialog", async () => {
+    state.remove.mockRejectedValueOnce(new ActionError({
+      error: "Production run RECORD-1 was not deleted because dependent credit batches still use it.",
+      code: "conflict",
+      conflict: { entity: "creditBatch", id: "batch-1", code: conflictCode("CB-1") },
+      issues: [{ path: ["productionRunId"], code: "conflict", message: "in use", meta: { reason: "in_use" } }],
+    }));
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<ProductionRunList />); });
+    try {
+      await act(async () => { renderer.root.findByProps({ "aria-label": "Delete" }).props.onClick(); });
+      await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
+      expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(0);
+      const dialog = JSON.stringify(renderer.toJSON());
+      expect(dialog).toContain("RECORD-1");
+      expect(dialog).toContain("dependent credit batches still use it");
+      expect(dialog).toContain("/credit-batches/batch-1");
+    } finally { await act(async () => renderer.unmount()); }
+  });
+});

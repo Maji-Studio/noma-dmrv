@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 /**
  * DB-backed coverage for the pre-POST whole-batch production claim reservation.
  * Competing Removal submissions must serialize on the credit-batch row, while
@@ -122,13 +123,10 @@ async function createFixture(): Promise<Fixture> {
       })
       .returning({ id: productionProcesses.id });
 
-    const [removalA, removalB] = await tx
-      .insert(certifierRemovals)
-      .values([
+    const [removalA, removalB] = await insertRemovalFixture(tx, [
         { organizationId: TEST_ORG_ID, facilityId: facility.id },
         { organizationId: TEST_ORG_ID, facilityId: facility.id },
-      ])
-      .returning({ id: certifierRemovals.id });
+      ]);
     createdRemovalIds.push(removalA.id, removalB.id);
 
     const [batch] = await tx

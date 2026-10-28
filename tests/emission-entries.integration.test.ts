@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { assert, afterAll, beforeAll, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -13,7 +14,6 @@ import {
   organizations,
   removalTemplateObservations,
   storageObjectDeletions,
-  transportLegs,
   users,
 } from "@/db/schema";
 import {
@@ -33,6 +33,7 @@ import {
 } from "@/data-access/document-writes";
 import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { createTransportLeg } from "@/data-access/transport-legs";
+import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
 import {
   createLineageFixture,
@@ -42,19 +43,6 @@ import {
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
-const flag = vi.hoisted(() => ({ enabled: true }));
-vi.mock("@/config/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/config/env")>();
-  return {
-    ...original,
-    env: {
-      ...original.env,
-      get EMISSIONS_ENTRIES_ENABLED() {
-        return flag.enabled;
-      },
-    },
-  };
-});
 const userId = `emission-entry-user-${crypto.randomUUID()}`;
 const ctx = makeTestOrgContext(userId);
 const otherOrg = `emission-entry-org-${crypto.randomUUID()}`;
@@ -347,10 +335,7 @@ it("tombstones unsubmitted draft zeros on value creation", async () => {
     .returning();
   entryIds.push(zero.id);
   await expect(db.insert(emissionEntries).values({ ...zero, id: crypto.randomUUID() })).rejects.toThrow();
-  const [otherDraft] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: lineage.facilityId })
-    .returning();
+  const [otherDraft] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: lineage.facilityId });
   extraRemovalIds.push(otherDraft.id);
   const [otherZero] = await db
     .insert(emissionEntries)
@@ -363,29 +348,22 @@ it("tombstones unsubmitted draft zeros on value creation", async () => {
   const [saved] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, zero.id));
   expect(saved.deletedAt).not.toBeNull();
 });
-it("loads persisted entries with the flag off while refusing writes", async () => {
+it("loads persisted entries and rejects a foreign facility", async () => {
   const entry = await create();
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(
     lines
       .find((line) => line.componentId === "energy")
       ?.entries.some((candidate) => candidate.id === entry.id && candidate.counts),
   ).toBe(true);
   await expect(loadBatchEmissionLines(ctx, crypto.randomUUID(), lineage.batchId)).rejects.toThrow();
-  flag.enabled = false;
-  try {
-    expect(
-      (await listEmissionEntries(ctx, lineage.batchId)).some((candidate) => candidate.id === entry.id),
-    ).toBe(true);
-    await expect(
-      updateEmissionEntry(ctx, { id: entry.id, expectedVersion: entry.version, note: "blocked" }),
-    ).rejects.toThrow("not available");
-    await expect(create()).rejects.toThrow("not available");
-  } finally {
-    flag.enabled = true;
-  }
+  expect(
+    (await listEmissionEntries(ctx, lineage.batchId)).some((candidate) => candidate.id === entry.id),
+  ).toBe(true);
 });
-it("refuses sample legs with the flag on before touching the sample", async () => {
+it("refuses sample legs before touching the sample", async () => {
   await expect(
     createTransportLeg(ctx, {
       entityType: "sample",
@@ -419,13 +397,15 @@ it("refuses unit-change confirmation and reads the re-entry state", async () => 
     "This entry no longer matches the template. Enter the values again.",
   );
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ observationId, version: 1 });
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(lines.find(line => line.componentId === "energy")).toMatchObject({
     state: "needsReview", total: null,
-    blocker: { message: "Enter the values again for the current template line." },
+    blocker: { message: "Enter the values again for the current template component." },
     entries: expect.arrayContaining([expect.objectContaining({
       id: entry.id, counts: false, canConfirm: false,
-      reason: "Enter the values again for the current template line.",
+      reason: "Enter the values again for the current template component.",
     })]),
   });
   await db
@@ -466,27 +446,6 @@ it("confirms uploaded evidence inside the entry revision transaction", async () 
     documentCount: 1,
   });
 });
-it("retains sample-leg creation when the flag is off", async () => {
-  // The shared fixture's batch has submissions from earlier cases, which lock its sample.
-  // Use a separate lineage with no submission so only the flag decides the outcome.
-  const unlocked = await createLineageFixture("none");
-  flag.enabled = false;
-  try {
-    const leg = await createTransportLeg(ctx, {
-      entityType: "sample",
-      entityId: unlocked.sampleId,
-      distanceKm: 1,
-      loadMassKg: 1,
-      transportMethodType: "road",
-      calculationMethodType: "distance_based",
-    });
-    expect(leg.entityType).toBe("sample");
-    await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
-  } finally {
-    flag.enabled = true;
-    await cleanupLineageFixture(unlocked);
-  }
-});
 
 it("enforces organization consistency independently for observation and claim references", async () => {
   const entry = await create();
@@ -502,10 +461,7 @@ it("enforces organization consistency independently for observation and claim re
       timezone: "UTC",
     })
     .returning();
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: otherOrg, facilityId: facility.id })
-    .returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId: otherOrg, facilityId: facility.id });
   const [submission] = await db
     .insert(certificationSubmissions)
     .values({
@@ -715,7 +671,7 @@ it("refuses supported but different entry units at create and update", async () 
 });
 
 
-it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
+it.each(["live", "deleted", "reserved", "sent", "confirmed", "reserved-zero", "sent-zero"] as const)(
   "deletes a batch only with unclaimed tombstones: %s", async (state) => {
   const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
   const [batch] = await db.insert(creditBatches).values({
@@ -732,18 +688,21 @@ it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
     fileUrl: "https://example.test/evidence", fileName: "Evidence",
   });
   try {
-    if (state === "reserved" || state === "sent") {
-      await claim(entry.id, state);
-      await db.update(emissionEntries).set({ deletedAt: new Date() }).where(eq(emissionEntries.id, entry.id));
+    if (state === "reserved" || state === "sent" || state === "reserved-zero" || state === "sent-zero") {
+      await claim(entry.id, state === "reserved-zero" ? "reserved" : state === "sent-zero" ? "sent" : state);
+      await db.update(emissionEntries).set({ deletedAt: new Date() })
+        .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "confirmed") {
+    if (state === "confirmed" || state === "reserved-zero" || state === "sent-zero") {
       await db.update(emissionEntries).set({
         kind: "zero", confirmedForRemovalId: lineage.removalId, deletedAt: new Date(),
-      }).where(eq(emissionEntries.id, entry.id));
+      }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
     }
-    if (state === "deleted") {
-      const current = await getEmissionEntry(ctx, entry.id);
-      await deleteEmissionEntry(ctx, entry.id, current.version);
+    if (state === "deleted" || state === "confirmed") {
+      if (state === "deleted") {
+        const current = await getEmissionEntry(ctx, entry.id);
+        await deleteEmissionEntry(ctx, entry.id, current.version);
+      }
       await deleteCreditBatch(ctx, batch.id, batch.version);
       expect(await db.select().from(creditBatches).where(eq(creditBatches.id, batch.id))).toEqual([]);
       expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id))).toEqual([]);
@@ -783,27 +742,88 @@ it("refuses document lists for unknown, tombstoned and other-organization entrie
   }
 });
 
-it("allows document lists for claimed entries while writes are disabled", async () => {
+it("allows document lists for claimed entries", async () => {
   const entry = await create();
   await claim(entry.id, "sent");
-  flag.enabled = false;
-  try {
-    await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
-    await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
-  } finally {
-    flag.enabled = true;
-  }
+  await expect(listDocumentsForEntity(ctx, "emission_entry", entry.id)).resolves.toEqual([]);
+  await expect(listDocumentsForEntityIds(ctx, "emission_entry", [entry.id])).resolves.toEqual([]);
 });
 
 it("uses the read model blocker for an unpinned batch", async () => {
+  const storedEntries = await listEmissionEntries(ctx, lineage.batchId);
   await db.update(creditBatches).set({ removalTemplateId: null })
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
   try {
-    await expect(create()).rejects.toThrow("Choose a Removal template for this credit batch.");
-    await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId))
-      .rejects.toThrow("Choose a Removal template for this credit batch.");
+    await expect(create()).rejects.toThrow("Set a Removal template in Settings, Removal templates.");
+    await expect(loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId)).resolves.toEqual({
+      status: "blocked", blocker: "unpinnedTemplate", storedEntries,
+    });
   } finally {
     await db.update(creditBatches).set({ removalTemplateId: templateId })
       .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, lineage.batchId)));
+  }
+});
+
+it("defaults additive dates to an ended batch and fixes single-line dates through updates", async () => {
+  const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
+  const [batch] = await db.insert(creditBatches).values({
+    ...original, id: crypto.randomUUID(), code: `CB-DATES-${crypto.randomUUID()}`,
+    startDate: "2026-06-01", endDate: "2026-06-30", productionEmissionsClaimedByRemovalId: null,
+  }).returning();
+  const ids: string[] = [];
+  try {
+    const additive = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    });
+    ids.push(additive.id);
+    expect(additive.occurredOn).toBe("2026-06-30");
+    const single = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "meter",
+      occurredOn: "2099-01-01",
+      values: ["initial_readout", "final_readout"].map((inputKey) => ({ inputKey, quantityKind: "energy", magnitude: "1", unit: "kWh" })),
+    });
+    ids.push(single.id);
+    expect(single.occurredOn).toBe("2026-06-01");
+    const updated = await updateEmissionEntry(ctx, { id: single.id, expectedVersion: single.version,
+      occurredOn: "2020-01-01", note: "Date stays fixed",
+    });
+    expect(updated).toMatchObject({ occurredOn: "2026-06-01", contentRevision: single.contentRevision });
+    await expect(createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy", occurredOn: "2026-05-31",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    })).rejects.toThrow("before the credit batch start");
+  } finally {
+    if (ids.length) {
+      await db.delete(emissionEntryValues).where(inArray(emissionEntryValues.entryId, ids));
+      await db.delete(emissionEntries).where(inArray(emissionEntries.id, ids));
+    }
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+  }
+});
+
+it("scopes the facility overview and excludes archived batches", async () => {
+  const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
+  const [batch] = await db.insert(creditBatches).values({
+    ...original, id: crypto.randomUUID(), code: `CB-OVERVIEW-${crypto.randomUUID()}`,
+    productionEmissionsClaimedByRemovalId: null,
+  }).returning();
+  let entryId: string | undefined;
+  try {
+    const entry = await createEmissionEntry(ctx, { creditBatchId: batch.id, componentId: "energy", occurredOn: "2026-06-13",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+    });
+    entryId = entry.id;
+    const overview = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
+    expect(overview.batches.find((row) => row.creditBatchId === batch.id)).toMatchObject({
+      status: batch.status, lastEntryOn: "2026-06-13", entriesThisMonth: 1,
+      lineCounts: { total: 2, open: 2, fileMissing: 1, notRecorded: 1 },
+    });
+    await expect(loadFacilityEmissionsOverview({ ...ctx, organizationId: otherOrg }, lineage.facilityId)).rejects.toThrow();
+    await db.update(creditBatches).set({ archivedAt: new Date() }).where(eq(creditBatches.id, batch.id));
+    expect((await loadFacilityEmissionsOverview(ctx, lineage.facilityId)).batches.some((row) => row.creditBatchId === batch.id)).toBe(false);
+  } finally {
+    if (entryId) {
+      await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entryId));
+      await db.delete(emissionEntries).where(eq(emissionEntries.id, entryId));
+    }
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
   }
 });

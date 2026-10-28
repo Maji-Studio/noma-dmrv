@@ -4,7 +4,8 @@
  * Create forms hold real files client-side and flush them against the fresh
  * entity ID after create — one Save, no "save first, then reopen to attach".
  * Covers the plan's verification list:
- *  (a) create-with-attachment happy path for feedstock and sample (+ leg),
+ *  (a) create-with-attachment happy path for feedstock and sample (+ leg
+ *      with no sample transport leg control),
  *  (b) view mode shows documents read-only (no delete, no dropzone),
  *  (c) partial-failure path — storage PUT aborted → sheet stays open in edit
  *      mode with a retry affordance that succeeds once the network recovers.
@@ -76,6 +77,8 @@ async function fillMinimalFeedstock(
     seededData.feedstockType.id,
     seededData.feedstockType.name,
   );
+  // The seeded supplier location has no facility distance: enter one as an override.
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.fill('input[name="transportDistanceKm"]', "40");
   await page.fill('input[name="totalWetMassKg"]', "100");
   await page.fill('input[name="moisturePercent"]', "25");
@@ -184,29 +187,15 @@ test.describe("Deferred create attachments", () => {
     await parentDialog.locator("#sample-deferred-documents-upload").setInputFiles(pdf("reflectance-histogram.pdf"));
     await expect(parentDialog.getByText("reflectance-histogram.pdf")).toBeVisible();
 
-    // Deferred transport leg via the nested dialog (no sample exists yet).
-    await parentDialog
-      .getByRole("button", { name: "Add transport leg" })
-      .click();
-    const transportDialog = page.getByRole("dialog", {
-      name: "Add transport leg",
-    });
-    await expect(transportDialog).toBeVisible();
-    await transportDialog.locator("#distanceKm").fill("12");
-    await transportDialog.locator('input[name="loadMassKg"]').fill("5");
-    await transportDialog
-      .getByRole("button", { name: "Add transport leg" })
-      .click();
-    await expect(transportDialog).toBeHidden();
-    await expect(parentDialog).toBeVisible();
-    // The journey timeline prints the leg distance and the journey total, so
-    // the figure appears twice; the first is the leg's own box.
-    await expect(parentDialog.getByText("12 km").first()).toBeVisible();
+    // Sample shipping is recorded as an emissions entry on the credit batch.
+    await expect(
+      parentDialog.getByRole("button", { name: "Add transport leg" }),
+    ).toHaveCount(0);
 
     await parentDialog.getByRole("button", { name: "Create Sample" }).click();
     await waitForSideSheetClose(page);
 
-    // Reopen: view mode shows both the document and the leg, read-only.
+    // Reopen: view mode shows the documents, read-only.
     await page.waitForLoadState("networkidle");
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
@@ -214,7 +203,6 @@ test.describe("Deferred create attachments", () => {
     await expect(sampleDialog.getByText("lab-report-deferred.pdf")).toBeVisible({
       timeout: 15000,
     });
-    await expect(sampleDialog.getByText("12 km").first()).toBeVisible();
     await expect(sampleDialog.getByText("reflectance-histogram.pdf")).toBeVisible();
     const histogramEntry = sampleDialog.getByRole("listitem").filter({
       has: page.getByText("reflectance-histogram.pdf", { exact: true }),

@@ -52,8 +52,9 @@ function supportedAutomaticTemplate(template: GhgEntryTemplate) {
 
 function facilityFacts(template: GhgEntryTemplate, lineSources: LineSources): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
-    defaultTemplate: { ...template, id: "different-default" },
+    currentTemplate: { ...template, id: "different-default" },
     templatesById: { [template.id]: {
       template, observation: { lineSources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), lineSources),
@@ -68,7 +69,7 @@ function prepare(template: GhgEntryTemplate, lineSources = sources(template), fa
   const facts = facilityFacts(template, lineSources);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facts);
   const context = { ...resolved, facilityId, mapping: facts.mapping, hasOrgCredentials: true };
-  return { resolved, ...prepareRemovalSubmission(context, { isometricEnvironment: "sandbox" }) };
+  return { resolved, ...prepareRemovalSubmission(context) };
 }
 
 function compile(template: GhgEntryTemplate, lineSources = sources(template), facilityId?: string) {
@@ -78,7 +79,7 @@ function compile(template: GhgEntryTemplate, lineSources = sources(template), fa
   return { ...result, inputs: resolveTemplateInputs({
     template: result.prepared!.removalTemplate, lineSources: result.prepared!.lineSources,
     blueprintsByKey: result.prepared!.blueprintsByKey, externalProjectId: result.prepared!.externalProjectId,
-    agg, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    agg, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   }) };
 }
 
@@ -132,7 +133,7 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.prepared).toBeNull();
     expect(result.blockers.map((blocker) => blocker.code)).toEqual(["templateLinesNeedReview", "templateUnbindable"]);
     const diagnostic = result.blockers.find((blocker) => blocker.code === "templateUnbindable")!.message;
-    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "Review the Removal template lines in Certification settings."]) {
+    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "This Removal template has components to decide."]) {
       expect(diagnostic).toContain(detail);
     }
   });
@@ -151,9 +152,9 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.requiredTransportCategories).not.toContain(category);
     const transportLegs: TransportLegsByCategory = { feedstock: [], biochar: [], sample: [] };
     transportLegs[category] = [{ id: "recorded-leg", distanceKm: 20 } as TransportLegsByCategory[typeof category][number]];
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
       .toEqual([expect.stringContaining(`${label} is recorded`)]);
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
   });
 
   it("fails closed when a carried automatic contract moves to an incompatible scope", () => {
@@ -171,4 +172,12 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.templateBlockers.map((blocker) => blocker.code)).toContain("templateLinesNeedReview");
     expect(findUnbindableTemplateInputs(changed, { lineSources })).toContainEqual(expect.objectContaining({ componentId: GENSET }));
   });
+});
+
+it("stops warning about retired sample transport facts", () => {
+  const template = supportedAutomaticTemplate(sandbox);
+  const warnings = buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
+    transportLegs: { feedstock: [], biochar: [], sample: [{ id: "legacy-sample-leg", distanceKm: 20 } as TransportLegsByCategory["sample"][number]] },
+  });
+  expect(warnings).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./removal-fixture";
 /**
  * An isolated organization with credit batches ready for lab Samples, for the
  * lab sample operation suites. Each batch holds one completed run and one
@@ -9,7 +10,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
-  applications, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
+  applications, certificationSubmissions, creditBatchApplications, creditBatchProductionRuns,
   creditBatches, deliveries, facilities, feedstocks, productionProcesses,
 } from "@/db/schema";
 import { createOrderInTransaction } from "@/data-access/orders";
@@ -61,7 +62,7 @@ async function addBatch(
   const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-LAB-CB-${suffix}`, facilityId: f.facility.id,
     feedstockTypeId: args.feedstockTypeId, productionProcessId: args.processId, status: "pending",
     startDate: args.startDate, endDate: args.endDate, certifier: "isometric" }).returning();
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: f.facility.id }).returning();
+  const [removal] = await insertRemovalFixture(db, { organizationId, facilityId: f.facility.id });
   await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: args.runId });
   // The slice exists unassigned: lineage is empty until a test assigns the Removal.
   await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: application.id,

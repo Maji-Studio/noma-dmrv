@@ -1,8 +1,11 @@
+import { useIntentMutation } from "./use-create-intent-key";
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
  * Client-side state management for the unified delivery + bin allocation workflow.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FeedstockFilterData,
@@ -24,6 +27,7 @@ import {
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { productionRunKeys } from "./use-production-runs";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -74,6 +78,19 @@ export function useFeedstock(feedstockId: string, enabled = true) {
   });
 }
 
+/**
+ * Reads one feedstock fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchFeedstock() {
+  const queryClient = useQueryClient();
+  return (feedstockId: string) => queryClient.fetchQuery({
+    queryKey: feedstockKeys.detail(feedstockId),
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
+    staleTime: 0,
+  });
+}
+
 export function useFeedstockStats(
   scope?: Partial<FeedstockStatsFilterData>,
   options?: { enabled?: boolean },
@@ -93,8 +110,9 @@ export function useFeedstockStats(
 export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstockResult, CreateFeedstockData>) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
+    mutationFn: async (data: CreateFeedstockData, intentKey) => unwrap(await createFeedstockFn(data, { intentKey })),
     onSuccess: async (data, variables) => {
       for (const feedstock of data.feedstocks) {
         queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
@@ -105,9 +123,11 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -122,6 +142,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -136,9 +157,11 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -152,6 +175,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
     mutationFn: async (data: DeleteFeedstockData) => {
       const result = await deleteFeedstockFn(data);
       if (!result.success) throwActionError(result);
@@ -165,6 +189,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);

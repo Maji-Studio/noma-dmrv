@@ -53,6 +53,16 @@ import type { GhgStatement } from "@/lib/isometric";
 // Module mocks — declared before the system under test imports.
 // ---------------------------------------------------------------------------
 
+// Keep the statement guard real; content comparison has its own agreement tests.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
+vi.mock("@/data-access/removal-entry-correction", () => ({
+  listNomaSentRemovalsForRemoteEntries: vi.fn(async () => []),
+  listStatementRemovalIdentities: vi.fn(async () => [{ id: "member", code: "R-12" }]),
+}));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
@@ -85,7 +95,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
     userId: "user-test-1",
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   }),
 }));
@@ -209,7 +219,7 @@ function makeMapping(): CertifierProjectRow {
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: "rvt_1",
+    removalTemplateId: "rvt_1",
     webhookSecret: null,
     metadata: null,
     createdAt: new Date(),
@@ -315,7 +325,7 @@ beforeEach(() => {
   vi.mocked(authServer.requireOrgContext).mockResolvedValue({
     userId: "user-test-1",
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   });
 

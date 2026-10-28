@@ -1,7 +1,15 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeedstockType } from "@/db/schema";
+
+const state = vi.hoisted(() => ({ remove: vi.fn(), error: vi.fn() }));
+beforeEach(() => { state.remove.mockReset(); state.error.mockReset(); });
+afterEach(cleanup);
 
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
@@ -53,14 +61,14 @@ vi.mock("@/hooks/use-feedstock-types", () => ({
     isLoading: false,
     error: null,
   }),
-  useCreateFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateFeedstockType: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArchiveFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUnarchiveFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDeleteFeedstockType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteFeedstockType: () => ({ mutateAsync: state.remove, isPending: false }),
 }));
 vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
+  useToast: () => ({ success: vi.fn(), error: state.error }),
 }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   ArchiveIcon: () => <span />,
@@ -82,7 +90,9 @@ vi.mock("@/components/ui", () => ({
       {actions}
     </header>
   ),
-  RowActionsMenu: () => null,
+  RowActionsMenu: ({ label, actions }: { label: string; actions: Array<{ label: string; onSelect: () => void }> }) => (
+    <div role="group" aria-label={label}>{actions.map((action) => <button key={action.label} onClick={action.onSelect}>{action.label}</button>)}</div>
+  ),
   SplitButton: ({
     children,
     menuLabel,
@@ -130,7 +140,10 @@ vi.mock("@/components/ui/data-table", () => ({
     },
   ),
 }));
-vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
+vi.mock("@/components/ui/delete-confirm-dialog", () => ({
+  DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => void }) =>
+    isOpen ? <button onClick={onConfirm}>Confirm delete</button> : null,
+}));
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: () => null }));
@@ -187,6 +200,17 @@ describe("FeedstockTypeList", () => {
     expect(html).not.toContain("More ways to add a feedstock type");
     expect(html).not.toContain("Import from Isometric");
     expect(html).not.toContain("New feedstock type");
+  });
+
+  it("offers Archive instead from the structured reason with different wording", async () => {
+    const message = "This feedstock type is still used.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["feedstockTypeId"]) }));
+    render(<FeedstockTypeList canManage />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Actions for FT-001" })).getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("button", { name: "Archive instead" })).toBeTruthy();
+    expect(state.remove).toHaveBeenCalledWith({ feedstockTypeId: activeType.id, expectedVersion: 1 });
+    expect(state.error).not.toHaveBeenCalled();
   });
 
   it("gates sampling to connected pyrolysis types with an active facility", () => {

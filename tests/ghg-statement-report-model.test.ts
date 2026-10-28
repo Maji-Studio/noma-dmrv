@@ -148,6 +148,20 @@ describe("GHG Statement report model", () => {
     expect(edited.sourceFingerprint).toBe(base.sourceFingerprint);
   });
 
+  it("keeps the fingerprint stable across an organization rename", () => {
+    const base = build();
+    const renamed = buildGhgStatementReportModel({
+      ...buildInput(),
+      documentControl: {
+        ...buildInput().documentControl,
+        organizationName: "Renamed supplier",
+      },
+    });
+
+    expect(renamed.sourceFingerprint).toBe(base.sourceFingerprint);
+    expect(renamed.documentControl.organizationName).toBe("Renamed supplier");
+  });
+
   it("changes the fingerprint when a pinned version changes", () => {
     const base = build();
     const repinned = buildGhgStatementReportModel({

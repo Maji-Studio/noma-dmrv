@@ -1,9 +1,12 @@
 /** Delivery side-sheet view mode: the sections config for EntitySideSheet. */
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import { TransportEvidencePanel, TransportRoutePreview } from "@/components/transport-legs";
+import { distanceReadFields } from "@/components/transport-legs/distance-override";
+import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { certificationDetailField, isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -16,7 +19,8 @@ const ROUTE_EMPTY =
 
 export type DeliverySheetRecord = Omit<DeliveryWithRelations, "proofOfDeliveryCount">;
 
-export function deliverySheetSections(delivery: DeliverySheetRecord, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
+/** `proofStatus` is the saved proof-of-delivery state of the record: neutral until its files load. */
+export function deliverySheetSections(delivery: DeliverySheetRecord, facilities: readonly { id: string; timezone: string }[], proofStatus: CertFieldStatus = "neutral"): DetailPanelSection[] {
   return [
     {
       title: "Delivery information",
@@ -51,13 +55,20 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
     },
     {
       title: "Transport",
-      fields: [
-        ...(delivery.distanceKmOverride != null
-          ? [{ label: "Distance note", value: delivery.distanceNote }]
-          : []),
-      ],
+      fields: distanceReadFields({
+        overrideKm: delivery.distanceKmOverride,
+        effectiveKm: delivery.effectiveDistanceKm,
+        note: delivery.distanceNote,
+        locationName: delivery.destinationName,
+        derivedSource: delivery.recordedDistanceSource,
+        // Resetting a delivery override restores its recorded pair snapshot.
+        locationDefaultKm: delivery.recordedDistanceKm,
+        certify: certificationDetailField("delivery", "effectiveDistanceKm"),
+      }),
       // The leg this delivery adds to its product's biochar distribution.
       content: (
+        <div className="flex flex-col gap-16">
+        <TransportDistanceDriftNotice target={{ entityType: "delivery", entityId: delivery.id }} recordCode={delivery.code} />
         <TransportRoutePreview
           entityType="biochar"
           originName={delivery.facilityName}
@@ -65,18 +76,19 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
           distanceKm={delivery.effectiveDistanceKm}
           distanceSource={delivery.effectiveDistanceSource}
           loadMassKg={delivery.deliveredWetMassKg}
-          saved
           evidenceAttached={hasAcceptedTransportEvidence(delivery.transportEvidenceDocumentCount)}
           emptyMessage={ROUTE_EMPTY}
-          certTag
           originPoint={{ lat: delivery.facilityGpsLatitude, lng: delivery.facilityGpsLongitude }}
           destinationPoint={{ lat: delivery.destinationGpsLatitude, lng: delivery.destinationGpsLongitude }}
         />
+        </div>
       ),
     },
     {
       title: "Delivery evidence",
       hint: TRANSPORT_EVIDENCE_HINTS.delivery,
+      certifyRequired: isCertifyEntityField("delivery", "proofOfDelivery"),
+      certifyStatus: proofStatus,
       fields: [],
       content: (
         <TransportEvidencePanel

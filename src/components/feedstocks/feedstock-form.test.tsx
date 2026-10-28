@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { ActionError } from "@/lib/action-error";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
@@ -6,6 +9,7 @@ import type { Control, FieldValues } from "react-hook-form";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const mocks = vi.hoisted(() => ({
+  driftActionReason: undefined as string | null | undefined,
   supplierSelectProps: undefined as
     | {
         allowCreate?: boolean;
@@ -22,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/forms", async () => {
   const { FormError } = await import("@/components/forms/form-error");
-  const { useWatch } = await vi.importActual<
+  const { useWatch, useController } = await vi.importActual<
     typeof import("react-hook-form")
   >("react-hook-form");
   const Wrapper = ({ children }: { children: ReactNode }) => children;
@@ -34,25 +38,31 @@ vi.mock("@/components/forms", async () => {
       name,
       allowCreate,
       onCreateNew,
+      onChange,
     }: {
       control: Control<FieldValues>;
       name: string;
       allowCreate?: boolean;
       onCreateNew?: () => void;
+      onChange?: (value: string, change: { asDefault: boolean }) => void;
     }) => {
       const value = useWatch({ control, name });
+      const { field } = useController({ control, name });
       if (name === "supplierId") {
         mocks.supplierSelectProps = { allowCreate, onCreateNew };
       }
       return name === "supplierId" ? (
-        <output
-          data-testid="selected-supplier-id"
-          data-value={String(value ?? "")}
-        />
+        <>
+          <output data-testid="selected-supplier-id" data-value={String(value ?? "")} />
+          <input aria-label="Supplier" {...field} onChange={(event) => {
+            field.onChange(event);
+            onChange?.(event.target.value, { asDefault: false });
+          }} />
+        </>
       ) : null;
     },
     FormField: Wrapper,
-    FormInput: () => null,
+    FormInput: (props: ComponentProps<"input">) => <input {...props} />,
     FormSection: Wrapper,
     FormSpine: Wrapper,
     FormTextarea: () => null,
@@ -112,21 +122,38 @@ vi.mock(
 );
 
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/hooks/use-suppliers", () => ({
   useSupplier: () => ({ data: undefined }),
   useSupplierLocationsBySupplier: () => ({ data: [] }),
 }));
+// The edit-mode refresh action has its own DOM test.
+vi.mock("@/components/transport-legs/transport-distance-drift", () => ({
+  DistanceDriftAction: (props: { disabledReason?: string | null }) => {
+    mocks.driftActionReason = props.disabledReason;
+    return null;
+  },
+  SAVE_BEFORE_REFRESH_REASON: "Save or discard your changes first.",
+}));
 vi.mock("@/hooks/use-transport-legs", () => ({
-  useTransportLegsForEntity: () => ({ data: undefined }),
+  useTransportLegsForEntity: () => ({ data: [{ distanceKm: 42, distanceSource: "manual" }] }),
 }));
 vi.mock("@/hooks/use-facilities", () => ({
   useFacility: () => ({ data: undefined }),
 }));
 vi.mock("@/components/transport-legs", () => ({ TransportRoutePreview: () => null }));
 
-vi.mock("@/components/ui", () => ({ Button: () => null }));
+// The distance field renders the real FormField; its tooltips need a DOM.
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: () => null,
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+}));
+vi.mock("@/components/ui", () => ({
+  Button: () => null,
+  Input: (props: ComponentProps<"input">) => <input {...props} />,
+}));
 vi.mock("@/components/ui/actionable-focus-target", () => ({
   ActionableFocusTarget: ({ children }: { children: ReactNode }) => children,
 }));
@@ -204,6 +231,100 @@ describe("FeedstockForm single-bin mass editing", () => {
     moistureContentPercent: 25,
   } as FeedstockWithRelations;
 
+  it.each(["totalWetMassKg", "allocations.0.allocatedWetMassKg"])("reverts both mass controls after a lock refusal on %s", async field => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["massWetKg"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    try {
+      // An allocation-only edit must stay within the unchanged delivery total.
+      const editedMass = field === "totalWetMassKg" ? "120" : "80";
+      fireEvent.change(input(field), { target: { value: editedMass } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input("totalWetMassKg").value).toBe("100"));
+      expect(input("allocations.0.allocatedWetMassKg").value).toBe("100");
+    } finally { cleanup(); }
+  });
+
+  it("closes a newly opened transport override after a Sent refusal restores the saved distance", async () => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Override the one-way distance" }));
+      const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+      fireEvent.change(input()!, { target: { value: "60" } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()).toBeNull());
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("restores a saved override cleared before a Sent refusal", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Reset to the location default" }));
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("clears the saved route override when the operator picks another supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const nextSupplierId = "66666666-6666-4666-8666-666666666666";
+    const onSubmit = vi.fn();
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    try {
+      expect(view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]')?.value).toBe("60");
+      fireEvent.change(view.getByLabelText("Supplier"), { target: { value: nextSupplierId } });
+      expect(view.container.querySelector('input[name="transportDistanceKm"]')).toBeNull();
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        supplierId: nextSupplierId,
+        transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
+      }), expect.any(Function));
+    } finally { cleanup(); }
+  });
+
+  it("keeps the saved override after reverting a changed supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["supplierId"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      await act(async () => {
+        mocks.supplierDialogProps?.onSuccess({ id: "66666666-6666-4666-8666-666666666666", code: "SUP-2", name: "Supplier B" });
+      });
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      await act(async () => {});
+      expect(input()?.value).toBe("60");
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();
     let renderer: ReactTestRenderer;
@@ -222,13 +343,133 @@ describe("FeedstockForm single-bin mass editing", () => {
         await renderer.root.findByType("form").props.onSubmit();
       });
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined,
+        transportDistanceSource: undefined,
         totalWetMassKg: mass,
         moisturePercent: 25,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: mass }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }
+  });
+
+  const buttonByText = (renderer: ReactTestRenderer, text: string) =>
+    renderer.root.findAll((node) => node.type === "button" && [node.props.children].flat().includes(text))[0];
+  const distanceInput = (renderer: ReactTestRenderer) =>
+    renderer.root.findByType("form").findAllByType("input").find(input => input.props.name === "transportDistanceKm");
+  async function renderForm(record: FeedstockWithRelations, onSubmit = vi.fn()) {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<FeedstockForm feedstock={record} onSubmit={onSubmit} />);
+    });
+    return { renderer, onSubmit };
+  }
+  const submit = (renderer: ReactTestRenderer) =>
+    act(async () => { await renderer.root.findByType("form").props.onSubmit(); });
+
+  it("shows the recorded leg distance read-only and omits it on save", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      expect(distanceInput(renderer)).toBeUndefined();
+      const derived = renderer.root.findByProps({ id: "transportDistanceKm", readOnly: true });
+      expect(derived.props.value).toBe("42");
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
+      }), expect.any(Function));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("offers the refresh from location until the form has unsaved edits", async () => {
+    const { renderer } = await renderForm(feedstock);
+    try {
+      expect(mocks.driftActionReason).toBeNull();
+      await act(async () => {
+        await renderer.root.findByProps({ name: "totalWetMassKg" }).props.onChange({ target: { name: "totalWetMassKg", value: 150 } });
+      });
+      expect(mocks.driftActionReason).toBe("Save or discard your changes first.");
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("sets an override with its source after Override unlocks entry", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await act(async () => {
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value: "60" } });
+      });
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: 60, transportDistanceSource: "manual",
+      }), expect.any(Function));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("refuses an empty override instead of saving it", async () => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await submit(renderer);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it.each(["", "0"])("refuses a typed override of %j instead of sending it", async (value) => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await act(async () => {
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value } });
+      });
+      await submit(renderer);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  const overridden = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+
+  it("preserves a saved override by omitting it", async () => {
+    const { renderer, onSubmit } = await renderForm(overridden);
+    try {
+      expect(distanceInput(renderer)?.props.readOnly).toBeUndefined();
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
+      }), expect.any(Function));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("sends a re-entered override in full after the supplier changes", async () => {
+    const { renderer, onSubmit } = await renderForm({ ...overridden, distanceSource: "manual", distanceNote: null } as FeedstockWithRelations);
+    try {
+      // A new supplier is a new route: its saved override no longer applies.
+      await act(async () => {
+        mocks.supplierDialogProps?.onSuccess({ id: "66666666-6666-4666-8666-666666666666", code: "SUP-2", name: "Supplier B" });
+      });
+      expect(distanceInput(renderer)).toBeUndefined();
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await act(async () => {
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value: "60" } });
+      });
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        supplierId: "66666666-6666-4666-8666-666666666666",
+        transportDistanceKm: 60, transportDistanceSource: "manual", distanceNote: null,
+      }), expect.any(Function));
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
+  it("clears a saved override back to the derived distance with null", async () => {
+    const { renderer, onSubmit } = await renderForm(overridden);
+    try {
+      await act(async () => { buttonByText(renderer, "Reset to default").props.onClick(); });
+      expect(distanceInput(renderer)).toBeUndefined();
+      await submit(renderer);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
+      }), expect.any(Function));
+    } finally { await act(async () => renderer.unmount()); }
   });
 
   it.each([90, 100])("keeps an intentional %s kg allocation override when the total changes", async (allocatedWetMassKg) => {
@@ -249,7 +490,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         totalWetMassKg: 160,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }

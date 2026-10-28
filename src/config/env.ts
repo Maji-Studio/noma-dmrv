@@ -1,5 +1,7 @@
+import { isOAuthProductionOrigin, oauthClientIdsSchema } from "./oauth-env-validation";
 import {
   emptyToUndefined,
+  fromEmailSchema,
   isHermeticCiBuildFor,
   isometricAccessTokenSchema,
   isometricClientSecretSchema,
@@ -41,7 +43,6 @@ function isValidStoragePrefix(value: string): boolean {
  * Ensures all required env vars are present and valid
  */
 const envSchema = z.object({
-  EMISSIONS_ENTRIES_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   // Database
   DATABASE_URL: z.string().url(),
 
@@ -53,10 +54,13 @@ const envSchema = z.object({
 
   // Email (optional for local development)
   RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  RESEND_FROM_EMAIL: z.preprocess(
-    emptyToUndefined,
-    z.string().email().optional()
-  ),
+  // A bare address or the display-name form `noma <noreply@example.com>`.
+  RESEND_FROM_EMAIL: z.preprocess(emptyToUndefined, fromEmailSchema.optional()),
+
+  RESEND_REPLY_TO: z.preprocess(emptyToUndefined, z.email().optional()),
+
+  OAUTH_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
+  OAUTH_CIMD_CLIENT_IDS: oauthClientIdsSchema,
 
   // API infrastructure
   CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(CRON_SECRET_MIN_LENGTH).optional()),
@@ -65,11 +69,6 @@ const envSchema = z.object({
   API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
-  ALLOW_SELF_SIGNUP: z
-    .string()
-    .optional()
-    .default("false")
-    .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
@@ -224,12 +223,28 @@ const envSchema = z.object({
 
   const isHermeticCiBuild = isHermeticCiBuildFor(data.NEXT_PUBLIC_APP_URL);
 
+  if (data.NODE_ENV === "production" && !isHermeticCiBuild && data.OAUTH_PROVIDER_ENABLED && !isOAuthProductionOrigin(data.NEXT_PUBLIC_APP_URL)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["NEXT_PUBLIC_APP_URL"], message: "Production OAuth requires an HTTPS app origin without a path, query or trailing slash." });
+  }
+
   if (data.API_FUZZ_DISABLE_RATE_LIMIT && !isHermeticCiBuild) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["API_FUZZ_DISABLE_RATE_LIMIT"],
       message: "API_FUZZ_DISABLE_RATE_LIMIT requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
     });
+  }
+
+  if (data.NODE_ENV === "production" && !isHermeticCiBuild) {
+    const missing = (["RESEND_API_KEY", "RESEND_FROM_EMAIL", "RESEND_REPLY_TO"] as const)
+      .filter((key) => !data[key]);
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["RESEND_API_KEY"],
+        message: `Production email delivery requires: ${missing.join(", ")}`,
+      });
+    }
   }
 
   if (data.NODE_ENV === "production" && !isHermeticCiBuild && !data.CRON_SECRET) {

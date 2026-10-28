@@ -1,0 +1,78 @@
+import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
+import { coversBatches, type CoveredContenders } from "@/lib/certification/covered-contenders";
+import { getEffectiveReportingPeriodEndOn } from "./certifier-ghg-statements";
+import { and, desc, eq, isNotNull, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { certificationSubmissions, certifierRemovals, certifierGhgStatements } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
+import { listEmissionEntryDraftContenders } from "./emission-entry-contenders";
+import { getCreditBatchesByRemovalId } from "./certifier-removals";
+
+/** Advisory state only. Mutation authorization comes from the locked lineage loader. */
+export async function loadRemovalCorrectionFacts(ctx: OrgContext, removalId: string, coveredContenders?: CoveredContenders) {
+  requireOrgScope(ctx);
+  const submitted = await getSentRemovalForComparison(ctx, removalId);
+  if (!submitted) return null;
+  const batches = await getCreditBatchesByRemovalId(ctx, removalId);
+  const ids = batches.map((batch) => batch.id);
+  const contenders = coversBatches(coveredContenders, ids) ? coveredContenders.contenders : await listEmissionEntryDraftContenders(ctx, ids);
+  const correction = contenders.find((item) => item.removalId === removalId && item.contenderKind === "correction");
+  if (!correction) return null;
+  if (!correction.returnedStatement) return null;
+  const [identity] = await db.select({ code: certifierRemovals.code,
+    reportingPeriodStartOn: certifierGhgStatements.reportingPeriodStartOn,
+    reportingPeriodEndOn: certifierGhgStatements.reportingPeriodEndOn,
+    metadata: certifierGhgStatements.metadata,
+  }).from(certifierRemovals)
+    .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      eq(certifierGhgStatements.id, correction.returnedStatement.id)))
+    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, removalId)));
+  if (!identity) return null;
+  return { submitted, batches, coveredContenders: { contenders, batchIds: ids }, correction, identity: {
+    ...identity, reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(identity),
+  } };
+}
+
+/** Evidence follows live attachments only under the existing lineage predicate. */
+export async function removalCorrectionWindowOpen(ctx: OrgContext, removalId: string): Promise<boolean> {
+  requireOrgScope(ctx);
+  const batches = await getCreditBatchesByRemovalId(ctx, removalId);
+  const contenders = await listEmissionEntryDraftContenders(ctx, batches.map(batch => batch.id));
+  return contenders.some(item => item.removalId === removalId && item.contenderKind === "correction");
+}
+
+export async function listStatementRemovalIdentities(ctx: OrgContext, statementId: string) {
+  requireOrgScope(ctx);
+  return db.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.ghgStatementId, statementId),
+  ));
+}
+
+/** Latest sent content, independent of whether lineage currently offers correction. */
+export async function getSentRemovalForComparison(ctx: OrgContext, removalId: string): Promise<typeof certificationSubmissions.$inferSelect | null> {
+  requireOrgScope(ctx);
+  const [submitted] = await db.select().from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.localEntityType, "removal"),
+    eq(certificationSubmissions.submissionType, "removal"), eq(certificationSubmissions.provider, "isometric"),
+    eq(certificationSubmissions.localEntityId, removalId), isNotNull(certificationSubmissions.submittedAt),
+  )).orderBy(desc(certificationSubmissions.version)).limit(1);
+  return submitted ?? null;
+}
+
+/** Use the same ledger identities and statuses as reconcileRemovalMembership. */
+export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, statementId: string, externalIds: readonly string[]) {
+  requireOrgScope(ctx);
+  if (!externalIds.length) return [];
+  return db.selectDistinct({ id: certifierRemovals.id, code: certifierRemovals.code,
+    ghgStatementId: certifierRemovals.ghgStatementId }).from(certificationSubmissions)
+    .innerJoin(certifierRemovals, and(eq(certifierRemovals.organizationId, ctx.organizationId),
+      eq(certifierRemovals.id, certificationSubmissions.localEntityId)))
+    .innerJoin(certifierGhgStatements, and(eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      eq(certifierGhgStatements.id, statementId), eq(certifierGhgStatements.facilityId, certifierRemovals.facilityId)))
+    .where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.provider, "isometric"), eq(certificationSubmissions.submissionType, "removal"),
+      eq(certificationSubmissions.localEntityType, "removal"),
+      inArray(certificationSubmissions.status, REMOVAL_MEMBERSHIP_STATUSES),
+      inArray(certificationSubmissions.externalId, [...externalIds])));
+}

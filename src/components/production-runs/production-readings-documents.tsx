@@ -187,7 +187,7 @@ export function ProductionReadingsDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  Readings CSV · {formatFileSize(doc.fileSizeBytes)}
+                  {doc.fileSizeBytes == null ? "Readings CSV" : `Readings CSV · ${formatFileSize(doc.fileSizeBytes)}`}
                 </span>
               </div>
               <a
@@ -232,7 +232,6 @@ export function ProductionReadingsDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -244,6 +243,7 @@ export function ProductionReadingsDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </section>

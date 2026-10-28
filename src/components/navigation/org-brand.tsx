@@ -1,10 +1,10 @@
 /**
  * OrgBrand — the sidebar brand header, doubling as the Organization switcher.
  *
+ * Always shows the organization name and the viewer's role (a small chip).
  * One row, two behaviors: users with at most one accessible organization get
- * the plain brand link to the dashboard (no tenancy chrome at all), while users
- * with multiple accessible organizations get the same row as a listbox trigger
- * — the org name is shown exactly once, and a caret is the only extra
+ * a plain brand link to the dashboard, while users with another organization to
+ * go to get the same row as a listbox trigger, with a caret as the only extra
  * affordance.
  * Switching resets facility selection and clears the query cache, because
  * every data view changes.
@@ -13,15 +13,21 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon, CheckIcon, CircleNotchIcon } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth/client";
+import { useToast } from "@/components/ui/toast";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
   useActiveOrganizationProfile,
   useAllOrganizations,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { requestAppLeave } from "@/lib/leave-guard";
+import { ORG_SWITCH_DISCARD_DESCRIPTION, orgSwitchFailedMessage } from "@/lib/org-switch-notice";
 import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
+import { useViewerOrg } from "./viewer-org";
+import { FALLBACK_ORG_NAME, viewerRoleLabel } from "./viewer-org-rules";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -35,6 +41,24 @@ function BrandMark({ initial }: { initial: string }) {
         {initial}
       </span>
     </div>
+  );
+}
+
+function OrgIdentity({ name, roleLabel }: { name: string; roleLabel: string | null }) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
+      <span
+        className="body-small font-medium text-white truncate max-w-full"
+        suppressHydrationWarning
+      >
+        {name}
+      </span>
+      {roleLabel && (
+        <span className="bg-[var(--color-white-10)] px-6 body-caption text-[var(--color-white-75)]">
+          {roleLabel}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -54,11 +78,16 @@ function OrgBrandLoading() {
 
 export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const isAdmin = useIsAdmin();
+  const viewer = useViewerOrg();
+  const roleLabel = viewer ? viewerRoleLabel(viewer) : null;
   const enterOrganization = useEnterOrganization();
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const toast = useToast();
+  // Holds the id of the organization being opened, so its row carries the spinner.
+  const switching = useBusyUntilUnload<string>();
+  const isSwitching = switching.held !== null;
 
   // Override-aware active-org lookup: the plugin's useActiveOrganization() is
   // members-only, so it never resolves for Platform Admins inside an org they
@@ -100,9 +129,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const canSwitch = shouldShowOrganizationSwitcher(switchable);
 
   const activeOrgName =
+    viewer?.organizationName ||
     activeOrg?.name?.trim() ||
     switchable.find((org) => org.id === activeOrganizationId)?.name ||
-    "noma dMRV";
+    FALLBACK_ORG_NAME;
   const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
   const organizationStatePending =
@@ -112,21 +142,33 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
       ? allOrgsQuery.isPending && !allOrgsQuery.error
       : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
-  async function handleSelect(organizationId: string) {
+  function handleSelect(organizationId: string, organizationName: string) {
+    if (switching.held) return;
     if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
     }
-    setIsSwitching(true);
+    // A pane with unsaved changes asks before the server session moves.
+    requestAppLeave(() => void switchOrganization(organizationId, organizationName), {
+      description: ORG_SWITCH_DISCARD_DESCRIPTION,
+    });
+  }
+
+  async function switchOrganization(organizationId: string, organizationName: string) {
+    // Stay "Switching" until the page reloads into the new organization; only a failure clears it.
+    switching.hold(organizationId);
+    // The list stays open, carrying the picked row's spinner, until the page unloads.
+    setIsOpen(true);
     try {
-      const result = await enterOrganization(organizationId);
+      const result = await enterOrganization(organizationId, organizationName);
       if (!result.success) {
-        setIsSwitching(false);
-        return;
+        // Revoked access or a deleted organization resolves unsuccessfully without throwing.
+        switching.release();
+        toast.error(orgSwitchFailedMessage(organizationName, result.error));
       }
-      setIsOpen(false);
-    } finally {
-      setIsSwitching(false);
+    } catch {
+      switching.release();
+      toast.error(orgSwitchFailedMessage(organizationName));
     }
   }
 
@@ -146,12 +188,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
           className="flex items-center gap-10 min-w-0"
         >
           <BrandMark initial={orgInitial} />
-          <span
-            className="body-small font-medium text-white truncate"
-            suppressHydrationWarning
-          >
-            {activeOrgName}
-          </span>
+          <OrgIdentity name={activeOrgName} roleLabel={roleLabel} />
         </Link>
       </div>
     );
@@ -172,12 +209,10 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
         className="group flex items-center gap-10 w-full h-full px-16 text-left cursor-pointer hover:bg-[var(--color-white-100)]/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--clr-purple)] transition-colors duration-150 disabled:opacity-60"
       >
         <BrandMark initial={orgInitial} />
-        <span
-          className="body-small font-medium text-white truncate flex-1"
-          suppressHydrationWarning
-        >
-          {isSwitching ? "Switching…" : activeOrgName}
-        </span>
+        <OrgIdentity
+          name={isSwitching ? "Switching…" : activeOrgName}
+          roleLabel={roleLabel}
+        />
         <CaretDownIcon
           size={12}
           weight="bold"
@@ -202,22 +237,34 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
             )}
             {switchable.map((org) => {
               const isSelected = org.id === activeOrganizationId;
+              const isOpening = switching.held === org.id;
               return (
                 <li key={org.id}>
                   <button
                     type="button"
                     role="option"
                     aria-selected={isSelected}
-                    onClick={() => handleSelect(org.id)}
-                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 ${
+                    aria-busy={isOpening || undefined}
+                    onClick={() => handleSelect(org.id, org.name)}
+                    disabled={isSwitching}
+                    className={`w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
-                        : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
+                        : isOpening
+                          ? "text-white"
+                          : "text-[var(--color-white-75)] enabled:hover:text-white enabled:hover:bg-[var(--color-white-100)]/[0.06]"
                     }`}
                   >
                     <span className="truncate">{org.name}</span>
-                    {isSelected && (
-                      <CheckIcon size={14} weight="bold" className="shrink-0" />
+                    {isOpening ? (
+                      <CircleNotchIcon
+                        aria-hidden
+                        size={14}
+                        weight="bold"
+                        className="shrink-0 animate-spin"
+                      />
+                    ) : (
+                      isSelected && <CheckIcon size={14} weight="bold" className="shrink-0" />
                     )}
                   </button>
                 </li>

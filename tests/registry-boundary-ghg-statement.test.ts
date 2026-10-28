@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Boundary tests for the GHG Statement create pipeline against the fake
@@ -165,10 +166,7 @@ async function createFixture(
     // facility's open removals — an already-submitted removal (latest ledger
     // row carries an externalId) completed inside the window. Seed one so
     // creates get past the guard to the registry boundary under test.
-    const [removal] = await db
-      .insert(certifierRemovals)
-      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
-      .returning({ id: certifierRemovals.id });
+    const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON });
     removalId = removal.id;
     externalRemovalId = `rmv_ggs_bd_${runId}`;
     await db.insert(certificationSubmissions).values({
@@ -234,6 +232,9 @@ beforeEach(() => {
 
 
 beforeAll(() => ensureTestOrg());
+
+// 51 statements reconcile and record a sync each; the default 5s is too tight under CI load.
+const PAGINATED_RECONCILE_TIMEOUT_MS = 20_000;
 
 describe("facility certification boundary lock", () => {
   it("serializes a Removal claim behind the GHG creation boundary", async () => {
@@ -986,5 +987,5 @@ describe("registry-list GHG statement reconciliation", () => {
       .from(certifierGhgStatements)
       .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
     expect(rows).toHaveLength(statementCount);
-  });
+  }, PAGINATED_RECONCILE_TIMEOUT_MS);
 });

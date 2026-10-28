@@ -1,0 +1,2 @@
+ALTER TABLE "customer_locations" ADD COLUMN "archived_at" timestamp;--> statement-breakpoint
+ALTER TABLE "customer_locations" ADD CONSTRAINT "customer_locations_default_active" CHECK (not "customer_locations"."is_default" or "customer_locations"."archived_at" is null);

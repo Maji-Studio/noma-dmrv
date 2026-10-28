@@ -122,6 +122,7 @@ export function buildEntityReadinessResult(
   }
 
   for (const category of requiredTransportCategories) {
+    if (category === "sample") continue;
     const legs = transportLegs[category];
     legs.forEach((leg, index) => {
       const legCode = `${category} transport ${index + 1}`;

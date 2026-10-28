@@ -7,11 +7,16 @@
  */
 
 
+import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -19,11 +24,13 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { Application } from "@/db/schema/application";
 import type { ApplicationListItem } from "@/data-access/applications";
 import {
   applicationKeys,
   useApplicationDeliveryOptions,
   useApplications,
+  useApplicationStats,
   useCreateApplication,
   useDeleteApplication,
   useUpdateApplication,
@@ -42,8 +49,8 @@ import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatCalendarDate, formatDateRange } from "@/lib/format-utils";
-import { sumNullableBy } from "@/lib/nullable-sum";
+import { formatCalendarDate } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
@@ -61,6 +68,13 @@ import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
 
+/** Record details an operator can add from the Columns menu. */
+const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
+  deliveryCode: false,
+  cropType: false,
+  fieldIdentifier: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -68,11 +82,12 @@ import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliver
 function createColumns(
   onEdit: (application: ApplicationListItem) => void,
   onDelete: (applicationId: string) => void,
+  locks: RecordLockViews,
 ): ColumnDef<ApplicationListItem>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -87,6 +102,12 @@ function createColumns(
       ),
     },
     {
+      accessorKey: "deliveryCode",
+      meta: { nowrap: true },
+      header: "Delivery",
+      cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
+    },
+    {
       id: "customer",
       header: "Customer / location",
       accessorFn: (row) => `${row.customerName ?? ""} ${row.locationName ?? ""}`.trim(),
@@ -95,7 +116,8 @@ function createColumns(
         return (
           <div className="flex flex-col">
             <span className="text-[var(--color-text-primary)]">
-              {customerName ?? MISSING_VALUE.notAvailable}
+              {/* A delivery without an order has no customer: the relation was never chosen. */}
+              {customerName ?? MISSING_VALUE.notSet}
             </span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
@@ -128,6 +150,16 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
+    },
+    {
+      accessorKey: "cropType",
+      header: "Crop type",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "fieldIdentifier",
+      header: "Field identifier",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",
@@ -171,17 +203,19 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        // A Removal of any kind refuses the delete; a Sent one refuses edits.
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -265,6 +299,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 
   const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("application", displaySideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -326,7 +361,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
-    executeCreate: async (data: ApplicationFormData) => {
+    executeCreate: async ({ data }: { data: ApplicationFormData; onRefusal: SaveRefusalHandler }) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
         throw new Error(result.error || "Application was not created. Check the form.");
@@ -349,8 +384,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Application was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) => {
+      return onRefusal(error, error instanceof Error ? error.message : "Application was not created. Check the form.");
+    },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -366,9 +402,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
   // Handlers
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: ApplicationFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
-  const handleUpdate = async (data: ApplicationFormData) => {
+  const handleUpdate = async (data: ApplicationFormData, onRefusal: SaveRefusalHandler, onCommitted: (record: Application) => void) => {
     if (!displaySideSheet?.entity) return;
     const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
@@ -392,10 +429,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           );
           if (!flushResult.ok) {
             // The update itself committed, so the still-open sheet has to adopt
-            // the version it wrote. Leaving the opened-on snapshot in place
+            // the version and form defaults it wrote, preserving typed input.
+            // Leaving the opened-on snapshot in place
             // would get the operator's next Save refused as stale against
             // their own write (#768).
             const saved = result.data;
+            onCommitted({ ...displaySideSheet.entity, ...saved });
             setSideSheet((prev) =>
               prev?.entity && prev.entity.id === applicationId
                 ? { ...prev, entity: { ...prev.entity, ...saved } }
@@ -429,7 +468,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         );
       }
     } catch (error) {
-      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Application was not saved. Try again.")));
     }
   };
 
@@ -457,6 +496,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const openCreate = () => {
+    createApplication.startDraft();
     void setFocusedApplicationId(null);
     setCreateError(null);
     setUpdateError(null);
@@ -483,11 +523,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   // Memoize columns
-  const columns = createColumns(openEdit, handleDelete);
-
   const items = applications?.items ?? [];
+  const applicationLocks = useRecordLocks("application", items.map((item) => item.id));
+  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks);
   const deliveryOptions = scopedDeliveries ?? deliveries;
-  const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -495,7 +534,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     isLoading,
     setCurrentPage,
   });
-  const totalBiochar = sumNullableBy(items, (item) => item.biocharAppliedTons);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApplicationStats(contextFacilityId || undefined, { enabled: !!contextFacilityId });
 
   const hasActiveFilters =
     !!searchQuery ||
@@ -518,7 +557,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <PageHeader
           area="distribution"
           title="Applications"
-          subtitle="Field applications of biochar to soil"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
       </div>
@@ -564,7 +602,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <PageHeader
         area="distribution"
         title="Applications"
-        subtitle="Field applications of biochar to soil"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -577,22 +614,27 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total applications"
-          value={totalApplications}
+          value={statsData?.totalApplications ?? 0}
+          description="All applications in this facility"
           icon={<MapPinIcon size={24} weight="bold" />}
-          description="Field applications"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Biochar applied"
-          value={formatApplicationKgFromTons(totalBiochar)}
+          title="Total biochar applied"
+          value={formatApplicationKgFromTons(statsData?.totalBiocharAppliedTons)}
+          description="Across all applications in this facility"
           icon={<LeafIcon size={24} weight="bold" />}
-          description="Biochar applied on this page"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
+      <RecordLockListNotice read={applicationLocks} />
+
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={items}
         enableSorting={false}
@@ -611,6 +653,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -665,7 +708,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -713,9 +756,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <DataTable.Pagination />
       </DataTable>
 
-      {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingApplicationId}
@@ -727,12 +767,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           setDeleteError(null);
         }}
         isPending={deleteApplication.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
-        detailToggle
-        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -743,7 +782,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        canEdit={fieldsEditable}
+        canEdit={fieldsEditable && isRecordEditable(sheetLock)}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
         editLabel="Edit application"
         size="wide"
         sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
@@ -751,6 +791,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <ApplicationForm
           key={sideSheetEntity?.id ?? "create"}
           application={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           deliveries={deliveryOptions}
           durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}

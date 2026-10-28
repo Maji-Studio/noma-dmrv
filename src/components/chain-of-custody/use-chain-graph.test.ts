@@ -1,5 +1,18 @@
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { buildRollbackMassTotals } from "@/lib/chain-of-custody/lineage-mass-totals";
+import {
+  RUN_ID,
+  PRODUCT_ID,
+  APPLICATION_ID,
+  SOURCE_EDGE_ID,
+  SHIPMENT_EDGE_ID,
+  APPLICATION_EDGE_ID,
+  massTotalsLineage,
+} from "@/lib/chain-of-custody/lineage-mass-totals-test-fixtures";
+import { expandProductLineages } from "./expand-product-lineages";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
@@ -97,13 +110,13 @@ describe("biochar mass labels", () => {
       massKg: 850, moistureContentPercent: 2, formulationName: null,
       linkedProductionRunId: "run-1", href: "/biochar-products",
     };
-    const nodes = buildLineageNodes(data);
+    const nodes = buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE);
     expect(nodes.find(node => node.kind === "biocharProduct")?.date).toBe("Jul 6, 2026");
     expect(nodes.find(node => node.kind === "application")?.date).toBe("May 20, 2026");
   });
 
   it("shows wet and dry mass together on run, delivery, and application nodes", () => {
-    const nodes = buildLineageNodes(lineage());
+    const nodes = buildLineageNodes(lineage(), UNKNOWN_FACILITY_TIMEZONE);
 
     expect(
       nodes.find((node) => node.kind === "productionRun")?.details,
@@ -142,7 +155,7 @@ describe("biochar mass labels", () => {
       },
     ];
 
-    const details = buildLineageNodes(data).find(
+    const details = buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE).find(
       (node) => node.kind === "feedstock",
     )?.details;
     expect(details).not.toContainEqual(expect.objectContaining({ label: "Inbound" }));
@@ -161,14 +174,14 @@ describe("biochar mass labels", () => {
     data.productionRun!.biocharStorageName = null;
 
     expect(
-      buildLineageNodes(data).find(
+      buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE).find(
         (node) => node.kind === "productionRun",
       )?.code,
     ).toBe("PR-1");
   });
 
   it("keeps the wet and dry pair on the application flow edge", () => {
-    const { edges } = useChainGraph(lineage());
+    const { edges } = useChainGraph(lineage(), { timeZone: UNKNOWN_FACILITY_TIMEZONE });
     const applicationEdge = edges.find(
       (graphEdge) =>
         graphEdge.source === "delivery:delivery-1" &&
@@ -178,6 +191,25 @@ describe("biochar mass labels", () => {
     expect(applicationEdge?.data?.kgLabel).toBe(
       "Wet: 850 kg · Dry: 820 kg",
     );
+  });
+
+  it("uses recorded product mass on the legacy single-source edge with null allocations", () => {
+    const data = lineage();
+    data.biocharProduct = {
+      id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
+      massKg: 850, moistureContentPercent: 2, formulationName: null,
+      linkedProductionRunId: "run-1", href: "/biochar-products",
+    };
+    data.sources = [{
+      productionRun: data.productionRun!, reactor: null, feedstocks: [],
+      allocatedWetMassKg: null, allocatedDryMassKg: null,
+    }];
+
+    const { edges } = useChainGraph(data, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
+    expect(edges.find(graphEdge => graphEdge.id === "production-run:run-1->biochar-product:product-1")?.data)
+      .toMatchObject({ mass: 833, wetKg: 850, unit: "kg", kgLabel: "Wet: 850 kg · Dry: 833 kg" });
+    expect(buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE).find(node => node.kind === "biocharProduct")?.details)
+      .toContainEqual({ label: "Applied from batch", value: "Wet: Not recorded · Dry: Not recorded" });
   });
 
   it("renders every mass-weighted source run with its allocated wet and dry mass", () => {
@@ -232,7 +264,7 @@ describe("biochar mass labels", () => {
       },
     ];
 
-    const { nodes, edges } = useChainGraph(data);
+    const { nodes, edges } = useChainGraph(data, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     expect(
       nodes.filter((node) => node.id.startsWith("production-run:")),
@@ -251,6 +283,43 @@ describe("biochar mass labels", () => {
           graphEdge.target === "biochar-product:product-1",
       )?.data?.kgLabel,
     ).toBe("Wet: 340 kg · Dry: 333.2 kg");
+  });
+
+  it.each([false, true])("sums a shared run's unequal applications regardless of lineage order (reversed: %s)", (reversed) => {
+    const applications = [
+      { id: "application-small", wetKg: 12, dryKg: 9.6 },
+      { id: "application-large", wetKg: 24, dryKg: 19.2 },
+    ];
+    const lineages = applications.map(({ id, wetKg, dryKg }) => {
+      const data = lineage();
+      data.application = {
+        ...data.application, id,
+        biocharAppliedTons: kgToTonnes(wetKg),
+        biocharAppliedDryTons: kgToTonnes(dryKg),
+      };
+      data.biocharProduct = {
+        id: "product-1", code: "BP-1", status: "ready", productionDate: "2026-05-18",
+        massKg: data.delivery.deliveredWetMassKg ?? null, moistureContentPercent: null,
+        formulationName: null, linkedProductionRunId: data.productionRun!.id,
+        href: "/biochar-products",
+      };
+      data.sources = [{
+        productionRun: data.productionRun!, reactor: data.reactor, feedstocks: data.feedstocks,
+        allocatedWetMassKg: wetKg, allocatedDryMassKg: dryKg,
+      }];
+      return data;
+    });
+    const { nodes, edges } = useBatchChainGraph(reversed ? [...lineages].reverse() : lineages, undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
+    const expectedMass = "Wet: 36 kg · Dry: 28.8 kg";
+
+    expect(nodes.find(node => node.id === "production-run:run-1")?.data.details).toContainEqual({
+      label: "Applied from source", value: expectedMass,
+    });
+    expect(nodes.find(node => node.id === "biochar-product:product-1")?.data.details).toContainEqual({
+      label: "Applied from batch", value: expectedMass,
+    });
+    expect(edges.find(graphEdge => graphEdge.source === "production-run:run-1" &&
+      graphEdge.target === "biochar-product:product-1")?.data?.kgLabel).toBe(expectedMass);
   });
 
   it("merges commingled slices without multiplying lot mass or understating applied mass", () => {
@@ -301,7 +370,7 @@ describe("biochar mass labels", () => {
     second.application.biocharAppliedTons = 0.34;
     second.application.biocharAppliedDryTons = 0.3202;
 
-    const { nodes, edges } = useBatchChainGraph([first, second], undefined);
+    const { nodes, edges } = useBatchChainGraph([first, second], undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
     const sourceLabels = ["run-1", "run-2"].map((runId) =>
       edges.find(
         (graphEdge) =>
@@ -403,7 +472,7 @@ describe("roll-forwards", () => {
     ];
     forward.products = [product];
 
-    const { nodes, edges } = useBatchChainGraph(undefined, [forward]);
+    const { nodes, edges } = useBatchChainGraph(undefined, [forward], { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     expect(nodes.map((node) => node.id).sort()).toEqual([
       "biochar-product:product-1",
@@ -423,7 +492,7 @@ describe("roll-forwards", () => {
   });
 
   it("stops at the run when nothing has been drawn from it yet", () => {
-    const { nodes } = useBatchChainGraph([], [rollForward("run-1")]);
+    const { nodes } = useBatchChainGraph([], [rollForward("run-1")], { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     expect(nodes.map((node) => node.id).sort()).toEqual([
       "feedstock:feedstock-run-1",
@@ -453,7 +522,7 @@ describe("roll-forwards", () => {
     ];
     forward.products = [sameProduct, rollForwardProduct("product-2")];
 
-    const { nodes, edges } = useBatchChainGraph([applied], [forward]);
+    const { nodes, edges } = useBatchChainGraph([applied], [forward], { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     expect(nodes.filter((node) => node.id === "production-run:run-1")).toHaveLength(1);
     expect(
@@ -485,7 +554,7 @@ describe("roll-forwards", () => {
     forward.products[1].drawnDryMassKg = 190;
     forward.products[1].drawnWetMassKg = 200;
 
-    const { edges } = useBatchChainGraph(undefined, [forward]);
+    const { edges } = useBatchChainGraph(undefined, [forward], { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     expect(
       edges.find((graphEdge) => graphEdge.id === "production-run:run-1->biochar-product:product-1")?.data?.pctLabel,
@@ -501,7 +570,7 @@ describe("roll-forwards", () => {
     first.products = [rollForwardProduct("product-1")];
     second.products = [{ ...rollForwardProduct("product-1"), drawnDryMassKg: 0 }];
 
-    const product = buildRollForwardNodes([first, second]).find(
+    const product = buildRollForwardNodes([first, second], UNKNOWN_FACILITY_TIMEZONE).find(
       (node) => node.id === "biochar-product:product-1",
     );
 
@@ -519,7 +588,7 @@ describe("roll-forwards", () => {
       forward.products = [product];
     }
 
-    const { edges } = useBatchChainGraph(undefined, [first, second]);
+    const { edges } = useBatchChainGraph(undefined, [first, second], { timeZone: UNKNOWN_FACILITY_TIMEZONE });
 
     const shipped = edges.filter((graphEdge) => graphEdge.id === "biochar-product:product-1->delivery:delivery-9");
     expect(shipped).toHaveLength(1);
@@ -638,9 +707,107 @@ it("keeps both products sharing a run and one physical application in the graph"
     { product: { ...lineage().biocharProduct!, id: "A", code: "A" }, sources: [source], allocatedWetMassKg: 785.714, allocatedDryMassKg: 450 },
     { product: { ...lineage().biocharProduct!, id: "B", code: "B" }, sources: [{ ...source, allocatedWetMassKg: 214.286, allocatedDryMassKg: 125 }], allocatedWetMassKg: 214.286, allocatedDryMassKg: 125 },
   ];
-  const graph = useChainGraph(base);
+  const graph = useChainGraph(base, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
   expect(graph.nodes.filter(n => n.id.startsWith("biochar-product:"))).toHaveLength(2);
   expect(graph.nodes.filter(n => n.id.startsWith("application:"))).toHaveLength(1);
   expect(graph.edges.filter(e => e.source.startsWith("biochar-product:")).map(e => e.data?.mass)).toEqual([0.45, 0.125]);
   expect(graph.edges.find(e => e.source === `delivery:${base.delivery.id}`)?.data?.kgLabel).toBe("Wet: 1,000 kg · Dry: 575 kg");
+});
+
+describe("roll-up rendering integration", () => {
+  it("chooses source allocations for popups and applied totals for merged product cards", () => {
+    const data = massTotalsLineage(850, 820);
+    data.sources![0].allocatedWetMassKg = 900;
+    data.sources![0].allocatedDryMassKg = 833;
+    const totals = buildRollbackMassTotals([data]);
+    const sourceRow = { label: "Applied from batch", value: "Wet: 900 kg · Dry: 833 kg" };
+    const appliedRow = { label: "Applied from batch", value: "Wet: 850 kg · Dry: 820 kg" };
+    expect(buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE).find(node => node.id === PRODUCT_ID)?.details).toEqual([sourceRow]);
+    expect(buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE, totals, "applied").find(node => node.id === PRODUCT_ID)?.details)
+      .toEqual([appliedRow]);
+    expect(useChainGraph(data, { timeZone: UNKNOWN_FACILITY_TIMEZONE }).nodes.find(node => node.id === PRODUCT_ID)?.data.details).toEqual([appliedRow]);
+    expect(useBatchChainGraph([data], undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE }).nodes.find(node => node.id === PRODUCT_ID)?.data.details)
+      .toEqual([appliedRow]);
+  });
+
+  it.each([
+    [null, null, "Wet: Not recorded · Dry: Not recorded"],
+    [120, null, "Wet: 120 kg · Dry: Not recorded"],
+    [null, 90, "Wet: Not recorded · Dry: 90 kg"],
+    [0, 0, "Wet: 0 kg · Dry: 0 kg"],
+  ] as const)("renders product wet=%s and dry=%s without fabricating zero", (wet, dry, expected) => {
+    const data = massTotalsLineage(wet, dry);
+    expect(buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE).find(node => node.id === PRODUCT_ID)?.details)
+      .toContainEqual({ label: "Applied from batch", value: expected });
+    expect(useBatchChainGraph([data], undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE }).nodes.find(node => node.id === PRODUCT_ID)?.data.details)
+      .toContainEqual({ label: "Applied from batch", value: expected });
+  });
+
+  it.each([false, true])("looks up independently summed wet/dry values on merged edges (reversed: %s)", reversed => {
+    const data = [massTotalsLineage(120, null), massTotalsLineage(null, 90)];
+    const graph = useBatchChainGraph(reversed ? [...data].reverse() : data, undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
+    expect(graph.edges.find(edge => edge.id === SOURCE_EDGE_ID)?.data?.kgLabel)
+      .toBe("Wet: 120 kg · Dry: 90 kg");
+    for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+      expect(graph.edges.find(edge => edge.id === id)?.data?.kgLabel)
+        .toBe("Wet: 120 kg · Dry: 90 kg");
+    }
+    expect(graph.nodes.find(node => node.id === RUN_ID)?.data.details)
+      .toContainEqual({ label: "Applied from source", value: "Wet: 120 kg · Dry: 90 kg" });
+  });
+});
+
+it("shows the full run allocation in the Carbon Viewer popup for two products", () => {
+  const data = massTotalsLineage(300, 290);
+  const second = massTotalsLineage(200, 190);
+  data.application.biocharAppliedTons = 0.5;
+  data.application.biocharAppliedDryTons = 0.48;
+  data.products = [
+    { product: data.biocharProduct!, sources: data.sources!, allocatedWetMassKg: 300, allocatedDryMassKg: 290 },
+    { product: { ...second.biocharProduct!, id: "product-2" }, sources: second.sources!, allocatedWetMassKg: 200, allocatedDryMassKg: 190 },
+  ];
+  const slices = expandProductLineages(data);
+  const totals = buildRollbackMassTotals(slices);
+  const expected = { label: "Applied from source", value: "Wet: 500 kg · Dry: 480 kg" };
+  const popupNodes = buildLineageNodes(data, UNKNOWN_FACILITY_TIMEZONE);
+  expect(popupNodes.filter(node => node.id === RUN_ID)).toHaveLength(1);
+  expect(popupNodes.filter(node => node.kind === "biocharProduct")).toHaveLength(2);
+  expect(popupNodes.find(node => node.id === RUN_ID)?.details).toContainEqual(expected);
+  for (const slice of slices) {
+    expect(buildLineageNodes(slice, UNKNOWN_FACILITY_TIMEZONE, totals).find(node => node.id === RUN_ID)?.details).toContainEqual(expected);
+  }
+  expect(useChainGraph(data, { timeZone: UNKNOWN_FACILITY_TIMEZONE }).nodes.find(node => node.id === RUN_ID)?.data.details).toContainEqual(expected);
+});
+
+it("restores the application's 200.2 kg rounding boundary while retaining native edge floats", () => {
+  const graph = useBatchChainGraph([massTotalsLineage(100.002, 100.002), massTotalsLineage(100.148, 100.148)], undefined, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
+  expect(graph.nodes.find(node => node.id === APPLICATION_ID)?.data.details)
+    .toContainEqual({ label: "Biochar applied", value: "Wet: 200.2 kg · Dry: 200.2 kg" });
+  for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+    expect(graph.edges.find(edge => edge.id === id)?.data?.mass).toBe(0.100002 + 0.100148);
+  }
+});
+
+it.each([0.0288, 0.82])("keeps the original %s tDry branch-share value exactly", dryTonnes => {
+  const data = massTotalsLineage();
+  data.application.biocharAppliedDryTons = dryTonnes;
+  const graph = useChainGraph(data, { timeZone: UNKNOWN_FACILITY_TIMEZONE });
+  for (const id of [SHIPMENT_EDGE_ID, APPLICATION_EDGE_ID]) {
+    expect(graph.edges.find(edge => edge.id === id)?.data?.mass).toBe(dryTonnes);
+  }
+});
+
+it("renders missing roll-up entries without throwing or fabricating mass", () => {
+  const nodes = buildLineageNodes(massTotalsLineage(), UNKNOWN_FACILITY_TIMEZONE, buildRollbackMassTotals([]));
+  for (const [id, label] of [[PRODUCT_ID, "Applied from batch"], [APPLICATION_ID, "Biochar applied"]]) {
+    expect(nodes.find(node => node.id === id)?.details)
+      .toContainEqual({ label, value: "Wet: Not recorded · Dry: Not recorded" });
+  }
+});
+
+it("dates delivery graph nodes on the facility calendar", () => {
+  const data = lineage();
+  data.delivery.deliveryDate = new Date("2026-10-21T21:30:00Z");
+  const node = buildLineageNodes(data, "Africa/Dar_es_Salaam").find(node => node.kind === "delivery");
+  expect(node?.date).toBe("Oct 22, 2026");
 });

@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { OAUTH_RESTART_MESSAGE } from "@/config/oauth";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth/client";
+import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
+import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
 
-const DEFAULT_SIGN_IN_PATH = "/dashboard";
+const DEFAULT_SIGN_IN_PATH = "/";
 
 function getSafeSignInPath(from: string | null): string {
   if (
@@ -36,6 +39,10 @@ export function LoginForm() {
   const { signIn, resendVerification } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // The request ends before the next page shows: hold busy through the navigation (a route change in the app,
+  // an unload for the OAuth continuation) and clear it only on a failure.
+  const [navigating, startNavigation] = useTransition();
+  const leaving = useBusyUntilUnload();
 
   const {
     register,
@@ -58,7 +65,12 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
-      router.push(getSafeSignInPath(searchParams.get("from")));
+      if (result.redirectUrl) {
+        if (followOAuthContinuation(result.redirectUrl, searchParams)) leaving.hold(true);
+        else setServerError(OAUTH_RESTART_MESSAGE);
+        return;
+      }
+      startNavigation(() => router.push(getSafeSignInPath(searchParams.get("from"))));
     } else {
       setServerError(
         result.error || "You could not be signed in. Check your details and try again.",
@@ -94,6 +106,8 @@ export function LoginForm() {
     setResendLoading(false);
   }
 
+  const busy = isSubmitting || navigating || !!leaving.held;
+
   return (
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       <FormField id="email" label="Email" error={errors.email?.message}>
@@ -101,7 +115,7 @@ export function LoginForm() {
           id="email"
           type="email"
           placeholder="name@darkearthcarbon.com"
-          disabled={isSubmitting}
+          disabled={busy}
           error={!!errors.email}
           aria-label="Email address"
           {...register("email")}
@@ -113,7 +127,7 @@ export function LoginForm() {
           id="password"
           type="password"
           placeholder="Enter your password"
-          disabled={isSubmitting}
+          disabled={busy}
           error={!!errors.password}
           aria-label="Password"
           {...register("password")}
@@ -156,9 +170,9 @@ export function LoginForm() {
         type="submit"
         variant="primary"
         width="full"
-        disabled={isSubmitting}
+        busy={busy}
       >
-        {isSubmitting ? "Signing in..." : "Sign in"}
+        Sign in
       </Button>
     </form>
   );

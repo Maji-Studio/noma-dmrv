@@ -209,13 +209,13 @@ describe("formulation REST writes", { timeout: TIMEOUT_MS }, () => {
     const order = await insertReadOrder(a, "FORMULATION-ORDER", { formulationId: row.id, archivedAt: archived ? new Date() : null });
     const before = await snapshot();
     const refusal = await problem(await mutate("delete", row.id), 409, "conflict", "/formulationId");
-    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/formulationId", meta: { orderCodes: [order.code] } }));
+    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/formulationId", meta: { orderCodes: [order.code], reason: "in_use" } }));
     expect(await snapshot()).toEqual(before);
   });
 
   it("maps bin and product blockers and used-line removal to conflict metadata", async () => {
     const binRefusal = await problem(await mutate("delete", a.recipe.id), 409, "conflict", "/formulationId");
-    expect(binRefusal.errors).toContainEqual(expect.objectContaining({ meta: { binCodes: [a.bin.code] } }));
+    expect(binRefusal.errors).toContainEqual(expect.objectContaining({ meta: { binCodes: [a.bin.code], reason: "in_use" } }));
     const made = await runOperation(makeBiocharProduct, a.ctx, {
       facilityId: a.facility.id, formulationId: a.recipe.id, placedAt: "2026-09-12T12:00:00.000Z",
       sourceBiocharStorageLocationId: a.source.id, storageLocationId: a.bin.id,
@@ -225,7 +225,7 @@ describe("formulation REST writes", { timeout: TIMEOUT_MS }, () => {
     const before = await snapshot();
     const productCodes = [made.data.product.code];
     const deletion = await problem(await mutate("delete", a.recipe.id), 409, "conflict", "/formulationId");
-    expect(deletion.errors).toContainEqual(expect.objectContaining({ meta: { productCodes } }));
+    expect(deletion.errors).toContainEqual(expect.objectContaining({ meta: { productCodes, reason: "in_use" } }));
     const removal = await problem(await mutate("patch", a.recipe.id, { lines: [] }), 409, "conflict", "/lines");
     expect(removal.errors).toContainEqual(expect.objectContaining({ meta: {
       formulationIngredientId: a.ingredient.id, feedstockTypeId: a.ingredientType.id, productCodes,

@@ -25,7 +25,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
@@ -33,6 +33,8 @@ import {
   ClipboardTextIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { Button, EmptyState, Modal } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -67,6 +69,7 @@ import {
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
 import { Notice } from "@/components/ui/notice";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -137,13 +140,16 @@ function DialogBody({
       registryStatementsExpanded,
     );
 
+  const formId = useId();
   const {
     register,
     handleSubmit,
     watch,
     trigger,
+    control,
     setError,
     clearErrors,
+    resetField,
     formState: { errors },
   } = useForm<CreateGhgStatementInput>({
     resolver: zodResolver(createGhgStatementSchema),
@@ -199,6 +205,7 @@ function DialogBody({
     await goTo(stepIndex + 1);
   };
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const onCreate = handleSubmit(async (data) => {
     if (isProduction && !data.confirmProduction) {
       setError("confirmProduction", {
@@ -224,12 +231,11 @@ function DialogBody({
         toast.success(`Created with ${linked}.`);
       }
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The GHG Statement was not created. Check the period and try again.",
-      });
+      const footer = refuseSave(
+        err,
+        toSaveErrorMessage(err, "The GHG Statement was not created. Check the period and try again."),
+      );
+      if (footer) setError("root.serverError", { message: footer });
     }
   });
 
@@ -237,8 +243,8 @@ function DialogBody({
   const isLastStep = stepIndex === STEPS.length - 1;
 
   return (
-    <div className="flex flex-col gap-24">
-      <header className="flex flex-col gap-4 pr-40">
+    <div id={formId} className="flex flex-col gap-24">
+      <header className="flex flex-col gap-4">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
           {result
             ? result.outcome === "existing"
@@ -324,31 +330,15 @@ function DialogBody({
         )}
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-start gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
         {result ? (
-          <Button variant="primary" onClick={onClose}>
+          <Button className={PHONE_TOUCH_TARGET} variant="primary" onClick={onClose}>
             Done
           </Button>
         ) : (
           <>
-            <Button
-              variant="default"
-              onClick={onClose}
-              disabled={mutation.isPending}
-            >
-              Cancel
-            </Button>
-            {stepIndex > 0 && (
-              <Button
-                variant="default"
-                onClick={() => setStepIndex((s) => s - 1)}
-                disabled={mutation.isPending}
-              >
-                Back
-              </Button>
-            )}
             {isLastStep ? (
-              <Button
+              <Button className={PHONE_TOUCH_TARGET}
                 variant="primary"
                 onClick={onCreate}
                 busy={mutation.isPending}
@@ -357,7 +347,7 @@ function DialogBody({
                 Create GHG Statement
               </Button>
             ) : (
-              <Button
+              <Button className={PHONE_TOUCH_TARGET}
                 variant="primary"
                 onClick={advance}
                 // On the Period step, wait for the existing statements the
@@ -375,6 +365,22 @@ function DialogBody({
                 Next
               </Button>
             )}
+            {stepIndex > 0 && (
+              <Button className={PHONE_TOUCH_TARGET}
+                variant="default"
+                onClick={() => setStepIndex((s) => s - 1)}
+                disabled={mutation.isPending}
+              >
+                Back
+              </Button>
+            )}
+            <Button className={PHONE_TOUCH_TARGET}
+              variant="default"
+              onClick={onClose}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
           </>
         )}
       </div>
@@ -669,7 +675,8 @@ function StepPreview({
             facilityId={facilityId}
             entries={inPeriod.map((removal) => ({
               removalId: removal.removalId,
-              label: removal.externalId,
+              label: removal.code,
+              registryId: removal.externalId,
               completedOn: removal.completedOn,
               creditBatches: removal.creditBatches,
             }))}
@@ -701,7 +708,8 @@ function StepPreview({
                 facilityId={facilityId}
                 entries={outside.map((removal) => ({
                   removalId: removal.removalId,
-                  label: removal.externalId,
+                  label: removal.code,
+              registryId: removal.externalId,
                   completedOn: removal.completedOn,
                   creditBatches: removal.creditBatches,
                 }))}

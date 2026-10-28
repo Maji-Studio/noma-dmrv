@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -33,6 +34,7 @@ import { creditBatchStatus } from "@/db/schema/common";
 import { updateFacility } from "@/data-access/facilities";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { SafeError } from "@/lib/errors";
+import { DURABILITY_TIER_ROLE_REFUSAL } from "@/data-access/facility-mutations";
 
 type CreditBatchStatus = (typeof creditBatchStatus.enumValues)[number];
 
@@ -134,10 +136,7 @@ async function insertBlockingRemoval(
   chain: FacilityChain,
   status: "draft" | "submitted" | "accepted" = "submitted",
 ): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId: chain.facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId: chain.facilityId });
   createdIds.certifierRemovals.push(removal.id);
 
   const [submission] = await db
@@ -245,6 +244,34 @@ describe("updateFacility durability-tier guard", () => {
     });
 
     expect(updated.durabilityOption).toBe("1000_year");
+  });
+
+  it("refuses a Member's tier change and keeps the tier", async () => {
+    const chain = await setupFacility("member-change", "200_year");
+    const member = { ...makeTestOrgContext(TEST_USER_ID), orgRole: "member" as const };
+
+    await expect(
+      updateFacility(member, chain.facilityId, {
+        expectedVersion: await masterDataVersion(member, "facilities", chain.facilityId),
+        durabilityOption: "1000_year",
+      }),
+    ).rejects.toThrow(DURABILITY_TIER_ROLE_REFUSAL);
+
+    expect(await tierOf(chain.facilityId)).toBe("200_year");
+  });
+
+  it("lets a Member save site details that echo the unchanged tier", async () => {
+    const chain = await setupFacility("member-echo", "200_year");
+    const member = { ...makeTestOrgContext(TEST_USER_ID), orgRole: "member" as const };
+
+    const updated = await updateFacility(member, chain.facilityId, {
+      expectedVersion: await masterDataVersion(member, "facilities", chain.facilityId),
+      durabilityOption: "200_year",
+      contactEmail: "member@example.com",
+    });
+
+    expect(updated.contactEmail).toBe("member@example.com");
+    expect(updated.durabilityOption).toBe("200_year");
   });
 
   it("allows a non-tier update even when a blocking batch exists", async () => {

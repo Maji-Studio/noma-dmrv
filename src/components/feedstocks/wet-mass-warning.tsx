@@ -43,6 +43,7 @@ export function WetMassWarning({
     <FormField
       id="overrideJustification"
       label="Over-allocation justification"
+      required
       error={justificationError}
       warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
     >

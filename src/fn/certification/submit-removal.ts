@@ -1,3 +1,5 @@
+import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
+import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
@@ -377,7 +379,7 @@ async function submitRemovalCore(
       localEntityId: removalId,
     },
     guard: mappingGuard,
-    policy: { onSubmittedHashChanged: "supersede", allowEvidenceRefresh: true },
+    policy: REMOVAL_SUBMISSION_CLAIM_POLICY,
     tentativeInputs: initialBuild,
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,
@@ -516,6 +518,7 @@ async function submitRemovalCore(
           removalId,
           submissionId: claimed.row.id,
           creditBatchIds: productionClaimBatchIds,
+          entryClaim: { memberBatchIds: ctx.memberBatches.map((batch) => batch.id), frozenEntrySet: readRemovalEntrySnapshot(claimed.row).frozenEntrySet },
         });
         if (claimed.reason === "rejected-hash-changed") {
           log.warn(
@@ -606,7 +609,7 @@ interface RunRemovalSubmissionArgs {
   fixed: ResolvedFixedInput[];
   template: IsometricGhgEntryTemplate;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  // §8.6.2 window: production start → latest application date (issue #320).
+  // Facility calendar dates: production start → latest application (issue #1282).
   reportingWindow: Parameters<
     typeof buildCreateGhgEntryRequest
   >[0]["reportingWindow"];
@@ -655,9 +658,8 @@ async function runRemovalSubmission({
   // On resume the datapoint bodies and fixed bindings are snapshot truth, so
   // the removal body's reporting window must also come from the snapshot — not
   // the live window, whose lineage/run set may have shifted while the draft
-  // was locked (a pre-#320 draft correctly resumes with its locked
-  // production-end window). On create, the snapshot was just built from this
-  // same window, so the override is a no-op.
+  // was locked. Resume preserves the saved dates. On create, the snapshot was
+  // just built from this same window, so the override is a no-op.
   const effectiveWindow = resumed
     ? readRemovalReportingWindow(row)
     : reportingWindow;

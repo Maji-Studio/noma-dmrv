@@ -39,7 +39,7 @@ function sectionWithHeading(page: Page, heading: string): Locator {
 
 async function openOrganizationSettings(page: Page): Promise<void> {
   await enterDefaultOrganization(page);
-  await page.goto("/settings/organization");
+  await page.goto("/settings/members");
   // First render may hit a dev-server compile of this route; allow extra time.
   // The route is now a pane inside the settings console: `Members` is both the
   // page title and the pane heading, and the rail carries the rest.
@@ -79,12 +79,12 @@ test.describe("Organization foundation UI", () => {
 
     const membersSection = sectionWithHeading(page, "Current members");
     const memberRows = membersSection.getByRole("listitem");
-    const ownerRoleSelect = membersSection
+    const adminRoleSelect = membersSection
       .locator('select[aria-label^="Role for "]')
-      .filter({ has: page.locator('option[value="owner"]:checked') });
+      .filter({ has: page.locator('option[value="admin"]:checked') });
 
     await expect(memberRows.first()).toBeVisible();
-    await expect(ownerRoleSelect.first()).toHaveValue("owner");
+    await expect(adminRoleSelect.first()).toHaveValue("admin");
 
     const pendingSection = sectionWithHeading(page, "Pending invitations");
     await revokeInviteIfPresent(page, pendingSection);
@@ -102,22 +102,24 @@ test.describe("Organization foundation UI", () => {
     const pendingSection = sectionWithHeading(page, "Pending invitations");
     await revokeInviteIfPresent(page, pendingSection);
 
-    const inviteSection = sectionWithHeading(page, "Invite a member");
-    await inviteSection.getByLabel("Email").fill(INVITEE_EMAIL);
-    await inviteSection.getByLabel("Role").selectOption("member");
-    await inviteSection
-      .getByRole("button", { name: "Send invitation" })
-      .click();
+    const membersSection = sectionWithHeading(page, "Current members");
+    await membersSection.getByRole("button", { name: "Invite member" }).click();
+    const dialog = page.getByRole("dialog", { name: "Invite a member" });
+    await dialog.getByLabel("Email").fill(INVITEE_EMAIL);
+    await dialog.getByLabel("Role").selectOption("member");
+    await dialog.getByRole("button", { name: "Send invitation" }).click();
+    await expect(dialog).toBeHidden();
 
-    const shareLinkInput = inviteSection
-      .getByText("Share this link with the invitee", { exact: true })
-      .locator("..")
-      .getByRole("textbox");
+    const shareLinkInput = page.getByRole("textbox", {
+      name: "Invitation link",
+    });
     const pendingInvitation = pendingSection
       .getByRole("listitem")
       .filter({ hasText: INVITEE_EMAIL });
 
     try {
+      // CI has no Resend keys, so the email is not sent: the notice says so and keeps the link.
+      await expect(page.getByText(`The email to ${INVITEE_EMAIL} did not send`)).toBeVisible();
       await expect(shareLinkInput).toBeVisible();
       await expect(shareLinkInput).toHaveValue(
         /^https?:\/\/.+\/accept-invitation\/.+/,
@@ -133,26 +135,37 @@ test.describe("Organization foundation UI", () => {
     await expect(pendingInvitation).toHaveCount(0);
   });
 
-  test("admin directory lists the seeded organization and enters its dashboard", async ({
+  test("Platform Organizations lists the seeded organization and enters its dashboard", async ({
     adminPage,
   }) => {
     const page = adminPage;
     await page.goto("/admin/organizations");
 
-    const organizationsSection = sectionWithHeading(page, "Organizations");
-    const organization = organizationsSection
-      .getByRole("listitem")
-      .filter({ hasText: ORGANIZATION_NAME });
+    const list = page.getByRole("navigation", { name: "Organizations" });
+    const organization = list
+      .getByRole("button")
+      .filter({ has: page.getByText(ORGANIZATION_NAME, { exact: true }) });
     await expect(organization).toBeVisible();
     await expect(organization).toContainText(/\d+ members?/);
+    await expect(list.getByRole("button", { name: "New organization" })).toBeVisible();
 
-    const createSection = sectionWithHeading(page, "Create organization");
-    await expect(
-      createSection.getByRole("button", { name: "Create organization" }),
-    ).toBeEnabled();
+    // Switches to it, or recognizes it as current when an earlier test already did.
+    await enterDefaultOrganization(page);
 
-    await organization.getByRole("button", { name: "Enter" }).click();
-    await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+    // A Platform Admin without a membership works under the Platform Admin bar.
+    const bar = page.getByRole("region", { name: "Platform Admin" });
+    await expect(bar).toContainText(`Platform Admin in ${ORGANIZATION_NAME}`);
+    await expect(bar.getByRole("link", { name: "Back to Platform" })).toHaveAttribute(
+      "href",
+      "/admin/organizations",
+    );
+
+    // The organization the admin is in says so and offers no switch.
+    await page.goto("/admin/organizations");
+    await organization.click();
+    const panel = page.getByRole("article", { name: ORGANIZATION_NAME });
+    await expect(panel).toContainText(`You're working in ${ORGANIZATION_NAME}.`);
+    await expect(panel.getByRole("button", { name: /^Switch to/ })).toHaveCount(0);
   });
 
   test("single-organization sidebar renders the active organization as a dashboard link", async ({

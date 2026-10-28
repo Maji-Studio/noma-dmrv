@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { creditBatchApplications, creditBatches } from "@/db/schema";
 import { certifierRemovals } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -8,7 +8,10 @@ import { requireOrgScope } from "./utils";
 export interface CreditBatchCertificationLink {
   id: string;
   facilityId: string;
+  removalTemplateId: string | null;
   removalId: string | null;
+  removalCode: string | null;
+  productionEmissionsClaimedByRemovalId: string | null;
   ghgStatementId: string | null;
   removalStartedOn: string | null;
   removalCompletedOn: string | null;
@@ -17,15 +20,19 @@ export interface CreditBatchCertificationLink {
 export async function listCreditBatchCertificationLinks(
   ctx: OrgContext,
   batchIds: string[],
+  executor: typeof db | DbTransaction = db,
 ): Promise<CreditBatchCertificationLink[]> {
   requireOrgScope(ctx);
   if (batchIds.length === 0) return [];
 
-  const rows = await db
+  const rows = await executor
     .selectDistinct({
       id: creditBatches.id,
       facilityId: creditBatches.facilityId,
+      removalTemplateId: creditBatches.removalTemplateId,
       removalId: creditBatchApplications.removalId,
+      removalCode: certifierRemovals.code,
+      productionEmissionsClaimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
       ghgStatementId: certifierRemovals.ghgStatementId,
       removalStartedOn: certifierRemovals.startedOn,
       removalCompletedOn: certifierRemovals.completedOn,
@@ -60,7 +67,10 @@ export async function listCreditBatchCertificationLinks(
   return rows.map((row) => ({
     id: row.id,
     facilityId: row.facilityId,
+    removalTemplateId: row.removalTemplateId,
     removalId: row.removalId,
+    removalCode: row.removalCode,
+    productionEmissionsClaimedByRemovalId: row.productionEmissionsClaimedByRemovalId,
     ghgStatementId: row.ghgStatementId,
     removalStartedOn: row.removalStartedOn,
     removalCompletedOn: row.removalCompletedOn,

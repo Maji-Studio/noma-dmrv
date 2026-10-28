@@ -1,13 +1,10 @@
 /**
- * Credit-batch side-sheet view mode — the sections config for EntitySideSheet.
+ * Credit-batch side-sheet view mode, the sections config for EntitySideSheet.
  *
- * One question drives the order: is this batch ready to become credits, and
- * what needs fixing if not? Certification progress leads, then the batch's
- * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, notes, and the batch's
- * recorded activity (which fetches its own summary). The interactive
- * certification checklist and lab-sample panels mount below via
- * `viewModeChildren` because they fetch their own data.
+ * The sheet is a preview of the batch page (`/credit-batches/[id]`), which
+ * holds the open items, Samples and activity. Certification progress leads,
+ * then the batch's identity (mirroring the edit form's section titles), the
+ * member production runs closed by the carbon estimate they produce, and notes.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -24,9 +21,10 @@ import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { APPLIED_DRY_LABEL } from "@/lib/credit-batches/batch-page";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
 import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
@@ -36,7 +34,7 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
-import { CreditBatchActivitySection } from "@/components/activity";
+import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -52,7 +50,7 @@ const DURABILITY_PERCENT_DIGITS = 1;
  * Why the estimate is missing, as one caption under the empty figure. Setup
  * gaps come first because they block every other input.
  */
-function carbonEstimateGap(missingInputs: readonly string[]): string | null {
+export function carbonEstimateGap(missingInputs: readonly string[]): string | null {
   if (missingInputs.includes("facilityCertifierProject")) return "No certifier project is linked to this facility.";
   if (missingInputs.includes("isometricCertifier")) return "Estimates are available for Isometric projects only.";
   if (missingInputs.includes(STORED_CO2E_PREVIEW_REVERIFICATION_GAP)) return "Paused for 200-year batches until the soil storage module is re-verified.";
@@ -72,9 +70,9 @@ function formatInput(value: number | null, unit: string): string {
  *
  * It closes the Production runs section because the runs listed above it are
  * what it is computed from. The figure is the only thing an operator reads off
- * the block, and both levels show it. The physical inputs the
- * registry turns into deductions are the arithmetic behind it, not a competing
- * list, so they sit under Show calculation as label and figure rows.
+ * the block. The physical inputs the registry turns into deductions are the
+ * arithmetic behind it, not a competing list, so they sit behind the caption's
+ * (i) as label and figure rows.
  *
  * The caption names the figure, so the headline carries no label of its own.
  * There is no gross-to-net chain to draw here: noma submits input quantities
@@ -119,7 +117,7 @@ function CreditBatchCarbonEstimate({
         value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
         sub={gap ?? undefined}
       />}
-      calculation={
+      explanation={
         <div className="flex flex-col gap-8">
           {runsPending ? (
             <StockRows
@@ -128,7 +126,7 @@ function CreditBatchCarbonEstimate({
                 label: "Production inputs",
                 value: (
                   <span aria-busy={isLoadingRuns || undefined} className="text-[var(--color-text-tertiary)]">
-                    {runsError ? `${MISSING_VALUE.notAvailable}. Reload the production runs.` : "Loading…"}
+                    {runsError ? `${LOAD_FAILED}. Reload the page.` : "Loading…"}
                   </span>
                 ),
               }]}
@@ -150,7 +148,7 @@ function formatDurabilityPercent(fraction: number): string {
   return `${(fraction * PERCENT_SCALE).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
 }
 
-function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
+export function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
 }
 
@@ -268,12 +266,16 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
-  /** Owner or Admin: may switch the batch's Removal template. */
+  /** Admin: may switch the batch's Removal template. */
   canManage?: boolean;
   /** A submitted Removal holds the batch, so its definition is locked. */
   locked?: boolean;
   /** The deep-link focus target the sheet was opened with. */
   activeFocusTarget?: string | null;
+  /** A Removal holds biochar from this batch (`isCreditBatchMembershipLocked`). */
+  inRemoval?: boolean;
+  /** Applied dry biochar (kg) from the page model; undefined while it loads, null when it failed. */
+  appliedDryKg?: number | null;
 }
 
 export function creditBatchSheetSections({
@@ -288,8 +290,13 @@ export function creditBatchSheetSections({
   canManage = false,
   locked = false,
   activeFocusTarget,
+  inRemoval = false,
+  appliedDryKg,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
+  const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
+    ? healthSummary?.productionEmissionsClaimedByRemovalCode
+    : healthSummary?.removalCode;
   const preview = creditBatch.co2eStoredPreview;
   const durabilityResult = preview?.applicationResults.find(
     (result) => result.fDurable != null,
@@ -312,7 +319,7 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
-          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">Production emissions included in Removal {removalId.slice(0, 8)}…</Link>}
+          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}
@@ -331,6 +338,8 @@ export function creditBatchSheetSections({
           canManage={canManage}
           locked={locked}
           activeFocusTarget={activeFocusTarget}
+          linesToDecide={healthSummary?.linesToDecide ?? 0}
+          inRemoval={inRemoval}
         />
       ),
     },
@@ -343,26 +352,35 @@ export function creditBatchSheetSections({
         { label: "Start date", value: formatDate(creditBatch.startDate) },
         { label: "End date", value: formatDate(creditBatch.endDate) },
         {
-          label: "Applied biochar",
-          value: formatTonnes(creditBatch.appliedWeightTons),
+          // Dry, from the page model's slices, as on the batch page.
+          label: APPLIED_DRY_LABEL,
+          // Null is a failed page model read, so the field says so instead of a token.
+          value: appliedDryKg === null ? LOAD_FAILED : appliedDryKg === undefined ? null : formatTonnes(kgToTonnes(appliedDryKg)),
+          pending: appliedDryKg === undefined,
+          ...(appliedDryKg === null ? { valuePresent: false } : {}),
         },
         ...(durabilityResult?.fDurable != null
-          ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
+          ? [{
+              label: "Durability estimate (capped)",
+              value: formatDurabilityPercent(durabilityResult.fDurable),
+              // How the estimate was reached: the raw figure, the cap and the
+              // preview's provenance. Explanation, so it opens from an (i).
+              explanationTitle: "Durability estimate",
+              explanation: durabilityResult.rawFDurable != null ? (
+                <StockRows
+                  label="Durability estimate basis"
+                  rows={[
+                    { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
+                    { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
+                    // Provenance rows: one the preview does not carry is left out.
+                    ...(preview?.componentKey ? [{ label: "Preview component", value: preview.componentKey }] : []),
+                    ...(preview?.formulaVersion ? [{ label: "Preview formula", value: preview.formulaVersion }] : []),
+                  ]}
+                />
+              ) : undefined,
+            }]
           : []),
       ],
-      // How the durability estimate was reached: the raw figure, the cap and
-      // the preview's provenance. Explanation, so Detailed only.
-      explanation: durabilityResult?.rawFDurable != null && durabilityResult.fDurable != null ? (
-        <StockRows
-          label="Durability estimate basis"
-          rows={[
-            { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
-            { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
-            { label: "Preview component", value: preview?.componentKey ?? MISSING_VALUE.notAvailable },
-            { label: "Preview formula", value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable },
-          ]}
-        />
-      ) : undefined,
     },
     {
       title: "Production runs",
@@ -387,18 +405,18 @@ export function creditBatchSheetSections({
       ),
     },
     {
-      id: "notes",
-      fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
-    },
-    {
-      title: "Activity",
+      id: "emissions",
       fields: [],
       content: (
-        <CreditBatchActivitySection
+        <CreditBatchEmissionsPanel
           creditBatchId={creditBatch.id}
           facilityId={creditBatch.facilityId}
         />
       ),
+    },
+    {
+      id: "notes",
+      fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
     },
   ];
 }

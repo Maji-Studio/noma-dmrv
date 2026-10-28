@@ -1,4 +1,6 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Orders React Query Hooks
@@ -16,6 +18,7 @@ import type {
 import type { PaginatedOrders, OrderWithRelations } from "@/data-access/orders";
 import {
   getOrdersFn,
+  getOrderStatsFn,
   getOrdersForSelectFn,
   createOrderFn,
   updateOrderFn,
@@ -36,6 +39,9 @@ export const orderKeys = {
   lists: () => [...orderKeys.all, "list"] as const,
   list: (filters?: Partial<OrderFilterData>) =>
     [...orderKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...orderKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...orderKeys.all, "stats"] as const,
   details: () => [...orderKeys.all, "detail"] as const,
   detail: (id: string) => [...orderKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
@@ -50,6 +56,15 @@ export const orderKeys = {
 // ============================================
 // Query Hooks
 // ============================================
+
+export function useOrderStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: orderKeys.stats(filters),
+    queryFn: async () => unwrap(await getOrderStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Hook to fetch paginated list of orders with filtering
@@ -105,14 +120,16 @@ export function useCreateOrder(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data)),
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
+    mutationFn: async (data: CreateOrderData, intentKey) => unwrap(await createOrderFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -139,6 +156,7 @@ export function useUpdateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (data: UpdateOrderData) => {
       const result = await updateOrderFn(data);
       if (!result.success) {
@@ -212,6 +230,7 @@ export function useUpdateOrder(
         queryKey: orderKeys.detailWithRelations(data.id),
       });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -259,6 +278,7 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
     mutationFn: async (variables: DeleteOrderData) => {
       const result = await deleteOrderFn(variables);
       if (!result.success) {
@@ -306,6 +326,7 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -334,12 +355,14 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
 
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
         queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
       }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },

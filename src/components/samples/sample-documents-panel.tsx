@@ -8,6 +8,7 @@ import { FormField, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -119,11 +120,13 @@ export function SampleDocumentsPanel({
           Loading documents…
         </p>
       ) : uploadedDocs.length === 0 ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {readOnly
-            ? "No documents attached yet."
-            : "No documents attached yet. Upload a lab report or reflectance histogram below."}
-        </p>
+        readOnly ? (
+          <EmptyState
+            icon={<FileIcon size={32} weight="bold" />}
+            title="No documents"
+            padding="sm"
+          />
+        ) : null
       ) : (
         <ul className="flex flex-col gap-8">
           {uploadedDocs.map((doc) => (
@@ -141,7 +144,11 @@ export function SampleDocumentsPanel({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {DOCUMENT_TYPE_LABELS[doc.documentType]} · {formatFileSize(doc.fileSizeBytes)} · {doc.visibility}
+                  {[
+                    DOCUMENT_TYPE_LABELS[doc.documentType],
+                    doc.fileSizeBytes == null ? null : formatFileSize(doc.fileSizeBytes),
+                    doc.visibility,
+                  ].filter(Boolean).join(" · ")}
                 </span>
               </div>
               <a
@@ -219,7 +226,6 @@ export function SampleDocumentsPanel({
         </div>
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -231,6 +237,7 @@ export function SampleDocumentsPanel({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </section>

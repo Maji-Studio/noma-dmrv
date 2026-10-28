@@ -1,24 +1,27 @@
 import { z } from "zod";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
-import { problemSchema } from "@/lib/api/problem-schema";
+import { cascadePreviewSchema, problemSchema } from "@/lib/api/problem-schema";
 import { actionFailureResponse, apiHttpErrorResponse } from "@/lib/api/problem";
 import { ApiHttpError } from "@/lib/api/http-error";
 import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
+import { toolText } from "./tool-text";
+
+export { TOOL_TEXT_SEPARATOR, toolText } from "./tool-text";
 
 /** REST's `errors` become MCP `issues`; HTTP metadata does not cross transports. */
 export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true, preview: true })
   .extend({
     issues: problemSchema.shape.errors,
     // Preserve operation-specific preview details when translating REST errors.
-    preview: problemSchema.shape.preview.unwrap().loose().optional().describe(problemSchema.shape.preview.description!),
+    preview: z.union([problemSchema.shape.preview.unwrap().loose(), cascadePreviewSchema]).optional().describe("Fresh stock or order cascade preview after stock_basis_changed or cascade_changed."),
   });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
-  return { content: [{ type: "text" as const, text }], structuredContent };
+  return { content: [{ type: "text" as const, text: toolText(text, structuredContent) }], structuredContent };
 }
 
 export function writesDisabledResult() {

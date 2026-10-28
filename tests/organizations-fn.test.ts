@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
-const mockCreateOrganizationWithOwner = vi.fn();
+const mockCreateOrganizationWithAdmin = vi.fn();
 const mockAcceptInvitation = vi.fn();
 const mockSetActiveOrganization = vi.fn();
 const mockPersistLastActiveOrganization = vi.fn();
@@ -11,6 +11,9 @@ vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
+      createInvitation: vi.fn(),
+      cancelInvitation: vi.fn(),
+      leaveOrganization: vi.fn(),
       acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
       setActiveOrganization: (...args: unknown[]) =>
         mockSetActiveOrganization(...args),
@@ -23,6 +26,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
   requireOrgRole: vi.fn(),
   requirePlatformAdmin: vi.fn(),
+  isAdmin: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({
@@ -32,10 +36,10 @@ vi.mock("@/lib/auth/providers/better-auth-server", () => ({
 vi.mock("@/data-access/organizations", () => ({
   cancelInvitationAsPlatformAdmin: vi.fn(),
   createInvitationAsPlatformAdmin: vi.fn(),
-  createOrganizationWithOwner: (...args: unknown[]) =>
-    mockCreateOrganizationWithOwner(...args),
+  createOrganizationWithAdmin: (...args: unknown[]) =>
+    mockCreateOrganizationWithAdmin(...args),
   findMembershipRole: vi.fn(),
-  findUserIdByEmail: vi.fn(),
+  replacePendingInvitation: vi.fn(),
   getActiveOrganization: vi.fn(),
   listAllOrganizations: vi.fn(),
   listOrgInvitations: vi.fn(),
@@ -43,6 +47,7 @@ vi.mock("@/data-access/organizations", () => ({
   persistLastActiveOrganization: (...args: unknown[]) =>
     mockPersistLastActiveOrganization(...args),
   removeMemberAsPlatformAdmin: vi.fn(),
+  renameActiveOrganization: vi.fn(),
   updateMemberRoleAsPlatformAdmin: vi.fn(),
 }));
 
@@ -57,32 +62,49 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/log", () => ({
-  logger: { error: vi.fn() },
+  logger: { error: vi.fn(), warn: vi.fn() },
   sanitizeErrorMessage: () => "Unexpected failure.",
 }));
 
+vi.mock("@/lib/email/send", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/email/send")>()),
+  sendEmail: vi.fn(),
+}));
+
+import { sendEmail } from "@/lib/email/send";
+import { auth } from "@/lib/auth/better-auth";
 import {
+  getActiveOrganization,
+  createInvitationAsPlatformAdmin,
+  renameActiveOrganization,
   findMembershipRole,
-  findUserIdByEmail,
+  replacePendingInvitation,
   listOrgInvitations,
   listOrgMembers,
+  removeMemberAsPlatformAdmin,
+  updateMemberRoleAsPlatformAdmin,
+  type PlatformAdminMemberNotice,
 } from "@/data-access/organizations";
 import {
+  inviteMemberAction,
+  resendInvitationAction,
+  leaveOrganizationAction,
+  renameOrganizationAction,
   acceptInvitationAction,
   createOrganizationAction,
   listInvitationsFn,
   listMembersFn,
   setActiveOrganizationAction,
+  changeMemberRoleAction,
+  removeMemberAction,
 } from "@/fn/organizations";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import { requireOrgContext, requireOrgRole, requirePlatformAdmin, type OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 
-const OWNER_USER_ID = "owner-user-123";
 const VALID_INPUT = {
   name: "Example Organization",
-  slug: "example-organization",
-  ownerEmail: "owner@example.com",
+  adminEmail: "admin@example.com",
 };
 
 const ORG_CONTEXT: OrgContext = {
@@ -95,6 +117,93 @@ const ORG_READS = [
   { name: "members", action: listMembersFn, read: listOrgMembers, message: "Members could not be loaded. Refresh the page and try again.", op: "organization:list-members" },
   { name: "invitations", action: listInvitationsFn, read: listOrgInvitations, message: "Invitations could not be loaded. Refresh the page and try again.", op: "organization:list-invitations" },
 ] as const;
+
+describe("Platform Admin membership notices", () => {
+  const context: OrgContext = { ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true };
+  const notice: PlatformAdminMemberNotice = {
+    memberId: "member-123",
+    userId: "recipient-123",
+    email: "recipient@example.test",
+    organizationId: context.organizationId,
+    organizationName: "Example Organization",
+    actorUserId: context.userId,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(context);
+    vi.mocked(getBetterAuthSession).mockResolvedValue(null);
+    vi.mocked(updateMemberRoleAsPlatformAdmin).mockReset().mockResolvedValue({
+      ...notice, fromRole: "member", toRole: "admin",
+    });
+    vi.mocked(removeMemberAsPlatformAdmin).mockReset().mockResolvedValue(notice);
+    vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
+  });
+
+  it("sends one role notice using the committed recipient and role", async () => {
+    expect(await changeMemberRoleAction({ memberId: notice.memberId, role: "admin" })).toEqual({
+      success: true, data: { memberId: notice.memberId },
+    });
+    expect(updateMemberRoleAsPlatformAdmin).toHaveBeenCalledExactlyOnceWith(context, notice.memberId, "admin");
+    expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      type: "role-changed", userId: notice.userId, to: notice.email,
+      memberId: notice.memberId, organizationId: notice.organizationId,
+      subject: `Your role in ${notice.organizationName} is now Admin`,
+    }));
+  });
+
+  it("sends no email for a same-role update", async () => {
+    vi.mocked(updateMemberRoleAsPlatformAdmin).mockResolvedValue({
+      ...notice, fromRole: "member", toRole: "member",
+    });
+    expect(await changeMemberRoleAction({ memberId: notice.memberId, role: "member" })).toEqual({
+      success: true, data: { memberId: notice.memberId },
+    });
+    expect(updateMemberRoleAsPlatformAdmin).toHaveBeenCalledExactlyOnceWith(context, notice.memberId, "member");
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends one removal notice using the committed recipient", async () => {
+    expect(await removeMemberAction({ memberIdOrEmail: notice.memberId })).toEqual({
+      success: true, data: { memberIdOrEmail: notice.memberId },
+    });
+    expect(removeMemberAsPlatformAdmin).toHaveBeenCalledExactlyOnceWith(context, notice.memberId);
+    expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      type: "removed-from-organization", userId: notice.userId, to: notice.email,
+      memberId: notice.memberId, organizationId: notice.organizationId,
+      subject: `You were removed from ${notice.organizationName}`,
+    }));
+  });
+
+  it.each(["role", "remove"] as const)("keeps the %s action successful when delivery fails", async path => {
+    for (const thrown of [false, true]) {
+      vi.mocked(sendEmail).mockClear();
+      if (thrown) vi.mocked(sendEmail).mockRejectedValue(new Error("private@example.test"));
+      else vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
+      const result = path === "role"
+        ? await changeMemberRoleAction({ memberId: notice.memberId, role: "admin" })
+        : await removeMemberAction({ memberIdOrEmail: notice.memberId });
+      expect(result).toEqual({
+        success: true,
+        data: path === "role" ? { memberId: notice.memberId } : { memberIdOrEmail: notice.memberId },
+      });
+      expect(sendEmail).toHaveBeenCalledOnce();
+    }
+  });
+
+  it.each(["role", "remove"] as const)("sends no %s notice when the write fails", async path => {
+    const error = new SafeError("Member not found.");
+    vi.mocked(updateMemberRoleAsPlatformAdmin).mockRejectedValue(error);
+    vi.mocked(removeMemberAsPlatformAdmin).mockRejectedValue(error);
+    expect(path === "role"
+      ? await changeMemberRoleAction({ memberId: notice.memberId, role: "admin" })
+      : await removeMemberAction({ memberIdOrEmail: notice.memberId })).toEqual({
+      success: false, error: error.message,
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
 
 describe("organization reads", () => {
   beforeEach(() => {
@@ -112,8 +221,8 @@ describe("organization reads", () => {
   });
 
   it.each(ORG_READS)("stops the $name read when authentication fails", async ({ action, read }) => {
-    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Select an Organization to continue."));
-    expect(await action()).toEqual({ success: false, error: "Select an Organization to continue." });
+    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Select an organization to continue."));
+    expect(await action()).toEqual({ success: false, error: "Select an organization to continue." });
     expect(read).not.toHaveBeenCalled();
     expect(requireOrgRole).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
@@ -143,11 +252,11 @@ describe("createOrganizationAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
-    vi.mocked(findUserIdByEmail).mockResolvedValue(OWNER_USER_ID);
-    mockCreateOrganizationWithOwner.mockResolvedValue({ id: "organization-123" });
+    vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message-123" });
+    mockCreateOrganizationWithAdmin.mockResolvedValue({ id: "organization-123", name: VALID_INPUT.name, firstAdmin: { kind: "member" } });
   });
 
-  it("requires Platform Admin authorization before resolving the owner", async () => {
+  it("requires Platform Admin authorization before resolving the admin", async () => {
     vi.mocked(requirePlatformAdmin).mockRejectedValue(
       new SafeError("Admin access is required for this action."),
     );
@@ -158,46 +267,84 @@ describe("createOrganizationAction", () => {
       success: false,
       error: "Admin access is required for this action.",
     });
-    expect(findUserIdByEmail).not.toHaveBeenCalled();
-    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
   });
 
-  it("creates through Better Auth with the selected owner user id", async () => {
+  it("validates and passes the intent key as the organization identity", async () => {
+    const intentKey = "A1234567-1234-4123-8123-123456789ABC";
+    await createOrganizationAction(VALID_INPUT, { intentKey });
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
+      ...VALID_INPUT, organizationId: intentKey.toLowerCase(),
+    });
+  });
+
+  it("refuses an invalid intent key before creating anything", async () => {
+    const result = await createOrganizationAction(VALID_INPUT, { intentKey: "invalid" });
+    expect(result.success).toBe(false);
+    expect(mockCreateOrganizationWithAdmin).not.toHaveBeenCalled();
+  });
+
+  it("passes normalized name and email to the transaction", async () => {
     const result = await createOrganizationAction({
       ...VALID_INPUT,
       name: "  Example Organization  ",
       slug: "  EXAMPLE-ORGANIZATION  ",
-      ownerEmail: "  OWNER@EXAMPLE.COM  ",
+      adminEmail: "  ADMIN@EXAMPLE.COM  ",
     });
 
     expect(requirePlatformAdmin).toHaveBeenCalledOnce();
-    expect(findUserIdByEmail).toHaveBeenCalledWith("owner@example.com");
-    expect(mockCreateOrganizationWithOwner).toHaveBeenCalledWith({
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledWith({
       name: "Example Organization",
-      slug: "example-organization",
-      ownerUserId: OWNER_USER_ID,
+      adminEmail: "admin@example.com",
+      organizationId: undefined,
     });
     expect(result).toEqual({
       success: true,
-      data: { organizationId: "organization-123" },
+      data: { organizationId: "organization-123", organizationName: VALID_INPUT.name, firstAdmin: { kind: "member" } },
     });
   });
 
-  it("returns a clear error when the selected owner has no account", async () => {
-    vi.mocked(findUserIdByEmail).mockResolvedValue(null);
-
-    const result = await createOrganizationAction(VALID_INPUT);
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        "No user account found for the owner email. The owner must have an account first.",
+  it("returns the first Admin invitation link for an unknown email", async () => {
+    mockCreateOrganizationWithAdmin.mockResolvedValue({
+      id: "organization-123", name: VALID_INPUT.name,
+      firstAdmin: { kind: "invited", invitationId: "invitation-123" },
     });
-    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
+    expect(await createOrganizationAction(VALID_INPUT)).toEqual({
+      success: true,
+      data: {
+        organizationId: "organization-123", organizationName: VALID_INPUT.name,
+        firstAdmin: { kind: "invited", acceptUrl: "http://localhost:3100/accept-invitation/invitation-123", emailSent: true },
+      },
+    });
+  });
+
+  it.each([true, false])("reports emailSent=%s for a new first Admin without losing the created org", async (sent) => {
+    mockCreateOrganizationWithAdmin.mockResolvedValue({
+      id: "organization-123", name: VALID_INPUT.name,
+      firstAdmin: { kind: "invited", invitationId: "invitation-123" },
+    });
+    vi.mocked(sendEmail).mockResolvedValue(sent
+      ? { sent: true, id: "message-123" }
+      : { sent: false, reason: "provider-error" });
+    expect(await createOrganizationAction(VALID_INPUT)).toMatchObject({
+      success: true,
+      data: { firstAdmin: { kind: "invited", emailSent: sent } },
+    });
+    expect(mockCreateOrganizationWithAdmin).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: VALID_INPUT.adminEmail,
+      html: expect.stringContaining('href="http://localhost:3100/accept-invitation/invitation-123"'),
+    }));
+  });
+
+  it("does not send an invitation to an existing first Admin", async () => {
+    await createOrganizationAction(VALID_INPUT);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("surfaces Better Auth API errors", async () => {
-    mockCreateOrganizationWithOwner.mockRejectedValue({
+    mockCreateOrganizationWithAdmin.mockRejectedValue({
       body: { message: "Organization slug is already taken." },
     });
 
@@ -210,7 +357,7 @@ describe("createOrganizationAction", () => {
   });
 
   it("uses the generic creation error for unexpected failures", async () => {
-    mockCreateOrganizationWithOwner.mockRejectedValue(new Error("database unavailable"));
+    mockCreateOrganizationWithAdmin.mockRejectedValue(new Error("database unavailable"));
 
     const result = await createOrganizationAction(VALID_INPUT);
 
@@ -288,9 +435,9 @@ describe("setActiveOrganizationAction", () => {
   });
 
   it("does not persist when the plugin rejects the switch", async () => {
-    mockSetActiveOrganization.mockRejectedValue(
-      new SafeError("You are not a member of this Organization."),
-    );
+    mockSetActiveOrganization.mockRejectedValue({
+      body: { code: "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", message: "User is not a member of the organization" },
+    });
 
     const result = await setActiveOrganizationAction({
       organizationId: "organization-123",
@@ -299,7 +446,163 @@ describe("setActiveOrganizationAction", () => {
     expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: false,
-      error: "You are not a member of this Organization.",
+      error: "You no longer have access to it. If you still need it, ask one of its Admins.",
     });
+  });
+});
+
+describe("renameOrganizationAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+  });
+
+  it.each(["a", "a".repeat(101)])("refuses an invalid name", async (name) => {
+    expect(await renameOrganizationAction({ name })).toMatchObject({
+      success: false, code: "validation_failed",
+    });
+    expect(renameActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Member before the write", async () => {
+    const member = { ...ORG_CONTEXT, orgRole: "member" as const };
+    vi.mocked(requireOrgContext).mockResolvedValue(member);
+    vi.mocked(requireOrgRole).mockImplementation(() => {
+      throw new SafeError("You don't have permission to perform this action.");
+    });
+    expect(await renameOrganizationAction({ name: "New name" })).toEqual({
+      success: false, error: "You don't have permission to perform this action.",
+    });
+    expect(requireOrgRole).toHaveBeenCalledWith(member, "admin");
+    expect(renameActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("trims the name and returns the saved name and slug", async () => {
+    const saved = { name: "New name", slug: "new-name-2" };
+    vi.mocked(renameActiveOrganization).mockResolvedValue(saved);
+    expect(await renameOrganizationAction({ name: "  New name  " })).toEqual({ success: true, data: saved });
+    expect(requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
+    expect(renameActiveOrganization).toHaveBeenCalledWith(ORG_CONTEXT, { name: "New name" });
+  });
+});
+
+
+describe("inviteMemberAction delivery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(getActiveOrganization).mockResolvedValue({ name: VALID_INPUT.name } as never);
+    vi.mocked(auth.api.createInvitation).mockResolvedValue({ id: "invitation-123" } as never);
+    vi.mocked(createInvitationAsPlatformAdmin).mockResolvedValue({ id: "invitation-123" });
+  });
+
+  it.each([
+    { platform: false, sent: true }, { platform: false, sent: false },
+    { platform: true, sent: true }, { platform: true, sent: false },
+  ])("sends once and reports $sent for platform=$platform", async ({ platform, sent }) => {
+    const ctx = { ...ORG_CONTEXT, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(sendEmail).mockResolvedValue(sent
+      ? { sent: true, id: "message-123" }
+      : { sent: false, reason: "provider-error" });
+    expect(await inviteMemberAction({ email: "invitee@example.test", role: "member" })).toEqual({
+      success: true,
+      data: {
+        invitationId: "invitation-123",
+        acceptUrl: "http://localhost:3100/accept-invitation/invitation-123",
+        emailSent: sent,
+      },
+    });
+    expect(requireOrgRole).toHaveBeenCalledWith(ctx, "admin");
+    const writer = platform ? createInvitationAsPlatformAdmin : auth.api.createInvitation;
+    const unusedWriter = platform ? auth.api.createInvitation : createInvitationAsPlatformAdmin;
+    expect(writer).toHaveBeenCalledOnce();
+    expect(unusedWriter).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      type: "org-invite", to: "invitee@example.test", invitationId: "invitation-123",
+      organizationId: ctx.organizationId,
+      html: expect.stringContaining('href="http://localhost:3100/accept-invitation/invitation-123"'),
+    }));
+    expect(vi.mocked(writer).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(sendEmail).mock.invocationCallOrder[0]);
+  });
+
+  it("does not write or send when the Admin role check refuses", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: "member" });
+    vi.mocked(requireOrgRole).mockImplementation(() => { throw new SafeError("Admin access is required."); });
+    expect(await inviteMemberAction({ email: "invitee@example.test", role: "member" }))
+      .toEqual({ success: false, error: "Admin access is required." });
+    expect(auth.api.createInvitation).not.toHaveBeenCalled();
+    expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Members page actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+    vi.mocked(getActiveOrganization).mockResolvedValue({ name: VALID_INPUT.name } as never);
+    vi.mocked(replacePendingInvitation).mockReset().mockResolvedValue({ id: "fresh-invite", email: "invitee@example.test", role: "member" });
+    vi.mocked(auth.api.cancelInvitation).mockResolvedValue({} as never);
+    vi.mocked(auth.api.createInvitation).mockResolvedValue({ id: "fresh-invite" } as never);
+    vi.mocked(createInvitationAsPlatformAdmin).mockResolvedValue({ id: "fresh-invite" });
+    vi.mocked(sendEmail).mockResolvedValue({ sent: true, id: "message" });
+  });
+
+  it.each([
+    { platform: false, sent: true }, { platform: false, sent: false },
+    { platform: true, sent: true }, { platform: true, sent: false },
+  ])("uses the atomic writer and sends once (platform=$platform, sent=$sent)", async ({ platform, sent }) => {
+    const ctx = { ...ORG_CONTEXT, orgRole: platform ? null : "admin" as const, isPlatformAdmin: platform };
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(sendEmail).mockResolvedValue(sent ? { sent: true, id: "message" } : { sent: false, reason: "provider-error" });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: true, data: {
+      invitationId: "fresh-invite", acceptUrl: "http://localhost:3100/accept-invitation/fresh-invite", emailSent: sent,
+    } });
+    expect(requireOrgRole).toHaveBeenCalledWith(ctx, "admin");
+    expect(replacePendingInvitation).toHaveBeenCalledExactlyOnceWith(ctx, { invitationId: "old-invite" });
+    expect(createInvitationAsPlatformAdmin).not.toHaveBeenCalled();
+    expect(auth.api.createInvitation).not.toHaveBeenCalled();
+    expect(auth.api.cancelInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledOnce();
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ invitationId: "fresh-invite", to: "invitee@example.test" }));
+    expect(vi.mocked(replacePendingInvitation).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(sendEmail).mock.invocationCallOrder[0]);
+  });
+
+  it("validates the invitation id before looking it up", async () => {
+    expect(await resendInvitationAction({ invitationId: " " })).toMatchObject({ success: false, code: "validation_failed" });
+    expect(replacePendingInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the atomic writer refuses the replacement", async () => {
+    vi.mocked(replacePendingInvitation).mockRejectedValueOnce(new SafeError("Invitation limit reached."));
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: false, error: "Invitation limit reached." });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Member before replacing or delivering", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: "member" });
+    vi.mocked(requireOrgRole).mockImplementation(() => { throw new SafeError("Admin access is required."); });
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toEqual({ success: false, error: "Admin access is required." });
+    expect(replacePendingInvitation).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not deliver after a failed replacement insert", async () => {
+    vi.mocked(replacePendingInvitation).mockRejectedValueOnce(new Error("Insert failed"));
+    expect(await resendInvitationAction({ invitationId: "old-invite" })).toMatchObject({ success: false });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("clearly refuses a Platform Admin who is not a member leaving", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue({ ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true });
+    expect(await leaveOrganizationAction()).toEqual({ success: false, error: "You are not a member of this organization, so you cannot leave it." });
+    expect(auth.api.leaveOrganization).not.toHaveBeenCalled();
   });
 });

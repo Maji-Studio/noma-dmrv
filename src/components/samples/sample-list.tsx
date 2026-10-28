@@ -1,12 +1,12 @@
 "use client";
 
-import { toDeleteErrorMessage } from "@/lib/stale-version";
+import { entityViewHref } from "@/lib/entity-deep-link";
+import { StaleVersionError, staleDeleteMessage, toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
  */
 
-import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
@@ -28,24 +28,28 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
+import { SAMPLE_DELETE_MESSAGE } from "./sample-delete-copy";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
-  parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import { SampleForm } from "./sample-form";
 import {
@@ -54,15 +58,20 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
-import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections";
-import type { TransportLegFormData } from "@/schemas/transport-legs";
+import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { isLabReportDocument } from "@/lib/certification/lab-report";
+import { formatLabPercent, formatSamplingTime, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "@/lib/sample-create-intent";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
+
+/** The average carbon card when the stats read settled and no Sample has a total carbon result. */
+const NO_TOTAL_CARBON_RESULTS = "No total carbon results";
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -93,18 +102,29 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
   );
 }
 
+/** Lab details an operator can add from the Columns menu. */
+const SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT = {
+  labName: false,
+  analysisDate: false,
+  oToCOrgRatio: false,
+  moistureContentPercent: false,
+  ph: false,
+  ashContentPercent: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
 
 function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
-  onDelete: (sampleId: string) => void
+  onDelete: (sampleId: string) => void,
+  locks: RecordLockViews,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
       accessorKey: "sampleCode",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -144,7 +164,41 @@ function createColumns(
       accessorKey: "hToCOrgRatio",
       header: "H:C org ratio",
       cell: ({ row }) =>
-        row.original.hToCOrgRatio?.toFixed(3) ?? MISSING_VALUE.notRecorded,
+        row.original.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "labName",
+      header: "Lab name",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.labName || MISSING_VALUE.notRecorded}</span>
+      ),
+    },
+    {
+      accessorKey: "analysisDate",
+      meta: { nowrap: true },
+      header: "Analysis date",
+      cell: ({ row }) => formatDate(row.original.analysisDate),
+    },
+    {
+      accessorKey: "oToCOrgRatio",
+      header: "O:C org ratio",
+      cell: ({ row }) =>
+        row.original.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? MISSING_VALUE.notRecorded,
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: MASS_MOISTURE_LABELS.moisture,
+      cell: ({ row }) => formatMoisturePercent(row.original.moistureContentPercent),
+    },
+    {
+      accessorKey: "ph",
+      header: "pH",
+      cell: ({ row }) => (row.original.ph == null ? MISSING_VALUE.notRecorded : String(row.original.ph)),
+    },
+    {
+      accessorKey: "ashContentPercent",
+      header: "Ash content",
+      cell: ({ row }) => formatLabPercent(row.original.ashContentPercent),
     },
     {
       accessorKey: "durabilityOption",
@@ -166,15 +220,19 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
+      // A Sample stays fully editable while In use; only a Sent Removal
+      // refuses its edit and delete (#687 item 2), so neither is offered.
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.sampleCode}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
+          {isRecordEditable(locks[row.original.id]) && (
+            <RowActionsMenu
+              label={`Actions for ${row.original.sampleCode}`}
+              actions={[
+                { label: "Edit", onSelect: () => onEdit(row.original) },
+                { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+              ]}
+            />
+          )}
         </div>
       ),
       enableSorting: false,
@@ -216,7 +274,7 @@ export function SampleList({
     ENTITY_DEEP_LINK_MODE_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
-  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+  const [, setDeepLinkFocus] = useQueryState(
     ENTITY_DEEP_LINK_FOCUS_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
@@ -231,10 +289,12 @@ export function SampleList({
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
-  const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
-  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
+  // One snapshot from the moment the dialog opens: a refetch can move the row off the page before the refusal comes back.
+  const [deleting, setDeleting] = useState<{ id: string; version: number; code: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A stale refusal closes the dialog (its Delete would resubmit the same version), so it reads on the page.
+  const [staleDeleteNotice, setStaleDeleteNotice] = useState<string | null>(null);
 
   const filters: Partial<SampleFilterData> = {
     search: debouncedSearch || undefined,
@@ -249,7 +309,7 @@ export function SampleList({
   const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
     enabled: !!contextFacilityId,
   });
-  const { data: statsData, isLoading: statsLoading } = useSampleStats(
+  const { data: statsData, isLoading: statsLoading, isError: statsFailed } = useSampleStats(
     creditBatchFilter || undefined,
     !!contextFacilityId,
     contextFacilityId || undefined,
@@ -269,9 +329,6 @@ export function SampleList({
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
   const toast = useToast();
-  const createTransportLeg = useCreateTransportLeg();
-  const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
-
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
   useReconcileListPage({
@@ -307,66 +364,49 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
-  const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
-    ? parseEntityFocusTarget(deepLinkFocus)
-    : null;
+  const labReportStatus = useDocumentsCertStatus("sample", displaySideSheet?.entity?.id, isLabReportDocument);
+  const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
+  // A lock that arrives as Sent keeps an open draft, read-only, with the way
+  // back (`submitBlock`).
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("sample", displaySideSheet?.entity?.id);
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
     entityNoun: "Sample",
-    executeCreate: async (data: SampleFormData) => {
+    executeCreate: async ({ data }: { data: SampleFormData; onRefusal: SaveRefusalHandler }) => {
       const sample = await createSample.mutateAsync(data);
       return { entities: [sample], result: sample };
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Sample was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) =>
+      onRefusal(error, error instanceof Error ? error.message : "Sample was not created. Check the form."),
     unresolvedUpdateMessage:
-      "Resolve or remove the failed attachments and transport legs before saving this Sample.",
+      "Resolve or remove the failed attachments before saving this Sample.",
     openEditOnFailure: (sample) =>
       leaveSampleCreateIntent(createIntent.clear, () =>
         setSideSheet({ mode: "edit", entity: sample }),
       ),
     closeOnSuccess: () =>
       leaveSampleCreateIntent(createIntent.clear, () => setSideSheet(null)),
-    onAfterFlush: async ({ created, flushResult }) => {
-      const sample = created.result;
-      const failedLegs: TransportLegFormData[] = [];
-      for (const leg of deferredLegs) {
-        try {
-          await createTransportLeg.mutateAsync({
-            ...leg,
-            entityType: "sample",
-            entityId: sample.id,
-          });
-        } catch {
-          failedLegs.push(leg);
-        }
-      }
-      setDeferredLegs(failedLegs);
-
-      const failedCount = flushResult.failed.length + failedLegs.length;
-      if (failedCount === 0) return;
-      return {
-        failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
-      };
-    },
+    onAfterFlush: ({ flushResult }) => ({
+      failureMessage: buildAttachmentFailureBanner(flushResult.failed.length) ?? undefined,
+    }),
     onSuccess: () =>
       toast.success("Sample created."),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: SampleFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
   // Keep the post-create "failed to save" banner in sync when the user retries
   // or removes individual failures inline: recompute it from the remaining
-  // failed attachments and transport legs so a fully-resolved queue clears it.
+  // failed attachments so a fully-resolved queue clears it.
   const setCreateFailureBanner = (
     failedAttachments: number,
-    failedLegs: number,
   ) => {
-    setFormError(buildAttachmentFailureBanner(failedAttachments + failedLegs));
+    setFormError(buildAttachmentFailureBanner(failedAttachments));
   };
 
   const handleRetryDeferredAttachments = async (key?: string) => {
@@ -387,7 +427,6 @@ export function SampleList({
           ).length;
     setCreateFailureBanner(
       untouchedFailed + result.failed.length,
-      deferredLegs.length,
     );
   };
 
@@ -397,51 +436,15 @@ export function SampleList({
     const remainingFailed = deferredAttachments.attachments.filter(
       (attachment) => attachment.status === "failed" && attachment.key !== key,
     ).length;
-    setCreateFailureBanner(remainingFailed, deferredLegs.length);
+    setCreateFailureBanner(remainingFailed);
   };
 
-  const handleDeferredLegsChange = (legs: TransportLegFormData[]) => {
-    setDeferredLegs(legs);
-    // Removing a failed leg from the post-create failure list must reconcile
-    // the banner too (adding legs only happens pre-create, where mode !== edit
-    // short-circuits and there is no banner yet).
-    if (sideSheet?.mode !== "edit") return;
-    const failedAttachments = deferredAttachments.attachments.filter(
-      (attachment) => attachment.status === "failed",
-    ).length;
-    setCreateFailureBanner(failedAttachments, legs.length);
-  };
-
-  const retryDeferredLegs = async () => {
-    if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
-    await createWithEvidence.runWhileFlushing(async () => {
-      const failedLegs: TransportLegFormData[] = [];
-      for (const leg of deferredLegs) {
-        try {
-          await createTransportLeg.mutateAsync({
-            ...leg,
-            entityType: "sample",
-            entityId: sideSheet.entity.id,
-          });
-        } catch {
-          failedLegs.push(leg);
-        }
-      }
-      setDeferredLegs(failedLegs);
-      setFormError(
-        failedLegs.length > 0
-          ? `Sample was saved, but ${failedLegs.length} transport ${failedLegs.length === 1 ? "leg" : "legs"} still failed to save.`
-          : null,
-      );
-    });
-  };
-
-  const handleUpdate = async (data: SampleFormData) => {
+  const handleUpdate = async (data: SampleFormData, onRefusal: SaveRefusalHandler) => {
     // A deep-linked edit sheet (?sample=...&mode=edit) has no local sheet
     // state, so the target comes from the displayed sheet, not `sideSheet`.
     if (displaySideSheet?.mode !== "edit") return;
     setFormError(null);
-    if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
+    if (createWithEvidence.guardUpdate()) return;
     try {
       await updateSample.mutateAsync({
         sampleId: displaySideSheet.entity.id,
@@ -451,36 +454,41 @@ export function SampleList({
       closeSideSheet();
       toast.success("Sample updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Sample was not saved. Try again."));
     }
   };
 
   const handleDelete = (sampleId: string) => {
     const row = (samples).find((item) => item.id === sampleId);
     if (!row) return;
-    setDeletingVersion(row.version);
-    setDeletingSampleId(sampleId);
+    setStaleDeleteNotice(null);
+    setDeleting({ id: sampleId, version: row.version, code: row.sampleCode });
   };
   const handleDeleteConfirm = async () => {
-    if (!deletingSampleId || deletingVersion === null) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteSample.mutateAsync({ sampleId: deletingSampleId, expectedVersion: deletingVersion });
-      setDeletingSampleId(null);
+      await deleteSample.mutateAsync({ sampleId: deleting.id, expectedVersion: deleting.version });
+      setDeleting(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      if (error instanceof StaleVersionError) {
+        setDeleting(null);
+        setStaleDeleteNotice(staleDeleteMessage(`Sample ${deleting.code}`));
+      } else {
+        setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
+      }
     }
   };
 
   const openCreate = () => {
+    createSample.startDraft();
     createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
     setFormError(null);
     createWithEvidence.reset();
-    setDeferredLegs([]);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (sample: SampleWithRelations) => {
@@ -498,6 +506,8 @@ export function SampleList({
     setSideSheet({ mode: "edit", entity: sample });
   };
   const closeSideSheet = () => {
+    // A deep-linked create skips openCreate, so closing ends the draft and its key.
+    createSample.startDraft();
     createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);
@@ -505,13 +515,11 @@ export function SampleList({
     setSideSheet(null);
     setFormError(null);
     createWithEvidence.reset();
-    setDeferredLegs([]);
   };
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(
       displaySideSheet?.mode === "create",
-      deferredLegs.length,
     );
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
@@ -530,7 +538,6 @@ export function SampleList({
   const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;
 
-  const sampleTransport = useTransportLegsForEntity("sample", displaySideSheet?.entity?.id ?? "", { enabled: displaySideSheet?.mode === "view" });
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const preselectedCreditBatchId = resolveSampleCreateCreditBatchId(
@@ -551,7 +558,7 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks);
 
   if (!contextFacilityId) {
     return (
@@ -559,7 +566,6 @@ export function SampleList({
         <PageHeader
           area="verification"
           title="Lab Samples"
-          subtitle="Lab analysis of biochar Samples and carbon permanence"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
       </div>
@@ -581,7 +587,6 @@ export function SampleList({
       <PageHeader
         area="verification"
         title="Lab Samples"
-        subtitle="Lab analysis of biochar Samples and carbon permanence"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -591,13 +596,16 @@ export function SampleList({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
-        <StatCard title="Avg carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Avg total carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? <span className="body-small font-normal text-[var(--color-text-tertiary)]">{!statsData && statsFailed ? LOAD_FAILED : NO_TOTAL_CARBON_RESULTS}</span>} icon={<LeafIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
 
+      <RecordLockListNotice read={sampleLocks} />
+
       <DataTable
+        defaultColumnVisibility={SAMPLE_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={samples}
         enableSorting={false}
@@ -616,6 +624,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/samples", "sample", row.id, contextFacilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -651,7 +660,7 @@ export function SampleList({
               <option value="">All credit batches</option>
               {creditBatchesData?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -667,19 +676,18 @@ export function SampleList({
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {staleDeleteNotice && <ServerError message={staleDeleteNotice} />}
       <DeleteConfirmDialog
-        isOpen={!!deletingSampleId}
+        isOpen={!!deleting}
         title="Delete Sample"
-        message="Delete this Sample? Samples linked to credit batches cannot be deleted. This action cannot be undone."
+        message={SAMPLE_DELETE_MESSAGE}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
+        onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteSample.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet
-        detailToggle={sampleTransport.data?.length ? "view" : false}
-        detailScope={displaySideSheet?.entity?.id ?? "create"}
         numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
@@ -688,8 +696,10 @@ export function SampleList({
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
       >
         {isResolvingCreateContext ? (
           <div
@@ -715,12 +725,6 @@ export function SampleList({
             deferredAttachments={deferredAttachments}
             onRetryDeferredAttachments={handleRetryDeferredAttachments}
             onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
-            deferredLegs={deferredLegs}
-            onDeferredLegsChange={handleDeferredLegsChange}
-            onRetryDeferredLegs={retryDeferredLegs}
-            focusTarget={
-              displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-            }
           />
         )}
       </EntitySideSheet>

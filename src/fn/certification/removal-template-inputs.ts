@@ -1,6 +1,10 @@
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import { effectiveContract } from "@/lib/isometric/template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
-import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
@@ -43,12 +47,13 @@ export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
   lineSources: LineSources;
   enrichmentComplete?: boolean;
+  emissionLines?: BatchEmissionLine[] | null;
+  entryContributions?: RemovalEntryContributions;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
   sourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
-  allowPeriodInputStub: boolean;
   omitProductionComponents: boolean;
 }): ResolvedTemplateInputs {
   const {
@@ -59,15 +64,17 @@ export function resolveTemplateInputs(args: {
     externalProjectId,
     sourceIds,
     sourceBindingPlan,
-    allowPeriodInputStub,
     omitProductionComponents,
   } = args;
 
-  const lineDecisions = new Map(deriveBatchEmissionLines({
-    definition: normalizeTemplateDefinition(template), lineSources, problems: [],
+  // Revalidate capabilities independently from the loaded line states.
+  const lineDecisions = [...(args.emissionLines ?? []), ...deriveBatchEmissionLines({
+    definition: normalizeTemplateDefinition(template), lineSources: withTemplateOrder(template, lineSources), problems: [],
     enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
-  }).map((line) => [line.componentId, line]));
+    entriesCanSubmit: !!args.entryContributions,
+  }).filter((line) => !args.entryContributions || line.blocker?.code !== "lineHasNoSource")];
 
+  if (args.entryContributions?.blockers.length) throw new SafeError(removalLineBlockerMessage(args.entryContributions.blockers[0]));
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
   const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
@@ -77,7 +84,9 @@ export function resolveTemplateInputs(args: {
   for (const group of template.groups) {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
-      const blocker = lineDecisions.get(component.id)?.blocker;
+      const entryInputs = args.entryContributions?.inputs.filter((input) => input.componentId === component.id) ?? [];
+      const contract = lineContract && effectiveContract(lineContract);
+      const blocker = lineDecisions.find((line) => line.componentId === component.id && line.blocker)?.blocker;
       if (blocker) throw new SafeError(removalLineBlockerMessage(blocker));
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
@@ -91,9 +100,9 @@ export function resolveTemplateInputs(args: {
         )
         .filter((mapping) => mapping != null);
       if (
-        omitProductionComponents &&
+        !entryInputs.length && (args.entryContributions?.sentSingleComponentIds.includes(component.id) || (omitProductionComponents &&
         monitoredMappings.length > 0 &&
-        monitoredMappings.every((mapping) => mapping.bucket === "production")
+        monitoredMappings.every((mapping) => mapping.bucket === "production")))
       ) {
         omittedTemplateComponentIds.push(component.id);
         continue;
@@ -130,11 +139,19 @@ export function resolveTemplateInputs(args: {
             `Registry template component "${blueprint.key}" is missing a required field. Ask an Admin to update the template.`,
           );
         }
+        const contribution = entryInputs.find((input) => input.inputKey === rtcInput.input_key);
+        if (args.entryContributions && contract?.scope === "operating" && contract.entryPolicy !== "none" &&
+          (!contract.automaticSource || (omitProductionComponents && lookupInputMapping(group.key, component.blueprint_key, rtcInput.input_key, lineContract)?.bucket === "production")) && !contribution) {
+          throw new SafeError(EMPTY_REMOVAL_LINE);
+        }
         const draft = buildCreateDatapointRequest({
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
           componentDisplayName: component.display_name,
           lineContract,
+          entryContribution: contribution?.value,
+          carriedEntries: args.entryContributions?.carriedEntries?.filter(entry => entry.componentId === component.id),
+          omitAutomaticProduction: omitProductionComponents,
           rtcInput,
           blueprintInput,
           agg,
@@ -147,7 +164,6 @@ export function resolveTemplateInputs(args: {
                   inputKey: rtcInput.input_key,
                 })
               : sourceIds,
-          allowPeriodInputStub,
         });
         monitored.push({
           removalTemplateComponentId: component.id,

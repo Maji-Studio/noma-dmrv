@@ -1,9 +1,12 @@
 "use client";
 
+import { useId } from "react";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   operatorFormSchema,
   type OperatorFormData,
@@ -12,7 +15,8 @@ import type { Operator } from "@/db/schema/parties";
 
 interface OperatorFormProps {
   operator?: Operator;
-  onSubmit: (data: OperatorFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: OperatorFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -27,12 +31,16 @@ export function OperatorForm({
   errorMessage,
   submitLabel,
 }: OperatorFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!operator;
 
   const {
     control,
     register,
     handleSubmit,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<OperatorFormData>({
     resolver: zodResolver(operatorFormSchema),
@@ -43,8 +51,10 @@ export function OperatorForm({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+
   return (
-    <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-20">
+    <form id={formId} onSubmit={latched(handleSubmit((data) => onSubmit(data, refuseSave)))} className="space-y-20">
       <FormField id="name" label="Name" error={errors.name?.message} required>
         <FormInput
           id="name"

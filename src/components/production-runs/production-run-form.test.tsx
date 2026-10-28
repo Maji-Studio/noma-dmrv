@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({
@@ -11,17 +12,34 @@ vi.mock("@/hooks/use-facility-context", () => ({
   }),
 }));
 vi.mock("@/hooks/use-entities", () => ({ useEntityById: () => ({ data: undefined }) }));
-vi.mock("@/components/forms/entity-select", () => ({
-  EntitySelect: () => null,
+const pickers = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock("@/components/forms/entity-select", async () => ({
+  useSelectDefault: (await vi.importActual<typeof import("@/components/forms/entity-select/use-select-default")>(
+    "@/components/forms/entity-select/use-select-default",
+  )).useSelectDefault,
+  EntitySelect: (props: Record<string, unknown>) => { pickers.push(props); return null; },
   StorageLocationQuickAddDialog: () => null,
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: () => null }));
 vi.mock("./production-run-mix-bin-notice", () => ({ ProductionRunMixBinNotice: () => null }));
+// The footer line has its own tests; here it only marks its place in the footer.
+const previewProps: Array<{ clearEndTime: boolean }> = [];
+vi.mock("./production-run-credit-batch-preview", () => ({
+  ProductionRunCreditBatchPreview: (props: { clearEndTime: boolean }) => {
+    previewProps.push(props);
+    return <p data-testid="credit-batch-preview" />;
+  },
+}));
 vi.mock("./production-readings-field", () => ({ ProductionReadingsField: () => null }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 import { ProductionRunForm } from "./production-run-form";
+import { footerForRefusedSave } from "./production-run-refusal";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { ActionError } from "@/lib/action-error";
+import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 
 const savedRun = {
   id: "55555555-5555-4555-8555-555555555555",
@@ -37,34 +55,167 @@ const savedRun = {
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
 } as unknown as ProductionRunWithRelations;
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); pickers.length = 0; previewProps.length = 0; });
+
+describe("ProductionRunForm reactor picker", () => {
+  it("links to creating a reactor at the run's facility", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const reactor = pickers.findLast((props) => props.entityType === "reactor");
+    expect(reactor).toMatchObject({
+      allowCreate: true,
+      createHref: "/reactors?facility=11111111-1111-4111-8111-111111111111&create=true",
+      emptyHint: { message: "This facility has no reactors yet." },
+    });
+  });
+});
+
+describe("ProductionRunForm unsaved changes", () => {
+  const REACTOR_ID = "22222222-2222-4222-8222-222222222222";
+  const dirtyStates = () => renderReportingDirty(<ProductionRunForm onSubmit={vi.fn()} onCancel={vi.fn()} />).states;
+  const reactor = () => pickers.findLast((props) => props.entityType === "reactor") as {
+    value: string; onChange: (id: string) => void; onAutoSelect?: (id: string) => void;
+  };
+
+  it("stays clean when the facility's only reactor is picked for the operator", async () => {
+    const states = dirtyStates();
+    // What the real select does with autoSelectSingle and one option.
+    act(() => { (reactor().onAutoSelect ?? reactor().onChange)(REACTOR_ID); });
+    await waitFor(() => expect(reactor().value).toBe(REACTOR_ID));
+    expectStayedClean(states);
+  });
+
+  it("turns dirty once the operator picks a reactor", async () => {
+    const states = dirtyStates();
+    act(() => { reactor().onChange(REACTOR_ID); });
+    await waitFor(() => expect(states.at(-1)).toBe(true));
+  });
+});
+
+describe("ProductionRunForm credit batch line", () => {
+  it("puts the credit batch line in the footer, directly before Save", () => {
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    const line = screen.getByTestId("credit-batch-preview");
+    const save = screen.getByRole("button", { name: "Create production run" });
+    // Outside the <form>, in the footer, and before the buttons.
+    expect(line.closest("form")).toBeNull();
+    expect(line.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.getAttribute("form")).toBe(document.querySelector("form")!.id);
+  });
+});
 
 describe("ProductionRunForm reopening", () => {
   it.each(["complete", "failed"] as const)("reopens a saved %s run without touching its end fields", async (status) => {
     const onSubmit = vi.fn();
-    render(<ProductionRunForm productionRun={{ ...savedRun, status }} onSubmit={onSubmit} />);
+    render(<ProductionRunForm productionRun={{ ...savedRun, status }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
     const endDate = document.querySelector<HTMLInputElement>('input[name="endDate"]')!;
     const endTime = document.querySelector<HTMLInputElement>('input[name="endTime"]')!;
     expect(endDate.value).toBe("2026-07-15");
     expect(endTime.value).toBe("12:00");
 
+    expect(previewProps.at(-1)?.clearEndTime).toBe(false);
     fireEvent.click(screen.getByRole("radio", { name: "Running" }));
+    // The credit batch line ignores the end time the save is about to clear.
+    expect(previewProps.at(-1)?.clearEndTime).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       status: "running", endTime: null, expectedVersion: savedRun.version,
-    }));
+    }), expect.any(Function));
     expect(endDate.value).toBe("2026-07-15");
     expect(endTime.value).toBe("12:00");
   });
 
   it("keeps the end-time field error for an already Running run", async () => {
     const onSubmit = vi.fn();
-    render(<ProductionRunForm productionRun={{ ...savedRun, status: "running", endTime: null }} onSubmit={onSubmit} />);
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "running", endTime: null }} onSubmit={onSubmit} lock={OPEN_LOCK} />);
     fireEvent.change(document.querySelector('input[name="endTime"]')!, { target: { value: "12:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
     await screen.findByText("Choose Complete or clear the end time for a Running run.");
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProductionRunForm refused saves", () => {
+  const refusalOf = (code: string, path: string, message: string) =>
+    new ActionError({ error: message, code: code as never, issues: [{ path: [path], code: code as never, message }] });
+  const LOCK_REASON = "This run feeds a Removal sent to Isometric. Correct the Removal first.";
+
+  function submitRefused(error: ActionError, edit: () => void = () => {}) {
+    const footers: Array<string | null> = [];
+    const onSubmit = vi.fn((_data, onRefusal) => { footers.push(onRefusal(error, "Production run was not saved. Try again.")); });
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "complete" } as ProductionRunWithRelations} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+    edit();
+    fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+    return { onSubmit, footers };
+  }
+
+  it("shows a field refusal at its field and leaves the footer empty", async () => {
+    const message = "Enter the biochar moisture for a complete run.";
+    const { onSubmit, footers } = submitRefused(refusalOf("validation_failed", "biocharMoisturePercent", message));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText(message)).toHaveLength(1);
+    expect(footers).toEqual([null]);
+  });
+
+  it("brings the saved value back into a field that became locked", async () => {
+    const field = () => document.querySelector<HTMLInputElement>('input[name="biocharOutputKg"]')!;
+    let saved = "";
+    const { onSubmit, footers } = submitRefused(
+      refusalOf("certification_locked", "biocharOutputKg", LOCK_REASON),
+      () => { saved = field().value; fireEvent.change(field(), { target: { value: "35" } }); },
+    );
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ biocharOutputKg: 35 });
+    await screen.findByText("Locked. Your change was not saved.");
+    expect(field().value).toBe(saved);
+    expect(footers).toEqual([LOCK_REASON]);
+  });
+
+  it("brings the saved start date back when only the date changed and the start is locked", async () => {
+    const date = () => document.querySelector<HTMLInputElement>('input[name="startDate"]')!;
+    let saved = "";
+    const { onSubmit, footers } = submitRefused(
+      refusalOf("certification_locked", "startTime", LOCK_REASON),
+      () => { saved = date().value; fireEvent.change(date(), { target: { value: "2026-07-10" } }); },
+    );
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(await screen.findAllByText("Locked. Your change was not saved.")).toHaveLength(2);
+    expect(date().value).toBe(saved);
+    expect(footers).toEqual([LOCK_REASON]);
+  });
+
+  it("files an overlap conflict at the start time, not in the footer, when the parent hands on the refusal", async () => {
+    const onRefusal = vi.fn(() => "footer");
+    const onSubmit = vi.fn(async (_data: unknown, handler: SaveRefusalHandler) => {
+      const error = new ProductionRunConflictError("Overlaps another run on this reactor", {
+        conflictingRunId: "run_2", conflictingRunNumber: "PR-2", startTime: new Date(), endTime: null,
+      } as never);
+      try { throw error; } catch (caught) {
+        // The parents' catch: the overlap is rethrown before the handler can take it.
+        footerForRefusedSave(caught, "fallback", (e, f) => { onRefusal(); return handler(e, f); });
+      }
+    });
+    render(<ProductionRunForm productionRun={{ ...savedRun, status: "complete" } as ProductionRunWithRelations} onSubmit={onSubmit} lock={OPEN_LOCK} />);
+    fireEvent.click(screen.getByRole("button", { name: "Update production run" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    await screen.findAllByText(/Overlaps another run on this reactor/);
+    expect(onRefusal).not.toHaveBeenCalled();
+  });
+});
+
+describe("footerForRefusedSave", () => {
+  const conflict = new ProductionRunConflictError("Overlaps", {} as never);
+
+  it("rethrows an overlap before the refusal handler sees it", () => {
+    const onRefusal = vi.fn(() => "footer");
+    expect(() => footerForRefusedSave(conflict, "fallback", onRefusal)).toThrow(conflict);
+    expect(onRefusal).not.toHaveBeenCalled();
+  });
+
+  it("hands any other error to the refusal handler", () => {
+    const onRefusal = vi.fn(() => "footer");
+    expect(footerForRefusedSave(new Error("x"), "fallback", onRefusal)).toBe("footer");
+    expect(onRefusal).toHaveBeenCalledWith(expect.any(Error), "fallback");
   });
 });

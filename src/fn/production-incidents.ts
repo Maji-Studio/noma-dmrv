@@ -1,5 +1,8 @@
 "use server";
+import { recordProductionIncident } from "@/lib/operations/production-incidents";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Production Incidents Server Actions
@@ -10,7 +13,6 @@ import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 import {
   getProductionIncidents as getProductionIncidentsData,
-  createProductionIncident,
   updateProductionIncident,
   deleteProductionIncident,
   type ProductionIncidentWithRelations,
@@ -56,24 +58,14 @@ export async function getProductionIncidentsFn(
 }
 
 export async function createProductionIncidentFn(
-  data: z.infer<typeof createProductionIncidentSchema>
+  data: z.infer<typeof createProductionIncidentSchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<ProductionIncidentWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createProductionIncidentSchema.parse(data);
 
-    const incident = await createProductionIncident(ctx, {
-      productionRunId: validated.productionRunId,
-      incidentTime: validated.incidentTime,
-      operatorId: validated.operatorId ?? null,
-      reactorId: validated.reactorId ?? null,
-      description: validated.description,
-      severity: validated.severity,
-      correctiveActions: validated.correctiveActions || null,
-      notes: validated.notes || null,
-    });
-
-    return incident;
-  }, {
+    return create(recordProductionIncident, validated);
+  }, options, {
     fallbackMessage: CREATE_FAILURE,
     log: { message: "createProductionIncidentFn failed", context: { op: "production-incident:create" } },
     mapError: (error) =>

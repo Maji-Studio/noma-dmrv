@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../helpers/removal-fixture";
 /**
  * Certification workspace E2E — section navigation across the three routes and
  * the consolidated Settings surface (Stage 3 remodel).
@@ -10,7 +11,7 @@
  *     "linked" — the operational routes (Removals / GHG Statements) are gated
  *     behind a registry link (ADR 0007), and the gate reads the
  *     DB-only `readFacilityCertifierSummary`, so no real project is required.
- *     Then visits each of the three routes via its nav link and asserts the
+ *     Then visits each of the two routes via its nav link and asserts the
  *     per-route heading plus that the active `?facility=` scope is preserved on
  *     every hop. Links are addressed by accessible name (sidebar section per
  *     ADR 0007, amended 2026-06-04).
@@ -19,10 +20,9 @@
  *     detail sheet, and closes it with Escape.
  *  3. Settings round-trip — needs a seeded `certifier_projects` mapping against
  *     the REAL sandbox project (the connection card resolves the project from
- *     Isometric), so it's gated behind the sandbox skip. Asserts the Settings
- *     page renders the linked project in the Certifier pane (the console's
- *     default) and that the admin-only categories — Emissions and Diagnostics,
- *     reached from the settings rail — mount. The link/edit/unlink dialog
+ *     Isometric), so it's gated behind the sandbox skip. Asserts the retired
+ *     route redirects, Settings, Facilities renders the linked project, and
+ *     Registry and Diagnostics, reached from the settings rail, mount. The link/edit/unlink dialog
  *     behaviour is covered by `facility-certifier-mapping.spec.ts`.
  *
  * Playwright loads `.env.test` only; we additionally pull `.env.local` (without
@@ -47,7 +47,6 @@ import { createDbConnection } from "./fixtures/db";
 const SECTIONS = [
   { label: "Removals", path: "/certification/removals" },
   { label: "GHG Statements", path: "/certification/ghg-statements" },
-  { label: "Settings", path: "/certification/settings" },
 ] as const;
 
 // DB-only link target to un-gate the operational routes; never reaches
@@ -127,6 +126,7 @@ test.describe("Certification workspace — status history", () => {
 
     const facilityId = seededData.facility.id;
     const removalId = crypto.randomUUID();
+    let removalCode = "";
     const submissionId = crypto.randomUUID();
     const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const submittedAt = new Date(Date.now() - 60 * 60 * 1000);
@@ -136,7 +136,7 @@ test.describe("Certification workspace — status history", () => {
     const { db, pool } = createDbConnection();
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(schema.certifierRemovals).values({
+        const [removalRow] = await insertRemovalFixture(tx, {
           organizationId: DEC_ORG_ID,
           id: removalId,
           facilityId,
@@ -145,6 +145,7 @@ test.describe("Certification workspace — status history", () => {
           startedOn: createdAt.toISOString().slice(0, 10),
           completedOn: submittedAt.toISOString().slice(0, 10),
         });
+        removalCode = removalRow.code;
         await tx.insert(schema.certificationSubmissions).values({
           organizationId: DEC_ORG_ID,
           id: submissionId,
@@ -209,12 +210,13 @@ test.describe("Certification workspace — status history", () => {
       await expect(history).toBeHidden();
       await expect(listBadge).toBeFocused();
 
-      // The row itself still opens the sheet, by keyboard and by click.
+      // The record link in the row's identity column opens the sheet by keyboard
+      // (the row itself has no tab stop); a click on the row opens it too.
       const row = page
         .getByRole("table", { name: "Removals" })
         .getByRole("row")
-        .filter({ hasText: removalId.slice(0, 8) });
-      await row.focus();
+        .filter({ hasText: removalCode });
+      await row.locator("[data-row-link]").focus();
       await page.keyboard.press("Enter");
       await expect(sheet).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`removal=${removalId}`));
@@ -222,7 +224,7 @@ test.describe("Certification workspace — status history", () => {
       await expect(sheet).toHaveCount(0);
 
       // Same badge on the detail sheet; Escape closes the popover, not the sheet.
-      await page.getByRole("cell", { name: new RegExp(removalId.slice(0, 8)) }).click();
+      await page.getByRole("cell", { name: new RegExp(removalCode) }).click();
       await expect(sheet).toBeVisible();
       await sheet.getByRole("button", { name: "Submitted, status history" }).click();
       await expect(history).toBeVisible();
@@ -260,17 +262,17 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
 
     const mapping = await seedCertifierMapping(facilityId, { externalProjectId });
     try {
-      await page.goto(`/certification/settings?facility=${facilityId}`);
+      // The retired route redirects to the pane that absorbed the section.
+      await page.goto(`/certification/settings?section=certifier&facility=${facilityId}`);
+      await expect(page).toHaveURL(new RegExp(`/settings/registry\\?facility=${facilityId}`), {
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
 
+      // A · The project link is on Settings, Facilities.
+      await page.goto(`/settings/facilities?facility=${facilityId}`);
       await expect(
-        page.getByRole("heading", { name: "Settings", level: 1 }),
+        page.getByRole("heading", { name: "Facilities", level: 1 }),
       ).toBeVisible({ timeout: 15000 });
-
-      // A · Certifier is the console's default pane — the seeded project
-      // resolves into it, below the organization keys.
-      await expect(
-        page.getByRole("heading", { name: "Certifier", level: 2 }),
-      ).toBeVisible();
       await expect(page.getByText(externalProjectId).first()).toBeVisible();
       // Admin sees the management controls (canManage = viewerCanManage).
       await expect(
@@ -280,23 +282,20 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
         page.getByRole("button", { name: "Unlink", exact: true }),
       ).toBeVisible();
 
-      // B/C · The other categories are rail entries, not tabs: clicking one
-      // swaps the pane, and only the selected pane is mounted.
-      const rail = page.getByRole("navigation", {
-        name: "Certification settings categories",
-      });
-      await rail.getByRole("button", { name: "Emissions" }).click();
+      // B/C · The other categories are rail links, one route each, and the
+      // working facility rides along.
+      const rail = page.getByRole("navigation", { name: "Settings categories" });
+      await rail.getByRole("link", { name: "Registry" }).click();
       await expect(
-        page.getByRole("heading", { name: "Emissions", level: 2 }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Certifier", level: 2 }),
-      ).toHaveCount(0);
+        page.getByRole("heading", { name: "Registry", level: 1 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(page).toHaveURL(new RegExp(`facility=${facilityId}`));
+      await expect(page.getByText("Registry: Isometric")).toBeVisible();
 
-      await rail.getByRole("button", { name: "Diagnostics" }).click();
+      await rail.getByRole("link", { name: "Diagnostics" }).click();
       await expect(
-        page.getByRole("heading", { name: "Diagnostics", level: 2 }),
-      ).toBeVisible();
+        page.getByRole("heading", { name: "Diagnostics", level: 1 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
     } finally {
       await mapping.cleanup();
     }

@@ -7,9 +7,10 @@ import {
 import type { BatchHealthFixTarget } from "./batch-health";
 import type { RemovalAdvisory, RemovalBlocker } from "./removal-blockers";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { isTemplateFixTarget, templateLineFixTarget } from "./template-fix-targets";
 
 /** Targets that repair the credit batch itself. Every other target is per record. */
-const BATCH_SCOPED_TARGETS: ReadonlySet<BatchHealthFixTarget> = new Set(["creditBatchTemplate", "batchDetails", "emissions"]);
+const BATCH_SCOPED_TARGETS: ReadonlySet<BatchHealthFixTarget> = new Set(["batchDetails", "emissions"]);
 
 /**
  * The one repair link for a Removal blocker or advisory. A finding with no
@@ -23,11 +24,14 @@ const BATCH_SCOPED_TARGETS: ReadonlySet<BatchHealthFixTarget> = new Set(["credit
  * anchor is never returned.
  */
 export function removalFindingFixLink(
-  finding: Pick<RemovalBlocker | RemovalAdvisory, "fixTarget">,
+  finding: Pick<RemovalBlocker | RemovalAdvisory, "fixTarget"> & { code?: RemovalBlocker["code"] | RemovalAdvisory["code"] },
   facilityId: string,
   memberBatchIds: readonly string[] = [],
 ): BatchHealthFixLink | null {
-  const target = finding.fixTarget;
+  // Template findings route through the one table, so a decided line never says "Decide components".
+  const target = finding.code && isTemplateFixTarget(finding.fixTarget)
+    ? templateLineFixTarget({ code: finding.code, fixTarget: finding.fixTarget })
+    : finding.fixTarget;
   if (!target) return null;
   const batchId = memberBatchIds.length === 1 && BATCH_SCOPED_TARGETS.has(target) ? memberBatchIds[0] : undefined;
   if (target === "batchDetails") {
@@ -36,5 +40,5 @@ export function removalFindingFixLink(
       href: batchId ? creditBatchDeepLinkHref(batchId, facilityId) : creditBatchListHref(facilityId),
     };
   }
-  return batchHealthFixLinkFor({ key: "template", fixTarget: target }, facilityId, batchId);
+  return batchHealthFixLinkFor({ key: target === "templateSetup" ? "templateSet" : "templateLines", fixTarget: target }, facilityId, batchId);
 }

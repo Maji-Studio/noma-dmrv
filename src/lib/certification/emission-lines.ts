@@ -1,3 +1,5 @@
+import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
@@ -11,18 +13,45 @@ const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the sam
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
-  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
+  needsReview: "Check entry", needsSetup: "Not set up", confirmedZero: "Recorded as zero",
 } as const;
 export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
+export type EmissionRecordSource = "productionRuns" | "transportLegs" | "deliveries" | "applications";
+export interface EmissionLineRecords {
+  source: EmissionRecordSource;
+  count: number;
+  figure: EmissionFigure | null;
+}
+const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
+  "run-genset-diesel": "productionRuns", "run-startup-diesel": "productionRuns",
+  "run-electricity": "productionRuns", "feedstock-dry-mass": "productionRuns",
+  "biochar-dry-mass": "deliveries", "safety-margin": "applications",
+  "feedstock-transport": "transportLegs", "sample-transport": "transportLegs",
+  "delivery-transport": "deliveries", sequestration: "applications",
+};
 export interface EmissionLineEntryFact {
+  carry?: EntryCarryDisposition;
+  reportedIn?: EntryCarryDestination | null;
+  revisionOf?: { removalId: string; removalCode: string } | null;
+  /** The Removal of the entry's own batch that was already sent when the entry was recorded. */
+  recordedAfter?: { removalId: string; removalCode: string } | null;
+  /** Present on stored entries; the submit step's component table reads them. */
+  id?: string;
+  /** The day the entry's use happened (YYYY-MM-DD). */
+  occurredOn?: string;
+  documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
+  confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
 }
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
+  entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  omittedAutomaticSources?: readonly AutomaticSourceId[];
+  automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
 }
 
@@ -51,14 +80,20 @@ export function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
 export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   // Revalidate as well as accepting observation problems: callers cannot hide an invalid contract.
   const problems = [...facts.problems, ...validateLineSources(facts.definition, facts.lineSources)];
-  return facts.definition.groups.flatMap((group) => group.components.map((component) => {
+  const fallbackGroupOffset = Math.max(-1, ...Object.values(facts.lineSources).map((source) => source.templateOrder?.groupPosition ?? -1)) + 1;
+  return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
-    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete, entriesCanSubmit: facts.entriesCanSubmit });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const records: EmissionLineRecords | null = contract?.automaticSource ? {
+      source: RECORD_SOURCES[contract.automaticSource],
+      count: facts.automaticRecordCounts?.[contract.automaticSource] ?? 0,
+      figure: automaticFigure,
+    } : null;
     let state: EmissionLineState;
     let blocker: RemovalBlocker | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
@@ -67,7 +102,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
-    else { state = "empty"; blocker = decision?.blocker; }
+    else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
+    else { state = "empty"; blocker = decision?.blocker;
+      if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
+        blocker = { code: "lineHasNoSource", message: EMPTY_REMOVAL_LINE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      }
+    }
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
@@ -80,11 +120,15 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const stale = entries.find((entry) => !entry.counts);
     if (stale) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template component.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
-      blueprintKey: component.blueprintKey, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
-  }));
+      groupName: group.displayName,
+      groupPosition: stored?.templateOrder?.groupPosition ?? fallbackGroupOffset + groupIndex,
+      position: stored?.templateOrder?.position ?? componentIndex,
+      blueprintKey: component.blueprintKey, description: component.description,
+      entryPolicy: contract?.entryPolicy ?? "none", records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
+  })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

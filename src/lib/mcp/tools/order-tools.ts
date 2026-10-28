@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ORDER_REPRESENTATION_REVISION } from "@/config/api-rest";
+import { ORDER_DELIVERY_NAME_CAP } from "@/lib/order-domain-errors";
 import {
   orderBody, representationCheckedDelete, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale,
 } from "@/lib/api/order-write-checks";
@@ -34,7 +35,7 @@ function guidedText(headline: string, body: Record<string, unknown>) {
 
 export const orderWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "record_order", scope: "orders:write", input: createInput, output: itemOutput,
+    kind: "write", name: "record_order", scope: "orders:write", requiredScopes: () => ["orders:write"], input: createInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: false },
     description: `Record one order with a required customer location for the delivery destination. Call find_customers, find_customer_locations and find_formulations first, and whoami for facility ids. ${ORDER_GUIDANCE} ${guidance}`,
     async execute(context, raw) {
@@ -48,7 +49,7 @@ export const orderWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "update_order", scope: "orders:write", input: updateInput, output: itemOutput,
+    kind: "write", name: "update_order", scope: "orders:write", requiredScopes: () => ["orders:write"], input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update an order by UUID. Send only what changes; customerLocationId cannot be cleared. Archived orders cannot be updated. ${versionGuidance} ${ORDER_GUIDANCE} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
@@ -58,9 +59,9 @@ export const orderWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "delete_order", scope: "orders:delete", input: deleteInput, output: deleteOutput,
+    kind: "write", name: "delete_order", scope: "orders:delete", requiredScopes: () => ["orders:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Delete an order by UUID and retire its documents. Requires orders:delete. Any delivery, including an archived delivery, prevents deletion; an archived order without deliveries can be deleted. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
+    description: `Delete an order by UUID and retire its documents. Requires orders:delete. Any delivery, including an archived delivery, prevents deletion with certification_locked at /orderId and issue metadata reason in_use, deliveryCode and deliveryId (the first by code in ascending order; the message names up to ${ORDER_DELIVERY_NAME_CAP} and counts the rest); an archived order without deliveries can be deleted. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),
     summarize(body, dryRun) {
       const code = ((body.deleted ?? body.data) as { code: string }).code;

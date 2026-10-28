@@ -6,12 +6,18 @@
  * customers silently drops everyone past the page and leaves no way to reach
  * them (#774).
  */
+import { errorBox } from "../../../tests/helpers/error-box-text";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
+import { useState } from "react";
+import { ActionError } from "@/lib/action-error";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
 const state = vi.hoisted(() => ({
   /** Every entity list request the form issues, in order. */
@@ -20,6 +26,8 @@ const state = vi.hoisted(() => ({
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
+  customerOptions: [] as EntityOption[],
+  formulationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
   /** The selected customer's detail read; archived when `archivedAt` is set. */
   customer: undefined as { archivedAt: Date | null } | undefined,
@@ -30,6 +38,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: (facilityId: string) => ({ timeZone: state.facilities.find(facility => facility.id === facilityId)?.timezone ?? "UTC", hint: "" }),
   useFacilityContext: () => ({
     facilityId: "facility",
     facilities: state.facilities,
@@ -63,12 +72,16 @@ vi.mock("@/hooks/use-entities", () => ({
     enabled?: boolean;
   }) => {
     state.optionRequests.push({ entityType, enabled });
-    return { data: enabled && entityType === "customerLocation" ? state.locationOptions : [], dataUpdatedAt: 0, isLoading: false, error: null };
+    const options = entityType === "customerLocation" ? state.locationOptions
+      : entityType === "customer" ? state.customerOptions
+      : entityType === "formulation" ? state.formulationOptions : [];
+    return { data: enabled ? options : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
   useEntityById: (entityType: EntityType, id: string | undefined) => {
     state.detailRequests.push({ entityType, id });
     const data = entityType === "customerLocation"
       ? state.locationOptions.find((option) => option.id === id)
+      : entityType === "formulation" ? state.formulationOptions.find((option) => option.id === id)
       : entityType === "customer" && id ? state.customersById[id] : null;
     return { data: data ?? null, dataUpdatedAt: 1, isPending: false };
   },
@@ -89,7 +102,7 @@ function renderForm(order?: Order) {
   // The quick-add dialogs EntitySelect mounts (closed) read the query client.
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
-      <OrderForm order={order} onSubmit={noop} />
+      <OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} />
     </QueryClientProvider>,
   );
 }
@@ -99,6 +112,8 @@ beforeEach(() => {
   state.detailRequests = [];
   state.customersById = {};
   state.locationOptions = [];
+  state.customerOptions = [];
+  state.formulationOptions = [];
   state.locations = [];
   state.customer = { archivedAt: null };
   state.customerIsError = false;
@@ -120,7 +135,7 @@ describe("OrderForm product details", () => {
         customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
         formulationId: "44444444-4444-4444-8444-444444444444",
         orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
-      } as Order} onSubmit={submit} />
+      } as Order} onSubmit={submit} lock={OPEN_LOCK} />
     </QueryClientProvider>);
     const quantity = screen.getByRole("spinbutton", { name: /^Requested wet mass/ });
     fireEvent.change(quantity, { target: { value: "" } });
@@ -130,7 +145,7 @@ describe("OrderForm product details", () => {
 
     fireEvent.change(quantity, { target: { value: "12.125" } });
     fireEvent.submit(quantity.closest("form")!);
-    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ quantityKg: 12.125 })));
+    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ quantityKg: 12.125 }), expect.any(Function)));
     expect(screen.queryByText("Quantity is required")).toBeNull();
     client.clear();
   });
@@ -147,12 +162,12 @@ describe("OrderForm product details", () => {
           customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
           formulationId: "44444444-4444-4444-8444-444444444444",
           orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
-        } as Order} onSubmit={submit} />
+        } as Order} onSubmit={submit} lock={OPEN_LOCK} />
       </QueryClientProvider>);
       const date = screen.getByLabelText(/^Order date/) as HTMLInputElement;
       expect(date.value).toBe("2026-09-01");
       fireEvent.submit(date.closest("form")!);
-      await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ orderDate: new Date("2026-09-01T00:00:00Z") })));
+      await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ orderDate: new Date("2026-09-01T00:00:00Z") }), expect.any(Function)));
     } finally {
       if (originalTimezone === undefined) delete process.env.TZ;
       else process.env.TZ = originalTimezone;
@@ -183,7 +198,7 @@ describe("OrderForm customer field", () => {
         customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "",
         formulationId: "44444444-4444-4444-8444-444444444444",
         orderDate: "2026-09-01", quantityKg: 1000, packaging: "loose",
-      } as unknown as Order} onSubmit={submit} />
+      } as unknown as Order} onSubmit={submit} lock={OPEN_LOCK} />
     </QueryClientProvider>);
     const picker = screen.getByRole("combobox", { name: /^Customer location/ });
     await waitFor(() => expect(picker.textContent).toBe("Only location"));
@@ -199,7 +214,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     state.locations = [location];
@@ -208,14 +223,14 @@ describe("OrderForm customer field", () => {
     state.facilities.push(orderFacility);
     const order = { facilityId: orderFacility.id, customerId: location.customerId, customerLocationId: location.id } as Order;
     const client = new QueryClient();
-    const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>;
+    const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>;
     const { rerender } = render(view);
     fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     fireEvent.click(screen.getByTestId("entity-select-edit"));
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     state.locations = [{ ...location, version: 2, name: "Renamed field" }];
     state.locationOptions = [{ ...state.locationOptions[0], name: "Renamed field" }];
-    rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+    rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     fireEvent.click(screen.getByRole("button", { name: "Close location editor" }));
     expect(screen.getByRole("combobox", { name: /^Customer location/ }).textContent).toBe("Renamed field");
@@ -227,7 +242,7 @@ describe("OrderForm customer field", () => {
   it("offers no location edit until the scoped location record is available", () => {
     state.locationOptions = [{ id: "location-1", code: "", name: "North field" }];
     const client = new QueryClient();
-    render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} /></QueryClientProvider>);
+    render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
     fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     expect(screen.queryByTestId("entity-select-edit")).toBeNull();
     client.clear();
@@ -285,7 +300,7 @@ describe("OrderForm customer field", () => {
     const location: CustomerLocation = {
       id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1,
       facilityDistances: [], organizationId: "organization-1", gpsLatitude: -6.8, gpsLongitude: 39.2,
-      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true,
+      address: null, city: null, stateRegion: null, defaultSoilTemperatureC: null, isDefault: true, archivedAt: null,
       createdAt: new Date("2026-09-12"), updatedAt: new Date("2026-09-12"),
     };
     const order = { customerId: "customer-1", customerLocationId: "location-1" } as Order;
@@ -295,7 +310,7 @@ describe("OrderForm customer field", () => {
       state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
       state.customer = { archivedAt };
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       return client;
     }
 
@@ -316,7 +331,7 @@ describe("OrderForm customer field", () => {
       state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
       state.customer = undefined;
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBe("true");
       fireEvent.click(picker);
@@ -332,13 +347,27 @@ describe("OrderForm customer field", () => {
       state.customer = undefined;
       state.customerIsError = true;
       const client = new QueryClient();
-      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
       const picker = screen.getByRole("combobox", { name: /^Customer location/ });
       expect(picker.getAttribute("aria-readonly")).toBe("true");
       expect(screen.queryByTestId("entity-select-edit")).toBeNull();
-      expect(screen.getByText("The customer could not be loaded, so the customer location is locked. Try again.")).toBeTruthy();
+      expect(screen.getByText(errorBox("The customer could not be loaded, so the customer location is locked. Try again."))).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Try again" }));
       expect(state.refetchCustomer).toHaveBeenCalledTimes(1);
+      client.clear();
+    });
+
+    it("offers no location editor for an archived destination and still lets an open order pick another one", () => {
+      state.locations = [{ ...location, archivedAt: new Date("2026-10-01") }];
+      state.locationOptions = [{ id: location.id, code: "", name: location.name! }, { id: "location-2", code: "", name: "South field" }];
+      state.customer = { archivedAt: null };
+      const client = new QueryClient();
+      render(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} lock={OPEN_LOCK} /></QueryClientProvider>);
+      const picker = screen.getByRole("combobox", { name: /^Customer location/ });
+      expect(picker.getAttribute("aria-readonly")).toBeNull();
+      fireEvent.click(picker);
+      expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+      expect(screen.getByText("South field")).toBeTruthy();
       client.clear();
     });
 
@@ -351,5 +380,259 @@ describe("OrderForm customer field", () => {
       expect(screen.queryByText(/This customer is archived/)).toBeNull();
       client.clear();
     });
+  });
+});
+
+describe("OrderForm record lock (#1119)", () => {
+  const ORDER = {
+    id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+    customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+    formulationId: "44444444-4444-4444-8444-444444444444",
+    orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+  } as Order;
+  const DELIVERY = { kind: "delivery", id: "55555555-5555-4555-8555-555555555555", label: "DL-26-004", facilityId: "22222222-2222-4222-8222-222222222222" };
+  const lockAt = (level: RecordLockView["level"]): RecordLockView => ({
+    level,
+    heldBy: level === "open" ? [] : [DELIVERY],
+    usedBy: level === "open" ? [] : [DELIVERY],
+    freeFields: level === "sent" ? [] : ["code", "quantityKg", "orderDate", "packaging"],
+    howToFree: level === "open" ? null : "To change them, first correct or remove those records.",
+    returnedBy: [],
+  });
+
+  function renderLocked(level: RecordLockView["level"] | "pending") {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}>
+      <OrderForm order={ORDER} onSubmit={noop} lock={level === "pending" ? undefined : lockAt(level)} />
+    </QueryClientProvider>);
+    return {
+      customer: screen.getByRole("combobox", { name: /^Customer(Required)?$/ }),
+      location: screen.getByRole("combobox", { name: /^Customer location/ }),
+      formulation: screen.getByRole("combobox", { name: /^Formulation/ }),
+      date: screen.getByLabelText(/^Order date/) as HTMLInputElement,
+      quantity: screen.getByRole("spinbutton", { name: /^Requested wet mass/ }) as HTMLInputElement,
+      packaging: screen.getByRole("combobox", { name: /^Packaging/ }) as HTMLSelectElement,
+    };
+  }
+  const isDisabled = (element: HTMLElement) => element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true";
+
+  it("leaves every field editable and shows no lock line while Open", () => {
+    const fields = renderLocked("open");
+    expect(Object.values(fields).some(isDisabled)).toBe(false);
+    expect(document.querySelector("[data-record-lock-notice]")).toBeNull();
+  });
+
+  // The lock line itself renders once, from the sheet (`editNotice`).
+  it("disables the fields a delivery holds while In use", () => {
+    const fields = renderLocked("inUse");
+    expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
+    expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
+  });
+
+  it("keeps the fields a delivery would hold closed until the lock answers", () => {
+    const fields = renderLocked("pending");
+    expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
+    expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
+  });
+
+  it("disables every field while Sent", () => {
+    const fields = renderLocked("sent");
+    expect(Object.values(fields).every(isDisabled)).toBe(true);
+  });
+});
+
+it("keeps one order submit in flight and allows a separate entry after it settles", async () => {
+  let resolve!: () => void;
+  const pending = new Promise<void>((done) => { resolve = done; });
+  const submit = vi.fn(() => pending);
+  const client = new QueryClient();
+  render(<QueryClientProvider client={client}>
+    <OrderForm order={{
+      id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+      customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+      formulationId: "44444444-4444-4444-8444-444444444444",
+      orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+    } as Order} onSubmit={submit} lock={OPEN_LOCK} />
+  </QueryClientProvider>);
+  const form = screen.getByLabelText(/^Order date/).closest("form")!;
+  await act(async () => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  expect(submit).toHaveBeenCalledTimes(1);
+  // The latch must still hold after validation and a render, until the save ends.
+  await act(async () => { fireEvent.submit(form); });
+  expect(submit).toHaveBeenCalledTimes(1);
+  await act(async () => { resolve(); await pending; });
+  await act(async () => { fireEvent.submit(form); });
+  expect(submit).toHaveBeenCalledTimes(2);
+  client.clear();
+});
+
+describe("OrderForm facility date default", () => {
+  it("defaults to the active facility day while the browser is still on yesterday", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T22:00:00Z"));
+    state.facilities = [{ id: "facility", name: "Facility", timezone: "Africa/Dar_es_Salaam" } as Facility];
+    try {
+      render(<QueryClientProvider client={new QueryClient()}>
+        <OrderForm onSubmit={noop} lock={OPEN_LOCK} />
+      </QueryClientProvider>);
+      expect((screen.getByLabelText(/^Order date/) as HTMLInputElement).value).toBe("2026-10-22");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("OrderForm unsaved changes", () => {
+  const SOIL_MIX: EntityOption = { id: "formulation-1", code: "F-1", name: "Soil mix" };
+  const COMPOST_MIX: EntityOption = { id: "formulation-2", code: "F-2", name: "Compost mix" };
+  const dirtyStates = () => {
+    // The quick-add dialogs EntitySelect mounts (closed) read the query client.
+    const client = new QueryClient();
+    return renderReportingDirty(<OrderForm onSubmit={noop} onCancel={noop} lock={OPEN_LOCK} />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    }).states;
+  };
+  const formulation = () => screen.getByRole("combobox", { name: /^Formulation/ });
+
+  it("stays clean when the only formulation is picked for the operator", async () => {
+    state.formulationOptions = [SOIL_MIX];
+    const states = dirtyStates();
+    await waitFor(() => expect(formulation().textContent).toBe("Soil mix"));
+    expectStayedClean(states);
+  });
+
+  it("turns dirty once the operator picks a formulation", async () => {
+    state.formulationOptions = [SOIL_MIX, COMPOST_MIX];
+    const states = dirtyStates();
+    fireEvent.click(formulation());
+    fireEvent.click(screen.getByTestId("entity-option-formulation-2"));
+    await waitFor(() => expect(states.at(-1)).toBe(true));
+  });
+});
+
+describe("OrderForm save refusal (#1327)", () => {
+  const ORDER = {
+    id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+    customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+    formulationId: "44444444-4444-4444-8444-444444444444",
+    orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+  } as Order;
+  const FALLBACK = "Order was not saved. Try again.";
+  const LOCK_REASON = "A delivery holds this quantity. Correct the delivery first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingOrderForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <OrderForm
+        order={ORDER}
+        lock={OPEN_LOCK}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, FALLBACK)); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (quantity: HTMLInputElement) => void) {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><RefusingOrderForm refusal={refusal} /></QueryClientProvider>);
+    const quantity = screen.getByRole("spinbutton", { name: /^Requested wet mass/ }) as HTMLInputElement;
+    edit?.(quantity);
+    await act(async () => { fireEvent.submit(quantity.closest("form")!); });
+    return quantity;
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const quantity = await saveRefused(new ActionError({
+      error: "Quantity is too high.", code: "validation_failed", issues: [issue(["quantityKg"], "Quantity is too high.")],
+    }));
+    await waitFor(() => expect(document.getElementById("quantityKg-error")?.textContent).toBe("Quantity is too high."));
+    expect(quantity.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.queryByText(FALLBACK)).toBeNull();
+    expect(screen.queryAllByText(/Quantity is too high\./)).toHaveLength(1);
+  });
+
+  it("restores the saved customer and its location together when the customer is locked", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const LOCATION_TWO = { id: "55555555-5555-4555-8555-555555555555", code: "", name: "South field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    const CUSTOMER_B = { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" };
+    state.customerOptions = [CUSTOMER_A, CUSTOMER_B];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A, [CUSTOMER_B.id]: CUSTOMER_B };
+    state.locationOptions = [LOCATION_ONE, LOCATION_TWO];
+    const client = new QueryClient();
+    const refusal = new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["customerId"], LOCK_REASON, "certification_locked")] });
+    render(<QueryClientProvider client={client}><RefusingOrderForm refusal={refusal} /></QueryClientProvider>);
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByText("Customer B"));
+    await waitFor(() => expect(customer().textContent).toBe("Customer B"));
+    // The operator's own change clears the location until they pick one of B's.
+    await waitFor(() => expect(location().textContent).not.toBe("North field"));
+    fireEvent.click(location());
+    fireEvent.click(await screen.findByText("South field"));
+    await waitFor(() => expect(location().textContent).toBe("South field"));
+
+    await act(async () => { fireEvent.submit(customer().closest("form")!); });
+    await waitFor(() => expect(customer().textContent).toBe("Customer A"));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    expect(document.getElementById("customerLocationId-error")?.textContent).toBe("Locked. Your change was not saved.");
+    expect(screen.getByText("Not saved. 2 fields are locked.")).toBeTruthy();
+    client.clear();
+  });
+
+  it("keeps the location and stays clean when the operator re-picks the same customer", async () => {
+    const LOCATION_ONE = { id: ORDER.customerLocationId, code: "", name: "North field" };
+    const CUSTOMER_A = { id: ORDER.customerId, code: "", name: "Customer A" };
+    state.customerOptions = [CUSTOMER_A, { id: "66666666-6666-4666-8666-666666666666", code: "", name: "Customer B" }];
+    state.customersById = { [CUSTOMER_A.id]: CUSTOMER_A };
+    state.locationOptions = [LOCATION_ONE];
+    const client = new QueryClient();
+    const { states } = renderReportingDirty(<OrderForm order={ORDER} lock={OPEN_LOCK} onSubmit={noop} onCancel={noop} />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    const customer = () => screen.getByRole("combobox", { name: /^Customer(Required)?$/ });
+    const location = () => screen.getByRole("combobox", { name: /^Customer location/ });
+    await waitFor(() => expect(location().textContent).toBe("North field"));
+
+    fireEvent.click(customer());
+    fireEvent.click(await screen.findByTestId(`entity-option-${CUSTOMER_A.id}`));
+    await act(async () => {});
+    expect(customer().textContent).toBe("Customer A");
+    expect(location().textContent).toBe("North field");
+    expectStayedClean(states);
+    client.clear();
+  });
+
+  it("keeps a code clash in the footer, since the order form has no Code field", async () => {
+    const message = 'Code "ORD-26-001" already exists. Use a different code.';
+    await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    expect(await screen.findAllByText(new RegExp(message.slice(0, 20)))).toHaveLength(1);
+    expect(document.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("keeps the fallback for a refusal without issues", async () => {
+    await saveRefused(new ActionError({ error: "Nope.", code: "validation_failed" }));
+    // The error box splits the parent's fallback into a title and its detail.
+    expect(await screen.findByText(/Try again\./)).toBeTruthy();
+  });
+
+  it("sends a locked field back to the saved quantity and says why once", async () => {
+    const quantity = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["quantityKg"], LOCK_REASON, "certification_locked")] }),
+      (field) => fireEvent.change(field, { target: { value: "2500" } }),
+    );
+    await waitFor(() => expect(quantity.value).toBe("1000"));
+    expect(document.getElementById("quantityKg-error")?.textContent).toBe("Locked. Your change was not saved.");
+    expect(screen.getAllByText(new RegExp(LOCK_REASON.slice(0, 25)))).toHaveLength(1);
   });
 });

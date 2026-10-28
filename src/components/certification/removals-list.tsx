@@ -16,9 +16,11 @@
  */
 "use client";
 
-import type { ColumnDef } from "@tanstack/react-table";
+import { certificationRemovalsHref } from "@/lib/certification/links";
+import type { CellContext, ColumnDef, SortingState } from "@tanstack/react-table";
+import { isSortedDescending } from "./undated-last-sort";
 import { parseAsString, useQueryState } from "nuqs";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import {
   PlusIcon,
   SealCheckIcon,
@@ -27,27 +29,37 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import {
+  useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
   useRemovalsForFacility,
 } from "@/hooks/use-certification";
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDateRange, formatDayString } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
+import { CORRECTION_NEEDED_LABEL, RemovalCorrectionCell } from "./removal-correction-needed";
+import { correctionStatus } from "@/lib/removal-correction-copy";
+import { useRecordLocks } from "@/hooks/use-record-locks";
+import type { RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
+import { IsometricLink } from "./isometric-link";
+import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import {
   buildRemovalListRows,
   type RemovalListRow,
 } from "./removal-list-state";
 
-const SHORT_ID = 8;
 
-export function RemovalsList() {
+export function RemovalsList({ initialCreate = false }: { initialCreate?: boolean } = {}) {
   const { facilityId, selectedFacility } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
+  // `?create=true` opens the wizard (the credit batch page's Start Removal).
+  const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
   // Resume an existing draft removal in the wizard — the consolidated landing
   // for the retired `/[removalId]/review` route, which now redirects here with
   // `?resume=<removalId>` (design doc §4).
@@ -56,9 +68,10 @@ export function RemovalsList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const wizardOpen = dialogOpen || !!resume;
+  const wizardOpen = dialogOpen || !!resume || createIntent.isOpen;
   const closeWizard = () => {
     setDialogOpen(false);
+    createIntent.clear();
     void setResume(null);
   };
 
@@ -67,7 +80,7 @@ export function RemovalsList() {
       <PageHeader
         area="certification"
         title="Removals"
-        subtitle="A Removal is the registry submission unit. Group one or more complete credit batches that share a reporting period, then submit the Removal to the registry."
+        subtitle="A Removal is the registry submission unit: complete credit batches that share a reporting period."
         actions={
           facilityId ? (
             <Button variant="primary" onClick={() => setDialogOpen(true)}>
@@ -101,30 +114,67 @@ export function RemovalsList() {
   );
 }
 
-function shortId(id: string): string {
-  return id.slice(0, SHORT_ID);
-}
-
 function reportingWindow(summary: RemovalListRow): string | null {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
     : null;
 }
 
+/** The record link: the Removal code alone. */
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
-  const window = reportingWindow(summary);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
-      <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
-        {shortId(summary.removalId)}…
-      </span>
+    <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
+      {summary.code}
+    </span>
+  );
+}
+
+/**
+ * The lines under the Removal code, outside the record link so the registry
+ * record can open Isometric: the registry id and version once submitted, then
+ * the reporting window.
+ */
+export function RemovalCellDetails({
+  summary,
+  registryHref,
+}: {
+  summary: RemovalListRow;
+  registryHref: string | null;
+}) {
+  const window = reportingWindow(summary);
+  const { externalId } = summary;
+  if (!externalId && !window) return null;
+  return (
+    <span className="block mt-2 min-w-0">
+      {externalId && (
+        <span className="block">
+          <span className="inline-flex max-w-full min-w-0 items-center gap-4 align-top">
+            <span className="body-caption font-mono text-[var(--color-text-secondary)] truncate">
+              {formatRegistryRecord(externalId, summary.version)}
+            </span>
+            {registryHref && <IsometricLink href={registryHref} />}
+          </span>
+        </span>
+      )}
       {window && (
-        <span className="body-caption text-[var(--color-text-tertiary)]">
+        <span className="block body-caption text-[var(--color-text-tertiary)]">
           {window}
         </span>
       )}
-    </div>
+    </span>
   );
+}
+
+/** What the list search matches in the Removal column. */
+export function removalSearchText(summary: RemovalListRow): string {
+  return [
+    summary.code,
+    summary.removalId,
+    summary.externalId,
+    reportingWindow(summary),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
@@ -149,7 +199,7 @@ function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   );
 }
 
-export function StatusCell({ summary }: { summary: RemovalListRow }) {
+export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: RecordLockView }) {
   const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -157,6 +207,9 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A returned Removal with its correction window open names that state in
+  // place of its own status, and #1134's lock-based cell steps aside.
+  const shown = summary.correction ? correctionStatus(summary.correction) : status;
   const firstReason = status.reasons[0]?.split("\n")[0];
   const remainingReasonCount = status.reasons.length - 1;
 
@@ -165,8 +218,8 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
       <CertificationStatusBadge
         entityType="removal"
         entityId={summary.removalId}
-        status={status.value}
-        label={status.label}
+        status={shown.value}
+        label={shown.label}
       />
       {firstReason && (
         // `relative` paints the reason above the badge's expanded hit area,
@@ -184,6 +237,7 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
           </span>
         </span>
       )}
+      <RemovalCorrectionCell lock={summary.correction ? undefined : lock} />
       {status.canRetry && (
         <Button
           variant="default"
@@ -202,19 +256,77 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
   );
 }
 
-const columns: ColumnDef<RemovalListRow>[] = [
+/**
+ * The page's record locks, read by the status cell. Cells are module-level
+ * components: a cell function created per render is a new component type, so
+ * every refetch would remount the cell and drop an open status history and
+ * the focus on its badge.
+ */
+const RemovalLocksContext = createContext<RecordLockViews>({});
+
+function RemovalColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <RemovalCell summary={row.original} />;
+}
+
+function BatchesColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  return <MemberBatchesCell summary={row.original} />;
+}
+
+function StatusColumnCell({ row }: CellContext<RemovalListRow, unknown>) {
+  const locks = useContext(RemovalLocksContext);
+  return <StatusCell summary={row.original} lock={locks[row.original.removalId]} />;
+}
+
+/** The reporting window is already on the Removal cell; its two dates can be added as columns. */
+const REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT = { reportingStart: false, reportingEnd: false };
+
+const createColumns = (
+  submittedOnDescending: boolean,
+  locks: RecordLockViews,
+  registryHref: (externalId: string) => string | null,
+  timeZone: string,
+): ColumnDef<RemovalListRow>[] => [
   {
     id: "removal",
+    meta: {
+      recordLink: true,
+      recordLinkDetails: (summary: RemovalListRow) => (
+        <RemovalCellDetails
+          summary={summary}
+          registryHref={summary.externalId ? registryHref(summary.externalId) : null}
+        />
+      ),
+    },
     header: "Removal",
-    accessorFn: (summary) =>
-      `${summary.removalId} ${reportingWindow(summary) ?? ""}`,
-    cell: ({ row }) => <RemovalCell summary={row.original} />,
+    accessorFn: removalSearchText,
+    cell: RemovalColumnCell,
   },
   {
     id: "batches",
     header: "Credit batches",
     accessorFn: (summary) => summary.memberBatchCodes.join(" "),
-    cell: ({ row }) => <MemberBatchesCell summary={row.original} />,
+    cell: BatchesColumnCell,
+  },
+  {
+    id: "submittedOn",
+    header: "Submitted on",
+    accessorFn: (summary) => submittedOnText(summary.submittedOn, timeZone),
+    sortingFn: submittedOnSortingFn<RemovalListRow>(submittedOnDescending),
+    cell: ({ row }) => <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />,
+  },
+  {
+    id: "reportingStart",
+    enableGlobalFilter: false,
+    header: "Reporting start",
+    accessorFn: (summary) => summary.startedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.startedOn)}</span>,
+  },
+  {
+    id: "reportingEnd",
+    enableGlobalFilter: false,
+    header: "Reporting end",
+    accessorFn: (summary) => summary.completedOn ?? "",
+    cell: ({ row }) => <span>{formatDayString(row.original.completedOn)}</span>,
   },
   {
     id: "status",
@@ -227,9 +339,11 @@ const columns: ColumnDef<RemovalListRow>[] = [
         enrichmentStatus: summary.enrichmentStatus,
         readiness: summary.readiness,
       });
-      return `${status.label} ${status.reasons.join(" ")}`;
+      const correction = summary.correction;
+      const returned = correction ? ` ${correctionStatus(correction).label}` : locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : "";
+      return `${status.label} ${status.reasons.join(" ")}${returned}`;
     },
-    cell: ({ row }) => <StatusCell summary={row.original} />,
+    cell: StatusColumnCell,
   },
 ];
 
@@ -240,8 +354,10 @@ function ListBody({
   facilityId: string;
   onNewRemoval: () => void;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [removalId, setRemovalId] = useQueryState(
     "removal",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -252,6 +368,11 @@ function ListBody({
     facilityId,
     identityRows.map((entry) => entry.removal.id),
   );
+  // One read for the page: which sent Removals Isometric returned.
+  const removalLocks = useRecordLocks("removal", identityRows.map((entry) => entry.removal.id));
+  // Loaded by the certification registry guard; this observer only reads that
+  // cache and never refetches it, even when it has gone stale.
+  const certifierSummary = useFacilityCertifierSummary(facilityId, true, { readCacheOnly: true });
 
   if (identities.error) {
     return (
@@ -264,6 +385,18 @@ function ListBody({
   }
 
   const rows = buildRemovalListRows(identityRows, enrichmentByRemovalId);
+  const externalProjectId =
+    certifierSummary.data?.mapping?.externalProjectId ?? null;
+  const isProduction = identities.data?.isProduction ?? false;
+  const columns = createColumns(isSortedDescending(sorting, "submittedOn"), removalLocks.locks, (externalId) =>
+    registryRecordUrl({
+      kind: "removal",
+      externalId,
+      externalProjectId,
+      isProduction,
+    }),
+    timeZone,
+  );
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
@@ -277,49 +410,57 @@ function ListBody({
             ({rows.length})
           </span>
         </h2>
-        <DataTable
-          columns={columns}
-          data={rows}
-          enableFiltering
-          enablePagination
-          globalFilter={searchQuery}
-          onGlobalFilterChange={setSearchQuery}
-          isLoading={identities.isLoading}
-          hoverable
-          onRowClick={(row) => setRemovalId(row.removalId)}
-          aria-label="Removals"
-          emptyMessage={
-            <EmptyState
-              padding="md"
-              icon={<SealCheckIcon size={40} />}
-              title={searchQuery ? "No matching Removals" : "No Removals yet"}
-              description={
-                searchQuery
-                  ? "Try clearing your search."
-                  : "Group complete credit batches into a Removal to submit them."
-              }
-              action={
-                searchQuery ? undefined : (
-                  <Button variant="default" onClick={onNewRemoval}>
-                    <PlusIcon size={16} weight="bold" />
-                    Create your first Removal
-                  </Button>
-                )
-              }
-            />
-          }
-        >
-          <DataTable.Toolbar>
-            <DataTable.Search
-              placeholder="Search Removals..."
-              aria-label="Search Removals"
-            />
-            <DataTable.Controls>
-              <DataTable.ColumnVisibility />
-            </DataTable.Controls>
-          </DataTable.Toolbar>
-          <DataTable.Pagination />
-        </DataTable>
+        <RemovalLocksContext.Provider value={removalLocks.locks}>
+          <DataTable
+            defaultColumnVisibility={REMOVAL_COLUMNS_HIDDEN_BY_DEFAULT}
+            columns={columns}
+            data={rows}
+            // Rows carry `removalId`, not `id`: key by it so an open status
+            // history stays with its Removal when rows shift.
+            getRowId={(row) => row.removalId}
+            enableFiltering
+            enablePagination
+            globalFilter={searchQuery}
+            onGlobalFilterChange={setSearchQuery}
+            onSortingChange={setSorting}
+            isLoading={identities.isLoading}
+            hoverable
+            onRowClick={(row) => setRemovalId(row.removalId)}
+            getRowHref={(row) => certificationRemovalsHref({ facility: facilityId, removal: row.removalId })}
+            aria-label="Removals"
+            emptyMessage={
+              <EmptyState
+                padding="md"
+                icon={<SealCheckIcon size={40} />}
+                title={searchQuery ? "No matching Removals" : "No Removals yet"}
+                description={
+                  searchQuery
+                    ? "Try clearing your search."
+                    : "Group complete credit batches into a Removal to submit them."
+                }
+                action={
+                  searchQuery ? undefined : (
+                    <Button variant="default" onClick={onNewRemoval}>
+                      <PlusIcon size={16} weight="bold" />
+                      Create your first Removal
+                    </Button>
+                  )
+                }
+              />
+            }
+          >
+            <DataTable.Toolbar>
+              <DataTable.Search
+                placeholder="Search Removals..."
+                aria-label="Search Removals"
+              />
+              <DataTable.Controls>
+                <DataTable.ColumnVisibility />
+              </DataTable.Controls>
+            </DataTable.Toolbar>
+            <DataTable.Pagination />
+          </DataTable>
+        </RemovalLocksContext.Provider>
       </section>
 
       {selected && identities.data && (
@@ -327,6 +468,7 @@ function ListBody({
           summary={selected}
           isProduction={identities.data.isProduction}
           facilityId={facilityId}
+          lock={removalLocks.locks[selected.removalId]}
           open
           onClose={() => setRemovalId(null)}
         />

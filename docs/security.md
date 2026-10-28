@@ -89,11 +89,6 @@ integer columns.
 
 ## Environment Variables
 
-**`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
-The server refuses emissions entry writes and evidence changes while disabled.
-Existing entries stay visible in the batch display. Enabling it also refuses new sample transport legs. Keep
-it disabled until entry submission support is deployed.
-
 **App environment list: the `envSchema` object in `src/config/env.ts`.**
 The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
 checks validate their credential pair and environment in `src/lib/isometric/client-env.ts`. Templates:
@@ -132,11 +127,10 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
-- **Signup is invite-only.** `ALLOW_SELF_SIGNUP` is `false` in every environment
-  (`.env.example`, `tests/setup.ts`, both E2E workflows) and public self-signup
-  is not a supported configuration for a B2B tenant — the flag is a tunable
-  that is never tuned. See [Architecture open questions](./open-questions-architecture.md#drop-the-allow_self_signup-flag-authdrop-self-signup-flag-opened-2026-07-20)
-  (`auth/drop-self-signup-flag`).
+- **`RESEND_REPLY_TO`** — optional email address in the schema, applied to every
+  transactional email. Real production boot requires `RESEND_API_KEY`,
+  `RESEND_FROM_EMAIL` and `RESEND_REPLY_TO`; one error names missing variables.
+  Development/test and hermetic CI may omit them; see [mail setup](./mail-setup.md).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
@@ -154,8 +148,50 @@ Non-obvious semantics only:
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
+### OAuth provider and client controls
+
+| Variable | Values and default | Validation and production gate |
+|---|---|---|
+| `OAUTH_PROVIDER_ENABLED` | `true` or `false`; default `false` | When on in production, `NEXT_PUBLIC_APP_URL` must equal an HTTPS origin with no path, query or trailing slash. Only hermetic CI skips this origin gate. |
+| `OAUTH_CIMD_CLIENT_IDS` | Comma-separated exact HTTPS metadata URLs; default empty (no CIMD) | Every environment requires a path and public DNS host, with no IP literal, local/special hostname, credentials, port, query or fragment. Production keeps the same validation. |
+
+[Env gates](../src/config/oauth-env-validation.ts) and
+[provider wiring](../src/lib/auth/oauth-provider.ts) fail closed. The flag is on for
+staging ([tested clients](./api.md#connecting-claude-and-chatgpt)).
+Production OAuth starts only after the production domain split: the issuer and
+both audiences embed the app host, so moving hosts invalidates connections.
+Never copy a staging issuer into production.
+
+[CIMD](../src/lib/auth/oauth-cimd.ts) matches the complete `client_id` URL against
+`OAUTH_CIMD_CLIENT_IDS`, including persisted-client resolution. A trusted host
+alone grants nothing. Its [fetch transport](../src/lib/auth/oauth-cimd-transport.ts)
+refuses private/special DNS addresses and redirects, bounds response size and
+time, and pins the checked public address. Dynamic registration stays off.
+Server-side preregistration requires the live Platform Admin create privilege;
+HTTP client-management endpoints remain closed. See [auth](./auth.md#oauth-connections).
+
+To disable a client, an authorized operator sets `oauth_clients.disabled` to
+true. This blocks API resolution and the plugin's token path. A concurrent CIMD
+refetch can overwrite it, so re-check after a minute. Remove its exact identity
+from `OAUTH_CIMD_CLIENT_IDS` and redeploy to prevent later discovery. Removing an
+id alone does not revoke stored tokens: existing access tokens can live out
+their hour. Keep the client disabled, or revoke its generations when immediate
+revocation is required. Do not log tokens or raw metadata containing secrets.
+
+The [pnpm patch](../patches/@better-auth__oauth-provider@1.7.10.patch) makes
+`invalidateRefreshFamily` refuse rather than delete tokens across organizations
+and resources. Re-check the patch on **every Better Auth upgrade**, together
+with the refresh race and endpoint-lockdown suites in [testing](./testing.md#oauth-suites).
+The application hook owns reuse and revocation; the patch is its backstop.
+
+### Variables read outside envSchema
+
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
+  `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
+  `NODE_ENV=production`. Hides the sidebar account text and the dev indicator for PR screenshots
+  (the PR screenshots section of `docs/testing.md`). Never put it in a 1Password item or a deployment.
 - `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
   `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
   production and `debug` otherwise; invalid values are rejected.
@@ -203,8 +239,8 @@ must be set directly on the staging/production items.
 ### Hermetic-CI exception on the production fail-closed gates
 
 The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
-missing `CREDENTIALS_ENCRYPTION_KEY` or `CRON_SECRET`, and non-`s3-compatible` storage — are
-skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
+missing `CREDENTIALS_ENCRYPTION_KEY`, `CRON_SECRET` or the Resend trio, and
+non-`s3-compatible` storage — are skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
 and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
 production bundles against localhost with placeholder config on purpose).
 Live E2E does not set the marker because it loads sandbox credentials and makes
@@ -257,6 +293,7 @@ Notes:
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
+  It also cross-checks workflow `op://` references against each item.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
 - The `op` CLI that `load-secrets-action` installs is pinned through its
@@ -272,8 +309,7 @@ Notes:
 Runtime registry credentials are stored per organization in
 `certifier_credentials`, encrypted at rest with AES-256-GCM using
 `CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
-four, update time) may cross a server-action boundary. Each organization's Owners
-and Admins manage these write-only values themselves from the organization admin
+four, update time) may cross a server-action boundary. Each organization's Admins manage these write-only values themselves from the organization admin
 area, with Platform Admins as an override
 (`assertCanManageOrgCredentials`, `src/data-access/certifier-credentials.ts`; see
 [auth.md](./auth.md)). Certification readiness
@@ -322,7 +358,7 @@ skipping the shared local/test teammate. It is idempotent and never clobbers liv
 state (existing admin password untouched; credentials inserted only when none
 exist) and fails loudly rather than exiting 0 without a credential row. The
 Platform Admin must use the organization invitation flow to add the first real
-Owner.
+Admin.
 
 The manually confirmed `reset-seed-staging` job loads the Isometric trio from
 the staging item. The Mafinga seed stores the organization credentials and, when
@@ -332,6 +368,14 @@ the Settings UI uses. Without that variable the mapping is finished by hand in
 Certification Settings. The seed only reads registry catalogues and templates;
 it creates no registry business records. `reset-empty-staging` continues to
 omit registry credentials.
+
+After a `reset-seed-staging` run, check by hand that the registry connection
+works, because the scheduled live checks use their own credentials and seed
+their own mapping:
+
+1. Settings, Registry says Connected.
+2. The Mafinga facility is mapped to the sandbox project and a Removal template.
+3. `/certification/removals` opens without redirecting to Settings, Registry.
 
 ## Operational Defaults
 

@@ -29,6 +29,7 @@
  * and audited without changing the registry. Legacy day-bound window hashes
  * still migrate. Payload validation gates new registrations; an existing batch
  * whose local facts cannot be rebuilt retains the existing reuse behavior.
+ * The strict month span guard always runs, including on reuse.
  */
 
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -41,6 +42,8 @@ import {
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
 import type { OrgContext } from "@/lib/auth/server";
+import { assertCreditBatchRunSpansUnderOneMonth } from "@/lib/credit-batch-production-span";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { SafeError } from "@/lib/errors";
 import {
   buildCreateProductionBatchRequest,
@@ -202,6 +205,12 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
+  const undeletableHolders = await getCreditBatchUndeletableRemovalCodes(
+    args.orgCtx, creditBatchIds,
+  );
+  assertCreditBatchRunSpansUnderOneMonth(inputs.map(input => ({
+    ...input, undeletableRemovalCodes: undeletableHolders.get(input.creditBatchId),
+  })));
   const client = await resolveIsometricClient(args.orgCtx);
 
   // Live identities must match current figures; missing identities require

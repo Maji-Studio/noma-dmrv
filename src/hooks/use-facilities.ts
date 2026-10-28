@@ -1,16 +1,20 @@
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 /**
  * Facilities React Query Hooks
  * Client-side state management for facility operations
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Facility } from "@/db/schema";
 import type { FacilityFilterData, CreateFacilityData, UpdateFacilityData } from "@/schemas/facilities";
 import type { PaginatedFacilities, FacilityWithRelations } from "@/data-access/facilities";
 import {
+  getFacilityStatsFn,
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
+  getFacilityOutputStockFn,
   createFacilityFn,
   updateFacilityFn,
   archiveFacilityFn,
@@ -20,9 +24,14 @@ import { getFacilitiesRead, getFacilityRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { productionRunKeys } from "./use-production-runs";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -33,6 +42,9 @@ export const facilityKeys = {
   lists: () => [...facilityKeys.all, "list"] as const,
   list: (filters?: Partial<FacilityFilterData>) =>
     [...facilityKeys.lists(), filters] as const,
+  stats: (filters?: { archived?: boolean }) =>
+    [...facilityKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...facilityKeys.all, "stats"] as const,
   details: () => [...facilityKeys.all, "detail"] as const,
   detail: (id: string) => [...facilityKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
@@ -47,6 +59,8 @@ export const facilityKeys = {
     [...facilityKeys.all, "codeCheck", code, excludeId] as const,
   archiveImpact: (id: string) =>
     [...facilityKeys.all, "archiveImpact", id] as const,
+  outputStock: (id: string) =>
+    [...facilityKeys.all, "outputStock", id] as const,
 };
 
 // Exact message thrown by the facility data-access reads
@@ -58,6 +72,25 @@ const FACILITY_LOOKUP_MAX_RETRIES = 2;
 // ============================================
 // Query Hooks
 // ============================================
+
+export function useFacilityStats(archived = false, options?: { enabled?: boolean }) {
+  const filters = { archived };
+  return useQuery({
+    queryKey: facilityKeys.stats(filters),
+    queryFn: async () => unwrap(await getFacilityStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
+
+/** Load stock only for the facility whose read sheet is open. */
+export function useFacilityOutputStock(facilityId: string | null) {
+  return useQuery({
+    queryKey: facilityKeys.outputStock(facilityId ?? ""),
+    queryFn: async () => unwrap(await getFacilityOutputStockFn({ facilityId: facilityId! })),
+    enabled: !!facilityId,
+    staleTime: 0,
+  });
+}
 
 /**
  * Hook to fetch paginated list of facilities with filtering
@@ -145,9 +178,9 @@ export function useCreateFacility(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateFacilityData) => {
-      const result = await createFacilityFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateFacilityData, intentKey) => {
+      const result = await createFacilityFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }
@@ -165,6 +198,7 @@ export function useCreateFacility(
       const listRefresh = queryClient.invalidateQueries({
         queryKey: facilityKeys.lists(),
       });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       void queryClient.invalidateQueries({
         queryKey: facilityKeys.countriesPrefix(),
       });
@@ -197,6 +231,7 @@ export function useUpdateFacility(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.facility, { onRefusalOnly: true }),
     mutationFn: async (data: UpdateFacilityData) => {
       const result = await updateFacilityFn(data);
       // Keeps an expected-version refusal typed so the open edit form can show
@@ -205,18 +240,15 @@ export function useUpdateFacility(
       return result.data;
     },
     onMutate: async (variables) => {
-      if (!optimistic) {
-        await callbacks?.onMutate?.(variables);
-        return;
-      }
-
       // Cancel outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({
-        queryKey: facilityKeys.detail(variables.facilityId),
-      });
-      await queryClient.cancelQueries({
-        queryKey: facilityKeys.lists(),
-      });
+      if (optimistic) {
+        await queryClient.cancelQueries({
+          queryKey: facilityKeys.detail(variables.facilityId),
+        });
+        await queryClient.cancelQueries({
+          queryKey: facilityKeys.lists(),
+        });
+      }
 
       // Snapshot previous values for rollback
       const previousFacility = queryClient.getQueryData<Facility>(
@@ -225,6 +257,16 @@ export function useUpdateFacility(
       const previousLists = queryClient.getQueriesData<PaginatedFacilities>({
         queryKey: facilityKeys.lists(),
       });
+      const previousTimezone = queryClient.getQueriesData<Facility>({
+        queryKey: facilityKeys.detail(variables.facilityId),
+      }).find(([, facility]) => facility?.timezone)?.[1]?.timezone
+        ?? previousLists.flatMap(([, list]) => list?.items ?? [])
+          .find((facility) => facility.id === variables.facilityId)?.timezone;
+
+      if (!optimistic) {
+        await callbacks?.onMutate?.(variables);
+        return { previousTimezone };
+      }
 
       // Optimistically update the facility detail cache
       if (previousFacility) {
@@ -262,11 +304,12 @@ export function useUpdateFacility(
       await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
-      return { previousFacility, previousLists };
+      return { previousFacility, previousLists, previousTimezone };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
       // Update cache with actual server data
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({
@@ -278,7 +321,16 @@ export function useUpdateFacility(
         data,
       );
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
+
+      if (context?.previousTimezone == null || context.previousTimezone !== data.timezone) {
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.details() });
+        invalidateEntityTypeQueries(queryClient, "productionRun");
+        queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+        queryClient.invalidateQueries({ queryKey: creditBatchKeys.productionRunOptionsPrefix() });
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },

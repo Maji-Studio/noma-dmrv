@@ -60,6 +60,7 @@ function registryInput(patch: Partial<ProductionBatchRegistryInput> = {}): Produ
     endDate: "2026-03-28",
     startedAt: "2026-03-01T07:15:00.000Z",
     endedAt: "2026-03-28T18:45:00.000Z",
+    latestEndingRunCode: null,
     externalProjectId: "prj_1K9YJ33RKSBX9FFF",
     externalFacilityId: "fcl_1G8QT5ZAB1S0XSDW",
     isometricFeedstockTypeId: "ftt_1D7KZ1P761S0G7BN",

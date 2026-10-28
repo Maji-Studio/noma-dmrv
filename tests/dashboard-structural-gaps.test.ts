@@ -497,7 +497,7 @@ describe("dashboard structural certification gaps", () => {
 
     expect(counts).toEqual({
       missingFeedstockGps: 1,
-      transportEndpointGpsGaps: 2,
+      transportEndpointGpsGaps: 1,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
       transportEndpointGpsTarget: {
         entityType: "biochar",
@@ -517,40 +517,16 @@ describe("dashboard structural certification gaps", () => {
       },
       {
         key: "transportEndpointGps",
-        metadata: "Biochar product form · Transport route · 2 affected",
-        count: 2,
+        metadata: "Biochar product form · Transport route · 1 affected",
+        count: 1,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
       },
-    ]);
-  });
-
-  it("builds a supported parent deep link for a sample leg", () => {
-    const facilityId = "00000000-0000-4000-8000-000000000001";
-    const gaps = buildDashboardStructuralGaps(
-      {
-        missingFeedstockGps: 0,
-        transportEndpointGpsGaps: 1,
-        missingFeedstockGpsSupplierId: null,
-        transportEndpointGpsTarget: {
-          entityType: "sample",
-          entityId: fixture?.validBatchSampleId ?? "sample-id",
-        },
-      },
-      facilityId,
-    );
-
-    expect(gaps.map(({ href }) => href)).toEqual([
-      `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}&mode=edit&focus=transport-route`,
-    ]);
-    expect(gaps.map(({ metadata }) => metadata)).toEqual([
-      "Sample form · Transport route · 1 affected",
     ]);
   });
 
   it.each([
     ["feedstock", "Feedstock form"],
     ["biochar", "Biochar product form"],
-    ["sample", "Sample form"],
   ] as const)(
     "names the %s destination form for transport gaps",
     (entityType, formName) => {
@@ -592,4 +568,10 @@ describe("dashboard structural certification gaps", () => {
     });
     expect(buildDashboardStructuralGaps(counts, fixture.clearFacilityId)).toEqual([]);
   });
+});
+
+it("excludes legacy sample GPS gaps only after retirement", async (ctx) => {
+  if (!dbReachable || !fixture) { ctx.skip(); return; }
+  const counts = await loadDashboardStructuralGapCounts(makeTestOrgContext(TEST_USER_ID), fixture.gapFacilityId);
+  expect(counts.transportEndpointGpsGaps).toBe(1);
 });

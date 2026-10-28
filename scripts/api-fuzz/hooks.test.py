@@ -56,6 +56,14 @@ for index, party in enumerate(("Supplier", "Customer")):
         target = f"{index + 1}{offset + 1}111111-1111-4111-8111-111111111111"
         PARTY_FIXTURE[purpose + party + "Id"] = target
         PARTY_FIXTURE[purpose + party + "Etag"] = '\"2.2\"' if purpose == "restore" else '\"1.2\"'
+for party in ("Supplier", "Customer"):
+    for purpose in ("delete", "archive", "restore"):
+        prefix = purpose + party + "Location"
+        PARTY_FIXTURE[prefix + "Id"] = CUSTOMER_LOCATION_ID
+        PARTY_FIXTURE[prefix + "Etag"] = '"3.1"'
+        PARTY_FIXTURE[prefix + "ParentId"] = FIXTURE_ID
+    PARTY_FIXTURE[party.lower() + "LocationId"] = CUSTOMER_LOCATION_ID
+    PARTY_FIXTURE[party.lower() + "LocationEtag"] = '"1.1"'
 FLOAT_MULTIPLE_OF_ARTIFACT = 330796.723
 TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER", "DELIVERY")
 for kind in TARGET_KINDS:
@@ -330,7 +338,8 @@ class HarnessTests(unittest.TestCase):
         # Earlier phases contribute 44 cases. Formulations add two successful
         # creates and four mutations. Parties add six creates and eight mutations;
         # ratio and party boundary refusals are counted separately.
-        self.assertEqual(len(seeded), 64)
+        # Locations add four boundary creates, six mutations and two detail reads.
+        self.assertEqual(len(seeded), 76)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -549,6 +558,12 @@ class HarnessTests(unittest.TestCase):
             hook("before_add_examples")(HookContext(operation=operation), examples)
             if operation.path == "/applications/{idOrCode}" and operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples, [])
+                continue
+            if "/locations/{locationId}" in operation.path or (operation.path.endswith("/locations") and operation.method.upper() == "POST"):
+                # Location cases have two path ids and their own assertions below.
+                self.assertTrue(examples)
+                self.assertFalse(for_operation(schema.config, operation=operation).path_parameters)
+                self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
                 continue
             self.assertEqual(len(examples), 1, operation.label)
             target = RUN_BIN_ID if operation.path.endswith("/application-balance") else DELETE_ORDER_ID if operation.label == "DELETE /orders/{idOrCode}" else FIXTURE_ID
@@ -836,6 +851,36 @@ class HarnessTests(unittest.TestCase):
             for status in (200, 400, 401, 428, 500):
                 self.assertEqual(check(None, SimpleNamespace(status_code=status), None), "checked")
             self.assertEqual(delegate.call_count, 5)
+
+    def test_location_examples_use_both_ids_location_tags_and_dry_runs(self):
+        for party in ("supplier", "customer"):
+            base = f"/{party}s/{{idOrCode}}/locations"
+            operations = [(base, "POST"), (base + "/{locationId}", "PATCH"), (base + "/{locationId}", "DELETE")]
+            if party == "customer":
+                operations += [(base + "/{locationId}/" + command, "POST") for command in ("archive", "restore")]
+            for path, method in operations:
+                operation = schema[path][method]
+                examples = []
+                hook("before_add_examples")(HookContext(operation=operation), examples)
+                self.assertTrue(examples, operation.label)
+                keys = []
+                for case in examples:
+                    self.assertEqual(case.query, {"dryRun": "true"})
+                    self.assertEqual(case.path_parameters["idOrCode"], FIXTURE_ID)
+                    self.assertEqual(set(case.path_parameters), {p.name for p in operation.path_parameters})
+                    if path == base:
+                        keys.append(case.headers["Idempotency-Key"])
+                    else:
+                        self.assertEqual(case.path_parameters["locationId"], CUSTOMER_LOCATION_ID)
+                        self.assertEqual(case.headers["If-Match"], '"1.1"' if method == "PATCH" else '"3.1"')
+                    check = hook("after_load_schema").__globals__["seeded_example_success"]
+                    for status in (404, 409):
+                        with self.assertRaises(AssertionError):
+                            check(None, SimpleNamespace(status_code=status), case)
+                    check(None, SimpleNamespace(status_code=200), case)
+                if path == base:
+                    self.assertEqual(len(keys), len(set(keys)))
+                    self.assertEqual([case.body["facilityDistances"][0]["distanceKm"] for case in examples], [0.001, 20000])
 
     def test_428_scope_parser_method_exclusions_and_write_positive_statuses(self):
         for result in schema.get_all_operations():

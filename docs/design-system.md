@@ -33,11 +33,26 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
-  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
-  opens. A 44px box on either would break label-row alignment wherever it
-  appears. The same silence hits a `var(--x)` whose property was renamed or never
+  Sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` and `ExplanationInfo` glyphs, and the icon-only
+  `IsometricLink` beside the ID it opens. A 44px box on any of them would break
+  label-row alignment wherever it appears. The same silence hits a `var(--x)` whose property was renamed or never
   defined; `pnpm check:css-vars` (CI) fails on it.
+- **Row action buttons reach 44px without growing.** `OrganizationRosterRow`
+  applies `ROW_ACTION_HIT_AREA` (`src/components/ui/touch-target.ts`) to its
+  actions slot: each button gets an invisible `::after` of at least 44px in both
+  axes, so the 32px and 40px look is unchanged. Every surface using the slot
+  gets it: members, pending invitations, vehicles, drivers and operators,
+  connected apps, API keys and the platform-admin organization rows. Text
+  buttons need nothing extra; two 32px icon buttons side by side need a 12px
+  gap or their hit areas overlap.
+- **Other controls use the shared recipes in `touch-target.ts`.**
+  `ICON_BUTTON_TOUCH_PROPS` for a standalone icon-only `Button` (spread it:
+  `size="icon"` is a 32px square by default; the bundle adds the 44px hit area and
+  `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
+  `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
+  `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
+  on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -152,11 +167,34 @@ and an optional `action` (a link or button); no eyebrow, no uppercase.
 | `success` | An action completed and the page stays | green icon, no tint | `status` |
 | `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
 
-Only `error` is tinted, so one blocker stands out on a page of advisories. Keep
+The role column is the default. `live={false}` drops the role and has exactly
+two sanctioned uses; every other Notice keeps its role:
+
+1. `FormErrorSummary` (`@/components/forms`), the error Notice above Save that
+   holds the links to refused fields. Its list changes as the user fixes fields,
+   so it is not a live region. It announces each refused save through its own
+   sr-only `role="alert"` line, except a lock-only refusal, where the box takes
+   focus and is read from there.
+2. `TopRefusal` (`FormActions`), the refusal above the lock line once a lock
+   hides Save. It takes focus, so it is a focusable `role="group"` named by its
+   own text (`aria-labelledby`), and it says what happened to the edit; the lock
+   line keeps the reason.
+
+A box that takes focus needs that role and name, or a screen reader may not read
+it. `ServerError` has no `live` prop; use `Notice` directly for a new case and
+add it to this list.
+
+Only `error` is tinted red, so one blocker stands out on a page of advisories.
+`boxed` is an opt-in quiet neutral card (`--color-surface-light`, 8px/12px
+padding, 8px radius) for a lock or state that explains why a record cannot
+change; the record lock notices use it. Keep
 `alert` for blocking errors; do not upgrade a warning to it. Field-level
 feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
 renders through `Notice`. For loading failures with a retry, pass the button as
-`action`.
+`action`. `FormFooterPreview` (`@/components/forms`), the association line
+above Save ([forms.md](./forms.md#formactions)), is a Notice that passes
+`infoIcon`: its info tone leads with the subject's icon, because its own ⓘ sits
+in the line.
 
 ### Flat controls
 
@@ -175,6 +213,10 @@ area. Date and time inputs get this from `TEMPORAL_INPUT_CLASSES` in the shared
 The entity select popover separates options with spacing, a hover fill and a
 selected fill, not per-row rules, and uses Phosphor icons. The search box and
 the "Edit <name>" and "Add new" footer rows are part of the same menu, not boxed apart.
+When the entity is created on its own page rather than in a quick-add dialog
+(reactors), "Add new" opens that page's create sheet in a new tab (`createHref`,
+open-in-new-tab icon) so the form keeps its entries, and the options reload when
+the operator comes back. An empty list's `emptyHint` link reloads the same way.
 All menu rows have a minimum 44px touch target. The portalled menu flips to fit
 the available viewport; touch opens it without focusing search. Give the trigger
 the `FormField` id (`FormEntitySelect` does) so the field label names it.
@@ -187,7 +229,7 @@ Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
-- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason.
+- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Every other link button keeps mono uppercase.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
 - **20px:** `.body-lead`
@@ -252,11 +294,17 @@ caption.
   ⓘ. Use
   the plain `Tooltip` only for hover extras that are also available another
   way (the CERT chip's own explanation, a disabled button's reason).
+- **Tables and arithmetic go in `ExplanationInfo`,** the same ⓘ glyph on a
+  `Popover` that opens on hover and on tap. One ⓘ per block: its panel leads
+  with the definition, then the tables. Two short lines may stay inline (the dry
+  mass formula under a moisture split, the dry biochar before → after line on a
+  stock movement); see
+  [forms.md](./forms.md#explanations-behind-an-i).
 - **Certification is a CERT chip, explained once.** A field required for
   certification carries a "CERT" chip on its label row
   (`CertificationFieldTag`): neutral when no record is saved, orange with a
   warning mark when the saved record lacks it, green with a check when it has
-  it. It shows in Simple and Detailed alike. There is no sheet legend: the
+  it. There is no sheet legend: the
   chip explains itself through its tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
@@ -351,16 +399,31 @@ the zone through `Intl`, so a viewer inside their own daylight-saving change
 still sees the facility time; do not swap in `formatInTimeZone`. Input side:
 [forms.md](./forms.md#dates).
 
+**Wherever a facility exists, use its clock.** Every time and business date a
+record shows, and every new-record default date, reads the record's facility
+(or the active facility when the record has none) through the same helpers. A
+time of day alone is `formatFacilityClockTime(value, timeZone)` (`14:30`); a
+new-record default day is `facilityToday(timeZone)`, never the browser's day.
+The browser zone is never used. When the facility cannot be resolved, pass
+`UNKNOWN_FACILITY_TIMEZONE` (UTC) explicitly; `timeZone` parameters have no
+default, so the fallback is always visible at the call site.
+
+**Exception.** Account security metadata that belongs to
+no facility (API keys, connected apps: created, last used, expires) keeps the
+viewer's clock via `formatDateTime`.
+
 ---
 
 ## Missing values
 
-**Never hand-write a missing-value string in a component.** Every formatter in
-`@/lib/format-utils` and `@/lib/mass-moisture` absorbs null itself and returns
-one of the six shared tokens in `MISSING_VALUE` (`@/lib/copy-utils`), so a
-component's job is to pass the nullable value straight through. The six
-situations and the rule for picking between them are in
-[ux-writing.md](./ux-writing.md).
+**Never hand-write a missing-value token in a component.** Every formatter
+for a recorded value in `@/lib/format-utils` and `@/lib/mass-moisture` absorbs
+null itself and returns one of the shared tokens in `MISSING_VALUE`
+(`@/lib/copy-utils`), so a component's job is to pass the nullable value
+straight through. Formatters for derived figures (`formatCo2e`, `formatTonnes`,
+`formatFileSize`) take a number only: when there is no figure the caller leaves
+it out or says why. The situations, the reasons and the rule for picking
+between them are in [ux-writing.md](./ux-writing.md).
 
 Three seams carry it:
 
@@ -369,7 +432,7 @@ Three seams carry it:
   coalesce are counts. Aggregate with `sumNullable` / `sumNullableBy`
   (`@/lib/nullable-sum`), which returns null when nothing was reported. When a
   readout carries its own unit, suppress the unit with the value
-  (`hero-kpi-band.tsx` is the reference) so nothing reads "Not available tph".
+  (`hero-kpi-band.tsx` is the reference) so nothing reads "Not recorded tph".
 - **`DetailField` / `DetailPanelField`** (`@/components/ui/detail-panel`) — pass
   the raw nullable `value` plus `emptySituation` when the field means something
   other than "not recorded". The field renders the token in the one placeholder
@@ -391,7 +454,9 @@ Three seams carry it:
 
 `MoistureSplit`'s unresolved state and `MassPair`'s "Not recorded" are the two
 worked examples: an absent input stays visible, because dry mass drives
-certification readiness.
+certification readiness. A missing `MassPair` figure renders `body-small`, tertiary
+ink, regular weight, with `data-empty` (no mono, no semibold): two full-size
+placeholders collide in a stat card. Both labels stay visible.
 
 ---
 
@@ -478,9 +543,32 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **`busy` is the one sanctioned in-flight convention.** It disables the button
   and renders a leading spinner. Do not hand-roll `disabled={isPending}` plus a
   text swap or your own spinner — `busy` exists to replace exactly that mix.
-- **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
-  `variant="destructive"` for a delete row action), plus an `aria-label`. Use
-  this rather than `width="square"`, which yields a differently-sized control.
+- **Busy lasts until the result is visible.** When the action ends in a
+  navigation, the button stays busy through it: a `window.location` navigation
+  holds until the page unloads (`useBusyUntilUnload`, which also drops the hold
+  when Back restores the page from the back-forward cache), an in-app
+  `router.push` is wrapped in `startTransition` and holds until the route
+  renders. Only a failure clears it. The clicked button carries the spinner and
+  its siblings are disabled.
+- **Exception: listbox rows.** The sidebar organization switcher's options are
+  `role="option"` rows (left-aligned text, a trailing icon, 40px, sentence
+  case). `Button` imposes `label-button` type, fixed heights and
+  `disabled:pointer-events-none`, so these keep a raw `<button>` with the same
+  spinner glyph and `aria-busy` as `busy`.
+- **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
+  `ConfirmActionDialog` show the spinner through `busy` and never swap the text
+  ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
+  and the X are held while it runs. A delete that returns to a list stays open
+  and busy until that list has rendered, and its success toast arrives with the
+  list: call `useNavigateWithToast().navigate(href, message)` and pass
+  `isPending={mutation.isPending || navigation.isPending}`. Never toast, close
+  the dialog and then push. Deletes that stay on the page toast as the request
+  returns.
+- **Quiet icon button:** spread `ICON_BUTTON_TOUCH_PROPS`
+  (`src/components/ui/touch-target.ts`; see the touch-target bullet under
+  "The invariants that break code silently") with `variant="noOutline"` (or `variant="destructive"` for a
+  delete row action) and an `aria-label`. `size="icon"` is a 32px
+  square by default; `ICON_BUTTON_TOUCH_PROPS` adds the 44px hit area.
 - There is **no `asChild` / Slot polymorphism** — `Button` is a plain
   `forwardRef` over `<button>`. To style a link, style the `<Link>` directly.
 - Disabled is `disabled:opacity-40`, handled by the component.
@@ -496,6 +584,7 @@ restore for free.
   opened from a sheet dim the sheet as part of its underlying context. Keep
   this ordering in the shared `--z-layer-sheet-*` and `--z-layer-dialog-*`
   tokens; feature components must not set their own competing layers.
+- **Titles clear the close button by themselves.** `Modal` pads the heading named by `ariaLabelledBy` at its inline end with the close button's width plus a gap (`--spacing-32` + `--spacing-8`). Give the title an id and pass it; never add `pr-*` to a title. A dialog named by `ariaLabel` passes `titleId` for the same clearance, so its accessible name stays as is.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.
@@ -505,6 +594,12 @@ restore for free.
   form reports separately, so saving keys cannot clear an unlinked project
   draft in the same registry dialog. Cancel, Escape, backdrop and the close
   button all warn before discarding and hold while a save is pending.
+- **Dialog actions sit bottom left, primary first, then secondary** (Delete,
+  then Cancel). Where it is easy, records a dialog names link to the record
+  through its deep-link helper; reuse `SheetLinkRow` (`@/components/ui/sheet-link-row`).
+- A dialog that lists records uses `md` width. Its text has hierarchy (a short
+  heading, then grouped lines), never one paragraph. Archived children sit
+  behind a collapsed toggle as compact rows, not full cards.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -556,12 +651,27 @@ width. It is the one exception to monoline: filled grains in three fixed batch
 tones (`--stock-batch-*` in `globals.css`). It can play a loop on card hover and focus through CSS in
 `globals.css` ("Stock mode art"), gated by `prefers-reduced-motion`; the
 settled state is the static drawing.
+Options with long titles pass `stackNarrow`: two-up options stay in one column
+until the group is about 24rem wide (a phone shows one column, a sheet or page
+column two).
 
 The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
 input is not the touch target: the whole label is, and `SegmentedControl`
-segments are at least 44px tall. The sheet header Simple/Detailed toggle
-(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
-component.
+segments are at least 44px tall.
+
+### Before and after
+
+A value change (bin moisture reset, stock preview, correction) is two blocks
+with an arrow between them: before on the left, arrow, after on the right.
+Never write it as a sentence. A short heading may introduce the pair.
+Unchanged values ("30% → 30%") are not shown.
+
+### Consistency across sibling surfaces
+
+A style change reaches every sibling surface of the same kind (all table
+headers, a whole page's chrome) in the same PR, so no screen is left in two
+type systems. Put risky surfaces, such as the dashboard, in a last commit that
+can be dropped on its own.
 
 ### Illustrations — `src/components/ui/illustrations`
 
@@ -641,16 +751,23 @@ The one outcome screen for auth pages (check your email, email verified, verific
   fires an unscoped query.
 - **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
   **StepFlow never validates**; the parent owns the active index and gates
-  forward progress by disabling its own Next button.
+  forward progress by disabling its own Next button. Below `sm` it shows the
+  current step only (its number, its label and "Step 2 of 3" under it), in both
+  orientations; the full rail returns from `sm` up. The rail's jump back is then a
+  desktop affordance, so a flow that relies on it carries a footer Back for
+  phones (New Removal's submit step does, `sm:hidden`).
 - **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
   `value` accepts a `ReactNode`: use the default `valueLayout="headline"` for a
   single scalar or short text value, and `valueLayout="breakdown"` for a
   structured comparison such as `MassPair`. Breakdown layout gives the value
   the full card width and does not apply headline typography to its children.
-  Optional `sparkline` slot takes any node.
+  Optional `sparkline` slot takes any node. A card fed by a server stats query
+  passes `isError`; it then shows "Could not load" and "Reload the page to try
+  again" in headline layout instead of a value that was never computed.
 - **`MassPair`** — the shared wet/dry comparison for KPI cards and dense table
-  cells. It keeps both labels visible, renders missing values as "Not recorded",
-  and keeps both figures in kg with up to one decimal. Use the default summary
+  cells. It keeps both labels visible, renders a missing value as "Not recorded"
+  in the small placeholder style (`body-small`, tertiary ink, regular weight,
+  `data-empty`), and keeps both figures in kg with up to one decimal. Use the default summary
   variant in `StatCard valueLayout="breakdown"`; use `variant="compact"` with
   `layout="stacked"` in table cells. Its figures own their mono numeric style;
   do not wrap them in a body typography class.
@@ -658,14 +775,27 @@ The one outcome screen for auth pages (check your email, email verified, verific
   as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
   KPI-rich card-list hubs; ordinary entity lists stay data tables.
 - **`PageHeader`** — mono uppercase area eyebrow → `title-heading-2` title →
-  one-line subtitle → actions. `area` sets the eyebrow text and ink; `eyebrow`
-  overrides the text; omit `area` for pages outside the nav groups
-  (Traceability). **Every list page gets a subtitle** — one descriptive line,
-  sentence case.
+  optional one-line subtitle → actions. `area` sets the eyebrow text and ink;
+  `eyebrow` overrides the text; omit `area` for pages outside the nav groups
+  (Traceability). **A list-page subtitle stays only when it says something the
+  title does not**: scope, what is counted, or a constraint the operator must
+  know. One line, sentence case. Test: delete it; would anyone miss it? Good:
+  "Deliveries of the last 90 days, newest first" under "Deliveries". Filler:
+  "Manage your orders" under "Orders".
 - **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
   row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
-  menu. Row click opens the detail side sheet everywhere; explicit "View"
-  buttons are retired (detail routes become an "Open details" item).
+  menu. A clickable `DataTable` marks its code or name column
+  `meta: { recordLink: true }`; that cell is the record link, the only
+  keyboard / screen-reader target, and the column cannot be hidden (it is the
+  one way in without a pointer). With `getRowHref` (the list's deep link, e.g.
+  `?customer=<id>`) it is a real `<a href>`: a plain click opens the sheet in
+  place, modifier and middle clicks open the deep link in a new tab. Without
+  one (reactors, formulations) it is a link-styled button. Never mark a column
+  whose cell renders its own controls; a line that needs its own link (the
+  Removal's registry record) goes in `meta.recordLinkDetails`, which renders
+  under the record link and outside it. Rows and mobile cards carry no role or
+  `tabIndex`; a whole-row click is a pointer-only convenience. It opens
+  the detail side sheet everywhere; explicit "View" buttons are retired (detail routes become an "Open details" item).
   `destructive: true` for irreversible actions only — **archive, restore, and
   unlink are reversible and stay neutral.** The wrapper stops propagation so
   menu clicks never fire the row click.
@@ -713,19 +843,19 @@ drawn only on a complete basis; until then the block shows its unresolved state.
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
-- **`MoistureSplit` variants:** `detail` (bar + key line + calculation table —
-  forms and read side sheets) · `compact` (figures + bar + one line) · `inline`
-  (text only — table cells, option labels). The `detail` surface carries **no
-  card, no frame and no tinted panel**: the bar sits directly under the wet-mass
-  and moisture inputs it describes and moves as they change, with one key line
-  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). The bar and key line
-  show at both levels, because they are what the two inputs mean, and
-  **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
-  words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
-  is no "Show calculation" disclosure on this surface, and `calculation={false}`
-  drops the table where the host surface owns one (the stock movement card: its
-  disclosure holds the FIFO draw, so the split contributes bar and key line
-  only). The bar names **dry solids**, not the tracked quantity: a blended
+- **`MoistureSplit` variants:** `detail` (bar + key line + (i) + formula
+  sentence; forms and read side sheets) · `compact` (figures + bar + one line) ·
+  `inline` (text only; table cells, option labels). The `detail` surface carries
+  **no card, no frame and no tinted panel**: the bar sits directly under the
+  wet-mass and moisture inputs it describes and moves as they change, with one
+  key line of swatches under it ("Dry 3,200 kg", "Water 800 kg") and an (i)
+  as its last item, so it wraps with the key. The (i) opens the `CompositionLedger` and the provenance `note`;
+  the derived wet-basis formula stays inline in one sentence ("Dry = wet × (1 -
+  moisture). 4,000 kg × (1 - 20%) = 3,200 kg."); a stored dry mass has no inline
+  line, its sentence sits in the (i) after the ledger. `calculation={false}` drops the
+  (i) and the sentence where the host surface owns the explanation (the stock
+  movement card: its (i) holds the FIFO draw, so the split contributes bar and
+  key line only). The bar names **dry solids**, not the tracked quantity: a blended
   product bin holding 84 kg of dry solids holds 70 kg of dry biochar, and both
   masses appear on the same card. Missing moisture renders
   an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
@@ -790,12 +920,24 @@ Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page
 renders `src/components/orders/order-list.tsx`. The shell and all state live in
 that `"use client"` component, **not** in `page.tsx`. Records open in their
 list's side sheet; detail routes only redirect there
-(`production-runs/[id]/page.tsx`, `credit-batches/[id]/page.tsx`).
+(`production-runs/[id]/page.tsx`).
+
+**Routed record pages** are the exception, for a record whose work outgrows a
+sheet: today only the credit batch (`credit-batches/[id]`, epic #1136). The
+route org-scopes the record and answers `notFound()` for another organization
+or a `?facility=` naming another facility, then renders one client component
+in the same `container-max page-shell`. It opens with a back link to the list,
+a `PageHeader` titled with the record code (no subtitle), one state-driven
+primary action, Edit (the edit form in an `EntitySideSheet` over the page) and
+a ⋯ menu holding delete. Sections are tabs in `?tab=` (the first tab stays out
+of the URL); the tab row scrolls inside its bar on phones. The list's sheet
+stays as a preview whose lead footer action opens the page
+(`viewPrimaryAction`), and every deep link to the record goes to the page.
 
 ```tsx
 <div className="container-max page-shell">
-  {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
-  <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
+  {/* 1. Header — area eyebrow → title → optional subtitle (only if it adds information) → actions */}
+  <PageHeader area="production" title="Orders" actions={<Button …/>} />
 
   {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
@@ -818,6 +960,14 @@ list's side sheet; detail routes only redirect there
 - KPI strips: `gap-24` grid, `md:grid-cols-2` with `lg:grid-cols-3` (3 cards)
   or `lg:grid-cols-4` (4 cards).
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
+- Side sheet footer (view mode): the sheet's actions first at natural width,
+  bottom left (primary Edit, then a destructive one), then `Close`
+  (`variant="default"` in `SlideOverPanel.Close`) last. A sheet with no action
+  keeps a footer with Close alone. The header X and Escape stay. The read-only
+  edit footer (record turned Sent mid-edit) is `Back to view` alone: full
+  width on phones (below `sm`, `max-sm:flex-1`), natural width from `sm` up.
+  Never `flex-1` or `justify-stretch` in the view-mode footer. Edit and create
+  mode use `FormActions`.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code
@@ -866,7 +1016,8 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
   `pageSize`, `hasActiveFilters`, `clearFilters`.
 - **Entity-data loading is prop-driven.** Continue to pass `isLoading` to
-  `DataTable` and each `StatCard`; nested tables use `LoadingSkeleton`. Do not
+  `DataTable` and each `StatCard`, and pass `isError` from the stats query so a
+  failed load never reads as zero; nested tables use `LoadingSkeleton`. Do not
   add a shared `(app)/loading.tsx`: a parent Suspense fallback can replace a
   detail route's canonical `not-found.tsx` response. If server-render latency
   needs a route fallback, add the narrowest leaf `loading.tsx` and verify that
@@ -878,7 +1029,13 @@ Fifteen list components share one shape. Copy it rather than re-deriving:
   far from the field that caused it.
 - **Destructive confirm** is `DeleteConfirmDialog`
   (`@/components/ui/delete-confirm-dialog`), driven by a `deletingXId` state.
-  Never hand-roll a `Modal` for this.
+  Never hand-roll a `Modal` for this. Pass `width="md"` when it lists records.
+  A delete the server refuses as in use is not an inline notice: the confirm
+  dialog gives way to `InUseDeleteDialog` (`@/components/ui/in-use-delete-dialog`)
+  with "Archive instead" first and "Cancel" after. Omit `onArchive` where
+  archiving would be refused too; it then shows only "Close". Customer saved
+  locations archive an in-use location automatically on Delete (see
+  design-decisions "Saved locations: Delete only").
 - **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
   `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
   Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as
@@ -928,12 +1085,12 @@ header→content `mb-32`.
 ## Forms
 
 Form behaviour is owned by [forms.md](./forms.md): react-hook-form + Zod
-resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
-Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
+resolver, `FormSection` / `DetailSection`, the section rhythm, explanations
+behind an (i) and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
 
-Simple and Detailed differ only in explanation: see [forms.md](./forms.md#simple-and-detailed-presentation).
+Explanation opens from an (i); only the lines forms.md names stay inline: see [forms.md](./forms.md#explanations-behind-an-i).
 
 ## Naming, file structure, React rules
 

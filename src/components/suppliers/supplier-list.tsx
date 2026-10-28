@@ -3,6 +3,7 @@
  * Main supplier listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { entityViewHref } from "@/lib/entity-deep-link";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
@@ -17,8 +18,10 @@ import {
   useRestoreSupplier,
   useSuppliers,
   useSupplier,
+  useFetchSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
+  useSupplierStats,
 } from "@/hooks/use-suppliers";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -27,12 +30,14 @@ import {
 } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { DeleteConflictNotice, isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -45,6 +50,12 @@ import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
+
+/** Record details an operator can add from the Columns menu. */
+const SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  sourceRegion: false,
+  address: false,
+};
 
 // ============================================
 // Column Definitions
@@ -60,7 +71,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">
@@ -95,6 +106,24 @@ function createColumns(
           {row.original.contactName ||
             row.original.contactEmail ||
             MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "sourceRegion",
+      header: "Source region",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.sourceRegion || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -165,6 +194,7 @@ export function SupplierList() {
     page: currentPage,
     pageSize,
   });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useSupplierStats(showArchived);
   const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
   // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
   // does: a later refetch (a location save, a refused stale save) must not move
@@ -198,6 +228,7 @@ export function SupplierList() {
   const archiveSupplier = useArchiveSupplier();
   const restoreSupplier = useRestoreSupplier();
   const toast = useToast();
+  const fetchSupplier = useFetchSupplier();
   const handledInvalidSupplierIdRef = useRef<string | null>(null);
 
   // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
@@ -231,7 +262,6 @@ export function SupplierList() {
   const suppliers = suppliersData?.items ?? [];
 
   // Computed stats
-  const totalSuppliers = suppliersData?.total ?? 0;
   const totalPages = suppliersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -243,6 +273,7 @@ export function SupplierList() {
   // Handlers
   const handleCreate = async (
     data: SupplierFormData,
+    onRefusal: SaveRefusalHandler,
     pendingLocations?: PendingSupplierLocation[]
   ) => {
     setCreateError(null);
@@ -254,13 +285,14 @@ export function SupplierList() {
       closeSideSheet();
       toast.success("Supplier created.");
     } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Supplier was not created. Check the form."
-      );
+      setCreateError(onRefusal(
+        error,
+        error instanceof Error ? error.message : "Supplier was not created. Check the form.",
+      ));
     }
   };
 
-  const handleUpdate = async (data: SupplierFormData) => {
+  const handleUpdate = async (data: SupplierFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -276,7 +308,7 @@ export function SupplierList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Supplier was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Supplier was not saved. Try again.")));
     }
   };
 
@@ -295,8 +327,8 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
-        // In use: the dialog gives way to a notice that offers Archive instead.
+      if (isInUseDeleteRefusal(error) && !deletingSupplier.archivedAt) {
+        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
         setDeleteConflict(deletingSupplier);
         setDeletingSupplier(null);
         return;
@@ -304,6 +336,24 @@ export function SupplierList() {
       if (error instanceof StaleVersionError) setDeletingSupplier(null);
       setDeleteError(message);
     }
+  };
+
+  // A refused archive or restore means the sheet's copy of the row is stale
+  // (a deep-linked archived supplier is not in the active list, so the list
+  // cannot supply a fresher one). Take the current row, or close the sheet
+  // when it is gone, so the next Restore carries a version the server knows.
+  // The operator may close the sheet or open another one while the reload
+  // runs, so both outcomes apply only to a sheet still showing this supplier.
+  const resnapshotSheet = async (supplier: SupplierWithRelations) => {
+    if (sideSheetState?.entity?.id !== supplier.id) return;
+    const current = await fetchSupplier(supplier.id).catch(() => null);
+    const stillOpen = (sheet: { entity: SupplierWithRelations | null } | null) => sheet?.entity?.id === supplier.id;
+    if (current) {
+      setSideSheet((sheet) => (stillOpen(sheet) ? { entity: current as SupplierWithRelations, mode: "view" } : sheet));
+      return;
+    }
+    setSideSheet((sheet) => (stillOpen(sheet) ? null : sheet));
+    toast.error(`Supplier ${supplier.code} could not be reloaded. Open it again from the list.`);
   };
 
   const handleArchive = async (supplier: SupplierWithRelations) => {
@@ -318,6 +368,7 @@ export function SupplierList() {
     } catch (error) {
       // Without a fresh row the notice would keep the stale version, so drop it.
       if (error instanceof StaleVersionError && !fresh) setDeleteConflict(null);
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "archive", "The supplier was not archived. Try again."));
     }
   };
@@ -332,6 +383,7 @@ export function SupplierList() {
       closeSideSheet();
       toast.success(`Supplier ${supplier.code} restored.`);
     } catch (error) {
+      if (error instanceof StaleVersionError) await resnapshotSheet(supplier);
       setLifecycleError(toArchiveRestoreErrorMessage(error, `Supplier ${supplier.code}`, "restore", "The supplier was not restored. Try again."));
     }
   };
@@ -344,7 +396,7 @@ export function SupplierList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => { createSupplier.startDraft(); clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
   const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); setLifecycleError(null); };
@@ -378,7 +430,6 @@ export function SupplierList() {
       <PageHeader
         area="distribution"
         title="Suppliers"
-        subtitle="Biomass suppliers and their source sites"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -391,15 +442,16 @@ export function SupplierList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
-          value={totalSuppliers}
+          value={statsData?.totalSuppliers ?? 0}
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biomass feedstock providers"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={suppliers}
         enableSorting={false}
@@ -418,6 +470,7 @@ export function SupplierList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => entityViewHref("/suppliers", SUPPLIER_QUERY_PARAM, row.id)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -467,14 +520,19 @@ export function SupplierList() {
       </DataTable>
 
       {deleteConflict && (
-        <DeleteConflictNotice
+        <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={() => handleArchive(deleteConflict)}
+          onClose={() => {
+            setDeleteConflict(null);
+            setLifecycleError(null);
+          }}
           isPending={archiveSupplier.isPending}
+          errorMessage={lifecycleError}
         />
       )}
 
-      {((lifecycleError && !viewedEntity) || (deleteError && !deletingSupplier)) && (
+      {((lifecycleError && !viewedEntity && !deleteConflict) || (deleteError && !deletingSupplier)) && (
         <ServerError message={(!viewedEntity ? lifecycleError : null) ?? deleteError ?? ""} />
       )}
 

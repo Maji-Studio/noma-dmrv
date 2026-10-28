@@ -17,7 +17,7 @@
  * actionable. The verdict is identical either way — if any date is in the
  * future, so is the maximum.
  */
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 
 type FutureDateRun = Pick<ProductionRunForCertification, "code" | "endTime">;
@@ -41,15 +41,16 @@ export function collectFutureDatedMeasurements(args: {
   samples?: FutureDateSample[];
   lineages: FutureDateLineage[];
   now?: Date;
+  facilityTimezone: string;
 }): string[] {
-  const { runs, samples = [], lineages, now = new Date() } = args;
+  const { runs, samples = [], lineages, now = new Date(), facilityTimezone } = args;
   const nowMs = now.getTime();
   const blockers: string[] = [];
 
   for (const run of runs) {
     if (run.endTime && run.endTime.getTime() > nowMs) {
       blockers.push(
-        `Production run ${run.code} ends on ${formatUtcDate(run.endTime)}. ` +
+        `Production run ${run.code} ends on ${formatFacilityDate(run.endTime, facilityTimezone)}. ` +
           "Change the end time or wait until the run ends.",
       );
     }

@@ -4,6 +4,7 @@ import { guidedWriteEnvelopeSchema, itemEnvelopeSchema } from "@/lib/representat
 import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
 import type { JsonSchema } from "@/lib/operations/json-schema";
+import { ORDER_DELIVERY_NAME_CAP } from "@/lib/order-domain-errors";
 import { mutationQuerySchema } from "../query";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { etagHeader, idempotencyParameter, ifMatchParameter, jsonResponse, locationHeader, privateHeaders, problemResponses, queryParameters, targetParameter, writeHeaders } from "./transport";
@@ -49,7 +50,7 @@ export function addOrderWritePaths(paths: Paths, { publishOutput, writeErrors }:
   };
   paths["/orders/{idOrCode}"].delete = {
     ...privateOperation("delete_order", "orders:delete",
-      "Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.",
+      `Delete by UUID with a strong If-Match. Requires orders:delete, a separate scope that is off by default. Only orders with no deliveries, including archived deliveries, can be deleted; otherwise the response is 409 certification_locked at /orderId with issue metadata reason in_use, deliveryCode and deliveryId. The metadata carries the first delivery by code in ascending order; the message names up to ${ORDER_DELIVERY_NAME_CAP} deliveries and counts the rest. An archived order without deliveries can be deleted. Certified lineage answers 409 certification_locked. The deletion retires order documents; storage cleanup runs after commit. Dry runs roll back and return the representation that would be deleted. A supplied body must be an empty JSON object.`,
       {
         ...problemResponses([...writeErrors, 412, 413, 415, 428]),
         "412": { $ref: "#/components/responses/OrderProblem412" },

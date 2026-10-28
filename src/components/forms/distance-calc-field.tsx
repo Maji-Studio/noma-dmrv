@@ -29,6 +29,8 @@ import type { CertFieldStatus } from "./cert-field-status";
 
 interface DistanceCalcFieldProps {
   id: string;
+  /** The RHF path this control answers to, so a refused save can land on it. */
+  fieldName?: string;
   label: string;
   helperText?: string;
   /** Visible line under the control (FormField `cue`), e.g. the counted round trip. */
@@ -113,6 +115,7 @@ function DistanceControl({
 
 export function DistanceCalcField({
   id,
+  fieldName,
   label,
   helperText,
   cue,
@@ -202,6 +205,7 @@ export function DistanceCalcField({
       <DistanceControl
         inputProps={{
           id,
+          ...(fieldName ? { "data-field-name": fieldName } : {}),
           type: "number",
           step: "any",
           min: 0,

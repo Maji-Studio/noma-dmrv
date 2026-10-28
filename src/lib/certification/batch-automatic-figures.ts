@@ -4,7 +4,7 @@ import { multiplyEntryDecimals } from "./emission-entry-rules";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
 import { transportMassDistanceAvailable, type ProductionRunForCertification, type TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
 
-function sourceForCategory(category: "feedstock" | "biochar" | "sample") {
+function sourceForCategory(category: "feedstock" | "biochar") {
   return category === "biochar" ? "delivery-transport" : (`${category}-transport` as const);
 }
 const SOURCE_UNITS: Record<AutomaticSourceId, string> = {
@@ -28,7 +28,7 @@ export interface ExactEmissionMasses {
  * Energy and distances originate in real columns; stringify those once at the boundary.
  */
 export function batchAutomaticFigures(runs: ProductionRunForCertification[], legs: TransportLegsByCategory, exact?: ExactEmissionMasses): BatchEmissionLineFacts["automaticFigures"] {
-  const figures: BatchEmissionLineFacts["automaticFigures"] = { sequestration: null };
+  const figures: BatchEmissionLineFacts["automaticFigures"] = { sequestration: null, "sample-transport": null };
   for (const [source, fields] of Object.entries(RUN_SOURCE_FIELDS)) {
     const unit = SOURCE_UNITS[source as keyof typeof RUN_SOURCE_FIELDS];
     const values = runs.flatMap((run) => fields.flatMap((field) => {
@@ -38,7 +38,7 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
     }));
     figures[source as keyof typeof RUN_SOURCE_FIELDS] = sumFigures(values);
   }
-  for (const category of ["feedstock", "biochar", "sample"] as const) {
+  for (const category of ["feedstock", "biochar"] as const) {
     const categoryLegs = legs[category];
     const valid = transportMassDistanceAvailable(categoryLegs, category === "biochar");
     if (!valid) {
@@ -58,4 +58,3 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
   }
   return figures;
 }
-

@@ -1,12 +1,8 @@
+// @vitest-environment jsdom
 import type { ReactElement } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-
-// The block's InfoHint is a Base UI tooltip, which needs a DOM this node
-// environment does not have; the hint's copy is not what these tests assert.
-vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
-import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
+import { afterEach, describe, expect, it } from "vitest";
 import { layoutMassFlow } from "@/components/ui/mass-flow-sankey";
 import { processFlowDiagram, ProcessFlowPreview, PROCESS_FLOW_WATER_INFLOW_LABEL } from "./production-run-process-flow-preview";
 
@@ -24,12 +20,7 @@ const run = {
 
 const FLOW_WIDTH_PX = 560;
 
-beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-
-/** Text a level leaves on screen: parts behind `hidden` do not count. */
-function visible(node: ReactTestInstance | string): string {
-  return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
-}
+afterEach(cleanup);
 
 /** Text as the operator reads it, with the markup and its entities resolved. */
 function text(node: ReactElement): string {
@@ -41,9 +32,9 @@ describe("ProcessFlowPreview", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 
     expect(rendered).toContain("Dry yield 50%");
-    expect(rendered).toContain("Feedstock July 100 kg wet, 90 kg dry");
+    expect(rendered).toContain("Feedstock July 100 kg wet mass, 90 kg dry");
     expect(rendered).toContain("Reactor 1");
-    expect(rendered).toContain("Biochar July 50 kg wet, 45 kg dry");
+    expect(rendered).toContain("Biochar July 50 kg wet mass, 45 kg dry");
     expect(rendered).toContain("Water driven off 10 kg");
     expect(rendered).toContain("Conversion loss 45 kg");
     expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 5 kg`);
@@ -74,8 +65,8 @@ describe("ProcessFlowPreview", () => {
     const waterIn = diagram.inflows!.reduce((total, inflow) => total + masses[inflow.to], 0);
     const losses = diagram.exits!.reduce((total, exit) => total + masses[exit.from], 0);
 
-    expect(rendered).toContain("500 kg wet, 400 kg dry");
-    expect(rendered).toContain("300 kg wet, 292.5 kg dry");
+    expect(rendered).toContain("500 kg wet mass, 400 kg dry");
+    expect(rendered).toContain("300 kg wet mass, 292.5 kg dry");
     expect(rendered).toContain("Water driven off 100 kg");
     expect(rendered).toContain("Conversion loss 107.5 kg");
     expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 7.5 kg`);
@@ -107,41 +98,42 @@ describe("ProcessFlowPreview", () => {
     expect(diagram.nodes[2].segments.find((segment) => segment.id === "biochar-dry")?.kg).toBe(tinyWaterRun.biocharDryKg);
   });
 
-  it("keeps the yield arithmetic behind the block's own disclosure", () => {
+  it("keeps the yield arithmetic behind the caption's (i)", async () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} />);
 
-    expect(html).toContain("Show calculation for process flow");
-    expect(html).toContain("Dry feedstock in");
-    expect(html).toContain("Dry biochar out");
-    expect(html).toContain("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.");
+    expect(html).toContain("About Process flow");
+    expect(html).not.toContain("Show calculation");
+    expect(html).not.toContain("Dry feedstock in");
+    expect(html).not.toContain("biochar out / feedstock in");
+
+    render(<ProcessFlowPreview {...run} />);
+    fireEvent.click(screen.getByRole("button", { name: "About Process flow" }));
+    expect(await screen.findByText("Dry feedstock in")).toBeTruthy();
+    expect(screen.getByText("Dry biochar out")).toBeTruthy();
+    expect(screen.getByText("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.")).toBeTruthy();
   });
 
-  it("shows the yield headline and the flow at both levels and adds the calculation in Detailed", async () => {
-    let renderer!: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(<FormDetailProvider scope="production-run"><FormDetailControl /><ProcessFlowPreview {...run} /></FormDetailProvider>);
-    });
-    const simple = visible(renderer.root);
-    expect(simple).toContain("Dry yield");
-    expect(simple).toContain("50%");
-    expect(simple).toContain("Feedstock July");
-    expect(simple).toContain("Conversion loss");
-    expect(simple).toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
-    expect(simple).not.toContain("Show calculation");
+  it("shows the yield headline and the flow without any interaction", () => {
+    const shown = text(<ProcessFlowPreview {...run} />);
+    expect(shown).toContain("Dry yield");
+    expect(shown).toContain("50%");
+    expect(shown).toContain("Feedstock July");
+    expect(shown).toContain("Conversion loss");
+    expect(shown).toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
+  });
 
-    await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-    const detailed = visible(renderer.root);
-    expect(detailed).toContain("Feedstock July");
-    expect(detailed).toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
-    expect(detailed).toContain("Show calculation");
-    await act(async () => renderer.unmount());
+  it("offers no (i) for the arithmetic until a yield resolves", () => {
+    const html = renderToStaticMarkup(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />);
+    // The arithmetic trigger is absent; the block's definition hint still renders.
+    expect(html).not.toContain("data-explanation-info");
+    expect(html).toContain("About Process flow");
   });
 
   it("falls back to a wet flow, with water and conversion loss as one exit, when the output dry mass is unresolved", () => {
     const rendered = text(<ProcessFlowPreview {...run} biocharMoisturePercent={null} biocharDryKg={null} />);
 
     expect(rendered).toContain("Wet yield 50%");
-    expect(rendered).toContain("Feedstock July 100 kg wet");
+    expect(rendered).toContain("Feedstock July 100 kg wet mass");
     expect(rendered).toContain("Water and conversion loss 50 kg");
     expect(rendered).not.toContain("Water driven off");
     expect(rendered).not.toContain("kg dry");
@@ -178,8 +170,8 @@ describe("ProcessFlowPreview", () => {
 
     expect(noOutput).not.toContain("data-mass-flow");
     expect(noOutput).toContain("Record the biochar wet mass to draw the flow.");
-    // No yield resolves, so the headline names the missing figure, not a basis.
-    expect(text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />)).toContain("Yield Not available");
+    // No yield resolves, so the headline is left out; the line above names what is missing.
+    expect(text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />)).not.toContain("Yield");
     expect(neither).toContain("Record the feedstock wet mass and the biochar wet mass to draw the flow.");
   });
 });

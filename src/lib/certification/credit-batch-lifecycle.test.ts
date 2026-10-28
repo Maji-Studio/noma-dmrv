@@ -8,7 +8,11 @@ function summary(
   return {
     state: "ready",
     issueCount: 0,
+    linesToDecide: 0,
+    checkCount: 0,
     removalId: null,
+    removalCode: null,
+    productionEmissionsClaimedByRemovalCode: null,
     removalStatus: null,
     ghgStatementId: null,
     ghgStatementStatus: null,

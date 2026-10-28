@@ -11,5 +11,5 @@ export const GET = apiRoute<Params>("api.v1.storage-locations.stock.get", "bioch
   const body = await readOutputBinStock(request, ctx, idOrCode);
   headers.set("ETag", bodyHashEtag(OUTPUT_BIN_STOCK_REPRESENTATION_REVISION, body.data));
   return Response.json(body, { headers });
-});
+}, { audience: "rest" });
 

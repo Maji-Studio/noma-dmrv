@@ -26,7 +26,6 @@ vi.mock("@/fn/fleet", () => ({
   }),
 }));
 vi.mock("@/fn/output-stock", () => ({ postOutputStockFn: vi.fn(() => Promise.resolve({ success: true, data: { savedDeliveries: [], savedProducts: [] } })) }));
-vi.mock("@/fn/certification/removal-template-review", () => ({ switchCreditBatchRemovalTemplate: vi.fn(savedRecord) }));
 vi.mock("@/fn/certification", () => ({
   createRemovalWithBatchesAction: vi.fn(ok),
   reconcileGhgStatementsFromRegistry: vi.fn(ok),
@@ -51,7 +50,6 @@ import { useDeleteReactor } from "./use-reactors";
 import { useUpdateCustomerLocation } from "./use-customers";
 import { useUpdateVehicle } from "./use-fleet";
 import { usePostOutputStock } from "./use-output-stock";
-import { useSwitchCreditBatchRemovalTemplate } from "./use-removal-template-review";
 import {
   useCreateGhgStatement,
   useCreateRemovalWithBatches,
@@ -84,7 +82,6 @@ it.each([
   ["customer location update", () => useUpdateCustomerLocation(), { locationId: RECORD_ID, expectedVersion: 1 }],
   ["vehicle update", () => useUpdateVehicle(), { vehicleId: RECORD_ID, expectedVersion: 1 }],
   ["output stock", () => usePostOutputStock(), { storageLocationId: RECORD_ID }],
-  ["credit batch template switch", () => useSwitchCreditBatchRemovalTemplate(), { creditBatchId: BATCH_ID, expectedVersion: 1 }],
   ["removal submission", () => useSubmitRemoval(), { input: { removalId: RECORD_ID }, onProgress: (): void => undefined }],
   ["removal creation", () => useCreateRemovalWithBatches(), { creditBatchIds: [BATCH_ID] }],
   ["GHG statement sync", () => useSyncGhgStatementsFromRegistry(), RECORD_ID],

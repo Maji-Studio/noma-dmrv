@@ -1,17 +1,16 @@
 /**
- * The removal's §8.6.2 reporting window (issue #320).
+ * The removal's reporting window (issue #320).
  *
- * Biochar Protocol §8.6.2 (local interpretation pin v1.2): the Reporting Period
- * begins with the batch's activity and ends when its biochar is applied at the
- * storage site. The window's END therefore anchors on the latest biochar
- * application across the removal's lineages — NOT the production-run end
- * (which keeps feeding durability `measured_at`, a production-time fact).
+ * Biochar Protocol v1.1.1: the reporting period "ends upon application of
+ * biochar from that batch at the storage site". The window's end anchors on
+ * the latest biochar application across the removal's lineages, not the
+ * production-run end.
  *
  * This module owns deriving that end date and reading a locked window back
  * out of a submission snapshot for the resume path.
  */
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 
@@ -26,9 +25,9 @@ const reportingWindowSnapshotSchema = z.object({
 });
 
 // The Reporting Period ends "upon application of biochar from that batch at
-// the storage site" (§8.6.2) — a removal aggregating N applications is
-// complete when the LAST biochar is stored. Fails closed on an empty lineage
-// list: there is no fallback to production end anywhere (issue #320).
+// the storage site" (Biochar Protocol v1.1.1). A removal aggregating N
+// applications is complete when the LAST biochar is stored. Fails closed on an
+// empty lineage list: there is no fallback to production end (issue #320).
 export function resolveLatestApplicationTime(
   lineages: { application: { applicationDate: Date; code: string } }[],
 ): Date {
@@ -47,51 +46,50 @@ export function resolveLatestApplicationTime(
 }
 
 /**
- * Resolve the timestamp-level review/snapshot window from the date-granular
- * registry contract.
+ * Resolve the facility calendar dates for the date-only registry contract,
+ * represented as UTC midnight for payload formatting and submission snapshots.
  *
- * Applications currently record a calendar date, represented as UTC
- * midnight. When production and application share that date, midnight is not
- * an observed application time and can precede the runs that produced the
- * applied biochar. Use the latest production end as the conservative
- * same-day floor so the technical window is chronological and contains every
- * member run. An earlier application day cannot contain an overnight run and
- * fails closed; a later application date remains the completion boundary.
+ * Production timestamps are instants converted to the facility's calendar day.
+ * Application dates already store that calendar day at UTC midnight and must
+ * not be converted through the facility timezone. Refuse an application day
+ * before the production end's facility day; completion is the application day,
+ * including when production ends on that same day.
  */
 export function resolveRemovalReportingWindow(args: {
   earliestProductionStartTime: Date;
   latestProductionEndTime: Date;
   latestApplicationTime: Date;
+  facilityTimezone: string;
 }): { startedOn: Date; completedOn: Date } {
   const {
     earliestProductionStartTime,
     latestProductionEndTime,
     latestApplicationTime,
+    facilityTimezone,
   } = args;
   const applicationDate = formatUtcDate(latestApplicationTime);
-  const latestProductionEndDate = formatUtcDate(latestProductionEndTime);
-  if (applicationDate < latestProductionEndDate) {
+  const productionEndFacilityDay = formatFacilityDate(
+    latestProductionEndTime,
+    facilityTimezone,
+  );
+  if (applicationDate < productionEndFacilityDay) {
     throw new SafeError(
       `Latest application date ${applicationDate} precedes latest production end date ` +
-        `${latestProductionEndDate}. Correct the application date before submitting.`,
+        `${productionEndFacilityDay}. Correct the application date before submitting.`,
     );
   }
-  const completedOn =
-    applicationDate === latestProductionEndDate &&
-    latestApplicationTime < latestProductionEndTime
-      ? latestProductionEndTime
-      : latestApplicationTime;
-
   return {
-    startedOn: earliestProductionStartTime,
-    completedOn,
+    startedOn: new Date(
+      `${formatFacilityDate(earliestProductionStartTime, facilityTimezone)}T00:00:00Z`,
+    ),
+    completedOn: new Date(`${applicationDate}T00:00:00Z`),
   };
 }
 
 /**
  * Reject dates that Isometric cannot accept before the submission pipeline
- * mirrors evidence Sources or creates Datapoints. Production end anchors the
- * reporting window, while latest application is the GHG entry's `completed_on`.
+ * mirrors evidence Sources or creates Datapoints. The latest application is the
+ * GHG entry's `completed_on`; production end must not be in the future.
  * Per-Sample durability `measured_at` values are guarded by the durability
  * builder. Equality is valid because neither date is in the future.
  */
@@ -121,26 +119,23 @@ export function assertRemovalDatesNotFuture(args: {
   }
 }
 
-// Guards the window inversion BEFORE any registry POST — the local stamp's
-// `startedOn <= completedOn` DB check happens later during finalization, so a
-// back-dated application must fail before posting an inverted window to
-// Isometric. Compares each lineage
-// against ITS OWN production run's start, not the removal-wide earliest:
-// biochar cannot be applied before the run that produced it started, and in a
-// mixed removal an earlier sibling run would otherwise mask a lineage whose
-// application predates its own run (PR #336 second-pass review). Fails closed
-// on a lineage whose run start cannot be resolved. Compares at DATE
-// granularity (what gets POSTed and stamped): form-entered application dates
-// are UTC midnight, so a millisecond comparison would wrongly block a
-// same-UTC-day application against a mid-day run start (issue #320 caveat 4).
+// Reject each application dated before its own production run before any
+// registry POST; an earlier sibling run must not mask invalid lineage.
+// The application date is a stored facility business date, represented as UTC
+// midnight of that day. Convert the run start instant to its facility day for
+// this comparison so a same-day application can follow a mid-day run start.
+// resolveRemovalReportingWindow also checks the production end's facility day
+// and returns the start and application calendar dates at UTC midnight.
+// Fail closed when the lineage's production run start cannot be resolved.
 export function assertReportingWindowNotInverted(args: {
   lineages: {
     application: { applicationDate: Date; code: string };
     productionRun: { id: string; code: string } | null;
   }[];
   runStartTimeByRunId: ReadonlyMap<string, Date>;
+  facilityTimezone: string;
 }): void {
-  const { lineages, runStartTimeByRunId } = args;
+  const { lineages, runStartTimeByRunId, facilityTimezone } = args;
   for (const lineage of lineages) {
     const run = lineage.productionRun;
     const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
@@ -151,7 +146,7 @@ export function assertReportingWindowNotInverted(args: {
       );
     }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
-    const runStartDate = formatUtcDate(runStartTime);
+    const runStartDate = formatFacilityDate(runStartTime, facilityTimezone);
     if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +
@@ -165,9 +160,8 @@ export function assertReportingWindowNotInverted(args: {
 // Reads the reporting window the original attempt locked into the snapshot, for
 // the resume path. Returns the two date fields `buildCreateGhgEntryRequest` and
 // `updateRemovalDates` consume, so a resumed removal stamps the window the
-// snapshot's datapoints were built for rather than a since-drifted live one
-// (pre-#320 drafts resume with their locked production-end window; the next
-// fresh submit supersedes with the application-anchored one). Fail-loud like
+// snapshot's datapoints were built for rather than a since-drifted live one.
+// Fail-loud like
 // the other snapshot readers: a missing/malformed window (pre-dating this
 // field) means the snapshot drifted, so refuse to resume.
 export function readRemovalReportingWindow(row: CertificationSubmissionRow): {

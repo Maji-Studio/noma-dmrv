@@ -9,9 +9,10 @@ import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
+import { ReestimateNotice } from "./reestimate-notice";
 import { IngredientStockInfo, StockLoadCard } from "./output-stock-load-card";
 import { StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
-import { binLabel, capitalize, dryingNotice, formatWetEstimate, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { binLabel, capitalize, dryingNotice, formatWetEstimate, splitDryLabel, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
 import { Notice } from "@/components/ui/notice";
 
 export { OutputStockAllocations, OutputStockAvailability } from "./output-stock-availability";
@@ -25,7 +26,7 @@ export interface StockEntry {
   wetMassKg: number | null | undefined;
 }
 
-/** "310 kg wet removed", "48 kg wet lost", "1,190 kg wet loaded". A count reads "Counted …". */
+/** "310 kg wet mass removed", "48 kg wet mass lost", "1,190 kg wet mass loaded". A count reads "Counted …". */
 const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
   correction: "removed",
   loss: "lost",
@@ -37,21 +38,25 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * against one bin (a correction, a loss, a count, a delivery load), `load` for
  * a surface that shows several bins at once (the product form).
  *
- * The preview is decision info, so both levels show the headline (the bin's
- * stock before and after), the picture, notices, refusals and blockers. Only
- * explanation waits for Detailed: the dry pair under a wet headline and the
- * figures and batch draw behind Show calculation.
+ * The preview is decision info: the headline (the bin's stock before and
+ * after), the picture, the dry biochar pair under a wet headline, notices,
+ * refusals and blockers are always visible. Explanation, the figures and the
+ * batch draw, opens from the caption's (i).
  *
  * `entry` is what the operator typed on a movement surface: its kind names the
- * movement in the headline's caption ("310 kg wet removed at 22.7% moisture"),
+ * movement in the headline's caption ("310 kg wet mass removed at 22.7% moisture"),
  * and its wet mass is the one figure a count cannot recover from the preview.
+ *
+ * `onMeasureAgain` is the one action of the re-estimate notice: it takes the
+ * operator back to the moisture they entered. A movement that re-estimates
+ * what stays (`preview.reestimate`) shows that notice with the mass flow.
  *
  * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
  * as the error on the field the operator must change. The same sentence in two
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, onMeasureAgain, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; onMeasureAgain?: (layerId?: string) => void; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const backdated = backdatedNotice(preview);
   return (
@@ -64,6 +69,7 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
           actions={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
         />
       )}
+      {variant === "movement" && <ReestimateNotice preview={preview} kind={removalKind(preview, entry)} onMeasureAgain={onMeasureAgain} />}
       {preview.discrepancySolidsKg > 0 && <Notice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</Notice>}
       {backdated && <Notice>{backdated}</Notice>}
       {blockingMessage && <Notice tone="error">{blockingMessage}</Notice>}
@@ -79,9 +85,9 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
  * stock before and after, labelled as an estimate because it is the tracked
  * solids at the moisture entered here, not a weighing. Its caption is the entry
  * itself. Under it the entered wet mass as a moisture split, then the one
- * notice a drying only count needs, then the tracked dry balance as a row in
- * Detailed: stock is kept in dry biochar, only the presentation leads wet. The
- * entered figures and the FIFO draw sit behind "Show calculation".
+ * notice a drying only count needs, then the tracked dry balance as a row:
+ * stock is kept in dry biochar, only the presentation leads wet. The entered
+ * figures and the FIFO draw sit behind the caption's (i).
  *
  * Without a moisture there is no wet estimate to show, so the dry balance takes
  * the headline instead of a made up figure. The ingredient lane tracks wet stock
@@ -114,19 +120,25 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
           ? <DerivedHeadline label={wet.label} value={wet.current} sub={line} />
           : <DerivedHeadline label={wet.label} before={wet.before} value={wet.after} figureLabel={wet.figureLabel} sub={line} />
         : dryPair}
-      detail={wet ? dryPair : undefined}
-      calculation={rows.length > 0 || ledger ? <>
+      explanation={rows.length > 0 || ledger ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         {ledger}
       </> : undefined}
     >
-      {/* The block's own disclosure holds the arithmetic, so the split
-          contributes the bar and its key line and no second ledger. */}
-      {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />}
+      {/* The block's own (i) holds the arithmetic, so the split contributes
+          the bar and its key line and no second ledger. */}
+      {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} dryLabel={splitDryLabel(preview)} />}
       {notice && <Notice>{notice}</Notice>}
       {!refused && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
+      {wet && dryPair}
     </CompositionCard>
   );
+}
+
+/** The kind of removal a re-estimate belongs to; a count removes nothing, so it never re-estimates. */
+function removalKind(preview: Preview, entry?: StockEntry): Exclude<StockEntryKind, "count"> {
+  const kind = entryKind(preview, entry);
+  return kind === "count" ? "correction" : kind;
 }
 
 /** A preview without an entry reads as a count when nothing was removed. */
@@ -145,18 +157,18 @@ function enteredWetMassKg(preview: Preview, entry?: StockEntry): number | null {
 }
 
 /**
- * The entry as one caption: "310 kg wet removed at 22.7% moisture", "Counted
- * 2,650 kg wet at 27.4% moisture". A refused entry drops the verb: "310 kg wet
+ * The entry as one caption: "310 kg wet mass removed at 22.7% moisture", "Counted
+ * 2,650 kg wet mass at 27.4% moisture". A refused entry drops the verb: "310 kg wet mass
  * at 22.7% moisture".
  */
 function enteredLine(preview: Preview, kind: StockEntryKind, entry: StockEntry | undefined, refused: boolean): string | null {
   const wetKg = enteredWetMassKg(preview, entry);
   if (wetKg === null) return null;
   const moisture = preview.movementMoisturePercent === null ? "" : ` at ${formatMoisturePercent(preview.movementMoisturePercent)} moisture`;
-  if (refused) return `${formatMassKg(wetKg)} wet${moisture}`;
+  if (refused) return `${formatMassKg(wetKg)} wet mass${moisture}`;
   return kind === "count"
-    ? `Counted ${formatMassKg(wetKg)} wet${moisture}`
-    : `${formatMassKg(wetKg)} wet ${ENTRY_VERB[kind]}${moisture}`;
+    ? `Counted ${formatMassKg(wetKg)} wet mass${moisture}`
+    : `${formatMassKg(wetKg)} wet mass ${ENTRY_VERB[kind]}${moisture}`;
 }
 
 /**

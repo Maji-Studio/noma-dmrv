@@ -1,3 +1,9 @@
+import { EMISSION_ENTRY_FILE_MISMATCH } from "@/lib/certification/emission-entry-messages";
+const warn = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/log", async (original) => {
+  const actual = await original<typeof import("@/lib/log")>();
+  return { ...actual, logger: { ...actual.logger, warn } };
+});
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./source-candidates", async (importOriginal) => ({
@@ -16,7 +22,7 @@ import * as sources from "./source-candidates";
 const ORG_CONTEXT = {
   userId: "removal-evidence-plan-user",
   organizationId: "removal-evidence-plan-org",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 } as const;
 
@@ -66,6 +72,7 @@ const template = {
 } as unknown as IsometricGhgEntryTemplate;
 
 const ctx = {
+  facilityTimezone: "UTC",
   lineages: [
     {
       application: { id: "application-1", code: "APP-001" },
@@ -167,4 +174,31 @@ describe("Removal evidence plan", () => {
     expect(evidence.sourceBindingPlan).toEqual([]);
     expect(evidence.semanticSourceBindingPlan).toEqual([]);
   });
+});
+
+it.each([true, false])("logs invalid entry bindings from either plan at the fn boundary (ready=%s)", async (ready) => {
+  const candidate = { documentId: "entry-file", binding: { nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
+    lineage: { entityType: "emission_entry", entityId: "entry", entityLabel: "Private display label" },
+    intendedTarget: { kind: "explicit", componentId: "absent-component", inputKey: "mass" }, mappingRevision: "revision" } };
+  await expect(plan({ candidateSourceDocuments: [candidate] as never,
+    sourceBindingCandidates: (ready ? [{ ...candidate, sourceId: "source" }] : []) as never,
+  })).rejects.toThrow(EMISSION_ENTRY_FILE_MISMATCH);
+  expect(warn).toHaveBeenCalledExactlyOnceWith({ removalId: "removal-1", documentId: "entry-file", entryId: "entry",
+    componentId: "absent-component", inputKey: "mass" }, expect.any(String));
+});
+
+it.each([false, true])("includes current operator files in the compiled evidence plan only in an open window (%s)", async correctionWindowOpen => {
+  const sent = inventoryDocument("sent-file");
+  const added = inventoryDocument("added-file");
+  vi.mocked(sources.collectCandidateSourceDocumentsForRemoval).mockResolvedValue([sent, added]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockImplementation(async (_ctx, args) =>
+    args.candidates.map(candidate => ({ ...candidate, sourceId: `source-${candidate.documentId}` })));
+  const evidence = await planRemovalEvidence({ orgCtx: ORG_CONTEXT, removalId: "removal-1", template,
+    ctx: { ...ctx, correctionWindowOpen, latestSubmission: {
+      status: "submitted", payloadSnapshot: { semantic: { candidateSources: [sent] } },
+    } as RemovalSubmissionContext["latestSubmission"] },
+    compiledBiocharApplicationIntents: [], supplied: {},
+  });
+  expect(evidence.candidateDocumentIds).toEqual(correctionWindowOpen ? ["added-file", "sent-file"] : ["sent-file"]);
+  expect(evidence.sourceIds).toEqual(correctionWindowOpen ? ["source-added-file", "source-sent-file"] : ["source-sent-file"]);
 });

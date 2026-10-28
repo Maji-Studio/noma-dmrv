@@ -37,19 +37,20 @@ const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.loadFacilityCertifierFacts.mockResolvedValue({
+    facilityTimezone: "UTC",
     hasOrgCredentials: true,
     mapping: {
       externalProjectId: "prj-1",
-      defaultRemovalTemplateId: "rvt-1",
+      removalTemplateId: "rvt-1",
     },
     project: { id: "prj-1", name: "Project One" },
-    defaultTemplate: {
+    currentTemplate: {
       id: "rvt-1",
       display_name: "Removal template",
       credit_type: "REMOVAL",
       groups: [],
     },
-    missingDefaultTemplateId: null,
+    missingCurrentTemplateId: null,
     blueprintsForTemplate: [],
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],

@@ -1,3 +1,4 @@
+import { toolText } from "@/lib/mcp/tool-text";
 import { expect, it } from "vitest";
 import { parseTranscript, redactKeys } from "./transcript";
 
@@ -65,38 +66,73 @@ it("preserves the call count when an interrupted stream ends with a partial even
   expect(parsed.completed).toBe(false);
 });
 
-it.each(["structured", "wrapped-text", "plain-text"])("retains the returned stock envelope from %s content", (shape) => {
+it.each(["plain-text", "summary-json"])("retains application warnings from %s results", shape => {
+  const body = { data: { id: "application" }, warnings: ["Check the facility reference temperature."] };
+  const text = shape === "summary-json" ? toolText("Recorded application.", body) : JSON.stringify(body);
+  const events = [
+    { type: "assistant", message: { content: [{ type: "tool_use", id: "write", name: "mcp__noma__record_application", input: {} }] } },
+    { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "write", content: text }] } },
+  ];
+  expect(parseTranscript(events.map(event => JSON.stringify(event)).join("\n")).calls[0])
+    .toMatchObject({ applicationResult: body, isError: false });
+});
+
+it("recognizes nested errors after a summary and ignores plain summaries", () => {
+  const events = [
+    { type: "assistant", message: { content: [
+      { type: "tool_use", id: "error", name: "mcp__noma__whoami", input: {} },
+      { type: "tool_use", id: "plain", name: "mcp__noma__whoami", input: {} },
+    ] } },
+    { type: "user", message: { content: [
+      { type: "tool_result", tool_use_id: "error", content: [{ type: "text", text: toolText("Request failed.", { isError: true }) }] },
+      { type: "tool_result", tool_use_id: "plain", content: [{ type: "text", text: "Plain summary.\n\nNo JSON here." }] },
+    ] } },
+  ];
+  expect(parseTranscript(events.map(event => JSON.stringify(event)).join("\n")).calls.map(call => call.isError)).toEqual([true, false]);
+});
+
+it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains the returned stock envelope from %s content", (shape) => {
   const body = { data: { storageLocationId: "bin", subBins: [{ layerId: "run", code: "PR-12" }] } };
   const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "stock", name: "mcp__noma__get_bin_stock", input: {} }] } };
   const wrapped = { structuredContent: body, content: [{ type: "text", text: "Stock read." }] };
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock",
-      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map((value) => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ stockResult: body, resultAfterCalls: 1, isError: false });
 });
 
-it.each(["structured", "wrapped-text", "plain-text"])("retains party lookup rows from %s content", (shape) => {
+it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains party lookup rows from %s content", (shape) => {
   const body = { data: [{ id: "supplier", code: "SUP-1", name: "Kilombero Sawmill", archivedAt: null }] };
   const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "find", name: "mcp__noma__find_suppliers", input: {} }] } };
   const wrapped = { structuredContent: body, content: [{ type: "text", text: "Suppliers." }] };
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "find",
-      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ partyRows: body.data, isError: false });
 });
 
-it.each(["structured", "wrapped-text", "plain-text"])("retains archived party conflicts from %s content", (shape) => {
+it.each(["structured", "wrapped-text", "plain-text", "summary-json"])("retains archived party conflicts from %s content", (shape) => {
   const body = { code: "conflict", issues: [{ pointer: "/name", meta: { supplierId: "supplier", archived: true } }] };
   const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "create", name: "mcp__noma__create_supplier", input: {} }] } };
   const wrapped = { isError: true, structuredContent: body, content: [{ type: "text", text: "Name reserved." }] };
   const event = shape === "structured"
     ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create" }] }, tool_use_result: wrapped }
     : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "create", is_error: true,
-      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+      content: [{ type: "text", text: shape === "summary-json" ? toolText("Summary.", body) : JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
   const parsed = parseTranscript([use, event].map(value => JSON.stringify(value)).join("\n"));
   expect(parsed.calls[0]).toMatchObject({ partyResult: body, isError: true });
+});
+
+it.each(["get_order", "get_customer_location", "find_customer_locations"])("retains grounded destination facts from %s", name => {
+  const row = { id: "field", name: "North Block", defaultSoilTemperatureC: 23.5, archivedAt: "2026-10-17" };
+  const body = { data: name.startsWith("find_") ? [row] : row };
+  const events = [
+    { type: "assistant", message: { content: [{ type: "tool_use", id: "read", name: `mcp__noma__${name}`, input: {} }] } },
+    { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "read", content: [{ type: "text", text: JSON.stringify({ structuredContent: body }) }] }] } },
+  ];
+  expect(parseTranscript(events.map(event => JSON.stringify(event)).join("\n")).calls[0]).toMatchObject({ partyRows: [row], isError: false });
 });

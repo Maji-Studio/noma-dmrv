@@ -30,6 +30,7 @@ import {
   useDeleteRemoval,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
@@ -53,7 +54,12 @@ import { DebugDrawer } from "./debug-drawer";
 import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
-import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
+import { ComponentTable } from "./component-table";
+import { CarriedEntriesPanel } from "../carried-entries";
+import { buildComponentTable } from "./component-table-model";
+import { SourceRecords } from "./source-records";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -69,6 +75,8 @@ interface SubmitStepProps {
   facilityName: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
+  /** Back to the Empty components step, to undo a recorded zero. Shown on phones only, where the rail shows one step. */
+  onBackToEmpty?: () => void;
 }
 
 export function SubmitStep({
@@ -78,6 +86,7 @@ export function SubmitStep({
   facilityName,
   onDone,
   submitMutation,
+  onBackToEmpty,
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
@@ -105,11 +114,24 @@ export function SubmitStep({
   const compilationReady = isRemovalCompilationReady(
     compilationQuery.data ?? null,
   );
+  const componentTable = buildComponentTable({
+    batches: ctx.memberBatches,
+    linesByBatchId: ctx.emissionLinesByBatchId,
+    review: compilationQuery.data?.review ?? null,
+    isLoading: compilationQuery.isLoading,
+    unbindableComponentIds: new Set(
+      (ctx.unbindableTemplateInputs ?? []).map((input) => input.componentId),
+    ),
+    ledger: ctx.emissionsLedger,
+    facilityId,
+  });
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
   // row exists the server removes whatever the attempt created on Isometric
-  // before releasing the batches. No role gate yet (issue #746).
+  // before releasing the batches; from then on only viewers at the role floor
+  // may delete it (issue #746).
+  const deleteAccess = useRemovalDeleteAccess(facilityId, removalId);
   const deleteFacts = {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight: ctx.latestSubmission
@@ -120,12 +142,16 @@ export function SubmitStep({
       : false,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
+    deletionInProgress: ctx.deletionInProgress,
   };
-  const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
+  const hasRegistryHistory = removalDeletionTouchesRegistry(
+    deleteFacts,
+    deleteAccess,
+  );
   const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
-    canDeleteRemovalRow(deleteFacts);
+    canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
   const deleteDialog = (
@@ -156,7 +182,6 @@ export function SubmitStep({
           : undefined
       }
       confirmLabel={deleteCopy.actionLabel}
-      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 
@@ -259,7 +284,10 @@ export function SubmitStep({
           updates={progressUpdates}
           isResubmission={attemptIsResubmission}
         />
-        <div className="flex flex-wrap items-center justify-end gap-12">
+        <div className="flex flex-wrap items-center justify-start gap-12">
+          <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
+            Done
+          </Button>
           {viewUrl && (
             <a
               href={viewUrl}
@@ -271,9 +299,6 @@ export function SubmitStep({
               <ArrowSquareOutIcon size={ACTION_ICON_SIZE} aria-hidden />
             </a>
           )}
-          <Button variant="primary" onClick={onDone}>
-            Done
-          </Button>
         </div>
       </div>
     );
@@ -304,23 +329,17 @@ export function SubmitStep({
           isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
-        <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {submitMutation.isPending
-              ? "noma is submitting the Removal to Isometric."
-              : submissionStalled
-                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
-                : "Completed registry operations are preserved for a safe retry."}
-          </span>
+        <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
             <div className="flex items-center gap-12">
               {submissionStalled ? (
-                <Button variant="primary" onClick={onDone}>
+                <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
               ) : (
                 <>
                   <Button
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
                       submitMutation.reset();
@@ -330,6 +349,7 @@ export function SubmitStep({
                   </Button>
                   <Button
                     variant="primary"
+                    className={PHONE_TOUCH_TARGET}
                     onClick={() => fireSubmit(lastConfirmProduction)}
                   >
                     Try again
@@ -338,6 +358,13 @@ export function SubmitStep({
               )}
             </div>
           )}
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {submitMutation.isPending
+              ? "noma is submitting the Removal to Isometric."
+              : submissionStalled
+                ? "Registry work may still be continuing. Close this dialog and refresh the page to reconcile its status."
+                : "Completed registry operations are preserved for a safe retry."}
+          </span>
         </div>
         {confirmDialog}
       </div>
@@ -347,6 +374,7 @@ export function SubmitStep({
   const submitButton = (
     <Button
       variant="primary"
+      className={PHONE_TOUCH_TARGET}
       onClick={handleSubmit}
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
@@ -365,17 +393,28 @@ export function SubmitStep({
         isCompilationLoading={compilationQuery.isLoading}
         compilationError={compilationQuery.error}
         checks={checklist}
+        table={componentTable}
         readiness={readiness}
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
       />
 
-      <RemovalEmissionsLedger
-        compilation={compilationQuery.data ?? null}
+      <ComponentTable table={componentTable} facilityId={facilityId} />
+
+      <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
+
+      <SourceRecords
         ledger={ctx.emissionsLedger}
         facilityId={facilityId}
-        isLoading={compilationQuery.isLoading}
+        storageSitesHref={
+          ctx.mapping?.externalProjectId
+            ? isometricRegistry.storageSites({
+                environment: ctx.isProduction ? "production" : "sandbox",
+                externalProjectId: ctx.mapping.externalProjectId,
+              })
+            : null
+        }
       />
 
       <DebugDrawer
@@ -391,18 +430,7 @@ export function SubmitStep({
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-        {canDeleteRemoval ? (
-          <Button
-            variant="default"
-            onClick={() => setDeleteConfirmOpen(true)}
-            disabled={submitMutation.isPending}
-          >
-            {deleteCopy.actionLabel}
-          </Button>
-        ) : (
-          <span />
-        )}
+      <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
         {requirementsMet ? (
           submitButton
         ) : (
@@ -412,6 +440,21 @@ export function SubmitStep({
             </span>
           </Tooltip>
         )}
+        {onBackToEmpty && (
+          <Button variant="default" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
+            Back
+          </Button>
+        )}
+        {canDeleteRemoval ? (
+          <Button
+            variant="default"
+            className={PHONE_TOUCH_TARGET}
+            onClick={() => setDeleteConfirmOpen(true)}
+            disabled={submitMutation.isPending}
+          >
+            {deleteCopy.actionLabel}
+          </Button>
+        ) : null}
       </div>
 
       {confirmDialog}

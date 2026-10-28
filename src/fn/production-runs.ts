@@ -6,6 +6,7 @@
  */
 
 import { z } from "zod";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 import {
   getProductionRunById as getProductionRunByIdData,
@@ -18,6 +19,7 @@ import {
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "@/lib/operations/production-runs";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -56,14 +58,15 @@ export async function getProductionRunByIdFn(
  * Create a new production run
  */
 export async function createProductionRunFn(
-  data: z.infer<typeof createProductionRunSchema>
+  data: z.infer<typeof createProductionRunSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<ProductionRunWithRelations>> {
-  return withAction(
-    (ctx) => {
+  return withCreate(
+    (_ctx, create) => {
       const { startDate, endDate, ...input } = createProductionRunSchema.parse(data);
       void startDate; void endDate;
-      return runOperationInProcess(startProductionRun, ctx, input);
-    },
+      return create(startProductionRun, input);
+    }, options,
     {
       fallbackMessage: "Failed to create production run",
       log: logFor("production-run:create"),

@@ -26,5 +26,9 @@ it("publishes location places and site defaults without private address fields",
     expect(value).not.toHaveProperty("email");
     expect(value.facilityDistances).toEqual([]);
   }
-  expect(customer).not.toHaveProperty("archivedAt");
+  expect(customer.archivedAt).toBe(instant.toISOString());
+  expect(representCustomerLocation({ ...location, archivedAt: null, customerId: id,
+    siteDescription: null, defaultSoilTemperatureC: null }).archivedAt).toBeNull();
+  expect(representCustomerLocation({ ...location, archivedAt: instant.toISOString(), customerId: id,
+    siteDescription: null, defaultSoilTemperatureC: null }).archivedAt).toBe(instant.toISOString());
 });

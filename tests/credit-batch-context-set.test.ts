@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getFacilityById } from "@/data-access/facilities";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   buildCreditBatchContexts,
@@ -9,6 +10,8 @@ import {
 } from "@/fn/certification/linked-ghg-statement-status";
 import { loadDurabilityBatchData } from "@/fn/certification/durability-readiness";
 import { makeTestOrgContext } from "./helpers/test-org";
+
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn() }));
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
   loadCreditBatchRollups: vi.fn(),
@@ -35,12 +38,13 @@ const BATCH_IDS = Array.from(
 const FACILITY_ID = "facility-1";
 
 const facilityFacts = {
+  facilityTimezone: "Africa/Dar_es_Salaam",
   templatesById: {}, removalTemplateIds: [],
   hasOrgCredentials: true,
   mapping: null,
   project: null,
-  defaultTemplate: null,
-  missingDefaultTemplateId: null,
+  currentTemplate: null,
+  missingCurrentTemplateId: null,
   blueprintsForTemplate: [],
   unbindableTemplateInputs: [],
   unresolvedBlueprintKeys: [],
@@ -130,5 +134,6 @@ describe("buildCreditBatchContexts", () => {
     ]);
     expect(Object.keys(result.contextsByBatch)).toEqual(BATCH_IDS);
     expect(result.contextsByBatch["batch-1"].facilityId).toBe(FACILITY_ID);
+    expect(getFacilityById).not.toHaveBeenCalled();
   });
 });

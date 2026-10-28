@@ -8,7 +8,7 @@
  */
 
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 
 export const VAULT = "Environment Variables";
@@ -28,7 +28,7 @@ export const REQUIRED_LOCAL_VARS = new Set([
 /**
  * Vars a Vercel deployment cannot boot without (NODE_ENV=production at
  * runtime): the core trio, the cron secret, credential encryption key, and s3-compatible
- * storage set that env.ts mandates in production. Everything else in
+ * storage set and the three email settings that env.ts mandates in production. Everything else in
  * .env.tpl degrades gracefully.
  */
 export const REQUIRED_DEPLOYED_VARS = new Set([
@@ -42,15 +42,56 @@ export const REQUIRED_DEPLOYED_VARS = new Set([
   "STORAGE_REGION",
   "STORAGE_ACCESS_KEY_ID",
   "STORAGE_SECRET_ACCESS_KEY",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "RESEND_REPLY_TO",
 ]);
 
 // Shape of an env-var name (and therefore a per-var 1Password field label).
-const ENV_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
+const ENV_NAME_PATTERN = "[A-Z_][A-Z0-9_]*";
+const ENV_NAME_RE = new RegExp(`^${ENV_NAME_PATTERN}$`);
 
 export interface TemplateEntry {
   name: string;
   /** Field referenced inside the op:// path, or null for a literal value. */
   opField: string | null;
+}
+
+/** Parse workflow op:// references into field names grouped by item env. */
+export function parseWorkflowOpReferences(workflow: string): Map<string, Set<string>> {
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const referencePattern = new RegExp(
+    `op://${escapeRegex(VAULT)}/${escapeRegex(ITEM_PREFIX)} ([A-Za-z0-9_-]+)/(${ENV_NAME_PATTERN})(?=["'\\s]|$)`,
+    "g"
+  );
+  const references = new Map<string, Set<string>>();
+  for (const line of workflow.split("\n")) {
+    if (line.trimStart().startsWith("#")) continue;
+    for (const [, env, field] of line.matchAll(referencePattern)) {
+      if (!references.has(env)) references.set(env, new Set());
+      references.get(env)!.add(field);
+    }
+  }
+  return references;
+}
+
+/** Workflow filenames per referenced field, grouped by 1Password item env. */
+export function readWorkflowOpReferences(): Map<string, Map<string, Set<string>>> {
+  const workflowDir = join(process.cwd(), ".github", "workflows");
+  const references = new Map<string, Map<string, Set<string>>>();
+  for (const file of readdirSync(workflowDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!file.isFile() || !/\.ya?ml$/.test(file.name)) continue;
+    const workflow = readFileSync(join(workflowDir, file.name), "utf-8");
+    for (const [env, fields] of parseWorkflowOpReferences(workflow)) {
+      if (!references.has(env)) references.set(env, new Map());
+      const envReferences = references.get(env)!;
+      for (const field of fields) {
+        if (!envReferences.has(field)) envReferences.set(field, new Set());
+        envReferences.get(field)!.add(file.name);
+      }
+    }
+  }
+  return references;
 }
 
 /** Parse an env template (default .env.tpl) into its declared variables. */

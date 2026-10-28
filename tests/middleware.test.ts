@@ -12,6 +12,19 @@ vi.mock("@/lib/auth/better-auth", () => ({
 }));
 
 describe("Auth middleware", () => {
+  it.each(["SIGN_IN_REQUIRED", "TOKEN_EXPIRED", "INVALID_TOKEN", "WRONG_ACCOUNT"])(
+    "preserves the Profile link error %s through the login redirect", async code => {
+      getSessionMock.mockResolvedValueOnce(null);
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const path = `/settings/profile?error=${code}`;
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get("location")!);
+      expect(location.pathname).toBe("/login");
+      expect(location.searchParams.get("from")).toBe(path);
+    },
+  );
+
   it("returns 401 for unauthenticated protected API routes", async () => {
     getSessionMock.mockResolvedValueOnce(null);
 
@@ -100,5 +113,69 @@ describe("cron proxy boundary", () => {
     const { updateSession } = await import("@/lib/auth/middleware");
     expect((await updateSession(new NextRequest(`http://localhost${path}`))).status).toBe(401);
     expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OAuth discovery proxy boundary", () => {
+  it.each([
+    "/.well-known/oauth-authorization-server/api/auth",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/api/mcp",
+    "/.well-known/oauth-protected-resource/api/v1",
+  ])("passes %s without a session lookup", async path => {
+    getSessionMock.mockReset();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each([
+    "/.well-known/oauth-protected-resourcex", "/.well-known/oauth-protected-resource/api/mcp/x",
+    "/.well-known/oauth-protected-resource/", "/.well-known/oauth-authorization-server/api/auth/x",
+    "/.well-known/oauth-authorization-server", "/oauth/organization", "/oauth/consent",
+  ])("keeps %s behind the session", async path => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OAuth login continuation", () => {
+  it("lets an authenticated user reach login with the provider's signed query", async () => {
+    getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost:3100/login?sig=signature&ba_param=1"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+  it.each(["/login", "/login?prompt=login", "/login?sig=signature", "/login?ba_param=1", "/forgot-password?sig=signature&ba_param=1", "/login/child?sig=signature&ba_param=1"])(
+    "keeps the authenticated redirect for %s", async path => {
+      getSessionMock.mockResolvedValue({ user: { emailVerified: true } });
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get("location")!).pathname).toBe("/dashboard");
+    },
+  );
+});
+
+describe("Home after signing in", () => {
+  it.each([
+    { role: "admin", home: "/admin/organizations" },
+    { role: "user", home: "/dashboard" },
+    { role: undefined, home: "/dashboard" },
+  ])("sends a $role session from / and the auth pages to $home", async ({ role, home }) => {
+    const { updateSession } = await import("@/lib/auth/middleware");
+    for (const path of ["/", "/login", "/forgot-password"]) {
+      for (const activeOrganizationId of [null, "org-1"]) {
+        getSessionMock.mockResolvedValue({ user: { role, emailVerified: true }, session: { activeOrganizationId } });
+        const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+        expect(response.status).toBe(307);
+        expect(new URL(response.headers.get("location")!).pathname).toBe(home);
+      }
+    }
   });
 });

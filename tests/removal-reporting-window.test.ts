@@ -53,6 +53,7 @@ describe("assertReportingWindowNotInverted", () => {
           lineage("2026-04-01T00:00:00Z", "APP-B", RUN_B, "RUN-B"),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).not.toThrow();
   });
@@ -68,6 +69,7 @@ describe("assertReportingWindowNotInverted", () => {
           lineage("2026-02-01T00:00:00Z", "APP-B", RUN_B, "RUN-B"),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(
       /APP-B is dated 2026-02-01, before its production run RUN-B started 2026-03-01/,
@@ -79,8 +81,28 @@ describe("assertReportingWindowNotInverted", () => {
       assertReportingWindowNotInverted({
         lineages: [lineage("2026-01-01T00:00:00Z", "APP-A", RUN_A)],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).not.toThrow();
+  });
+
+  it.each([
+    { zone: "Africa/Dar_es_Salaam", start: "2026-07-25T22:30:00Z", day: "2026-07-26", previous: "2026-07-25" },
+    { zone: "America/Los_Angeles", start: "2026-07-26T02:30:00Z", day: "2026-07-25", previous: "2026-07-24" },
+  ])("compares business dates with the run's local day in $zone", ({ zone, start, day, previous }) => {
+    const runStartTimeByRunId = new Map([[RUN_A, new Date(start)]]);
+    const check = (applicationDay: string) => assertReportingWindowNotInverted({
+      lineages: [lineage(`${applicationDay}T00:00:00Z`, "APP-A", RUN_A, "RUN-A")],
+      runStartTimeByRunId,
+      facilityTimezone: zone,
+    });
+    expect(() => check(day)).not.toThrow();
+    const message = thrownMessage(() => check(previous));
+    expect(message).toBe(
+      `Application APP-A is dated ${previous}, before its production run RUN-A started ${day}. ` +
+        "Correct the application date before submitting.",
+    );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
   });
 
   it("fails closed when a lineage has no production run", () => {
@@ -88,6 +110,7 @@ describe("assertReportingWindowNotInverted", () => {
       assertReportingWindowNotInverted({
         lineages: [lineage("2026-02-01T00:00:00Z", "APP-X", null)],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(/APP-X.*no resolvable production run start/);
   });
@@ -103,6 +126,7 @@ describe("assertReportingWindowNotInverted", () => {
           ),
         ],
         runStartTimeByRunId: runStarts,
+        facilityTimezone: "UTC",
       }),
     ).toThrow(/APP-Y.*no resolvable production run start/);
   });
@@ -126,19 +150,103 @@ describe("resolveLatestApplicationTime", () => {
 });
 
 describe("resolveRemovalReportingWindow", () => {
-  it("uses the latest run end as the same-day application time floor", () => {
+  // Production instants convert to the facility's calendar day. Application
+  // dates are already calendar dates (UTC midnight), so they pass through.
+  // Both returned values are calendar dates at UTC midnight (issue #1282).
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+  it("does not refuse a Bogota run ending 14 Mar 21:30 local with an application dated 14 Mar", () => {
     const window = resolveRemovalReportingWindow({
-      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
-      latestProductionEndTime: new Date("2026-07-29T15:30:00Z"),
-      latestApplicationTime: new Date("2026-07-29T00:00:00Z"),
+      earliestProductionStartTime: new Date("2026-03-14T14:00:00Z"),
+      latestProductionEndTime: new Date("2026-03-15T02:30:00Z"),
+      latestApplicationTime: day("2026-03-14"),
+      facilityTimezone: "America/Bogota",
     });
 
-    expect(window.startedOn.toISOString()).toBe(
-      "2026-07-29T06:00:00.000Z",
+    expect(window).toEqual({
+      startedOn: day("2026-03-14"),
+      completedOn: day("2026-03-14"),
+    });
+  });
+
+  it("uses the facility day of the run start, not its UTC day, west of UTC", () => {
+    const window = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-03-15T02:30:00Z"),
+      latestProductionEndTime: new Date("2026-03-15T04:30:00Z"),
+      latestApplicationTime: day("2026-03-14"),
+      facilityTimezone: "America/Bogota",
+    });
+
+    expect(window.startedOn).toEqual(day("2026-03-14"));
+    expect(window.completedOn).toEqual(day("2026-03-14"));
+  });
+
+  it("refuses an application day before the production end's facility day and prints that day", () => {
+    const message = thrownMessage(() => resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-03-14T14:00:00Z"),
+      latestProductionEndTime: new Date("2026-03-15T02:30:00Z"),
+      latestApplicationTime: day("2026-03-13"),
+      facilityTimezone: "America/Bogota",
+    }));
+
+    expect(message).toBe(
+      "Latest application date 2026-03-13 precedes latest production end date 2026-03-14. " +
+        "Correct the application date before submitting.",
     );
-    expect(window.completedOn.toISOString()).toBe(
-      "2026-07-29T15:30:00.000Z",
+    expect(message).not.toMatch(EN_OR_EM_DASH);
+  });
+
+  it("refuses by the facility day east of UTC and prints it", () => {
+    const message = thrownMessage(() => resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
+      latestProductionEndTime: new Date("2026-07-29T22:30:00Z"),
+      latestApplicationTime: day("2026-07-29"),
+      facilityTimezone: "Africa/Dar_es_Salaam",
+    }));
+
+    expect(message).toBe(
+      "Latest application date 2026-07-29 precedes latest production end date 2026-07-30. " +
+        "Correct the application date before submitting.",
     );
+    expect(message).not.toMatch(EN_OR_EM_DASH);
+  });
+
+  it("accepts an application on the facility day east of UTC", () => {
+    const window = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
+      latestProductionEndTime: new Date("2026-07-29T22:30:00Z"),
+      latestApplicationTime: day("2026-07-30"),
+      facilityTimezone: "Africa/Dar_es_Salaam",
+    });
+
+    expect(window).toEqual({
+      startedOn: day("2026-07-29"),
+      completedOn: day("2026-07-30"),
+    });
+  });
+
+  it.each([
+    { scenario: "earlier day refusal", application: "2026-07-28", completedOn: null },
+    { scenario: "same day", application: "2026-07-29", completedOn: "2026-07-29" },
+    { scenario: "later day", application: "2026-07-30", completedOn: "2026-07-30" },
+  ])("compares facility days in a UTC facility: $scenario", ({ application, completedOn }) => {
+    const resolve = () => resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
+      latestProductionEndTime: new Date("2026-07-29T15:30:00Z"),
+      latestApplicationTime: day(application),
+      facilityTimezone: "UTC",
+    });
+    if (completedOn === null) {
+      expect(thrownMessage(resolve)).toBe(
+        "Latest application date 2026-07-28 precedes latest production end date 2026-07-29. " +
+          "Correct the application date before submitting.",
+      );
+    } else {
+      expect(resolve()).toEqual({
+        startedOn: day("2026-07-29"),
+        completedOn: day(completedOn),
+      });
+    }
   });
 
   it("rejects an application day before an overnight production run ends", () => {
@@ -146,22 +254,11 @@ describe("resolveRemovalReportingWindow", () => {
       resolveRemovalReportingWindow({
         earliestProductionStartTime: new Date("2026-07-29T23:00:00Z"),
         latestProductionEndTime: new Date("2026-07-30T01:00:00Z"),
-        latestApplicationTime: new Date("2026-07-29T00:00:00Z"),
+        latestApplicationTime: day("2026-07-29"),
+        facilityTimezone: "UTC",
       }),
     ).toThrow(
       /Latest application date 2026-07-29 precedes latest production end date 2026-07-30/,
-    );
-  });
-
-  it("keeps a later application date as the reporting end", () => {
-    const window = resolveRemovalReportingWindow({
-      earliestProductionStartTime: new Date("2026-07-29T06:00:00Z"),
-      latestProductionEndTime: new Date("2026-07-29T15:30:00Z"),
-      latestApplicationTime: new Date("2026-07-30T00:00:00Z"),
-    });
-
-    expect(window.completedOn.toISOString()).toBe(
-      "2026-07-30T00:00:00.000Z",
     );
   });
 });

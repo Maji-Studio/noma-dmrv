@@ -11,11 +11,14 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
@@ -30,6 +33,7 @@ import {
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
 import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
@@ -47,6 +51,11 @@ import {
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
+import { correctionStatus } from "@/lib/removal-correction-copy";
+import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -54,6 +63,8 @@ interface RemovalDetailSheetProps {
   facilityId: string;
   open: boolean;
   onClose: () => void;
+  /** Which Isometric returned, if any: shows "Correction needed" where the Removal has no `correction`. */
+  lock?: RecordLockView;
 }
 
 export function RemovalStorageSitesField({
@@ -144,10 +155,7 @@ export function RemovalReviewAction({
   return (
     <Link
       href={reviewHref}
-      className={buttonVariants({
-        variant: "primary",
-        className: "flex-1",
-      })}
+      className={buttonVariants({ variant: "primary" })}
     >
       Review &amp; submit
     </Link>
@@ -160,7 +168,9 @@ export function RemovalDetailSheet({
   facilityId,
   open,
   onClose,
+  lock,
 }: RemovalDetailSheetProps) {
+  const { timeZone } = useFacilityClock(facilityId);
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
     open,
@@ -174,6 +184,15 @@ export function RemovalDetailSheet({
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A replaced Removal never sends anything, so it is the one state that
+  // skips the carried-entries read.
+  const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
+  const carriedEntries = removalEntries?.carriedEntries;
+  const lateEntries = removalEntries?.lateEntries;
+  // A returned Removal with its correction window open shows the Returned or
+  // Resubmit needed status and one notice in place of #1134's lock-based one.
+  const { correction } = summary;
+  const shownStatus = correction ? { ...workflowStatus, ...correctionStatus(correction) } : workflowStatus;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
@@ -184,11 +203,17 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
-  // Deletion mirrors the server rule: never-finalized only. With registry
-  // history the draft GHG Entry and Biochar Applications are removed from
-  // Isometric before the local record goes. No role gate yet (issue #746).
-  const touchesRegistry = removalDeletionTouchesRegistry(summary);
-  const canDelete = canDeleteRemovalRow(summary);
+  // Deletion mirrors the server rule: never-finalized only, and once the
+  // Removal touched the registry only viewers at the role floor (issue #746).
+  // With registry history the draft GHG Entry and Biochar Applications are
+  // removed from Isometric before the local record goes.
+  const deleteAccess = useRemovalDeleteAccess(
+    facilityId,
+    summary.removalId,
+    open,
+  );
+  const touchesRegistry = removalDeletionTouchesRegistry(summary, deleteAccess);
+  const canDelete = canDeleteRemovalRow(summary, deleteAccess);
   const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
@@ -213,7 +238,7 @@ export function RemovalDetailSheet({
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
             <SlideOverPanel.Title>
-              Removal {summary.removalId.slice(0, 8)}…
+              {summary.code}
             </SlideOverPanel.Title>
             {hasReportingWindow && (
               <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
@@ -223,7 +248,13 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Body className="flex flex-col gap-24">
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={workflowStatus} />
+            <SubmissionStatusSection summary={summary} status={shownStatus} />
+            {correction ? (
+              <RemovalResubmitNotice correction={correction} facilityId={facilityId} />
+            ) : (
+              <RemovalCorrectionNotice lock={lock} />
+            )}
+            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown
@@ -293,6 +324,13 @@ export function RemovalDetailSheet({
               </div>
             </DetailSection>
 
+            <CarriedEntriesSection
+              entries={carriedEntries}
+              facilityId={facilityId}
+              sent={workflowStatus.kind === "submitted"}
+            />
+            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} />
+
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
               diesel the active template cannot carry. Distinct from readiness
@@ -317,34 +355,28 @@ export function RemovalDetailSheet({
             {summary.recentSyncEvents.length > 0 && (
               <SyncEventLog
                 events={summary.recentSyncEvents}
+                timeZone={timeZone}
                 label={`Submission history (${summary.recentSyncEvents.length})`}
               />
             )}
           </SlideOverPanel.Body>
 
-          <SlideOverPanel.Footer className="justify-stretch">
+          <SlideOverPanel.Footer>
+            <ResubmitRemovalAction correction={correction} facilityId={facilityId} />
+            <RemovalReviewAction
+              isActionable={isActionable}
+              reviewHref={reviewHref}
+            />
             {canDelete && (
               <Button
                 variant="destructive"
-                className="flex-1"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
               >
                 {deleteCopy.actionLabel}
               </Button>
             )}
-            <RemovalReviewAction
-              isActionable={isActionable}
-              reviewHref={reviewHref}
-            />
-            <SlideOverPanel.Close>
-              <Button
-                variant={isActionable ? "default" : "primary"}
-                className="flex-1"
-              >
-                Close
-              </Button>
-            </SlideOverPanel.Close>
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         </SlideOverPanel.Content>
       </SlideOverPanel.Root>
@@ -377,7 +409,6 @@ export function RemovalDetailSheet({
             : undefined
         }
         confirmLabel={deleteCopy.actionLabel}
-        pendingLabel={deleteCopy.pendingLabel}
       />
     </>
   );

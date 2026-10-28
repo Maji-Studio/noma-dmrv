@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { activityEvents } from "@/db/schema/activity";
 import { listEntityActivity } from "@/data-access/activity-events";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -443,23 +444,6 @@ describe("deleteRemoval", () => {
     expect(registry.requests).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
-  it("lets any member delete, registry cleanup included", async () => {
-    const member = { ...makeTestOrgContext(), orgRole: "member" as const };
-    const fixture = await createFixture();
-    const entry = registry.seedGhgEntry({ status: "DRAFT" });
-    await insertLedgerRow(fixture, {
-      status: "draft",
-      externalId: entry.id,
-      metadata: interruptedMetadata(),
-    });
-    const result = await deleteRemoval(member, {
-      facilityId: fixture.facilityId,
-      removalId: fixture.removalId,
-    });
-    expect(result.deletedGhgEntryIds).toEqual([entry.id]);
-    expect(registry.ghgEntries).toHaveLength(0);
-    expect(await removalExists(fixture.removalId)).toBe(false);
-  });
   it("finds and deletes a GHG Entry whose POST landed without a recorded ID", async () => {
     const fixture = await createFixture();
     const supplierRef = buildRemovalSupplierRef({
@@ -753,9 +737,9 @@ it.each([false, true])("rechecks the lease after the optimistic submission read 
 
 it("serializes concurrent retained-batch finalizers and preserves the last Removal for retry", async () => {
   const first = await createFixture();
-  const [other] = await db.insert(certifierRemovals).values({
+  const [other] = await insertRemovalFixture(db, {
     organizationId: TEST_ORG_ID, facilityId: first.facilityId, provider: "isometric",
-  }).returning({ id: certifierRemovals.id });
+  });
   createdRemovalIds.push(other.id);
   const fixtures = [first, { ...first, removalId: other.id }];
   const chain = await createBiocharApplicationChain({ ...first, tag: first.runId });

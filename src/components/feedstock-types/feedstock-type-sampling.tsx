@@ -6,7 +6,8 @@ import { ServerError } from "@/components/forms/server-error";
 import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, formatCount } from "@/lib/copy-utils";
+import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import {
   useMethodBEligibility,
   useStartNewProductionProcess,
@@ -17,6 +18,16 @@ const MOISTURE_PATHWAY_LABELS: Record<string, string> = {
   consistent_target_moisture: "Consistent target moisture",
   measured_every_batch: "Moisture measured for every batch",
 };
+
+/** Why unsampled batches are not open yet: the Samples still short and the prerequisites still missing. */
+function unsampledGap(status: Pick<MethodBEligibility, "eligibleSampleCount" | "agreedBaselineSize" | "prerequisitesRecorded">): string {
+  const short = Math.max(0, status.agreedBaselineSize - status.eligibleSampleCount);
+  const needs = [
+    short > 0 ? `${formatCount(short, "more Sample")}` : null,
+    status.prerequisitesRecorded ? null : "the Method-B prerequisites",
+  ].filter((need): need is string => need !== null);
+  return needs.length > 0 ? `Needs ${needs.join(" and ")}` : "Not open yet";
+}
 
 interface FeedstockTypeSamplingProps {
   facilityId: string;
@@ -90,7 +101,7 @@ export function FeedstockTypeSampling({
             Unsampled batches
           </span>
           <span className="body-medium font-medium text-[var(--color-text-primary)]">
-            {status.unsampledAllowed ? "Available" : "Not available"}
+            {status.unsampledAllowed ? "Available" : unsampledGap(status)}
           </span>
         </div>
       </div>
@@ -116,7 +127,7 @@ export function FeedstockTypeSampling({
 
       {canManage && (
         <div className="border-t border-[var(--color-border-tertiary)] pt-12">
-          <Button variant="weak" size="small" onClick={() => setConfirmOpen(true)}>
+          <Button variant="weak" size="small" onClick={() => { startNewProcess.startDraft(); setConfirmOpen(true); }}>
             <ArrowCounterClockwiseIcon size={16} weight="bold" />
             Start new process
           </Button>
@@ -133,7 +144,6 @@ export function FeedstockTypeSampling({
         title="Start a new production process?"
         body="This resets the eligible Sample count for this facility and feedstock type to zero. Existing credit batches keep their recorded sampling choice."
         confirmLabel="Start new process"
-        busyLabel="Starting…"
         variant="neutral"
         isPending={startNewProcess.isPending}
         errorMessage={actionError ?? undefined}

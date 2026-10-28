@@ -273,7 +273,7 @@ describe("enrichWithTransportLegs", () => {
       feedstock: [], biochar: [],
       sample: [{ ...leg(10, 100), vehicleType: "truck" }, { ...leg(20, 100), vehicleType: "van" }],
     }, { feedstockIds: [], biocharProductIds: [], sampleIds: [] });
-    expect(coverage.sample.vehicleAdvisories).toHaveLength(1);
+    expect(coverage.sample.vehicleAdvisories).toHaveLength(0);
     const facts = toRemovalReadinessFacts({
       submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       latestSubmission: null, supportingDocuments: { total: 0, mirrored: 0 },
@@ -306,27 +306,8 @@ describe("enrichWithTransportLegs", () => {
 
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(450);
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(200);
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBeNull();
     expect(enriched.warnings).toEqual([]);
-  });
-
-  it("computes sample mass-distance as Σ(distance × load mass in tonnes)", () => {
-    const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [],
-      biochar: [],
-      // 10 km × 0.5 t + 30 km × 0.5 t = 5 + 15 = 20 t·km
-      sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)],
-    });
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
-  });
-
-  it("sample mass-distance is 0 (not null) when there are no sample legs", () => {
-    const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [roundTripLeg(50, 1000)],
-      biochar: [],
-      sample: [],
-    });
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(0);
   });
 
   it("does not mutate the input aggregation object", () => {
@@ -366,7 +347,7 @@ describe("enrichWithTransportLegs", () => {
 
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBeNull();
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(100);
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(0);
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBeNull();
   });
 
   it("appends a warning per category with a leg missing load mass", () => {
@@ -378,12 +359,9 @@ describe("enrichWithTransportLegs", () => {
 
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBeNull();
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(200);
-    // Blocked sample category falls back to 0 (the pipeline blocks on the
-    // warning, not the value).
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(0);
-    expect(enriched.warnings).toHaveLength(2);
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBeNull();
+    expect(enriched.warnings).toHaveLength(1);
     expect(enriched.warnings[0]).toMatch(/Feedstock/);
-    expect(enriched.warnings[1]).toMatch(/Sample/);
   });
 
   it("preserves pre-existing warnings on the base aggregation", () => {
@@ -400,7 +378,7 @@ describe("enrichWithTransportLegs", () => {
   });
 
   // §8.6.2 buckets (issue #349, ADR 0020): biochar transport is the DELIVERY
-  // bucket and carries attributed wet loads; feedstock/sample transport are
+  // bucket and carries attributed wet loads; feedstock transport is
   // PRODUCTION-bucket and always sum whole.
   it("counts already-attributed delivery loads without a second share factor", () => {
     const enriched = enrichWithTransportLegs(
@@ -414,7 +392,7 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("leaves feedstock and sample mass-distance unscaled", () => {
+  it("leaves feedstock mass-distance unscaled", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -425,7 +403,7 @@ describe("enrichWithTransportLegs", () => {
     );
     // PRODUCTION-bucket categories stay whole.
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(50);
-    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBeNull();
     // The DELIVERY bucket is already attributed.
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
@@ -450,4 +428,21 @@ describe("enrichWithTransportLegs", () => {
     );
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeNull();
   });
+});
+
+it("ignores legacy sample values, warnings and transport coverage", () => {
+  const aggregate = {
+    sampleTransportMassDistanceTonneKm: 99, warnings: [],
+  } as unknown as AggregatedProductionData;
+  const valid = enrichWithTransportLegs(aggregate, { feedstock: [], biochar: [], sample: [leg(10, 1000)] });
+  expect(valid.sampleTransportMassDistanceTonneKm).toBe(null);
+  const invalid = enrichWithTransportLegs(aggregate, { feedstock: [], biochar: [], sample: [leg(10, null)] });
+  expect(invalid.warnings.length).toBe(0);
+  const coverage = buildTransportCoverage({ feedstock: [], biochar: [], sample: [leg(10, null)] }, {
+    feedstockIds: [], biocharProductIds: [], sampleIds: ["sample"],
+  });
+  expect(coverage.sample.count).toBe(0);
+  expect(coverage.sample.entityIds).toEqual([]);
+  expect(coverage.sample.aggregationWarning === null).toBe(true);
+  expect(coverage.sample.vehicleAdvisories.length > 0).toBe(false);
 });

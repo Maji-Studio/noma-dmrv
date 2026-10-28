@@ -21,6 +21,7 @@ import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
 import { FormError } from "@/components/forms/form-error";
+import { RequiredMarker } from "@/components/forms/required-marker";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import { EVIDENCE_METHOD_ART } from "./evidence-method-art";
 
@@ -64,6 +65,11 @@ interface ApplicationEvidencePanelProps {
   onBoundaryChange?: (boundary: GisBoundary | null) => void;
 }
 
+const GIS_LABEL_ID = "gisBoundary-label";
+const GIS_ERROR_ID = "gisBoundary-error";
+/** The form field the boundary buttons stand for, for the error summary's link. */
+const GIS_FIELD_NAME = "gisBoundary";
+
 function GisReferenceField({
   boundary,
   disabled,
@@ -92,6 +98,8 @@ function GisReferenceField({
                 variant="weak"
                 disabled={disabled}
                 onClick={onEdit}
+                aria-describedby={GIS_ERROR_ID}
+                data-field-name={GIS_FIELD_NAME}
               >
                 Replace
               </Button>
@@ -127,6 +135,8 @@ function GisReferenceField({
       width="full"
       disabled={disabled}
       onClick={onEdit}
+      aria-describedby={GIS_ERROR_ID}
+      data-field-name={GIS_FIELD_NAME}
       className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left normal-case tracking-normal"
     >
       <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
@@ -212,17 +222,32 @@ export function ApplicationEvidencePanel({
       )}
 
       {mode === "boundary" && (
-        <GisReferenceField
-          boundary={boundary}
-          disabled={disabled}
-          readOnly={readOnly}
-          locked={locked}
-          onEdit={() => setDialogOpen(true)}
-          onRemove={removeBoundary}
-        />
+        <div
+          role={readOnly ? undefined : "group"}
+          aria-labelledby={readOnly ? undefined : GIS_LABEL_ID}
+          className="flex flex-col gap-8"
+        >
+          {!readOnly && (
+            <span
+              id={GIS_LABEL_ID}
+              className="body-small font-medium text-[var(--color-text-secondary)]"
+            >
+              GIS reference
+              <RequiredMarker />
+            </span>
+          )}
+          <GisReferenceField
+            boundary={boundary}
+            disabled={disabled}
+            readOnly={readOnly}
+            locked={locked}
+            onEdit={() => setDialogOpen(true)}
+            onRemove={removeBoundary}
+          />
+        </div>
       )}
 
-      <FormError id="gisBoundary-error" message={error} />
+      <FormError id={GIS_ERROR_ID} message={error} />
 
       {!readOnly && (
         <GisReferenceDialog

@@ -38,10 +38,6 @@ export const saveMappingSchema = z.object({
   facilityId: z.string().uuid(),
   externalProjectId: z.string().min(1, "Pick an Isometric project"),
   protocolSlug: z.string().min(1),
-  defaultRemovalTemplateId: emptyToNull
-    .or(z.string().min(1))
-    .nullable()
-    .optional(),
   // Isometric facility id (fcl_…). Required since production-batch
   // registration (issue #630): every removal submission registers the
   // credit batch against this facility, so a mapping without it fails at

@@ -70,7 +70,7 @@ describe("updateProductionRun terminal to running", () => {
           reactorId: reactor.id,
           code: `PR-REOPEN-${tag}`,
           status,
-          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0, biocharOutputKg: 100,
           startTime: new Date("2026-07-01T08:00:00Z"),
           endTime: new Date("2026-07-01T10:00:00Z"),
         })

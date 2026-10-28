@@ -5,6 +5,41 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // Keep shared-module mocks partial so added exports remain available.
+  // Keep no-restricted-syntax in one block: later blocks replace its selectors.
+  {
+    files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            'CallExpression[callee.object.name="vi"][callee.property.name="mock"]:matches([arguments.0.value="@/config/env"], [arguments.0.value="@/db/schema"]) > *.arguments:nth-child(2):not([body.body.0.type="ThrowStatement"]):not(:has(CallExpression[callee.name="importOriginal"]))',
+          message:
+            'Use a partial mock and spread ...(await importOriginal<typeof import("@/config/env")>()) (or the original schema) so new exports do not vanish from the mock. See docs/testing.md#stale-mocks-lint-rule-and-pre-push-hook.',
+        },
+      ],
+    },
+  },
+  // Stock composition is display-only, including indirect access via components.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/components/storage-locations/**", "src/lib/output-stock/stock-{replay,parts}.test.ts"],
+    rules: {
+      "import/no-restricted-paths": ["error", { basePath: import.meta.dirname, zones: [
+        {
+          target: "./src/**/*.{ts,tsx}",
+          from: ["./src/lib/output-stock/stock-replay.ts", "./src/lib/output-stock/stock-parts.ts"],
+          message: "Stock replay and parts are display-only; server sorting uses stock-order.",
+        },
+        {
+          target: ["./src/{data-access,fn,app/api}/**/*", "./src/lib/{operations,read-models,mcp,representations}/**/*"],
+          from: "./src/components/storage-locations",
+          message: "Server paths cannot read display stock figures through storage components.",
+        },
+      ] }],
+    },
+  },
   // Enforce the 1000-line file-size cap (CLAUDE.md). Generated Isometric
   // types and the seed script are exempt — they are not hand-maintained code.
   {

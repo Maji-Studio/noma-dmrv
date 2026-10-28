@@ -1,13 +1,16 @@
 "use client";
 
-import { useRef } from "react";
+import { useId } from "react";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   FormActions,
   FormField,
   FormInput,
   FormSection,
+  GPS_FIELD_NAMES,
   PositionPicker,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
@@ -15,21 +18,10 @@ import {
   facilityFormSchema,
   type FacilityFormData,
 } from "@/schemas/facilities";
-import {
-  durabilityOptions,
-  type DurabilityOption,
-} from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
-import {
-  DurabilityTierSelect,
-  FacilityIsometricConnector,
-} from "@/components/certification";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isValidIanaTimezone } from "@/lib/timezones";
 import { TimezoneCombobox } from "./timezone-combobox";
-
-// 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
-const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
 /**
  * A zone the picker offers, or `undefined`. The facility column and the
@@ -42,17 +34,10 @@ function resolveTimezone(zone: string | null | undefined): string | undefined {
   return isValidIanaTimezone(zone) ? zone : undefined;
 }
 
-function getDefaultDurabilityOption(
-  option: Facility["durabilityOption"] | null | undefined
-): DurabilityOption {
-  return durabilityOptions.includes(option as DurabilityOption)
-    ? (option as DurabilityOption)
-    : DEFAULT_DURABILITY_OPTION;
-}
-
 interface FacilityFormProps {
   facility?: Facility;
-  onSubmit: (data: FacilityFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FacilityFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -69,6 +54,8 @@ export function FacilityForm({
   submitLabel,
   cancelLabel,
 }: FacilityFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!facility;
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -82,6 +69,8 @@ export function FacilityForm({
     trigger,
     watch,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(facilityFormSchema),
@@ -94,13 +83,17 @@ export function FacilityForm({
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
+      // "", not undefined: the picker's input registers this field, and a
+      // field with no default takes the input's "" as its value, so a fresh
+      // form read as edited and Cancel asked to discard it. The schema reads
+      // "" as not chosen.
       timezone: resolveTimezone(facility?.timezone)
-        ?? resolveTimezone(orgDefaults.defaultTimezone),
-      durabilityOption: getDefaultDurabilityOption(
-        facility?.durabilityOption,
-      ),
+        ?? resolveTimezone(orgDefaults.defaultTimezone)
+        ?? "",
     },
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   const defaultSubmitLabel = isEditMode ? "Update facility" : "Create facility";
 
@@ -108,32 +101,13 @@ export function FacilityForm({
   const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
   const timezone = watch("timezone") as string | undefined;
   const country = watch("country");
-  const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
   const timezoneField = register("timezone");
 
-  // Re-entrancy latch against a rapid double-submit (QA: a double-click on
-  // Create Facility created two facilities). The parent's `isSubmitting`
-  // disables the button only after its async mutation state round-trips a
-  // render, so two submits dispatched in the same tick both slip through before
-  // the button disables. The latch is touched only inside this event handler
-  // (never during render, per the React Compiler refs rule); microtask FIFO
-  // ordering means the first validated submit sets it before the second's
-  // validation resolves, and the `finally` re-arms it so a validation failure
-  // or a settled mutation still allows a later legitimate resubmit.
-  const submitLockRef = useRef(false);
-
-  const handleFormSubmit = handleSubmit(async (data) => {
-    if (submitLockRef.current) return;
-    submitLockRef.current = true;
-    try {
-      await onSubmit(data as FacilityFormData);
-    } finally {
-      submitLockRef.current = false;
-    }
-  });
+  // `latched` holds a double-click (QA: one created two facilities) until the save settles.
+  const handleFormSubmit = latched(handleSubmit((data) => onSubmit(data as FacilityFormData, refuseSave)));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSection title="Site" divider={false}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -214,6 +188,7 @@ export function FacilityForm({
 
       <PositionPicker
         idPrefix="gps"
+        fieldNames={GPS_FIELD_NAMES}
         label="Facility position"
         required
         accent="purple"
@@ -254,37 +229,6 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      </FormSection>
-
-      <FormSection title="Certification">
-      <div className="grid grid-cols-1 gap-y-20">
-        <FormField
-          id="durabilityOption"
-          label="Durability tier"
-          error={errors.durabilityOption?.message}
-          hint="Set once for your registry program and inherited by every credit batch and Sample at this facility. The 200-year pathway opens when a 200-year client onboards."
-        >
-          <DurabilityTierSelect
-            value={durabilityOption}
-            onChange={(value) =>
-              setValue("durabilityOption", value, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={isSubmitting}
-            aria-label="Facility durability tier"
-          />
-        </FormField>
-      </div>
-
-      {/* Registry connection — edit-mode only (needs a facility id; the
-          post-create link dialog covers new facilities). Self-contained:
-          saves immediately via its own admin-gated action, independent of
-          this form's submit. */}
-      {isEditMode && facility && (
-        <FacilityIsometricConnector facilityId={facility.id} />
-      )}
       </FormSection>
 
       <FormActions

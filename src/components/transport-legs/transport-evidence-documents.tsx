@@ -144,8 +144,8 @@ export function TransportEvidenceDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {evidenceUploaderLabel(entityType, doc.documentType)} ·{" "}
-                  {formatFileSize(doc.fileSizeBytes)}
+                  {evidenceUploaderLabel(entityType, doc.documentType)}
+                  {doc.fileSizeBytes == null ? null : ` · ${formatFileSize(doc.fileSizeBytes)}`}
                 </span>
               </div>
               <a
@@ -190,7 +190,6 @@ export function TransportEvidenceDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -202,6 +201,7 @@ export function TransportEvidenceDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </div>

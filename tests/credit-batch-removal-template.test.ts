@@ -3,8 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses } from "@/db/schema";
 import { createCreditBatch, getCreditBatchProductionRunOptions, updateCreditBatch } from "@/data-access/credit-batches";
-import { switchCreditBatchRemovalTemplate } from "@/data-access/credit-batch-removal-template";
-import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
 // DB-backed: needs supervisor after migration generation/application.
@@ -45,35 +43,20 @@ describe("credit batch Removal template pins", () => {
     expect((await create("01")).removalTemplateId).toBeNull();
   });
   it("copies the facility default at creation and keeps existing pins", async () => {
-    const [project] = await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId, provider: "isometric", externalProjectId: "project-pins", externalFacilityId: "facility-pins", defaultRemovalTemplateId: "template-original" }).returning();
+    const [project] = await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId, provider: "isometric", externalProjectId: "project-pins", externalFacilityId: "facility-pins", removalTemplateId: "template-original" }).returning();
     const batch = await create("02");
     expect(batch.removalTemplateId).toBe("template-original");
-    await db.update(certifierProjects).set({ defaultRemovalTemplateId: "template-next" }).where(and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.id, project.id)));
+    await db.update(certifierProjects).set({ removalTemplateId: "template-next" }).where(and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.id, project.id)));
     expect((await create("03")).removalTemplateId).toBe("template-next");
     const [stored] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
     expect(stored.removalTemplateId).toBe("template-original");
   });
-  it("switches with version checking and one value-free activity event", async () => {
-    const batch = await create("04");
-    const updated = await switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-switched", expectedVersion: batch.version });
-    expect(updated.version).toBe(batch.version + 1);
-    const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, batch.id), eq(activityEvents.action, "updated")));
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ entityType: "credit_batch", changedFields: ["removalTemplateId"] });
-    await expect(switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-stale", expectedVersion: batch.version })).rejects.toMatchObject({ code: "stale_version" });
-  });
-  it("refuses switches on a locked certified lineage", async () => {
-    await withLineageFixture(async (fixture) => {
-      const [batch] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, fixture.batchId)));
-      await expect(switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-new", expectedVersion: batch.version })).rejects.toThrow("locked by a certification submission");
-    }, "removal");
-  });
   describe("facility moves", () => {
-    async function moveTarget(label: string, defaultTemplate: string | null) {
+    async function moveTarget(label: string, currentTemplate: string | null) {
       const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, timezone: "UTC", code: `FAC-MV-${label}-${tag}`, name: `Move ${label} ${tag}` }).returning();
       extraFacilityIds.push(facility.id);
-      if (defaultTemplate) {
-        await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId: facility.id, provider: "isometric", externalProjectId: `project-mv-${label}-${tag}`, externalFacilityId: `facility-mv-${label}-${tag}`, defaultRemovalTemplateId: defaultTemplate });
+      if (currentTemplate) {
+        await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId: facility.id, provider: "isometric", externalProjectId: `project-mv-${label}-${tag}`, externalFacilityId: `facility-mv-${label}-${tag}`, removalTemplateId: currentTemplate });
       }
       return facility.id;
     }
@@ -127,7 +110,7 @@ describe("credit batch Removal template pins", () => {
 
       await expect(updateCreditBatch(ctx, batch.id, {
         facilityId, expectedVersion: moved.version,
-      })).rejects.toThrow("A credit batch may span at most one month (one calendar month; noma rule).");
+      })).rejects.toThrow("Choose an end date on or before Jan 31, 2027. Isometric credit batches must cover less than one month.");
       expect(await pinOf(batch.id)).toMatchObject({ facilityId: target, certifier: null, version: moved.version });
 
       const restored = await updateCreditBatch(ctx, batch.id, {
@@ -140,12 +123,12 @@ describe("credit batch Removal template pins", () => {
   it("keeps the Isometric month cap on create, update, and run options", async () => {
     const batch = await create("08");
     const period = { startDate: new Date("2026-09-01"), endDate: new Date("2026-12-31") };
-    const message = "A credit batch may span at most one month (one calendar month; noma rule).";
+    const message = "Choose an end date on or before Sep 30, 2026. Isometric credit batches must cover less than one month.";
     await expect(createCreditBatch(ctx, {
       facilityId, feedstockTypeId, code: `CB-PIN-POLICY-${tag}`, productionRunIds: [], ...period,
     })).rejects.toThrow(message);
     await expect(updateCreditBatch(ctx, batch.id, {
-      expectedVersion: batch.version, endDate: period.endDate,
+      expectedVersion: batch.version, ...period,
     })).rejects.toThrow(message);
     await expect(getCreditBatchProductionRunOptions(ctx, { facilityId, ...period })).rejects.toThrow(message);
   });

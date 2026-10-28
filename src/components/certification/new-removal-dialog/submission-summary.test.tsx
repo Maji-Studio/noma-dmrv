@@ -7,6 +7,9 @@ import type {
 } from "@/fn/certification/certify-context";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionSummary } from "./submission-summary";
+import type { ComponentTable } from "./component-table-model";
+
+const NO_ROWS: ComponentTable = { loading: false, batches: [], rows: [], groups: [] };
 
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => (
@@ -59,12 +62,21 @@ const PASSING_CHECKS: RemovalRequirementCheck[] = [
     key: "mapping",
     label: "Facility linked to a registry project",
     requirementLabel: "Facility linked to a registry project",
+    unmetLabel: "Facility not linked to a registry project",
     status: "met",
   },
   {
-    key: "template",
-    label: "Removal template resolved",
-    requirementLabel: "Removal template resolved",
+    key: "templateSet",
+    label: "Template set",
+    requirementLabel: "Template set",
+    unmetLabel: "Template not set",
+    status: "met",
+  },
+  {
+    key: "templateLines",
+    label: "Components decided",
+    requirementLabel: "Components decided",
+    unmetLabel: "Template components not ready",
     status: "met",
   },
 ];
@@ -76,6 +88,7 @@ function render(overrides: {
   facilityName?: string;
   advisories?: string[];
   transportVehicleAdvisories?: string[];
+  loading?: boolean;
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
@@ -83,11 +96,12 @@ function render(overrides: {
       facilityId="facility-1"
       facilityName={overrides.facilityName ?? "Tanzania facility"}
       compilation={overrides.compilation ?? COMPILATION}
-      isCompilationLoading={false}
+      isCompilationLoading={overrides.loading ?? false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
       readiness={{ state: "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
       rejectionMessage={null}
+      table={NO_ROWS}
     />,
   );
 }
@@ -100,18 +114,18 @@ describe("SubmissionSummary", () => {
   });
 
   it("links a dropped recorded fact as a warning, not a blocker", () => {
-    const message = "Genset diesel is recorded, but the active Removal template has no automatic source for it.";
+    const message = "Genset diesel is recorded, but the active Removal template takes no automatic datapoints for it. Check which template component should take it in Removal templates.";
     const html = render({
       compilation: {
         ...COMPILATION,
-        submissionAdvisories: [{ code: "droppedRecordedFact", fixTarget: "templateLineReview", message }],
+        submissionAdvisories: [{ code: "droppedRecordedFact", fixTarget: "templateLines", message }],
         warnings: [message],
       } as unknown as RemovalCompilationView,
     });
     expect(html).toContain("Submission notes");
     expect(html.split(message)).toHaveLength(2);
-    expect(html).toContain("Review template lines");
-    expect(html).toContain("/certification/settings?section=removal-templates&amp;facility=facility-1");
+    expect(html).toContain("Open Removal templates");
+    expect(html).toContain("/settings/removal-templates?facility=facility-1");
     expect(html).not.toContain('role="alert"');
   });
 
@@ -119,21 +133,21 @@ describe("SubmissionSummary", () => {
     const html = render({
       compilation: {
         ...COMPILATION,
-        blockers: ["Choose a Removal template for this credit batch.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
+        blockers: ["Set a Removal template in Settings, Removal templates.", "Complete these fields before submitting the Removal:\nRecord Sample moisture"],
         removalBlockers: [
-          { code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch.", fixTarget: "creditBatchTemplate" },
+          { code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates.", fixTarget: "templateSetup" },
           { code: "entityReadiness", message: "Complete these fields before submitting the Removal:\nRecord Sample moisture", fixTarget: null },
         ],
         snapshot: null,
         compilationHash: null,
       } as unknown as RemovalCompilationView,
     });
-    expect(html).toContain("Choose a Removal template for this credit batch.");
-    expect(html).toContain("Switch template");
+    expect(html).toContain("Set a Removal template in Settings, Removal templates.");
+    expect(html).toContain("Set template");
     expect(html).toContain("Record Sample moisture");
-    expect(html.split("Switch template")).toHaveLength(2);
+    expect(html.split("Set template")).toHaveLength(2);
     expect(html).not.toContain("#batch-details");
-    expect(html).not.toContain("Review template lines");
+    expect(html).not.toContain("Answer in Settings");
   });
 
   it("sends a per-record blocker to the records list, not a create intent, with one member batch", () => {
@@ -161,15 +175,15 @@ describe("SubmissionSummary", () => {
     expect(html).not.toContain("What to fix");
   });
 
-  it("states the tonnage exactly once, as the subject of the panel", () => {
+  it("leads with the totals, then the quieter facts, each said once", () => {
     const html = render();
 
-    expect(html).toContain("You are sending");
+    for (const label of ["Estimated CO₂e stored", "Biochar dry mass", "Reporting window", "Files to upload", "Destination", "Facility", "Durability", "Sampling"]) {
+      expect(html.split(`>${label}<`).length - 1, label).toBe(1);
+    }
     expect(html.split("8.5 t")).toHaveLength(2);
-    expect(html).toContain("Biochar, dry mass");
-    expect(html).toContain(
-      "Isometric calculates stored and net CO₂e after submission.",
-    );
+    expect(html).toContain("Jul 1 to Jul 31, 2026");
+    expect(html).toContain("1000-year (R₀ reflectance)");
     expect(html).toContain("Biochar project (Sandbox)");
     expect(html).toContain("Tanzania facility");
     expect(html).toContain(
@@ -178,24 +192,47 @@ describe("SubmissionSummary", () => {
     expect(html).toContain(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7",
     );
-    expect(html).toContain(
-      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/storage-sites?tab=sites",
-    );
-    expect(html).toContain("Storage sites");
-    expect(html).toContain("View in Isometric");
-    expect(html).toContain("Jul 1 to Jul 31, 2026");
-    expect(html).toContain("CB-26-001");
-    expect(html).toContain("1000-year (R₀ reflectance)");
+    // The component table names the credit batches; the totals do not.
+    expect(html).not.toContain("CB-26-001");
+    expect(html).not.toContain("You are sending");
+  });
+
+  it("gives the estimate its figure, and Not yet computed until the review has one", () => {
+    expect(render({ compilation: { ...COMPILATION, estimatedStoredCo2eTonnes: 12.34 } as unknown as RemovalCompilationView })).toContain("≈ 12.34 t CO₂e");
+    expect(render()).toContain("Not yet computed");
+  });
+
+  it("shows the estimate and reporting window as pending while the compile loads, never as not yet computed", () => {
+    const html = render({ loading: true });
+    expect(html).not.toContain("Not yet computed");
+    expect(html).not.toContain(">None<");
+    expect(html.split("animate-skeleton").length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("falls back to the context's files after a blocked or failed compile, whose empty review has none", () => {
+    const emptyReview = { ...COMPILATION.review, memberCreditBatches: [], bindings: [], pendingSourceCount: 0 };
+    const html = render({
+      compilation: { ...COMPILATION, review: emptyReview } as unknown as RemovalCompilationView,
+      ctx: { ...CONTEXT, supportingDocuments: { total: 4, mirrored: 1 } } as unknown as RemovalCertifyContext,
+    });
+    expect(html).toContain("3 files");
+    expect(html).not.toContain(">None<");
+  });
+
+  it("counts the files to upload, and says None when there are none", () => {
+    const withFiles = render({ compilation: { ...COMPILATION, review: { ...COMPILATION.review, pendingSourceCount: 5 } } as unknown as RemovalCompilationView });
+    expect(withFiles).toContain("5 files");
+    expect(render()).toContain(">None<");
   });
 
   it("renders no checks list when every check passes", () => {
     const html = render();
 
     expect(html).toContain("Ready to submit");
-    expect(html).toContain("2 checks passed.");
+    expect(html).toContain("3 checks passed.");
     expect(html).not.toContain("Nothing left to fix.");
     expect(html).not.toContain("What to fix");
-    expect(html).not.toContain("Removal template resolved");
+    expect(html).not.toContain("Template set");
   });
 
   it("does not render an empty verdict detail when no checks were evaluated", () => {

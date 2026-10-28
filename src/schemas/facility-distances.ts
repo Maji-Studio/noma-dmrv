@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM } from "@/config/party-input";
 import { distanceSources } from "./distance-source";
 import { toClearableNumber, uuidSchema } from "./helpers";
 
@@ -11,7 +12,7 @@ export type FacilityDistance = z.infer<typeof facilityDistanceSchema> & { facili
 
 // A null distance explicitly removes this facility's default. Omission preserves it.
 export const facilityDistanceInputSchema = facilityDistanceSchema.extend({
-  distanceKm: z.preprocess(toClearableNumber, z.number().positive("Distance must be greater than zero").nullable()),
+  distanceKm: z.preprocess(toClearableNumber, z.number().positive("Distance must be greater than zero").min(LOCATION_DISTANCE_MIN_KM).max(LOCATION_DISTANCE_MAX_KM).nullable()),
 });
 export const facilityDistancesInputSchema = z.array(facilityDistanceInputSchema).refine(
   rows => new Set(rows.map(row => row.facilityId)).size === rows.length,

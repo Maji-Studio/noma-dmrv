@@ -53,6 +53,8 @@ import { submitDurabilityMeasurementSamples } from "@/fn/certification/durabilit
 import { appendSubmissionJournal } from "@/data-access/certification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
+import { sequestrationTemplateSelectionError } from "@/lib/isometric/sequestration-template-selection";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -60,7 +62,6 @@ import {
 } from "@/lib/isometric/storage-blueprints";
 import {
   assertSequestrationTemplateBindings,
-  assertSequestrationTemplateSelectable,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
   RegistryMappingError,
@@ -222,6 +223,10 @@ describe("1000-year sequestration registry boundary", () => {
     ).toThrow(/uses the wrong measurement type/);
   });
 
+  it("allows the supported sampled component to be selected", () => {
+    expect(sequestrationTemplateSelectionError(template())).toBeNull();
+  });
+
   it("rejects the deprecated component for a newly selected template with an actionable replacement", () => {
     const deprecated = template();
     deprecated.groups[0].components[0].blueprint_key =
@@ -241,8 +246,8 @@ describe("1000-year sequestration registry boundary", () => {
     expect(() => assertSequestrationTemplateBindings(deprecated)).toThrow(
       /deprecated.*biochar_sequestration_1000_year_f_durable_max/i,
     );
-    expect(() => assertSequestrationTemplateSelectable(deprecated)).toThrow(
-      /legacy.*total-carbon.*uncapped.*biochar_sequestration_1000_year_f_durable_max/i,
+    expect(sequestrationTemplateSelectionError(deprecated)).toBe(
+      REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration,
     );
   });
 
@@ -254,8 +259,8 @@ describe("1000-year sequestration registry boundary", () => {
     expect(() => assertSequestrationTemplateBindings(unsampled)).toThrow(
       /Unsampled Method B is not supported/i,
     );
-    expect(() => assertSequestrationTemplateSelectable(unsampled)).toThrow(
-      /Unsampled Method B is not supported/i,
+    expect(sequestrationTemplateSelectionError(unsampled)).toBe(
+      REMOVAL_TEMPLATE_BLOCKERS.unsupportedSequestration,
     );
   });
 

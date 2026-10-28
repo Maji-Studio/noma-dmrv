@@ -157,7 +157,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
       makeTestOrgContext(USER_ID), [CREDIT_BATCH_ID],
     );
     vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs)
-      .mockResolvedValueOnce(inputs)
+      .mockResolvedValueOnce(inputs) // Readiness gate.
+      .mockResolvedValueOnce(inputs) // Registered-batch pre-pass.
       .mockRejectedValue(originalError);
     await expect(submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }))
       .rejects.toBe(originalError);

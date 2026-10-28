@@ -56,6 +56,7 @@ const PRE_637_FIELD_SOURCES: Record<string, string[]> = {
   // #1021: the biochar leg loads each Removal's frozen application slice, not the delivery mass.
   "application.biocharAppliedTons": ["biocharTransportMassDistanceTonneKm"],
   "customerLocation.facilityDistances": ["biocharTransportMassDistanceTonneKm"],
+  "delivery.effectiveDistanceKm": ["biocharTransportMassDistanceTonneKm"],
   "supplierLocation.facilityDistances": ["feedstockTransportMassDistanceTonneKm"],
 };
 
@@ -70,7 +71,7 @@ const BIOCHAR_DRY_MASS_TUPLES = [
   "co2-stored/carbon_rich_substance_sequestration/product_mass",
   "miscellaneous/mass_based_ci_emissions/mass",
 ];
-const TRANSPORT_TUPLES = [BIOCHAR_MASS_DISTANCE, FEEDSTOCK_MASS_DISTANCE, SAMPLE_MASS_DISTANCE];
+const TRANSPORT_TUPLES = [BIOCHAR_MASS_DISTANCE, FEEDSTOCK_MASS_DISTANCE];
 
 // The tuples the pre-#637 registry declared as literals.
 const PRE_637_LITERAL_TUPLES: Record<string, string[]> = {
@@ -113,6 +114,7 @@ const RESOLVED_FIELD_TUPLES: Record<string, string[]> = {
   "transportLeg.loadMassKg": TRANSPORT_TUPLES,
   "application.biocharAppliedTons": [BIOCHAR_MASS_DISTANCE],
   "customerLocation.facilityDistances": [BIOCHAR_MASS_DISTANCE],
+  "delivery.effectiveDistanceKm": [BIOCHAR_MASS_DISTANCE],
   "supplierLocation.facilityDistances": [FEEDSTOCK_MASS_DISTANCE],
 };
 
@@ -198,7 +200,7 @@ describe("certify field registry through the catalog", () => {
     expect(sources).toEqual(PRE_637_FIELD_SOURCES);
   });
 
-  it("resolves every pre-#637 literal tuple, plus the fields whose facts also feed a bound input", () => {
+  it("resolves active field tuples, plus the fields whose facts also feed a bound input", () => {
     const resolved = resolvedFieldTuples();
     for (const [field, tuples] of Object.entries(PRE_637_LITERAL_TUPLES)) {
       expect(resolved[field], field).toEqual(expect.arrayContaining(tuples));
@@ -213,14 +215,13 @@ describe("transport categories through the catalog", () => {
       const key = triple.join("/");
       const expected = PRE_637_TRANSPORT_CATEGORIES[key];
       expect(deriveRequiredTransportCategories(templateOf([triple])), key).toEqual(
-        expected ? [expected] : [],
+        expected && expected !== "sample" ? [expected] : [],
       );
       expect(deriveRequiredTransportCategories(templateOf([triple], "fixed")), key).toEqual([]);
     }
     expect(deriveRequiredTransportCategories(templateOf(everyCatalogTriple()))).toEqual([
       "feedstock",
       "biochar",
-      "sample",
     ]);
   });
 
@@ -242,7 +243,6 @@ describe("one catalog edit", () => {
     expect(legTuples).toEqual([
       "biochar-transport/mass_distance_based_ci_emissions/mass_distance_v2",
       "biomass-feedstock-transport/mass_distance_based_ci_emissions/mass_distance_v2",
-      "sampling-required-for-mrv/mass_distance_based_ci_emissions/mass_distance_v2",
     ]);
 
     const oldTemplate = templateOf(
@@ -255,7 +255,13 @@ describe("one catalog edit", () => {
     expect(deriveRequiredTransportCategories(newTemplate, transportTable)).toEqual([
       "feedstock",
       "biochar",
-      "sample",
     ]);
   });
+});
+
+it("filters sample coverage and field tuples without changing projections", () => {
+  const sampleTriple: [string, string, string] = ["sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance"];
+  expect(deriveRequiredTransportCategories(templateOf([sampleTriple]))).toEqual([]);
+  expect(resolvedFieldTuples()["transportLeg.distanceKm"].includes(sampleTriple.join("/"))).toBe(false);
+  expect(projectTransportCategories()[sampleTriple[0]][sampleTriple[1]][sampleTriple[2]]).toBe("sample");
 });

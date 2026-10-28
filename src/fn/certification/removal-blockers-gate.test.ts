@@ -21,6 +21,9 @@ import { createDatapoint, createGhgEntry } from "@/lib/isometric";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 
+import * as productionBatches from "@/data-access/certifier-production-batches";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
+
 const orgCtx = makeTestOrgContext();
 const mappingGap = { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" };
 
@@ -54,6 +57,47 @@ async function oldFirstMessage(ctx: ReturnType<typeof makeContext>) {
 }
 
 describe("Removal preflight", () => {
+  it("uses the same undeletable-holder refusal in readiness and submission", async () => {
+    const inputs = await productionBatches.getProductionBatchRegistryInputs(orgCtx, []);
+    vi.mocked(productionBatches.getProductionBatchRegistryInputs).mockResolvedValue(inputs.map(input => ({
+      ...input, endedAt: "2026-02-01T00:00:00.000Z", latestEndingRunCode: "RUN-OVER",
+    })));
+    vi.mocked(getCreditBatchUndeletableRemovalCodes).mockResolvedValue(
+      new Map(inputs.map(input => [input.creditBatchId, ["REM-SENT", "REM-RETURNED"]])),
+    );
+    const ctx = makeContext();
+    const [blocker] = await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx });
+    expect(blocker.message).toContain("Removal REM-SENT and Removal REM-RETURNED were sent to Isometric and cannot be deleted");
+    expect(blocker.message).not.toContain("Discard or delete");
+    expect(getCreditBatchUndeletableRemovalCodes).toHaveBeenCalledWith(
+      orgCtx, inputs.map(input => input.creditBatchId),
+    );
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
+      .rejects.toThrow(blocker.message);
+    expect(createDatapoint).not.toHaveBeenCalled();
+    expect(createGhgEntry).not.toHaveBeenCalled();
+  });
+
+  it("shows the overlong run span in readiness and refuses submit before registry writes", async () => {
+    const inputs = await productionBatches.getProductionBatchRegistryInputs(orgCtx, []);
+    vi.mocked(productionBatches.getProductionBatchRegistryInputs).mockResolvedValue(inputs.map(input => ({
+      ...input, endedAt: "2026-02-01T00:00:00.000Z", latestEndingRunCode: "RUN-OVER",
+    })));
+    const ctx = makeContext();
+    const blockers = await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx });
+    expect(blockers).toEqual([expect.objectContaining({
+      message: expect.stringContaining("Production run RUN-OVER"), fixTarget: "batchDetails",
+    })]);
+    expect(blockers[0].message).toContain("Discard or delete every Removal");
+    expect(blockers[0].message).toContain("including this one");
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx, removalId: REMOVAL_ID, confirmProduction: true }))
+      .rejects.toThrow("Production run RUN-OVER");
+    expect(createDatapoint).not.toHaveBeenCalled();
+    expect(createGhgEntry).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["happy path", () => makeContext()],
     ["mapping before entity", () => makeContext(undefined, { feedstockTypeMappingGaps: [mappingGap], entityReadinessGaps: ["Record Sample moisture"] })],
@@ -102,7 +146,7 @@ describe("Removal preflight", () => {
   it("uses the template blocker destination when the preparation code has one", () => {
     const ctx = makeContext();
     ctx.removalTemplate!.credit_type = "REDUCTION";
-    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "notRemovalTemplate", fixTarget: "creditBatchTemplate" });
+    expect(collectContextRemovalBlockers(ctx)[0]).toMatchObject({ code: "notRemovalTemplate", fixTarget: "templateSetup" });
   });
 
   it("uses the lineage target for the build's exact joined lineage refusal", async () => {
@@ -178,4 +222,25 @@ describe("Removal preflight", () => {
     const facts = toRemovalReadinessFacts({ ...makeContext(), templateTierBlocker: message });
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: expect.arrayContaining([message]) });
   });
+});
+
+it("retains typed empty-line and contribution blockers with entry compilation enabled", () => {
+  const ctx = makeContext();
+  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+    manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [],
+    blockers: [{ code: "singleLineMultipleEntries", message: "Create separate Removals for these batches.", creditBatchId: "batch", fixTarget: "emissions" }],
+  } };
+  ctx.emissionLines = [{ componentId: "line", blocker: { code: "lineHasNoSource", message: "Record a value or confirm that this component has no emissions for this Removal.", fixTarget: "emissions" } }] as typeof ctx.emissionLines;
+  expect(collectContextRemovalBlockers(ctx).map((blocker) => blocker.code)).toEqual(["singleLineMultipleEntries", "lineHasNoSource"]);
+});
+it("deduplicates the same contribution and line blocker but keeps distinct batches and components", () => {
+  const ctx = makeContext();
+  const blocker = { code: "entryMissingEvidence" as const, message: "Add a file.", fixTarget: "emissions" as const,
+    lineRef: { componentId: "line", displayName: "Electricity" } };
+  ctx.removalEntryContext = { observationId: "observation", semanticFingerprint: "fingerprint", contributions: {
+    manifest: [], inputs: [], entrySet: [], selectedEntryIds: [], sentSingleComponentIds: [], blockers: [{ ...blocker, creditBatchId: "batch" }],
+  } };
+  ctx.emissionLinesByBatchId = { batch: [{ componentId: "line", blocker }, { componentId: "other", blocker: { ...blocker, lineRef: { componentId: "other", displayName: "Other" } } }],
+    second: [{ componentId: "line", blocker }] } as unknown as NonNullable<typeof ctx.emissionLinesByBatchId>;
+  expect(collectContextRemovalBlockers(ctx)).toHaveLength(3);
 });

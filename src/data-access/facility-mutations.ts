@@ -1,8 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { facilities, type Facility } from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { ORGANIZATION_SETTINGS_ROLES } from "@/lib/settings/panes";
 import { DomainError } from "@/lib/domain-errors";
 import { hasBlockingFacilitySubmission } from "./certification";
 import {
@@ -13,6 +14,8 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
+import { reallocateRunsForFacility } from "./feedstock-run-allocations";
+import { resolveFacilityTimezoneEdit } from "./facility-timezone-guard";
 
 /** Entity key on a facility's expected-version conflict. */
 export const FACILITY_CONFLICT_ENTITY = "facility";
@@ -36,9 +39,13 @@ async function lockFacilityRow(
   ctx: OrgContext,
   tx: DbTransaction,
   facilityId: string,
-): Promise<{ durabilityOption: string; version: number; updatedAt: Date }> {
+): Promise<Pick<Facility, "id" | "code" | "timezone" | "durabilityOption" | "version" | "updatedAt">> {
+  requireOrgScope(ctx);
   const [locked] = await tx
     .select({
+      id: facilities.id,
+      code: facilities.code,
+      timezone: facilities.timezone,
       durabilityOption: facilities.durabilityOption,
       version: facilities.version,
       updatedAt: facilities.updatedAt,
@@ -55,8 +62,9 @@ async function lockFacilityRow(
   return locked;
 }
 
-export async function createFacility(
+export async function createFacilityInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -74,7 +82,7 @@ export async function createFacility(
   requireOrgScope(ctx);
 
   const [facility] = await guardFacilityName(ctx, data.name, () =>
-    db
+    tx
       .insert(facilities)
       .values({
         organizationId: ctx.organizationId,
@@ -98,7 +106,7 @@ export async function createFacility(
 
 async function updateFacilityRow(
   ctx: OrgContext,
-  executor: typeof db | DbTransaction,
+  executor: DbTransaction,
   facilityId: string,
   data: FacilityUpdateData,
 ): Promise<Facility> {
@@ -128,8 +136,15 @@ async function updateFacilityRow(
     ),
   );
   if (!updated) throw new SafeError("Facility not found");
+  // resolveFacilityTimezoneEdit returns undefined for unchanged zones/aliases.
+  if (data.timezone !== undefined) await reallocateRunsForFacility(ctx, executor, facilityId);
   return updated;
 }
+
+/** Who may change a facility's durability tier (Settings, Facilities, #1277). */
+const DURABILITY_TIER_MIN_ROLE = "admin";
+export const DURABILITY_TIER_ROLE_REFUSAL =
+  `Only organization ${ORGANIZATION_SETTINGS_ROLES} can change the durability tier. Nothing was changed.`;
 
 /** Update a facility, serializing only real durability-tier changes. */
 export async function updateFacility(
@@ -153,11 +168,17 @@ export async function updateFacility(
   const tierChangeRequested =
     data.durabilityOption !== undefined &&
     data.durabilityOption !== existing.durabilityOption;
+  // The tier is certification configuration: every member edits site details,
+  // only Admins (and Platform Admins) change the tier. A save that
+  // echoes the current tier is not a change and stays open to members.
+  if (tierChangeRequested && !hasOrgRole(ctx, DURABILITY_TIER_MIN_ROLE)) {
+    throw new SafeError(DURABILITY_TIER_ROLE_REFUSAL);
+  }
   if (!tierChangeRequested) {
     // Strip a stale echoed tier so this cheap path cannot revert a concurrent
     // real tier edit. It still takes no durability lock and runs no ledger
-    // probe; the transaction exists only so the facility's own row lock spans
-    // the version check and the write it guards (issue #768).
+    // probe. The facility row lock spans the version check, time zone guard
+    // and the write they protect.
     const nonTierData = { ...data };
     delete nonTierData.durabilityOption;
     return db.transaction(async (tx) => {
@@ -168,6 +189,7 @@ export async function updateFacility(
         expectedVersion,
         actualVersion: locked.version,
       });
+      nonTierData.timezone = await resolveFacilityTimezoneEdit(ctx, tx, locked, data.timezone);
       return updateFacilityRow(ctx, tx, facilityId, nonTierData);
     });
   }
@@ -181,6 +203,8 @@ export async function updateFacility(
       expectedVersion,
       actualVersion: lockedExisting.version,
     });
+
+    data.timezone = await resolveFacilityTimezoneEdit(ctx, tx, lockedExisting, data.timezone);
 
     if (data.durabilityOption === lockedExisting.durabilityOption) {
       const nonTierData = { ...data };

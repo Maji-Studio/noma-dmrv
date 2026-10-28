@@ -4,6 +4,7 @@ import { SUB_BIN_RECENT_MOVEMENTS } from '@/config/output-stock';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { rationalToNumber } from '@/lib/output-stock';
+import { splitIngredientSolids, type SavedIngredientSolids } from '@/lib/output-stock/sub-bin-ingredients';
 import { subBinMovements } from '@/lib/output-stock/sub-bin-movements';
 import { outputSubBinsSchema } from '@/schemas/output-stock';
 import { isOutputBinType } from '@/schemas/storage-locations';
@@ -12,6 +13,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { readOutputBinStockAt, withStockSnapshot } from './output-bin-stock';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { getOutputStockHistory } from './output-stock-history';
+import { savedIngredientSolids } from './output-stock-ingredients';
 import { requireOrgScope } from './utils';
 
 /**
@@ -46,7 +48,9 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput,
     } : undefined,
   });
   if (unresolved) throw unresolved;
-  const history = await getOutputStockHistory(ctx, bin.id, tx);
+  const history = await getOutputStockHistory(ctx, bin.id, tx, { recomputeWet: false });
+  // A product bin's layers are its products, so each layer's ingredients are that product's saved lines.
+  const ingredients = bin.type === 'product_bin' ? await savedIngredientSolids(ctx, stock.subBins.map(subBin => subBin.layerId), tx) : new Map<string, SavedIngredientSolids[]>();
   // A split bin lists its sub-bins in its default draw order; the API stock read stays oldest first.
   const subBins = stock.stockMode === 'split' && bin.drawOrder === 'newest_first' ? [...stock.subBins].reverse() : stock.subBins;
   return {
@@ -56,6 +60,7 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput,
     subBins: subBins.map(subBin => ({
       layerId: subBin.layerId, code: subBin.code ?? subBin.layerId, placedAt: subBin.placedAt,
       dryMassKg: rationalToNumber(subBin.dryBiocharKg), solidsKg: rationalToNumber(subBin.solidsKg),
+      ingredients: splitIngredientSolids(rationalToNumber(subBin.solidsKg) - rationalToNumber(subBin.dryBiocharKg), ingredients.get(subBin.layerId) ?? []),
       wetEstimateKg: subBin.estimatedWetKg ? rationalToNumber(subBin.estimatedWetKg) : null,
       moisturePercent: subBin.estimatedMoisturePercent ? rationalToNumber(subBin.estimatedMoisturePercent) : null,
       basis: subBin.moistureBasis,

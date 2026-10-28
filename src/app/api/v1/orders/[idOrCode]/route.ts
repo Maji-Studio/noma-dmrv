@@ -11,9 +11,9 @@ export const GET = apiRoute<Params>("api.v1.orders.get", "orders:read", async (r
   const data = await readOrder(request, ctx, idOrCode);
   headers.set("ETag", orderEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });
 
 export const PATCH = apiRoute<Params>("api.v1.orders.update", "orders:write", (request, context, { idOrCode }) =>
-  mutateOrderResponse(request, context, idOrCode, "PATCH"));
+  mutateOrderResponse(request, context, idOrCode, "PATCH"), { audience: "rest" });
 export const DELETE = apiRoute<Params>("api.v1.orders.delete", "orders:delete", (request, context, { idOrCode }) =>
-  mutateOrderResponse(request, context, idOrCode, "DELETE"));
+  mutateOrderResponse(request, context, idOrCode, "DELETE"), { audience: "rest" });

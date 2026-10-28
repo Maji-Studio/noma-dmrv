@@ -9,6 +9,7 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useState } from "react";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
@@ -46,7 +47,6 @@ import {
 import { Notice } from "@/components/ui/notice";
 
 const ICON_SIZE = 14;
-const SHORT_ID = 8;
 const STALE_DETAIL_WARNING =
   "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
 
@@ -107,6 +107,7 @@ function DetailState({
   open: boolean;
 }) {
   const { statement } = item;
+  const { timeZone } = useFacilityClock(statement.facilityId);
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
   const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
@@ -304,9 +305,8 @@ function DetailState({
                   entries={linkedRemovals.map(
                     ({ removal, submission, creditBatches }) => ({
                       removalId: removal.id,
-                      label:
-                        submission?.externalId ??
-                        `${removal.id.slice(0, SHORT_ID)}…`,
+                      label: removal.code,
+                      registryId: submission?.externalId ?? null,
                       completedOn: removal.completedOn,
                       creditBatches,
                       badge: (
@@ -347,7 +347,7 @@ function DetailState({
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Panel className="[&>div]:p-16">
-                <SyncEventList events={recentSyncEvents} />
+                <SyncEventList events={recentSyncEvents} timeZone={timeZone} />
               </Accordion.Panel>
             </Accordion.Item>
           )}
@@ -391,11 +391,10 @@ function DetailState({
         generationUnavailableReason={generationUnavailableReason}
       />
 
-      <SlideOverPanel.Footer className="justify-stretch">
+      <SlideOverPanel.Footer>
         {statementSubmission && (
           <Button
-            variant="default"
-            className="flex-1"
+            variant="primary"
             onClick={handleRefresh}
             busy={refreshMutation.isPending}
           >
@@ -405,11 +404,7 @@ function DetailState({
             Refresh
           </Button>
         )}
-        <SlideOverPanel.Close>
-          <Button variant="primary" className="flex-1">
-            Close
-          </Button>
-        </SlideOverPanel.Close>
+        <SlideOverPanel.FooterClose />
       </SlideOverPanel.Footer>
     </>
   );
@@ -417,12 +412,8 @@ function DetailState({
 
 function CloseFooter() {
   return (
-    <SlideOverPanel.Footer className="justify-stretch">
-      <SlideOverPanel.Close>
-        <Button variant="primary" className="flex-1">
-          Close
-        </Button>
-      </SlideOverPanel.Close>
+    <SlideOverPanel.Footer>
+      <SlideOverPanel.FooterClose />
     </SlideOverPanel.Footer>
   );
 }

@@ -1,4 +1,3 @@
-import { deletedProductIds } from './output-stock-active-movements';
 /**
  * Facilities Data Access Layer
  * CRUD operations for facilities with auth guards, pagination, and filtering
@@ -7,9 +6,8 @@ import { deletedProductIds } from './output-stock-active-movements';
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
-import { notInArray, and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
-import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   facilities,
@@ -29,9 +27,7 @@ import {
 } from "@/db/schema";
 import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
-import { deriveLaneStock } from "./lane-stock-derivation";
+import { getFacilityFeedstockWetStock } from "./facility-feedstock-stock";
 import { assertRowVersion, nextVersion } from "./row-version";
 
 // Individual entity archives originate from JavaScript Date values and are
@@ -60,8 +56,6 @@ export interface FacilityWithRelations extends Facility {
   };
   inventorySummary: {
     feedstockWetKg: number;
-    biocharKg: number;
-    productKg: number;
   };
 }
 
@@ -185,10 +179,7 @@ export async function getFacilities(
   const [
     reactorPreviewRows,
     storageCountsByType,
-    feedstockBinRows,
-    biocharOutputRows,
-    biocharAllocationRows,
-    productInventoryRows,
+    feedstockWetStockByFacility,
   ] = facilityIds.length > 0
     ? await Promise.all([
         db
@@ -211,75 +202,9 @@ export async function getFacilities(
           .from(storageLocations)
           .where(and(inArray(storageLocations.facilityId, facilityIds), eq(storageLocations.organizationId, ctx.organizationId)))
           .groupBy(storageLocations.facilityId, storageLocations.type),
-        db
-          .select({
-            id: storageLocations.id,
-            facilityId: storageLocations.facilityId,
-          })
-          .from(storageLocations)
-          .where(and(
-            inArray(storageLocations.facilityId, facilityIds),
-            eq(storageLocations.type, "feedstock_bin"),
-            eq(storageLocations.organizationId, ctx.organizationId),
-          )),
-        db
-          .select({
-            facilityId: productionRuns.facilityId,
-            totalProducedKg: sumNumeric(productionRuns.biocharOutputKg),
-          })
-          .from(productionRuns)
-          .where(and(
-            inArray(productionRuns.facilityId, facilityIds),
-            eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-          ))
-          .groupBy(productionRuns.facilityId),
-        db
-          .select({
-            facilityId: biocharProducts.facilityId,
-            totalAllocatedKg: numericAggregate(sql<number>`
-              COALESCE(
-                SUM(
-                  ${sourceBiocharMassKgSql(
-                    biocharProducts.massKg,
-                    biocharProducts.composition,
-                  )}
-                ),
-                0
-              )
-            `),
-          })
-          .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, db))))
-          .groupBy(biocharProducts.facilityId),
-        db
-          .select({
-            facilityId: biocharProducts.facilityId,
-            totalProductKg: sumNumeric(biocharProducts.massKg),
-          })
-          .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, db))))
-          .groupBy(biocharProducts.facilityId),
+        getFacilityFeedstockWetStock(ctx, facilityIds),
       ])
-    : [[], [], [], [], [], []];
-
-  const feedstockLaneStocks = await deriveLaneStock(ctx, db, {
-    storageLocationIds: feedstockBinRows.map((bin) => bin.id),
-    lanes: "feedstock",
-  });
-  const feedstockBinFacilityById = new Map(
-    feedstockBinRows.map((bin) => [bin.id, bin.facilityId]),
-  );
-  const feedstockWetStockByFacility = new Map<string, number>();
-  for (const stock of feedstockLaneStocks) {
-    const facilityId = feedstockBinFacilityById.get(stock.storageLocationId);
-    if (!facilityId) continue;
-    feedstockWetStockByFacility.set(
-      facilityId,
-      (feedstockWetStockByFacility.get(facilityId) ?? 0) +
-        stock.feedstockStockWetKg,
-    );
-  }
+    : [[], [], new Map<string, number>()];
 
   // Derive reactor counts and preview (max 4) from preview rows
   const reactorCountMap = new Map<string, number>();
@@ -323,16 +248,6 @@ export async function getFacilities(
     storageSummaryMap.set(row.facilityId, summary);
   }
 
-  const biocharOutputMap = new Map(
-    biocharOutputRows.map((row) => [row.facilityId, row.totalProducedKg])
-  );
-  const biocharAllocationMap = new Map(
-    biocharAllocationRows.map((row) => [row.facilityId, row.totalAllocatedKg])
-  );
-  const productInventoryMap = new Map(
-    productInventoryRows.map((row) => [row.facilityId, row.totalProductKg])
-  );
-
   // Combine data
   const items: FacilityWithRelations[] = facilityList.map((f) => ({
     ...f,
@@ -349,12 +264,6 @@ export async function getFacilities(
     },
     inventorySummary: {
       feedstockWetKg: feedstockWetStockByFacility.get(f.id) ?? 0,
-      biocharKg: Math.max(
-        0,
-        (biocharOutputMap.get(f.id) ?? 0) -
-          (biocharAllocationMap.get(f.id) ?? 0)
-      ),
-      productKg: productInventoryMap.get(f.id) ?? 0,
     },
   }));
 
@@ -389,7 +298,7 @@ export async function getFacilityById(
   return facility;
 }
 
-export { createFacility, updateFacility } from "./facility-mutations";
+export { updateFacility } from "./facility-mutations";
 
 // ============================================
 // Archive Operations (soft delete, reversible)

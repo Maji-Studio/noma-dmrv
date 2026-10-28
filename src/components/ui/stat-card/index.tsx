@@ -83,7 +83,12 @@ export interface StatCardProps
   href?: string;
   /** Loading state */
   isLoading?: boolean;
+  /** The figure failed to load: show the failure instead of a value that was never computed. */
+  isError?: boolean;
 }
+
+export const STAT_CARD_ERROR_VALUE = "Could not load";
+export const STAT_CARD_ERROR_DESCRIPTION = "Reload the page to try again";
 
 /* -------------------------------------------------------------------------------------------------
  * TrendBadge Component
@@ -140,9 +145,9 @@ const StatCardContent = React.forwardRef<
     {
       className,
       title,
-      value,
-      valueLayout = "headline",
-      description,
+      value: valueProp,
+      valueLayout: valueLayoutProp = "headline",
+      description: descriptionProp,
       icon,
       trend,
       trendValue,
@@ -150,6 +155,7 @@ const StatCardContent = React.forwardRef<
       sparkline,
       interactive,
       isLoading,
+      isError,
       ...props
     },
     ref
@@ -157,6 +163,10 @@ const StatCardContent = React.forwardRef<
     if (isLoading) {
       return <StatCardSkeleton />;
     }
+
+    const value = isError ? STAT_CARD_ERROR_VALUE : valueProp;
+    const valueLayout = isError ? "headline" : valueLayoutProp;
+    const description = isError ? STAT_CARD_ERROR_DESCRIPTION : descriptionProp;
 
     if (valueLayout === "breakdown") {
       return (

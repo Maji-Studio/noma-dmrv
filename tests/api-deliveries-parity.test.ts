@@ -1,7 +1,7 @@
 /** Real UI actions, REST and MCP against the worktree test database. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, biocharProducts, facilities, orders, storageLocations } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
@@ -9,7 +9,7 @@ import { createDeliveryFn, updateDeliveryFn } from "@/fn/deliveries";
 import { jsonPointer } from "@/lib/api/problem";
 import { BILL_OF_LADING_WARNING } from "@/lib/delivery-guidance";
 import { representDelivery } from "@/lib/representations/deliveries";
-import { deliveryOperationFieldAliases, type createDeliverySchema, type updateDeliverySchema } from "@/schemas/deliveries";
+import type { createDeliverySchema, updateDeliverySchema } from "@/schemas/deliveries";
 import type { z } from "zod";
 import { createApiDeliveryWriteFixture, removeApiDeliveryWriteFixture, deliveryInput, postDelivery, patchDelivery, readDelivery,
   deliveryRows, deliveryRecords, deliveryAudits, DELIVERY_AT, DELIVERY_WET_KG, type ApiDeliveryWriteFixture } from "./helpers/api-delivery-write-fixture";
@@ -120,8 +120,13 @@ interface Refusal { code?: string; issues: { pointer: string; code: string; meta
 const apiRefusal = (output: { code: string; errors?: Refusal["issues"]; issues?: Refusal["issues"] }): Refusal => ({
   code: output.code, issues: (output.errors ?? output.issues ?? []).map(({ pointer, code, meta }) => ({ pointer, code, ...(meta ? { meta } : {}) })),
 });
-/** Normalize only the form's documented field aliases; keep every issue code and metadata value. */
-const actionPointer = (path: (string | number)[]) => jsonPointer(path.map((part, index) => index === 0 ? Object.entries(deliveryOperationFieldAliases).find(([, field]) => field === part)?.[0] ?? part : part));
+/** Actions validate the form schema before the operation, so those refusals use form names. */
+function actionPointer(path: readonly PropertyKey[]): string {
+  const [field, ...rest] = path;
+  if (field === "deliveryDate") return jsonPointer(["deliveredAt", ...rest]);
+  if (field === "moistureContentPercent") return jsonPointer(["moisturePercent", ...rest]);
+  return jsonPointer(path);
+}
 async function refuse(transport: Transport, changes: Record<string, unknown>, id?: string): Promise<Refusal> {
   const f = fixtures.get(transport)!;
   if (transport === "action") {
@@ -144,8 +149,8 @@ async function refuse(transport: Transport, changes: Record<string, unknown>, id
 
 async function stockState(f: ApiDeliveryWriteFixture) {
   return {
-    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)),
-    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)),
+    movements: await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId)).orderBy(asc(binMovements.id)),
+    products: await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId)).orderBy(asc(biocharProducts.id)),
   };
 }
 

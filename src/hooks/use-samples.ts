@@ -1,4 +1,6 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Samples React Query Hooks
@@ -33,7 +35,7 @@ import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./
 // Query Keys
 // ============================================
 
-const sampleKeys = {
+export const sampleKeys = {
   all: ["samples"] as const,
   lists: () => [...sampleKeys.all, "list"] as const,
   list: (filters?: Partial<SampleFilterData>) =>
@@ -107,8 +109,9 @@ export function useCreateSample(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data)),
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
+    mutationFn: async (data: CreateSampleData, intentKey) => unwrap(await createSampleFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
@@ -153,6 +156,7 @@ export function useUpdateSample(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (data: UpdateSampleData) => {
       const result = await updateSampleFn(data);
       if (!result.success) {
@@ -291,6 +295,7 @@ export function useDeleteSample(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
     mutationFn: async (variables: DeleteSampleData) => {
       const result = await deleteSampleFn(variables);
       if (!result.success) {

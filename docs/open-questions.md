@@ -13,11 +13,65 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
-## Emissions entry dates (2026-10-16) - **deferred**
+## Open design picks (`ui/design-picks`)
 
-- `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
-  recheck entry dates when a batch start date moves. Decide whether to refuse
-  the batch edit or stop counting entries dated before the new start date.
+A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.
+
+- Monthly facility report (#1109): layout A, B or C.
+- Bin history (#1004): wet mass always, dry when available, the rest in the table, top to bottom on phones are settled; the layout pick is open.
+- Switch-template warning (#1144): how the warning leads to the template's line review.
+- Submission history (#1148): proposed statuses Fine / Stopped / Needs support.
+- Row links (#1130): the user wants the full row clickable.
+
+## Open-item problem wording
+
+- `src/lib/credit-batches/open-items.ts:buildCreditBatchOpenItems`: Open-item problem
+  wording for unmet checks, shared with the New Removal wizard; Kenji to decide; #1136.
+
+## Credit batch page panels (2026-10-18) - **deferred**
+
+- `src/components/credit-batches/credit-batch-page-parts.tsx:PAGE_PANEL` is a
+  feature-local panel surface (border and paper). Moving the page's panels onto
+  the shared `Card` surface (`--panel-bg`, `--panel-border`, `--panel-shadow`)
+  is a visual change that needs its own design check; #1156 review.
+
+## Credit batch timeline follow-ups (#1153) - **deferred**
+
+- `src/data-access/credit-batch-timeline-facts.ts:listCreditBatchTimelineFacts`
+  repeats the produced, applied and not-in-a-Removal dry-mass rule of
+  `src/data-access/credit-batch-page-model.ts:getCreditBatchPageModel`, over a
+  slice query without the page model's `applications` and `deliveries` joins.
+  Extract one shared helper so the hover card and the batch page cannot
+  disagree on credit-bearing mass.
+- `src/components/credit-batches/credit-batch-timeline.tsx:CreditBatchTimeline`
+  gives (+) slots a 44px minimum but not batch bars: a batch of a few days is a
+  bar a few pixels wide. Needs a design decision for bars whose 44px hit areas
+  would overlap.
+
+## Answering components for a kept batch's older template - **open**
+
+- `src/components/credit-batches/credit-batch-removal-template.tsx:CreditBatchRemovalTemplate`
+  hides the "Answer in Settings" link when the batch's pinned template is not the
+  facility's current one: the setup's Check step makes the answered template the
+  facility's and switches every open batch (`src/data-access/removal-template-setup.ts:applySetupInTransaction`).
+  A returned Removal on an older template that gains a component therefore has no
+  decisions-only path. Options: a decisions-only apply that records the answers
+  without changing the facility template, or moving the batch to the current template.
+
+## Late production runs after submission (`credit-batches/late-runs`) - **parked**
+
+- The batch now shows a Check to-do to record each excluded run's diesel and power as manual entries dated on the later of the run's start day and the batch's first day; crediting remains parked.
+- `src/data-access/credit-batch-membership.ts:assertNoOverlappingCreditBatchCohort`
+  keeps one credit batch per facility and feedstock for any day. Since PR 5
+  (Kenji, 2026-10-22), a run completed while its batch's Removal is a draft or
+  returned by Isometric joins the batch automatically and is sent with the
+  (re)submission. Only while the Removal is Sent (submitted and not returned,
+  or verified) does a late run stay without a batch and is not credited.
+  Adding a run to such a batch by hand on the credit batch form is not possible
+  yet (#1383). Parked on 2026-10-19 (#674, closed): Kenji
+  keeps the one-batch rule until a real late run needs crediting. Isometric's
+  protocol says nothing either way about two Removals or GHG Statements with
+  overlapping dates, so reopening this starts with asking Isometric.
 
 ## Record-lock follow-ups
 
@@ -39,11 +93,16 @@ Deferred work lives here, never as a `TODO` in code.
   per-entry correction-dependency reads so opening history does not repeatedly
   fetch later movements from the same bin.
 
-## Activity recording gaps (`activity/deferred-writers`) - **deferred**
+## Account suspension across organizations (#1391 section 4) - **deferred**
 
-- 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
-  record activity in PR 4, before zero rows can be written. Its coverage
-  exemption is temporary until that writer is enabled.
+- Decided 2026-10-22: defer until after the first production deployment.
+  `src/db/schema/auth.ts:users` has no suspend field today, so an Admin can only
+  remove a member from one organization at a time.
+- Options to weigh later: a `users.suspended` flag checked where
+  `src/lib/auth/better-auth.ts` creates a session (`databaseHooks.session`), or
+  removing all of the user's memberships in one action.
+
+## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
   without an event. Define value-free lifecycle events alongside the existing
@@ -60,14 +119,6 @@ Deferred work lives here, never as a `TODO` in code.
   "for now". Decide whether to resume estimates (rebuild the settings form and
   the read) or drop the table with a migration. Until then the table, its test
   cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
-
-## DataTable mobile cards (`ui/data-table`) - **deferred**
-
-- `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
-  a `role="button"` container that holds nested buttons (the Removals list
-  Retry button, and now `CertificationStatusBadge`), which screen readers
-  announce unreliably. Fix: a semantic card with a separate record-opening
-  button or link beside its controls. It changes every DataTable consumer.
 
 ## Activity reads
 
@@ -201,20 +252,6 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **To resolve:** stakeholder call; if yes, add columns via the `percent`
   numeric family and re-add the fields end-to-end (reseed, not migrate).
 
-### Mix pile wet stock floors each batch at zero on its own (`output-stock/wet-stock-mix-floor`, opened 2026-10-05)
-
-- **Context:** `layerWet` in `src/lib/output-stock/moisture-estimate.ts` floors
-  each batch's wet stock at zero before `estimateStock` sums the pile. A mix
-  removal takes wet shares pro rata to solids, so a removal wetter than a dry
-  batch can take more wet mass from that batch than it holds. Its negative
-  remainder is dropped, not netted against the other batches.
-- **Example:** batches of 100 kg wet with 60 kg and 90 kg solids; a 175 kg
-  removal at 60% takes 70 kg and 105 kg wet. The pile shows 30 kg wet, while
-  wet in less wet out is 25 kg. Split bins are unaffected: their batches are
-  separate sub-bins.
-- **To resolve:** decide whether a mix pile floors its total once instead of
-  each batch, and whether a batch's wet stock can then read negative.
-
 ## Architecture
 
 See [Architecture open questions](./open-questions-architecture.md) for the deferred decisions in this area.
@@ -234,12 +271,12 @@ companion inherits this file's schema, invariants, and resolution rules.
   actually found (feedstock and biochar transport) when the scheduled live
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
-- The binding is still live in code and docs:
+- Catalog projections stay stable, but runtime sample sources are always excluded:
   `src/lib/isometric/semantic-binding-catalog.ts` declares
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
-  transport categories are projections of it), and
-  `docs/isometric/sandbox-template-authoring.md` still lists the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  transport categories are projections of it). The authoring doc now omits that
+  legacy row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
 - Two explanations are open and only a registry probe separates them: the
@@ -253,13 +290,17 @@ companion inherits this file's schema, invariants, and resolution rules.
   as "Dark Earth Carbon Template (15 Oct)" and now has two sample shipping lines
   (EU, India), as the production template "LCA based template Cula" does. Sample
   transport is present, but one source cannot fill two lines.
-- **Resolve via:** the [template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
-  §4.5 fills both lines from emissions entries and removes
-  `sampleTransportMassDistanceTonneKm` from
-  `src/lib/isometric/semantic-binding-catalog.ts`, drops the authoring-doc row,
-  records it in [`docs/isometric/changes.md`](./isometric/changes.md) and
-  updates the sandbox-health assertion. The entry leaves when that change is
-  switched on in the sandbox (M).
+- **Resolve after cleanup:** [PR 4 of the template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
+  §4.5 makes both sample shipping lines entry-only in every environment. The
+  legacy catalog projections remain stable for `MAPPING_REVISION`. Runtime
+  reads exclude sample legs. Run the org-scoped retirement CLI in §5 to delete
+  old legs and owned evidence. Keep this question open until the CLI has run
+  for the sandbox/staging organization and cleanup is verified (M).
+- **Leftover sample slots (from #1324 review):** `transportEntityTypes` in
+  `src/schemas/transport-legs.ts` still lists `sample`, so the REST/MCP
+  `record_transport_leg` input advertises a type the server always refuses.
+  `TransportLegsByCategory.sample`, `sampleIds` and `TransportCoverage.sample`
+  are still typed but always empty. Drop them in one API change (S).
 
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 
@@ -592,11 +633,14 @@ operational tradeoff, and this is not a registry requirement we verified.
 when a monitored input changes unit. Define an exact decimal unit-conversion table
 before allowing confirmation to convert stored entry values to the new unit.
 
-## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
+## Save refusals on the remaining forms (#1327) - **deferred**
 
-- `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
-  `Error` carrying only the message, so the server's refusal `code` and meta are
-  lost. `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal` (marker in `src/lib/delete-refusal.ts`)
-  therefore matches the message text to offer "Archive instead". Carry the action
-  error code and meta to the client (for example on a typed error subclass) so
-  refusal UIs branch on the code, not on copy.
+- Most forms use `useSaveRefusal`. Remaining migrations are tracked by `PENDING`
+  in `src/components/forms/save-refusal-coverage.test.ts`.
+- Forms not yet migrated keep typed values after a Sent refusal.
+- Registered customer locations have no lock-read kind; their refusal-specific
+  disabling belongs to the customer forms migration.
+
+## Stale versions on delete dialogs - **deferred**
+
+- Stale versions: `application-list`, `order-list`, `transport-legs-editor` and the document panels keep the dialog open on a stale version, so Delete retries the same saved version and fails again; `sample-list` closes the dialog instead. Unify them.

@@ -1,4 +1,4 @@
-import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { formulationFreezesTypeUsage } from "@/lib/formulation-domain-errors";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { and, asc, eq } from "drizzle-orm";
@@ -17,7 +17,7 @@ import {
 import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
-import { ActionConflictError, SafeError } from "@/lib/errors";
+import { SafeError } from "@/lib/errors";
 import {
   getFeedstockTypeDeleteDecision,
   type FeedstockTypeDeleteConflict,
@@ -53,13 +53,13 @@ export async function listFeedstockTypes(
     .orderBy(asc(feedstockTypes.name));
 }
 
-export async function createFeedstockType(
-  ctx: OrgContext,
+export async function createFeedstockTypeInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
   data: CreateFeedstockTypeData & { code: string },
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
-  const [created] = await db
+  const [created] = await tx
     .insert(feedstockTypes)
     .values({
       organizationId: ctx.organizationId,
@@ -268,9 +268,10 @@ export async function deleteFeedstockType(
     const conflict = await findDeleteConflict(ctx, tx, feedstockTypeId);
     const decision = getFeedstockTypeDeleteDecision(conflict ? [conflict] : []);
     if (decision.action === "conflict") {
-      throw new ActionConflictError(
+      throw inUseDeleteRefusal(
         `Feedstock type ${IN_USE_DELETE_MARKER} records still use it. Archive it instead.`,
-        decision.conflict,
+        ["feedstockTypeId"],
+        { conflict: decision.conflict },
       );
     }
     const [deleted] = await tx

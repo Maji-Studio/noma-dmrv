@@ -1,8 +1,7 @@
-/** DB-free check of the form boundary's issue aliases and error metadata. */
+/** DB-free check of operation issue paths and error metadata at the action boundary. */
 import { expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { conflictCode } from "@/lib/conflict-ref";
-import { deliveryOperationFieldAliases } from "@/schemas/deliveries";
 import { createDeliveryFn } from "./deliveries";
 
 const mocks = vi.hoisted(() => ({ run: vi.fn() }));
@@ -15,7 +14,7 @@ vi.mock("./with-action", () => ({ withAction: (work: (ctx: object) => unknown) =
 
 const ID = "00000000-0000-4000-8000-000000000001";
 
-it("remaps only root issue aliases and preserves every DomainError option", async () => {
+it("keeps operation issue paths and preserves every DomainError option", async () => {
   const cause = new Error("cause");
   const original = new DomainError("stock_basis_changed", "Refresh stock.", {
     conflict: { entity: "storage_location", id: ID, code: conflictCode("PB-1") },
@@ -35,8 +34,8 @@ it("remaps only root issue aliases and preserves every DomainError option", asyn
   }).catch((error: unknown) => error);
   expect(failed).toBeInstanceOf(DomainError);
   expect(failed).toMatchObject({ ...original, issues: [
-    { ...original.issues[0], path: [deliveryOperationFieldAliases.deliveredAt] },
-    { ...original.issues[1], path: [deliveryOperationFieldAliases.moisturePercent] },
+    { ...original.issues[0], path: ["deliveredAt"] },
+    { ...original.issues[1], path: ["moisturePercent"] },
     original.issues[2],
   ] });
   expect((failed as DomainError).cause).toBe(cause);

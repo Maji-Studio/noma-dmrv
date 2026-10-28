@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { Notice } from "@/components/ui/notice";
 import { deliveryAfterDistanceFill } from "@/lib/delivery-distance-refresh";
 import { useDeliveryWithRelations } from "@/hooks/use-deliveries";
@@ -15,30 +16,33 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useId, useState } from "react";
 
-import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
+import { FormActions, FormEntitySelect, FormField, FormSection, FormSpine, makeCertFieldStatus, resolveCertFieldStatus, MoistureField, FieldErrorRow, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
-import { FormSelect } from "@/components/forms/form-select";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { focusMoistureField, moistureFieldSelectors } from "@/components/storage-locations/reestimate-notice";
+import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
-import { resolveDeliveryDistanceSourceChoice } from "./delivery-distance-source";
+import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
+import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
+import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
-import { useOrdersForSelect } from "@/hooks/use-orders";
+import { useOrdersForSelect, useOrderWithRelations } from "@/hooks/use-orders";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
-import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
-import {
-  DISTANCE_SOURCE_LABELS,
-  type DistanceSourceValue,
-} from "@/schemas/distance-source";
+import { DELIVERY_REFUSAL_ALIASES, deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
@@ -54,6 +58,12 @@ const SET_VALUE_OPTS = {
   shouldValidate: true,
 } as const;
 
+/** The override fields: reset together on a refusal, cleared together with the override. */
+const OVERRIDE_FIELDS = ["distanceKmOverride", "distanceSource", "distanceNote"] as const;
+// Lock reverts of these fields restore the saved sub-bin draw.
+const DRAW_RESTORE_FIELDS = [
+  "deliveredWetMassKg", "sources", "storageLocationId", "deliveryDate", "moistureContentPercent",
+];
 const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
@@ -71,7 +81,7 @@ interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean, expectedVersion?: number) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onRefusal: SaveRefusalHandler, expectedVersion?: number) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -82,16 +92,20 @@ interface DeliveryFormProps {
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
+  /** A refresh from location saved a new version: reopen the form on it; resolves once the sheet holds it. */
+  onDistanceRefreshed?: () => Promise<void>;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget, onDistanceRefreshed }: DeliveryFormProps) {
+  const latched = useLatchedSubmit();
   const refreshedDelivery = useDeliveryWithRelations(delivery?.id ?? "");
   const distanceRecord = delivery ? deliveryAfterDistanceFill(delivery, refreshedDelivery.data) : undefined;
   const isEditMode = !!delivery;
   const stockEdit = useDeliveryStockEdit(delivery);
   const [openedMovement, setOpenedMovement] = useState(stockEdit.movement);
   if (!openedMovement && stockEdit.movement) setOpenedMovement(stockEdit.movement);
-  const massLocked = isEditMode && (!stockEdit.editable || (!!openedMovement && openedMovement.id !== stockEdit.movement?.id));
+  // Date, mass and moisture post one stock correction, so one dependency check locks all three.
+  const stockLocked = isEditMode && (!stockEdit.editable || (!!openedMovement && openedMovement.id !== stockEdit.movement?.id));
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
@@ -105,6 +119,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   });
   const orders = ordersData ?? [];
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const savedOverride = delivery
+    ? { distanceKm: delivery.distanceKmOverride, source: delivery.distanceSource, note: delivery.distanceNote }
+    : null;
+  const [overriding, setOverriding] = useState(hasSavedOverride(savedOverride));
 
   const defaultValues = {
     idempotencyKey,
@@ -121,8 +139,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
-    distanceKmOverride: delivery?.distanceKmOverride === 0 ? null : delivery?.distanceKmOverride ?? undefined,
-    distanceSource: delivery?.distanceSource ?? null,
+    // Only an override is a form value; the derived distance is the recorded pair.
+    distanceKmOverride: (hasSavedOverride(savedOverride) ? delivery?.distanceKmOverride : null) as number | null,
+    distanceSource: (hasSavedOverride(savedOverride) ? delivery?.distanceSource : null) as DistanceSourceValue | null,
     distanceNote: delivery?.distanceNote ?? "",
   };
 
@@ -133,7 +152,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     handleSubmit,
     setValue,
     setError,
-    formState: { errors },
+    resetField,
+    clearErrors,
+    formState: { errors, isDirty },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
@@ -143,6 +164,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
+  const savedDistanceKm = distanceRecord ? resolveDeliveryTransportRoute({
+    distanceKmOverride: distanceRecord.distanceKmOverride,
+    distanceSource: distanceRecord.distanceSource,
+    location: {
+      distanceKm: distanceRecord.recordedDistanceKm ?? null,
+      distanceSource: distanceRecord.recordedDistanceSource ?? null,
+    },
+  }).distanceKm : null;
 
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
   const watchSources = useWatch({ control, name: "sources" });
@@ -157,104 +186,54 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const draftDistanceSource = useWatch({ control, name: "distanceSource" });
 
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
+  // Clearing an override restores the recorded pair snapshot (GLOSSARY).
   const storedDistanceKm = distanceRecord ? distanceRecord.recordedDistanceKm ?? null : selectedOrder?.destinationDistanceKm ?? null;
   const storedDistanceSource = distanceRecord ? distanceRecord.recordedDistanceSource ?? null : selectedOrder?.destinationDistanceSource ?? null;
 
-  // An override changes the effective distance; clearing it restores the snapshot.
-  const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
-  const effectiveDraftDistanceSource: DistanceSourceValue | null =
-    draftDistanceSource === "document"
-      ? "document"
-      : distanceKmOverride != null
-        ? (draftDistanceSource ?? "manual")
-        : storedDistanceSource;
-  const distanceSourceOptions = [
-    ...(storedDistanceKm != null && storedDistanceSource === "map_estimate"
-      ? [{
-          value: "map_estimate",
-          label: DISTANCE_SOURCE_LABELS.map_estimate,
-        }]
-      : []),
-    ...(distanceKmOverride != null ||
-    storedDistanceSource === "manual" ||
-    storedDistanceKm == null
-      ? [{ value: "manual", label: DISTANCE_SOURCE_LABELS.manual }]
-      : []),
-    ...(effectiveDraftDistanceSource === "document"
-      ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
-      : []),
-  ] as const;
+  // The trip's effective distance, resolved like the saved route: a delivery
+  // can document the stored route without overriding its distance.
+  const effectiveDistanceKm = overriding ? (distanceKmOverride ?? null) : storedDistanceKm;
+  const effectiveDraftDistanceSource: DistanceSourceValue | null = overriding
+    ? (draftDistanceSource ?? "manual")
+    : delivery?.distanceSource === "document" ? "document" : storedDistanceSource;
+  // The repair link needs the order's customer; load it only when the pair is missing.
+  const { data: orderRelations } = useOrderWithRelations(watchOrderId ?? "", !!watchOrderId && storedDistanceKm == null);
+  const customerLocationRepairHref = orderRelations && formFacilityId
+    ? customerLocationDistanceLink({ facilityId: formFacilityId, partyId: orderRelations.customerId, locationId: orderRelations.customerLocationId })
+    : null;
 
-  // Text draft so in-flight typing survives; resync when the effective value
-  // changes from outside (order switch, prefill) — adjust-state-during-render.
-  const [distanceDraft, setDistanceDraft] = useState(formatDistance(effectiveDistanceKm));
-  const [syncedDistanceKm, setSyncedDistanceKm] = useState(effectiveDistanceKm);
-  if (effectiveDistanceKm !== syncedDistanceKm) {
-    setSyncedDistanceKm(effectiveDistanceKm);
-    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
-      setDistanceDraft(formatDistance(effectiveDistanceKm));
-    }
-  }
-
-  const handleDistanceChange = (raw: string) => {
-    setDistanceDraft(raw);
-    const parsed = parseDistanceDraft(raw);
-    if (parsed === undefined) return; // unparseable in-flight text — wait
-    const isOverride = parsed !== null && (parsed <= 0 || parsed !== storedDistanceKm);
-    // Keep the render-time resync quiet while editing; a cleared/reverted
-    // draft refills from the stored value on blur instead of mid-keystroke.
-    setSyncedDistanceKm(isOverride ? parsed : storedDistanceKm);
-    setValue("distanceKmOverride", isOverride ? parsed : null, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setValue("distanceSource", isOverride ? "manual" : null, { shouldDirty: true });
+  const startOverride = () => {
+    setOverriding(true);
+    setValue("distanceKmOverride", null, SET_VALUE_OPTS);
+    setValue("distanceSource", "manual", { shouldDirty: true });
   };
-
-  const handleDistanceBlur = () => {
-    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
-      setDistanceDraft(formatDistance(effectiveDistanceKm));
-    }
+  const clearOverride = () => {
+    setOverriding(false);
+    clearErrors([...OVERRIDE_FIELDS]);
+    setValue("distanceKmOverride", null, { shouldDirty: true });
+    setValue("distanceSource", null, { shouldDirty: true });
+    setValue("distanceNote", "", { shouldDirty: true });
   };
-
-  const handleDistanceSourceChange = (raw: string) => {
-    const choice = resolveDeliveryDistanceSourceChoice(raw, {
-      storedDistanceKm,
-      storedDistanceSource,
-      hasOverride: distanceKmOverride != null,
-    });
-    if (choice.kind === "inherit-stored" && storedDistanceKm != null) {
-      setDistanceDraft(formatDistance(storedDistanceKm));
-      setSyncedDistanceKm(storedDistanceKm);
-      setValue("distanceKmOverride", null, SET_VALUE_OPTS);
-      setValue("distanceSource", null, SET_VALUE_OPTS);
-      setValue("distanceNote", "", SET_VALUE_OPTS);
-      return;
-    }
-    setValue("distanceSource", choice.kind === "set" ? choice.source : null, SET_VALUE_OPTS);
-  };
-
 
   // Switching orders invalidates a trip-specific override and its note.
   useClearOnDependencyChange(watchOrderId, () => {
-    setValue("distanceKmOverride", null, { shouldValidate: true });
-    setValue("distanceSource", null);
-    setValue("distanceNote", "");
+    if (overriding) clearOverride();
   });
 
   const wetMass = Number(watchWetMass);
   const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
   // A split product bin takes one reading per sub-bin the load reaches.
   const draw = useSubBinDraw({
-    bin: !massLocked && watchBinId && formFacilityId ? { storageLocationId: watchBinId, facilityId: formFacilityId } : null,
+    bin: !stockLocked && watchBinId && formFacilityId ? { storageLocationId: watchBinId, facilityId: formFacilityId } : null,
     occurredAt: watchDate ? String(watchDate) : null, wetKg: wetMass,
     correction: openedMovement ? { movementId: openedMovement.id, kind: "delivery", sources: openedMovement.sources } : undefined,
   });
   const [attempted, setAttempted] = useState(false);
+  const dateChanged = isEditMode && !!watchDate && new Date(String(watchDate)).getTime() !== new Date(delivery.deliveryDate).getTime();
   const massChanged = isEditMode && (draw.changed || wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
     ((draw.sources ?? watchSources) != null && JSON.stringify(draw.sources ?? watchSources) !== JSON.stringify(openedMovement?.sources)));
-  const stockChanged = !isEditMode || (!massLocked && massChanged);
-  const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
+  const stockChanged = !isEditMode || (!stockLocked && (massChanged || dateChanged));
+  const { preview: stockPreview, input: drawInput, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: !stockChanged,
     singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
     moisturePercent: moisture,
@@ -270,47 +249,63 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     },
   });
   const { canSave, submitDisabled: draftSubmitDisabled, basisFingerprint } = gate();
-  const submitDisabled = draftSubmitDisabled || (massLocked && massChanged);
+  // A saved delivery keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("delivery", { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate }, drawInput);
+  const submitDisabled = draftSubmitDisabled || (stockLocked && (massChanged || dateChanged));
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
-  const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? errors.sources?.message ?? stockPreview.data?.blockingMessage ?? undefined;
+  // A refusal caused by the new time alone belongs under the date, not the mass.
+  const blockingMessage = stockPreview.data?.blockingMessage ?? undefined;
+  const blockedByDate = dateChanged && !massChanged;
+  const deliveryDateError = errors.deliveryDate?.message ?? (blockedByDate ? blockingMessage : undefined);
+  const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? errors.sources?.message ?? (blockedByDate ? undefined : blockingMessage);
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
-  const submitDelivery = handleSubmit(async (data) => {
-    if (!canSave || (massLocked && massChanged)) return;
-    const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
+  // A refused override edit goes back to the saved override as a whole, and the panel follows it.
+  const restoreSavedOverride = () => {
+    setOverriding(hasSavedOverride(savedOverride));
+    for (const name of OVERRIDE_FIELDS) resetField(name);
+  };
+  register("sources");
+  const refuseWithFields = useSaveRefusal({
+    control, setError, formId, aliases: DELIVERY_REFUSAL_ALIASES,
+    resetField: (field) => {
+      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) restoreSavedOverride();
+      else {
+        resetField(field);
+        if (DRAW_RESTORE_FIELDS.includes(field)) {
+          draw.restoreSaved();
+          resetField("sources");
+        }
+      }
+    },
+    isChanged: (field) => field === "deliveredWetMassKg" && draw.changed,
+    // The single moisture field is only on screen for a load with one reading.
+    isEnabled: (field) => field !== "moistureContentPercent" || stockLocked || draw.usesSingleMoisture,
+  });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    if (isOverrideLockRefusal(error, OVERRIDE_FIELDS)) restoreSavedOverride();
+    return refuseWithFields(error, fallback);
+  };
+  const submitDelivery = latched(handleSubmit(async (data) => {
+    if (!canSave || (stockLocked && (massChanged || dateChanged))) return;
+    const submitted = { overriding, distanceKm: data.distanceKmOverride, source: data.distanceSource, note: data.distanceNote };
+    const overrideError = overrideDistanceError(submitted);
+    if (overrideError) {
+      setError("distanceKmOverride", { type: "manual", message: overrideError }, { shouldFocus: true });
+      return;
+    }
+    // The order is locked once saved; guard the baseline anyway, as the feedstock form does.
+    const patch = distanceOverridePatch(savedOverride, submitted, { routeChanged: isEditMode && data.orderId !== delivery.orderId });
+    const distanceFields = { distanceKmOverride: patch.distanceKm, distanceSource: patch.source, distanceNote: patch.note };
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
-    await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
-      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, (error) => {
-      const issues = deliveryActionFieldIssues(error, [
-        "deliveryDate", "orderId", "storageLocationId", "deliveredWetMassKg",
-        "distanceSource", "distanceKmOverride",
-        ...(massLocked || draw.usesSingleMoisture ? ["moistureContentPercent" as const] : []),
-        ...(distanceKmOverride != null ? ["distanceNote" as const] : []),
-      ] as const);
-      if (!issues) return false;
-      issues.forEach((issue, index) => {
-        setError(issue.field, { type: "server", message: issue.message }, { shouldFocus: index === 0 });
-      });
-      return true;
-    }, distanceRecord?.version);
-  });
-
-  // Why the field is empty stays visible (a cue). With a distance there is no
-  // cue: the route below shows the round trip it counts.
-  const distanceCue = !watchOrderId
-    ? "Select an order to load the destination's stored distance."
-    : undefined;
-  const distanceHelperText = !watchOrderId
-    ? undefined
-    : storedDistanceKm == null
-      ? "This destination has no stored distance. Add one to the customer location, or enter a distance for this delivery."
-      : "Facility › destination distance. Edit only when routing differs.";
+    await onSubmit({ ...data, ...distanceFields, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
+      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, refuseSave, distanceRecord?.version);
+  }));
 
   return (
-    // The wrapper div absorbs the side-sheet Body's direct-child flex-col
-    // override so the sticky CTA row keeps its own layout (see sample-form).
     <div className="space-y-20">
       <FormSpine control={control}>
       <form id={formId} onSubmit={(event) => {
@@ -319,6 +314,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         return submitDelivery(event);
       }} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
+      {isEditMode && stockLocked && <Notice tone="info">{stockEdit.movement?.editLockedReason ?? (stockEdit.history.error ? "Stock edit availability could not be loaded. Reload this delivery." : stockEdit.movement ? "This delivery was corrected. Reload it before editing its date, mass or moisture." : "Loading stock edit availability...")}</Notice>}
       {/* Delivery Information Section */}
       <FormSection
         title="Delivery information"
@@ -326,8 +322,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required cue={deliveryClock.hint}>
-            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || isEditMode} />
+          <FormField id="deliveryDate" label="Delivery date and time" error={deliveryDateError} required cue={deliveryClock.hint}>
+            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || stockLocked} />
           </FormField>
 
         </div>
@@ -383,47 +379,52 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         icon={<ScalesIcon size={14} weight="bold" />}
         fields={["deliveredWetMassKg", "moistureContentPercent"]}
       >
-        {isEditMode && massLocked && <Notice tone="info">{stockEdit.movement?.editLockedReason ?? (stockEdit.history.error ? "Stock edit availability could not be loaded. Reload this delivery." : stockEdit.movement ? "This delivery was corrected. Reload it before editing its mass." : "Loading stock edit availability...")}</Notice>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <WetMassField
-            id="deliveredWetMassKg"
-            label="Biochar product wet mass"
-            unit="kg"
-            error={deliveredWetMassError}
-            hint="Measured wet mass at departure, water included."
-            required
-            disabled={isSubmitting || massLocked}
-            placeholder="e.g. 1000"
-            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
-            certifyStatus={certStatus("deliveredWetMassKg")}
-            registration={register("deliveredWetMassKg", {
-              setValueAs: nullableNumericValue,
-            })}
-          />
-          {(massLocked || draw.usesSingleMoisture) && <MoistureField
+          {/* The message can be long, so it takes its own full-width row under both columns. */}
+          <div className="md:col-start-1 md:row-start-1">
+            <WetMassField
+              id="deliveredWetMassKg"
+              label="Biochar product wet mass"
+              unit="kg"
+              error={deliveredWetMassError}
+              errorOutside
+              hint="Measured wet mass at departure, water included."
+              required
+              disabled={isSubmitting || stockLocked}
+              placeholder="e.g. 1000"
+              certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
+              certifyStatus={certStatus("deliveredWetMassKg")}
+              registration={register("deliveredWetMassKg", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </div>
+          <FieldErrorRow id="deliveredWetMassKg-error" message={deliveredWetMassError} className="md:col-span-2 md:row-start-2" />
+          {(stockLocked || draw.usesSingleMoisture) && <div className="md:col-start-2 md:row-start-1"><MoistureField
             id="moistureContentPercent"
             label="Biochar product moisture"
             unit="%"
             error={errors.moistureContentPercent?.message}
             required
-            disabled={isSubmitting || massLocked}
+            disabled={isSubmitting || stockLocked}
             placeholder="e.g. 20"
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
+            hideDeviationWarning={showsReestimate(stockPreview.data)}
             registration={register("moistureContentPercent")}
-          />}
+          /></div>}
           {/* The composition cards belong to the same grid as the two inputs
               above them, so they align to the field columns and inherit the
               row rhythm instead of stacking on a second spacing scale. The
               wrapper drops out while every child is hidden (before a bin and
               mass give a preview), so it adds no empty grid row under the inputs. */}
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
-            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || massLocked} showErrors={attempted} />}
+            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || stockLocked} showErrors={attempted} hideDeviationWarning={showsReestimate(stockPreview.data)} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === blockingMessage || deliveryDateError === blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("delivery", "moistureContentPercent", layerId))} />}
           </div>
         </div>
       </FormSection>
@@ -443,69 +444,42 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           activeTarget={focusTarget}
           actionLabel="Complete the saved transport route information"
         >
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
-          <FormField
-            id="distanceSource"
-            label="Distance source"
-            error={errors.distanceSource?.message}
-          >
-            <FormSelect
-              id="distanceSource"
-              options={distanceSourceOptions}
-              placeholder="Select source"
-              disabled={isSubmitting || effectiveDistanceKm == null}
-              error={!!errors.distanceSource}
-              {...register("distanceSource")}
-              // The select shows the effective source, which may be inherited
-              // from the customer location while the form value stays null.
-              // These overrides keep RHF's handlers from copying the displayed
-              // value into the form; blur still validates through trigger().
-              value={effectiveDraftDistanceSource ?? ""}
-              onChange={(event) => handleDistanceSourceChange(event.target.value)}
-              onBlur={() => void trigger("distanceSource")}
-            />
-          </FormField>
-
-          <FormField
+          <DistanceOverrideField
             id="distanceKmOverride"
-            label="One-way distance"
-            unit="km"
-            error={errors.distanceKmOverride?.message}
-            helperText={distanceHelperText}
-            cue={distanceCue}
-          >
-            <FormInput
-              id="distanceKmOverride"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceKmOverride}
-              value={distanceDraft}
-              onChange={(event) => handleDistanceChange(event.target.value)}
-              onBlur={handleDistanceBlur}
-            />
-          </FormField>
-
-        </div>
-
-        {distanceKmOverride != null && (
-          <FormField
-            id="distanceNote"
-            label="Distance note"
-            error={errors.distanceNote?.message}
-            helperText="Explain why this trip used a different route."
-          >
-            <FormTextarea
-              id="distanceNote"
-              placeholder="e.g., detour via the coastal road due to bridge closure"
-              disabled={isSubmitting}
-              error={!!errors.distanceNote}
-              {...register("distanceNote")}
-            />
-          </FormField>
-        )}
+            certifyRequired={isDeliveryCertifyField("distanceKmOverride")}
+            certifyStatus={resolveCertFieldStatus(isEditMode && distanceRecord ? true : undefined, savedDistanceKm != null)}
+            sourceId="distanceSource"
+            noteId="distanceNote"
+            hint="The one-way distance from this facility to the order's customer location. Override it when this trip took a different route."
+            overriding={overriding}
+            onOverride={startOverride}
+            onClear={clearOverride}
+            derived={{ distanceKm: storedDistanceKm, source: storedDistanceSource }}
+            // A new delivery reads the pair from the order list; claim nothing until it loads.
+            pending={!distanceRecord && !!watchOrderId && ordersData === undefined}
+            locationName={selectedOrder?.destinationName ?? null}
+            awaitingMessage={watchOrderId ? null : "Select an order to load the destination's distance."}
+            repairHref={customerLocationRepairHref}
+            footer={delivery && !hasSavedOverride(savedOverride) ? (
+              <DistanceDriftAction
+                target={{ entityType: "delivery", entityId: delivery.id }}
+                recordCode={delivery.code}
+                disabledReason={isDirty ? SAVE_BEFORE_REFRESH_REASON : null}
+                onRefreshed={() => onDistanceRefreshed?.()}
+              />
+            ) : undefined}
+            distanceRegistration={register("distanceKmOverride", { setValueAs: nullableNumericValue })}
+            sourceRegistration={register("distanceSource", { setValueAs: emptyToNullSource })}
+            noteRegistration={register("distanceNote")}
+            source={draftDistanceSource}
+            notePlaceholder="e.g., detour via the coastal road due to a bridge closure"
+            errors={{
+              distanceKm: errors.distanceKmOverride?.message,
+              source: errors.distanceSource?.message,
+              note: errors.distanceNote?.message,
+            }}
+            disabled={isSubmitting}
+          />
         </ActionableFocusTarget>
         <TransportRoutePreview
           entityType="biochar"
@@ -516,7 +490,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           distanceKm={effectiveDistanceKm}
           distanceSource={effectiveDraftDistanceSource}
           loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-          saved={isEditMode}
           emptyMessage={ROUTE_EMPTY}
         />
       </FormSection>
@@ -541,6 +514,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="delivery" id={delivery?.id} preview={creditBatchPreview} facilityId={formFacilityId} />}
       />
     </div>
   );

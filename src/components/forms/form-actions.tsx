@@ -4,23 +4,37 @@
  * all entity forms: left-aligned, primary action first, nothing after it.
  * Sticky by default (side-sheet forms); pass `sticky={false}` for nested
  * inline forms (e.g. transport legs, child-entity editors).
+ *
+ * The one error box (action error, refused-field summary, references) is
+ * normal flow at the end of the form, directly above the footer. The footer
+ * order, top to bottom: why Save is off, the optional association `preview`,
+ * then the buttons.
  */
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
+  get,
   useFormState,
   type Control,
   type FieldValues,
 } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { Notice } from "@/components/ui/notice";
+import { useSubmitBlock } from "@/components/ui/submit-block-context";
+import { useRefusalSlot } from "@/components/ui/refusal-slot-context";
 import { cn } from "@/lib/utils";
+import { splitErrorMessage } from "@/lib/error-title";
 import {
   useSideSheetActions,
   type SideSheetActions,
 } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
+import { FormErrorSummary } from "./form-error-summary";
+import { LOCK_REFUSAL_ROOT } from "./use-save-refusal";
+import { readFieldDirectory, type FieldDirectory } from "./form-error-summary-dom";
 
 /** Room kept between a focused control and the sticky CTA row's top edge. */
 const FOCUS_CLEARANCE_PX = 8;
@@ -52,7 +66,8 @@ interface FormActionsProps<
   submitLabel?: string;
   showSubmit?: boolean;
   submitVariant?: React.ComponentProps<typeof Button>["variant"];
-  submittingLabel?: string;
+  /** Extra classes for the submit button, for a label that must wrap on phones. */
+  submitClassName?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
   cancelLabel?: string;
@@ -73,6 +88,12 @@ interface FormActionsProps<
   submitType?: "submit" | "button";
   /** Click handler for a non-submit action button. */
   onSubmitClick?: () => void;
+  /**
+   * One quiet line directly above the buttons saying what saving associates
+   * the record with, such as the credit batch a run joins (#1164). It informs
+   * only: it never disables Save. Hidden with the footer on read-only forms.
+   */
+  preview?: React.ReactNode;
 }
 
 export function FormActions<
@@ -88,7 +109,7 @@ export function FormActions<
   submitLabel,
   showSubmit = true,
   submitVariant = "primary",
-  submittingLabel = "Saving...",
+  submitClassName,
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
   submitDisabled = false,
@@ -97,6 +118,7 @@ export function FormActions<
   guardDialogCancel = sticky,
   submitType = "submit",
   onSubmitClick,
+  preview,
 }: FormActionsProps<TFieldValues, TContext, TTransformed>) {
   // A sticky CTA row inside an EntitySideSheet routes Cancel through the
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
@@ -107,7 +129,28 @@ export function FormActions<
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const block = useSubmitBlock();
+  const refusalSlot = useRefusalSlot();
+  const blockedReasonId = React.useId();
   const inDialog = guardDialogCancel && dialogActions !== null;
+  // Labels and order of the fields, read on every submit of the form (a
+  // click, Enter, or requestSubmit) for the error summary. A field that
+  // appears later still lists, by its message.
+  const [fieldDirectory, setFieldDirectory] = React.useState<FieldDirectory | null>(null);
+  const submitRef = React.useRef<HTMLButtonElement | null>(null);
+  const attachSubmit = (button: HTMLButtonElement | null) => {
+    submitRef.current = button;
+    const form = button?.form;
+    if (!form || !control) return;
+    const readDirectory = () => setFieldDirectory(readFieldDirectory(form));
+    form.addEventListener("submit", readDirectory, true);
+    return () => {
+      form.removeEventListener("submit", readDirectory, true);
+      submitRef.current = null;
+    };
+  };
+  // The Save button's form owner: the form it sits in, or the one `formId` names.
+  const getForm = () => submitRef.current?.form ?? null;
   const handleCancel = onCancel
     ? inSheet
       ? sheetActions.cancel
@@ -123,29 +166,77 @@ export function FormActions<
       {control && inSheet && (
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
-    {(showSubmit || handleCancel || errorMessage) && <div
+    {/* A read-only form (a lock that arrived Sent) offers no actions here; its
+        container keeps the way back and the lock line says why. A refusal that
+        got it there moves to the top of the sheet, where Save used to be. */}
+    {block?.readOnly && errorMessage && (
+      refusalSlot
+        ? createPortal(<TopRefusal control={control} message={errorMessage} action={errorAction} />, refusalSlot)
+        : <TopRefusal control={control} message={errorMessage} action={errorAction} />
+    )}
+    {/* The error box scrolls with the form, after its last field. */}
+    {!block?.readOnly && (
+      control && showSubmit ? (
+        <FormErrorSummary
+          control={control}
+          directory={fieldDirectory}
+          getForm={getForm}
+          message={errorMessage}
+          action={errorAction}
+        />
+      ) : (
+        <ScrolledServerError message={errorMessage} action={errorAction} />
+      )
+    )}
+    {!block?.readOnly && (showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
+      // EntitySideSheet's fieldset stretches every ancestor of this marker so
+      // `mt-auto!` pins the row to the sheet bottom (SHEET_FORM_FILL).
+      data-sheet-footer={sticky ? "" : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
           // `mt-auto!` pins the footer to the bottom of a fill-height flex-column
-          // form on short forms (overriding the form's `space-y` margin); on
+          // form on short forms. A visible error box right before it takes the
+          // auto margin instead (`data-form-error-box`), so the error stays
+          // directly above Save. On
           // long forms there is no free space, so `sticky bottom-0` keeps the
           // action error and CTA in view while the body scrolls.
-          ? "sticky bottom-0 z-20 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          ? "sticky bottom-0 z-20 mt-auto! [[data-form-error-box]:not(:empty)+&]:mt-0! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >
-      <ServerError message={errorMessage} action={errorAction} />
+      {/* Why Save is off sits above the buttons, in the tone of the block. */}
+      {showSubmit && block && (
+        <Notice
+          tone={block.tone}
+          id={blockedReasonId}
+          action={block.retry ? (
+            <Button type="button" variant="default" size="small" busy={block.retry.running} onClick={block.retry.run}>
+              {block.retry.label}
+            </Button>
+          ) : undefined}
+        >
+          {block.reason}
+        </Notice>
+      )}
+      {preview}
       <div className="flex items-center justify-start gap-16">
         {showSubmit && <Button
+          ref={attachSubmit}
           type={submitType}
           variant={submitVariant}
+          className={submitClassName}
           form={formId}
-          onClick={onSubmitClick}
-          disabled={isSubmitting || submitDisabled}
+          onClick={(event) => {
+            if (submitType === "submit") skipNativeChecksUnlessUnparsed(event.currentTarget);
+            onSubmitClick?.();
+          }}
+          busy={isSubmitting}
+          disabled={submitDisabled || !!block}
+          aria-describedby={block ? blockedReasonId : undefined}
         >
-          {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
+          {submitLabel ?? defaultSubmitLabel}
         </Button>}
         {handleCancel && (
           <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>
@@ -155,6 +246,111 @@ export function FormActions<
       </div>
     </div>}
     </>
+  );
+}
+
+/** What a lock refusal says at the top; the lock line below keeps the reason. */
+export const TOP_REFUSAL_TITLE = "Your changes were not saved.";
+
+/**
+ * The refusal of a record that turned read-only. The Save button that held
+ * focus is gone, so the box takes it. A focused box needs a role and a name to
+ * be read, so it is a named group and not a live region: a screen reader
+ * hears it once, from focus. Only a lock refusal is worded here, since it
+ * refused the whole edit and the lock line under the box keeps the reason;
+ * any other message (a partial save, a stale version, a form that has not
+ * moved to the shared refusal hook) shows as the server said it.
+ */
+function TopRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  message,
+  action,
+}: {
+  control?: Control<TFieldValues, TContext, TTransformed>;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  return control
+    ? <LockAwareTopRefusal control={control} message={message} action={action} />
+    : <TopRefusalBox locked={false} message={message} action={action} />;
+}
+
+function LockAwareTopRefusal<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  message,
+  action,
+}: {
+  control: Control<TFieldValues, TContext, TTransformed>;
+  message: string;
+  action?: React.ReactNode;
+}) {
+  const { errors } = useFormState({ control });
+  const locked = Boolean(get(errors, LOCK_REFUSAL_ROOT));
+  return <TopRefusalBox locked={locked} message={message} action={action} />;
+}
+
+export function TopRefusalBox({
+  locked,
+  message,
+  action,
+  lead,
+}: {
+  locked: boolean;
+  message: string;
+  action?: React.ReactNode;
+  /** A title for a form with no lock line of its own: `message` becomes the detail under it. */
+  lead?: string;
+}) {
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  const textId = React.useId();
+  // Sanctioned useEffect: focus and scroll are imperative DOM work.
+  React.useEffect(() => {
+    const box = boxRef.current;
+    box?.scrollIntoView?.({ block: "nearest" });
+    box?.focus({ preventScroll: true });
+  }, []);
+  const { title, detail } = lead ? { title: lead, detail: message } : locked ? { title: TOP_REFUSAL_TITLE, detail: null } : splitErrorMessage(message);
+  return (
+    <div ref={boxRef} tabIndex={-1} role="group" aria-labelledby={textId} data-top-refusal="">
+      <Notice tone="error" live={false} id={textId} title={title}>
+        {detail && <p className="body-small">{" "}{detail}</p>}
+        {action && <div className="mt-8">{action}</div>}
+      </Notice>
+    </div>
+  );
+}
+
+/**
+ * The error box of a form without the summary (no `control`, or no Save). It
+ * sits at the end of the form, so a new message scrolls into view; focus stays
+ * put because the alert role announces it.
+ */
+function ScrolledServerError({ message, action }: { message?: string; action?: React.ReactNode }) {
+  const boxRef = React.useRef<HTMLDivElement>(null);
+  // Sanctioned useEffect: scrolling is imperative DOM work.
+  React.useEffect(() => {
+    if (message) boxRef.current?.scrollIntoView({ block: "nearest" });
+  }, [message]);
+  if (!message) return null;
+  return (
+    <div ref={boxRef} data-form-error-box="" className="mt-auto!">
+      <ServerError message={message} action={action} />
+    </div>
+  );
+}
+
+/**
+ * Lets the schema's own messages explain a refusal: the browser's constraint
+ * bubbles (from the native min, max and step the inputs carry) are skipped.
+ * The one exception is a number input holding text the browser cannot parse
+ * ("1e"): it reports an empty value, which the schema would read as a cleared
+ * field, so the browser's check stays on and blocks the save. Runs on click,
+ * which Enter-key submission also fires, before the form validates.
+ */
+export function skipNativeChecksUnlessUnparsed(submitter: HTMLButtonElement) {
+  const elements = submitter.form ? Array.from(submitter.form.elements) : [];
+  submitter.formNoValidate = !elements.some(
+    (element) => element instanceof HTMLInputElement && element.validity.badInput,
   );
 }
 

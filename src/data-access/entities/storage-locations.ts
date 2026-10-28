@@ -44,7 +44,7 @@ import { requireOrgScope } from "../utils";
 
 
 /**
- * Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar".
+ * Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet mass, 249.6 kg dry biochar".
  * Product bins lead with their formulation so bins with similar names stay distinguishable.
  */
 function outputBinStockSubtitle(
@@ -56,7 +56,9 @@ function outputBinStockSubtitle(
     dryKg: stock.dryMassKg,
     estimatedWet: true,
   });
-  return row.type === "product_bin" ? `${row.formulationName ?? PURE_BIOCHAR_LABEL} · ${stockText}` : stockText;
+  if (row.type !== "product_bin") return stockText;
+  const formulation = row.formulationName ?? PURE_BIOCHAR_LABEL;
+  return stockText ? `${formulation} · ${stockText}` : formulation;
 }
 /** Feedstock bin option subtitle: type, held feedstock, wet stock, pending intake. */
 function formatFeedstockBinSubtitle(

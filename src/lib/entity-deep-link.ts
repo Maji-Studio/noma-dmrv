@@ -5,6 +5,9 @@ export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit feedstock type";
 export const FEEDSTOCK_TYPE_QUERY_PARAM = "feedstockType";
 export const LOCATION_DEEP_LINK_PARAM = "location";
 export const SUPPLIER_QUERY_PARAM = "supplier";
+export const VEHICLE_QUERY_PARAM = "vehicle";
+export const DRIVER_QUERY_PARAM = "driver";
+export const OPERATOR_QUERY_PARAM = "operator";
 
 const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 
@@ -63,4 +66,17 @@ export function buildFeedstockTypeEditDeepLink(
     params.set(ENTITY_DEEP_LINK_MODE_PARAM, ENTITY_DEEP_LINK_EDIT_MODE);
   }
   return `${FEEDSTOCK_TYPES_PATH}?${params.toString()}`;
+}
+
+/** Deep link that opens one record's view sheet on its list page. */
+export function entityViewHref(
+  path: string,
+  queryKey: string,
+  entityId: string,
+  facilityId?: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (facilityId) params.set("facility", facilityId);
+  params.set(queryKey, entityId);
+  return `${path}?${params.toString()}`;
 }

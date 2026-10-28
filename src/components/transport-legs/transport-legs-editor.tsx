@@ -7,7 +7,6 @@ import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dis
 import { Button } from "@/components/ui";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { useToast } from "@/components/ui/toast";
-import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
@@ -23,11 +22,8 @@ import type {
 import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { TransportRoute } from "./transport-route";
-import {
-  deriveTransportLegCertStatuses,
-  summarizeTransportLegCertStatuses,
-} from "./transport-leg-cert-status";
 
 interface TransportLegsEditorProps {
   entityType: TransportEntityTypeValue;
@@ -104,6 +100,7 @@ export function TransportLegsEditor({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const openCreate = () => {
+    createMutation.startDraft();
     setFormError(null);
     setDialog({ open: true });
   };
@@ -117,7 +114,7 @@ export function TransportLegsEditor({
     setDialog((current) => ({ ...current, open: false }));
   };
 
-  const handleSubmit = async (data: TransportLegFormData) => {
+  const handleSubmit = async (data: TransportLegFormData, onRefusal: SaveRefusalHandler) => {
     if (disabled) return;
     setFormError(null);
 
@@ -147,7 +144,7 @@ export function TransportLegsEditor({
       closeDialog();
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Transport leg was not saved. Try again.",
+        onRefusal(err, err instanceof Error ? err.message : "Transport leg was not saved. Try again."),
       );
     }
   };
@@ -180,9 +177,6 @@ export function TransportLegsEditor({
     ? deferredLegs
     : (legs ?? []);
   const controlsDisabled = dialog.open || disabled;
-  const certSummary = summarizeTransportLegCertStatuses(
-    deriveTransportLegCertStatuses(deferred ? deferredLegs : legs, !deferred, entityType),
-  );
 
   const evidenceFor = (index: number): boolean => {
     const leg = displayedLegs[index];
@@ -230,7 +224,6 @@ export function TransportLegsEditor({
         entityType={entityType}
         legs={displayedLegs}
         title={title}
-        cert={certSummary}
         emptyMessage={
           emptyMessage ??
           (readOnly
@@ -291,7 +284,6 @@ export function TransportLegsEditor({
       {/* Delete Confirmation */}
       {!readOnly && (
         <>
-          {deleteError && <ServerError message={deleteError} />}
           <DeleteConfirmDialog
             isOpen={deleteTarget !== null}
             title="Delete transport leg"
@@ -302,6 +294,7 @@ export function TransportLegsEditor({
               setDeleteError(null);
             }}
             isPending={deleteMutation.isPending}
+            errorMessage={deleteError ?? undefined}
           />
         </>
       )}

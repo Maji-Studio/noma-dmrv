@@ -11,17 +11,22 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
 import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { formatDayString } from "@/lib/format-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { toDateInputValue, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { applicationCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
 import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -38,15 +43,18 @@ import {
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { APPLICATION_REFUSAL_ALIASES } from "@/lib/application-operation-input";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import type { DurabilityOption } from "@/schemas/credit-batches";
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 import {
   FieldPositionField,
-  resetFieldPosition,
+  setFieldPosition,
 } from "./field-position-field";
 import type { FieldPositionMode } from "./field-position-field";
 import {
@@ -58,11 +66,15 @@ import {
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import {
-  deliveryStockOverdrawMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  wholeStockDrawKg,
 } from "@/lib/stock-overdraw";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(applicationFormSchema);
 
 // ============================================
 // Constants for select options
@@ -117,12 +129,15 @@ function AppliedMassSplit({
 // ============================================
 
 interface ApplicationFormProps {
+  /** The saved application's lock: a Removal slice fixes its delivery and applied mass. */
+  lock?: RecordLockView;
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
   deliveries?: ApplicationDeliveryOption[];
   /** Form submission handler */
-  onSubmit: (data: ApplicationFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1298). */
+  onSubmit: (data: ApplicationFormData, onRefusal: SaveRefusalHandler, onCommitted: (record: Application) => void) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -152,35 +167,46 @@ export function ApplicationForm({
   submitLabel,
   durabilityOption = "200_year",
   deferredAttachments,
+  lock,
 }: ApplicationFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
+  const { facilityId } = useFacilityContext();
+  const initialDelivery = deliveries.find(delivery => delivery.id === application?.deliveryId);
+  const { timeZone } = useFacilityClock(facilityId);
+  const today = resolveApplicationDateDefault(initialDelivery?.facilityTimezone ?? (application ? UNKNOWN_FACILITY_TIMEZONE : timeZone));
   const isEditMode = !!application;
+  // A Removal slice refuses delivery and applied mass changes (`assertMutableSlices`).
+  // Fail closed: until the lock answers, fields an In use application holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("application"), field);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
   const hideSoilTemperature = durabilityOption === "1000_year";
 
-  const defaultValues = {
-    applicationDate: application?.applicationDate
-      ? toDateInputValue(application.applicationDate)
-      : resolveApplicationDateDefault(),
-    deliveryId: application?.deliveryId ?? "",
-    biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    fieldSizeHa: application?.fieldSizeHa ?? "",
-    fieldIdentifier: application?.fieldIdentifier ?? "",
-    cropType: application?.cropType ?? "",
-    gpsLatitude: application?.gpsLatitude ?? undefined,
-    gpsLongitude: application?.gpsLongitude ?? undefined,
-    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? "",
+  const valuesForRecord = (record: Application | undefined) => ({
+    applicationDate: record?.applicationDate
+      ? toDateInputValue(record.applicationDate, today)
+      : today,
+    deliveryId: record?.deliveryId ?? "",
+    biocharAppliedKg: applicationTonsToKg(record?.biocharAppliedTons) ?? undefined,
+    fieldSizeHa: record?.fieldSizeHa ?? "",
+    fieldIdentifier: record?.fieldIdentifier ?? "",
+    cropType: record?.cropType ?? "",
+    gpsLatitude: record?.gpsLatitude ?? undefined,
+    gpsLongitude: record?.gpsLongitude ?? undefined,
+    applicationMethodType: (record?.applicationMethodType as ApplicationMethod) ?? "",
     // The visual path remains UI-locked, but existing records keep their
     // declared evidence method when another field is edited.
     evidenceMethod: resolveApplicationEvidenceMethodDefault(
-      application?.evidenceMethod,
+      record?.evidenceMethod,
       organizationDefaults.defaultEvidenceMethod,
     ),
-    gisBoundary: application?.gisBoundary ?? null,
-    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? "",
-    soilTemperatureC: application?.soilTemperatureC ?? null,
-  };
+    gisBoundary: record?.gisBoundary ?? null,
+    soilTemperatureSource: (record?.soilTemperatureSource as SoilTemperatureSource) ?? "",
+    soilTemperatureC: record?.soilTemperatureC ?? null,
+  });
+  const defaultValues = valuesForRecord(application);
 
   const {
     register,
@@ -190,7 +216,9 @@ export function ApplicationForm({
     setError,
     setValue,
     resetField,
+    reset,
     getFieldState,
+    clearErrors,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -206,6 +234,13 @@ export function ApplicationForm({
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
+  // A saved application reads its saved shares until another delivery is chosen.
+  const creditBatchPreview = isEditMode && selectedDeliveryId === application?.deliveryId ? undefined
+    : applicationCreditBatchPreview(selectedDeliveryId, watchedAppliedKg, application?.id ?? null);
+  // A refused over-draw named the old delivery's remaining mass; another delivery voids it.
+  useClearOnDependencyChange(selectedDeliveryId, () => {
+    if (getFieldState("biocharAppliedKg").error?.type === SERVER_ERROR_TYPE) clearErrors("biocharAppliedKg");
+  });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -223,6 +258,15 @@ export function ApplicationForm({
     disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+  // A new application's date follows the selected delivery's facility clock,
+  // else the active facility's; it re-defaults while the date is untouched.
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone: selectedDelivery?.facilityTimezone ?? timeZone,
+    isEditMode,
+    fields: ["applicationDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const derivedPosition = selectedDelivery
     ? resolveApplicationPositionDefault({ delivery: selectedDelivery })
     : null;
@@ -340,19 +384,11 @@ export function ApplicationForm({
     isStockOverdraw(appliedKgValid, availableKg)
       ? `Only ${formatStockLimitKg(availableKg)} remains in this delivery. Reduce the applied mass.`
       : undefined;
-  const applicationMassFingerprint = [
-    selectedDeliveryId,
-    watchedAppliedKg,
-  ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    applicationMassFingerprint,
-    (message) => message === deliveryStockOverdrawMessage(),
-  );
   const biocharAppliedError =
     errors.biocharAppliedKg?.message ??
-    applicationStockError ??
-    routedServerError.inlineError;
+    applicationStockError;
+  const wholeAvailableKg =
+    availableKg !== null ? wholeStockDrawKg(availableKg) : null;
   const stockCues = applicationStockCues({
     delivery: selectedDelivery,
     availableKg,
@@ -361,35 +397,15 @@ export function ApplicationForm({
     overdrawError: applicationStockError,
   });
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  register("gpsLatitude");
+  register("gpsLongitude");
+  register("gisBoundary");
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: APPLICATION_REFUSAL_ALIASES,
+    dependents: { gpsLatitude: ["gpsLongitude"], gpsLongitude: ["gpsLatitude"] },
+  });
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (applicationStockError) return;
-
-    // Custody ordering (issue #284): the server rejects this too — but a
-    // legacy application can still reference an undelivered delivery (the
-    // option is disabled yet survives edit-mode defaults), so surface a
-    // field error instead of a generic server error.
-    if (selectedDelivery && selectedDelivery.status !== "delivered") {
-      setError("deliveryId", {
-        type: "manual",
-        message:
-          "This delivery is not marked as delivered. Mark it as delivered before recording an application.",
-      });
-      return;
-    }
-
-    // Custody ordering (issue #284): the server rejects this too — surface a
-    // field error here instead of a generic server error. Both sides compare
-    // the typed day with the delivery's day on its facility clock.
-    if (
-      selectedDelivery?.deliveryDay &&
-      formatUtcDate(data.applicationDate) < selectedDelivery.deliveryDay
-    ) {
-      setError("applicationDate", {
-        type: "manual",
-        message: `Application date cannot be before the delivery date (${formatDayString(selectedDelivery.deliveryDay)})`,
-      });
-      return;
-    }
 
     if (appliedDryBiocharKg == null) {
       setError("root.serverError", {
@@ -402,11 +418,11 @@ export function ApplicationForm({
     await onSubmit({
       ...data,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
-    });
-  });
+    }, refuseSave, (record) => reset(valuesForRecord(record), { keepValues: true, keepSubmitCount: true, keepIsSubmitted: true, keepDirty: true }));
+  }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
@@ -422,7 +438,7 @@ export function ApplicationForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.applicationDate}
-              {...register("applicationDate")}
+              {...register("applicationDate", { onChange: () => markDateEdited("applicationDate") })}
             />
           </FormField>
         </div>
@@ -440,7 +456,7 @@ export function ApplicationForm({
               id="deliveryId"
               optionLabel="delivery"
               placeholder="Select delivery..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("deliveryId")}
               error={!!errors.deliveryId}
               options={deliveryOptions}
               value={deliveryField.value}
@@ -448,7 +464,7 @@ export function ApplicationForm({
                 deliveryField.onChange(id);
                 if (!isEditMode && !getFieldState("applicationDate").isDirty) {
                   setValue("applicationDate", resolveApplicationDateDefault(
-                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone,
+                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone ?? timeZone,
                   ));
                 }
               }}
@@ -468,13 +484,28 @@ export function ApplicationForm({
             certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
+            cueAction={
+              wholeAvailableKg !== null && !locked("appliedWetMassKg")
+                ? {
+                    label: "Add all",
+                    ariaLabel: "Add all to biochar product applied",
+                    disabled: isSubmitting,
+                    onClick: () =>
+                      setValue("biocharAppliedKg", wholeAvailableKg, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      }),
+                  }
+                : undefined
+            }
           >
             <FormInput
               id="biocharAppliedKg"
               type="number"
-              step="any"
+              {...numberBounds("biocharAppliedKg")}
               placeholder="e.g., 5000"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("appliedWetMassKg")}
               error={!!biocharAppliedError}
               {...register("biocharAppliedKg", {
                 setValueAs: numericValue,
@@ -506,7 +537,7 @@ export function ApplicationForm({
             <FormInput
               id="fieldSizeHa"
               type="number"
-              step="any"
+              {...numberBounds("fieldSizeHa")}
               placeholder="e.g., 2.5"
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
@@ -570,10 +601,11 @@ export function ApplicationForm({
             setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
             setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
-          onDerive={() => resetFieldPosition(resetField, derivedPosition)}
+          onDerive={() => setFieldPosition(setValue, derivedPosition)}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
+          required={(evidenceMethod ?? "location") === "location"}
         />
 
       </FormSection>
@@ -582,7 +614,6 @@ export function ApplicationForm({
       <FormSection
         title="Evidence method"
         icon={<MapTrifoldIcon size={14} weight="bold" />}
-        hint="Choose one way to identify where the biochar was applied."
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
@@ -657,7 +688,7 @@ export function ApplicationForm({
             <FormInput
               id="soilTemperatureC"
               type="number"
-              step="any"
+              {...numberBounds("soilTemperatureC")}
               placeholder="e.g., 25.0"
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}
@@ -675,9 +706,10 @@ export function ApplicationForm({
         control={control}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="application" id={application?.id} preview={creditBatchPreview} />}
       />
     </form>
   );

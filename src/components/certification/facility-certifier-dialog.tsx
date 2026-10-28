@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useContext, useState } from "react";
+import { useContext, useId, useState } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
@@ -20,11 +20,10 @@ import {
   saveMappingSchema,
   type SaveMappingInput,
 } from "@/schemas/certification";
-import {
-  useIsometricProjectTemplates,
-  useSaveFacilityCertifierMapping,
-} from "@/hooks/use-certification";
+import { useSaveFacilityCertifierMapping } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import { ProductionConfirmation } from "./production-confirmation";
 import { ConfirmActionDialog } from "./confirm-action-dialog";
@@ -87,7 +86,6 @@ export function FacilityCertifierForm({
     facilityId,
     externalProjectId: mapping?.externalProjectId ?? "",
     protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
-    defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
     externalFacilityId: mapping?.externalFacilityId ?? "",
     confirmProduction: false,
   };
@@ -99,12 +97,15 @@ export function FacilityCertifierForm({
     setValue,
     setError,
     reset,
+    resetField,
     formState: { errors, isSubmitting },
   } = useForm<SaveMappingInput>({
     resolver: zodResolver(saveMappingSchema),
     defaultValues,
   });
 
+  const formId = useId();
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const dialogActions = useContext(FormDialogContext);
   const toast = useToast();
   const saveMutation = useSaveFacilityCertifierMapping();
@@ -118,26 +119,18 @@ export function FacilityCertifierForm({
 
   const watchedProjectId = useWatch({ control, name: "externalProjectId" });
   const { field: projectField } = useController({ control, name: "externalProjectId" });
-  const { field: templateField } = useController({ control, name: "defaultRemovalTemplateId" });
-  const { data: liveTemplates, isLoading: templatesLoading, error: templatesError } =
-    useIsometricProjectTemplates(watchedProjectId || null);
 
-  // When the project changes, clear project-scoped registry identifiers and
-  // reset the share acknowledgment. A stale template or facility id from the
-  // previous Isometric project would fail validation or register production batches at the
-  // wrong facility, and the ack must be re-confirmed for the new project.
+  // When the project changes, clear the project-scoped facility id and reset
+  // the share acknowledgment. A facility id from the previous Isometric project
+  // would register production batches at the wrong facility, and the ack must
+  // be re-confirmed for the new project. The server clears the default Removal
+  // template on a project change; it is chosen in Removal templates.
   const handleProjectChange = (value: string | undefined) => {
     const projectId = value ?? "";
     if (projectId === projectField.value) return;
     projectField.onChange(projectId);
     const returnsToPersistedProject =
       mapping?.externalProjectId === projectId;
-    setValue(
-      "defaultRemovalTemplateId",
-      returnsToPersistedProject
-        ? mapping?.defaultRemovalTemplateId ?? ""
-        : "",
-    );
     setValue(
       "externalFacilityId",
       returnsToPersistedProject ? mapping?.externalFacilityId ?? "" : "",
@@ -161,17 +154,6 @@ export function FacilityCertifierForm({
     code: project.id,
     name: `${project.name}: ${project.id}`,
   }));
-
-  const templates = liveTemplates ?? loaderData.availableTemplates;
-  // Only REMOVAL templates are valid bindings — the save action rejects
-  // anything else, so don't offer REDUCTION templates in the first place.
-  const templateOptions = templates
-    .filter((t) => t.credit_type === "REMOVAL")
-    .map((t) => ({
-      id: t.id,
-      code: t.id,
-      name: `${t.display_name}: ${t.id}`,
-    }));
 
   const linkedHintForSelected = watchedProjectId
     ? linkedFacilitiesByProject.get(watchedProjectId)
@@ -197,31 +179,16 @@ export function FacilityCertifierForm({
       toast.success("Certifier mapping saved");
       onSaved?.();
     } catch (error) {
-      setError("root.serverError", {
-        type: "server",
-        message:
-          error instanceof Error
-            ? error.message
-            : "The mapping was not saved. Try again.",
-      });
+      const footer = refuseSave(error, toSaveErrorMessage(error, "The mapping was not saved. Try again."));
+      if (footer) setError("root.serverError", { type: "server", message: footer });
     }
   };
-
-  // Why the list is empty stays visible; what the default does is explanation.
-  const templateCue = (() => {
-    if (!watchedProjectId) return "Pick a project to load templates.";
-    if (templatesLoading) return "Loading templates…";
-    if (templateOptions.length === 0) {
-      return "This project has no Removal templates.";
-    }
-    return undefined;
-  })();
-  const templateHelperText = "Used as the default when submitting credit batches.";
 
   const showProjectDetails = !!watchedProjectId;
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-24"
     >
@@ -286,30 +253,9 @@ export function FacilityCertifierForm({
           )}
 
           <FormField
-            id="defaultRemovalTemplateId"
-            label="Default Removal template"
-            error={errors.defaultRemovalTemplateId?.message}
-            cue={templateCue}
-            helperText={templateHelperText}
-          >
-            <EntitySelect
-              id="defaultRemovalTemplateId"
-              optionLabel="Removal template"
-              placeholder="No default"
-              options={templateOptions}
-              loadError={templateOptions.length === 0 ? templatesError : null}
-              error={!!errors.defaultRemovalTemplateId}
-              isLoading={templatesLoading}
-              disabled={!watchedProjectId || templatesLoading}
-              value={templateField.value ?? ""}
-              onChange={templateField.onChange}
-              onBlur={templateField.onBlur}
-            />
-          </FormField>
-
-          <FormField
             id="externalFacilityId"
             label="Isometric facility ID"
+            required
             error={errors.externalFacilityId?.message}
             hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
           >
@@ -377,7 +323,6 @@ export function UnlinkConfirmDialog({
       variant="neutral"
       title="Unlink Isometric project"
       confirmLabel="Unlink"
-      busyLabel="Unlinking…"
       body="The facility will no longer be associated with the Isometric project. Past submissions stay on Isometric."
     />
   );

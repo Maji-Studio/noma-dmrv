@@ -1,3 +1,7 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn(async () => new Map()),
+}));
+
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
@@ -7,7 +11,7 @@ import type { OrgContext } from "@/lib/auth/server";
 const ORG_CTX = vi.hoisted((): OrgContext => ({
   userId: "user-test-1",
   organizationId: "org-test-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 }));
 
@@ -17,6 +21,9 @@ vi.mock("../with-action", async () => {
 });
 vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: vi.fn(),
+}));
+vi.mock("@/data-access/certifier-production-batches", () => ({
+  getProductionBatchRegistryInputs: async () => [],
 }));
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(),
@@ -80,6 +87,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
     groups: [{ components: [{ id: "cmp-1", blueprint_key: "electricity_grid", inputs: [] }] }],
   };
   const baseContext = {
+    facilityTimezone: "UTC",
     mapping: { externalProjectId: "prj-1" },
     hasOrgCredentials: true,
     templateBlockers: [],
@@ -229,7 +237,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
           "Add the application logbook.",
         ],
         removalBlockers: [
-          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "creditBatchTemplate" },
+          { code: "notRemovalTemplate", message: REMOVAL_PREPARATION_BLOCKERS.notRemovalTemplate, fixTarget: "templateSetup" },
           { code: "legacy", message: "Add the application logbook.", fixTarget: null },
         ],
         snapshot: null,

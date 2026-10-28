@@ -15,6 +15,11 @@
  * headline stays in ordinary ink so the material reads as content rather than
  * as a category badge.
  *
+ * The figure is the wet mass, because that is what an operator finds on site.
+ * Biochar and product bins track dry biochar, so it reads under the wet
+ * estimate as a smaller secondary figure, the same pair the detail sheet's
+ * stock card shows.
+ *
  * Every mass here is fixed kg (`formatMassKg`), matching the detail sheet the
  * tile opens: a tile reading "1.5 t" above a sheet reading "1,470 kg" for the
  * same bin is the incoherence that rule prevents. Facility-wide roll-ups (the
@@ -22,13 +27,20 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { RowActionsMenu } from "@/components/ui";
+import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
+import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
+import { formatFacilityDay, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
+import { outputStockFigure } from "./stock-preview-shared";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   BIN_TYPE_META,
@@ -52,6 +64,8 @@ interface StorageBinTileProps {
   actions: BinRowAction[];
   onView: (bin: StorageLocationWithFacility) => void;
   onReconcile: (bin: StorageLocationWithFacility) => void;
+  /** Open or In use, from the board's one batched lock read. */
+  lock?: RecordLockView;
 }
 
 export function StorageBinTile({
@@ -59,12 +73,19 @@ export function StorageBinTile({
   actions,
   onView,
   onReconcile,
+  lock,
 }: StorageBinTileProps) {
   const output = useOutputStockBalance(bin.type === "feedstock_bin" || bin.archivedAt != null ? null : { storageLocationId: bin.id, facilityId: bin.facilityId });
   const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : bin.archivedAt != null ? (bin.type === "biochar_bin" ? bin.biocharInventory.dryMassKg : bin.productInventory.dryMassKg) ?? null : output.data?.beforeDryKg ?? null;
+  // An archived bin has no posting read, so it has no wet estimate either.
+  const wetEstimateKg = bin.type === "feedstock_bin" || bin.archivedAt != null ? null : output.data?.beforeEstimatedWetKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
-  const isEmpty = massKg === 0;
+  // A known positive wet estimate is stock, even where the dry biochar rounds to nothing.
+  const hasWetStock = wetEstimateKg != null && wetEstimateKg > 0;
+  const isEmpty = !hasWetStock && massKg === 0;
+  // An active output bin's figures arrive with its stock read; until then the slot stays blank.
+  const loading = bin.type !== "feedstock_bin" && bin.archivedAt == null && !output.data && !output.error;
   const isArchived = bin.archivedAt != null;
   const material = binMaterialName(bin);
   const { Icon, ink } = BIN_TYPE_META[bin.type];
@@ -72,25 +93,18 @@ export function StorageBinTile({
   return (
     <article
       style={binAccentStyle(bin.type)}
-      // Reachable by keyboard, same contract as `application-card.tsx`: the
-      // whole tile opens the detail sheet, so it has to answer Enter and Space.
-      role="button"
-      tabIndex={0}
-      onClick={() => onView(bin)}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        // Only when the tile itself has focus — Space on the nested actions
-        // menu belongs to that menu.
-        if (event.target !== event.currentTarget) return;
-        event.preventDefault();
-        onView(bin);
-      }}
+      // Pointer-only convenience: the material heading below is the link and
+      // the only keyboard / screen-reader target. No role or tabIndex here, so
+      // the actions menu is not nested inside an interactive element.
+      // Same guard as DataTable rows: nested controls (actions menu,
+      // Reconcile) and portaled menus keep their own press.
+      onClick={(event) => handleRowActivationClick(event, () => onView(bin))}
       // Named for the bin, not for the material: several tiles can hold the same
       // material, and a screen reader moving between them needs them distinct.
       // Bin names are unique per org (`guardStorageLocationName`), so the name
       // alone identifies it — no need to read the code aloud either.
       aria-label={bin.name}
-      className={`group flex cursor-pointer items-stretch bg-[var(--panel-bg)] [border:var(--panel-border)] transition-colors hover:[border-color:var(--bin-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] ${
+      className={`group flex cursor-pointer items-stretch bg-[var(--panel-bg)] [border:var(--panel-border)] transition-colors hover:[border-color:var(--bin-accent)] ${
         isEmpty ? "opacity-70" : ""
       } ${needsReconciliation ? "[border-color:var(--st-bad-border)]" : ""}`}
     >
@@ -125,9 +139,23 @@ export function StorageBinTile({
           <span style={{ color: ink }} className="shrink-0">
             <Icon size={16} weight="bold" />
           </span>
-          <h3 className="min-w-0 flex-1 truncate body-small font-semibold" title={material}>
-            {material}
+          <h3 className="min-w-0 flex-1 body-small font-semibold">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onView(bin);
+              }}
+              title={material}
+              // Visible text first (WCAG 2.5.3), then the bin: two bins can hold
+              // the same material, and a bare "Biochar" repeats down the board.
+              aria-label={`${material}, ${bin.name}`}
+              className="block max-w-full cursor-pointer truncate text-left underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+            >
+              {material}
+            </button>
           </h3>
+          <RecordLockOverviewChip lock={lock} className="shrink-0" />
           <span className="shrink-0">
             <RowActionsMenu label={`Actions for ${bin.code}`} actions={actions} />
           </span>
@@ -144,20 +172,25 @@ export function StorageBinTile({
           )}
         </p>
 
-        <div className="flex items-baseline justify-between gap-8">
-          <span
-            className={`body-large font-semibold tabular-nums ${
-              needsReconciliation
-                ? "text-[var(--color-signal-red)]"
-                : isEmpty
-                  ? "text-[var(--color-text-tertiary)]"
-                  : "text-[var(--color-text-primary)]"
-            }`}
-          >
-            {massKg == null ? MISSING_VALUE.notAvailable : isEmpty ? "Empty" : formatMassKg(massKg)}{massKg != null && bin.type !== "feedstock_bin" && " dry biochar"}
-          </span>
-          {needsReconciliation && (
-            <ReconcileLink bin={bin} onReconcile={onReconcile} />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-8">
+            <span
+              className={`body-large font-semibold tabular-nums ${
+                needsReconciliation
+                  ? "text-[var(--color-signal-red)]"
+                  : isEmpty
+                    ? "text-[var(--color-text-tertiary)]"
+                    : "text-[var(--color-text-primary)]"
+              }`}
+            >
+              {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} massKg={massKg} wetEstimateKg={wetEstimateKg} readFailed={!!output.error} />}
+            </span>
+            {needsReconciliation && (
+              <ReconcileLink bin={bin} onReconcile={onReconcile} />
+            )}
+          </div>
+          {!isEmpty && !loading && massKg != null && wetEstimateKg != null && (
+            <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(massKg)} />
           )}
         </div>
 
@@ -166,6 +199,22 @@ export function StorageBinTile({
       </div>
     </article>
   );
+}
+
+/**
+ * The tile's one figure. A feedstock bin's stock is its wet mass. An output
+ * bin leads with its wet estimate. A positive wet estimate wins over a dry
+ * biochar that rounds to nothing, so the tile never says Empty over wet stock
+ * the sheet shows. An archived bin has no stock read, so the dry biochar it
+ * holds is its one figure. A failed stock read says so; a stock figure the
+ * bin does not carry is a derived balance, so the slot stays empty.
+ */
+function TileFigure({ feedstock, massKg, wetEstimateKg, readFailed }: { feedstock: boolean; massKg: number | null; wetEstimateKg: number | null; readFailed: boolean }) {
+  if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, 0);
+  if (massKg == null) return readFailed ? LOAD_FAILED : null;
+  if (massKg === 0) return "Empty";
+  if (feedstock) return `${formatMassKg(massKg)} wet mass`;
+  return outputStockFigure(wetEstimateKg, massKg);
 }
 
 /**
@@ -203,6 +252,7 @@ function ReconcileLink({
  */
 function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   const { lastActivity } = bin;
+  const { timeZone } = useFacilityClock(bin.facilityId);
 
   if (!lastActivity) {
     // Worth saying: under the board's default order this bin sorts last, and
@@ -227,11 +277,11 @@ function LastActivity({ bin }: { bin: StorageLocationWithFacility }) {
   return (
     <p
       className="truncate body-caption text-[var(--color-text-tertiary)]"
-      title={`${lastActivity.label} · ${sign}${activityMass} · ${formatDateTime(
-        lastActivity.date,
+      title={`${lastActivity.label} · ${sign}${activityMass} · ${formatFacilityDateTime(
+        lastActivity.date, timeZone,
       )}`}
     >
-      Last activity: {formatDate(lastActivity.date)}
+      Last activity: {formatFacilityDay(lastActivity.date, timeZone)}
     </p>
   );
 }

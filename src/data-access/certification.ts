@@ -1,10 +1,9 @@
 import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
 import { DomainError } from "@/lib/domain-errors";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { insertDocument } from "./documents";
-import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
-import { nextVersion } from "./row-version";
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
   certifierGhgStatements,
@@ -13,11 +12,9 @@ import {
   certificationSubmissions,
   certifierSyncEvents,
 } from "@/db/schema/certification";
-import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { isTerminalAttemptStatus, isRemoteSubmission, submissionHasRemoteEffect } from "@/lib/record-lock";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -26,13 +23,12 @@ import {
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
 import { pluralize } from "@/lib/copy-utils";
-import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import {
   hasStorageLocationRegistrationForExternalProject,
 } from "./certifier-storage-locations";
 import { withCertifierProjectMappingLocks } from "./certifier-project-mapping-locks";
-import { rejectDraftSubmission } from "./submission-rejection";
 import { adoptCreditBatchesForIsometric } from "./certifier-project-credit-batches";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
@@ -47,7 +43,7 @@ export interface UpsertCertifierProjectInput {
   externalProjectId: string;
   protocolSlug?: string;
   protocolVersion?: string | null;
-  defaultRemovalTemplateId?: string | null;
+  removalTemplateId?: string | null;
   // Operator-pasted Isometric facility id (fcl_…).
   externalFacilityId: string;
   metadata?: Record<string, unknown> | null;
@@ -124,6 +120,8 @@ export async function listAllFacilitiesLinkedByProvider(
     .where(and(eq(certifierProjects.provider, provider), eq(certifierProjects.organizationId, ctx.organizationId)));
 }
 
+export { markSubmissionSubmitted, retireStaleSubmissionDraft, markSubmissionRejected, appendSubmissionJournal, updateSubmissionMetadata, setSubmissionTerminalStatus, clearTerminalStatusForResubmit } from "./submission-ledger-transitions";
+
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Exported for the facility archive-with-warning gate (archive stays allowed;
@@ -182,10 +180,18 @@ export async function hasBlockingFacilitySubmission(
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
 // serial in-transaction probe in upsertCertifierProject cannot see a concurrent
 // upsert (each only row-locks its own facility), so the unique index fires for
-// the loser. Relabel that one 23505 as a clear SafeError; every other error
+// the loser. Relabel that one 23505 as the `validation_failed` DomainError at
+// `externalFacilityId` (via `facilityIdInUse`); every other error
 // (including the entity-version 23505 handled elsewhere) propagates unchanged.
 const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";
+
+/** Refusal shown at the form's Isometric facility ID field (`validation_failed` with one issue). */
+function facilityIdInUse(message: string): DomainError {
+  return new DomainError("validation_failed", message, {
+    issues: [{ path: ["externalFacilityId"], code: "validation_failed", message }],
+  });
+}
 
 async function withExternalFacilityConflictGuard<T>(
   externalFacilityId: string,
@@ -195,7 +201,7 @@ async function withExternalFacilityConflictGuard<T>(
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT)) {
-      throw new SafeError(
+      throw facilityIdInUse(
         `Isometric facility ID ${externalFacilityId} is already linked to another facility. Each Isometric facility maps to exactly one facility here.`,
       );
     }
@@ -215,7 +221,7 @@ export async function upsertCertifierProject(
     externalProjectId: input.externalProjectId,
     protocolSlug: input.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     protocolVersion: input.protocolVersion ?? null,
-    defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
+    removalTemplateId: input.removalTemplateId ?? null,
     externalFacilityId: input.externalFacilityId,
     metadata: input.metadata ?? null,
   };
@@ -270,7 +276,7 @@ export async function upsertCertifierProject(
         )
         .limit(1);
       if (collision) {
-        throw new SafeError(
+        throw facilityIdInUse(
           `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
         );
       }
@@ -329,7 +335,11 @@ export async function upsertCertifierProject(
                     else null
                   end`
                 : values.protocolVersion,
-            defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+            removalTemplateId: input.removalTemplateId === undefined
+              ? existing?.externalProjectId === values.externalProjectId
+                ? existing.removalTemplateId
+                : null
+              : values.removalTemplateId,
             externalFacilityId: values.externalFacilityId,
             metadata: values.metadata,
             updatedAt: sql`now()`,
@@ -355,6 +365,30 @@ export async function upsertCertifierProject(
     },
     () => withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert),
   );
+}
+
+export async function updateFacilityRemovalTemplateInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
+  input: { facilityId: string; externalProjectId: string; removalTemplateId: string },
+): Promise<CertifierProjectRow> {
+  requireOrgScope(ctx);
+  requireOrgRole(ctx, "admin");
+  const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(
+    eq(facilities.organizationId, ctx.organizationId),
+    eq(facilities.id, input.facilityId),
+    isNull(facilities.archivedAt),
+  )).for("share");
+  if (!facility) throw new SafeError("Facility not found or archived.");
+  const [row] = await tx.update(certifierProjects).set({
+    removalTemplateId: input.removalTemplateId, updatedAt: sql`now()`,
+  }).where(and(
+    eq(certifierProjects.organizationId, ctx.organizationId),
+    eq(certifierProjects.facilityId, input.facilityId),
+    eq(certifierProjects.provider, "isometric"),
+    eq(certifierProjects.externalProjectId, input.externalProjectId),
+  )).returning();
+  if (!row) throw new SafeError("The facility's Isometric project link changed. Refresh and try again.");
+  return row;
 }
 
 export interface FacilityEmissionConfigInput {
@@ -582,10 +616,16 @@ export async function getLatestSubmissionsForEntities(
   // entity lives in a different facility are dropped from the result — a
   // batched read must not leak another facility's ledger rows.
   expectedFacilityId?: string,
+  executor: Tx | typeof db = db,
+  // `submitted` keeps only rows that record a submission, so a newer draft
+  // version does not hide an earlier submission: "ledger" needs submitted_at,
+  // "verifier" needs metadata.submittedToVerifierAt (a GHG Statement reaches the
+  // verifier later than its ledger submitted_at, which stamps registry creation).
+  options: { submitted?: "ledger" | "verifier" } = {},
 ): Promise<Map<string, CertificationSubmissionRow>> {
   requireOrgScope(ctx);
   if (key.localEntityIds.length === 0) return new Map();
-  const rows = await db
+  const rows = await executor
     .selectDistinctOn([certificationSubmissions.localEntityId])
     .from(certificationSubmissions)
     .where(
@@ -595,6 +635,12 @@ export async function getLatestSubmissionsForEntities(
         eq(certificationSubmissions.localEntityType, key.localEntityType),
         inArray(certificationSubmissions.localEntityId, key.localEntityIds),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
+        options.submitted === "ledger"
+          ? isNotNull(certificationSubmissions.submittedAt)
+          : undefined,
+        options.submitted === "verifier"
+          ? sql`${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.submittedToVerifierAt} is not null`
+          : undefined,
       ),
     )
     .orderBy(
@@ -606,7 +652,7 @@ export async function getLatestSubmissionsForEntities(
   }
   const facilityById = await facilityIdsForLocalEntities(
     ctx,
-    db,
+    executor,
     key.localEntityType,
     rows.map((row) => row.localEntityId),
   );
@@ -665,245 +711,6 @@ export async function getSubmissionByExternalId(
     )
     .limit(1);
   return row ?? null;
-}
-
-export async function markSubmissionSubmitted(
-  ctx: OrgContext,
-  id: string,
-  args: {
-    externalId: string;
-    supersedePreviousId?: string | null;
-    expectedLockedAt?: Date;
-    // §8.6.2: atomically stamp the claiming removal onto its member batches.
-    // Optional because GHG-statement callers do not claim.
-    productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
-  },
-  callerTx?: Tx,
-  origin?: CertificationActivityOrigin,
-): Promise<void> {
-  requireOrgScope(ctx);
-  const run = async (tx: Tx): Promise<void> => {
-    const updated = await tx
-      .update(certificationSubmissions)
-      .set({
-        status: "submitted",
-        externalId: args.externalId,
-        submittedAt: sql`now()`,
-        lockedAt: null,
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text`,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(certificationSubmissions.id, id),
-          eq(certificationSubmissions.organizationId, ctx.organizationId),
-          ...(args.expectedLockedAt
-            ? [eq(certificationSubmissions.status, "draft" as const), eq(certificationSubmissions.lockedAt, args.expectedLockedAt)]
-            : []),
-        ),
-      )
-      .returning({ id: certificationSubmissions.id });
-    if (updated.length === 0) {
-      throw new SafeError("The submission changed before it could be finalized. Refresh and try again.");
-    }
-    if (args.supersedePreviousId) {
-      await tx
-        .update(certificationSubmissions)
-        .set({
-          status: "superseded",
-          supersededAt: sql`now()`,
-          updatedAt: sql`now()`,
-        })
-        .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
-    }
-    if (args.productionEmissionsClaim?.creditBatchIds.length) {
-      // A throw here rolls back the ledger flip too: the row stays a locked
-      // draft, the resume path reconciles the already-POSTed registry
-      // artifacts by supplier ref, and the pre-flight claim gate re-fires
-      // loudly on retry.
-      await stampProductionEmissionsClaimWithExecutor(
-        ctx,
-        tx,
-        { ...args.productionEmissionsClaim, reservationSubmissionId: id },
-      );
-    }
-  };
-  await withCertificationStatusActivity(ctx, [id, ...(args.supersedePreviousId ? [args.supersedePreviousId] : [])], run, callerTx, origin);
-}
-
-// §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
-// self): unclaimed rows and self re-claims (resubmit/supersede) are stamped;
-// a foreign claim or transferred reservation is excluded by the predicates.
-// The rowcount backstop turns either exclusion into a loud failure and rolls
-// back the ledger transition with the claim write.
-async function stampProductionEmissionsClaimWithExecutor(
-  ctx: OrgContext,
-  executor: Tx | typeof db,
-  args: {
-    removalId: string;
-    creditBatchIds: string[];
-    reservationSubmissionId: string;
-  },
-): Promise<void> {
-  const { removalId, creditBatchIds } = args;
-  const stamped = await executor
-    .update(creditBatches)
-    .set({ version: nextVersion(creditBatches.version),
-      productionEmissionsClaimedByRemovalId: removalId,
-      productionEmissionsClaimReservedBySubmissionId: null,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        inArray(creditBatches.id, creditBatchIds),
-        or(
-          isNull(creditBatches.productionEmissionsClaimedByRemovalId),
-          eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
-        ),
-        eq(
-          creditBatches.productionEmissionsClaimReservedBySubmissionId,
-          args.reservationSubmissionId,
-        ),
-        eq(creditBatches.organizationId, ctx.organizationId),
-      ),
-    )
-    .returning({ id: creditBatches.id });
-  if (stamped.length !== creditBatchIds.length) {
-    const stampedIds = new Set(stamped.map((row) => row.id));
-    const skipped = creditBatchIds.filter((id) => !stampedIds.has(id));
-    throw new SafeError(
-      `${skipped.length} credit ${pluralize(skipped.length, "batch", "batches")} ${skipped.length === 1 ? "was" : "were"} claimed by another Removal while this submission was running (§8.6.2). Reload and submit again.`,
-    );
-  }
-}
-
-// Retires a claimed draft this deploy refuses to resume (currently: its
-// snapshot predates the live INPUT_MAPPING revision — see
-// production-claim-gate.ts). `superseded` is terminal and NON-blocking, so
-// the next submit attempt mints a fresh version from live data; `rejected`
-// would route straight back to resume on an unchanged hash and loop forever.
-// Status-guarded to drafts — never retires a row that progressed.
-export async function retireStaleSubmissionDraft(
-  ctx: OrgContext,
-  id: string,
-  args: { reason: string },
-): Promise<void> {
-  requireOrgScope(ctx);
-  await withCertificationStatusActivity(ctx, [id], async (tx) => {
-    await tx
-      .update(certificationSubmissions)
-      .set({
-        status: "superseded",
-        supersededAt: sql`now()`,
-        lockedAt: null,
-        updatedAt: sql`now()`,
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
-      })
-      .where(
-        and(
-          eq(certificationSubmissions.id, id),
-          eq(certificationSubmissions.status, "draft"),
-          eq(certificationSubmissions.organizationId, ctx.organizationId),
-        ),
-      );
-  });
-}
-
-export async function markSubmissionRejected(
-  ctx: OrgContext,
-  id: string,
-  args: { errorMessage: string; expectedLockedAt?: Date },
-): Promise<void> {
-  requireOrgScope(ctx);
-  await db.transaction((tx) => rejectDraftSubmission(ctx, tx, id, args));
-}
-
-// Deep-merges recovery facts into payload_snapshot.journaled so successive
-// measurement-sample steps retain previously recorded registry identities.
-export async function appendSubmissionJournal(
-  ctx: OrgContext,
-  id: string,
-  patch: Record<string, unknown>,
-  tx?: Tx,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      payloadSnapshot: sql`jsonb_set(
-        coalesce(${certificationSubmissions.payloadSnapshot}, '{}'::jsonb),
-        '{journaled}',
-        coalesce(${certificationSubmissions.payloadSnapshot} -> 'journaled', '{}'::jsonb)
-          || ${JSON.stringify(patch)}::jsonb,
-        true
-      )`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
-}
-
-export async function updateSubmissionMetadata(
-  ctx: OrgContext,
-  id: string,
-  patch: Record<string, unknown>,
-  tx?: Tx,
-  origin?: CertificationActivityOrigin,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await withCertificationStatusActivity(ctx, [id], async (executor) => {
-    await executor
-      .update(certificationSubmissions)
-      .set({
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
-  }, tx, origin);
-}
-
-export async function setSubmissionTerminalStatus(
-  ctx: OrgContext,
-  id: string,
-  args: {
-    status: "accepted" | "rejected";
-    metadataPatch?: Record<string, unknown>;
-  },
-  tx?: Tx,
-  origin?: CertificationActivityOrigin,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await withCertificationStatusActivity(ctx, [id], async (executor) => {
-    await executor
-      .update(certificationSubmissions)
-      .set({
-        status: args.status,
-        lockedAt: null,
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
-  }, tx, origin);
-}
-
-export async function clearTerminalStatusForResubmit(
-  ctx: OrgContext,
-  id: string,
-  args: { metadataPatch?: Record<string, unknown> } = {},
-  tx?: Tx,
-  origin?: CertificationActivityOrigin,
-): Promise<void> {
-  requireOrgScope(ctx);
-  await withCertificationStatusActivity(ctx, [id], async (executor) => {
-    await executor
-      .update(certificationSubmissions)
-      .set({
-        status: "submitted",
-        lockedAt: null,
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
-  }, tx, origin);
 }
 
 export async function attachReportDocument(

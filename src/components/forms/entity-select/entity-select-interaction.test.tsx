@@ -14,6 +14,7 @@ import { z } from "zod";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 
 const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null, selected: undefined as EntityOption | undefined }));
+vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
     state.listEnabled.push(enabled);
@@ -337,14 +338,14 @@ describe("EntitySelect menu interactions", () => {
 
   it("keeps server code matches and a rich selected label while searching", async () => {
     const change = vi.fn();
-    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} alwaysShowSearch formatSelectedLabel={(option) => <strong>{option.name} (+100 kg wet)</strong>} />);
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} alwaysShowSearch formatSelectedLabel={(option) => <strong>{option.name} (+100 kg wet mass)</strong>} />);
     open();
     const search = screen.getByRole("combobox", { name: "Search storage bin" });
     await waitFor(() => expect(document.activeElement).toBe(search));
     fireEvent.change(search, { target: { value: "2" } });
     await waitFor(() => expect(screen.queryByTestId("entity-option-one")).toBeNull());
     expect(screen.getByTestId("entity-option-two").textContent).toBe("South bin");
-    expect(trigger().querySelector("strong")?.textContent).toBe("North bin (+100 kg wet)");
+    expect(trigger().querySelector("strong")?.textContent).toBe("North bin (+100 kg wet mass)");
     key("Enter");
     expect(change).toHaveBeenCalledExactlyOnceWith("two");
   });
@@ -811,6 +812,20 @@ describe("EntitySelect caller-owned options", () => {
     open(); key("ArrowDown"); key("Enter");
     expect(trigger().getAttribute("aria-activedescendant")).toBeNull();
     expect(change).not.toHaveBeenCalled();
+  });
+
+  it("hands the automatic pick to onAutoSelect, not onChange, when the form asks", () => {
+    const change = vi.fn();
+    const auto = vi.fn();
+    render(<EntitySelect options={[state.options[0]]} value="" onChange={change} onAutoSelect={auto} autoSelectSingle />);
+    expect(auto).toHaveBeenCalledExactlyOnceWith("one");
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("still sends the automatic pick to onChange without onAutoSelect", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={[state.options[0]]} value="" onChange={change} autoSelectSingle />);
+    expect(change).toHaveBeenCalledExactlyOnceWith("one");
   });
 
   it("renders caller loading and errors instead of selectable retained options", () => {

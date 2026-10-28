@@ -71,6 +71,8 @@ api-fuzz-report/
 /.pnpm-store/
 /output/
 /outputs/
+# Screen-spec shots (tests/e2e/*-screen.spec.ts); PR evidence lives on the issue-assets branch
+/artifacts/
 # QA run artifacts: only markdown reports are tracked; screenshots, videos,
 # raw driver output, and scripts stay local (docs/organization.md)
 docs/archive/qa/artifacts/**

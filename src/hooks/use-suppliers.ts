@@ -1,4 +1,6 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { transportLegKeys } from "./use-transport-legs";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
 import { invalidateCertificationReadiness } from "./use-certification";
 /**
@@ -34,6 +36,7 @@ import type {
   SupplierWithRelations,
 } from "@/data-access/suppliers";
 import {
+  getSupplierStatsFn,
   getSuppliersFn,
   getSupplierByIdFn,
   createSupplierWithLocationsFn,
@@ -48,7 +51,7 @@ import {
 } from "@/fn/suppliers";
 
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
@@ -80,6 +83,14 @@ function seedCreatedSupplierCaches(
 // ============================================
 // Supplier Query Hooks
 // ============================================
+
+export function useSupplierStats(archived = false) {
+  const filters = { archived };
+  return useQuery({
+    queryKey: supplierKeys.stats(filters),
+    queryFn: async () => unwrap(await getSupplierStatsFn(filters)),
+  });
+}
 
 /**
  * Hook to fetch paginated list of suppliers with filtering
@@ -128,6 +139,12 @@ export function useSupplier(supplierId: string, enabled = true) {
   });
 }
 
+/** Read one supplier from the server now, bypassing the cache, for a sheet that needs its current row. */
+export function useFetchSupplier() {
+  const queryClient = useQueryClient();
+  return (supplierId: string) => queryClient.fetchQuery({ ...supplierQueryOptions(supplierId), staleTime: 0 });
+}
+
 // ============================================
 // Supplier Mutation Hooks
 // ============================================
@@ -137,9 +154,9 @@ export function useCreateSupplierWithLocations(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateSupplierWithLocationsData) => {
-      const result = await createSupplierWithLocationsFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateSupplierWithLocationsData, intentKey) => {
+      const result = await createSupplierWithLocationsFn(data, { intentKey });
       if (!result.success) {
         throwActionError(result);
       }
@@ -149,6 +166,7 @@ export function useCreateSupplierWithLocations(
       seedCreatedSupplierCaches(queryClient, data);
 
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
@@ -255,6 +273,7 @@ export function useUpdateSupplier(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
       // Feedstock and delivery pickers read the supplier through EntitySelect.
@@ -362,6 +381,7 @@ export function useDeleteSupplier(
       queryClient.removeQueries({ queryKey: supplierKeys.detail(supplierId) });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       // Invalidate locations in case the deleted supplier was the only one with its location
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
@@ -404,6 +424,7 @@ export function useDeleteSupplier(
     onSettled: async (data, error, variables) => {
             // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },
@@ -434,6 +455,7 @@ function useSupplierLifecycle(
       invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: supplierKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() }),
         queryClient.invalidateQueries({ queryKey: supplierKeys.options() }),
       ]);
       await callbacks?.onSuccess?.(data, variables);
@@ -489,18 +511,20 @@ export function useSupplierLocationsBySupplier(
 export function useCreateSupplierLocation(callbacks?: MutationCallbacks<SupplierLocation, CreateSupplierLocationData>) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateSupplierLocationData) => {
-      const result = await createSupplierLocationFn(data);
+  return useIntentMutation({
+    mutationFn: async (data: CreateSupplierLocationData, intentKey) => {
+      const result = await createSupplierLocationFn(data, { intentKey });
       if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);
@@ -527,9 +551,11 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       patchArrayListCacheByExactKeyWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all }),
         queryClient.invalidateQueries({ queryKey: feedstockKeys.all }),
         invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
       ]);
@@ -555,7 +581,9 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
+      queryClient.invalidateQueries({ queryKey: chainOfCustodyKeys.all });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {

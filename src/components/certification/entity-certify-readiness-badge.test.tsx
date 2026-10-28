@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import type { EntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { deriveEntityCertifyReadiness, type EntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { EntityCertifyReadinessBadge } from "./entity-certify-readiness-badge";
 
 const READY: EntityCertifyReadiness = {
@@ -24,6 +24,22 @@ const INCOMPLETE: EntityCertifyReadiness = {
 };
 
 describe("EntityCertifyReadinessBadge scoped copy", () => {
+  it("shows Ready (1 warning) for a sampled Sample whose saved lab report is missing", () => {
+    const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "sampled", durabilityOption: "200_year", hasLabReport: false,
+      moistureContentPercent: 10, organicCarbonPercent: 80, hToCOrgRatio: 0.4, oToCOrgRatio: 0.15,
+    });
+    const tooltip = EntityCertifyReadinessBadge({ readiness }) as ReactElement<{
+      children: ReactElement<{
+        "aria-label": string;
+        children: ReactElement<{ label: string }>;
+      }>;
+    }>;
+
+    expect(tooltip.props.children.props.children.props.label).toBe("Ready (1 warning)");
+    expect(tooltip.props.children.props["aria-label"]).toContain("Submission remains available.");
+  });
+
   it("can describe sample chemistry without claiming certification readiness", () => {
     const badge = EntityCertifyReadinessBadge({
       readiness: READY,

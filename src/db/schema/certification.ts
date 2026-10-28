@@ -1,4 +1,5 @@
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -85,8 +86,8 @@ export const certifierProjects = pgTable(
     externalProjectId: text('external_project_id').notNull(),
     protocolSlug: text('protocol_slug').notNull().default('biochar'),
     protocolVersion: text('protocol_version'),
-    // Default Certify removal template used when submitting credit batches for this facility.
-    defaultRemovalTemplateId: text('default_removal_template_id'),
+    // Removal template for this facility's Isometric project and mutable credit batches.
+    removalTemplateId: text('default_removal_template_id'),
     // --- Phase 3.7 emission-estimate config (per facility) ---
     // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
@@ -320,6 +321,7 @@ export const certifierRemovals = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
+    code: text('code').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
@@ -339,6 +341,10 @@ export const certifierRemovals = pgTable(
   },
   (table) => [
     index('certifier_removals_organization_id_idx').on(table.organizationId),
+    unique('certifier_removals_organization_id_code_unique').on(
+      table.organizationId,
+      table.code,
+    ),
     unique('certifier_removals_id_organization_id_unique').on(
       table.id,
       table.organizationId,
@@ -387,6 +393,8 @@ export const certificationSubmissions = pgTable(
     version: integer('version').notNull().default(1),
     status: certificationSubmissionStatus('status').notNull().default('draft'),
     payloadSnapshot: jsonb('payload_snapshot'),
+    // Maintained by the snapshot trigger, including rejected-attempt resets.
+    payloadSnapshotFrozen: boolean('payload_snapshot_frozen').notNull().default(false),
     payloadHash: text('payload_hash'),
     submittedAt: timestamp('submitted_at'),
     lockedAt: timestamp('locked_at'),

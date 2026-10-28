@@ -1,6 +1,8 @@
+import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE } from "@/lib/isometric/emission-line-constants";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { buildRemovalRequirementsChecklist, ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalReadinessFacts, type RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { CERT_REQUIREMENT_META } from "@/lib/certification/requirement-labels";
 import { SubmissionChecks } from "./submission-checks";
 
 vi.mock("next/link", () => ({
@@ -12,7 +14,8 @@ vi.mock("next/link", () => ({
 const CHECKS = [
   ["mapping", "Facility linked to a registry project"],
   ["credentials", "Organization registry credentials"],
-  ["template", "Removal template resolved"],
+  ["templateSet", "Template set"],
+  ["templateLines", "Components decided"],
   ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
@@ -23,6 +26,7 @@ const CHECKS = [
   key,
   label: requirementLabel,
   requirementLabel,
+  unmetLabel: CERT_REQUIREMENT_META[key as RemovalRequirementCheck["key"]].unmetLabel,
   status: "met",
 })) as RemovalRequirementCheck[];
 
@@ -38,16 +42,23 @@ function withUnmet(
 }
 
 describe("SubmissionChecks", () => {
-  it("links template pin blockers to each batch's Switch template and line blockers to the review", () => {
+  it("links template blockers to the Set template setup in Settings and line blockers to the review", () => {
     const html = renderToStaticMarkup(<SubmissionChecks
-      checks={withUnmet("template", { templateBlockerCodes: ["mixedTemplatePins", "templateLinesNeedReview"] })}
+      checks={CHECKS.map((check): RemovalRequirementCheck => check.key === "templateSet"
+        ? { ...check, status: "unmet", templateBlockerCodes: ["mixedTemplatePins"] }
+        : check.key === "templateLines"
+          ? { ...check, status: "unmet", templateBlockerCodes: ["templateLinesNeedReview"] }
+          : check)}
       facilityId="facility-1"
       creditBatches={[{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }]}
     />);
-    expect(html).toContain('href="/credit-batches?facility=facility-1&amp;batch=batch-1&amp;focus=removal-template"');
-    expect(html).toContain(">Switch template on CB-2</a>");
-    expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
-    expect(html).toContain(">Review template lines</a>");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
+    expect(html).toContain(">Set template</a>");
+    expect(html).not.toContain("Switch template");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
+    expect(html).toContain(">Answer in Settings</a>");
+    expect(html).toContain("Template cannot be used");
+    expect(html).toContain("Template components not ready");
     expect(html).not.toContain(">Open settings</a>");
   });
 
@@ -71,6 +82,7 @@ describe("SubmissionChecks", () => {
         key,
         label: "Transport check",
         requirementLabel: "Transport check",
+        unmetLabel: "Transport problem",
         status: "unmet" as const,
         transportCategory: category,
         detail: `${category} ${key} needs attention`,
@@ -88,7 +100,7 @@ describe("SubmissionChecks", () => {
   it("lists only what the operator must fix, with passed checks reduced to a count", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks
-        checks={withUnmet("template", {
+        checks={withUnmet("templateSet", {
           detail: "No default Removal template is selected.",
         })}
         facilityId="facility-1"
@@ -96,13 +108,14 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("What to fix");
-    expect(html).toContain("8 checks passed");
+    expect(html).toContain("9 checks passed");
     expect(html).toMatch(/<h3[^>]*>\s*What to fix\s*<\/h3>/);
     expect(html).not.toContain("<button");
-    expect(html).toContain("Removal template resolved");
+    expect(html).toContain("Template cannot be used");
+    expect(html).not.toContain("Template set");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(
-      'href="/certification/settings?section=certifier&amp;facility=facility-1"',
+      'href="/settings/facilities?facility=facility-1"',
     );
     // Passing checks are noise on a screen titled "need attention".
     expect(html).not.toContain("Facility linked to a registry project");
@@ -118,7 +131,7 @@ describe("SubmissionChecks", () => {
       />,
     );
 
-    expect(html).toContain("Production lineage complete");
+    expect(html).toContain("No production run linked");
     expect(html).toContain(
       "No applications fall in this batch&#x27;s crediting period.",
     );
@@ -194,7 +207,7 @@ describe("SubmissionChecks", () => {
     expect(bothHtml).toContain("PR-26-001");
     expect(bothHtml).toContain("AP-26-001");
     expect(bothHtml).toMatch(/<li[^>]*>[\s\S]*PR-26-001/);
-    expect(bothHtml).toContain("Future dates");
+    expect(bothHtml).toContain("Production or application date not accepted");
     expect(bothHtml).toContain(
       "Correct these dates, or wait until both dates have passed.",
     );
@@ -208,13 +221,14 @@ describe("SubmissionChecks", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks
         checks={[
-          ...withUnmet("template", {
+          ...withUnmet("templateSet", {
             detail: "No default Removal template is selected.",
           }),
           {
             key: "evidence",
             label: "Registry value sources linked",
             requirementLabel: "Registry value sources linked",
+            unmetLabel: "Registry value sources not linked",
             status: "warning",
             detail: "2 files will upload on submit",
           },
@@ -223,7 +237,7 @@ describe("SubmissionChecks", () => {
       />,
     );
 
-    expect(html).toContain("8 checks passed");
+    expect(html).toContain("9 checks passed");
     expect(html).not.toContain("Registry value sources linked");
     expect(html).not.toContain("2 files will upload on submit");
   });
@@ -261,4 +275,40 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("Review D-0 evidence");
     expect(html).not.toContain(`Review D-${ENTITY_READINESS_CHECK_DISPLAY_LIMIT} evidence`);
   });
+});
+
+it.each(["templateNotFullyRead", "forbiddenLine", "lineNeedsSetup", "lineHasNoSource"] as const)("opens Removal templates for a decided or unread %s problem", (code) => {
+  const checks = buildRemovalRequirementsChecklist({
+    local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+    hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
+    emissionLineBlockers: [{ code, message: "Check the template.", fixTarget: "templateLineReview" }],
+  });
+  const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" />);
+  expect(html).toContain(">Open Removal templates</a>");
+  expect(html).not.toContain(">Answer in Settings</a>");
+});
+
+it.each([LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE])("links replacement guidance to the Set template setup in Settings: %s", (message) => {
+  const facts: RemovalReadinessFacts = {
+    local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+    hasSubmittableRuns: true, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransport: [], feedstockTypeMappingGaps: [],
+    emissionLineBlockers: [{ code: "lineNeedsSetup", message, fixTarget: "templateReplacement" }],
+  };
+  const checks = buildRemovalRequirementsChecklist(facts);
+  for (const count of [0, 1, 2]) {
+    const creditBatches = [{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }].slice(0, count);
+    const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
+    expect(html).toContain(">Set template</a>");
+    expect(html).toContain('href="/settings/removal-templates?facility=facility-1&amp;setup=template"');
+    expect(html).not.toContain(">Answer in Settings</a>");
+  }
+});
+
+it.each([0, 1, 2])("preserves emissions link labels for %s batches", (count) => {
+  const creditBatches = [{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }].slice(0, count);
+  const checks: RemovalRequirementCheck[] = [{ key: "emissions", label: "Emissions", ...CERT_REQUIREMENT_META.emissions, status: "unmet" }];
+  const html = renderToStaticMarkup(<SubmissionChecks checks={checks} facilityId="facility-1" creditBatches={creditBatches} />);
+  expect(html).toContain(`>${count < 2 ? "Review emissions" : "Review emissions on CB-1"}</a>`);
+  expect(html).toContain(count === 0 ? 'href="/credit-batches?facility=facility-1"' : 'href="/credit-batches/batch-1?facility=facility-1&amp;tab=emissions"');
+  if (count === 2) expect(html).toContain(">Review emissions on CB-2</a>");
 });

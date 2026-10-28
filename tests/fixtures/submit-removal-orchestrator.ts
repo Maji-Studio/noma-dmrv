@@ -1,3 +1,9 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn<
+    typeof import("@/data-access/credit-batch-removal-holders").getCreditBatchUndeletableRemovalCodes
+  >(async () => new Map()),
+}));
+
 import { reviewedTemplateSources } from "../helpers/template-line-sources";
 import { beforeEach, vi } from "vitest";
 
@@ -46,6 +52,7 @@ const BLOCKING_EXTERNAL_MUTATIONS = new Set<unknown>([
 // are in place when its top-level imports resolve.
 // ---------------------------------------------------------------------------
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
@@ -305,7 +312,7 @@ function makeMapping(): CertifierProjectRow {
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: TEMPLATE_ID,
+    removalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
     defaultSoilTemperatureC: 24.2,
@@ -441,6 +448,7 @@ export function makeContext(
   const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
+    facilityTimezone: overrides.facilityTimezone ?? "UTC",
     hasOrgCredentials: true,
     removalId: REMOVAL_ID,
     reportingWindowStartedOn: storedRemovalStartedOn,
@@ -512,6 +520,7 @@ export function makeContext(
     latestSubmission: latest,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
     linkedGhgStatement: null,
     isProduction: false,
     lineages: [makeLineage({ biocharMassKg })],
@@ -853,6 +862,7 @@ beforeEach(() => {
       totalDryMassKg: ORIGINAL_BIOCHAR_MASS_KG,
       runsMissingDryMass: 0,
       runsMissingEndTime: 0,
+      latestEndingRunCode: "RUN-LAST",
     },
   ]);
   vi.mocked(

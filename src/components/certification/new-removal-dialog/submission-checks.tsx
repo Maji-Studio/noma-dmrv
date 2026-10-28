@@ -12,12 +12,12 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
-import { certificationSettingsHref } from "@/lib/certification/links";
-import {
-  removalTemplateBlockerDestination,
-  type RemovalTemplateBlockerCode,
-} from "@/lib/certification/removal-template-blockers";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
+import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
+import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
+import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
 import {
   buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
@@ -37,44 +37,45 @@ interface CheckCreditBatch {
 interface SubmissionChecksProps {
   checks: RemovalRequirementCheck[];
   facilityId: string;
-  /** The Removal's credit batches. Template pin blockers link to each one. */
+  /** The Removal's credit batches. Emissions blockers link to each one. */
   creditBatches?: readonly CheckCreditBatch[];
 }
 
-/**
- * A pin blocker is fixed on each credit batch (Switch template); a line blocker
- * in the template line review. Without codes, fall back to Settings.
- */
-function templateFixLinks(
-  codes: readonly RemovalTemplateBlockerCode[],
+function perBatchLinks(
+  target: Parameters<typeof batchHealthFixLinkFor>[0],
   facilityId: string,
   creditBatches: readonly CheckCreditBatch[],
 ): { label: string; href: string }[] {
-  const destinations = new Set(
-    codes.map(removalTemplateBlockerDestination),
-  );
+  if (creditBatches.length === 0) return [batchHealthFixLinkFor(target, facilityId)];
+  return creditBatches.map((batch) => {
+    const link = batchHealthFixLinkFor(target, facilityId, batch.id);
+    return creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` };
+  });
+}
+
+/** Keep decision, filling and batch-template repairs distinct. */
+function templateFixLinks(
+  codes: readonly RemovalBlockerCode[],
+  facilityId: string,
+  targets?: readonly TemplateFixTarget[],
+): { label: string; href: string }[] {
+  const destinations = new Set(targets ?? codes.filter(isTemplateRoutedCode).map(templateFixTarget));
   if (destinations.size === 0) {
-    return [{ label: "Open settings", href: certificationSettingsHref(facilityId) }];
+    return [batchHealthFixLinkFor({ key: "templateLines", fixTarget: "templateLines" }, facilityId)];
   }
-  const links: { label: string; href: string }[] = [];
-  if (destinations.has("creditBatchTemplate")) {
-    const target = { key: "template", fixTarget: "creditBatchTemplate" } as const;
-    if (creditBatches.length === 0) links.push(batchHealthFixLinkFor(target, facilityId));
-    for (const batch of creditBatches) {
-      const link = batchHealthFixLinkFor(target, facilityId, batch.id);
-      links.push(creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` });
-    }
-  }
-  if (destinations.has("templateLineReview")) {
-    links.push(batchHealthFixLinkFor({ key: "template", fixTarget: "templateLineReview" }, facilityId));
-  }
-  return links;
+  // Both open the same review page. Keep the specific decision action when needed.
+  if (destinations.has("templateLineReview")) destinations.delete("templateLines");
+  return [...destinations].flatMap((fixTarget) => {
+    const target = { key: "templateLines", fixTarget } as const;
+    // One facility Removal template now: setup and replacement go to the same Settings dialog for every batch.
+    return [batchHealthFixLinkFor(target, facilityId)];
+  }).filter((link, index, links) => links.findIndex((item) => item.href === link.href) === index);
 }
 
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes" | "templateFixTargets"
   >,
   facilityId: string,
   creditBatches: readonly CheckCreditBatch[] = [],
@@ -104,10 +105,15 @@ function fixLinksFor(
     }
     case "mapping":
       return [
-        { label: "Open settings", href: certificationSettingsHref(facilityId) },
+        { label: "Open settings", href: facilityCertificationSettingsHref(facilityId) },
       ];
-    case "template":
-      return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
+    case "templateSet":
+    case "templateLines":
+      return check.key === "templateSet" && !check.templateBlockerCodes?.length
+        ? [{ label: "Open settings", href: facilityCertificationSettingsHref(facilityId) }]
+        : templateFixLinks(check.templateBlockerCodes ?? [], facilityId, check.templateFixTargets);
+    case "emissions":
+      return perBatchLinks({ key: "emissions" }, facilityId, creditBatches);
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "labSamples") return [labSamples];
@@ -156,12 +162,6 @@ function fixLinksFor(
   }
 }
 
-function checkHeading(check: RemovalRequirementCheck): string {
-  return check.key === "measurementDates"
-    ? "Future dates"
-    : check.requirementLabel;
-}
-
 function dateGuidance(dateCount: number): string {
   if (dateCount === 1) {
     return "Correct this date, or wait until it has passed.";
@@ -197,7 +197,7 @@ function CheckRow({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <span className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-          {checkHeading(check)}
+          {certCheckLabel(check)}
           {check.whyDetail && (
             <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
           )}

@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Samples Server Actions
@@ -26,6 +27,7 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 /** Keep the per-operation log context the legacy actions emitted. */
 function logFor(op: string) {
@@ -114,11 +116,12 @@ export async function getSampleStatsFn(
  * nutrient toggle, file URLs without an input) stay behind.
  */
 export async function createSampleFn(
-  data: z.infer<typeof createSampleSchema>
+  data: z.infer<typeof createSampleSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<SampleWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createSampleSchema.parse(data);
-    const result = await runOperationInProcess(recordLabSample, ctx, {
+    const result = await create(recordLabSample, {
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime,
       labName: validated.labName || null,
@@ -153,7 +156,7 @@ export async function createSampleFn(
       ironPercent: validated.ironPercent ?? null,
     });
     return result.sample;
-  }, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
+  }, options, { fallbackMessage: "Failed to create sample", log: logFor("sample:create") });
 }
 
 // ============================================

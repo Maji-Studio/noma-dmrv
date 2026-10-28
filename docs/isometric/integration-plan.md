@@ -37,7 +37,7 @@ Application credentials are not environment-only:
 - each organization stores one Isometric access token and client secret in
   `certifier_credentials`;
 - both values are encrypted through `src/lib/crypto/secrets.ts`;
-- Owners/Admins manage their active organization's credentials through
+- Admins manage their active organization's credentials through
   `src/data-access/certifier-credentials.ts`;
 - application calls construct an organization-specific client with
   `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,
@@ -110,7 +110,8 @@ superseding version.
 
 `completed_on` is the latest application date across the Removal's lineage and
 fails closed when no application exists. `started_on` currently uses the
-earliest production start. The pinned protocol says the Reporting Period begins
+facility day of the earliest production start. Both are facility calendar days
+(see `changes.md`, 2026-10-21). The pinned protocol says the Reporting Period begins
 with feedstock sourcing, so the start boundary is a known implementation gap
 and must not be described as conformant.
 
@@ -163,15 +164,30 @@ association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
 artifact intact. The documented provider response omits
-`source_ids` on both create and GET, and no REST endpoint exposes the reverse
-link. The accepted create request is therefore the attachment contract: a
-readback without `source_ids` is not drift. Returned Source IDs, when a response
-does include them, must match the exact reviewed set. The immutable local intent
-and submission snapshot retain the IDs sent. Authoritative readback through the
-GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field is tracked in
-issue #737. Registry failure
-blocks Removal submission and leaves the claim safely retryable. There is no
-gate or placeholder lifecycle.
+`source_ids` on both create and GET. REST still accepts omitted/null Source
+readback and checks any returned set. GraphQL now reads the authoritative links
+through `project.biocharSpreadEvents.biocharSpreadEventSources` after Application
+confirmation. The call uses `/graphql` at the Certify origin with both Certify
+authentication headers, a 10-second attempt timeout and at most two attempts.
+Wrong or malformed sets stop submission and record `source_set_mismatch` drift.
+No answer continues with persisted `unconfirmed` status and an ID-only warning
+unless the previous readback was a mismatch. A retry without an answer keeps that
+mismatch, restores `source_set_mismatch` drift, and stops submission until an
+authoritative exact match confirms the corrected evidence set.
+The immutable snapshot retains the expected IDs; empty expected sets are not checked.
+
+Removal summary reloads recheck only unconfirmed, lifecycle-confirmed registrations.
+Each load rechecks at most three eligible registrations concurrently with one shared
+client resolution. Rows outside that limit retain their persisted status and counts;
+a failed recheck retains the row's previous status without failing the summary.
+Success clears the note. A mismatch on refresh records the evidence status and logs
+IDs without failing the summary or marking submission drift. The summary and list
+row expose `evidenceLinks` counts and the latest check time for the UI.
+Confirmed checks are reused on submission retries. The sandbox confirmed the
+query, the auth and the REST/GraphQL id equivalence on a live Application; the
+full-submit retest on staging is tracked in
+[open questions](../open-questions-isometric.md).
+Other registry failures block submission and leave the claim safely retryable.
 
 ## Deleting a never-finalized Removal
 
@@ -248,11 +264,16 @@ Removal template.
 
 ### PROJECT-scope emissions
 
-Staff travel, direct pyrolyzer gases, storage fuel, lab electricity, sampling
-consumables, and other period/LCA overhead are authored as PROJECT-scope
-components in Isometric where applicable. noma keeps no project-emissions
-journal. The transformer guard prevents these tuples from being silently
-submitted as Removal-scope zeroes.
+Establishment and end-of-life components remain project-level in Isometric.
+Operating components, including staff travel, direct gases, lab electricity and
+sampling consumables, use their reviewed template contracts and emissions
+entries under [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+Period inputs are never stubbed, independently of the
+emissions-entry activation gate. A missing operating input blocks submission
+until records, entries or a Removal-confirmed zero supply it. Operators confirm
+zeros on Empty components. Forbidden project-level inputs still fail closed.
+See [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
 
 ## Durability paths
 
@@ -329,7 +350,13 @@ catalog declares on each input:
 - application-boundary inventory/logbook evidence to sequestration
   `product_mass` and, when present, safety-margin `mass`;
 - generated transport ledger to the transport inputs present in the template;
-- generated durability ledger to the tier-specific durability inputs.
+- generated durability ledger to the tier-specific durability inputs;
+- `emission_entry` files to the exact `{componentId, inputKey}` targets in the
+  contribution manifest, validated against the frozen entry set. Paired inputs
+  each receive the entry's files; recorded zeros and tombstoned entries add none.
+  Datapoints receive the sorted, deduplicated union of automatic and entry Sources.
+  Source descriptions identify the emissions entry by component name, entry date,
+  and credit batch code. The lineage retains the entry ID.
 
 Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
 are also mirrored as Sources and attached to each corresponding Biochar
@@ -423,9 +450,10 @@ Parquet and reactor MeasurementSamples are outside the approved submission route
 
 ## Operational checks
 
-- `pnpm isometric:coverage-check -- --source=fixture` validates checked-in
-  template fixtures against ordinary, durability, diesel-name, safety-margin,
-  and PROJECT-scope guards.
+- `pnpm isometric:coverage-check -- --source=fixture` fetches live templates
+  selected by the checked-in fixture and uses the same line contracts as readiness
+  and submission (ADR 0032). Entry-only operating lines warn; unsettled contracts,
+  forbidden lines and unmapped inputs fail.
 - `pnpm isometric:coverage-check -- --source=db` inspects configured facility
   templates when credentials/database access are available.
 - `.github/workflows/isometric-health.yml` performs the repository's scheduled

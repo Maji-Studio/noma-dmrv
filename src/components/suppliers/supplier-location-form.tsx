@@ -5,7 +5,11 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useId } from "react";
 import { useController, useForm } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { FACILITY_DISTANCE_REFUSAL_ALIASES } from "@/lib/facility-distance-changes";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +19,7 @@ import {
   FormInput,
   FormSection,
   FormTextarea,
+  GPS_FIELD_NAMES,
   PositionPicker,
 } from "@/components/forms";
 import {
@@ -54,8 +59,8 @@ interface SupplierLocationFormProps {
   initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
-  /** Form submission handler */
-  onSubmit: (data: SupplierLocationFormData) => Promise<void> | void;
+  /** Form submission handler; `onRefusal` shows a refused save at its fields (#1327). */
+  onSubmit: (data: SupplierLocationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -80,6 +85,7 @@ export function SupplierLocationForm({
   errorMessage,
   submitLabel,
 }: SupplierLocationFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!location;
   const { facilities } = useFacilityContext();
   // The default moves only by setting another location as default.
@@ -105,6 +111,8 @@ export function SupplierLocationForm({
     getValues,
     register,
     handleSubmit,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierLocationFormSchema),
@@ -144,12 +152,15 @@ export function SupplierLocationForm({
       ? { lat: gpsLatitude, lng: gpsLongitude }
       : null;
 
-  const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data);
-  });
+  const formId = useId();
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: FACILITY_DISTANCE_REFUSAL_ALIASES });
+  const handleFormSubmit = latched(handleSubmit((data) => {
+    return onSubmit(data, refuseSave);
+  }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         event.stopPropagation();
         return handleFormSubmit(event);
@@ -242,6 +253,7 @@ export function SupplierLocationForm({
       <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix={positionIdPrefix}
+          fieldNames={GPS_FIELD_NAMES}
           label="Source location position"
           accent="orange"
           required
@@ -298,6 +310,7 @@ export function SupplierLocationForm({
 
       <FormActions
         control={control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

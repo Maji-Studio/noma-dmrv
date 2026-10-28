@@ -48,7 +48,7 @@ let ctx: OrgContext;
 let fixture: Awaited<ReturnType<typeof createActivityWriteFixture>>;
 
 beforeEach(async () => {
-  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "admin", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
   __setStorageProviderForTests(new RetirementStorageProvider());
 });
@@ -220,12 +220,24 @@ it("records transport-leg create/update/delete once with batch lineage", async (
   for (const row of rows) expect(row.creditBatchId).toBe(fixture.batch.id);
 });
 
-it("records sample-owned transport and its documents against the sample's batch", async () => {
-  const sample = await insertSample();
-  const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
+it("records feedstock-owned transport and its documents against the batch", async () => {
+  const leg = await createTransportLeg(ctx, legInput());
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   expect((await events("transport_leg", leg.id))[0].creditBatchId).toBe(fixture.batch.id);
   expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
+});
+
+it("records sample-owned transport and its documents against the sample's batch", async () => {
+  const sample = await insertSample();
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
+  const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
+  expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
+  await runOperationInProcess(deleteLabSample, ctx, { labSampleId: sample.id, expectedVersion: sample.version });
+  expect((await events("transport_leg", leg.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
+  expect((await events("document", document.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
 });
 
 it("records cascade transport deletes and document retirement with captured ownership", async () => {
@@ -240,16 +252,28 @@ it("records cascade transport deletes and document retirement with captured owne
 });
 
 it("upserts identical derived syncs without events and records changed fields on a real update", async () => {
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: DERIVED_LEG_DISTANCE_KM }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: DERIVED_LEG_DISTANCE_KM, distanceSource: "manual" }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: DERIVED_LEG_DISTANCE_KM }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: DERIVED_LEG_DISTANCE_KM, distanceSource: "manual" }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
   expect(await events("transport_leg", leg.id)).toHaveLength(1);
   const [unchanged] = await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id));
   expect(unchanged.version).toBe(leg.version + 1);
   expect(unchanged.updatedAt.getTime()).toBeGreaterThanOrEqual(leg.updatedAt.getTime());
   expect({ ...unchanged, version: leg.version, updatedAt: leg.updatedAt }).toEqual(leg);
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: UPDATED_LEG_DISTANCE_KM }));
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: null }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: UPDATED_LEG_DISTANCE_KM, distanceSource: "manual" }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: null, distanceSource: null }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
   const rows = await events("transport_leg", leg.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   expect(rows[1].changedFields).toEqual(["distanceKm"]);
@@ -258,7 +282,10 @@ it("upserts identical derived syncs without events and records changed fields on
 
 it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
   const sample = await insertSample();
-  const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
   const sampleDocument = await insertDocument(ctx, documentInput("sample", sample.id));
   const legDocument = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   const input = { labSampleId: sample.id, expectedVersion: sample.version };
@@ -469,7 +496,10 @@ it("rolls back certification-safe app deletion and activity on recording failure
 
 
 it.each(["rest", "mcp", "script"] as const)("records derived document retirement as system when a %s update clears the leg", async source => {
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: LEG_DISTANCE_KM }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: LEG_DISTANCE_KM, distanceSource: "manual" }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   const input = { feedstockId: fixture.feedstock.id, expectedVersion: fixture.feedstock.version, transportDistanceKm: null };
@@ -499,7 +529,10 @@ it("records only affected batch visibility changes on facility archive and resto
 it("records vehicle snapshot refreshes as system leg updates with batch and run scope", async () => {
   const [vehicle] = await db.insert(vehicles).values({ organizationId: ctx.organizationId, code: "ACT-VEHICLE", name: "Activity vehicle", vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }).returning();
   await db.update(feedstocks).set({ vehicleId: vehicle.id }).where(eq(feedstocks.id, fixture.feedstock.id));
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: LEG_DISTANCE_KM }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: LEG_DISTANCE_KM, distanceSource: "manual" }).where(eq(feedstocks.id, fixture.feedstock.id));
+    await syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { refreshFromLocation: true });
+  });
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
   const updated = await updateVehicle(ctx, vehicle.id, { name: vehicle.name, vehicleType: "van", modelYear: UPDATED_MODEL_YEAR }, vehicle.version);
   const rows = await events("transport_leg", leg.id);

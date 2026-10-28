@@ -1,6 +1,7 @@
 "use server";
 
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
@@ -10,6 +11,7 @@ import { runOperationInProcess } from "@/lib/operations/runner";
 import { recordApplication, updateApplication, deleteApplication } from "@/lib/operations/applications";
 import { recordApplicationInput, updateApplicationInput, deleteApplicationInput } from "@/schemas/application-input";
 import { requireOrgFacility } from "@/data-access/utils";
+import { getApplicationStats as getApplicationStatsData, type ApplicationStats } from "@/data-access/application-stats";
 import {
   getApplications as getApplicationsData,
   getApplicationDeliveryOptions as getApplicationDeliveryOptionsData,
@@ -20,6 +22,7 @@ import {
   applicationEvidenceMethods,
   applicationStatuses,
 } from "@/schemas/applications";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
 
@@ -57,6 +60,26 @@ export async function getApplicationsFn(
   });
 }
 
+const applicationStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getApplicationStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<ApplicationStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = applicationStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getApplicationStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load application stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "application action failed", context: { op: "application:stats" } },
+  });
+}
+
 export async function getApplicationDeliveryOptionsFn(
   facilityId?: string
 ): Promise<ActionResult<Awaited<ReturnType<typeof getApplicationDeliveryOptionsData>>>> {
@@ -75,8 +98,11 @@ export async function getApplicationDeliveryOptionsFn(
   });
 }
 
-export async function createApplicationFn(data: z.input<typeof recordApplicationInput>): Promise<ActionResult<Application>> {
-  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data))).application, {
+export async function createApplicationFn(
+  data: z.input<typeof recordApplicationInput>,
+  options?: CreateIntentOptions
+): Promise<ActionResult<Application>> {
+  return withCreate(async (_ctx, create) => (await create(recordApplication, recordApplicationInput.parse(data))).application, options, {
     fallbackMessage: "Failed to create application", log: { message: "application action failed", context: { op: "application:create" } },
   });
 }

@@ -30,10 +30,10 @@ export function lineCompilesWithoutEmissionSource(component: TemplateComponent):
       (!hasExplicitSequestrationBinding(component.blueprintKey) || !!getSequestrationInputBinding(component.blueprintKey, input.key))));
 }
 
-/** The shared, batch-independent decision. Entries cannot supply submission inputs until PR 4. */
+/** Shared capability guard; Removal-specific selection supplies entry values. */
 export function emissionLineBindingDecision(args: {
   component: TemplateComponent; groupKey: string; contract?: LineContract;
-  problems: readonly LineSourceProblem[]; enrichmentComplete: boolean;
+  problems: readonly LineSourceProblem[]; enrichmentComplete: boolean; entriesCanSubmit?: boolean;
 }): EmissionLineBindingDecision | undefined {
   const { component, groupKey, problems } = args;
   const contract = args.contract && effectiveContract(args.contract);
@@ -60,6 +60,9 @@ export function emissionLineBindingDecision(args: {
     blocker: { ...templateRemovalBlocker("forbiddenLine"), lineRef },
   };
   if (lineCompilesWithoutEmissionSource(component)) return undefined;
+  // Legacy paired transport can have a valid automatic contract but no datapoint mapping.
+  // Entry capability cannot waive mapping checks for the automatic contribution.
+  if (args.entriesCanSubmit && !contract?.automaticSource && contract?.scope === "operating" && contract.entryPolicy !== "none") return undefined;
   const unmappedKeys = component.inputs.filter((input) => input.type === "monitored" &&
     !getSequestrationInputBinding(component.blueprintKey, input.key) &&
     !lookupInputMapping(groupKey, component.blueprintKey, input.key, contract)).map((input) => input.key);
@@ -69,7 +72,7 @@ export function emissionLineBindingDecision(args: {
       state: entryOnly ? "empty" : "needsSetup", reason: "unmapped", inputKeys: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY ? [keys[0]] : unmappedKeys.length ? unmappedKeys : keys,
       blocker: { code: entryOnly ? "lineHasNoSource" : "lineNeedsSetup", message: component.blueprintKey === TRANSPORT_BLUEPRINT_KEY
         ? LINE_TRANSPORT_REPLACEMENT_MESSAGE
-        : LINE_NO_MAPPING_MESSAGE, fixTarget: "templateLineReview", lineRef },
+        : LINE_NO_MAPPING_MESSAGE, fixTarget: "templateReplacement", lineRef },
     };
   }
   return undefined;

@@ -158,6 +158,11 @@ export const certifierStorageLocationDriftStatus = pgEnum(
   ['in_sync', 'drifted'],
 );
 
+export const certifierBiocharApplicationSourceReadbackStatus = pgEnum(
+  "certifier_biochar_application_source_readback_status",
+  ["not_checked", "confirmed", "unconfirmed", "mismatch"],
+);
+
 export const certifierBiocharApplicationLifecycleStatus = pgEnum(
   'certifier_biochar_application_lifecycle_status',
   ['creating', 'confirmed', 'deleted'],
@@ -291,6 +296,7 @@ export const certificationSubmissionStatus = pgEnum(
 
 export const ACTIVITY_ENTITY_TYPES = [
   "emission_entry",
+  "emission_line_comment",
   "removal",
   "ghg_statement",
   "production_run",

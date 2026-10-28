@@ -4,8 +4,8 @@
 > per-stage split and genset-yield portions after the active removal template
 > moved to a single combined energy measurement point.
 >
-> **"An admin page" is now Certification → Settings → Emissions**
-> (`/certification/settings?section=emission-estimates`), per ADR 0007.
+> **"An admin page" is now Settings, Facilities** (`/settings/facilities`,
+> #1277; formerly Certification → Settings → Emissions, per ADR 0007).
 
 ## Context
 

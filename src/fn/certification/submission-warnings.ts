@@ -1,5 +1,4 @@
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
@@ -7,11 +6,13 @@ import { catalogCandidates, type AutomaticSourceId } from "@/lib/isometric/templ
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import type { TransportLegsByCategory } from "./shared";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
+import { formatFacilityDate } from "@/lib/date-utils";
 
 // Run masses exist on every run and sequestration is required on every Removal
 // template. Warning for those would fire on nearly every template. Safety margin
 // reuses dry biochar mass rather than an independently recorded emissions fact.
 export const DELIBERATELY_EXCLUDED_SOURCES = {
+  "sample-transport": "Sample shipping is recorded as an emissions entry. Legacy legs are retired.",
   "feedstock-dry-mass": "Run mass is recorded on every run.",
   "biochar-dry-mass": "Run mass is recorded on every run.",
   sequestration: "Every Removal template requires sequestration.",
@@ -26,7 +27,6 @@ export const RECORDED_AUTOMATIC_SOURCES = [
 export const RECORDED_TRANSPORT_SOURCES = [
   { category: "feedstock", id: "feedstock-transport", label: "Feedstock transport" },
   { category: "biochar", id: "delivery-transport", label: "Delivery transport" },
-  { category: "sample", id: "sample-transport", label: "Sample transport" },
 ] as const satisfies readonly { category: keyof TransportLegsByCategory; id: AutomaticSourceId; label: string }[];
 
 function carriedAutomaticSources(template: IsometricGhgEntryTemplate, lineSources: LineSources): Set<AutomaticSourceId> {
@@ -45,6 +45,8 @@ function carriedAutomaticSources(template: IsometricGhgEntryTemplate, lineSource
 
 // UTC year-month key ("YYYY-MM") — the reporting window is compared at month
 // grain because a noma Removal defaults to a one-RP-month batch (ADR 0016).
+// Application dates are calendar dates at UTC midnight: their UTC month is the
+// facility month. Production starts are instants and convert to the facility day.
 function utcMonth(date: Date): string {
   return date.toISOString().slice(0, 7);
 }
@@ -57,8 +59,9 @@ function utcMonth(date: Date): string {
 function buildStraddleWarning(args: {
   runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
+  facilityTimezone: string;
 }): string[] {
-  const { runs, lineages } = args;
+  const { runs, lineages, facilityTimezone } = args;
   if (runs.length === 0 || lineages.length === 0) return [];
   const earliestStart = runs.reduce(
     (earliest, run) => (run.startTime < earliest ? run.startTime : earliest),
@@ -71,7 +74,7 @@ function buildStraddleWarning(args: {
         : latest,
     lineages[0].application.applicationDate,
   );
-  const startMonth = utcMonth(earliestStart);
+  const startMonth = formatFacilityDate(earliestStart, facilityTimezone).slice(0, 7);
   const applicationMonth = utcMonth(latestApplication);
   if (startMonth === applicationMonth) return [];
   return [
@@ -103,11 +106,13 @@ export function buildSubmissionAdvisories(args: {
     }),
   ];
   return droppedFacts.map((source) => ({
-    code: "droppedRecordedFact", fixTarget: "templateLineReview",
-    message: `${source.label} is recorded, but the active Removal template has no automatic source for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`,
+    code: "droppedRecordedFact", fixTarget: "templateLines",
+    message: `${source.label} is recorded, but the active Removal template takes no automatic datapoints for it. Check which template component should take it in Removal templates.`,
   }));
 }
 
-export function buildSubmissionWarnings(args: Parameters<typeof buildSubmissionAdvisories>[0]): string[] {
+export function buildSubmissionWarnings(
+  args: Parameters<typeof buildSubmissionAdvisories>[0] & { facilityTimezone: string },
+): string[] {
   return [...buildSubmissionAdvisories(args).map((advisory) => advisory.message), ...buildStraddleWarning(args)];
 }

@@ -2,8 +2,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import type { ApiRouteContext } from "@/lib/api/route";
+import { withLockedFieldIssues } from "@/lib/record-lock-fields";
+import { actionFailureResponse } from "@/lib/api/problem";
 import { apiResponseHeaders } from "@/lib/api/problem";
-import { toolErrorSchema, toolFailure, toolSuccess } from "./results";
+import { toolErrorSchema, toolFailure, toolSuccess, toolText, writesDisabledResult } from "./results";
 import { parseQueryInput } from "@/lib/api/query";
 import { lookupListSchema } from "@/lib/api/query-schemas";
 
@@ -11,6 +13,26 @@ const mocks = vi.hoisted(() => ({ log: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => vi.clearAllMocks());
 const context = { requestId: "request-1", instance: "/api/mcp", headers: apiResponseHeaders("request-1"), deadlineAt: 0 } as ApiRouteContext;
+
+it("returns one text block with the summary and compact JSON, preserving structured content", () => {
+  const body = { data: [{ id: "batch-1", note: 'Quoted "value"\nNext line' }], nextCursor: null };
+  const result = toolSuccess(body, "1 credit batch.");
+  expect(result.content).toEqual([{ type: "text", text: toolText("1 credit batch.", body) }]);
+  expect(result.structuredContent).toBe(body);
+});
+
+it("includes the same problem JSON after the summary for tool failures", async () => {
+  const result = await toolFailure(new DomainError("validation_failed", "Check the field."), context, "test_tool");
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([{ type: "text", text: toolText("Check the field.", result.structuredContent) }]);
+});
+
+it("includes the same problem JSON after the summary when writes are disabled", () => {
+  const result = writesDisabledResult();
+  expect(result.isError).toBe(true);
+  expect(result.content).toEqual([{ type: "text", text: toolText("API writes are temporarily disabled.", result.structuredContent) }]);
+});
+
 it.each([
   ["find_facilities", { q: "bad\u0000value" }, lookupListSchema, "/q"],
   ["find_feedstocks", { cursor: "bad\tvalue" }, lookupListSchema, "/cursor"],
@@ -56,4 +78,23 @@ it.each(["outcome_unknown", "deadline_exceeded"] as const)("logs %s without a ca
 it("preserves retryable document conflicts just like REST", async () => {
   const result = await toolFailure(new DomainError("conflict", "Upload the file again.", { retryable: true }), context, "confirm_document_upload");
   expect(result).toMatchObject({ isError: true, structuredContent: { code: "conflict", retryable: true } });
+});
+
+it("adds lineage field issues in REST and MCP while preserving the original refusal", async () => {
+  const message = "Delivery DL-001 is locked by a certification submission.";
+  const original = new DomainError("certification_locked", message, {
+    issues: [{ path: ["deliveryId"], code: "certification_locked", message }],
+  });
+  const error = await withLockedFieldIssues(async () => { throw original; },
+    { code: "DL-001" }, { code: "DL-EDIT" },
+  ).catch((failure: DomainError) => failure);
+  const response = actionFailureResponse({ success: false, error: error.message, code: error.code, issues: error.issues }, "/deliveries", "request-1");
+  expect(response.status).toBe(409);
+  const problem = await response.json();
+  const expectedIssues = ["/deliveryId", "/code"].map(pointer => ({ pointer, code: original.code, detail: message }));
+  expect(problem).toMatchObject({ code: original.code, detail: message });
+  expect(problem.errors).toEqual(expectedIssues);
+  const result = await toolFailure(error, context, "update_delivery");
+  expect(result.structuredContent).toMatchObject({ code: original.code, detail: message });
+  expect(result.structuredContent.issues).toEqual(expectedIssues);
 });

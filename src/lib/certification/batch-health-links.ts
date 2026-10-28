@@ -10,8 +10,8 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -25,9 +25,9 @@ export interface BatchHealthFixLink {
   href: string;
 }
 
-// Note: the problem-phrased "open check headline" was retired in Phase 0 — every
-// readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
-// (see `requirement-labels.ts`), so the batch page and the removal wizard can't
+// Note: every readiness surface labels a check through `certCheckLabel`
+// (`requirement-labels.ts`): the named problem while unmet, the neutral
+// requirement otherwise. The batch page and the removal wizard therefore can't
 // phrase the same gap differently.
 
 export function fallbackBatchHealthFixTarget(
@@ -36,7 +36,8 @@ export function fallbackBatchHealthFixTarget(
   switch (key) {
     case "emissions":
       return "emissions";
-    case "template":
+    case "templateSet":
+    case "templateLines":
       return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
@@ -89,15 +90,16 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "emissions":
-      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
-      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
-    case "creditBatchTemplate":
-      return creditBatchId
-        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
-        : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
+    case "templateSetup":
+    case "templateReplacement":
+      return { label: "Set template", href: removalTemplateSetupHref(facilityId) };
+    case "templateLines":
+      return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":
-      return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplateSetupHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,
@@ -115,8 +117,8 @@ export function batchHealthFixLinkFor(
       };
     case "certificationEmissions":
       return {
-        label: "Open emission estimates",
-        href: certificationEmissionEstimatesHref(facilityId),
+        label: "Open Settings, Facilities",
+        href: facilityCertificationSettingsHref(facilityId),
       };
     case "applications":
       // Applications auto-match by crediting period — there is no manual "link"

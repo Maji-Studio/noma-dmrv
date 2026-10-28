@@ -4,7 +4,8 @@
  */
 
 export { FormActions } from "./form-actions";
-export { FormError } from "./form-error";
+export { FormFooterPreview, type FormFooterPreviewProps } from "./form-footer-preview";
+export { FieldErrorRow, FormError } from "./form-error";
 export { ServerError } from "./server-error";
 export { FormField } from "./form-field";
 export { FormInput } from "./form-input";
@@ -35,7 +36,7 @@ export {
 export { DistanceCalcField } from "./distance-calc-field";
 
 // Position Picker (map preview + address search + manual lat/lng)
-export { PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";
+export { GPS_FIELD_NAMES, PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";
 
 // Entity Select
 export {
@@ -43,6 +44,7 @@ export {
   FormEntitySelect,
   QuickAddDialog,
   useQuickAddDialog,
+  useSelectDefault,
   type EntityOption,
   type EntityType,
   type EntitySelectProps,
@@ -50,8 +52,6 @@ export {
   type UseEntityOptionsParams,
 } from "./entity-select";
 
-export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
-export { FormDetailProvider, FormDetailControl, DetailedOnly, DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "./form-detail-context";
 
 export { CompositionCard } from "./composition-card";
 export { DerivedHeadline } from "./derived-headline";

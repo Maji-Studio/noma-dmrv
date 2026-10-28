@@ -6,6 +6,8 @@ import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import { BIOCHAR_PRODUCT_MASS, OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
+export const oauthGuide = `OAuth connects one member in one organization. Read first; reauthorize with the challenged scopes on 403 insufficient_scope. No delete. Disconnect in Settings, Connected apps. Attach chat files in noma.`;
+
 export const domainGuide = `## Feedstock intake
 
 - Operators weigh wet mass as received. Dry mass is derived from wet mass and moisture, not weighed for bin stock. ${FEEDSTOCK_UNITS}
@@ -23,7 +25,7 @@ export const domainGuide = `## Feedstock intake
 
 /**
  * Biochar product and bin stock guidance. It lives in llms.txt and the MCP tool
- * descriptions rather than the MCP server instructions, which stay under 2000 characters.
+ * descriptions rather than the MCP server instructions, whose non-OAuth guidance stays under 2000 characters.
  */
 export const biocharStockGuide = `## Biochar products and bin stock
 
@@ -35,7 +37,7 @@ export const biocharStockGuide = `## Biochar products and bin stock
 - ${OUTPUT_STOCK_NO_CORRECTIONS}
 `;
 
-/** Lab sample guidance lives in llms.txt and the MCP tool descriptions, not the MCP server instructions, which stay under 2000 characters. */
+/** Lab sample guidance lives in llms.txt and the MCP tool descriptions, not the MCP server instructions, whose non-OAuth guidance stays under 2000 characters. */
 export const labSampleGuide = `## Lab samples
 
 - ${LAB_SAMPLE_BATCHES}
@@ -73,6 +75,10 @@ export const llmsGuide = `# noma data-entry API v1
 Public contract: /api/v1/openapi.json
 Base URL: /api/v1
 
+## OAuth connections
+
+${oauthGuide}
+
 ${domainGuide}
 ${biocharStockGuide}
 ${labSampleGuide}
@@ -92,7 +98,7 @@ MCP: find_documents and get_document_download_url require the chosen owner's rea
 
 ## REST requests
 
-- Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
+- Authenticate private routes with Authorization: Bearer <API key or OAuth access token> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
 - GET /me returns the credential organization, active facilities, role, scopes and expiry. Reads require the resource :read scope. Feedstock creates and updates require feedstocks:write; deletes require feedstocks:delete. Production run creates and updates require production-runs:write; deletes require production-runs:delete. Biochar product creates and updates, and loss and count postings on output bins, require biochar-products:write; products cannot be deleted. /me needs no scope. Domain guards still apply.
 - Resolve reference UUIDs through read-only facilities, feedstock-types, storage-locations, vehicles, drivers and reactors. Read formulations with formulations:read. Use POST /formulations with Idempotency-Key; PATCH and DELETE /formulations/{id} and POST /formulations/{id}/archive and /restore use UUID paths with If-Match (formulations:write for create, update, archive and restore; formulations:delete for delete). Biochar products (biochar-products:read) are read-only lookups; /storage-locations/{idOrCode}/stock-movements lists a biochar or product bin's posted movements, newest first (biochar-products:read), and POST on it records a loss or count (UUID only). Credit batches (credit-batches:read) are a read-only lookup. A lab sample (lab-samples:read) belongs to one credit batch, and the batch's facility, shown in the facility's durabilityOption and timeZone, sets its tier and clock. POST /lab-samples (lab-samples:write, Idempotency-Key required) records one replicate and PATCH moves or edits it; DELETE needs lab-samples:delete. Writes return the sample and any calculated ratios or certification gaps in warnings. Supplier locations require the parent UUID. GET detail accepts UUID or exact code; PATCH and DELETE require UUID.
 - Use POST /suppliers with Idempotency-Key; PATCH and DELETE /suppliers/{id} and POST /suppliers/{id}/archive and /restore use UUID paths with If-Match (suppliers:write for create, update, archive and restore; suppliers:delete for delete).
@@ -105,5 +111,6 @@ MCP: find_documents and get_document_download_url require the chosen owner's rea
 - Lists use newest-first (createdAt, id) cursor pagination, default ${API_LIST_DEFAULT_LIMIT} and maximum ${API_LIST_MAX_LIMIT}. Send nextCursor as cursor with unchanged filters; null means the end. No totals or include. q searches a literal case-insensitive code/name prefix; code matches exactly. Feedstocks search code only; supplier locations search name only.
 - Run start and end times take RFC 3339 with an explicit offset, or facility-local { date, time }; offset-less strings are refused. Responses return UTC instants.
 - Errors use application/problem+json with code, retryable, errors containing JSON pointers and safe metadata, and optional conflict, blockers or current. Follow retryable and Retry-After seconds. 429 is rate limited; 409 idempotency_in_progress means wait and retry the same key. Retryable 500 deadline_exceeded or outcome_unknown requires the same key; outcome_unknown may already have committed. 503 temporarily disables writes.
+- Feedstock (production-run usage) and order (deliveries) dependency delete refusals keep 409 certification_locked and production-run dependency refusals keep 409 conflict; each adds issue metadata reason in_use (errors in REST, issues in MCP). Certified-lineage refusals are 409 certification_locked without that reason. Order issues also include deliveryCode and deliveryId, selected by code in ascending order.
 - RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset describe the tightest request bucket; Reset is seconds. Failed writes and dry runs consume the write budget. X-Request-Id identifies requests.
 `;

@@ -29,6 +29,8 @@ vi.mock("@/hooks/use-suppliers", () => ({
 vi.mock("@/hooks/use-customers", () => ({
   useCustomerLocations: () => harness.query,
   useDeleteCustomerLocation: () => ({ isPending: false }),
+  useArchiveCustomerLocation: () => ({ isPending: false }),
+  useRestoreCustomerLocation: () => ({ isPending: false }),
 }));
 vi.mock("./suppliers/supplier-location-dialog", () => ({
   SupplierLocationDialog: (props: { isFirstLocation?: boolean }) => {

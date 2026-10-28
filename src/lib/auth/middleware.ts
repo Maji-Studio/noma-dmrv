@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/better-auth";
+import { homePathFor } from "./home-path";
 
 /**
  * Route configuration
@@ -32,6 +33,12 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
  * `/api/mcp/anything` stay behind the session.
  */
 const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp", "/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"]);
+const DISCOVERY_ROUTES = new Set([
+  "/.well-known/oauth-authorization-server/api/auth",
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-protected-resource/api/mcp",
+  "/.well-known/oauth-protected-resource/api/v1",
+]);
 
 /**
  * Check if path matches any of the given routes
@@ -57,7 +64,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
+  if (DISCOVERY_ROUTES.has(pathname) || MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     return NextResponse.next();
   }
 
@@ -78,17 +85,18 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = matchesRoute(pathname, AUTH_ROUTES);
   const isApiRoute = pathname.startsWith("/api");
 
-  // Root path: redirect to dashboard or login
+  // Root path: redirect to the role-based home or login
   if (pathname === "/") {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(new URL(homePathFor(session?.user), request.url));
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // If authenticated and on an auth page, redirect to app
-  if (isAuthenticated && isAuthRoute) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  const isOAuthLogin = pathname === "/login" && request.nextUrl.searchParams.has("sig") && request.nextUrl.searchParams.has("ba_param");
+  if (isAuthenticated && isAuthRoute && !isOAuthLogin) {
+    return NextResponse.redirect(new URL(homePathFor(session?.user), request.url));
   }
 
   // If not authenticated and not on a public route
@@ -100,7 +108,7 @@ export async function updateSession(request: NextRequest) {
       });
     }
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("from", pathname);
+    loginUrl.searchParams.set("from", pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

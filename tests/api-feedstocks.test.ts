@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
@@ -37,7 +38,7 @@ beforeEach(async () => {
   b = await createIntakeFixture(`rest-b-${randomUUID()}`);
   for (const fixture of [a, b]) {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "REST fixture", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "admin" });
     await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId }).where(eq(storageLocations.id, fixture.binId));
   }
   const credential = await createApiKey(a.ctx, { name: "Intake A", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
@@ -84,7 +85,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("creates one stock addition, returns Location and ETag, and replays byte-identically", async () => {
     const first = await create();
     expect(first.response.headers.get("location")).toBe(`/api/v1/feedstocks/${first.row.id}`);
-    expect(first.etag).toBe('"1.2"');
+    expect(first.etag).toBe('"1.3"');
     expect(first.row).toMatchObject({ version: 1, deliveryDate: "2026-10-06", massWetKg: 4200, massDryKg: 2835, moistureContentPercent: 32.5 });
     expect(JSON.parse(first.text)).not.toHaveProperty("stockEffects");
     expect(first.row).not.toHaveProperty("supplierName");
@@ -97,6 +98,33 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await feedstockCount(a)).toBe(1);
     expect(await stock()).toBe(4200);
     await problem(await POST(request("POST", "", a.input(100), { "idempotency-key": first.key })), 422, "idempotency_key_reused");
+  });
+
+  it("refuses source-only patches on derived distances and accepts them on overrides", async () => {
+    const created = await create({ ...a.input(), transportDistanceKm: 0 });
+    const refusal = await problem(await patch(created.row.id, { transportDistanceSource: "document" }, created.etag), 422, "validation_failed");
+    expect(refusal.detail).toBe("The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+    const unchanged = await GET(request("GET", `/${created.row.id}`), params(created.row.id));
+    expect(unchanged.headers.get("etag")).toBe(created.etag);
+    expect((await unchanged.json()).data).toEqual(created.row);
+    const overridden = await patch(created.row.id, { transportDistanceKm: 25 }, created.etag);
+    expect(overridden.status).toBe(200);
+    const changed = await patch(created.row.id, { transportDistanceSource: "document" }, overridden.headers.get("etag")!);
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).data).toMatchObject({ distanceKmOverride: 25, distanceSource: "document" });
+  });
+
+  it("returns persisted override metadata and accepts legacy zero without storing a zero override", async () => {
+    const created = await create({ ...a.input(), transportDistanceKm: 0 });
+    expect(created.row).toMatchObject({ distanceKmOverride: null, distanceSource: null, distanceNote: null });
+    const overridden = await patch(created.row.id, {
+      transportDistanceKm: 25, transportDistanceSource: "document", distanceNote: "Measured route",
+    }, created.etag);
+    expect(overridden.status).toBe(200);
+    expect((await overridden.json()).data).toMatchObject({ distanceKmOverride: 25, distanceSource: "document", distanceNote: "Measured route" });
+    const cleared = await patch(created.row.id, { transportDistanceKm: 0 }, overridden.headers.get("etag")!);
+    expect(cleared.status).toBe(200);
+    expect((await cleared.json()).data).toMatchObject({ distanceKmOverride: null, distanceSource: null, distanceNote: null });
   });
 
   it("canonicalizes uppercase reference and path UUIDs, so either case replays one key (api/uuid-case)", async () => {
@@ -227,12 +255,12 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     await problem(await patch(saved.row.id, {}, '"1.99"'), 412, "stale_version");
     const updated = await patch(saved.row.id, { moistureContentPercent: 0 }, saved.etag);
     expect(updated.status).toBe(200);
-    expect(updated.headers.get("etag")).toBe('"2.2"');
+    expect(updated.headers.get("etag")).toBe('"2.3"');
     const current = (await updated.json()).data;
     expect(current).toMatchObject({ version: 2, moistureContentPercent: 0, massDryKg: 4200, notes: "Keep this note" });
     const stale = await problem(await patch(saved.row.id, { notes: "Stale" }, saved.etag), 412, "stale_version");
     expect(stale.current).toEqual(current);
-    const cleared = await patch(saved.row.id, { notes: null, transportDistanceKm: null }, '"2.2"');
+    const cleared = await patch(saved.row.id, { notes: null, transportDistanceKm: null }, '"2.3"');
     expect(cleared.status).toBe(200);
     expect((await cleared.json()).data).toMatchObject({ version: 3, notes: null, moistureContentPercent: 0 });
   });
@@ -243,9 +271,9 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     const first = await patch(saved.row.id, { notes: "First patch" }, saved.etag, keyA, { "idempotency-key": key });
     const text = await first.text();
     expect(first.status).toBe(200);
-    expect((await patch(saved.row.id, { notes: "Later edit" }, '"2.2"')).status).toBe(200);
+    expect((await patch(saved.row.id, { notes: "Later edit" }, '"2.3"')).status).toBe(200);
     for (const deleted of [false, true]) {
-      if (deleted) expect((await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": '"3.2"' }), params(saved.row.id))).status).toBe(204);
+      if (deleted) expect((await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": '"3.3"' }), params(saved.row.id))).status).toBe(204);
       const replay = await patch(saved.row.id, { notes: "First patch" }, saved.etag, keyA, { "idempotency-key": key });
       expect(replay.status).toBe(200);
       expect(replay.headers.get("idempotent-replayed")).toBe("true");
@@ -256,7 +284,10 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
   it.each(["revoked", "owner removed"])("re-authenticates a stored POST replay after %s", async (change) => {
     const saved = await create();
     if (change === "revoked") await revokeApiKey(a.ctx, { id: credentialIdA, expectedVersion: 1 });
-    else await db.delete(members).where(eq(members.userId, a.ctx.userId));
+    else {
+      await retainFixtureAdmin(a.ctx.organizationId);
+      await db.delete(members).where(eq(members.userId, a.ctx.userId));
+    }
     const replay = await POST(request("POST", "", saved.body, { "idempotency-key": saved.key }));
     expect(replay.status).toBe(401);
     expect(replay.headers.get("idempotent-replayed")).toBeNull();
@@ -274,7 +305,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     const body = { notes: "Bound patch" };
     expect((await patch(first.row.id, body, first.etag, keyA, { "idempotency-key": key })).status).toBe(200);
     await problem(await patch(second.row.id, body, second.etag, keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
-    await problem(await patch(first.row.id, body, '"2.2"', keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
+    await problem(await patch(first.row.id, body, '"2.3"', keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
     await problem(await DELETE(request("DELETE", `/${first.row.id}`, undefined, {
       "if-match": first.etag, "idempotency-key": key,
     }), params(first.row.id)), 422, "idempotency_key_reused");
@@ -462,7 +493,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(events).toHaveLength(3);
     const expected = [
       { response: created.response, operationId: "log_feedstock_delivery", action: "created", versionBefore: null, versionAfter: 1,
-        changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId", "transportDistanceKm", "transportDistanceSource"] },
+        changedFields: ["code", "deliveryDate", "distanceKmOverride", "distanceSource", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId", "transportDistanceKm", "transportDistanceSource"] },
       { response: updated, operationId: "update_feedstock", action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
       { response: deleted, operationId: "delete_feedstock", action: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
     ];
@@ -495,8 +526,8 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     });
     expect(events.find(event => event.requestId === updated.headers.get("x-request-id"))).toMatchObject({
       operationId: "update_feedstock", entityType: "feedstock", entityId: created.row.id,
-      changedFields: ["transportDistanceKm"],
-      changes: { transportDistanceKm: { from: oldDistanceKm, to: newDistanceKm } },
+      changedFields: ["distanceKmOverride", "transportDistanceKm"],
+      changes: { distanceKmOverride: { from: String(oldDistanceKm), to: String(newDistanceKm) }, transportDistanceKm: { from: oldDistanceKm, to: newDistanceKm } },
     });
   });
 

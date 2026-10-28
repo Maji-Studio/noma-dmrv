@@ -61,7 +61,7 @@ it("parses credit batch filters against the status and sampling vocabularies", (
 it("parses customer and destination searches and refuses unknown keys", () => {
   expect(parseApiQuery(request("?q=customer&code=CU-1"), resourceQueries.customers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "customer", code: "CU-1", archived: false });
   expect(parseApiQuery(request("?q=supplier&code=SU-1"), resourceQueries.suppliers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "supplier", code: "SU-1", archived: false });
-  expect(parseApiQuery(request("?q=field"), customerLocationListSchema)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "field" });
+  expect(parseApiQuery(request("?q=field"), customerLocationListSchema)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "field", archived: false });
   for (const schema of [resourceQueries.customers.list, customerLocationListSchema]) {
     for (const query of ["?address=x", "?q=a&q=b", "?facilityId=bad"]) expect(() => parseApiQuery(request(query), schema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }

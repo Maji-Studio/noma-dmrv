@@ -1,10 +1,15 @@
 /**
- * Settings — the organization-configuration console at `/settings`.
- *
- * Org-scoped configuration an Owner/Admin can change lives here. Registry
- * configuration stays at `/certification/settings` (ADR 0007) and cross-tenant
- * platform administration stays at `/admin/organizations`.
+ * Settings — the one settings console at `/settings` (#1277): You,
+ * Organization, Certification and Platform panes, one route each.
+ * Registry configuration folded in from `/certification/settings`; the
+ * cross-tenant organization directory stays at `/admin/organizations`.
  */
 export { SettingsConsole } from "./settings-console";
 export { OrganizationDefaultsForm } from "./organization-defaults-form";
-export { FleetSettings } from "./fleet-settings";
+export { GeneralSettingsPane } from "./general-settings-pane";
+export { ApiAccessLine } from "./api-access-line";
+export { RegistrySettingsPane } from "./registry-settings-pane";
+export { RemovalTemplatesSettingsPane } from "./removal-templates-settings-pane";
+export { FacilitySettingsPane } from "./facility-settings-pane";
+export { TemplateMappingSettingsPane } from "./template-mapping-settings-pane";
+export { ProfileSettingsPane } from "./profile-settings-pane";

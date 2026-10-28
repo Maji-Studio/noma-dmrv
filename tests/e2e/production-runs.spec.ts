@@ -172,14 +172,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .locator('input[name="feedstockDraws.1.wetMassKg"]')
         .fill("70");
       await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
-      // The "Total wet input" recap is gone; the Detailed composition ledger
-      // carries the summed wet mass. With no biochar mass yet the process flow
-      // is not drawn and names the mass still to record instead.
-      await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+      // The "Total wet input" recap is gone; the composition ledger behind the
+      // split's (i) carries the summed wet mass. With no biochar mass yet the
+      // process flow is not drawn and names the mass still to record instead.
+      await page.getByRole("button", { name: /^About Feedstock composition$/ }).click();
       await expect(
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),
       ).toContainText("120 kg");
+      await page.keyboard.press("Escape");
       await expect(
         page.getByText("Record the biochar wet mass to draw the flow.", { exact: true }),
       ).toBeVisible();
@@ -434,6 +435,8 @@ async function editFirstRow(page: Page) {
   // cleanly). A post-save list refetch can re-render the row and detach the
   // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
   // waiting for network idle (CI dev servers may never settle within budget).
+  // Edit is offered only once the row's lock read answers (#1119); the retry
+  // below covers that wait, since an Open row shows no chip to wait for.
   await expect(async () => {
     await page
       .locator("tbody tr")
@@ -541,9 +544,11 @@ test.describe("Production Run lifecycle (#254)", () => {
       await expect(dialog.locator(`label[for="${field}"]`)).not.toContainText("Required");
     }
     await chooseRunStatus(dialog, "complete");
-    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+    for (const field of ["endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
       await expect(dialog.locator(`label[for="${field}"]`)).toContainText("Required");
     }
+    // A blank end date defaults to the start date, so it carries no star.
+    await expect(dialog.locator('label[for="endDate"]')).not.toContainText("Required");
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();
@@ -582,13 +587,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
-    for (const detail of ["Simple", "Detailed"]) {
-      await page.getByRole("radio", { name: detail, exact: true }).locator("..").click();
-      const options = page.locator('[role="dialog"] label:has(input[name="status"])');
-      await expect(options).toHaveText(["Running", "Complete"]);
-      for (const option of await options.all()) await expect(option).toBeVisible();
-      await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
-    }
+    const options = page.locator('[role="dialog"] label:has(input[name="status"])');
+    await expect(options).toHaveText(["Running", "Complete"]);
+    for (const option of await options.all()) await expect(option).toBeVisible();
+    await expect(page.locator('[role="dialog"] input[name="status"][value="running"]')).toBeChecked();
   });
 
   test("requires a cancellation reason and saves the cancelled audit record", async ({
@@ -602,6 +604,12 @@ test.describe("Production Run lifecycle (#254)", () => {
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
+    // Only the new run is running; the seeded run is complete and In use, so
+    // the first row must be this one before editing.
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
     await editFirstRow(page);
     await chooseRunStatus(page, "cancelled");
 
@@ -612,7 +620,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(cancellationReason).toBeVisible();
 
     await saveEdit(page);
-    await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
+    await expect(dialog.locator("#cancellationReason-error")).toHaveText("Enter a cancellation reason.");
+    await expect(
+      dialog.getByRole("link", { name: "Cancellation reason", exact: true }),
+    ).toBeVisible();
 
     await cancellationReason.fill("Duplicate run entered by the operator");
     await saveEdit(page);
@@ -755,8 +766,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("rejects an overlapping window on the same reactor", async ({
@@ -786,8 +798,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("rejects a run starting after an unfinished (open) run", async ({
@@ -815,8 +828,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
 
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
   });
 
   test("accepts an overnight run (end date is the next day)", async ({
@@ -871,8 +885,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await expect(page.locator('[role="dialog"] input[name="startTime"]')).toHaveValue("08:30");
     await saveEdit(page);
     await expect(
-      page.locator('[role="dialog"]').getByText(overlapText),
-    ).toBeVisible({ timeout: 10000 });
+      // The field's own message; the error summary above Save repeats it.
+      page.locator('[role="dialog"]').locator("#startTime-error"),
+    ).toHaveText(overlapText, { timeout: 10000 });
 
     // Move it to a slot clear of both runs — the edit now saves.
     await page.fill('input[name="startTime"]', "18:00");

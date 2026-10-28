@@ -36,8 +36,12 @@ import {
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
 import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
-import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
+import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { focusRowProps } from "./credit-batch-page-parts";
+
+/** A replicate with no production run: a batch-level Sample. One label for the table and `sampleProvenanceLabel`. */
+const BATCH_SAMPLE_LABEL = "Batch Sample";
 
 function Section({
   children,
@@ -143,7 +147,8 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
         </span>
       </td>
       <td className="px-10 py-8 body-caption text-[var(--color-text-secondary)]">
-        {r.productionRunCode ?? MISSING_VALUE.notAvailable}
+        {/* No run is a batch-level sample, as in `sampleProvenanceLabel`; a run outside the batch has no code here. */}
+        {r.productionRunCode ?? (r.productionRunId ? "Run not in this batch" : BATCH_SAMPLE_LABEL)}
         {r.samplingDay ? ` · ${r.samplingDay}` : ""}
       </td>
       <td className="px-10 py-8 text-right tabular-nums body-caption text-[var(--color-text-secondary)]">
@@ -201,37 +206,43 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
 function SampleSummaryRows({
   summary,
   facilityId,
+  focusedSampleId,
 }: {
   summary: DurabilityBatchSummary;
   facilityId: string;
+  focusedSampleId?: string | null;
 }) {
   return (
     <SheetLinkRows>
-      {summary.replicates.map((replicate) => (
-        <SheetLinkRow
-          key={replicate.id}
-          href={sampleDetailHref(facilityId, replicate.id)}
-          ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
-          primary={
-            <span className="inline-flex min-w-0 items-center gap-6">
-              {replicate.outlier && (
-                <WarningIcon
-                  size={13}
-                  weight="fill"
-                  className="shrink-0 text-[var(--st-wait)]"
-                  aria-label="Chemistry outlier"
-                />
-              )}
-              {replicate.sampleCode}
-            </span>
-          }
-          meta={
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {sampleProvenanceLabel(replicate)}
-            </span>
-          }
-        />
-      ))}
+      {summary.replicates.map((replicate) => {
+        // `?focus=<sample id>` scrolls to this row and highlights it.
+        return (
+          <div key={replicate.id} {...focusRowProps(`sample-row-${replicate.id}`, replicate.id === focusedSampleId)}>
+            <SheetLinkRow
+              href={sampleDetailHref(facilityId, replicate.id)}
+              ariaLabel={`Open lab Sample ${replicate.sampleCode}`}
+              primary={
+                <span className="inline-flex min-w-0 items-center gap-6">
+                  {replicate.outlier && (
+                    <WarningIcon
+                      size={13}
+                      weight="fill"
+                      className="shrink-0 text-[var(--st-wait)]"
+                      aria-label="Chemistry outlier"
+                    />
+                  )}
+                  {replicate.sampleCode}
+                </span>
+              }
+              meta={
+                <span className="body-caption text-[var(--color-text-tertiary)]">
+                  {sampleProvenanceLabel(replicate)}
+                </span>
+              }
+            />
+          </div>
+        );
+      })}
     </SheetLinkRows>
   );
 }
@@ -242,7 +253,7 @@ export function sampleProvenanceLabel(
     "productionRunCode" | "samplingDay"
   >,
 ): string {
-  const source = replicate.productionRunCode ?? "Batch Sample";
+  const source = replicate.productionRunCode ?? BATCH_SAMPLE_LABEL;
   return replicate.samplingDay
     ? `${source} · ${formatDate(replicate.samplingDay)}`
     : source;
@@ -251,9 +262,12 @@ export function sampleProvenanceLabel(
 export function CreditBatchDurabilityPanel({
   creditBatchId,
   facilityId,
+  focusedSampleId,
 }: {
   creditBatchId: string;
   facilityId: string;
+  /** A Sample a deep link points at (`?focus=`): its row scrolls into view, highlighted. */
+  focusedSampleId?: string | null;
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
@@ -305,7 +319,7 @@ export function CreditBatchDurabilityPanel({
   return (
     <Section action={action}>
       <DurabilityReadinessSignals summary={summary} />
-      <SampleSummaryRows summary={summary} facilityId={facilityId} />
+      <SampleSummaryRows summary={summary} facilityId={facilityId} focusedSampleId={focusedSampleId} />
 
       <details className="group border border-[var(--color-border-tertiary)]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-12 px-12 py-10 body-small font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">

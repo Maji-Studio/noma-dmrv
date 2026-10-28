@@ -13,7 +13,7 @@ vi.mock('./feedstock-wet-stock', () => ({ assertFeedstockWetDrawWithinStock: vi.
 import { getIngredientMoistureBasis } from './ingredient-moisture-basis';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
 
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 function reader(intakes: unknown[], products: unknown[] = [], draws: unknown[] = [], movements: unknown[] = [], conditions: SQL[] = []) {
   const results = new Map<unknown, unknown[]>([[feedstocks, intakes], [biocharProducts, products], [productionRunFeedstockDraws, draws], [binMovements, movements]]);
   return { select: vi.fn(() => {
@@ -112,4 +112,14 @@ describe('remaining ingredient moisture', () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 100, dry: 80 }], [], [{ wet: 20, moisture: 0 }], [{ wet: -10, moisture: null }]));
     expect(basis).toMatchObject({ wetMassKg: 70, dryMassKg: 56, moisturePercent: 20 });
   });
+});
+
+
+it.each(['product', 'run', 'loss'])('a wetter %s withdrawal preserves the feedstock pile ratio', async kind => {
+  // 50 kg at 50% carries 25 kg measured solids, but the bin's dry estimate
+  // follows its original 80/100 ratio, never 80 minus the measured 25.
+  const product = { composition: { ingredients: [{ storageLocationId: 'bin', massKg: 50, massDryKg: 25, moistureContentPercent: 50 }] } };
+  const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 100, dry: 80 }],
+    kind === 'product' ? [product] : [], kind === 'run' ? [{ wet: 50, moisture: 50 }] : [], kind === 'loss' ? [{ wet: -50 }] : []));
+  expect(basis).toEqual({ wetMassKg: 50, dryMassKg: 40, moisturePercent: 20 });
 });

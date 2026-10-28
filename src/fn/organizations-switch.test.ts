@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   persistLastActiveOrganization: vi.fn(),
   setActiveOrganization: vi.fn(),
   requirePlatformAdmin: vi.fn(),
+  isAdmin: vi.fn(),
+  organizationRows: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -20,7 +22,9 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ getAll: () => [], delete: vi.fn() }),
 }));
 
-vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/db", () => ({
+  db: { select: () => ({ from: () => ({ where: () => ({ limit: () => mocks.organizationRows() }) }) }) },
+}));
 
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: { api: { setActiveOrganization: mocks.setActiveOrganization } },
@@ -35,12 +39,13 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
   requireOrgRole: vi.fn(),
   requirePlatformAdmin: mocks.requirePlatformAdmin,
+  isAdmin: mocks.isAdmin,
 }));
 
 vi.mock("@/data-access/organizations", () => ({
   cancelInvitationAsPlatformAdmin: vi.fn(),
   createInvitationAsPlatformAdmin: vi.fn(),
-  createOrganizationWithOwner: vi.fn(),
+  createOrganizationWithAdmin: vi.fn(),
   findMembershipRole: mocks.findMembershipRole,
   findUserIdByEmail: vi.fn(),
   getActiveOrganization: vi.fn(),
@@ -58,6 +63,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
+import { SafeError } from "@/lib/errors";
 import { setActiveOrganizationAction } from "./organizations";
 import { ORG_PREFERENCE_NOT_SAVED } from "./org-preference";
 
@@ -124,6 +130,78 @@ describe("setActiveOrganizationAction", () => {
     expect(Object.keys(logged)).not.toContain("name");
   });
 
+  it.each([
+    ["USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION", "You no longer have access to it. If you still need it, ask one of its Admins."],
+    ["ORGANIZATION_NOT_FOUND", "It no longer exists."],
+  ])("words the Better Auth code %s for the person switching", async (code, reason) => {
+    mocks.setActiveOrganization.mockRejectedValue({ status: "BAD_REQUEST", body: { code, message: "system text" } });
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: reason });
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("tells a removed member they no longer have access, without asking for admin rights", async () => {
+    mocks.findMembershipRole.mockResolvedValue(null);
+    mocks.isAdmin.mockResolvedValue(false);
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "You no longer have access to it. If you still need it, ask one of its Admins." });
+    expect(mocks.requirePlatformAdmin).not.toHaveBeenCalled();
+    expect(mocks.setActiveOrganization).not.toHaveBeenCalled();
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
+  });
+
+  it("says Try again for a Better Auth code it does not word, and logs the code", async () => {
+    mocks.setActiveOrganization.mockRejectedValue({ body: { code: "SOMETHING_ELSE", message: "system text" } });
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "Try again." });
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: "Better Auth could not set the active organization (code: SOMETHING_ELSE).",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("logs the error name when an unmapped failure has no code", async () => {
+    mocks.setActiveOrganization.mockRejectedValue(new TypeError("boom"));
+
+    await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: "Better Auth could not set the active organization (error: TypeError).",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("passes a SafeError from the plugin through unchanged", async () => {
+    mocks.setActiveOrganization.mockRejectedValue(new SafeError("Verify your email first."));
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(result).toEqual({ success: false, error: "Verify your email first." });
+  });
+
+  it("lets a Platform Admin without membership try the override, and says a missing organization no longer exists", async () => {
+    mocks.findMembershipRole.mockResolvedValue(null);
+    mocks.isAdmin.mockResolvedValue(true);
+    mocks.requirePlatformAdmin.mockResolvedValue({});
+    mocks.organizationRows.mockResolvedValue([]);
+
+    const result = await setActiveOrganizationAction({ organizationId: ORGANIZATION_ID });
+
+    expect(mocks.requirePlatformAdmin).toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: "It no longer exists." });
+    expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
+  });
+
   it("keeps the failure when the switch itself fails", async () => {
     mocks.setActiveOrganization.mockRejectedValue(
       new Error("plugin rejected the switch"),
@@ -133,7 +211,8 @@ describe("setActiveOrganizationAction", () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    expect(result.success).toBe(false);
+    // The catch-all is only the next step, so the toast does not say "did not open" twice.
+    expect(result).toEqual({ success: false, error: "Try again." });
     expect(mocks.persistLastActiveOrganization).not.toHaveBeenCalled();
   });
 });

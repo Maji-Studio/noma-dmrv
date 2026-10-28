@@ -101,7 +101,7 @@ async function seedFixture(): Promise<Fixture> {
   const ctx: OrgContext = {
     organizationId,
     userId,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 
@@ -333,7 +333,7 @@ async function seedFixture(): Promise<Fixture> {
     totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: 5,
     ...SAMPLE_TIER_EVIDENCE,
   }).returning();
-  const leg = await createTransportLeg(ctx, { entityType: "sample", entityId: sample.id,
+  const leg = await createTransportLeg(ctx, { entityType: "feedstock", entityId: seeded.feedstockId,
     distanceKm: 10, loadMassKg: 1, transportMethodType: "road", calculationMethodType: "distance_based",
   });
   const ids: Record<EntityKey, string> = {
@@ -452,10 +452,16 @@ it("membership edits preserve linked samples and batch deletion refuses them", a
 it("derived transport upserts bump the existing row", async () => {
   const f = await fixture();
   const [feedstock] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
-  await db.transaction(tx => syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { distanceKm: 10 }));
-  const [before] = await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstock.id));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: 10, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));
+    await syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { refreshFromLocation: true });
+  });
+  const [before] = (await db.select().from(transportLegs).where(eq(transportLegs.entityId, feedstock.id))).filter(row => row.isDerived);
   expect(before).toBeDefined();
-  await db.transaction(tx => syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { distanceKm: 20 }));
+  await db.transaction(async tx => {
+    await tx.update(feedstocks).set({ distanceKmOverride: 20, distanceSource: "manual" }).where(eq(feedstocks.id, feedstock.id));
+    await syncFeedstockTransportLeg(f.ctx, tx, feedstock.id, { refreshFromLocation: true });
+  });
   const [after] = await db.select().from(transportLegs).where(eq(transportLegs.id, before.id));
   expect(after.version).toBe(before.version + VERSION_INCREMENT);
 });

@@ -127,7 +127,7 @@ export async function signOut() {
 // Organization context (multi-tenancy — Better Auth organization plugin)
 // ---------------------------------------------------------------------------
 
-export type OrgRole = "owner" | "admin" | "member";
+export type OrgRole = "admin" | "member";
 
 /**
  * The org-scoped request context threaded through org-aware server actions.
@@ -144,7 +144,6 @@ export type OrgContext = {
 const ORG_ROLE_RANK: Record<OrgRole, number> = {
   member: 1,
   admin: 2,
-  owner: 3,
 };
 
 /**
@@ -246,7 +245,7 @@ export function hasOrgRole(ctx: OrgContext, minRole: OrgRole): boolean {
 }
 
 /**
- * Assert the context holds at least `minRole` in the active org. Owner ⊃ Admin
+ * Assert the context holds at least `minRole` in the active org. Admin
  * ⊃ Member; Platform Admins always pass. Throws SafeError otherwise.
  */
 export function requireOrgRole(ctx: OrgContext, minRole: OrgRole): void {

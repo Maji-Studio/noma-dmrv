@@ -1,5 +1,10 @@
 "use server";
 
+import { getReactorStats as getReactorStatsData, type ReactorStats } from "@/data-access/reactor-stats";
+
+import { createReactor } from "@/lib/operations/reactors";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { withCreate } from "./with-create";
 import { withAction } from "./with-action";
 
 /**
@@ -8,14 +13,9 @@ import { withAction } from "./with-action";
  */
 
 import { z } from "zod";
-import { type Reactor, reactors } from "@/db/schema";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
+import { type Reactor } from "@/db/schema";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
-  createReactor,
   deleteReactor,
   getReactors as getReactorsData,
   updateReactor,
@@ -32,6 +32,26 @@ import { getReactorById } from "@/data-access/reactors";
 import { uuidSchema } from "@/schemas/helpers";
 
 const LOG_MESSAGE = "reactor action failed";
+
+const reactorStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getReactorStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<ReactorStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = reactorStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getReactorStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load reactor stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "reactor:stats" } },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -68,31 +88,12 @@ export async function getReactorsFn(
  * Create a new reactor
  */
 export async function createReactorFn(
-  data: z.infer<typeof createReactorSchema>
+  data: z.infer<typeof createReactorSchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<Reactor>> {
-  return withAction(async (ctx) => {
-    const validated = createReactorSchema.parse(data);
-
-    const reactor = await withAutoCode(
-      ctx,
-      "R",
-      reactors,
-      reactors.code,
-      undefined,
-      (code) =>
-        createReactor(ctx, {
-          code,
-          identifier: validated.identifier,
-          facilityId: validated.facilityId,
-          reactorType: validated.reactorType,
-          nominalThroughputTph: validated.nominalThroughputTph ?? null,
-          specifications: validated.specifications ?? null,
-        }),
-      CODE_CONFLICT_MESSAGES.reactor,
-    );
-
-    return reactor;
-  }, {
+  return withCreate((_ctx, create) => {
+    return create(createReactor, createReactorSchema.parse(data));
+  }, options, {
     fallbackMessage: "Failed to create reactor",
     log: { message: LOG_MESSAGE, context: { op: "reactor:create" } },
   });

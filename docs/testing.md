@@ -8,6 +8,8 @@ themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
+`vitest.config.ts` pins the process zone to `America/Los_Angeles`, a zone no facility uses, so code that reads the process zone instead of the facility's fails in tests.
+
 Vitest defaults to the `node` environment. Component tests that need a real DOM
 or portals opt in with `// @vitest-environment jsdom` and use
 `@testing-library/react`.
@@ -102,10 +104,56 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
 
 Vitest checks the test DB's migration count and latest timestamp before suites
-load and reports how to migrate a stale DB. A DB ahead of or diverged from this
-branch's journal must be reset or recreated. It never repairs the DB automatically.
+load. Local runs auto-migrate a stale local database only when its decoded name
+matches `^noma_dmrv_wt_[a-z0-9_]+_test$`, with no target override parameters,
+and its history matches a prefix of this branch's journal. Other databases and
+CI still throw with migration instructions. A DB ahead of or diverged from this
+branch's journal must be reset or recreated.
 Set `VITEST_SKIP_MIGRATION_CHECK=1` for pure unit runs without a DB; the check
 also skips when no DB URL is configured.
+
+## OAuth suites
+
+OAuth is opt-in for each process. In Vitest, call
+`vi.stubEnv("OAUTH_PROVIDER_ENABLED", "true")`, then `vi.resetModules()` before
+importing the auth/config modules. They capture validated env and plugin setup
+at import time. Restore stubs after tests that change env. Do not rely on an
+untracked env file to enable the provider. The default-off and production-gate
+cases live in `src/config/env-oauth.test.ts`.
+
+| Coverage | Suites |
+|---|---|
+| Pure or mocked boundaries | Colocated `oauth-config`, `oauth-scopes`, `oauth-role-policy`, `oauth-request-policy`, `oauth-token-hash`, `oauth-context`, `oauth-provider`, `oauth-hooks`, `api-credential-header`, `lib/api/problem`, `scope-denial`, `lib/mcp/oauth-admission` and `lib/mcp/tools/required-scopes` tests |
+| Schema, generations, attempts and eligibility | `tests/oauth-schema-contract.test.ts`, `tests/oauth-grants.test.ts`, `tests/oauth-grant-lifecycle.test.ts`, `tests/oauth-eligibility.test.ts`, `tests/oauth-membership-hooks.test.ts` |
+| API authority, isolation, parity and admission | `tests/oauth-api-context.test.ts`, `tests/oauth-bola.test.ts`, `tests/oauth-member-parity.test.ts`, `tests/api-mcp-oauth.test.ts`, `tests/oauth-documents.test.ts`, `tests/api-admission-limits.test.ts` |
+| Real provider, rotation and public boundary | `tests/oauth-flow.test.ts`, `tests/oauth-refresh.test.ts`, `tests/oauth-endpoint-lockdown.test.ts`, `tests/oauth-cimd.test.ts`, `tests/oauth-discovery.test.ts`, `tests/oauth-endpoint-limits.test.ts`, `tests/oauth-endpoint-limits-db.test.ts`, `tests/oauth-offer-writes.test.ts` |
+| Actions and UI | `tests/oauth-actions.test.ts`, colocated `src/fn/oauth.test.ts`, `src/hooks/use-oauth-grants.test.tsx`, `src/components/oauth/*.test.tsx` |
+| Browser flows | `tests/e2e/oauth-consent.spec.ts`, `tests/e2e/connected-apps.spec.ts` |
+
+Read setup before running: most root OAuth suites use Postgres; endpoint-limits
+and CIMD also have mocked harnesses. [Vitest database safety](#vitest-only-runs-against-a-throwaway-database)
+still applies. Refresh tests cover replay, generation-scoped reuse, racing
+successors and the patched teardown refusal. These and the runtime endpoint
+inventory must stay green on every Better Auth upgrade.
+
+For E2E, enable `OAUTH_PROVIDER_ENABLED=true` on the app server as well as the
+Playwright process. `tests/e2e/fixtures/oauth-helpers.ts` provides preregistered
+clients, multi-organization people, PKCE authorize URLs, ready-made connections,
+read assertions and cleanup with the E2E naming contract. The OAuth specs extend
+Playwright directly with these dedicated fixtures. Use a local migrated DB;
+real Claude/ChatGPT proof is the separate [staging checklist](./api.md#connecting-claude-and-chatgpt).
+For screenshots, close the Next.js Dev Tools menu and issue overlay if present;
+its development-only warning can obscure the OAuth page without a page failure.
+
+### Build-check environment
+
+Use the placeholder env block in `.github/workflows/ci.yml`'s `build` job for
+production-bundle checks without deployment credentials. Hermetic exceptions
+require all three: `NOMA_HERMETIC_CI=true`, truthy `CI`, and a loopback app URL.
+A local production build outside that exception also needs a `CRON_SECRET`
+placeholder of at least 32 characters and the other [production gates](./security.md#hermetic-ci-exception-on-the-production-fail-closed-gates).
+Never use a real deployment secret for a build check. With OAuth enabled and no
+DB, [resource seeding can log an expected error](./troubleshooting.md#oauth-resource-seeding-during-build).
 
 ## Agent evaluation
 
@@ -210,7 +258,7 @@ minutes, and uploads `api-fuzz-report/junit.xml` even after test failures.
 Locally, install `uv` and prepare an empty, migrated local database whose name
 contains a `test` or `e2e` segment. Export `DATABASE_URL` and the app environment
 before seeding; the seed does not load env files. Use the workflow's hermetic
-env block for production-build parity. The seed creates a verified Owner, the
+env block for production-build parity. The seed creates a verified Admin, the
 intake prerequisites, a driver, vehicle, supplier location, committed feedstock
 intake, a reactor and a closed production run through the operation runner (the run
 draws from its own second bin, so the feedstock cases keep their stock). For
@@ -311,7 +359,8 @@ Parallel sessions each work in their own worktree, one writer per worktree.
 ```bash
 scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
 scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
-scripts/worktree.sh teardown <name>             # only what `new` recorded for <name>
+scripts/worktree.sh migrate <name>              # migrate both recorded dev and test databases
+scripts/worktree.sh teardown <name> [--force] [--dry-run] # only what `new` recorded for <name>
 ```
 
 `new` creates `noma_dmrv_wt_<name>_dev` (dev server and Playwright fixtures) and
@@ -322,6 +371,10 @@ the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
 targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
 
 See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-database) for migration and reset guidance.
+After pulling migrations, run `scripts/worktree.sh migrate <name>` to update
+both databases. Vitest can auto-migrate its stale worktree test DB, but
+Playwright also needs the dev DB migrated. Database names replace worktree
+name hyphens with underscores.
 
 - Start the dev server with the one-line command `new` prints, in your own
   terminal: background commands from an agent stop after two hours. Don't use
@@ -332,11 +385,63 @@ See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-datab
   the worktree's own server.
 - `teardown` runs from outside the worktree and refuses while it has uncommitted
   changes. A worktree another session (or you, from a terminal) created needs
-  `--force`, after checking with its owner. It stops only processes running
+  `--force`, after checking with its owner, unless it is registered and clean and
+  its HEAD is part of a merged PR for the branch (checked with `gh`; a squash
+  merge deletes the upstream, so the PR head is the reference). The skip is
+  printed. `--dry-run` runs the checks and previews removals without changing
+  anything; it combines with `--force` in either order.
+  Teardown stops only processes running
   inside the worktree, drops only databases `new` recorded as created, and
   deletes the branch only if it is merged.
 - `status` lists worktrees and `noma_dmrv_*` databases the script did not
   create. Another session may own them: ask before removing anything.
+
+### Landing a PR and reading red CI
+
+`scripts/pr-land.sh <pr> [--teardown <name>] [--dry-run]` merges `origin/staging` into the
+PR branch only when it conflicts (`mergeStateStatus` is `DIRTY`, in the worktree that has it
+checked out) and pushes. A PR that is merely behind is enqueued as is because the queue
+retests on top of staging. The script waits for
+GitHub to show that head and for every required check to pass, enqueues the PR in the merge queue
+through GraphQL, and watches until MERGED. A drop from the queue prints the
+`RemovedFromMergeQueueEvent` reason and exits non-zero. `--teardown` runs
+`teardown` from `scripts/worktree.sh` only after MERGED; `--dry-run` reads state and mutates
+nothing. `scripts/ci-failures.sh <pr>` lists failing checks and prints the Vitest and
+Playwright failing test names with their error lines from the failed Actions logs.
+Neither script runs tests or deletes branches itself; `--teardown` delegates to `teardown`, which deletes the branch once merged.
+
+## Stale mocks: lint rule and pre-push hook
+
+A hand-written `vi.mock` factory silently drops any export added to the mocked
+module later, so CI can fail while targeted local runs pass. Two guards:
+
+- **Lint:** `vi.mock("@/config/env", factory)` and `vi.mock("@/db/schema", factory)`
+  must call `importOriginal` and spread the result
+  (`...(await importOriginal<typeof import("@/config/env")>())`), then override
+  only what the test needs. `vi.mock(path)` without a factory, and a factory
+  that only throws (a "must not load" tripwire), are allowed.
+- **Pre-push:** `.githooks/pre-push` runs two stages on the `src/` and
+  `tests/` files changed since the merge-base with `origin/staging`:
+  1. Always: changed test files plus test files that `vi.mock(` a changed
+     module by its `@/` alias path (`src/lib/api/problem.ts` matches
+     `@/lib/api/problem`; an index file also matches its directory and
+     `/index`). `pnpm vitest run`; a failure blocks the push. This stage has no
+     time limit and can include DB-backed specs, so start Postgres
+     (`pnpm docker:up`) first.
+  2. Then `pnpm vitest related --run`, cut off after
+     `PRE_PUSH_RELATED_TIMEOUT_SECONDS` (default 300, overridable by env). On a
+     cut-off it prints one line, CI runs the rest, and the push goes through; a
+     real failure inside the bound blocks.
+
+  It skips when only docs or other non-code files changed and on deletion-only
+  pushes, and never runs the full suite (CI does). `new` in `scripts/worktree.sh`
+  enables it with `git config --worktree core.hooksPath .githooks`, which stays
+  local to that worktree; `new` enables `extensions.worktreeConfig` on the shared
+  repo first. In a worktree not created by `new`, run that command once
+  yourself. Skip it for one push with
+  `git push --no-verify`.
+- **Known gaps:** the lint selector misses an aliased `vi`, a factory passed by
+  identifier, and the `vi.mock(import("@/config/env"), ...)` form. The stage 1 match ignores relative-path mocks.
 
 ## E2E data naming is a hard contract
 
@@ -354,6 +459,13 @@ failure:
 
 Never name a fixture entity `Test Facility 1`. Check `global-teardown.ts` before adding a
 spec that creates a table it doesn't yet sweep.
+
+## PR screenshots
+
+Evidence tooling (upload; one marked `Screenshots (head <sha>)` block inside the PR body's `## Evidence` section) lives in
+`scripts/pr-evidence/`; see its README. Start the dev server with `NEXT_PUBLIC_SHOT_MODE=true`
+to hide the sidebar account text and the Next.js dev indicator before capturing. Never set it
+on a deployment.
 
 ## Safety guards (don't "fix" them)
 
@@ -409,6 +521,21 @@ pages and contexts for admin/operator/labTechnician/viewer, plus `seededData`,
   the trigger `data-testid` is not per-field and these do the xpath-ancestor scoping for
   you. Don't hand-roll the locator.
 
+## Known flakes
+
+Check here before chasing a red E2E as a branch regression. Rerun the single spec with
+`--repeat-each=3`; if it fails alone, compare with a clean `staging` worktree. No open
+`ci-health` issue tracks a flake; add a line (with the issue link) when one is filed.
+
+- Popover Escape did not return focus to its trigger after a press inside the popup
+  (`certification-workspace.spec.ts` "closes it with Escape"): fixed in the shared
+  `Popover`, which now focuses the trigger on Escape and Close. Issue #1283.
+- Local only, under a multi-spec run (pass alone): `production-runs.spec.ts` and
+  `full-chain-ui` "Create Sample" (the side sheet does not close after submit);
+  `feedstock-types.spec.ts` (the row's Archive menu item detaches after an edit). No issue.
+- Local only: `certifier-credentials-self-serve` "Keys saved" fails because the spec
+  encrypts with the test key and the dev server cannot decrypt it; run it alone. No issue.
+
 ## Parallelism
 
 `fullyParallel: false` serializes tests only within a single file. Locally,
@@ -426,8 +553,11 @@ retry**. Specs must not assume ordering across files, workers, or shards.
   main checkout is the live dev database. For a Vitest-only problem reset the test DB instead:
   `DATABASE_URL=<TEST_DATABASE_URL> pnpm db:reset`.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
-- A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
-  `getByRole("button")`, not `getByRole("row")`.
+- A DataTable row stays a plain `<tr>` (role `row`) when `onRowClick` is set; the
+  `meta.recordLink` column holds the record link (`[data-row-link]`, an `<a href>` deep
+  link, or a link-styled button on reactors and formulations). Select rows with
+  `getByRole("row")` or `locator("table tbody tr")`, open one by clicking the row or that
+  link, and never rely on `role="button"` / `tabindex` on a row or mobile card.
 - **Wait for hydration before touching a control on a server-rendered form.** Forms are
   server-rendered, so the inputs exist in the HTML before React attaches to them, and
   react-hook-form only records a value once its `onChange` listener is live. A `fill()` or

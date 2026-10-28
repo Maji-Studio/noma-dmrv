@@ -240,7 +240,7 @@ const Title = React.forwardRef<HTMLHeadingElement, SlideOverPanelTitleProps>(
         className={cn(
           "title-heading-4 text-[var(--color-text-primary)]",
           // Wrap, never truncate: at phone width the title shares its row
-          // with the Simple/Detailed toggle and the close button.
+          // with the close button.
           "text-balance break-words",
           className
         )}
@@ -290,10 +290,11 @@ interface SlideOverPanelBodyProps
   /** Remove bottom padding so sticky/flush footers inside have no gap */
   noPaddingBottom?: boolean;
   /**
-   * Stretch the single child (a form root) to fill the body height so its
-   * `mt-auto` CTA row is pinned to the bottom even when the form is short.
-   * The child still grows past the viewport on long forms — the body scrolls
-   * and the sticky footer keeps the CTA in view. Used by edit/create forms.
+   * Make the body a flex column so its one filling child (EntitySideSheet's
+   * fieldset, or a bin sheet's wrapper) can take `flex-1` and pin a `mt-auto`
+   * CTA row to the bottom even when the form is short. The child still grows
+   * past the viewport on long forms: the body scrolls and the sticky footer
+   * keeps the CTA in view. The child opts in with its own `flex-1`.
    */
   fillHeight?: boolean;
 }
@@ -309,9 +310,7 @@ const Body = React.forwardRef<HTMLDivElement, SlideOverPanelBodyProps>(
         className={cn(
           "flex-1 overflow-y-auto",
           noPaddingBottom ? "p-24 pb-0" : "p-24",
-          // Form-root child fills the body as a flex column so FormActions'
-          // `mt-auto` can pin the CTA row to the bottom on short forms.
-          fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
+          fillHeight && "flex flex-col",
           className
         )}
       >
@@ -329,13 +328,20 @@ Body.displayName = "SlideOverPanel.Body";
 interface SlideOverPanelFooterProps {
   children: React.ReactNode;
   className?: string;
+  /**
+   * One quiet line above the buttons, such as the credit batch line (#1059
+   * section 2). Same place `FormActions` gives its `preview`.
+   */
+  preview?: React.ReactNode;
 }
 
-function Footer({ children, className }: SlideOverPanelFooterProps) {
+const FOOTER_ACTIONS = "flex flex-wrap items-center justify-start gap-12";
+
+function Footer({ children, className, preview }: SlideOverPanelFooterProps) {
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-12",
+        preview ? "flex flex-col gap-16" : FOOTER_ACTIONS,
         "px-24 py-16",
         "border-t border-[var(--color-border-secondary)]",
         "bg-[var(--color-background-white)]",
@@ -343,7 +349,14 @@ function Footer({ children, className }: SlideOverPanelFooterProps) {
         className
       )}
     >
-      {children}
+      {preview ? (
+        <>
+          {preview}
+          <div className={FOOTER_ACTIONS}>{children}</div>
+        </>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -393,6 +406,15 @@ const Close = React.forwardRef<HTMLButtonElement, SlideOverPanelCloseProps>(
 );
 Close.displayName = "SlideOverPanel.Close";
 
+/** The view-mode footer's Close: last, after the sheet's actions. */
+function FooterClose() {
+  return (
+    <Close>
+      <Button variant="default">Close</Button>
+    </Close>
+  );
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Icons
  * -----------------------------------------------------------------------------------------------*/
@@ -430,6 +452,7 @@ export const SlideOverPanel = {
   Body,
   Footer,
   Close,
+  FooterClose,
 };
 
 export {
@@ -442,4 +465,5 @@ export {
   Body as SlideOverPanelBody,
   Footer as SlideOverPanelFooter,
   Close as SlideOverPanelClose,
+  FooterClose as SlideOverPanelFooterClose,
 };

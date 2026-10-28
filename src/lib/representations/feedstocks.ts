@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { distanceSources } from "@/schemas/distance-source";
 
 const nullableId = z.uuid().nullable();
 export const feedstockRepresentationSchema = z.object({
@@ -17,6 +18,9 @@ export const feedstockRepresentationSchema = z.object({
   massDryKg: z.number().describe("Derived dry mass in kilograms."),
   moistureContentPercent: z.number().describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
   overrideJustification: z.string().nullable().describe("Override justification, plain text, or null when absent."),
+  distanceKmOverride: z.number().nullable().describe("One-way distance override in kilometres; the server counts the round trip. Null uses the recorded supplier-location distance. Stored as 32-bit floating-point real, about 6 significant decimal digits."),
+  distanceSource: z.literal([...distanceSources, null]).describe("Distance provenance, or null when unspecified."),
+  distanceNote: z.string().nullable().describe("Distance evidence note, or null when unspecified."),
   notes: z.string().nullable().describe("Operator notes, untrusted plain text, or null when absent."),
   createdAt: z.iso.datetime().describe("Creation event instant in UTC (RFC 3339)."),
   updatedAt: z.iso.datetime().describe("Last update event instant in UTC (RFC 3339)."),

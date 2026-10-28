@@ -7,6 +7,10 @@
  * page full of advisories stays quiet and the one thing stopping the user is
  * the only box. Live-region roles follow the tone: `status` announces politely
  * (info, warning, success); `alert` interrupts, so it is reserved for errors.
+ *
+ * `boxed` is an opt-in quiet card for a lock or state that explains why a
+ * record cannot change: a light neutral surface and compact padding. It never
+ * turns red; the error tone keeps its own tint and ignores it.
  */
 import type { HTMLAttributes, ReactNode } from "react";
 import {
@@ -21,6 +25,9 @@ import { cn } from "@/lib/utils";
 export type NoticeTone = "info" | "warning" | "error" | "success";
 
 const NOTICE_ICON_SIZE = 16;
+/** Neutral card for `boxed`: 8px vertical, 12px horizontal, small-card radius. */
+const BOXED_CLASS =
+  "bg-[var(--color-surface-light)] rounded-[8px] px-12 py-8";
 
 const TONES: Record<
   NoticeTone,
@@ -59,26 +66,41 @@ export interface NoticeProps
   title?: ReactNode;
   /** A link or button that resolves the notice, shown after the text. */
   action?: ReactNode;
+  /** Quiet neutral card for non-error tones. Ignored for `error`. */
+  boxed?: boolean;
+  /**
+   * `false` drops the live-region role, for a notice whose content changes
+   * while the user works and announces itself another way.
+   */
+  live?: boolean;
+  /**
+   * Replaces the `info` tone's icon with the subject's own, for a line that
+   * carries its own ⓘ (`FormFooterPreview`). Other tones keep theirs.
+   */
+  infoIcon?: Icon;
 }
 
 export function Notice({
   tone = "warning",
   title,
   action,
+  boxed = false,
+  live = true,
+  infoIcon,
   className,
   children,
   ...props
 }: NoticeProps) {
   const config = TONES[tone];
-  const ToneIcon = config.Icon;
+  const ToneIcon = tone === "info" && infoIcon ? infoIcon : config.Icon;
 
   return (
     <div
-      role={config.role}
+      role={live ? config.role : undefined}
       data-tone={tone}
       className={cn(
         "flex flex-wrap items-start gap-x-8 gap-y-8",
-        config.boxClass,
+        config.boxClass || (boxed && BOXED_CLASS),
         className,
       )}
       {...props}

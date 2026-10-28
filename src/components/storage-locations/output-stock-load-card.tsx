@@ -8,11 +8,11 @@ import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import type { AffectedStockPreview as Preview } from "@/types/output-stock";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockAllocations } from "./output-stock-availability";
 import { InlineMassChange, StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
-import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, splitDryLabel, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
 import { Notice } from "@/components/ui/notice";
 
 /**
@@ -39,7 +39,7 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
       title={preview.binName}
       hint={stockCardHint(preview)}
       actions={actions}
-      calculation={rows.length > 0 || preview.allocations.length > 0 ? <>
+      explanation={rows.length > 0 || preview.allocations.length > 0 ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         <OutputStockAllocations allocations={preview.allocations} />
       </> : undefined}
@@ -50,7 +50,7 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
         <SegmentKey segments={drawn} />
       </div> : enteredWetKg !== null && <div className="space-y-6">
         <p className="body-caption text-[var(--color-text-secondary)]">{enteredCaption(preview)}</p>
-        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
+        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} dryLabel={splitDryLabel(preview)} />
       </div>}
       {notice && <Notice>{notice}</Notice>}
       {preview.blockingMessage === null && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
@@ -82,12 +82,12 @@ function drawnCaption(preview: Preview): string {
 function enteredCaption(preview: Preview): string {
   return preview.removedWetKg === null
     ? "What you entered"
-    : `${formatMassKg(Math.abs(preview.removedWetKg))} wet ${movementDirection(preview.removedWetKg)}`;
+    : `${formatMassKg(Math.abs(preview.removedWetKg))} wet mass ${movementDirection(preview.removedWetKg)}`;
 }
 
 /**
  * The entered figures and the estimate the headline leaves out. These are the
- * inputs, not the consequence, so they sit behind the disclosure.
+ * inputs, not the consequence, so they sit behind the (i).
  */
 function movementRows(preview: Preview): StockRow[] {
   const dryLabel = preview.dryLabel ?? "dry biochar";
@@ -112,11 +112,12 @@ function movementRows(preview: Preview): StockRow[] {
 
 export function IngredientStockInfo({ preview }: { preview: Preview }) {
   const [open, setOpen] = useState(false);
+  const titleId = useId();
   return <>
     <Button onClick={() => setOpen(true)}>More info</Button>
-    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Ingredient stock basis">
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Ingredient stock basis" titleId={titleId}>
       <div className="space-y-16">
-        <h3 className="title-heading-3">{preview.binName}</h3>
+        <h3 id={titleId} className="title-heading-3">{preview.binName}</h3>
         <p className="body-small">Wet stock is the recorded intake less tracked withdrawals. Ingredient withdrawals take a proportional share of this stock.</p>
         <p className="body-small">Dry solids use the recorded intake basis. The moisture used for the new product describes its ingredient addition and does not update the remaining bin.</p>
         <p className="body-small">Before: {formatMassKg(preview.beforeEstimatedWetKg)} wet stock, {formatMassKg(preview.beforeDryKg)} dry solids. After: {formatMassKg(preview.afterEstimatedWetKg)} wet stock, {formatMassKg(preview.afterDryKg)} dry solids.</p>

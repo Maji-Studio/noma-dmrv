@@ -1,0 +1,268 @@
+"use client";
+
+/**
+ * The read-view drift notice for a feedstock or delivery distance, with its
+ * deliberate "Refresh from location" correction (ADR 0034).
+ *
+ * Drift shows only for a derived distance whose location now has a different
+ * facility distance. Overrides never drift: they are the operator's own value.
+ */
+import { useState } from "react";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
+import { ConfirmActionDialog } from "@/components/certification/confirm-action-dialog";
+import { Notice } from "@/components/ui/notice";
+import { useToast } from "@/components/ui/toast";
+import type { TransportDistanceDrift } from "@/data-access/transport-distance-drift";
+import { useRefreshTransportDistance, useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
+import { formatDistanceKm } from "@/lib/format-utils";
+import { toSaveErrorMessage } from "@/lib/stale-version";
+import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
+import type { TransportDistanceTarget } from "@/schemas/transport-distance-refresh";
+
+export const REFRESH_FROM_LOCATION_LABEL = "Refresh from location";
+const DRIFT_TITLE = "Location distance changed";
+const CONFIRM_TITLE = "Refresh distance from location?";
+// Short, so it fits beside Cancel in the 400px confirm dialog; the title names the location.
+const CONFIRM_LABEL = "Refresh";
+const REFRESH_FAILED_MESSAGE = "The distance was not refreshed. Try again.";
+const REOPEN_BEFORE_SAVING = "Close it and open it again before saving.";
+
+const RECORD_NOUNS: Record<TransportDistanceTarget["entityType"], string> = {
+  feedstock: "feedstock",
+  delivery: "delivery",
+};
+
+/** The drift worth showing: derived, different, and refreshable to a known value. */
+export function visibleDrift(drift: TransportDistanceDrift | undefined): drift is TransportDistanceDrift & { currentDistanceKm: number } {
+  return !!drift && !drift.isOverridden && drift.hasDrift && drift.currentDistanceKm != null;
+}
+
+export function driftSummary(drift: TransportDistanceDrift & { currentDistanceKm: number }): string {
+  const recorded = drift.recordedDistanceKm == null
+    ? "No distance recorded."
+    : `Recorded ${formatDistanceKm(drift.recordedDistanceKm)}.`;
+  return `${recorded} Location now ${formatDistanceKm(drift.currentDistanceKm)}.`;
+}
+
+const REFRESH_ICON_SIZE = 14;
+// A text link, not a boxed button: it sits inline beside the distance. The
+// 44px touch target only applies on phones, so the desktop row keeps its height.
+const REFRESH_LINK_CLASS = "inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] disabled:pointer-events-none disabled:opacity-40 sm:min-h-0";
+
+function RefreshLinkButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={REFRESH_LINK_CLASS} disabled={disabled} onClick={onClick}>
+      <ArrowClockwiseIcon size={REFRESH_ICON_SIZE} weight="bold" aria-hidden />
+      {REFRESH_FROM_LOCATION_LABEL}
+    </button>
+  );
+}
+
+type VisibleDrift = TransportDistanceDrift & { currentDistanceKm: number };
+
+/**
+ * The one confirmation for a deliberate refresh from location, shared by the
+ * read view's notice and the edit form's compact action.
+ */
+function DistanceRefreshDialog({
+  open, onClose, target, drift, recordCode, onRefused, onAttempt, onRefreshed,
+}: {
+  open: boolean;
+  onClose: () => void;
+  target: TransportDistanceTarget;
+  drift: VisibleDrift;
+  recordCode: string;
+  /**
+   * A refused version or a new lock changes what the next attempt sees.
+   * Resolves false when the refetched drift is gone: the dialog then closes
+   * instead of retrying on its stale snapshot.
+   */
+  onRefused: () => Promise<boolean>;
+  /** Called when a refresh attempt starts, before any request. */
+  onAttempt?: () => void;
+  /** Resolves once the caller holds the refreshed record; the dialog waits for it. */
+  onRefreshed?: (refreshed: TransportDistanceDrift) => Promise<void> | void;
+}) {
+  const refresh = useRefreshTransportDistance(target.entityType);
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+  // The refresh committed a new version; Save stays out of reach until the
+  // form holds it, or it would send the old one.
+  const [reloading, setReloading] = useState(false);
+  // After a refusal the drift is refetched; the stale version stays out of
+  // reach (no retry, no dismissal) until that recheck settles.
+  const [rechecking, setRechecking] = useState(false);
+  const busy = refresh.isPending || reloading || rechecking;
+  const noun = RECORD_NOUNS[target.entityType];
+  const close = () => {
+    setError(null);
+    onClose();
+  };
+  const confirm = async () => {
+    setError(null);
+    onAttempt?.();
+    let refreshed: TransportDistanceDrift;
+    try {
+      refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
+    } catch (refusal) {
+      const message = toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE);
+      setRechecking(true);
+      let stillOffered = false;
+      try {
+        stillOffered = await onRefused();
+      } finally {
+        setRechecking(false);
+      }
+      if (stillOffered) {
+        setError(message);
+      } else {
+        close();
+        toast.error(message);
+      }
+      return;
+    }
+    setReloading(true);
+    let reloaded = true;
+    try {
+      await onRefreshed?.(refreshed);
+    } catch {
+      reloaded = false;
+    } finally {
+      setReloading(false);
+    }
+    close();
+    const done = `Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`;
+    if (reloaded) toast.success(done);
+    else toast.warning(`${done} ${SAVED_DETAILS_UNAVAILABLE} ${REOPEN_BEFORE_SAVING}`);
+  };
+
+  return (
+    <ConfirmActionDialog
+      isOpen={open}
+      onClose={close}
+      onConfirm={() => void confirm()}
+      title={CONFIRM_TITLE}
+      body={
+        <div className="flex flex-col gap-12">
+          <p>
+            {drift.recordedDistanceKm == null
+              ? `The ${noun} records ${formatDistanceKm(drift.currentDistanceKm)}, the location's current distance, and its transport is recalculated.`
+              : `The recorded distance changes from ${formatDistanceKm(drift.recordedDistanceKm)} to ${formatDistanceKm(drift.currentDistanceKm)}, the location's current distance, and the ${noun}'s transport is recalculated.`}
+          </p>
+          {drift.hasSubmittedRemoval && (
+            <Notice tone="error" title="Locked by a submitted Removal">
+              {`This ${noun} feeds a submitted Removal, so its distance cannot be refreshed. Ask an Organization Admin to review the linked Removal.`}
+            </Notice>
+          )}
+        </div>
+      }
+      confirmLabel={CONFIRM_LABEL}
+      isPending={busy}
+      dismissible={!busy}
+      confirmDisabled={drift.hasSubmittedRemoval}
+      errorMessage={error ?? undefined}
+    />
+  );
+}
+
+interface TransportDistanceDriftNoticeProps {
+  target: TransportDistanceTarget;
+  /** Stable record code for the confirmation toast. */
+  recordCode: string;
+}
+
+/** Read view: a warning notice with the drift and its refresh action. */
+export function TransportDistanceDriftNotice({ target, recordCode }: TransportDistanceDriftNoticeProps) {
+  const drift = useTransportDistanceDrift(target);
+  const [confirming, setConfirming] = useState(false);
+  const data = drift.data;
+  if (!visibleDrift(data)) return null;
+
+  return (
+    <>
+      <Notice
+        tone="warning"
+        title={DRIFT_TITLE}
+        data-testid="transport-distance-drift"
+        action={<RefreshLinkButton onClick={() => setConfirming(true)} />}
+      >
+        {driftSummary(data)}
+      </Notice>
+      <DistanceRefreshDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        target={target}
+        drift={data}
+        recordCode={recordCode}
+        onRefused={async () => visibleDrift((await drift.refetch()).data)}
+      />
+    </>
+  );
+}
+
+export const SAVE_BEFORE_REFRESH_REASON = "Save or discard your changes first.";
+
+interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
+  /** Why the action is unavailable, shown beside it (unsaved form edits). */
+  disabledReason?: string | null;
+  /**
+   * The refresh committed a new version: the form must reload the record.
+   * The dialog stays pending until the returned promise settles.
+   */
+  onRefreshed: (refreshed: TransportDistanceDrift) => Promise<void> | void;
+}
+
+/**
+ * Edit form: one compact line under the derived distance, "Location now
+ * 55 km." with a small Refresh from location action and the same dialog.
+ */
+export function DistanceDriftAction({ target, recordCode, disabledReason, onRefreshed }: DistanceDriftActionProps) {
+  const drift = useTransportDistanceDrift(target);
+  // The drift the dialog opened on. A successful refresh clears the live
+  // drift before the form has reloaded; the dialog stays on this snapshot,
+  // pending, until the reload lands.
+  const [confirmingDrift, setConfirmingDrift] = useState<VisibleDrift | null>(null);
+  // Set by a refusal, cleared by the next attempt: after one, the snapshot is
+  // stale and the live drift is the only version worth retrying with.
+  const [refused, setRefused] = useState(false);
+  const visible = visibleDrift(drift.data) ? drift.data : null;
+  if (refused && !visible && confirmingDrift) {
+    setConfirmingDrift(null);
+    setRefused(false);
+  }
+  const dialogDrift = visible ?? (refused ? null : confirmingDrift);
+  if (!dialogDrift) return null;
+
+  return (
+    <>
+      {visible && (
+        <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
+          <p className="body-caption text-[var(--color-text-secondary)]">
+            {`Location now ${formatDistanceKm(visible.currentDistanceKm)}.`}
+            {disabledReason ? ` ${disabledReason}` : ""}
+          </p>
+          <RefreshLinkButton
+            disabled={!!disabledReason}
+            onClick={() => {
+              setRefused(false);
+              setConfirmingDrift(visible);
+            }}
+          />
+        </div>
+      )}
+      <DistanceRefreshDialog
+        open={!!confirmingDrift}
+        onClose={() => setConfirmingDrift(null)}
+        target={target}
+        drift={dialogDrift}
+        recordCode={recordCode}
+        onAttempt={() => setRefused(false)}
+        onRefused={async () => {
+          setRefused(true);
+          return !!visibleDrift((await drift.refetch()).data);
+        }}
+        onRefreshed={onRefreshed}
+      />
+    </>
+  );
+}

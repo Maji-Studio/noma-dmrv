@@ -6,16 +6,16 @@
  */
 
 import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
-import { runOperationInProcess } from "@/lib/operations/runner";
+import { archiveCustomerLocation, restoreCustomerLocation, addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
+import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
+import { keylessOutcomeUnknown, runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
+import { getCustomerStats as getCustomerStatsData, type CustomerStats } from "@/data-access/customer-stats";
 import { type Customer, type CustomerLocation } from "@/db/schema";
 import {
   getCustomers as getCustomersData,
   getCustomerWithRelations as getCustomerWithRelationsData,
   getCustomerLocations as getCustomerLocationsData,
-  createCustomerLocation,
-  updateCustomerLocation,
-  deleteCustomerLocation,
   type PaginatedCustomers,
   type CustomerDetail,
   type CreatedCustomerWithLocations,
@@ -28,9 +28,12 @@ import {
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
-import { customerVersionInput } from "@/schemas/customer-input";
+import { customerLocationVersionInput } from "@/schemas/customer-location-input";
+import { customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "customer action failed";
 
@@ -55,6 +58,23 @@ export async function getCustomersFn(
     fallbackMessage: "Failed to load customers",
     zodErrorPrefix: "Invalid filter parameters",
     log: { message: LOG_MESSAGE, context: { op: "customer:list" } },
+  });
+}
+
+const customerStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getCustomerStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<CustomerStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = customerStatsFilterSchema.parse(filters);
+    return getCustomerStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load customer stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "customer:stats" } },
   });
 }
 
@@ -95,6 +115,7 @@ export async function getCustomerLocationsFn(
       createdAt: Date;
       version: number;
       updatedAt: Date;
+      archivedAt: Date | null;
     }>
   >
 > {
@@ -113,13 +134,14 @@ export async function getCustomerLocationsFn(
 
 /** Create the customer and its locations in one transaction; any failure rolls back both. */
 export async function createCustomerWithLocationsFn(
-  data: z.infer<typeof createCustomerWithLocationsSchema>
+  data: z.infer<typeof createCustomerWithLocationsSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {
-  return withAction(
-    async (ctx) => {
+  return withCreate(
+    async (_ctx, create) => {
       const validated = createCustomerWithLocationsSchema.parse(data);
 
-      const result = await runOperationInProcess(createCustomer, ctx, {
+      const result = await create(createCustomer, {
         name: validated.customer.name,
         cropType: validated.customer.cropType || null,
         address: validated.customer.address || null,
@@ -139,7 +161,7 @@ export async function createCustomerWithLocationsFn(
         })),
       });
       return result;
-    },
+    }, options,
     {
       fallbackMessage:
         "The customer and its locations were not created. Try again.",
@@ -188,15 +210,25 @@ export async function updateCustomerFn(
  * Delete a customer
  */
 export async function deleteCustomerFn(
-  data: z.infer<typeof customerVersionInput>
-): Promise<ActionResult<void>> {
+  data: z.infer<typeof deleteCustomerInput>
+) {
   return withAction(async (ctx) => {
 
-    const validated = customerVersionInput.parse(data);
-    await runOperationInProcess(deleteCustomer, ctx, validated);
-
-    return undefined;
+    const validated = deleteCustomerInput.parse(data);
+    try {
+      return (await runWithCascadePreview(deleteCustomer, ctx, validated)).data;
+    } catch (error) {
+      throw keylessOutcomeUnknown(error);
+    }
   }, { fallbackMessage: "Failed to delete customer", log: { message: LOG_MESSAGE, context: { op: "customer:delete" } } });
+}
+
+/** Run the same locked delete and roll it back for the confirmation. */
+export async function previewDeleteCustomerFn(data: z.infer<typeof deleteCustomerInput>) {
+  return withAction(async ctx => {
+    const result = await runOperation(deleteCustomer, ctx, deleteCustomerInput.parse(data), { dryRun: true });
+    return result.data;
+  }, { fallbackMessage: "Failed to preview customer deletion", log: { message: LOG_MESSAGE, context: { op: "customer:delete-preview" } } });
 }
 
 // ============================================
@@ -207,12 +239,13 @@ export async function deleteCustomerFn(
  * Create a new customer location
  */
 export async function createCustomerLocationFn(
-  data: z.infer<typeof createCustomerLocationSchema>
-): Promise<ActionResult<CustomerLocation>> {
-  return withAction(async (ctx) => {
+  data: z.infer<typeof createCustomerLocationSchema>,
+  options?: CreateIntentOptions
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
+  return withCreate(async (_ctx, create) => {
     const validated = createCustomerLocationSchema.parse(data);
 
-    const location = await createCustomerLocation(ctx, {
+    const location = await create(addCustomerLocation, {
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
@@ -228,7 +261,7 @@ export async function createCustomerLocationFn(
     });
 
     return location;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create customer location",
     log: { message: LOG_MESSAGE, context: { op: "customer-location:create" } },
   });
@@ -239,12 +272,14 @@ export async function createCustomerLocationFn(
  */
 export async function updateCustomerLocationFn(
   data: z.infer<typeof updateCustomerLocationSchema>
-): Promise<ActionResult<CustomerLocation>> {
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
   return withAction(async (ctx) => {
 
     const validated = updateCustomerLocationSchema.parse(data);
 
-    const location = await updateCustomerLocation(ctx, validated.locationId, {
+    const location = await runOperationInProcess(updateCustomerLocation, ctx, {
+      customerId: validated.customerId,
+      locationId: validated.locationId,
       expectedVersion: validated.expectedVersion,
       name: validated.name,
       country: validated.country,
@@ -272,13 +307,13 @@ export async function updateCustomerLocationFn(
  */
 export async function deleteCustomerLocationFn(
   data: z.infer<typeof deleteCustomerLocationSchema>
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<{ warnings: string[] }>> {
   return withAction(async (ctx) => {
 
     const validated = deleteCustomerLocationSchema.parse(data);
-    await deleteCustomerLocation(ctx, validated.locationId, validated.expectedVersion);
+    const { warnings } = await runOperationInProcess(deleteCustomerLocation, ctx, validated);
 
-    return undefined;
+    return { warnings };
   }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
 }
 
@@ -298,4 +333,22 @@ export async function restoreCustomerFn(
     const validated = customerVersionInput.parse(data);
     return runOperationInProcess(restoreCustomer, ctx, validated);
   }, { fallbackMessage: "Failed to restore customer", log: { message: LOG_MESSAGE, context: { op: "customer:restore" } } });
+}
+
+export async function archiveCustomerLocationFn(
+  data: z.infer<typeof customerLocationVersionInput>
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
+  return withAction(async (ctx) => {
+    const validated = customerLocationVersionInput.parse(data);
+    return runOperationInProcess(archiveCustomerLocation, ctx, validated);
+  }, { fallbackMessage: "Failed to archive customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:archive" } } });
+}
+
+export async function restoreCustomerLocationFn(
+  data: z.infer<typeof customerLocationVersionInput>
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
+  return withAction(async (ctx) => {
+    const validated = customerLocationVersionInput.parse(data);
+    return runOperationInProcess(restoreCustomerLocation, ctx, validated);
+  }, { fallbackMessage: "Failed to restore customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:restore" } } });
 }

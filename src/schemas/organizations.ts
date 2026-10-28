@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { passwordSchema } from "@/schemas/auth";
 
-export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
+export const orgRoleSchema = z.enum(["admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
 
 export const inviteMemberSchema = z.object({
@@ -21,21 +21,22 @@ export const inviteMemberSchema = z.object({
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
+export const ORGANIZATION_NAME_MAX_LENGTH = 100;
+
+export const renameOrganizationSchema = z.object({
+  name: z.string().trim()
+    .min(2, "Name must be at least 2 characters.")
+    .max(ORGANIZATION_NAME_MAX_LENGTH, `Name must be at most ${ORGANIZATION_NAME_MAX_LENGTH} characters.`),
+});
+export type RenameOrganizationInput = z.infer<typeof renameOrganizationSchema>;
+
 export const createOrganizationSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  slug: z
+  name: renameOrganizationSchema.shape.name,
+  adminEmail: z
     .string()
     .trim()
     .toLowerCase()
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Slug may only contain lowercase letters, numbers, and hyphens."
-    ),
-  ownerEmail: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .pipe(z.email("Enter a valid owner email.")),
+    .pipe(z.email("Enter an email address.")),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 

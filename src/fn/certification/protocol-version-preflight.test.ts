@@ -18,7 +18,7 @@ import { appendSyncEventBestEffort } from "./shared";
 const ORG_CTX = {
   userId: "user-test-1",
   organizationId: "org-test-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 } as OrgContext;
 const REMOVAL_ID = "00000000-0000-4000-8000-000000000001";

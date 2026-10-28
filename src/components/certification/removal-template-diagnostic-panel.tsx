@@ -116,7 +116,7 @@ const AVAILABILITY_COPY: Record<
   "template-not-selected": {
     title: "No active Removal template",
     description:
-      "Select a default Isometric Removal template in Certifier settings.",
+      "Choose a Removal template in Settings.",
   },
   "template-not-found": {
     title: "Active Removal template is missing",
@@ -187,9 +187,12 @@ export function RemovalTemplateDiagnosticPanel({
           <p className="body-small font-medium text-[var(--color-text-secondary)]">
             Active Removal template
           </p>
-          <p className="body-small">
-            {data.diagnostic?.template.displayName ?? MISSING_VALUE.notAvailable}
-          </p>
+          {/* Without a diagnostic the notice below says why; an unchosen template is simply not set. */}
+          {data.diagnostic ? (
+            <p className="body-small">{data.diagnostic.template.displayName}</p>
+          ) : !data.selectedTemplateId && (
+            <p className="body-small text-[var(--color-text-tertiary)]">{MISSING_VALUE.notSet}</p>
+          )}
           {data.diagnostic && (
             <p className="body-caption text-[var(--color-text-tertiary)]">
               {data.diagnostic.template.creditType} credit type
@@ -215,22 +218,19 @@ export function RemovalTemplateDiagnosticPanel({
             </details>
           )}
         </div>
-        <div>
-          <p className="body-small font-medium text-[var(--color-text-secondary)]">
-            Aggregate status
-          </p>
-          {data.diagnostic ? (
+        {/* The status is derived from the diagnostic, so without one it is left out. */}
+        {data.diagnostic && (
+          <div>
+            <p className="body-small font-medium text-[var(--color-text-secondary)]">
+              Aggregate status
+            </p>
             <div className="mt-4">
               <RemovalTemplateAggregateStatusBadge
                 status={data.diagnostic.aggregateStatus}
               />
             </div>
-          ) : (
-            <p className="body-small text-[var(--color-text-tertiary)]">
-              {MISSING_VALUE.notAvailable}
-            </p>
-          )}
-        </div>
+          </div>
+        )}
         {data.diagnostic && <MappingOverview counts={data.diagnostic.counts} />}
       </section>
 

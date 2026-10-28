@@ -9,16 +9,16 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { removalTemplateSetupHref } from "@/lib/certification/links";
 
 const template = templateFixture as GhgEntryTemplate;
 
 function facts(): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     // Deliberately a different default. It must never be used for a Removal.
-    defaultTemplate: { ...template, id: "other-default" },
+    currentTemplate: { ...template, id: "other-default" },
     templatesById: {
       [template.id]: {
         template, observation: { lineSources: {} }, enrichmentProblems: [], lineSourceProblems: [],
@@ -29,10 +29,19 @@ function facts(): FacilityCertifierFacts {
 }
 
 describe("Removal template pins", () => {
+  it("uses raw template array order for live facility facts", () => {
+    const facility = facts();
+    facility.templatesById[template.id]!.observation!.lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
+    const lines = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility).emissionLines!;
+    expect(lines.map(({ componentId, groupName, groupPosition, position }) => ({ componentId, groupName, groupPosition, position })))
+      .toEqual(template.groups.flatMap((group, groupPosition) => group.components.map((component, position) => ({
+        componentId: component.id, groupName: group.display_name, groupPosition, position,
+      }))));
+  });
   it("blocks an unpinned member without substituting the default", () => {
     const result = resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: null }], facts());
     expect(result.removalTemplate).toBeNull();
-    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Choose a Removal template for this credit batch." }]);
+    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates." }]);
   });
   it("refuses mixed pins", () => {
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: "other-default" }], facts()).templateBlockers)
@@ -79,7 +88,7 @@ describe("Removal template pins", () => {
       hasSubmittableRuns: true, requiredTransport: [], feedstockTypeMappingGaps: [], ...resolved,
     };
     expect(deriveRemovalReadiness(readiness).state).toBe("blocked");
-    const check = buildRemovalRequirementsChecklist(readiness).find((check) => check.key === "template")!;
+    const check = buildRemovalRequirementsChecklist(readiness).find((check) => check.key === "templateSet")!;
     expect(check.detail).toContain("Set each value in the Isometric template editor before submitting.");
     expect(check.detail).not.toContain("Try again");
     expect(check.templateBlockerCodes).toEqual(["missingFixedDatapoint"]);
@@ -88,10 +97,10 @@ describe("Removal template pins", () => {
       hasSubmittableRuns: true, submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       entityReadinessGaps: [], requiredTransportCategories: [],
     } as unknown as import("./certify-context").RemovalCertifyContext, "batch-1"));
-    const batchCheck = health.checks.find((check) => check.key === "template")!;
+    const batchCheck = health.checks.find((check) => check.key === "templateSet")!;
     expect(batchCheck).toMatchObject({ status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
     expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-      label: "Switch template", href: creditBatchRemovalTemplateHref("batch-1", "facility-1"),
+      label: "Set template", href: removalTemplateSetupHref("facility-1"),
     });
   });
 });
@@ -120,7 +129,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   const diagnostics = templateFacts.unbindableTemplateInputs.filter((finding) => [gensetId, startupId].includes(finding.componentId));
   expect(diagnostics).toContainEqual(expect.objectContaining({ componentId: gensetId,
     reason: problem === "duplicate-source" ? "ambiguous" : "unmapped" }));
-  expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("Review the Removal template lines in Certification settings.");
+  expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("This Removal template has components to decide.");
   if (problem === "incompatible-carried") expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("ask support");
   else expect(formatUnbindableTemplateInputsText(diagnostics)).not.toContain("ask support");
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], input);
@@ -129,17 +138,17 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
     hasSubmittableRuns: true, requiredTransport: [], feedstockTypeMappingGaps: [], ...resolved,
   };
   expect(deriveRemovalReadiness(readiness).state).toBe("blocked");
-  const check = buildRemovalRequirementsChecklist(readiness).find((check) => check.key === "template")!;
+  const check = buildRemovalRequirementsChecklist(readiness).find((check) => check.key === "templateLines")!;
   expect(check.templateBlockerCodes).toEqual(["templateLinesNeedReview"]);
   const health = deriveBatchHealth(toBatchHealthFacts({
     ...resolved, mapping: {}, memberBatches: [{ id: "batch-1", code: "CB-1" }],
     hasSubmittableRuns: true, submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
     entityReadinessGaps: [], requiredTransportCategories: [],
   } as unknown as import("./certify-context").RemovalCertifyContext, "batch-1"));
-  const batchCheck = health.checks.find((check) => check.key === "template" && check.fixTarget === "templateLineReview")!;
+  const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
-    label: "Review template lines", href: certificationRemovalTemplatesHref("facility-1"),
+    label: "Answer in Settings", href: removalTemplateSetupHref("facility-1"),
   });
 });
 

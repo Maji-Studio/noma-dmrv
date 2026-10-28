@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { type ReactNode } from "react";
@@ -109,8 +110,11 @@ it("prefills a Lost mass edit and posts its correction target with the saved eve
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" correction={correction} onCancel={vi.fn()} onRecorded={vi.fn()} />); });
   expect(mocks.input).toMatchObject({ wetMassKg: 10, moisturePercent: 20, occurredAt: correction.occurredAt, correctsMovementId: correction.id });
+  // The reason starts empty and asks why the entry is corrected.
+  expect(renderer.root.findByType("textarea").props.value ?? "").toBe("");
   await act(async () => renderer.root.findByProps({ name: "wetMassKg" }).props.onChange({ target: { name: "wetMassKg", value: 5 }, type: "change" }));
+  await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Scale misread" }, type: "change" }); });
   await act(async () => { await renderer.root.findByType("form").props.onSubmit({ stopPropagation: vi.fn(), preventDefault: vi.fn(), persist: vi.fn() }); });
-  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ wetMassKg: 5, reason: "Wrong reading", correctsMovementId: correction.id, occurredAt: correction.occurredAt }));
+  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ wetMassKg: 5, reason: "Scale misread", correctsMovementId: correction.id, occurredAt: correction.occurredAt }));
   await act(async () => renderer.unmount());
 });

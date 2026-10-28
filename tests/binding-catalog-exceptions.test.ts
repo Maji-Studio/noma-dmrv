@@ -44,8 +44,8 @@ import {
   projectSequestrationInputBindings,
 } from "@/lib/isometric/semantic-binding-projections";
 
-const PRE_638_SOURCE_BINDING_MAPPING_REVISION =
-  "61cf0d32ae78a9b1fe43165258a5ddbc819c0a3484f00fb99c043095450a4118";
+const ENTRY_SOURCE_BINDING_MAPPING_REVISION =
+  "d9d2992461eaf4b31b20b66f9f133a77419bec8c85c76587a8194d241eb238db";
 
 const PRE_638_STORAGE_CLASSIFICATION = {
   "carbon_rich_substance_sequestration": {
@@ -341,7 +341,7 @@ describe("measurement-sample bindings", () => {
 describe("component disambiguation", () => {
   it("fails closed on an unrecognised pyrolysis diesel component with the same message", () => {
     const diesel = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow("Review the Removal template lines in Certification settings.");
+    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow("This Removal template has components to decide.");
   });
 
   it("resolves the diesel split and the Safety margin through their named rules", () => {
@@ -376,8 +376,8 @@ describe("component disambiguation", () => {
 });
 
 describe("Source evidence targets", () => {
-  it("keep the Source binding revision", () => {
-    expect(SOURCE_BINDING_MAPPING_REVISION).toBe(PRE_638_SOURCE_BINDING_MAPPING_REVISION);
+  it("pins the Source binding revision including explicit entry targets", () => {
+    expect(SOURCE_BINDING_MAPPING_REVISION).toBe(ENTRY_SOURCE_BINDING_MAPPING_REVISION);
   });
 
   it("keep the optional evidence targets", () => {

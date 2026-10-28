@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, integer, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
-import { FEEDSTOCK_CATEGORIES, feedstockStatus, feedstockTypeUsage } from './common';
+import { check, real, integer, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { distanceSource, FEEDSTOCK_CATEGORIES, feedstockStatus, feedstockTypeUsage } from './common';
 import { massKg, percent } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
@@ -77,6 +77,9 @@ export const feedstocks = pgTable(
 
     // --- Override ---
     overrideJustification: text('override_justification'),
+    distanceKmOverride: real('distance_km_override'),
+    distanceSource: distanceSource('distance_source'),
+    distanceNote: text('distance_note'),
 
     // --- Feedstock Details ---
     feedstockTypeId: uuid('feedstock_type_id')
@@ -103,6 +106,7 @@ export const feedstocks = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    check('feedstocks_distance_override_positive', sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} > 0`),
     unique('feedstocks_organization_id_code_unique').on(table.organizationId, table.code),
     foreignKey({
       columns: [table.facilityId, table.organizationId],

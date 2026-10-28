@@ -1,0 +1,13 @@
+Join Dark Earth Carbon on noma
+
+Amani Mushi invited you to join Dark Earth Carbon as an Admin. Accept to join.
+
+Accept invitation:
+https://app.noma.example/accept-invitation/inv-1
+
+This invitation expires in 7 days.
+
+If you did not expect this invitation, ignore this email. Nothing happens until you accept.
+
+Sent to invitee@example.test because you were invited to Dark Earth Carbon.
+Questions? Reply to this email.

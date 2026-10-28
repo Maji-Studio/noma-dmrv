@@ -1,51 +1,65 @@
 "use client";
 import { EmptyState, Notice } from "@/components/ui";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { mixPileName } from "@/lib/output-stock/labels";
+import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
+import { mixPileName, WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
+import { estimateKg } from "./output-stock-history-days";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
-import { formatWetEstimate } from "./stock-preview-shared";
+import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
+import { partFigure, partLabel, partRows } from "./sub-bin-card";
+import { pileFigures, stockParts } from "@/lib/output-stock/stock-parts";
 import type { OutputSubBin } from "@/types/output-stock";
+import type { MoistureBasis } from "@/lib/output-stock/moisture-estimate";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 
-const SPLIT_HINT = "Wet stock is an estimate from the latest moisture reading of each sub-bin. Wet mass added less wet mass taken out determines the wet estimate; only a count resets moisture. Bays are drawn by wet mass, the hatched top being the estimated water, in the order a draw takes them.";
-const MIX_HINT = "Wet stock is an estimate from the pile's latest moisture reading, drawn as the hatched water on top of the dry batches. Draws leave the estimated moisture unchanged. Each batch added brings its own wet mass.";
+const SPLIT_CAPTION = `Each bay is a sub-bin, drawn by wet mass with its water hatched on top, in the order draws take them.`;
+const MIX_CAPTION = `The water is hatched on top of the dry batches.`;
 const SUB_BINS_LABEL = "Sub-bins, next out first";
 const PERCENT = 100;
-/** Below this a part is rounding, not a band worth drawing. */
-const PILE_PART_MIN_KG = 0.05;
 
 /**
- * A mix bin's pile from the bottom up: each batch's dry biochar, then any
- * ingredient solids (a product bin), then wet stock less those solids as
- * estimated water, so the bands add up to the wet estimate on the card.
+ * A mix bin's pile from the bottom up: each batch's dry biochar, then each
+ * ingredient's solids across the batches (a product bin), then wet stock less
+ * those solids as estimated water, so the bands add up to the wet estimate on
+ * the card. Parts are named the way the product composition names them.
  */
-function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg: number | null, moisturePercent: number | null, timeZone: string): PileBand[] {
-  const solidsKg = layers.reduce((sum, layer) => sum + layer.solidsKg, 0);
-  const ingredientsKg = solidsKg - layers.reduce((sum, layer) => sum + layer.dryMassKg, 0);
-  const waterKg = wetKg === null ? 0 : wetKg - solidsKg;
+export function mixPileBands(layers: OutputSubBin[], dryKg: number | null, wetKg: number | null, moisturePercent: number | null, timeZone: string): PileBand[] {
+  const parts = stockParts(pileFigures(layers, wetKg));
   return [
     ...layers.map((layer) => ({ label: layer.code, kg: layer.dryMassKg, details: [
-      { label: "Share of dry biochar", value: dryKg ? `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` : MISSING_VALUE.notAvailable },
-      { label: "Dry biochar", value: formatMassKg(layer.dryMassKg) },
-      { label: "Solids", value: formatMassKg(layer.solidsKg) },
+      // A share is derived, so a bin without dry stock leaves the row out.
+      ...(dryKg ? [{ label: "Share of dry biochar", value: `${Math.round((layer.dryMassKg / dryKg) * PERCENT)}%` }] : []),
+      // A batch in a pile has no wet estimate of its own, so it has no water row.
+      ...partRows(stockParts(pileFigures([layer], null)).rows),
       { label: "Added", value: formatFacilityDateTime(layer.placedAt, timeZone) },
     ] })),
-    ...(ingredientsKg >= PILE_PART_MIN_KG ? [{ label: "Ingredients, dry", kg: ingredientsKg, category: "ingredient-solids" as const, details: [
-      { label: "Ingredient solids", value: formatMassKg(ingredientsKg) },
-    ] }] : []),
-    ...(waterKg >= PILE_PART_MIN_KG ? [{ label: "Water, estimated", kg: waterKg, category: "existing-water" as const, details: [
-      { label: "Water, estimated", value: formatMassKg(waterKg) },
-      { label: "Moisture", value: moisturePercent === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(moisturePercent) },
-    ] }] : []),
+    ...parts.rows.filter((part) => part.kind === "ingredient").map((part) => ({ label: partLabel(part), kg: part.kg, category: "ingredient-solids" as const, details: [
+      { label: partLabel(part), value: formatMassKg(part.kg) },
+    ] })),
+    ...parts.rows.filter((part) => part.kind === "water").map((part) => ({ label: partLabel(part), kg: part.kg, category: "existing-water" as const, estimated: true, details: [
+      { label: partLabel(part), value: partFigure(part) },
+      // The pile's moisture is an estimate, so without one the row is left out.
+      ...(moisturePercent === null ? [] : [{ label: "Moisture", value: formatMoisturePercent(moisturePercent) }]),
+    ] })),
   ];
+}
+
+/**
+ * The newest draw that set the bin's moisture estimate, across the bin and
+ * its sub-bins; null when every estimate still rests on a count or on intake.
+ */
+export function drawMoistureBasis(bases: readonly (MoistureBasis | null | undefined)[]): MoistureBasis | null {
+  const draws = bases.filter((basis): basis is MoistureBasis & { source: "draw" } => basis?.source === "draw");
+  return draws.reduce<(MoistureBasis & { source: "draw" }) | null>((newest, basis) => !newest || basis.at > newest.at ? basis : newest, null);
 }
 
 /**
@@ -67,6 +81,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const layers = subBins.data?.subBins ?? [];
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
   const dryKg = preview.data?.beforeDryKg ?? null;
+  const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), clock.timeZone);
   const mixMoisture = mode === "mix" ? preview.data?.moistureEstimate?.moisturePercent ?? null : null;
   const ready = !!preview.data && !subBins.isLoading;
   // Shares the history modal's query, so opening it shows the same data at once.
@@ -76,19 +91,19 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   return <div className="flex flex-col gap-16">
     <StockCard
       title={mode === "mix" && preview.data ? mixPileName(preview.data.binName) : "Stock"}
-      hint={mode === "mix" ? MIX_HINT : SPLIT_HINT}
+      hint={WET_STOCK_DEFINITION}
       status={<>
         {(subBins.isLoading || preview.isLoading) && <p role="status" className="body-caption">Loading stock...</p>}
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
       figure={ready && <>
-        {wetKg === null ? MISSING_VALUE.notAvailable : `≈ ${formatWetEstimate(wetKg)} kg wet`}
+        {outputStockFigure(wetKg, dryKg ?? 0)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
       </>}
-      caption={ready && <>
-        {mode === "mix" && `${mixMoisture === null ? MISSING_VALUE.notAvailable : formatMoisturePercent(mixMoisture)} moisture · `}
-        {dryKg === null ? MISSING_VALUE.notAvailable : formatMassKg(dryKg)} dry biochar
+      caption={ready && wetKg !== null && dryKg !== null && <>
+        <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />
+        {basisCaption && <span className="block">{basisCaption}</span>}
       </>}
       onAdjust={onAdjust}
     >
@@ -96,10 +111,11 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
       {!subBins.isLoading && layers.length > 0 && (mode === "mix"
         ? <MixPileBay bands={mixPileBands(layers, dryKg, wetKg, mixMoisture, clock.timeZone)} capacityKg={capacityKg} />
         : <SubBinBays subBins={layers} timeZone={clock.timeZone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
+      {!subBins.isLoading && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
     </StockCard>
     <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
-      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={clock.timeZone} now={history.dataUpdatedAt} /> : undefined}
+      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={clock.timeZone} now={history.dataUpdatedAt} formatEstimate={estimateKg} /> : undefined}
     </StockChartCard>
   </div>;
 }

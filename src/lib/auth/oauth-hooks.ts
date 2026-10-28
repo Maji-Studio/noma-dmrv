@@ -1,0 +1,142 @@
+import { defaultKeyHasher } from "@better-auth/api-key";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { env } from "@/config/env";
+import { getOAuthConfig } from "./oauth-config";
+import { OAUTH_ACCESS_TOKEN_PREFIX, OAUTH_REFRESH_TOKEN_PREFIX } from "@/config/oauth";
+import { findOAuthClientResources, findOAuthClientScopes, findOAuthOfflineGenerations } from "@/data-access/oauth-provider";
+import { findOAuthAuthorizationCode, findOAuthRefreshToken, findOAuthRevocationToken } from "@/data-access/oauth-token-lookups";
+import { revokeGeneration } from "@/data-access/oauth-grant-lifecycle";
+import { assertGenerationEligible } from "./oauth-eligibility";
+import { OAUTH_REQUESTABLE_SCOPES } from "./oauth-scopes";
+
+import { guardOAuthAuthorize, guardOAuthRefreshScopes, guardOAuthTokenInput, OAUTH_HTTP_PATHS, refuseOAuth, refreshDecision } from "./oauth-request-policy";
+
+type OAuthHookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+const REQUESTABLE_SCOPES: ReadonlySet<string> = new Set(OAUTH_REQUESTABLE_SCOPES);
+
+export async function oauthBefore(ctx: OAuthHookContext) {
+  if (!ctx.path?.startsWith("/oauth2/")) return;
+  if ((ctx.request || ctx.headers) && !OAUTH_HTTP_PATHS.has(ctx.path)) throw new APIError("NOT_FOUND");
+  if (ctx.path === "/oauth2/authorize") {
+    const isAuthorizeEntry = ctx.request && new URL(ctx.request.url).pathname.endsWith("/oauth2/authorize");
+    const isFormAuthorize = ctx.method === "POST" && isAuthorizeEntry;
+    const query = (isFormAuthorize ? ctx.body : ctx.query) ?? {};
+    guardOAuthAuthorize(query);
+    // The raw URL preserves repeated parameters before endpoint schema parsing.
+    if (ctx.request && new URL(ctx.request.url).searchParams.getAll("resource").length > 1) refuseOAuth("invalid_target");
+    // Normalize before the provider signs the authorization.
+    const normalized: Record<string, unknown> = { ...query };
+    // Re-offer consent on client entry only; internal re-dispatch would loop.
+    if (isAuthorizeEntry) {
+      const prompts = typeof query.prompt === "string" ? query.prompt.trim().split(/\s+/).filter(Boolean) : [];
+      if (!prompts.includes("none") && !prompts.includes("consent")) normalized.prompt = [...prompts, "consent"].join(" ");
+    }
+    // Offer registered reads and writes plus offline access. Round 14 Q100
+    // supersedes decision 123: reads start ticked, writes start unticked.
+    if (typeof query.client_id === "string") {
+      const clientScopes = await findOAuthClientScopes(query.client_id);
+      const registration = clientScopes ?? (env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id) ? OAUTH_REQUESTABLE_SCOPES : undefined);
+      const registered = new Set(registration ?? []);
+      if (typeof query.scope !== "string" || query.scope.trim() === "") {
+        normalized.scope = OAUTH_REQUESTABLE_SCOPES.filter(scope => registered.has(scope)).join(" ");
+      } else if (registration !== undefined) {
+        // Discovery advertises every requestable scope. Trim only known scopes
+        // outside this registration; invalid scopes still fail the guard above.
+        const requested = query.scope.trim().split(/\s+/);
+        const allowed = requested.filter((scope: string) => !REQUESTABLE_SCOPES.has(scope) || registered.has(scope));
+        // An empty scope would trigger provider defaults. Preserve the original
+        // request instead so the provider rejects the unregistered scopes.
+        if (allowed.length && allowed.length < requested.length) normalized.scope = allowed.join(" ");
+      }
+    }
+    if (query.resource === undefined && typeof query.client_id === "string") {
+      const resources = await findOAuthClientResources(query.client_id);
+      if (resources.length === 0 && env.OAUTH_CIMD_CLIENT_IDS.includes(query.client_id)) {
+        // Match clientRegistrationDefaultResources; discovery still validates the client.
+        normalized.resource = getOAuthConfig().mcp;
+      } else {
+        if (resources.length !== 1) refuseOAuth("invalid_target");
+        normalized.resource = resources[0].resource;
+      }
+    }
+    if (typeof normalized.scope === "string" && !normalized.scope.split(/\s+/).includes("offline_access") &&
+      typeof normalized.client_id === "string" && typeof normalized.resource === "string") {
+      const session = await getSessionFromCtx(ctx);
+      if (session) {
+        const generations = await findOAuthOfflineGenerations(session.user.id, normalized.client_id, normalized.resource);
+        for (const generation of generations) {
+          if ((await assertGenerationEligible(generation, new Date())).ok) {
+            normalized.scope = `${normalized.scope} offline_access`.trim();
+            break;
+          }
+        }
+      }
+    }
+    return { context: isFormAuthorize ? { body: normalized } : { query: normalized } };
+  }
+  if (ctx.path === "/oauth2/token") {
+    const raw = ctx.body ?? {};
+    // The plugin's schema trims grant_type after hooks run, so decide on the
+    // trimmed value and hand that same value on: the plugin never acts on a
+    // grant type this hook did not check.
+    const grantType = typeof raw.grant_type === "string" ? raw.grant_type.trim() : raw.grant_type;
+    if (grantType !== "authorization_code" && grantType !== "refresh_token") refuseOAuth("unsupported_grant_type");
+    const body = { ...raw, grant_type: grantType };
+    guardOAuthTokenInput(body, ctx.headers ?? ctx.request?.headers);
+    if (body.grant_type === "authorization_code") {
+      if (typeof body.code !== "string") refuseOAuth("invalid_grant");
+      // Read only: consumeVerificationValue is reserved for the plugin handler.
+      const code = await findOAuthAuthorizationCode(ctx.context.adapter, await defaultKeyHasher(body.code));
+      // A consumed or unknown code goes to the plugin, whose replay handling
+      // revokes the tokens already issued for it (RFC 6749 4.1.2).
+      if (!code) return { context: { body } };
+      let referenceId: unknown;
+      try { referenceId = JSON.parse(code.value).referenceId; } catch { refuseOAuth("invalid_grant"); }
+      if (typeof referenceId !== "string" || !(await assertGenerationEligible({ id: referenceId }, new Date())).ok) refuseOAuth("invalid_grant");
+    }
+    if (body.grant_type === "refresh_token") {
+      const token = body.refresh_token;
+      if (typeof token !== "string" || !token.startsWith(OAUTH_REFRESH_TOKEN_PREFIX)) return { context: { body } };
+      const row = await findOAuthRefreshToken(ctx.context.adapter, await defaultKeyHasher(token.slice(OAUTH_REFRESH_TOKEN_PREFIX.length)));
+      const now = new Date();
+      // Match the plugin's strict comparison: equality must still pass our reuse guard.
+      if (!row || row.expiresAt < now) return { context: { body } };
+      if (!row.referenceId || !(await assertGenerationEligible({ id: row.referenceId }, now)).ok) refuseOAuth("invalid_grant");
+      guardOAuthRefreshScopes(body.scope, row.scopes ?? []);
+      const decision = refreshDecision({ revoked: row.revoked ?? null, rotatedAt: row.rotatedAt ?? null }, now);
+      if (decision === "reuse") await revokeGeneration(row.referenceId, "refresh_reuse");
+      if (decision !== "pass") refuseOAuth("invalid_grant");
+    }
+    return { context: { body } };
+  }
+  if (ctx.path === "/oauth2/revoke") {
+    const token = ctx.body?.token;
+    const clientId = revokeClientId(ctx.body?.client_id, ctx.headers ?? ctx.request?.headers);
+    if (typeof token === "string") {
+      const refresh = token.startsWith(OAUTH_REFRESH_TOKEN_PREFIX);
+      const prefix = refresh ? OAUTH_REFRESH_TOKEN_PREFIX : OAUTH_ACCESS_TOKEN_PREFIX;
+      if (token.startsWith(prefix)) {
+        const row = await findOAuthRevocationToken(ctx.context.adapter, await defaultKeyHasher(token.slice(prefix.length)), refresh);
+        // RFC 7009 2.1: a client may only revoke its own tokens.
+        if (row?.referenceId && row.clientId === clientId) await revokeGeneration(row.referenceId, "client_revoked");
+      }
+    }
+    return ctx.json({});
+  }
+}
+
+/** RFC 6749 2.3.1 encodes each Basic credential as application/x-www-form-urlencoded. */
+function revokeClientId(bodyClientId: unknown, headers?: Headers): string | undefined {
+  const authorization = headers?.get("authorization");
+  if (!authorization) return typeof bodyClientId === "string" ? bodyClientId : undefined;
+  const basic = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(authorization);
+  if (!basic) return undefined;
+  try {
+    const credentials = Buffer.from(basic[1], "base64").toString("utf8");
+    const separator = credentials.indexOf(":");
+    if (separator < 0) return undefined;
+    const clientId = decodeURIComponent(credentials.slice(0, separator).replace(/\+/g, " "));
+    if (bodyClientId !== undefined && bodyClientId !== clientId) return undefined;
+    return clientId;
+  } catch { return undefined; }
+}

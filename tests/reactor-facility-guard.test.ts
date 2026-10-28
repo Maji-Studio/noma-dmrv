@@ -3,12 +3,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
-import { facilities, organizations, productionRuns, reactors } from "@/db/schema";
+import { facilities, organizations, productionRuns, reactors, storageLocations } from "@/db/schema";
 import { createProductionRunInTransaction } from "@/data-access/production-runs";
 import { deleteReactor, updateReactor } from "@/data-access/reactors";
 import { nextVersion } from "@/data-access/row-version";
 import { makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 import { createTestPool } from "./helpers/operation-fixture";
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 
 const BARRIER_CONNECTIONS = 2;
@@ -44,7 +45,7 @@ async function seed() {
 
 afterEach(async () => {
   for (const { ctx } of fixtures.splice(0)) {
-    for (const table of [productionRuns, reactors, facilities]) {
+    for (const table of [productionRuns, reactors, storageLocations, facilities]) {
       await db.delete(table).where(eq(table.organizationId, ctx.organizationId));
     }
     await db.delete(organizations).where(eq(organizations.id, ctx.organizationId));
@@ -62,15 +63,20 @@ describe("reactor facility changes", () => {
   it.each(["running", "cancelled", "failed", "complete"] as const)("blocks a move with a %s production run but allows edits at the same facility", async (status) => {
     const { ctx, reactor, source, destination } = await seed();
     const startTime = new Date("2026-01-01T00:00:00Z");
+    const outputBinId = status === "complete" ? await createProductionRunOutputBin(ctx.organizationId, source.id) : null;
     await db.insert(productionRuns).values({
       organizationId: ctx.organizationId, code: "PR-1", facilityId: source.id,
       reactorId: reactor.id, status, startTime,
       cancellationReason: status === "cancelled" ? "Recorded in error" : null,
+      ...(outputBinId ? { biocharStorageLocationId: outputBinId, biocharOutputKg: 100, biocharMoisturePercent: 0 } : {}),
       endTime: status === "running" ? null : new Date("2026-01-01T01:00:00Z"),
     });
     await expect(updateReactor(ctx, reactor.id, { expectedVersion: reactor.version, facilityId: destination.id }))
       .rejects.toThrow(/Cannot move a reactor with associated production runs/);
-    await expect(deleteReactor(ctx, reactor.id, reactor.version)).rejects.toThrow(/associated production runs/);
+    await expect(deleteReactor(ctx, reactor.id, reactor.version)).rejects.toMatchObject({
+      code: "conflict", message: `Reactor ${reactor.code} was not deleted because production runs still use it. Choose another reactor on those runs first, or keep this reactor.`,
+      issues: [{ path: ["reactorId"], code: "conflict", meta: { reason: "in_use" } }],
+    });
     const edited = await updateReactor(ctx, reactor.id, {
       expectedVersion: reactor.version, facilityId: source.id, identifier: "Renamed reactor",
     });

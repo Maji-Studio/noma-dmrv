@@ -1,6 +1,6 @@
 # Authentication
 
-Better Auth 1.7.7 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
+Better Auth 1.7.10 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
 
 Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported from `src/lib/auth/client.ts` (**not** from `providers/better-auth-client.ts`, which exports only `authClient`, types, and raw helpers).
 
@@ -24,10 +24,10 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
   ownership. Matching is prefix-based
   (`pathname === route || pathname.startsWith(route + "/")`), so every
   descendant is public too.
-- `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
+- `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected by `homePathFor(session.user)`: Platform Admins go to `/admin/organizations`, everyone else to `/dashboard`. The authenticated root route uses the same rule. Successful sign-in without a safe explicit `from=` navigates to `/` so the server chooses the home; organization membership does not affect that choice. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
-- Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and lists only tools allowed by the credential scopes. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
+- Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys or OAuth access tokens with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and filters key tool discovery by scopes. OAuth discovers grantable writes for step-up. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
 
 ### Public verifier report capability
 
@@ -53,22 +53,32 @@ workspace and document read keeps normal organization scoping.
 
 ## Roles and active organization
 
-`users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Owner ⊃ Admin ⊃ Member. See [organization.md](./organization.md).
+`users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Admin ⊃ Member. See [organization.md](./organization.md).
 
 - **Session cookie cache is on with `maxAge: 5 * 60`.** Changes to cached session fields — notably an org switch's `activeOrganizationId` — can take up to 5 minutes to show up. `getOrgContext()` re-reads membership on every call, so revocations are immediate. `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag.
 - **`getOrgContext()` returns `null`, it does not throw,** when an `activeOrganizationId` is set but the user is neither a member nor a Platform Admin. Do not read `null` as "signed out".
 - **`resolveOrgContext()` is the same resolution with the reason attached** — `{ ok: true, ctx }`, or `{ ok: false, denial }` where `denial` is `"unauthenticated"` (no session) or `"no-organization"` (signed in, but no active organization or not a member of it). `getOrgContext()` and `requireOrgContext()` are thin wrappers over it and discard the reason. Only an HTTP transport needs it: the private read handlers (`src/app/api/reads/read-response.ts`) answer **401** for `"unauthenticated"` and **403** for `"no-organization"`, because a signed-out caller can fix it by signing in and a wrongly-scoped one cannot. Server actions have no status code to choose and keep using `requireOrgContext()`. Both denials are authorization answers, never a 400.
 - **`OrgContext.orgRole` is `null` for a Platform Admin acting inside an org they don't belong to.** Never compare or rank `ctx.orgRole` directly — that wrongly denies Platform Admins. Use `requireOrgRole(ctx, minRole)`, which short-circuits on `isPlatformAdmin` first.
 - **How `activeOrganizationId` gets set:** every successful explicit switch persists `users.lastActiveOrganizationId`. On session creation, the hook restores that organization only after revalidating current access. If it is missing or stale, ordinary users receive their first membership ordered by membership creation time then id; Platform Admins receive the first organization ordered by organization creation time then id. Users with no accessible organizations remain without an active org. The saved id is a preference, never an authorization grant.
-- **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user the Owner, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
-- **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Owner plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
+- **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user an Admin, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
+- **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Admin plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
 - **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
 
 The deliberate `// org-scope-ok:` credential-verification seam,
 `verifyIsometricCredentialsForOrganization(ctx, organizationId)`, uses the same
-management guard as credential writes: Owners and Admins may verify their active
+management guard as credential writes: Admins may verify their active
 organization, and only Platform Admins may verify another organization. It
 returns only the project count from `listProjects`.
+
+The organization plugin uses `creatorRole: "admin"` and grants Admin the former
+Owner member-management permissions. `disableOrganizationDeletion: true` refuses
+plugin organization deletion; lifecycle belongs to Platform Admins. A database
+trigger serializes removal of Admins on the organization row and refuses losing
+the last Admin, including concurrent plugin writes. Both the plugin and the
+Platform Admin membership writers refuse demoting, removing, or leaving as the
+last Admin. Plugin errors tell the user to promote another member first. Role
+inputs accept only a single `admin` or `member`; the plugin's built-in `owner`
+and multi-role inputs are rejected.
 
 ## Server actions
 
@@ -95,7 +105,7 @@ Data-access functions take an `OrgContext` and call `requireOrgScope(ctx)` — t
 - **`assertSameOrg()` must be passed the current `tx` as its `executor`** when called inside a transaction — reading through the global pool from inside a transaction starves the pool under parallel load. See `src/data-access/utils.ts`.
 - `organizationId` is never accepted from form data; cross-org IDs resolve as absent rather than disclosing another org's data.
 
-Registry credentials are owned per organization and managed by its Owners and Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
+Registry credentials are owned per organization and managed by its Admins (and by Platform Admins), gated on the server-computed `viewerCanManage` rather than on `users.role`. Ordinary members use them through scoped certification flows but cannot read or replace the stored secrets.
 
 ## Rate limiting
 
@@ -106,7 +116,17 @@ Two distinct limiters — a real trip hazard:
 
 ## Invitations
 
-Organization Admins and Owners invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
+Signup is invite-only: public signup is off in code (`disableSignUp: true` in `src/lib/auth/better-auth.ts`), with no env flag to turn it on. Users join through an organization invite or the admin bootstrap CLI.
+
+Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to Settings, Members (`/settings/members`).
+
+## Profile: name, password and email
+
+Settings, Profile (`src/fn/profile.ts`) changes only the caller's own user, through Better Auth with the request's session headers. `changePasswordFn` checks the current password with `changePassword` (`revokeOtherSessions: false`), then calls `revokeOtherSessions`, keeping this device's session. Better Auth's own `revokeOtherSessions: true` creates a replacement session inside its transaction, and the session-create hook in `better-auth.ts` then waits for a second pool connection, so the two calls stay separate. Other devices stop working within `SESSION_COOKIE_CACHE_SECONDS` (5 minutes), because each browser trusts its signed session snapshot that long. The change is limited to 5 attempts per 15 minutes per user.
+
+Email changes use `useChangeEmail` → `changeEmailFn` in `src/fn/profile.ts` → `auth.api.changeEmail`, with server-side Zod validation and a fixed Profile callback. The action limits requests to 5 per 15 minutes per user; the HTTP `/change-email` endpoint also limits requests to 5 per 15 minutes. A confirmation link goes to the new address and a best-effort notice goes to the old address when the request is made. The address changes only when the link is opened. Requests require a fresh session, using Better Auth's default `freshAge` of 24 hours. The app's before-hook enforces freshness because Better Auth 1.7.10's sensitive-session middleware checks session validity only. The before-hook runs for HTTP and direct API calls. A stale session returns `SESSION_EXPIRED`, translated by the action to `session_expired` and propagated by the hook as an `ActionError`; sign in again before retrying. Confirmation checks the authoritative session store, bypassing the cookie cache, and requires the requester's session creation time, floored to seconds, to be no later than the link's signed `iat`; password reset revokes all sessions, so a later sign-in cannot redeem the old link. Refusals redirect to the safe callback with `error=SIGN_IN_REQUIRED` for no session, `INVALID_TOKEN` for an already-used link or a session newer than the link, and `WRONG_ACCOUNT` for another account, without creating a session or setting a cookie. An address already belonging to an account returns the same `{ status: true }` and pending state, with neither email sent. Delivery failures for confirmation propagate like normal verification; notice failures never block the request.
+
+Memberships, credentials and Platform Admin authority use user IDs and stored roles, so changing an address preserves them. Pending invitations remain bound to their original recipient address; ask an Admin to cancel and re-invite the new address. The admin bootstrap CLI still finds its target by `ADMIN_EMAIL`: after a Platform Admin changes their email, update that operator configuration before rerunning bootstrap or it can create another admin at the old address.
 
 ## Better Auth schema and credential identity
 
@@ -129,7 +149,7 @@ reseeded: `pnpm db:reset` then `pnpm db:seed` locally, the
 
 ## API credentials
 
-`@better-auth/api-key` 1.7.7 stores hashed, organization-bound credentials in
+`@better-auth/api-key` 1.7.10 stores hashed, organization-bound credentials in
 `api_keys`; `api_key_owners` binds each to its creating user and issuance
 membership independently of client-editable metadata. The adapter maps the plugin's `apikey` model to
 `apiKeys`. Keys use `noma_live_` when `env.NODE_ENV` is `production` and
@@ -138,7 +158,7 @@ on a prefix. Production-mode staging builds also use the live prefix.
 
 Credential management goes through `src/fn/api-keys.ts` (`withAction`, strict
 Zod schemas) into `src/data-access/api-keys.ts`. Every management action checks
-live, verified Owner/Admin membership. Unlike normal organization actions, a
+live, verified Admin membership. Unlike normal organization actions, a
 Platform Admin has **no membership override** here. The organization comes
 from the resolved context, never the payload. Creation requires an explicit
 `expiresIn` in seconds, at most 365 days; the plugin's defensive default is
@@ -148,6 +168,26 @@ records the reason, and no application action can re-enable it. Only creation
 returns plaintext. Lists select safe fields explicitly and never return the
 key hash or plugin metadata.
 
+The create dialog sends a per-draft intent key ([forms.md](./forms.md#double-submit)).
+The action reads `create.key` from the shared
+[`withCreate` wrapper](./architecture.md#layers), which validates the key lazily
+after the API key payload. A retry with the same key, after a response that never reached the
+browser, deletes the key recorded under it (its secret was never shown) and
+issues a fresh one, so the list keeps one key. The idempotency record holds
+only the key id, never the plaintext. The transaction runs on a dedicated
+connection because Better Auth issues the key through the shared pool, and an
+advisory try-lock refuses an overlapping request with the same intent instead
+of letting it wait and replace a key that is about to be returned. The draft
+key rotates once a successful create response arrives and when the dialog closes.
+After claiming the intent, the transaction issues through Better Auth before
+deleting the previous key or locking the issuing membership. Holding no locks
+on those rows during issuance avoids pool wait cycles with expired-key cleanup
+or membership writes. It then locks the membership, deletes the previous key
+(member before key rows, the order membership writers use), binds the owner and
+re-checks identity, role and verified email through that connection before
+recording the outcome. A demotion after the membership lock
+waits until the owner row is visible to revocation.
+
 The Better Auth `hooks.before` rejects all HTTP `/api/auth/api-key/*` calls,
 including create, update, delete, get and list. Only header-free, server-side
 `auth.api` calls are allowed. API-key session emulation and the plugin's own
@@ -155,7 +195,7 @@ per-key rate limiter are disabled. Last-used timestamps still update during
 verification. REST rate budgets belong to the REST transport.
 
 The plugin's organization access control adds `apiKey` management permissions
-to Owner/Admin while preserving the existing organization permissions.
+to Admin while preserving the existing organization permissions.
 `afterRemoveMember` and `afterUpdateMemberRole` disable the affected user's
 keys in that organization and record `credential_owner_removed`; promotion or
 re-admission does not restore those credentials. Platform Admin membership overrides disable keys in their existing database
@@ -171,8 +211,8 @@ issuance and deleted users.
 
 ### API key settings
 
-Manage credentials at `/settings/api-keys` in the settings console. Live
-organization Owners and Admins can create keys, edit names and permissions,
+Manage credentials in Settings, Developers (`/settings/developers`), which also shows whether a Platform Admin has API access on for the organization. Live
+organization Admins can create keys, edit names and permissions,
 and revoke keys. Members and Platform Admins without that membership role
 see an explanation without management controls. Creation shows the plaintext
 once with a copy button; closing the dialog clears it. Revoked keys remain
@@ -183,14 +223,14 @@ management version.
 
 ### API request context
 
-`resolveApiContext(request)` returns `{ ok: true, ctx: ApiContext }` or
+`resolveApiContext(request, audience)` returns `{ ok: true, ctx: ApiContext }` or
 `{ ok: false, denial: ApiContextDenial }`, following the session resolver's
-result vocabulary. `ApiContext` extends `OrgContext`: `userId` is the key owner,
-`organizationId` is the key organization, `orgRole` is the live membership,
+result vocabulary. `ApiContext` extends `OrgContext`: `userId` is the credential owner,
+`organizationId` is the credential organization, `orgRole` is the live membership,
 and `isPlatformAdmin` is always false. It also carries `principal`,
 `credentialId`, enumerated `scopes`, and safe credential metadata.
 
-Only one `Authorization: Bearer <key>` is accepted. Duplicate Authorization
+Only one `Authorization: Bearer <credential>` is accepted. Duplicate Authorization
 values and bearer plus `x-api-key` are refused. `x-api-key` alone is unsupported:
 `verifyApiKey` accepts a key directly and does not need that header. Cookies
 are ignored when a bearer exists, and cookies alone cannot authenticate.
@@ -205,8 +245,8 @@ when its hook has disabled the key. The v1 vocabulary is `feedstocks:read`,
 `feedstocks:write`, `feedstocks:delete`, and read-only `facilities`, `suppliers`,
 `feedstock-types`, `storage-locations`, `vehicles`, and `drivers`. Plugin
 permissions are `{ entity: [action] }`; wildcards grant nothing. `hasScope`
-checks the credential alone, and `hasRoleAndScope` intersects Owner/Admin with
-the requested scope. Operation/domain guards must still enforce the remaining
+checks the credential alone, and `principalAllows` intersects API keys with Admin and OAuth with its
+live role ceiling, then checks the requested scope. Operation/domain guards must still enforce the remaining
 operation permission.
 
 The proxy bypasses session lookup for `/api/v1` and `/api/v1/*`, including
@@ -219,12 +259,86 @@ applies there.
 They do not call `resolveApiContext` or the rate-limit guards and cache publicly
 for 300 seconds. The proxy passes both exact paths before session lookup.
 
-`GET /api/v1/me` accepts any authenticated key, including an empty scope set.
+`GET /api/v1/me` accepts either credential kind, including an empty scope set.
 It returns organization, active facilities with `timeZone` and facility-local
-`today` (`YYYY-MM-DD`), role, scopes, and credential id/name/expiry. A read model
+`today` (`YYYY-MM-DD`), role, scopes, and credential kind/id/name/expiry. A read model
 calls an organization-scoped data-access read. Expiry is an ISO UTC instant.
 
-### REST denials and errors
+## OAuth connections
+
+OAuth lets a member connect an app as themselves in one organization. Admin and Member may connect; API keys remain Admin credentials for scripts
+and internal agents. Neither path has a Platform Admin membership override.
+`ApiContext.principal.kind` distinguishes them; OAuth uses the grant generation
+id as `credentialId` for rate limits, idempotency and audit, with `oauthClientId`
+on activity events. See [API caller guidance](./api.md#oauth-for-api-callers).
+
+[Grant lifecycle](../src/data-access/oauth-grant-lifecycle.ts) binds each
+`oauth_grants` generation to one user, issuance membership, organization, client
+and resource. Codes, consent and tokens carry that id in `referenceId`. Step-up
+reuses a live generation; reconnecting after revocation creates a new one. An
+immutable, ten-minute authorization attempt binds the selected organization to
+the session, client, PKCE challenge, resource and redirect URI, so two tabs can
+choose independently. It never changes `activeOrganizationId`. The picker skips
+only when exactly one membership is eligible; otherwise it preselects the most
+recently used consented connection. See [attempt callbacks](../src/lib/auth/oauth-attempt.ts).
+
+One [eligibility check](../src/lib/auth/oauth-eligibility.ts),
+`assertGenerationEligible`, runs at consent reference resolution, code exchange,
+refresh and API resolution. It re-reads, in order: the live membership must match
+the issuance membership and permit connecting; email must be verified; the
+generation must be unrevoked; API use must be within 30 days of `lastUsedAt`
+(initially creation time); organization API access must be enabled. Idle expiry
+revokes the generation before any activity update. Refreshes do not count as use.
+Code exchange and refresh map eligibility failures to `invalid_grant`.
+
+The [OAuth resolver](../src/lib/auth/oauth-context.ts) runs in this order:
+
+1. Require the provider flag, a stored access-token hash, no sender binding
+   (`confirmation`), and a matching generation, client and user.
+2. Refuse a token already marked revoked, then run generation eligibility.
+3. Check access-token expiry, then require exactly the generation's resource and
+   the route's audience, then check that the client exists and is enabled.
+4. Require current consent. Effective scopes intersect token, consent, grantable
+   scopes and the live role ceiling. Narrowing consent constrains old tokens.
+5. Update `lastUsedAt` at most once a minute, only on an unrevoked generation.
+
+The [header parser](../src/lib/auth/api-credential-header.ts) selects by prefix:
+`noma_live_` or `noma_test_` for keys, `noma_oat_` for OAuth. Refresh tokens
+(`noma_ort_`), JWT-shaped and unknown bearers fail without fallback. Missing or
+purged rows give `credential_invalid`. Membership removal precedes generation
+revocation, so normal Disconnect does not hide `credential_owner_removed`.
+
+[Token hooks](../src/lib/auth/oauth-hooks.ts) own refresh reuse: an identical
+retry within 30 seconds can replay the response; later reuse revokes only that
+generation and returns `invalid_grant`. The plugin replay window is 120 seconds,
+and the auth route's Vercel duration is 30 seconds. The [pnpm patch](../patches/@better-auth__oauth-provider@1.7.10.patch)
+makes plugin family teardown refuse with `invalid_grant`, preventing deletion
+across organizations and audiences. Application revocation marks the generation
+and deletes its consent, leaving plugin token rows untouched until purge.
+Refresh tokens must retain `offline_access`: dropping it is `invalid_scope`;
+a stored refresh row without it is `invalid_grant`. Browser sign-out revokes
+that session's access tokens, but refresh can continue the connection.
+
+[Membership hooks](../src/lib/auth/better-auth.ts) revoke on removal and on a
+role change that no longer permits connecting. Admin/Member transitions
+keep OAuth connections; API keys still disable on role changes. Self-service
+`/organization/leave` has an after-hook because the plugin skips
+`afterRemoveMember`; it verifies the returned membership is gone before revoking
+connections and disabling keys. [Platform Admin membership changes](../src/data-access/organizations.ts)
+apply the same policy in their transaction. Direct deletion still fails the issuance-membership
+check, and re-admission cannot restore old authority.
+
+The [provider](../src/lib/auth/oauth-provider.ts) uses opaque, hashed tokens,
+authorization code with S256 PKCE and refresh rotation. No `jwt()`, `mcp()`, DCR,
+client credentials or DPoP flow is enabled. `clientPrivileges` permits only
+`create` for server-side registration in a live Platform Admin session; every
+other client action is denied. HTTP OAuth paths are limited to authorize, token,
+consent, continue and revoke, including for signed-in users.
+`OAUTH_PROVIDER_ENABLED` defaults to false: the plugins are absent, discovery is
+404 and OAuth bearers fail closed. See [security gates and client runbook](./security.md#oauth-provider-and-client-controls)
+and [Connected apps](./api.md#connected-apps).
+
+## REST denials and errors
 
 `src/lib/api/problem.ts` builds RFC 9457 responses with `code`, `retryable`,
 and pointer-based `errors`, sanitizes 500 bodies, and maps `ActionFailure`
@@ -235,13 +349,19 @@ and `Cache-Control: private, no-store`.
 | --- | --- |
 | `credential_missing`, `credential_malformed`, `credential_ambiguous` | 401 |
 | `credential_header_unsupported`, `cookie_session_unsupported` | 401 |
-| `credential_invalid`, `credential_expired`, `credential_disabled`, `credential_revoked` | 401 |
+| `credential_invalid`, `credential_expired` | 401 |
 | `credential_owner_removed`, `credential_owner_unverified` | 401 |
+| `credential_audience_mismatch` (OAuth resource differs from the route audience) | 401 |
+| `credential_revoked` (key revoked; OAuth generation or token revoked, or consent absent) | 401 |
+| `credential_disabled` (key disabled; OAuth client missing or disabled) | 401 |
 | `missing_scope`, `insufficient_role`, `api_access_disabled` | 403 |
 
-Every 401 includes `WWW-Authenticate: Bearer`. Unknown or purged credentials
+When `OAUTH_PROVIDER_ENABLED` is true, authentication denials include a Bearer
+challenge with resource metadata and all requestable scopes, including
+`offline_access`. OAuth bearer denials on 401s also include `error="invalid_token"`.
+Unknown or purged credentials
 return `credential_invalid`; expired credentials still present in storage
-return `credential_expired`. Owner demotion uses `credential_owner_removed`
+return `credential_expired`. API-key owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's
 403 `insufficient_role` refusal.
 
@@ -265,5 +385,5 @@ cross-organization state and toggle it at `/admin/organizations`, through
 `src/fn/organization-api-access.ts:setOrganizationApiAccessFn` and its guarded
 data-access seam. Turning it off requires confirmation: every API key in that
 organization stops working until access is restored, without revoking the
-keys. Organization Owners/Admins without Platform Admin access cannot toggle
+keys. Organization Admins without Platform Admin access cannot toggle
 it. Restoring access still requires each credential to pass its normal checks.

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 /**
  * ADR 0023 — a registry GHG statement's local identity is scoped per
  * (organization, facility), not globally.
@@ -79,7 +80,7 @@ function makeOtherOrgContext(): OrgContext {
   return {
     userId: "user_test_ghg_identity_other",
     organizationId: OTHER_ORG_ID,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 }
@@ -454,14 +455,11 @@ describe("registry sync after a shared project is re-pointed", () => {
         externalProjectId,
       },
     ]);
-    const [removal] = await db
-      .insert(certifierRemovals)
-      .values({
+    const [removal] = await insertRemovalFixture(db, {
         organizationId: TEST_ORG_ID,
         facilityId: owner,
         completedOn: IN_WINDOW_COMPLETED_ON,
-      })
-      .returning({ id: certifierRemovals.id });
+      });
     const externalRemovalId = `rmv_ggs_sk_${runId}`;
     await db.insert(certificationSubmissions).values({
       organizationId: TEST_ORG_ID,

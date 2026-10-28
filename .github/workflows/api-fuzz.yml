@@ -47,7 +47,6 @@ jobs:
       CI: "true"
       NOMA_HERMETIC_CI: "true"
       API_FUZZ_DISABLE_RATE_LIMIT: "true"
-      ALLOW_SELF_SIGNUP: "false"
       STORAGE_PROVIDER: local-fs
       STORAGE_LOCAL_FS_ROOT: .storage-api-fuzz
       STORAGE_SIGNING_SECRET: local-storage-signing-secret-local-32

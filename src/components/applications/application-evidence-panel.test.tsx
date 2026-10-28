@@ -155,6 +155,14 @@ function renderSupportingEvidencePanel(
   );
 }
 
+describe("GIS reference required marker", () => {
+  it("stars the GIS reference only for the GIS reference method, and not read-only", () => {
+    expect(renderPanel([], "boundary")).toContain("sr-only\">Required");
+    expect(renderPanel([], "location")).not.toContain("Required");
+    expect(renderPanel([], "boundary", null, true)).not.toContain("Required");
+  });
+});
+
 describe("ApplicationEvidencePanel", () => {
   it("shows customer location first and selects it by default", () => {
     const html = renderPanel([]);
@@ -279,3 +287,8 @@ it("shows the boundary field refusal in the evidence panel", () => {
   </QueryClientProvider>);
   expect(html).toContain(message);
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));

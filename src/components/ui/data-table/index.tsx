@@ -8,6 +8,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type Cell,
   type ColumnDef,
   type ColumnFiltersState,
   type PaginationState,
@@ -25,7 +26,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { pluralize } from "@/lib/copy-utils";
-import { cva, type VariantProps } from "class-variance-authority";
+import { type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
 import { ListPagination } from "@/components/ui/list-pagination";
@@ -38,8 +39,15 @@ import {
   STICKY_END_HEADER_CLASSES,
   columnLabel,
   handleRowActivationClick,
-  handleRowActivationKeyDown,
+  cellKeepsOneLine,
 } from "./data-table-helpers";
+import {
+  RowLink,
+  recordLinkVisibility,
+  rowLinkColumnId,
+  warnMissingRecordLink,
+} from "./row-link";
+import { tableRowVariants, tableVariants } from "./table-variants";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -48,6 +56,14 @@ import {
 interface DataTableContextValue<TData> {
   table: TanStackTable<TData>;
 }
+
+// TanStack's `table` is one mutable instance for the table's lifetime. The
+// React Compiler skips `DataTable` itself (`useReactTable` is a known
+// incompatible library) but compiles the parts below, which would cache every
+// `table.*` read on that stable reference and never show a later page count,
+// search value or column state (#1280). So each part that reads the table opts
+// out with "use no memo", and the context value is a new object on every
+// `DataTable` render so those parts re-render with it.
 
 const DataTableContext = React.createContext<DataTableContextValue<unknown> | null>(null);
 
@@ -59,63 +75,13 @@ function useDataTable<TData>() {
   return context;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Table Variants (CVA)                                                */
-/* ------------------------------------------------------------------ */
-
-const tableVariants = cva(
-  "w-full border-collapse",
-  {
-    variants: {
-      variant: {
-        default: "",
-        bordered: "[border:var(--panel-border)]",
-      },
-      size: {
-        default: "",
-        compact: "[&_th]:py-6 [&_th]:px-8 [&_td]:py-4 [&_td]:px-8",
-        comfortable: "[&_th]:py-16 [&_th]:px-16 [&_td]:py-12 [&_td]:px-16",
-      },
-    },
-    defaultVariants: {
-      variant: "bordered",
-      size: "default",
-    },
-  }
-);
-
-const tableRowVariants = cva(
-  // 1px 10%-plum divider between rows (--hair-3 weight); the panel frame
-  // closes the bottom, so the last row drops its divider.
-  "[border-bottom:var(--row-divider)] last:[border-bottom:none] align-middle transition-colors",
-  {
-    variants: {
-      striped: {
-        true: "even:bg-[var(--row-stripe-bg)]",
-        false: "",
-      },
-      hoverable: {
-        true: "hover:bg-[var(--row-hover-bg)]",
-        false: "",
-      },
-      selected: {
-        true: "bg-[var(--color-interaction)]/10",
-        false: "",
-      },
-    },
-    defaultVariants: {
-      striped: false,
-      hoverable: false,
-      selected: false,
-    },
-  }
-);
-
 const MAX_LOADING_ROWS = 5;
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
 /* ------------------------------------------------------------------ */
+
+const NO_HIDDEN_COLUMNS: VisibilityState = {};
 
 export interface DataTableProps<TData, TValue> extends VariantProps<typeof tableVariants> {
   columns: ColumnDef<TData, TValue>[];
@@ -142,12 +108,20 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   enableMultiRowSelection?: boolean;
   // Column visibility
   columnVisibility?: VisibilityState;
+  /** Columns that start hidden (`{ id: false }`); "Reset columns" restores this state. */
+  defaultColumnVisibility?: VisibilityState;
   onColumnVisibilityChange?: (visibility: VisibilityState) => void;
   // Row options
   striped?: boolean;
   hoverable?: boolean;
   // Callbacks
   onRowClick?: (row: TData) => void;
+  /**
+   * Deep link that opens a row's record (the same URL `onRowClick` opens in
+   * place). The record-link column then renders as a real `<a href>` so
+   * open-in-new-tab works; omit it for tables without a deep link.
+   */
+  getRowHref?: (row: TData) => string | undefined;
   // Loading state
   isLoading?: boolean;
   // Empty state
@@ -205,12 +179,14 @@ function DataTableRoot<TData, TValue>({
   enableMultiRowSelection = true,
   // Column visibility
   columnVisibility: externalColumnVisibility,
+  defaultColumnVisibility = NO_HIDDEN_COLUMNS,
   onColumnVisibilityChange,
   // Row options
   striped = false,
   hoverable = false,
   // Callbacks
   onRowClick,
+  getRowHref,
   // Loading state
   isLoading = false,
   // Empty state
@@ -231,7 +207,7 @@ function DataTableRoot<TData, TValue>({
   const [sorting, setSorting] = React.useState<SortingState>(defaultSorting);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(defaultColumnVisibility);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: externalPageIndex ?? 0,
@@ -304,7 +280,12 @@ function DataTableRoot<TData, TValue>({
 
   // Use external values if provided
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
-  const effectiveColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  // The record-link column is the only way to open a record by keyboard, so no
+  // visibility state (including a caller's) may hide it.
+  const requestedColumnVisibility = externalColumnVisibility ?? columnVisibility;
+  const effectiveColumnVisibility = onRowClick
+    ? { ...requestedColumnVisibility, ...recordLinkVisibility(columns) }
+    : requestedColumnVisibility;
   const effectiveRowSelection = externalRowSelection ?? rowSelection;
   const effectivePagination = {
     pageIndex: externalPageIndex ?? pagination.pageIndex,
@@ -315,6 +296,7 @@ function DataTableRoot<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    initialState: { columnVisibility: defaultColumnVisibility },
     state: {
       sorting,
       globalFilter: effectiveGlobalFilter,
@@ -340,10 +322,35 @@ function DataTableRoot<TData, TValue>({
     getRowId,
   });
 
-  const contextValue = React.useMemo(
-    () => ({ table }),
-    [table]
-  );
+  // With `onRowClick`, the column marked `meta.recordLink` renders as the
+  // record's link, the only keyboard / screen-reader activation target; the
+  // row itself stays a plain row (see `row-link.tsx`).
+  if (
+    process.env.NODE_ENV !== "production" &&
+    onRowClick &&
+    !columns.some((column) => column.meta?.recordLink)
+  ) {
+    warnMissingRecordLink(ariaLabel);
+  }
+  const linkColumnId = onRowClick
+    ? rowLinkColumnId(table.getVisibleLeafColumns())
+    : undefined;
+  const renderCell = (cell: Cell<TData, unknown>, record: TData) => {
+    const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+    const details = cell.column.columnDef.meta?.recordLinkDetails?.(record);
+    if (!onRowClick || cell.column.id !== linkColumnId) return <>{content}{details}</>;
+    return (
+      <>
+        <RowLink onActivate={() => onRowClick(record)} href={getRowHref?.(record)}
+          before={cell.column.columnDef.meta?.recordLinkBefore?.(record)}>
+          {content}
+        </RowLink>
+        {details}
+      </>
+    );
+  };
+
+  const contextValue: DataTableContextValue<TData> = { table };
 
   // Slot partition: pagination renders BELOW the table (visually and in DOM —
   // keyboard/screen-reader order must match the visual order inside the
@@ -470,27 +477,14 @@ function DataTableRoot<TData, TValue>({
                         hoverable: hoverable || !!onRowClick,
                         selected: row.getIsSelected(),
                       }),
-                      onRowClick &&
-                        "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
+                      onRowClick && "cursor-pointer"
                     )}
+                    // Pointer-only convenience. No role, tabIndex or key
+                    // handler: the `meta.recordLink` link is the accessible target.
                     onClick={
                       onRowClick
                         ? (event) =>
                             handleRowActivationClick(event, () =>
-                              onRowClick(row.original),
-                            )
-                        : undefined
-                    }
-                    // A clickable row must be reachable and activatable by
-                    // keyboard: focusable with Enter/Space activation, but
-                    // WITHOUT role="button" — that would override the implicit
-                    // role="row" and sever the cell to column-header
-                    // association for screen readers.
-                    tabIndex={onRowClick ? 0 : undefined}
-                    onKeyDown={
-                      onRowClick
-                        ? (event) =>
-                            handleRowActivationKeyDown(event, () =>
                               onRowClick(row.original),
                             )
                         : undefined
@@ -502,13 +496,12 @@ function DataTableRoot<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           "py-8 px-12 body-small",
-                          cell.column.columnDef.meta?.nowrap &&
-                            "whitespace-nowrap",
+                          cellKeepsOneLine(cell) && "whitespace-nowrap",
                           cell.column.columnDef.meta?.stickyEnd &&
                             STICKY_END_CELL_CLASSES
                         )}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {renderCell(cell, row.original)}
                       </td>
                     ))}
                   </tr>
@@ -536,26 +529,17 @@ function DataTableRoot<TData, TValue>({
             table.getRowModel().rows.map((row) => (
               <div
                 key={row.id}
+                data-record-card=""
                 className={cn(
                   "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
                   row.getIsSelected() && "bg-[var(--color-interaction)]/10",
                   onRowClick &&
-                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]",
+                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)]",
                 )}
                 onClick={
                   onRowClick
                     ? (event) =>
                         handleRowActivationClick(event, () =>
-                          onRowClick(row.original),
-                        )
-                    : undefined
-                }
-                role={onRowClick ? "button" : undefined}
-                tabIndex={onRowClick ? 0 : undefined}
-                onKeyDown={
-                  onRowClick
-                    ? (event) =>
-                        handleRowActivationKeyDown(event, () =>
                           onRowClick(row.original),
                         )
                     : undefined
@@ -577,11 +561,8 @@ function DataTableRoot<TData, TValue>({
                           {label}
                         </span>
                       )}
-                      <div className="body-small min-w-0 break-words text-right">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
+                      <div className={cn("body-small min-w-0 break-words text-right", cellKeepsOneLine(cell) && "whitespace-nowrap")}>
+                        {renderCell(cell, row.original)}
                       </div>
                     </div>
                   );
@@ -639,6 +620,7 @@ function DataTableSearch({
   className,
   "aria-label": ariaLabel = "Search table",
 }: DataTableSearchProps) {
+  "use no memo";
   const { table } = useDataTable();
   const value = (table.getState().globalFilter as string) ?? "";
 
@@ -715,7 +697,7 @@ function DataTableFilterSelect({
   return (
     <select
       className={cn(
-        "h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small text-[var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto",
+        "h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small text-[var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:max-w-[320px] truncate",
         className,
       )}
       {...props}
@@ -734,6 +716,7 @@ interface DataTableColumnVisibilityProps {
 }
 
 function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps) {
+  "use no memo";
   const { table } = useDataTable();
   const [isOpen, setIsOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -741,8 +724,16 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
   const menuId = React.useId();
   const hideableColumns = table
     .getAllLeafColumns()
-    .filter((column) => column.getCanHide() && columnLabel(column));
-  const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
+    .filter(
+      (column) =>
+        column.getCanHide() &&
+        !column.columnDef.meta?.recordLink &&
+        columnLabel(column),
+    );
+  const defaultVisibility = table.initialState.columnVisibility;
+  const hasVisibilityChanges = hideableColumns.some(
+    (column) => column.getIsVisible() !== (defaultVisibility[column.id] !== false),
+  );
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -783,7 +774,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
           id={menuId}
           role="dialog"
           aria-label="Column visibility"
-          className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
+          className="absolute right-0 top-[calc(100%+4px)] z-[var(--z-layer-popover)] max-h-320 w-max min-w-[160px] overflow-y-auto border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
         >
           {hideableColumns.map((column) => (
             <label
@@ -804,7 +795,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
                 onChange={column.getToggleVisibilityHandler()}
                 className="sr-only"
               />
-              <span>{columnLabel(column)}</span>
+              <span className="whitespace-nowrap">{columnLabel(column)}</span>
             </label>
           ))}
           {hasVisibilityChanges && (
@@ -842,6 +833,7 @@ function DataTablePagination({
   showSelectedCount = false,
   className,
 }: DataTablePaginationProps) {
+  "use no memo";
   const { table } = useDataTable();
   const pageIndex = table.getState().pagination.pageIndex;
   const pageSize = table.getState().pagination.pageSize;

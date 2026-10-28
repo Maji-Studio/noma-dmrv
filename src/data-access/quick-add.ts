@@ -7,7 +7,7 @@
 import { lockFormulationReference } from "./formulation-reference-guards";
 
 import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   drivers,
@@ -25,15 +25,9 @@ import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
 import { getStorageLocationById } from "./entities/storage-locations";
-import { createFeedstockType as createCanonicalFeedstockType } from "./feedstock-types";
-import type { FeedstockCategory } from "@/schemas/feedstock-types";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
-const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
-  "feedstock_types_organization_id_isometric_id_unique";
-const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
-  "feedstock_types_organization_id_name_usage_unique";
 
 // ============================================
 // Driver Quick Add
@@ -52,8 +46,13 @@ export interface CreateDriverData {
  */
 export async function createDriver(ctx: OrgContext, data: CreateDriverData): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createDriverInTransaction(ctx, tx, data));
+}
 
-  const [driver] = await db
+export async function createDriverInTransaction(ctx: OrgContext, tx: DbTransaction, data: CreateDriverData): Promise<EntityOption> {
+  requireOrgScope(ctx);
+
+  const [driver] = await tx
     .insert(drivers)
     .values({
       organizationId: ctx.organizationId,
@@ -82,14 +81,19 @@ export interface CreateOperatorData {
   contactPhone?: string | null;
 }
 
-export async function createOperator(
-  ctx: OrgContext,
+export async function createOperator(ctx: OrgContext, data: CreateOperatorData): Promise<EntityOption> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createOperatorInTransaction(ctx, tx, data));
+}
+
+export async function createOperatorInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
   data: CreateOperatorData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
   try {
-    const [operator] = await db
+    const [operator] = await tx
       .insert(operators)
       .values({
         organizationId: ctx.organizationId,
@@ -135,9 +139,16 @@ export interface CreateVehicleData {
  */
 export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createVehicleInTransaction(ctx, tx, data));
+}
+
+export async function createVehicleInTransaction(
+  ctx: OrgContext, tx: DbTransaction, data: CreateVehicleData,
+): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
   // Check for duplicate name (unique constraint)
-  const [existingName] = await db
+  const [existingName] = await tx
     .select({ id: vehicles.id })
     .from(vehicles)
     .where(
@@ -152,7 +163,7 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
   }
 
   try {
-    const [vehicle] = await db
+    const [vehicle] = await tx
       .insert(vehicles)
       .values({
         organizationId: ctx.organizationId,
@@ -175,52 +186,6 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
   } catch (error) {
     if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
       throw new SafeError("A vehicle with this name already exists");
-    }
-    throw error;
-  }
-}
-
-// ============================================
-// Feedstock Type Quick Add
-// ============================================
-
-export interface CreateFeedstockTypeData {
-  code: string;
-  name: string;
-  category: FeedstockCategory;
-  usage?: "pyrolysis" | "blend";
-  description?: string | null;
-  registryUrl?: string | null;
-  isometricFeedstockTypeId?: string | null;
-}
-
-/**
- * Create a new feedstock type with required fields
- * Returns EntityOption for immediate use in select dropdowns
- */
-export async function createFeedstockType(
-  ctx: OrgContext,
-  data: CreateFeedstockTypeData
-): Promise<EntityOption> {
-  requireOrgScope(ctx);
-  try {
-    const feedstockType = await createCanonicalFeedstockType(ctx, {
-      ...data,
-      usage: data.usage ?? "pyrolysis",
-    });
-
-    return {
-      id: feedstockType.id,
-      code: feedstockType.code,
-      name: feedstockType.name,
-      subtitle: `${feedstockType.category} · ${feedstockType.usage}`,
-    };
-  } catch (error) {
-    if (isPgUniqueViolation(error, ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT)) {
-      throw new SafeError("This Isometric feedstock type already exists. Select the existing feedstock type.");
-    }
-    if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
-      throw new SafeError("A feedstock type with this name and usage already exists");
     }
     throw error;
   }
@@ -251,38 +216,43 @@ export async function createStorageLocation(
   data: CreateStorageLocationData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
+  return db.transaction((tx) => createQuickStorageLocationInTransaction(ctx, tx, data));
+}
 
-  return db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
-    if (data.feedstockTypeId) {
-      await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
-    }
-    if (data.formulationId) {
-      await lockFormulationReference(ctx, tx, data.formulationId);
-    }
+export async function createQuickStorageLocationInTransaction(
+  ctx: OrgContext, tx: DbTransaction, data: CreateStorageLocationData,
+): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
-    const [location] = await guardStorageLocationName(ctx, data.name, () =>
-      tx
-        .insert(storageLocations)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          name: data.name,
-          type: data.type,
-          facilityId: data.facilityId,
-          capacityKg: data.capacityKg ?? null,
-          feedstockTypeId: data.feedstockTypeId ?? null,
-          formulationId: data.formulationId ?? null,
-          stockMode: initialStockMode(data.type, data.stockMode),
-          drawOrder: data.drawOrder ?? "oldest_first",
-        })
-        .returning(),
-    );
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  if (data.feedstockTypeId) {
+    await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
+  }
+  if (data.formulationId) {
+    await lockFormulationReference(ctx, tx, data.formulationId);
+  }
 
-    const enriched = await getStorageLocationById(ctx, location.id, tx);
-    if (!enriched) {
-      throw new Error("Created storage location could not be read");
-    }
-    return enriched;
-  });
+  const [location] = await guardStorageLocationName(ctx, data.name, () =>
+    tx
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        feedstockTypeId: data.feedstockTypeId ?? null,
+        formulationId: data.formulationId ?? null,
+        stockMode: initialStockMode(data.type, data.stockMode),
+        drawOrder: data.drawOrder ?? "oldest_first",
+      })
+      .returning(),
+  );
+
+  const enriched = await getStorageLocationById(ctx, location.id, tx);
+  if (!enriched) {
+    throw new Error("Created storage location could not be read");
+  }
+  return enriched;
 }

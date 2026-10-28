@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RemovalHubEntry } from "@/fn/certification/certify-context";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
-import { buildRemovalListRows, canDeleteRemovalRow } from "./removal-list-state";
+import {
+  buildRemovalListRows,
+  canDeleteRemovalRow,
+  removalDeletionTouchesRegistry,
+} from "./removal-list-state";
+
+vi.mock("@/db", () => ({}));
 
 function identity(
   id: string,
@@ -17,6 +23,7 @@ function identity(
     latestSubmission: null,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
   } as RemovalHubEntry;
 }
 
@@ -25,6 +32,7 @@ function enrichment(
 ): RemovalPreflightSummary {
   return {
     removalId: id,
+    code: "RM-26-001",
     startedOn: "2026-07-01",
     completedOn: "2026-07-31",
     memberBatchCodes: [`${id}-enriched`],
@@ -35,14 +43,40 @@ function enrichment(
     submissionInterrupted: false,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
+    deletionInProgress: false,
     readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     evidenceHealth: null,
+    evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
     submissionWarnings: [],
     recentSyncEvents: [],
   };
 }
 
 describe("buildRemovalListRows", () => {
+  it.each(["loading", "unavailable"] as const)(
+    "uses the identity deletion lease while enrichment is %s",
+    (status) => {
+      const deleting = { ...identity("removal-deleting", "CB-DELETE"), deletionInProgress: true };
+      const [row] = buildRemovalListRows([deleting], {
+        "removal-deleting": { status, data: enrichment("removal-deleting") },
+      });
+
+      expect(row.deletionInProgress).toBe(true);
+    },
+  );
+
+  it.each([true, false])("uses an available enrichment deletion lease of %s", (deletionInProgress) => {
+    const entry = { ...identity("removal-lease", "CB-LEASE"), deletionInProgress: !deletionInProgress };
+    const [row] = buildRemovalListRows([entry], {
+      "removal-lease": {
+        status: "available",
+        data: { ...enrichment("removal-lease"), deletionInProgress },
+      },
+    });
+
+    expect(row.deletionInProgress).toBe(deletionInProgress);
+  });
+
   it("keeps every identity row visible while enrichment loads or fails independently", () => {
     const rows = buildRemovalListRows(
       [identity("removal-a", "CB-A"), identity("removal-b", "CB-B")],
@@ -61,6 +95,7 @@ describe("buildRemovalListRows", () => {
       removalId: "removal-a",
       memberBatchCodes: ["removal-a-enriched"],
       enrichmentStatus: "available",
+      evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
     });
     expect(rows[1]).toMatchObject({
       removalId: "removal-b",
@@ -141,25 +176,95 @@ describe("buildRemovalListRows", () => {
   });
 });
 
+const LOCAL_ROW = {
+  local: null,
+  lockInFlight: false,
+  submissionInterrupted: false,
+  hasFinalizedSubmission: false,
+  registryBoundaryOpened: false,
+  deletionInProgress: false,
+} as const;
+const FLOOR_MET = {
+  viewerCanDeleteRegistryRemovals: true,
+  hasRegisteredProductionBatches: false,
+} as const;
+const BELOW_FLOOR = {
+  viewerCanDeleteRegistryRemovals: false,
+  hasRegisteredProductionBatches: false,
+} as const;
+
 describe("canDeleteRemovalRow", () => {
+  it.each([
+    ["draft", { ...LOCAL_ROW, local: "draft" as const }, FLOOR_MET],
+    ["ledgerless", LOCAL_ROW, FLOOR_MET],
+    ["rejected", { ...LOCAL_ROW, local: "rejected" as const }, FLOOR_MET],
+    ["ledgerless with a registered Production Batch", LOCAL_ROW, { ...FLOOR_MET, hasRegisteredProductionBatches: true }],
+    ["interrupted", { ...LOCAL_ROW, local: "draft" as const, lockInFlight: true, submissionInterrupted: true }, FLOOR_MET],
+    ["local Member", LOCAL_ROW, BELOW_FLOOR],
+  ])("hides Delete for a %s Removal until its deletion lease clears", (_label, row, access) => {
+    expect(canDeleteRemovalRow({ ...row, deletionInProgress: true }, access)).toBe(false);
+    expect(canDeleteRemovalRow({ ...row, deletionInProgress: false }, access)).toBe(true);
+  });
+
   it("allows removals that never finalized a submission", () => {
-    expect(canDeleteRemovalRow({ local: null, lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "rejected", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
+    expect(canDeleteRemovalRow(LOCAL_ROW, FLOOR_MET)).toBe(true);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft" }, FLOOR_MET)).toBe(true);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "rejected" }, FLOOR_MET)).toBe(true);
   });
 
   it("refuses when an earlier version finalized even if the latest is a draft", () => {
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: true, registryBoundaryOpened: false })).toBe(false);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft", hasFinalizedSubmission: true }, FLOOR_MET)).toBe(false);
   });
 
   it("refuses removals whose submission completed", () => {
-    expect(canDeleteRemovalRow({ local: "submitted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "accepted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "superseded", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "submitted" }, FLOOR_MET)).toBe(false);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "accepted" }, FLOOR_MET)).toBe(false);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "superseded" }, FLOOR_MET)).toBe(false);
   });
 
   it("waits for a running attempt but not for an interrupted one", () => {
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: true, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft", lockInFlight: true }, FLOOR_MET)).toBe(false);
+    expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft", lockInFlight: true, submissionInterrupted: true }, FLOOR_MET)).toBe(true);
+  });
+
+  describe("role floor (issue #746)", () => {
+    it("lets a member delete a Removal that never touched the registry", () => {
+      expect(canDeleteRemovalRow(LOCAL_ROW, BELOW_FLOOR)).toBe(true);
+    });
+
+    it.each([
+      ["a ledger row", { ...LOCAL_ROW, local: "draft" as const }, BELOW_FLOOR],
+      ["a rejected ledger row", { ...LOCAL_ROW, local: "rejected" as const }, BELOW_FLOOR],
+      ["the external mutation marker", { ...LOCAL_ROW, registryBoundaryOpened: true }, BELOW_FLOOR],
+      ["a registered Production Batch", LOCAL_ROW, { ...BELOW_FLOOR, hasRegisteredProductionBatches: true }],
+    ])("refuses a member once %s opened the registry boundary", (_label, row, access) => {
+      expect(canDeleteRemovalRow(row, access)).toBe(false);
+    });
+
+    it.each([
+      ["a ledger row", { ...LOCAL_ROW, local: "draft" as const }, FLOOR_MET],
+      ["the external mutation marker", { ...LOCAL_ROW, registryBoundaryOpened: true }, FLOOR_MET],
+      ["a registered Production Batch", LOCAL_ROW, { ...FLOOR_MET, hasRegisteredProductionBatches: true }],
+    ])("lets a viewer at the floor delete once %s opened the boundary", (_label, row, access) => {
+      expect(canDeleteRemovalRow(row, access)).toBe(true);
+    });
+
+    it("hides the action while the viewer role or Production Batch facts are unknown", () => {
+      expect(canDeleteRemovalRow(LOCAL_ROW, { viewerCanDeleteRegistryRemovals: null, hasRegisteredProductionBatches: null })).toBe(false);
+      expect(canDeleteRemovalRow(LOCAL_ROW, { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: null })).toBe(false);
+      expect(canDeleteRemovalRow(LOCAL_ROW, { viewerCanDeleteRegistryRemovals: null, hasRegisteredProductionBatches: false })).toBe(true);
+      expect(canDeleteRemovalRow({ ...LOCAL_ROW, registryBoundaryOpened: true }, { viewerCanDeleteRegistryRemovals: null, hasRegisteredProductionBatches: false })).toBe(false);
+      expect(canDeleteRemovalRow({ ...LOCAL_ROW, local: "draft" }, { viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: null })).toBe(true);
+    });
+  });
+});
+
+describe("removalDeletionTouchesRegistry", () => {
+  it("counts a registered Production Batch as registry history", () => {
+    expect(removalDeletionTouchesRegistry(LOCAL_ROW)).toBe(false);
+    expect(removalDeletionTouchesRegistry(LOCAL_ROW, { hasRegisteredProductionBatches: null })).toBe(false);
+    expect(removalDeletionTouchesRegistry(LOCAL_ROW, { hasRegisteredProductionBatches: true })).toBe(true);
+    expect(removalDeletionTouchesRegistry({ ...LOCAL_ROW, registryBoundaryOpened: true })).toBe(true);
+    expect(removalDeletionTouchesRegistry({ ...LOCAL_ROW, local: "rejected" })).toBe(true);
   });
 });

@@ -51,6 +51,7 @@ const DISTANCE_SOURCE = {
   ],
 };
 const TEXT_2000 = { type: "string", maxLength: 2000 };
+const DISTANCE_NOTE = { type: "string", maxLength: 500 };
 
 describe("toOperationJsonSchema: shared helpers", () => {
   it("keeps the bounds of a piped mass helper", () => {
@@ -95,6 +96,7 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         supplierId: REQUIRED_UUID,
         vehicleId: NULLABLE_UUID,
         transportDistanceKm: DISTANCE_KM,
+        distanceNote: { anyOf: [DISTANCE_NOTE, { type: "null" }] },
         transportDistanceSource: DISTANCE_SOURCE,
         feedstockTypeId: REQUIRED_UUID,
         totalWetMassKg: POSITIVE_MASS_KG,
@@ -137,6 +139,7 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         supplierId: UUID,
         vehicleId: NULLABLE_UUID,
         transportDistanceKm: DISTANCE_KM,
+        distanceNote: { anyOf: [DISTANCE_NOTE, { type: "null" }] },
         transportDistanceSource: DISTANCE_SOURCE,
         feedstockTypeId: UUID,
         massWetKg: POSITIVE_MASS_KG,

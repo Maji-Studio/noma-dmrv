@@ -59,10 +59,10 @@ export interface PaginatedOrders {
 // ============================================
 
 import { SafeError } from "@/lib/errors";
-import { orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
+import { ORDER_DELIVERY_NAME_CAP, orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { formulationArchived } from "@/lib/formulation-domain-errors";
-import { lockCustomerReference } from "./party-reference-guards";
+import { lockCustomerReference, lockCustomerLocationReference } from "./party-reference-guards";
 import { lockFormulationReference } from "./formulation-reference-guards";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
@@ -333,9 +333,7 @@ async function validateOrderReferences(ctx: OrgContext, tx: DbTransaction, data:
 }, allowArchived = false): Promise<string> {
   requireOrgScope(ctx);
   await lockCustomerReference(ctx, tx, data.customerId, { allowArchived });
-  const [location] = await tx.select({ customerId: customerLocations.customerId }).from(customerLocations)
-    .where(and(eq(customerLocations.id, data.customerLocationId), eq(customerLocations.organizationId, ctx.organizationId))).for("key share");
-  if (!location) throw orderReferenceNotFound("customerLocationId");
+  const location = await lockCustomerLocationReference(ctx, tx, data.customerLocationId, { allowArchived });
   return location.customerId;
 }
 
@@ -415,9 +413,14 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   if (!existing) throw orderReferenceNotFound("orderId");
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
-  const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
-    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
-  if (delivery) throw orderHasDeliveries(delivery);
+  const blockingDeliveries = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
+    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)))
+    .orderBy(asc(deliveries.code)).limit(ORDER_DELIVERY_NAME_CAP);
+  if (blockingDeliveries.length > 0) {
+    const [{ total }] = await tx.select({ total: count() }).from(deliveries)
+      .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
+    throw orderHasDeliveries(blockingDeliveries, existing.code, total);
+  }
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;

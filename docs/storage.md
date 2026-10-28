@@ -109,7 +109,7 @@ back to `getPublicDocumentById(id)`.
 Non-UUID `id` → 400. A row with neither `storageKey` nor `fileUrl`, or a
 `storageKey` row not yet `uploaded` → 500 / 404 respectively.
 
-An Owner or Admin can change visibility through the guarded document writer.
+An Admin can change visibility through the guarded document writer.
 It checks submitted lineage and increments the document version, without a
 provider call or object copy. API reads have no public-visibility fallback.
 
@@ -231,8 +231,7 @@ Client orchestration: `src/hooks/use-file-upload.ts` and
 Document mutations enforce organization, owner and submitted-lineage checks in
 transaction-aware data-access writers. The lock order is documented in
 [architecture.md](./architecture.md#database-boundaries). Archived owners refuse
-request and confirm; delete remains allowed. Visibility requires an Owner or
-Admin at the data-access boundary and bumps the document version, as does
+request and confirm; delete remains allowed. Visibility requires an Admin at the data-access boundary and bumps the document version, as does
 application evidence reclassification. Submitted lineage refuses every app
 mutation, including deletion of documents that are not registry Sources.
 Server-generated ledgers and GHG Statement reports retain their own writers.
@@ -259,7 +258,11 @@ not from the Removal detail. Before submission, `deleteDocument` acquires the
 same per-document lock used by Source mirroring and Removal submission. If an
 Isometric mapping is not referenced by any persisted submission payload, the
 delete retires that local mapping and the owning document together; the remote
-Isometric Source is never deleted.
+Isometric Source is never deleted. Because the release leaves that Source on the
+registry, it needs the Removal registry role floor
+(`REMOVAL_REGISTRY_DELETION_MIN_ROLE`, issue #1188): a Member may delete a
+document with no mapping, but not one with a mapping, whether directly or by
+deleting its parent record (for example a credit batch).
 
 If any submission snapshot references the Source, deletion/replacement fails:
 the document belongs to submitted certification history and both its local audit

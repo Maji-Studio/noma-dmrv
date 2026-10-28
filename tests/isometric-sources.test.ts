@@ -202,3 +202,13 @@ describe("payloadHash sensitivity to sourceIds — supersede contract", () => {
     expect(a).not.toBe(b);
   });
 });
+
+it("does not attach evidence to a retired sample datapoint", () => {
+  const build = () => buildCreateDatapointRequest({
+    groupKey: "sampling-required-for-mrv", componentBlueprintKey: "mass_distance_based_ci_emissions",
+    rtcInput: rtcInput({ input_key: "mass_distance", quantity_kind: "mass_distance" }),
+    blueprintInput: blueprintInput({ input_key: "mass_distance", quantity_kind: "mass_distance", compatible_unit: "tonne * km" }),
+    agg: baseAgg, projectId: PROJECT_ID, supplierRefId: SUPPLIER_REF, sourceIds: ["source-sample"],
+  });
+  expect(build).toThrow();
+});

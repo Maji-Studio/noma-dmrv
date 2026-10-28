@@ -22,7 +22,7 @@ vi.mock('./output-bin-stock-mode', () => ({ assertAdditionAfterSplit: vi.fn() })
 import { createBiocharProduct, createBiocharProductInTransaction } from './biochar-product-create';
 import type { DbTransaction } from '@/db';
 
-const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
+const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'admin' as const, isPlatformAdmin: false };
 const recipeLine = { id: 'line', feedstockTypeId: 'type', feedstockTypeName: 'Compost', feedstockTypeCategory: 'compost', ratio: 0.2 };
 const data = { code: 'BP-1', facilityId: 'facility', formulationId: 'recipe', placedAt: '2026-09-14T12:00:00.000Z',
   idempotencyKey: 'request', basisFingerprint: 'aggregate', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination',

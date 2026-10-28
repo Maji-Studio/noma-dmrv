@@ -4,12 +4,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RegistryConnectionDialog } from "./registry-connection-dialog";
 import { FacilityCertifierDialog } from "./facility-certifier-dialog";
-import { FacilityIsometricConnector } from "./facility-isometric-connector";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
 
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/hooks/use-organizations", () => ({
@@ -19,8 +21,6 @@ const mocks = vi.hoisted(() => ({
   configured: true,
   saveKeys: vi.fn(),
   saveMapping: vi.fn(),
-  templatesError: null as Error | null,
-  liveTemplates: true,
 }));
 vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ data: { configured: mocks.configured, accessTokenLast4: "Uwhl" }, isLoading: false }),
@@ -36,7 +36,6 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   useFacilityCertifierMapping: () => ({ data: loaderData, isLoading: false }),
   useFacilityCertifierSummary: () => ({ data: { viewerCanManage: true } }),
   useDeleteFacilityCertifierMapping: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useIsometricProjectTemplates: () => ({ data: mocks.liveTemplates ? [{ id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL" }] : undefined, isLoading: false, error: mocks.templatesError }),
   useSaveFacilityCertifierMapping: () => ({ mutateAsync: mocks.saveMapping, isPending: false }),
 }));
 
@@ -52,8 +51,6 @@ beforeEach(() => {
   loaderData.availableTemplates = [];
   loaderData.linkHints = [];
   loaderData.isProduction = false;
-  mocks.templatesError = null;
-  mocks.liveTemplates = true;
   mocks.saveKeys.mockResolvedValue({ verification: { ok: true, message: "Connection tested." } });
   mocks.saveMapping.mockResolvedValue({});
 });
@@ -98,65 +95,33 @@ describe("Isometric project reselection", () => {
   it("keeps unsaved bindings and sharing acknowledgment on reselect, but resets them for another project", async () => {
     loaderData.mapping = {
       externalProjectId: "prj_test", protocolSlug: "biochar",
-      defaultRemovalTemplateId: "tpl_saved", externalFacilityId: "fcl_saved",
+      removalTemplateId: "tpl_saved", externalFacilityId: "fcl_saved",
     } as NonNullable<FacilityCertifierMapping["mapping"]>;
     render(<FacilityCertifierDialog isOpen onClose={close} facilityId={FACILITY_ID} loaderData={loaderData} />);
-    await select("Default Removal template", "Test template: tpl_test");
     await change("externalFacilityId", "fcl_edited");
     const acknowledgment = screen.getByRole("checkbox", { name: "I intend to share this project across facilities." });
     fireEvent.click(acknowledgment);
 
     await select("Isometric project", "Test project: prj_test");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("Test template: tpl_test");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_edited");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_edited");
     expect(acknowledgment).toHaveProperty("checked", true);
     expect(button("Save changes")).toHaveProperty("disabled", false);
 
     await select("Isometric project", "Other project: prj_other");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("No default");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("");
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("");
     expect(acknowledgment).toHaveProperty("checked", false);
 
     await select("Isometric project", "Test project: prj_test");
-    expect(screen.getByRole("combobox", { name: /^Default Removal template/ }).textContent).toBe("tpl_saved");
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_saved");
-  });
-
-  it("keeps connector confirmations on reselect and resets them for another project", async () => {
-    loaderData.isProduction = true;
-    render(<FacilityIsometricConnector facilityId={FACILITY_ID} />);
-    await click("Manage");
-    await select("Isometric project", "Test project: prj_test");
-    fireEvent.change(screen.getByRole("textbox", { name: "Isometric facility ID" }), { target: { value: "fcl_edited" } });
-    const acknowledgments = screen.getAllByRole("checkbox");
-    acknowledgments.forEach((checkbox) => fireEvent.click(checkbox));
-    expect(button("Connect")).toHaveProperty("disabled", false);
-
-    await select("Isometric project", "Test project: prj_test");
-    acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", true));
-    expect(button("Connect")).toHaveProperty("disabled", false);
-    expect((screen.getByRole("textbox", { name: "Isometric facility ID" }) as HTMLInputElement).value).toBe("fcl_edited");
-
-    await select("Isometric project", "Other project: prj_other");
-    acknowledgments.forEach((checkbox) => expect(checkbox).toHaveProperty("checked", false));
-    expect(button("Connect")).toHaveProperty("disabled", true);
+    expect((screen.getByRole("textbox", { name: /^Isometric facility ID/ }) as HTMLInputElement).value).toBe("fcl_saved");
   });
 });
 
-it.each(["live", "loader"])("keeps retained %s templates selectable after a query error", async (source) => {
-  mocks.templatesError = new Error("Background refetch failed");
-  mocks.liveTemplates = source === "live";
-  if (source === "loader") loaderData.availableTemplates = [{
-    id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL",
-  } as FacilityCertifierMapping["availableTemplates"][number]];
+it("does not ask for a default Removal template when linking a project", async () => {
   await mount();
   await select("Isometric project", "Test project: prj_test");
-  await select("Default Removal template", "Test template: tpl_test");
-  expect(screen.queryByText("Error loading options")).toBeNull();
-  await change("externalFacilityId", "fcl_test");
-  await submit(1);
-  await waitFor(() => expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ defaultRemovalTemplateId: "tpl_test" })));
+  expect(screen.queryByRole("combobox", { name: /^Default Removal template/ })).toBeNull();
 });
+
 
 describe("registry connection dialog", () => {
   it("masks saved keys and hides both save and link until there is work to do", async () => {
@@ -173,7 +138,7 @@ describe("registry connection dialog", () => {
     loaderData.mapping = {
       id: "mapping-1", organizationId: "org-1", facilityId: FACILITY_ID,
       provider: "isometric", externalProjectId: "prj_test", protocolSlug: "biochar",
-      protocolVersion: null, defaultRemovalTemplateId: null,
+      protocolVersion: null, removalTemplateId: null,
       defaultSoilTemperatureC: null,
       defaultSoilTemperatureSource: null, webhookSecret: null,
       externalFacilityId: "fcl_test", metadata: null,
@@ -232,13 +197,12 @@ describe("registry connection dialog", () => {
     const link = screen.getByRole("button", { name: "Link project" });
     expect(link.className).toContain("border-[var(--color-border-primary)]");
     expect(link.className).toContain("bg-transparent");
-    await select("Default Removal template", "Test template: tpl_test");
+    await change("externalFacilityId", "fcl_test");
     await dismiss();
     expect(close).not.toHaveBeenCalled();
     await click("Keep editing");
-    await change("externalFacilityId", "fcl_test");
     await submit(1);
-    expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ facilityId: FACILITY_ID, externalProjectId: "prj_test", defaultRemovalTemplateId: "tpl_test" }));
+    expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ facilityId: FACILITY_ID, externalProjectId: "prj_test" }));
     expect(close).toHaveBeenCalledOnce();
   });
 

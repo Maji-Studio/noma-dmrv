@@ -51,6 +51,7 @@ vi.mock("nuqs", () => ({
 }));
 vi.mock("@/hooks/use-customers", () => ({
   useCustomers: () => ({ data: { items: [], total: 0, totalPages: 0 }, isLoading: false, error: null }),
+  useCustomerStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useCustomerWithRelations: () => ({
     data: harness.query.customer ? harness.customer : undefined,
     isLoading: false,
@@ -60,8 +61,9 @@ vi.mock("@/hooks/use-customers", () => ({
     isError: false,
   }),
   useCustomerLocations: () => harness.locationsQuery,
-  useCreateCustomerWithLocations: () => ({ isPending: false, mutateAsync: harness.create }),
+  useCreateCustomerWithLocations: () => ({ isPending: false, mutateAsync: harness.create, startDraft: vi.fn() }),
   useUpdateCustomer: () => ({ isPending: false, mutateAsync: harness.update }),
+  useCustomerDeletePreview: () => ({ data: undefined, error: null, isPending: false, isError: false }),
   useDeleteCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useArchiveCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRestoreCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),

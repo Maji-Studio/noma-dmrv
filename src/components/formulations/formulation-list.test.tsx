@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { FormulationList } from "./formulation-list";
 
 const state = vi.hoisted(() => ({
+  remove: vi.fn(),
   filters: [] as Array<{ archived?: boolean }>,
   items: [] as unknown[],
 }));
@@ -20,12 +23,13 @@ function formulation(code: string, archivedAt: Date | null): FormulationWithIngr
 vi.mock("@/hooks/use-formulations", () => {
   const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
   return {
+    useFormulationStats: () => ({ data: undefined, isLoading: false, isError: false }),
     useFormulations: (filters: { archived?: boolean }) => {
       state.filters.push(filters);
       const items = state.items.filter((item) => Boolean((item as FormulationWithIngredients).archivedAt) === Boolean(filters.archived));
       return { data: { items, total: items.length, totalPages: 1 }, isLoading: false, error: null };
     },
-    useCreateFormulation: mutation, useUpdateFormulation: mutation, useDeleteFormulation: mutation,
+    useCreateFormulation: mutation, useUpdateFormulation: mutation, useDeleteFormulation: () => ({ mutateAsync: state.remove, isPending: false }),
     useArchiveFormulation: mutation, useRestoreFormulation: mutation,
   };
 });
@@ -37,7 +41,10 @@ vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => un
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <p role="alert">{message}</p> }));
 vi.mock("./formulation-form", () => ({ FormulationForm: () => null, PURE_BIOCHAR_CUE: "Pure biochar, no ingredients." }));
-vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
+vi.mock("@/components/ui/delete-confirm-dialog", () => ({
+  DeleteConfirmDialog: ({ isOpen, onConfirm, errorMessage }: { isOpen: boolean; onConfirm: () => void; errorMessage?: string }) =>
+    isOpen ? <div><button onClick={onConfirm}>Confirm delete</button>{errorMessage && <p role="alert">{errorMessage}</p>}</div> : null,
+}));
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("@/components/ui/stat-card", () => ({ StatCard: ({ title }: { title: string }) => <section>{title}</section> }));
 vi.mock("@/components/ui", () => ({
@@ -46,8 +53,8 @@ vi.mock("@/components/ui", () => ({
   ),
   EmptyState: ({ title, description }: { title: string; description: string }) => <section><h2>{title}</h2><p>{description}</p></section>,
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
-  RowActionsMenu: ({ label, actions }: { label: string; actions: Array<{ label: string }> }) => (
-    <ul aria-label={label}>{actions.map((action) => <li key={action.label}>{action.label}</li>)}</ul>
+  RowActionsMenu: ({ label, actions }: { label: string; actions: Array<{ label: string; onSelect: () => void }> }) => (
+    <ul aria-label={label}>{actions.map((action) => <li key={action.label}><button onClick={action.onSelect}>{action.label}</button></li>)}</ul>
   ),
 }));
 vi.mock("@/components/ui/data-table", () => {
@@ -68,12 +75,13 @@ vi.mock("@/components/ui/data-table", () => {
           ))}
         </div>
       ),
-      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => null, Pagination: () => null },
+      { Toolbar: Slot, Controls: Slot, Search: () => null, ColumnVisibility: () => <button type="button">Columns</button>, Pagination: () => null },
     ),
   };
 });
 
 beforeEach(() => {
+  state.remove.mockReset();
   state.filters = [];
   state.items = [formulation("BCF-0001", null), formulation("BCF-0002", new Date("2026-01-01"))];
 });
@@ -100,6 +108,31 @@ describe("FormulationList archive view", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     expect(within("Actions for BCF-0002")).toEqual(["Restore", "Delete"]);
+  });
+
+  it("offers Archive instead for a structured refusal with different wording", async () => {
+    const message = "This formulation is still used.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["formulationId"]) }));
+    render(<FormulationList />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("button", { name: "Archive instead" })).toBeTruthy();
+    expect(state.remove).toHaveBeenCalledWith({ formulationId: "id-BCF-0001", expectedVersion: 1 });
+  });
+
+  it("keeps an unmarked conflict in the delete dialog", async () => {
+    const message = "Formulation was not deleted because its name clashes.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, code: "conflict" }));
+    render(<FormulationList />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(message));
+    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+  });
+
+  it("shows no Columns control: every record field is already a column", () => {
+    render(<FormulationList />);
+    expect(screen.queryByRole("button", { name: "Columns" })).toBeNull();
   });
 
   it("explains an empty archived view", () => {

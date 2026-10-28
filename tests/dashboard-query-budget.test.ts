@@ -31,8 +31,11 @@ import { TEST_SITE_POSITION,
   TEST_ORG_ID,
 } from "./helpers/test-org";
 
-/** Statements one dashboard overview read may send, with any number of batches. */
-const OVERVIEW_QUERY_BUDGET = 18;
+/**
+ * Statements one dashboard overview read may send, with any number of batches.
+ * Includes the facility timezone read that sets local-day bounds (#1175).
+ */
+const OVERVIEW_QUERY_BUDGET = 19;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;
@@ -90,6 +93,7 @@ beforeAll(async () => {
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         feedstockMassDryKg: 1_000 * (n + 1),
         biocharDryMassKg: 200 * (n + 1),
+        biocharOutputKg: 200 * (n + 1),
       })),
     )
     .returning({ id: productionRuns.id });

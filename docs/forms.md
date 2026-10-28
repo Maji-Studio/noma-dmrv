@@ -148,6 +148,34 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
+### Native number constraints
+
+A number input's native `min`, `max` and `step` come from the Zod schema that
+validates it, never from hand-typed numbers. Build a lookup once at module
+level and spread it onto the input:
+
+```typescript
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
+<FormInput id="totalCarbonPercent" type="number" {...numberBounds("totalCarbonPercent")} … />
+```
+
+`numberInputConstraintsFor` (`@/lib/number-input-constraints`) unwraps
+preprocess pipes, nullables and `"" | number` unions, reads array elements
+(`"ingredients.sharePercent"`) and throws on an unknown path. `step` is the
+schema's `multipleOf`, 1 for an integer, else `"any"`; an exclusive bound
+(`.positive()`) becomes the next step, or the bound itself with `"any"`. For a
+lone field schema use `numberInputConstraints(latitudeSchema)`. A form may set
+`step` after the spread when its display precision differs (formulation
+shares). `number-input-bounds-coverage.test.ts` fails on a number input with no
+bounds spread and no `min`.
+
+The native attributes give the spinner its range and expose min and max to
+assistive tech. They do not block a save: `FormActions`' submit sets
+`formNoValidate` on click (`skipNativeChecksUnlessUnparsed`), so the schema's
+messages explain a refusal. The exception is a number input holding text the
+browser cannot parse ("1e"): it reports an empty value the schema would read as
+cleared, so the browser's own check stays on and blocks the save.
+
 ### GPS coordinates
 
 Facilities, supplier locations and customer locations require a GPS pair to
@@ -178,37 +206,80 @@ rerender the parent form on every keystroke.
 
 Prefer the `PositionPicker` component (map preview + address search + manual lat/lng) over a hand-rolled coordinate input.
 
+## Saved values after a lock refusal
+
+`useSaveRefusal` requires the form's `resetField` alongside `setError`. Its
+optional `dependents` map restores registered dependent fields once after a parent
+lock revert, for example `{ customerId: ["customerLocationId"] }`. A dependent
+gets the Locked marker only if changed and on screen; otherwise it resets silently.
+Clear dependent fields from operator change handlers when a dependency cascade
+would also fire on `resetField` and erase restored values. `isChanged` can report
+operator edits held outside RHF, such as delivery sub-bin choices. `useSaveRefusal`'s
+locked-field reset uses RHF defaults, so those defaults must describe saved
+values. Delivery and feedstock initialize from the opened record. So do the storage bin (the opened bin), output stock and loss (the correction entry, or blank for a new one) and the transport leg (the saved leg). Feedstock
+resets both its total and single-bin allocation mass together. Application
+updates its defaults explicitly when an update commits but an attachment upload
+fails: the parent adopts the returned row and calls the form's committed-record
+callback, which uses `reset(committedValues, { keepValues: true, keepSubmitCount: true, keepIsSubmitted: true, keepDirty: true })`. Typed input
+stays on screen; a background refetch never re-syncs the form. A stale-version
+refusal does not replace that snapshot. The profile password pane also wires
+`resetField`, although it has no record-lock read. The customer location has no lock-read kind, so after a lock refusal its form disables name and GPS from local state until the dialog reopens or switches location.
+
+Mutations declare affected kinds with `recordLockMeta`. A `certification_locked`
+`ActionError` refreshes those kinds even though the write failed; unrelated
+failures leave ordinary lock reads alone. Registry mutations refresh all kinds
+even on other failures. Refetching retains ready status while saved lock data
+is available.
+
+When the re-read turns the whole record Sent, the form is read-only and `FormActions`
+hides its footer, so the refusal would vanish. `EntitySideSheet` (edit mode) and
+`RecordLockFormFrame` hold a refusal slot above the lock line, shared through
+`RefusalSlotContext` (`src/components/ui/refusal-slot-context.tsx`; the element is
+kept in a `useState` ref callback, no effect). On `block.readOnly` with an error
+message `FormActions` portals `TopRefusal` into that slot and focuses it, since
+the Save button that held focus is gone. After a `certification_locked` refusal it says only
+"Your changes were not saved." (`useSaveRefusal` files `errors.root.lockRefusal`, which
+`FormActions` reads through `control`; the error summary skips `root`, the next submit
+clears it); the lock line below keeps the reason and how to free the record. Any other
+message (a partial save, a stale version, a form not yet on the hook) shows as the
+server worded it, since the fields were not necessarily reverted. It is a focusable `role="group"`
+named by its own text, not a live region, so a screen reader hears it once from
+focus. Without a slot the box renders inline. A refusal made only of locks focuses
+the summary box (also a named group) rather than the field, which is disabled once
+the lock read lands, whether or not a reason sits beside the count, so the reason is
+read from it; a locked link in the summary scrolls to its field without focusing it.
+A refused override edit on a delivery or feedstock goes back to the saved override
+as a whole (distance, source, note, and whether the panel is open).
+
 ## Dates
+
+Union date fields use `dateOrStringSchema` from `@/schemas/helpers`.
+The resolver shows the first branch's first issue, so the helper puts strings
+first and shares that message with server validation.
 
 Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
 as **UTC-midnight date-only values**, such as the feedstock delivery date. It
 accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
 a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
-accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
-these persisted UTC date-only values.
+accepts a `Date` only at UTC midnight. Use
+`toDateInputValue(value, facilityToday(timeZone))` for defaults of these
+persisted UTC date-only values. Resolve `timeZone` with
+`useFacilityClock(record?.facilityId ?? activeFacilityId)` so empty or invalid
+values default to the facility calendar day. Unknown facilities use the shared
+UTC fallback.
 
-Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+Use `requiredDateOnlySchema(<required message>)` / `optionalDateOnly` where a date is combined with a
 facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
 midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.
 `z.iso.date()` validates a string but does not produce a `Date`.
 
-Several established application/delivery/credit-batch schemas still use
-`z.coerce.date()` while their components protect the default side with
-`formatLocalDate`. Treat those as legacy contracts: do not mass-change their
-output types, but when changing one, trace its component, action, data-access,
-and database column and migrate the round trip deliberately. The
-production-run schemas are the current reference for the local date-only
-helpers.
-
-For local date and time defaults, **never use `toISOString()`**. Use `@/lib/date-utils`:
-
-```typescript
-date: formatLocalDate(new Date()),          // "2026-03-03"  → <input type="date">
-startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-local
-```
-
-`toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
+New-record business dates use `facilityToday(timeZone)` from
+`@/lib/date-utils`, never the browser calendar. Physical event inputs keep UTC
+instants and show them through `EventTimeInput` on the facility clock. Use
+`formatFacilityWallClock` when a facility-local datetime input value is needed.
+`toDateInputValue` preserves the stored UTC calendar of date-only records;
+its required second argument supplies the facility day for empty/invalid values.
 
 Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
 
@@ -249,9 +320,10 @@ New or touched leaf and shared components should import from `@/components/forms
 - **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
   - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
   - `cue` is one visible `body-caption` line under the control: "Minimum 8 characters", "-90 to 90", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery", "Seeds new facilities. Existing facilities keep their own." (organization defaults timezone), "Applies to new Sources across the organization." (registry default visibility), "Annual average for this application site" (soil temperature). It is tagged by hand at the call site; never move an explanation into it to make it visible. Exception: exactly the last three examples above (the timezone and default-visibility scope notes and the soil temperature definition) stay visible as cues by product decision; no other explanation may be a cue. An error or warning replaces it while shown.
-  - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
+  - `cueAction` ({ label, onClick, disabled?, ariaLabel? }) puts one tertiary text action at the right of the cue row, for a shortcut that fills the control from the cue's figure ("Add all" beside "1,000 kg available from this delivery"). It stays mounted whenever `cue` has text, even while an error or warning replaces the cue's message, so a click that follows the input's blur still lands. Compute the value with `wholeStockDrawKg` (`@/lib/stock-overdraw`), set it with `shouldDirty`, `shouldTouch` and `shouldValidate`, and omit the action (do not dim it) when the field is locked.
+  - `unit` renders a suffix inside the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
   - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
-- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. Set server validation issues on fields only when every issue maps to a rendered field, and focus the first field. Otherwise use RHF `setError('root.serverError', …)` and the shared `ServerError` banner. See the delivery form (`src/components/deliveries/delivery-form.tsx`) and `deliveryActionFieldIssues` (`src/lib/delivery-action-errors.ts`) for the reference.
+- **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. A refused save is split, not all-or-nothing: an issue whose field is on screen shows at that field, the rest show once in the error box. A form calls `useSaveRefusal` (`src/components/forms/use-save-refusal.ts`) and calls the returned function from its submit `catch`, **inside the `handleSubmit` callback** (RHF works out `isSubmitSuccessful` when the callback ends, and `FormErrorSummary` shows only after an unsuccessful submit, so a later `setError` is never listed or focused). Its handler is `(error: unknown, fallback: string) => string | null`: it returns the plan's footer, including `null` when every issue sits at a field, or the supplied fallback for a stale-version or conflict refusal, a refusal without issues, or a non-`ActionError`. This handler owns the one footer rule; parents keep their conflict and blocker side effects. The rule itself is `planSaveRefusal` (`src/lib/save-refusal.ts`). Server paths the form names differently go in an alias map next to the payload builder (`feedstockUpdatePayload`, `applicationOperationInput`, delivery's shared `DELIVERY_REFUSAL_ALIASES` next to `deliveryOperationInput` in `src/schemas/deliveries.ts`, `FORMULATION_REFUSAL_ALIASES` and `VEHICLE_REFUSAL_ALIASES` in their schema files; the reactor form keeps its throughput alias inline because it builds the payload itself). A server path the form splits across several controls goes in `splitFields` (`{ serverPath: [controlNames] }`), for example an instant split into a date control and a time control: the production run's `startTime` is `startDate` plus `startTime`. A change to any part counts as a change to the field, a refusal files its error on every part, and a lock reverts and marks every part. Aliases match the whole dotted path first, then patterns where `*` matches exactly one segment and the target's `*` takes that segment (for example `ingredients.*.wetMassKg -> ingredientBins.*.massKg`), then the first segment. The delivery create action returns operation paths (form-schema refusals keep form names); the update action validates and writes with form names except stock posting refusals (`occurredAt`, `wetMassKg`). The form applies the shared map, which carries those two to the delivery date and the load mass. A lock refusal (`certification_locked`) restores the saved value with `resetField`, then shows **"Locked. Your change was not saved."** at a field the operator changed and that is on screen; the lock's reason shows once in the footer, and a lock without a changed visible field goes to the footer only. Lineage refusals include changed operation fields so their typed values revert too. Transport leg lineage refusals (`assertCanMutateCertifiedLineage`) carry no issues and stay footer-only; the editable editor has no production mount today. The summary words it apart: "Not saved. 2 fields are locked." (mixed: "Not saved. Fix 1 field. 2 fields are locked."). Forms that do not use the hook yet keep the footer line. Never copy a server rule into the form just to show it at the field; the server's issue now lands there. Parents hand the form's handler the caught error and their existing fallback: `onSubmit(data, onRefusal)`, then `setError(onRefusal(error, fallback))`; a null footer means every reason sits at a field, so `?? fallback` would wrongly bring the generic line back (see `delivery-list.tsx`, `feedstock-list.tsx`, `application-list.tsx`, `order-list.tsx`, `sample-list.tsx`, `credit-batch-list.tsx`). The picker edit dialogs hand it through `usePickerEditSubmit` (`onSubmitWithRefusal` in `entity-edit-forms.tsx`), which keeps the `ActionError`. `saveCreditBatchEdit` returns the thrown error as `cause` for the same reason. A form whose field revalidates itself (credit batch end date) must skip that when the error is a server or locked one, or the refusal is cleared at once.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
   Use `EntitySelect` / `FormEntitySelect` for lists of user data, including
   customer locations, deliveries and registry projects or templates. Keep
@@ -259,6 +331,7 @@ New or touched leaf and shared components should import from `@/components/forms
 - **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`). The bin stock sheet opens Lost mass directly and has no loss / count selector.
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
 - **`DistanceCalcField`** — derived transport-leg distance. It and similar derived-with-provenance fields (distance plus `distanceSource`) are wired with `useController`, one per field, written through `field.onChange(...)`; never `watch` / `useWatch` plus `setValue`. Pass `null` to clear, not `undefined`: `useController` falls back to the default value on `undefined`, so a cleared saved value reappears. A provenance select bound to a controller field spreads `{...field}` instead of `register`, as `transport-leg-form.tsx` does. Reference: `src/components/customers/customer-location-fields.tsx`.
+- **`DistanceOverrideField`** (`src/components/transport-legs/distance-override-field.tsx`) — the feedstock and delivery One-way distance, two-state per GLOSSARY "Distance override": the location's facility distance read-only, or an override (distance, source, note). One outline `Button` (`variant="default"`, 40px) sits outside the input, to its right, and wraps below it on a narrow sheet: "Override" unlocks entry, "Reset to default" returns to the location default. Provenance ("From {location}. Source: …", "Override. Location default is 42 km.") reads behind the label's ⓘ, never as a visible state label; the only caption is an actionable one (no location distance, with its repair link). The form owns the mode and maps it with `distanceOverridePatch` (`distance-override.ts`): a derived or unchanged value is omitted, `null` clears an override, a positive number sets one. Never send a derived distance back as data. Read views mirror it with `distanceReadFields` (same ⓘ text) and show drift with `TransportDistanceDriftNotice`; edit forms show it as the compact `DistanceDriftAction` under the input, disabled while the form has unsaved edits, and reopen on the refreshed version.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
 - **`FormFileUpload`** — see [File upload](#file-upload).
 
@@ -305,11 +378,23 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 The only CTA row — left-aligned, primary action first, sticky by default, nothing renders after it.
 
+- Inside a record sheet, every ancestor of a sticky `FormActions` becomes a filling flex column (`SHEET_FORM_FILL`, [design-decisions](design-decisions.md) "Sheet actions pinned to the bottom"), so never place it inside a grid row, and never keep a `FormActions` mounted inside an element hidden with `hidden`: the fill rule's `display: flex` outranks it.
 - Never stack a parent dialog or step-flow footer beneath `FormActions`. The
   embedded form owns the one action row. Give its secondary action the
   context-specific label (for example, `cancelLabel="Not now"`) and omit the
   parent footer for that step.
-- Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
+- Submission-level server/action/root errors go through `errorMessage` (references the refusal named go in `errorAction`). `FormActions` renders them as the form's one error box at the end of the form, directly above the sticky footer; never earlier in the form or in a parent sheet. The footer keeps only the Save blocker, `preview` and the buttons. Do not render the same error in a parent sheet.
+- **Error box.** One `Notice tone="error"`, never two. The bold title is the first sentence of the server message (`splitErrorMessage`, `src/lib/error-title.ts`; a lead such as "Feedstock was not saved." folds into "Not saved. <next sentence>"), the rest of the message is the detail, `ServerError` outside `FormActions` splits the same way. With `control`, a Save that validation refused shows
+  `FormErrorSummary` as that box: the count title ("Not saved. Fix N fields."), the server message as detail, one link per field error in form order labelled with the field's name only (the reason shows once, at the field; "Share, row 2" for an array row), then `errorAction`. Focus moves to the first field, scrolled to the middle of
+  the sheet; each link focuses its field. With no field error the box shows the message alone and a refused Save scrolls it into view (`nearest`) and focuses it, once per attempt. The list follows the live errors and
+  goes once none are left. Save stays pressable. It finds a field by its RHF
+  path as the control's `data-field-name`, `name` or `id`: a `Controller`
+  widget keeps its `id` equal to the field name, or sets `data-field-name`
+  (`EntitySelect` takes `fieldName`, `PositionPicker` takes `fieldNames`). An
+  error with no matching control lists unlinked, by its message. The list is not a live
+  region: one sr-only alert announces each refused save, so fixing a field
+  does not re-read the whole list. A field message that is long may run the full form width: `FormField errorOutside` plus `FieldErrorRow` in the grid (see the delivery wet mass).
+  Do not hand-roll a summary or a focus-first-error helper in a form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
 - Sheet forms pass `control` (the RHF `control` object). It feeds the side
   sheet's unsaved-changes guard with `formState.isDirty`, which is the only
@@ -325,6 +410,58 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+- **Association preview.** `preview` takes one `FormFooterPreview` line,
+  rendered under the Save blocker, directly above the
+  buttons: what saving associates the record with. The Production Run form
+  shows the credit batch the run joins, is expected to join, or belongs to
+  (#1164); there the server answers from the unsaved values with the save
+  path's own rule, so the browser holds no copy of it. Credit batch lines
+  render through `CreditBatchLine`
+  (`src/components/credit-batches/credit-batch-line.tsx`) from a form-specific
+  `CreditBatchLineCopy`. The Lab Sample line repeats the batch chosen in the
+  form, read from the batch summary the form already loads. The Emissions entry
+  line repeats the batch whose Emissions page opened the form, with no request;
+  that slide-over passes it to `SlideOverPanelFooter`'s `preview`, placed where
+  `FormActions` puts its own. The line never blocks Save, and it shows "Checking" whenever
+  its last answer is not for the current inputs.
+  Feedstock, Delivery, Application and Biochar Product render `RecordCreditBatchLine` from saved
+  provenance via `getRecordCreditBatches`. While creating, a new Feedstock says
+  "Set when a production run uses this feedstock"; the other three pass the chosen
+  source bin or delivery as `preview` (#1350). `previewRecordCreditBatches` plans the
+  draw with the stock preview's own request (`prepareOutputStock`) or the
+  application's shares (`planApplicationShares`), the planners the save posts, and
+  resolves the runs through `getCreditBatchesForSourceRuns`, by each record's
+  saved lineage rule: a delivery keeps runs with drawn dry biochar, a product
+  every run layer it draws (a residual one included), an application runs with
+  a share. Every line reads as a label, the same before and after saving:
+  "Credit batch: CB-26-001". Before the mass is entered it reads the runs the
+  source holds: "Credit batch:" when they share one batch, "Possible credit
+  batch(es):" when they span several or some are in none (the draw can take
+  from one or all of them). An entry the save would refuse says "Shown once
+  the load / amount / biochar draw can be saved"; a delivery whose saved
+  allocation does not balance says "Can't be traced for this delivery". The
+  date window is hidden below 640 px, except in a warning about the window. A failed stock save invalidates these previews with
+  the stock previews (`invalidateAfterFailedStockSave`).
+  When several batches apply, "+N" opens a list of all their batches.
+- The submit skips the browser's constraint bubbles except for unparsed number text (see [Native number constraints](#native-number-constraints)); a nested `submitType="button"` is untouched.
+
+### Double submit
+
+`disabled={isSubmitting}` turns on only after a render, so a double-click sends two saves (#1238). Every form uses the latch below; runner-backed create hooks also send an intent key. The stock-posting forms are the exception: they keep their own domain request keys.
+
+- Wrap the RHF handler: `const latched = useLatchedSubmit(); <form onSubmit={latched(handleSubmit(...))}>`. The inner handler must `return` or `await` the save, or the latch lets go before the server answers.
+- Create hooks backed by `runOperationInProcess` use `useIntentMutation` from `@/hooks/use-create-intent-key`. Its `mutationFn(variables, intentKey)` passes `{ intentKey }` to the action and throws on an unsuccessful `ActionResult` (use `unwrap` or `throwActionError`). The action uses `withCreate(callback, options, actionOptions)`; see [architecture.md](./architecture.md#layers). The helper keeps the key through failed saves, rotates it before the caller's `onSuccess`, and exposes `startDraft()` to rotate it for a new draft: call it when a create sheet or dialog opens, or when a dialog that stays mounted closes. A retry inside one open draft keeps the key and replays the first save.
+
+Facility, reactor, storage-bin sheet, feedstock-type settings and production-process
+creates use the same intent hook. List create handlers and the process confirmation
+start a new draft on open. The onboarding sheet mounts fresh per open, so its
+key is already new; the storage-bin sheet stays mounted and synchronizes draft
+rotation with its prop-driven opening. Mutation rerenders and failed saves do
+not rotate the key. Their form error handling is unchanged.
+
+All six quick-add dialogs use the key owned by `useQuickAddSubmit`: its `serverFn(data, intentKey)` forwards the key, and the hook rotates it after success. Dialogs call `startDraft()` on open; formulation calls it on close. Failed saves keep the key. The hook throws a failed result through `throwActionError` and passes the caught `ActionError` to an optional `onRefusal` from the form; a form that passes no handler keeps the footer message. Every fleet, feedstock type, formulation, reactor and facility form is on `useSaveRefusal`; their sheets, lists, onboarding and quick-add dialogs hand it the caught error. None of them can be locked today (no record lock covers them, and the facility tier refusal names no field), so they never show "Locked". A create that saves several records in a loop, such as pending Sample transport legs, passes one key per record instead of the draft key.
+
+API key creation sends an intent key without the runner, and a retry replaces the unseen key instead of replaying it because the secret is shown only once (see [docs/auth.md](./auth.md)).
 
 ### FormSpine
 
@@ -355,9 +492,20 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 - Field-less sections render as plain numbered orientation steps — use them for previews and recaps, not required input.
 - Conditional sections may mount/unmount; numbering derives from rendered order and stays contiguous.
 
+### Required stars
+
+A red star on a label means the save refuses the field empty. The rules:
+
+- Star what the schema or the submit handler rejects when empty. Do not star a field that merely feels important, or one a blank value defaults.
+- A field required only in one state shows the star only in that state (cancellation reason when cancelled, nutrient shares while claims are on, the override distance while Override is on, the GIS reference for that evidence method).
+- A field needed for certification but not for saving gets the CERT chip below, never a star.
+- `FormField` takes `required`. Anything drawn outside a FormField (a picker label, a legend, a readout) uses `RequiredMarker` from `@/components/forms/required-marker`, imported by file path, never through the barrel. For a fieldset control (`SegmentedControl`, `ChoiceCardGroup`) also pass `required`, which adds "Required" to the sr-only legend that names the group. Do not add `aria-required`: the control would announce it twice.
+- The star adds "Required" to the label, so locate a starred field in specs with a regex or by role and a prefix match, not by exact name.
+- The guard lives in `src/components/forms/form-required-markers.test.tsx`: every sheet form is submitted empty and any field that shows an error must carry a star. Its limit: Zod 4 aborts an object `superRefine` after an `invalid_type` issue and handler checks run after validation, so an empty submit never reaches a conditional requirement. Those go in its second table, which starts from a valid fixture, empties one field and asserts the star and the error together. A new conditional requirement gets a row there.
+
 ### CERT chip status
 
-A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`). It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
 
 - create mode → `neutral` (neutral chip, no claim)
 - edit mode, saved value present → `satisfied` (green chip with a check)
@@ -430,8 +578,7 @@ stock actions.
 
 Supported types are storage bins, formulations, suppliers, customers, feedstock
 types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
-requires the server-resolved management permission (Owner, Admin or Platform
-Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+requires the server-resolved management permission (Admin or Platform Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
 is supported by the shared dialog but currently has no form picker.
 The order form's Customer location picker uses `onEditSelected` to open
 `CustomerLocationDialog` for the selected location.
@@ -472,115 +619,124 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
 
-## Simple and Detailed presentation
+**Order form departs from `dependsOn`.** The customer picker clears the customer location from its own `onChange` (only when the value differs from the current customer), not through the location's `dependsOn`, because `dependsOn` also fires on a programmatic `resetField` such as a lock revert, which restores customer and location together.
 
-Use `FormDetailToggle` for the shared compact radio control. Opt entity sheets
-in with `EntitySideSheet`'s `detailToggle` and pass the record ID as
-`detailScope`: `true` shows the control in every mode, `"view"` in saved read
-mode only, `"form"` in create and edit only. A sheet that does not opt in has no
-provider, and everything under it renders at Detailed. The switch lives in
-`SlideOverPanel.Header`'s `actions` slot beside the title, not in an extra row
-above the form. Other sheet owners can use `FormDetailProvider` and
-`FormDetailControl` with a scope containing open state, mode and record ID.
+**A select's own pick is a default on an untouched form** (#1360). When `autoSelectSingle` picks the only option, or `dependsOn` clears the field, while the form is still clean, `FormEntitySelect` moves the field's default with its value (`useSelectDefault`), so Cancel closes without "Discard unsaved changes?". Once the operator has edited anything, the same change is an edit and stays in `dirtyFields`, so a dirty-fields patch still sends it. The caller's `onChange` side effect also runs on the pick, with `change.asDefault`: a side effect that sets other fields sets them with `resetField(name, { defaultValue })` when `asDefault` is true (the credit batch month window). A plain `EntitySelect` under a `Controller` passes `onAutoSelect={(id) => setSelectDefault(name, id, field.onChange)}` with `const setSelectDefault = useSelectDefault(control)`.
 
-The provider resets to Simple when that scope changes without remounting input
-fields. Presentation state is separate from RHF and payloads. The shared sheet
-excludes `data-presentation-control` events from its unsaved-change heuristic.
-A real input change must still trigger the discard guard.
+**Default each registered field to the value its input produces when empty.** RHF fills a field whose default is `undefined` from its input, and `isDirty` compares every value with the defaults, so a mismatch makes the untouched form read as edited the next time anything recomputes it. That is `""` for a text or picker input and for a number input with no `setValueAs` (facility `timezone`, order `quantityKg`, production run `residenceTimeMinutes`), `null` for an input whose `setValueAs` gives `null` such as `nullableNumericValue` (storage bin `capacityKg`) and for radios with none chosen (storage bin `type`), and `undefined` only where `setValueAs` maps empty to `undefined` (`numericValue`, `integerValue`).
 
-**The contract: Simple and Detailed show the same information and differ
-only in explanation.** Neither level hides something you fill in or something
-you read.
+## Explanations behind an (i)
 
-- **Forms:** every input, section and action (history links, uploads, add
-  buttons) renders at both levels, and so does everything that informs a
-  decision: available stock, stock after the movement, matching bins, before →
-  after previews, blockers and warnings.
-- **Read views:** both levels show the same fields and sections.
-  `DetailPanelField` and `DetailPanelSection` have no level flag.
-- **Detailed adds only explanation:** calculation rows, basis captions,
-  formula or component provenance, raw versus capped values. A read section
-  puts it in its `explanation` slot; a derived block in `detail` or
-  `calculation`; anything else in `DetailedOnly`. All three carry
-  `data-detail-explanation`.
+There is one view of every form and read sheet. Explanation does not switch on
+and off; it opens from an (i) beside the figure or caption it explains.
+
+**The contract:** an input, section, action or anything that informs a decision
+is always visible: available stock, before → after, matching bins, blockers,
+warnings, dry figures as `secondary` lines (`DetailField`, `DerivedHeadline`,
+both through `SecondaryFigure`, CERT chip included). Explanation is what only
+checks a number: composition ledgers, calculation arithmetic, the figures
+behind a movement, FIFO batches, source runs, yield arithmetic, H:C / O:C
+formulas, carbon estimate inputs, durability raw value, cap, component and
+formula version, held allocations. It sits behind an (i).
+
+- **`ExplanationInfo`** (`@/components/ui/explanation-info`) is the one (i):
+  `<ExplanationInfo title hint?>{tables}</ExplanationInfo>`. It is a `Popover`
+  with `openOnHover`, so it opens on mouse hover (desktop) and on a tap, click,
+  Enter or Space (touch, keyboard); Escape, an outside press, the close button or
+  a second press closes it, so a panel never traps the field being edited. The
+  trigger is a `span` with `role="button"` named "About {title}" (a native button inside a read-only form's `<fieldset disabled>` would be disabled, and a locked record must still open its explanations), looks like
+  `InfoHint`, keeps its 24px hit area and carries `data-presentation-control`, so
+  a press on it never marks a sheet dirty. The panel is up to 420px wide and
+  never wider than the viewport minus 32px; it scrolls past the Popover's max
+  height. The body mounts only while open. Do not build this on the Base UI
+  Tooltip, which closes on the tap that opens it.
+- **One (i) per block.** A block with a definition and an explanation passes
+  both: the `hint` leads the panel, then the tables. A block with only a
+  definition keeps `InfoHint`.
+- **Two short lines stay inline,** because the operator checks them on every
+  entry: the dry mass formula sentence under a moisture split
+  that derives dry mass from moisture (`formatSplitArithmetic` in
+  `ui/moisture-split`; a stored dry mass explains itself inside the (i)) and the dry biochar before →
+  after line on a stock movement ("Dry biochar in bin 540 → 135 kg"). Add no
+  third without a decision in `docs/design-decisions.md`. Other explanation
+  goes behind the (i).
+- **Read sections:** `DetailPanelSection.explanation` (titled sections only)
+  opens from the (i) beside the section title, after the section's `hint`;
+  `DetailPanelField.explanation` does the same beside one figure's label, when a
+  section holds several (`explanationTitle` names it). Read sheets build their
+  sections in a named builder (`*-read-sections.tsx`, returning
+  `DetailPanelSection[]`), never inline in the list;
+  `src/components/read-sheets.test.tsx` fails for a builder without a
+  case.
 - **No "Add X" reveals** for fillable fields. A field may still appear when an
   earlier answer makes it relevant (a cancellation reason, an over-allocation
   justification). Keep long sheets calm by grouping, pairing and unit
   suffixes, never by hiding.
-- **Dry figures are data.** A read view shows dry biochar or dry solids as a
-  `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
-  both through `SecondaryFigure`), CERT chip included. A stock balance such as
-  available dry stock does the same. In a movement preview the dry before and
-  after pair stays part of the calculation.
-
-The `src/components/forms/form-detail-parity*.test.tsx` suites guard this.
-Only `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the
-level, and `DetailedOnly` has a short list of callers. Every level-aware block,
-every read sheet and one create form per family render at both levels and must
-show identical labels, titles, inputs, actions and text outside explanation
-blocks. Read sheets build their sections in a named builder
-(`*-read-sections.tsx`, returning `DetailPanelSection[]`), never inline in the
-list; a new builder fails the coverage check until it has a case.
+- **No presentation state.** There is no provider, no sheet prop and no level to
+  test. A test of a block asserts the inline content, then opens the (i) and
+  asserts the explanation.
 
 ### Derived blocks
 
 A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
-caption with its one-sentence definition behind an ⓘ `hint`, an optional
-`headline`, the picture as `children`, and one action row holding the block's
-own `actions` (a fix such as "Balance to 100%"). Stock history lives on the
-storage bin and its own loss, count and correction form, never on the block of a
-form that only draws from a bin. All of that
-shows at both levels. Detailed adds the `detail` rows (explanation such as a
-ledger, never decision info) and Show calculation, which opens `calculation`:
-arithmetic the block does not already show. Omit it and no control renders. Do
-not draw proportions from an incomplete or zero basis.
+caption, an optional `headline`, the picture as `children`, one `explanation`
+slot and one action row holding the block's own `actions` (a fix such as
+"Balance to 100%"). The caption's one (i) opens `explanation`, led by the
+`hint` definition; with no `explanation` the `hint` stays an `InfoHint`. Put a
+short line that must stay visible (the stock movement's dry pair) in `children`.
+Stock history lives on the storage bin and its own loss, count and correction
+form, never on the block of a form that only draws from a bin. Omit
+`explanation` when it would only restate visible numbers. Do not draw
+proportions from an incomplete or zero basis.
 
-Before any input, a form's moisture split and product composition are
-explanation of what will appear, so only Detailed draws their unresolved
-state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
-never remounts when the first value arrives). Explanation parts stay mounted behind
-`hidden`, so an open disclosure survives a level switch.
+Before any input, a form's moisture split and product composition would only
+explain what will appear, so they render nothing until the first value makes
+them data (`MassMoistureFields` and `ProductCompositionBlock` gate on
+`started`).
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
 label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
 so the label stays a plain name), an optional muted `before` value and arrow for
-a change, and an optional `sub` caption naming the entry behind it. `null` reads
-"Not available". Pass `figureLabel` so a before and after pair is announced as
-one phrase.
+a change, and an optional `sub` caption naming the entry behind it. A `null`
+figure is left out: the label stays with `sub` saying why, and with no `sub`
+the headline renders nothing. Pass `figureLabel` so a before and after pair is
+announced as one phrase.
 
-Disclosure state is separate from form state and must never submit or dirty the
-form. Keep stateful history/correction controls mounted while hiding their
-presentation, so switching levels does not reset an active correction.
+Presentation controls (the (i), a history link) never submit or dirty the form.
 
 ### Stock blocks lead with wet mass
 
 Stock is kept in dry biochar, but operators weigh and load wet mass, so the
-stock family presents wet first. Only presentation changes.
+stock family presents wet first. Only presentation changes. A wet figure reads
+"N kg wet mass", number first, in every caption; never the short "kg wet".
 
 - **Movement blocks** (`OutputStockPreview variant="movement"`: correction,
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
-  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
-  22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
+  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet mass removed at
+  22.7% moisture", "Counted 2,650 kg wet mass at 27.4% moisture", "1,190 kg wet mass
   loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
   less wet mass taken out from its last count; after takes this entry's wet
   mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
-  solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
-  Detailed `detail` row (the calculation); the entered figures and the FIFO
-  batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
+  solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is an
+  inline line under the picture (one of the two lines that stay visible); the
+  entered figures and the FIFO batch draw sit behind the caption's (i). Without a moisture there is no estimate, and the dry pair takes
   the headline. Ingredient bins track wet stock directly, so their headline is
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
   estimate", each batch's wet mass added less wet mass taken out from its last
-  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it at
-  both levels; the batch bar and key as the picture. On the order form and
-  read sheet the bins collapse into one tappable "Available stock" row
-  (wet estimate first, dry secondary) that opens a "Matching stock" modal with
-  these cards. The row's wet figure sums only the bins that have an estimate and
-  says "in N of M bins" when some do not; it never switches to dry.
-- A wet estimate is computed at a moisture, not weighed: its label always says
-  "estimate", and it reads in whole kilograms.
+  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it;
+  the batch bar and key as the picture. On the order form and
+  read sheet the bins collapse into one tappable row labelled "Available" with
+  the wet figure only ("2,500 kg wet mass"), plus "in N of M bins" when some
+  bins lack an estimate so a partial sum never reads as the full stock. Dry
+  stock and the bin breakdown sit in the "Matching stock" modal the row opens.
+- A wet estimate is computed at a moisture, not weighed, and reads in whole
+  kilograms as "N kg wet mass" with no "≈" and no "estimate" on the figure.
+  Where the figure has a label, the label says estimate ("Available wet stock,
+  estimate"); otherwise its info hint says "Estimated: …". Secondary figures
+  lead with the number ("1,500 kg dry biochar", "270 kg dry solids").
 
 ### Stock moisture readings
 
@@ -615,8 +771,8 @@ check, never a value:
 
 A bin selector whose choice moves stock shows the change in its selected value:
 `EntitySelect`'s `formatSelectedLabel` returns a `ReactNode`, and
-`StockChangeLabel` renders "Biochar bin (−100 kg wet)" in amber for a draw and
-"Product bin (+400 kg wet)" in green for an addition. It shows only for a fresh,
+`StockChangeLabel` renders "Biochar bin (−100 kg wet mass)" in amber for a draw and
+"Product bin (+400 kg wet mass)" in green for an addition. It shows only for a fresh,
 unblocked projection with a finite, non-zero mass; pass `available={false}`
 while the preview refetches or has failed. The biochar product form's biochar,
 ingredient and product bin selectors are the reference; they replace separate

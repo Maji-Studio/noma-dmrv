@@ -21,7 +21,7 @@ it("includes all run values unscaled, including preprocessing in genset", () => 
   expect(figures["run-genset-diesel"]).toEqual({ magnitude: "20", unit: "L" });
 });
 
-it("maps each transport category through the existing round-trip aggregators", () => {
+it("maps active transport categories through the existing round-trip aggregators", () => {
   const leg: TransportLegsByCategory["feedstock"][number] = {
     id: "leg", entityId: "feedstock", entityType: "feedstock", organizationId: "org", version: 1,
     createdAt: new Date("2026-10-01"), updatedAt: new Date("2026-10-01"),
@@ -33,7 +33,7 @@ it("maps each transport category through the existing round-trip aggregators", (
   const figures = batchAutomaticFigures([], { feedstock: [leg], biochar: [{ ...leg, distanceKm: 20 }], sample: [{ ...leg, loadMassKg: 10 }] });
   expect(figures["feedstock-transport"]).toEqual({ magnitude: "20", unit: "km * tonne" });
   expect(figures["delivery-transport"]).toEqual({ magnitude: "40", unit: "km * tonne" });
-  expect(figures["sample-transport"]).toEqual({ magnitude: "0.2", unit: "km * tonne" });
+  expect(figures["sample-transport"]).toBeNull();
 });
 
 it("preserves DB decimal text and never accumulates energy in floats", () => {
@@ -63,4 +63,9 @@ it.each(["empty", "missing-mass", "mixed-mode", "biochar-zero-distance"])("match
   const figures = batchAutomaticFigures([], { feedstock: legs, biochar: legs, sample: legs });
   expect(figures["feedstock-transport"] === null).toBe(aggregateTransportMassDistance(legs, "Feedstock").massDistanceTonneKm === null);
   expect(figures["delivery-transport"] === null).toBe(aggregateBiocharTransportMassDistance(legs).massDistanceTonneKm === null);
+});
+
+it("retires the sample automatic figure", () => {
+  const leg = { id: "sample-leg", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["sample"][number];
+  expect(batchAutomaticFigures([], { ...emptyLegs, sample: [leg] })["sample-transport"]).toEqual(null);
 });

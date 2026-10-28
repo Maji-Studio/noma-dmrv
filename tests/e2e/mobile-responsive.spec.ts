@@ -10,7 +10,8 @@
  *  2. The mobile chrome is present: the desktop rail is hidden and the sticky
  *     top bar + hamburger drawer (`MobileNav`) takes over below `md`.
  *  3. `DataTable` swaps its desktop `<table>` for the stacked card view, and
- *     those cards stay keyboard-reachable (`role="button"` + `tabindex=0`).
+ *     each card keeps one keyboard-reachable record link (`meta.recordLink` column); the
+ *     card itself has no role or tab stop.
  *
  * Method mirrors the desktop specs: auth via the HTTP API (`adminPage`
  * fixture), seeded chain data for facility scoping. The viewport override is
@@ -40,16 +41,18 @@ const ROUTES = [
   "/suppliers",
   "/storage-locations",
   "/formulations",
-  "/energy",
+  "/emissions",
   "/certification",
-  "/certification/settings",
   "/certification/removals",
   "/certification/ghg-statements",
   "/traceability",
-  // Settings is a rail plus one pane; both panes are checked because the rail
-  // and the pane stack differently below `md`.
-  "/settings/organization",
-  "/settings/defaults",
+  // Settings is a rail (a grouped select below `lg`) plus one pane; panes of
+  // each group are checked because their content stacks differently.
+  "/settings/general",
+  "/settings/members",
+  "/settings/registry",
+  "/settings/facilities",
+  "/vehicles-and-crew",
   "/admin/organizations",
 ] as const;
 
@@ -150,13 +153,18 @@ test.describe("Mobile responsiveness (390×844)", () => {
     // collapses it); the stacked card view takes over.
     await expect(page.getByRole("table")).toBeHidden();
 
-    // The seeded reactor renders as a card row that is keyboard-focusable —
-    // the a11y contract the card view must preserve. The mobile card is a
-    // `<div role="button">`, distinct from the (hidden) desktop `<tr>`.
-    const card = page.locator('div[role="button"][tabindex="0"]').first();
-    await expect(card).toBeVisible({ timeout: 15000 });
-    await card.focus();
-    await expect(card).toBeFocused();
+    // The seeded reactor renders as a card whose record-link column is a
+    // focusable link — the a11y contract the card view must preserve. The card
+    // itself is a plain `<div>` with no role or tab stop, distinct from the
+    // (hidden) desktop `<tr>`.
+    const recordLink = page.locator("[data-row-link]:visible").first();
+    await expect(recordLink).toBeVisible({ timeout: 15000 });
+    await recordLink.focus();
+    await expect(recordLink).toBeFocused();
+    const card = page.locator("[data-record-card]:visible").first();
+    await expect(card.locator("[data-row-link]")).toHaveCount(1);
+    await expect(card).not.toHaveAttribute("role", /.+/);
+    await expect(card).not.toHaveAttribute("tabindex", /.+/);
 
     await expectNoHorizontalOverflow(page, "/reactors (card view)");
   });
@@ -170,7 +178,7 @@ test.describe("Mobile responsiveness (390×844)", () => {
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
     await expect(hamburger(page)).toBeVisible();
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-    await page.locator('div[role="button"][tabindex="0"]').first().click();
+    await page.locator("[data-row-link]:visible").first().click();
 
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible({ timeout: 15000 });

@@ -47,7 +47,7 @@ async function openBatchEditor(
   );
   await waitForFacilityHydration(page, data.facility.name);
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Edit credit batch", exact: true }).click();
+  await dialog.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: "Update credit batch", exact: true }),
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
@@ -79,7 +79,7 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
   try {
     const mapping = await seedCertifierMapping(seededData.facility.id, {
       externalProjectId: `e2e-concurrent-project-${tag}`,
-      defaultRemovalTemplateId: `e2e-concurrent-template-${tag}`,
+      removalTemplateId: `e2e-concurrent-template-${tag}`,
     });
     cleanups.push(mapping.cleanup);
 
@@ -261,7 +261,8 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
       }
       const args: unknown = request.postDataJSON();
       const input: unknown = Array.isArray(args) && args.length === 1 ? args[0] : null;
-      if (typeof input !== "object" || input === null || !("creditBatchId" in input) || input.creditBatchId !== first.creditBatchId) {
+      // Only the batch update carries productionRunIds; the Emissions panel read also names the batch.
+      if (typeof input !== "object" || input === null || !("creditBatchId" in input) || input.creditBatchId !== first.creditBatchId || !("productionRunIds" in input)) {
         await route.continue();
         return;
       }

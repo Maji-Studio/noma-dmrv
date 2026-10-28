@@ -1,5 +1,7 @@
+import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
-import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
 import { partyArchived } from "@/lib/party-domain-errors";
 import { lockSupplierReference } from "./party-reference-guards";
@@ -40,10 +42,11 @@ import {
 import {
   deleteTransportLegsForEntity,
   syncFeedstockTransportLeg,
-  type FeedstockTransportOverride,
 } from "./transport-legs";
+import { resolveDistanceSource, type DistanceSourceValue } from "@/schemas/distance-source";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -122,6 +125,9 @@ async function validateFeedstockStorageLocations(
 
 export interface FeedstockWithRelations {
   version: number;
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  distanceNote: string | null;
   id: string;
   code: string;
   facilityId: string;
@@ -189,8 +195,9 @@ export interface CreateFeedstockInput {
   allocations: CreateFeedstockAllocation[];
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportDistanceSource?: DistanceSourceValue | null;
 }
 
 export interface UpdateFeedstockInput {
@@ -204,8 +211,9 @@ export interface UpdateFeedstockInput {
   storageLocationId?: string;
   overrideJustification?: string | null;
   notes?: string | null;
+  distanceNote?: string | null;
   transportDistanceKm?: number | null;
-  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportDistanceSource?: DistanceSourceValue | null;
   /** Mandatory version the edit form loaded. */
   expectedVersion: number;
 }
@@ -220,6 +228,9 @@ export interface CreateFeedstockResult {
 // ============================================
 
 const feedstockSelectFields = {
+  distanceKmOverride: feedstocks.distanceKmOverride,
+  distanceSource: feedstocks.distanceSource,
+  distanceNote: feedstocks.distanceNote,
   version: feedstocks.version,
   id: feedstocks.id,
   code: feedstocks.code,
@@ -441,8 +452,8 @@ export async function getFeedstockStats(
 // Create Operations
 // ============================================
 
-/** Persisted distance belongs to the derived leg, rather than the feedstock row. */
-async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
+/** Capture the effective leg distance alongside the row’s override fields. */
+export async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
   requireOrgScope(ctx);
   const [leg] = await tx.select({
     transportDistanceKm: transportLegs.distanceKm,
@@ -548,6 +559,7 @@ export async function createFeedstockInTransaction(
             supplierId: data.supplierId,
             vehicleId: data.vehicleId ?? null,
             deliveryGroupId,
+            ...feedstockDistanceColumns(data),
             overrideJustification: data.overrideJustification || null,
             // Material fields
             feedstockTypeId: data.feedstockTypeId,
@@ -561,10 +573,7 @@ export async function createFeedstockInTransaction(
 
         results.push(feedstock.id);
 
-        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id, {
-          distanceKm: data.transportDistanceKm,
-          distanceSource: data.transportDistanceSource,
-        });
+        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id);
         if (capture) capture(feedstock.id, null, { ...feedstock, ...await readFeedstockTransportSnapshot(ctx, savepoint, feedstock.id) });
 
         // Lock feedstock type on bin (first-use lock)
@@ -588,6 +597,8 @@ export async function createFeedstockInTransaction(
     },
   );
 
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate }), {}, data);
+
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
   if (allocationsExceedDelivery) {
@@ -595,6 +606,26 @@ export async function createFeedstockInTransaction(
   }
 
   return { feedstocks: items, warning };
+}
+
+/** The sole input-to-column mapping for persisted feedstock distance overrides. */
+function feedstockDistanceColumns(
+  input: Pick<UpdateFeedstockInput, "transportDistanceKm" | "transportDistanceSource" | "distanceNote">,
+  previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
+  routeAnchorChanged = false,
+) {
+  // The v1 input contract accepts zero; it means derived, never a stored override.
+  const distanceKmOverride = input.transportDistanceKm !== undefined
+    ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
+    : routeAnchorChanged ? null : previous?.distanceKmOverride ?? null;
+  const source = input.transportDistanceKm === undefined && input.transportDistanceSource === undefined && !routeAnchorChanged
+    ? previous?.distanceSource
+    : input.transportDistanceSource;
+  return {
+    distanceKmOverride,
+    distanceSource: resolveDistanceSource(distanceKmOverride, source),
+    distanceNote: distanceKmOverride === null || input.distanceNote === "" ? null : input.distanceNote,
+  };
 }
 
 // ============================================
@@ -614,6 +645,7 @@ export async function updateFeedstockInTransaction(
     transportDistanceKm,
     transportDistanceSource,
     expectedVersion,
+    distanceNote,
     ...feedstockData
   } = data;
   if (feedstockData.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, feedstockData.vehicleId!, tx), "not_found", ["vehicleId"]);
@@ -651,28 +683,41 @@ export async function updateFeedstockInTransaction(
   }
   const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
-  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx,
-    tx,
-    { entityType: "feedstock", entityId: feedstockId },
-    "update",
-  ), "certification_locked");
+  const routeAnchorChanged =
+    (feedstockData.supplierId !== undefined &&
+      feedstockData.supplierId !== locked.supplierId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
+  const distanceColumns = feedstockDistanceColumns({ transportDistanceKm, transportDistanceSource, distanceNote }, locked, routeAnchorChanged);
+
+  // Compare operation names, including overrides stripped from feedstockData.
+  // Zero distance and an empty note both mean clearing the saved override.
+  const previousFields = {
+    ...locked,
+    transportDistanceKm: locked.distanceKmOverride,
+    transportDistanceSource: locked.distanceKmOverride == null ? null : locked.distanceSource,
+  };
+  const changedFields = {
+    ...data,
+    transportDistanceKm: distanceColumns.distanceKmOverride,
+    transportDistanceSource: distanceColumns.distanceSource,
+    distanceNote: distanceColumns.distanceNote,
+  };
+  await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+  ), "certification_locked"), previousFields, changedFields);
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
+  if (transportDistanceKm === undefined && transportDistanceSource != null
+    && (locked.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
   // Derive before anything reads the new masses: the status, the stock-lane
   // check, and the write below must all see the same dry figure.
   const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
   const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
 
   const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
-  const routeAnchorChanged =
-    (feedstockData.supplierId !== undefined &&
-      feedstockData.supplierId !== locked.supplierId) ||
-    (feedstockData.facilityId !== undefined &&
-      feedstockData.facilityId !== locked.facilityId);
-  const explicitDistanceSupplied = transportDistanceKm !== undefined;
-  const explicitDistanceSourceSupplied =
-    transportDistanceSource !== undefined;
   const effectiveStorageLocationId =
     feedstockData.storageLocationId !== undefined
       ? feedstockData.storageLocationId
@@ -694,7 +739,10 @@ export async function updateFeedstockInTransaction(
     (feedstockData.storageLocationId !== undefined &&
       feedstockData.storageLocationId !== locked.storageLocationId);
 
-  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+  const allocationChanged = stockDerivationChanged ||
+    (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+
+  if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
@@ -717,6 +765,7 @@ export async function updateFeedstockInTransaction(
     .update(feedstocks)
     .set({
       ...effectiveChanges,
+      ...distanceColumns,
       status,
       version: nextVersion(feedstocks.version),
       updatedAt: new Date(),
@@ -732,16 +781,20 @@ export async function updateFeedstockInTransaction(
       tx,
       [locked.storageLocationId, effectiveStorageLocationId],
       "save",
+      (binId) => binId === locked.storageLocationId && effectiveStorageLocationId === locked.storageLocationId
+        ? ["massWetKg"] : ["storageLocationId"],
     );
   }
 
+  if (allocationChanged) {
+    const earliestDeliveryDate = new Date(Math.min(locked.deliveryDate.getTime(), saved.deliveryDate.getTime()));
+    await withIntakeAllocationIssues(() => reallocateRunsForBins(
+      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate },
+    ), previousFields, changedFields);
+  }
+
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
-    distanceKm: transportDistanceKm,
-    distanceSource: transportDistanceSource,
-    resetDistanceToRoute:
-      routeAnchorChanged &&
-      !explicitDistanceSupplied &&
-      !explicitDistanceSourceSupplied,
+    refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
   if (capture) capture(feedstockId, { ...locked, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, feedstockId) });
 
@@ -768,6 +821,7 @@ export async function deleteFeedstockInTransaction(
   const [locked] = await tx
     .select({
       id: feedstocks.id,
+      code: feedstocks.code,
       facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
@@ -806,8 +860,10 @@ export async function deleteFeedstockInTransaction(
     .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   if (Number(usageCount.count) > 0) {
-    throw new DomainError("certification_locked",
-      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+    throw inUseDeleteRefusal(
+      `Feedstock ${locked.code} ${IN_USE_DELETE_MARKER} production runs still use it. Change the source bin on those runs first, or keep this feedstock.`,
+      ["feedstockId"],
+      { code: "certification_locked" },
     );
   }
 

@@ -35,17 +35,27 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { ActionError } from "@/lib/action-error";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
-import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { footerForRefusedSave } from "./production-run-refusal";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -59,6 +69,7 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
@@ -77,14 +88,26 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // Column Definitions
 // ============================================
 
+/** Run details start hidden and are added from the Columns menu. */
+const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
+  operator: false,
+  biocharMoisturePercent: false,
+  residenceTimeMinutes: false,
+  electricityKwh: false,
+  dieselOperationLiters: false,
+  dieselGensetLiters: false,
+};
+
+
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
-  onDelete: (runId: string) => void
+  onDelete: (runId: string) => void,
+  locks: RecordLockViews,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -95,14 +118,6 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => formatDate(row.original.date),
-    },
-    {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-      ),
     },
     {
       id: "reactor",
@@ -131,6 +146,55 @@ function createColumns(
       ),
     },
     {
+      id: "operator",
+      header: "Operator",
+      accessorFn: (row) => row.operatorName ?? "",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.operatorName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "biocharMoisturePercent",
+      header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
+      ),
+    },
+    {
+      accessorKey: "residenceTimeMinutes",
+      header: "Residence time",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.residenceTimeMinutes == null ? MISSING_VALUE.notRecorded : `${row.original.residenceTimeMinutes} min`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "electricityKwh",
+      header: "Electricity",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.electricityKwh == null ? MISSING_VALUE.notRecorded : `${row.original.electricityKwh} kWh`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselOperationLiters",
+      header: "Startup / plant diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselOperationLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselOperationLiters} L`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselGensetLiters",
+      header: "Genset diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselGensetLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselGensetLiters} L`}
+        </span>
+      ),
+    },
+    {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
@@ -148,21 +212,24 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              {
-                label: "Open details",
-                href: productionRunDetailHref(row.original),
-              },
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        return (
+          <div className="flex items-center justify-end">
+            <RowActionsMenu
+              label={`Actions for ${row.original.code}`}
+              actions={[
+                {
+                  label: "Open details",
+                  href: productionRunDetailHref(row.original),
+                },
+                ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+                ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+              ]}
+            />
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -223,6 +290,8 @@ export function ProductionRunList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
@@ -252,6 +321,7 @@ export function ProductionRunList() {
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
+  const runLocks = useRecordLocks("productionRun", runs.map((run) => run.id));
   const setDeletingRunId = (id: string | null) => setDeleting(runs.find(row => row.id === id) ?? null);
   const totalPages = runsData?.totalPages ?? 0;
   useReconcileListPage({
@@ -264,19 +334,20 @@ export function ProductionRunList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_run",
     entityNoun: "Production run",
-    executeCreate: async (data: ProductionRunSubmitData) => {
+    executeCreate: async ({ data }: { data: ProductionRunSubmitData; onRefusal: SaveRefusalHandler }) => {
       const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) => {
+    getCreateErrorMessage: (error, { onRefusal }) => {
       // Let the form surface an overlap conflict inline (on the start field,
       // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      return error instanceof Error
-        ? error.message
-        : "Production run was not created. Check the form.";
+      return footerForRefusedSave(
+        error,
+        error instanceof Error ? error.message : "Production run was not created. Check the form.",
+        onRefusal,
+      );
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachment before saving this production run.",
@@ -288,9 +359,11 @@ export function ProductionRunList() {
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
+  };
 
-  const handleUpdate = async (data: ProductionRunSubmitData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -315,14 +388,17 @@ export function ProductionRunList() {
       closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
-      if (getRunConflict(error)) throw error;
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Production run was not saved. Try again.");
+      setUpdateError(footerForRefusedSave(error, fallback, onRefusal));
     }
   };
 
-  const handleDelete = (runId: string) => setDeletingRunId(runId);
+  const handleDelete = (runId: string) => {
+    setDeleteError(null);
+    setDeletingRunId(runId);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -335,12 +411,25 @@ export function ProductionRunList() {
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const blocker = error instanceof ActionError ? error.conflict : undefined;
+        const reference = blocker?.entity === "biocharProduct"
+          ? { href: biocharProductDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "biochar product" }
+          : blocker?.entity === "creditBatch"
+            ? { href: creditBatchDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "credit batch" }
+            : undefined;
+        setInUseRefusal({ code: deleting.code, message, reference });
+        setDeletingRunId(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeleting(null);
-      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
   const openCreate = () => {
+    createRun.startDraft();
     setFocusedRunId(null);
     setCreateError(null);
     setUpdateError(null);
@@ -371,7 +460,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks);
 
   useEffect(() => {
     if (!focusedRunId) {
@@ -413,6 +502,7 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
     createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
@@ -433,7 +523,6 @@ export function ProductionRunList() {
         <PageHeader
           area="production"
           title="Production Runs"
-          subtitle="Pyrolysis batches from feedstock to biochar output"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
       </div>
@@ -467,7 +556,6 @@ export function ProductionRunList() {
       <PageHeader
         area="production"
         title="Production Runs"
-        subtitle="Pyrolysis batches from feedstock to biochar output"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -478,7 +566,7 @@ export function ProductionRunList() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard
           title="Biochar output"
           value={
@@ -491,12 +579,15 @@ export function ProductionRunList() {
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
-        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
-        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
+        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} isLoading={statsLoading} />
       </div>
+
+      <RecordLockListNotice read={runLocks} />
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={runs}
         enableSorting={false}
@@ -515,6 +606,7 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={productionRunDetailHref}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -562,7 +654,7 @@ export function ProductionRunList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -589,20 +681,26 @@ export function ProductionRunList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
+
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+        </InUseDeleteDialog>
+      )}
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
+        message="Are you sure you want to delete this production run? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet
-        detailToggle
-        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -611,6 +709,8 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit production run"
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
@@ -618,6 +718,7 @@ export function ProductionRunList() {
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}

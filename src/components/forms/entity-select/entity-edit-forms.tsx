@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { ModalWidth } from "@/components/ui/modal";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { usePickerEditSubmit } from "@/hooks/use-picker-edit-submit";
@@ -13,6 +14,8 @@ import { ReactorForm } from "@/components/reactors/reactor-form";
 import { useUpdateReactor } from "@/hooks/use-reactors";
 import type { CreateReactorData } from "@/schemas/reactors";
 import { OrderForm } from "@/components/orders/order-form";
+import { RecordLockFormFrame } from "@/components/record-locks/record-lock-sheet-props";
+import { useRecordLock } from "@/hooks/use-record-locks";
 import { useUpdateOrder } from "@/hooks/use-orders";
 import type { OrderFormData } from "@/schemas/orders";
 import { SupplierForm } from "@/components/suppliers/supplier-form";
@@ -42,7 +45,8 @@ interface PickerEditFormDialogProps<R extends { id: string }, D> {
   width?: ModalWidth;
   renderForm: (record: R, props: {
     key: string;
-    onSubmit: (data: D) => Promise<void>;
+    /** Hands the form's refusal handler to the save; every form takes it as its `onSubmit`. */
+    onSubmitWithRefusal: (data: D, onRefusal: SaveRefusalHandler) => Promise<void>;
     onCancel: () => void;
     isSubmitting: boolean;
     errorMessage?: string;
@@ -62,7 +66,7 @@ function PickerEditFormDialog<R extends { id: string }, D>({
     <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError}
       title={title} testId={testId} dismissible={!isPending} width={width}>
       {renderForm(record, {
-        key: sessionKey, onSubmit: handleSubmit, onCancel: onClose,
+        key: sessionKey, onSubmitWithRefusal: handleSubmit, onCancel: onClose,
         isSubmitting: isPending, errorMessage: error, submitLabel: "Save changes",
       })}
     </QuickAddDialogShell>
@@ -74,7 +78,7 @@ export function CustomerEditFormDialog(props: EditProps<"customer">) {
   return <PickerEditFormDialog {...props} title="Edit customer" testId="customer-edit-dialog"
     isPending={update.isPending}
     save={(data: CustomerFormData, record) => update.mutateAsync({ ...data, customerId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} customer={record} customerId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} customer={record} customerId={record.id} />} />;
 }
 
 export function ReactorEditFormDialog(props: EditProps<"reactor">) {
@@ -82,15 +86,21 @@ export function ReactorEditFormDialog(props: EditProps<"reactor">) {
   return <PickerEditFormDialog {...props} title="Edit reactor" testId="reactor-edit-dialog"
     isPending={update.isPending}
     save={(data: CreateReactorData, record) => update.mutateAsync({ ...data, reactorId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} reactor={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} reactor={record} />} />;
 }
 
 export function OrderEditFormDialog(props: EditProps<"order">) {
   const update = useUpdateOrder();
+  // The same lock as the order sheet: held fields disabled, Save off until it answers.
+  const { lock, status, retry, retrying } = useRecordLock("order", props.isOpen ? props.record.id : null);
   return <PickerEditFormDialog {...props} title="Edit order" testId="order-edit-dialog"
     isPending={update.isPending}
     save={(data: OrderFormData, record) => update.mutateAsync({ ...data, orderId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <OrderForm key={key} {...formProps} order={record} />} />;
+    renderForm={(record, { key, ...formProps }) => (
+      <RecordLockFormFrame lock={lock} status={status} retry={retry} retrying={retrying}>
+        <OrderForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} order={record} lock={lock} />
+      </RecordLockFormFrame>
+    )} />;
 }
 
 export function SupplierEditFormDialog(props: EditProps<"supplier">) {
@@ -98,7 +108,7 @@ export function SupplierEditFormDialog(props: EditProps<"supplier">) {
   return <PickerEditFormDialog {...props} title="Edit supplier" testId="supplier-edit-dialog"
     isPending={update.isPending}
     save={(data: SupplierFormData, record) => update.mutateAsync({ ...data, supplierId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} supplier={record} supplierId={record.id} />} />;
+    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} supplier={record} supplierId={record.id} />} />;
 }
 
 export function FormulationEditFormDialog(props: EditProps<"formulation">) {
@@ -106,7 +116,7 @@ export function FormulationEditFormDialog(props: EditProps<"formulation">) {
   return <PickerEditFormDialog {...props} title="Edit formulation" testId="formulation-edit-dialog" width="lg"
     isPending={update.isPending}
     save={(data: FormulationFormData, record) => update.mutateAsync({ ...data, formulationId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} formulation={record} />} />;
+    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} formulation={record} />} />;
 }
 
 export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
@@ -114,5 +124,5 @@ export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
   return <PickerEditFormDialog {...props} title="Edit feedstock type" testId="feedstock-type-edit-dialog"
     isPending={update.isPending}
     save={(data: FeedstockTypeFormData, record) => update.mutateAsync({ ...data, feedstockTypeId: record.id, expectedVersion: record.version })}
-    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
+    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} onSubmit={formProps.onSubmitWithRefusal} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
 }

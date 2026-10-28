@@ -89,3 +89,90 @@ it.each(["sent", "inUse"] as const)("names holders and gives release guidance fo
   });
   expect(message).toBe("Cannot edit this record. Held by production run RUN-42. Correct the production run first.");
 });
+
+it("words the In use refusal for one holder or several, and keeps custom sentences", async () => {
+  const { withRecordLockGuidance, inUseHowToFree, IN_USE_HOW_TO_FREE } = await import("./record-lock");
+  const holder = (id: string) => ({ kind: "delivery", id, label: id });
+  const lock = (heldBy: ReturnType<typeof holder>[], howToFree: string) => ({ level: "inUse" as const, heldBy, freeFields: [], howToFree });
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1")], IN_USE_HOW_TO_FREE)))
+    .toBe("No. Held by delivery DL-1. To change this, first correct or remove the record that uses it.");
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1"), holder("DL-2")], IN_USE_HOW_TO_FREE)))
+    .toBe("No. Held by delivery DL-1, delivery DL-2. To change this, first correct or remove the records that use it.");
+  expect(withRecordLockGuidance("No.", lock([holder("DL-1")], "Custom."))).toBe("No. Held by delivery DL-1. Custom.");
+  expect(inUseHowToFree("notice", 1)).toBe("To change them, first correct or remove that record.");
+  expect(inUseHowToFree("notice", 3)).toBe(IN_USE_HOW_TO_FREE);
+});
+
+describe("returned Removals", () => {
+  const returned = (submittedAt: string) => ({ id: "removal", submissions: [{ status: "submitted", externalId: "entry", submittedAt }], statements: [{
+    id: "statement", status: "FAILED_VERIFICATION", fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02T00:00:00Z", removalExternalIds: ["entry"],
+  }] });
+
+  it("names the returned Removal and its statement once Sent is lifted", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-01T00:00:00Z")] })).toMatchObject({
+      level: "open", returnedBy: [{ removalId: "removal", statements: [{ id: "statement", status: "FAILED_VERIFICATION" }] }],
+    });
+  });
+
+  it("is not returned when an attempt is newer than the return, which keeps it Sent", () => {
+    const lock = recordLocks.productionRun({ dependents: [], removals: [returned("2026-10-03T00:00:00Z")] });
+    expect(lock.level).toBe("sent");
+    expect(lock.returnedBy).toBeUndefined();
+  });
+
+  it("is not returned when nothing ever reached Isometric", () => {
+    expect(recordLocks.productionRun({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "rejected" }], statements: [] }] }).returnedBy).toBeUndefined();
+  });
+});
+
+describe("interrupted Removals", () => {
+  const interrupted = (id: string) => ({ id, label: id, submissions: [{ status: "draft" }], statements: [] });
+  const sentRemoval = (id: string) => ({ id, label: id, submissions: [{ status: "submitted" }], statements: [] });
+
+  it("keeps a draft already at Isometric interrupted, so delete or resume stays the advice", () => {
+    const remoteDraft = { id: "REM-9", label: "REM-9", submissions: [{ status: "draft", externalId: "rem_9" }], statements: [] };
+    const lock = recordLocks.feedstock({ dependents: [], removals: [remoteDraft] });
+    expect(lock).toMatchObject({ level: "sent", interruptedHolders: [{ kind: "removal", id: "REM-9" }] });
+  });
+
+  it("marks the Sent lock interrupted and words the refusal for one Removal", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1")] });
+    expect(lock).toMatchObject({ level: "sent", interruptedHolders: [{ kind: "removal", id: "REM-1" }] });
+    expect(withRecordLockGuidance("No.", lock))
+      .toBe("No. Held by Removal REM-1. To edit again, delete or resume that Removal, or review its records in Isometric.");
+  });
+
+  it("words the refusal for several Removals", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [interrupted("REM-1"), interrupted("REM-2")] });
+    expect(withRecordLockGuidance("No.", lock))
+      .toBe("No. Held by Removal REM-1, Removal REM-2. To edit again, delete or resume those Removals, or review their records in Isometric.");
+  });
+
+  it("does not mark a submitted Removal interrupted", () => {
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("r")] });
+    expect(lock.interruptedHolders).toBeUndefined();
+    expect(lock.howToFree).toBe("If Isometric sends the GHG Statement back, refresh its status to edit again.");
+  });
+
+  it("does not mark a Removal with a rejected attempt and a later submitted one interrupted", () => {
+    const removal = { id: "r", label: "REM-1", submissions: [{ status: "rejected" }, { status: "submitted" }], statements: [] };
+    expect(recordLocks.feedstock({ dependents: [], removals: [removal] }).interruptedHolders).toBeUndefined();
+  });
+
+  it("decides per holder: a mixed lock names only the unfinished Removal", async () => {
+    const { withRecordLockGuidance } = await import("./record-lock");
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("REM-1"), interrupted("REM-2")] });
+    expect(lock.interruptedHolders).toEqual([{ kind: "removal", id: "REM-2", label: "REM-2" }]);
+    expect(lock.howToFree).toBe("To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.");
+    expect(withRecordLockGuidance("No.", lock)).toBe(
+      "No. Held by Removal REM-1, Removal REM-2. Sending Removal REM-2 to Isometric was started and not finished. To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.",
+    );
+  });
+
+  it("uses the plural mixed sentence for several unfinished Removals", () => {
+    const lock = recordLocks.feedstock({ dependents: [], removals: [sentRemoval("REM-1"), interrupted("REM-2"), interrupted("REM-3")] });
+    expect(lock.howToFree).toBe("To edit again, delete or resume those Removals, and wait for Isometric to send the GHG Statement back.");
+  });
+});

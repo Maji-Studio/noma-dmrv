@@ -67,6 +67,14 @@ describe("radio structure", () => {
     expect(markup).not.toMatch(/checked=""[^>]*value="c"/);
   });
 
+  it("draws a radio circle per card instead of the check glyph when radioIndicator is set", () => {
+    const markup = renderToStaticMarkup(<ChoiceCardGroup legend="Pick" name="pick" value="a" options={OPTIONS} radioIndicator singleColumn />);
+    expect(markup.match(/rounded-full border/g)).toHaveLength(OPTIONS.length);
+    expect(markup).not.toContain("right-8 top-8");
+    expect(markup).toContain("group-has-[input:checked]:opacity-100");
+    expect(markup.match(/type="radio"/g)).toHaveLength(OPTIONS.length);
+  });
+
   it("disables an option without disabling its siblings", () => {
     const r = mount(<ChoiceCardGroup legend="Pick" name="pick" value="a" options={OPTIONS} />);
     expect(radios(r.root).map((i) => Boolean(i.props.disabled))).toEqual([false, true, false]);
@@ -128,5 +136,37 @@ describe("react-hook-form", () => {
     expect(fieldset.props["aria-invalid"]).toBe(true);
     expect(fieldset.props["aria-describedby"]).toBe("evidenceMethod-error");
     expect(JSON.stringify(renderer.toJSON())).toContain("Choose an evidence method.");
+  });
+});
+
+describe("ChoiceCardGroup error border", () => {
+  const cardClasses = (error: boolean) => {
+    const html = renderToStaticMarkup(<ChoiceCardGroup legend="Evidence method" options={EVIDENCE_OPTIONS} value="" error={error} />);
+    return [...html.matchAll(/class="([^"]*peer-checked:[^"]*)"/g)].map((m) => m[1]);
+  };
+
+  it("draws the cards red, with no grey border or hover colour, in error", () => {
+    expect(cardClasses(true).length).toBeGreaterThan(0);
+    for (const cls of cardClasses(true)) {
+      expect(cls).toContain("border-[var(--color-signal-red)]");
+      expect(cls).not.toContain("border-[var(--color-border-secondary)]");
+      expect(cls).not.toContain("hover:border-");
+    }
+  });
+
+  it("keeps the grey border and hover colour without an error", () => {
+    for (const cls of cardClasses(false)) {
+      expect(cls).toContain("border-[var(--color-border-secondary)]");
+      expect(cls).not.toContain("border-[var(--color-signal-red)]");
+    }
+  });
+
+  it("keeps a disabled card grey in error and colours only the enabled ones", () => {
+    const html = renderToStaticMarkup(<ChoiceCardGroup legend="Evidence method" value="" error options={[{ value: "a", title: "A" }, { value: "b", title: "B", disabled: true }]} />);
+    const cards = [...html.matchAll(/class="([^"]*peer-checked:[^"]*)"/g)].map((m) => m[1]);
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toContain("border-[var(--color-signal-red)]");
+    expect(cards[1]).toContain("border-[var(--color-border-secondary)]");
+    expect(cards[1]).not.toContain("border-[var(--color-signal-red)]");
   });
 });

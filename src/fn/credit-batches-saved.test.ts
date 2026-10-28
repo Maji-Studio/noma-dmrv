@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
   createCreditBatch: vi.fn(),
+  describeSavedCreditBatch: vi.fn(),
   updateCreditBatch: vi.fn(),
   getCreditBatchById: vi.fn(),
   getCreditBatchCertifierForFacility: vi.fn(),
@@ -25,19 +26,11 @@ vi.mock("@/lib/auth/server", () => ({
 
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 
-vi.mock("@/data-access/code-generator", () => ({
-  withAutoCode: (
-    _ctx: unknown,
-    _prefix: string,
-    _table: unknown,
-    _column: unknown,
-    _scope: unknown,
-    run: (code: string) => unknown,
-  ) => run("CB-001"),
-}));
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.createCreditBatch }));
+vi.mock("@/lib/operations/credit-batches", () => ({ createCreditBatch: { id: "create_credit_batch" } }));
 
 vi.mock("@/data-access/credit-batches", () => ({
-  createCreditBatch: mocks.createCreditBatch,
+  describeSavedCreditBatch: mocks.describeSavedCreditBatch,
   getCreditBatchById: mocks.getCreditBatchById,
   getCo2eStoredPreviews: vi.fn(),
   getCreditBatchProductionRunOptions: vi.fn(),
@@ -55,6 +48,9 @@ vi.mock("@/lib/log", () => ({
 
 import { createCreditBatchFn, updateCreditBatchFn } from "./credit-batches";
 import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
+import { ActionConflictError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
+import { formatCreditBatchEntryDateConflict } from "@/lib/credit-batch-entry-dates";
 
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -85,6 +81,7 @@ function createdRow(rollupLoaded: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.describeSavedCreditBatch.mockImplementation(async (_ctx, committed) => committed);
   mocks.requireOrgContext.mockResolvedValue({ organizationId: ORGANIZATION_ID });
   mocks.getCreditBatchCertifierForFacility.mockResolvedValue("isometric");
 });
@@ -109,7 +106,7 @@ describe("createCreditBatchFn", () => {
       .toMatchObject({
         success: false,
         code: "validation_failed",
-        issues: [{ path: ["endDate"], message: "A credit batch may span at most one month (one calendar month; noma rule)." }],
+        issues: [{ path: ["endDate"], message: "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month." }],
       });
     expect(mocks.createCreditBatch).not.toHaveBeenCalled();
   });
@@ -155,6 +152,19 @@ describe("updateCreditBatchFn", () => {
 
   beforeEach(() => {
     mocks.getCreditBatchById.mockResolvedValue({ id: BATCH_ID, code: "CB-001" });
+  });
+
+  it("preserves the entry-date conflict and recovery message without logging it", async () => {
+    const message = formatCreditBatchEntryDateConflict("CB-001", [
+      { displayName: "Lab electricity", occurredOn: "2026-01-10" },
+    ]);
+    const conflict = { entity: "credit_batch" as const, id: BATCH_ID, code: conflictCode("CB-001") };
+    mocks.updateCreditBatch.mockRejectedValue(new ActionConflictError(message, conflict));
+
+    expect(await updateCreditBatchFn({
+      creditBatchId: BATCH_ID, expectedVersion: 1, startDate: new Date("2026-01-15"),
+    })).toEqual({ success: false, code: "conflict", error: message, conflict });
+    expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 
   it("reports a plain success when the roll-up loads with the batch", async () => {

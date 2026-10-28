@@ -1,3 +1,7 @@
+import { env } from "@/config/env";
+import { getOAuthConfig, oauthResourceMetadataUrl } from "@/lib/auth/oauth-config";
+import { OAUTH_REQUESTABLE_SCOPES, OAUTH_GRANTABLE_SCOPES, oauthRoleCeiling } from "@/lib/auth/oauth-scopes";
+import type { ApiScope } from "@/lib/auth/api-scopes";
 import type { RateLimitResult } from "@/data-access/api-rate-limits";
 import type { z } from "zod";
 import type { problemSchema } from "./problem-schema";
@@ -8,8 +12,9 @@ import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
+  session_expired: 401,
   validation_failed: 422, not_found: 404, stale_version: 412,
-  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409,
+  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
   registry_not_configured: 409, registry_read_refused: 422, registry_unavailable: 503,
   storage_not_configured: 409, storage_unavailable: 503,
@@ -61,7 +66,7 @@ export function problemResponse(options: ProblemOptions): Response {
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
     ...(!internal && options.current !== undefined ? { current: options.current } : {}),
     ...(!internal && options.preview ? { preview: options.preview } : {}),
-  } satisfies z.infer<typeof problemSchema>, { status, headers });
+  } satisfies Omit<z.infer<typeof problemSchema>, "preview"> & Pick<ProblemOptions, "preview">, { status, headers });
 }
 
 export function apiHttpErrorResponse(error: ApiHttpError, instance: string, requestId: string): Response {
@@ -71,9 +76,30 @@ export function apiHttpErrorResponse(error: ApiHttpError, instance: string, requ
   });
 }
 
-export function apiDenialResponse(denial: ApiContextDenial, instance: string, requestId: string) {
+type DenialChallenge = { role?: string; oauth?: boolean; audience?: string; scopes?: readonly ApiScope[]; requiredScopes?: readonly ApiScope[] };
+
+export function oauthStepUpChallengeApplies(denial: ApiContextDenial, challenge: DenialChallenge): boolean {
+  return env.OAUTH_PROVIDER_ENABLED && denial === "missing_scope" && challenge.oauth === true
+    && Boolean(challenge.requiredScopes?.length)
+    && (challenge.requiredScopes ?? []).every(scope => OAUTH_GRANTABLE_SCOPES.has(scope) && oauthRoleCeiling(challenge.role ?? null).has(scope));
+}
+
+export function oauthInsufficientScopeChallenge(audience: string, scopes: readonly ApiScope[], requiredScopes: readonly ApiScope[]): string {
+  const union = [...new Set([...scopes, ...requiredScopes])].filter(scope => OAUTH_GRANTABLE_SCOPES.has(scope));
+  return `Bearer error="insufficient_scope", scope="${union.join(" ")}", resource_metadata="${oauthResourceMetadataUrl(audience)}"`;
+}
+
+export function apiDenialResponse(denial: ApiContextDenial, instance: string, requestId: string, challenge: DenialChallenge = {}) {
   const status = denial === "api_access_disabled" || denial === "missing_scope" || denial === "insufficient_role" ? 403 : 401;
-  return problemResponse({ status, code: denial, detail: "The credential cannot authorize this request.", instance, requestId });
+  const response = problemResponse({ status, code: denial, detail: "The credential cannot authorize this request.", instance, requestId });
+  if (!env.OAUTH_PROVIDER_ENABLED) return response;
+  const audience = challenge.audience ?? (instance === "/api/mcp" ? getOAuthConfig().mcp : getOAuthConfig().rest);
+  if (status === 401) {
+    response.headers.set("WWW-Authenticate", `Bearer ${challenge.oauth ? 'error="invalid_token", ' : ""}resource_metadata="${oauthResourceMetadataUrl(audience)}", scope="${OAUTH_REQUESTABLE_SCOPES.join(" ")}"`);
+  } else if (oauthStepUpChallengeApplies(denial, challenge)) {
+    response.headers.set("WWW-Authenticate", oauthInsufficientScopeChallenge(audience, challenge.scopes ?? [], challenge.requiredScopes ?? []));
+  }
+  return response;
 }
 
 export function jsonPointer(path: readonly PropertyKey[]): string {

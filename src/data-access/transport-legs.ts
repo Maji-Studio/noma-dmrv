@@ -1,4 +1,4 @@
-import { assertTransportEntryType } from "@/lib/certification/emissions-entry-gate";
+import { assertTransportEntryType } from "@/lib/certification/transport-entry-type";
 import { diffActivityChanges } from "@/lib/activity-changes";
 import { supplierLocationFacilityDistances } from "@/db/schema";
 import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";
@@ -35,6 +35,7 @@ import {
   resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
@@ -51,7 +52,7 @@ import {
   biocharTransportEvidenceDocumentCount,
   transportEvidenceDocumentCount,
 } from "./transport-evidence-projections";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { lockSampleParent } from "./samples/write-scope";
 
 export type TransportEntityType = TransportEntityTypeValue;
@@ -83,9 +84,10 @@ async function resolveEntityFacility(
   ctx: OrgContext,
   entityType: TransportEntityType,
   entityId: string,
+  executor: Executor = db,
 ): Promise<{ facilityId: string }> {
   if (entityType === "feedstock") {
-    const [row] = await db
+    const [row] = await executor
       .select({ facilityId: feedstocks.facilityId })
       .from(feedstocks)
       .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId)));
@@ -94,7 +96,7 @@ async function resolveEntityFacility(
   }
 
   if (entityType === "biochar") {
-    const [row] = await db
+    const [row] = await executor
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
       .where(and(eq(biocharProducts.id, entityId), eq(biocharProducts.organizationId, ctx.organizationId)));
@@ -103,7 +105,7 @@ async function resolveEntityFacility(
   }
 
   // sample: samples → credit_batches → facility.
-  const [row] = await db
+  const [row] = await executor
     .select({ facilityId: creditBatches.facilityId })
     .from(samples)
     .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
@@ -173,7 +175,7 @@ export async function getTransportLegsForEntity(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // Skips per-entity facility resolution: callers (submission orchestrator,
@@ -183,11 +185,12 @@ export async function getTransportLegsForEntities(
   ctx: OrgContext,
   entityType: TransportEntityType,
   entityIds: string[],
+  executor: Executor = db,
 ): Promise<TransportLeg[]> {
   requireOrgScope(ctx);
   if (entityIds.length === 0) return [];
 
-  return db
+  return executor
     .select()
     .from(transportLegs)
     .where(
@@ -197,7 +200,7 @@ export async function getTransportLegsForEntities(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // Same access contract as `getTransportLegsForEntities` (parents validated
@@ -227,7 +230,7 @@ export async function getTransportLegsWithEvidenceForEntities(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(transportLegs.createdAt));
+    .orderBy(asc(transportLegs.createdAt), asc(transportLegs.id));
 }
 
 // ============================================
@@ -241,52 +244,56 @@ export type CreateTransportLegInput = Omit<
   entityType: TransportEntityType;
 };
 
-export async function createTransportLeg(
+export async function createTransportLeg(ctx: OrgContext, input: CreateTransportLegInput): Promise<TransportLeg> {
+  requireOrgScope(ctx);
+  return db.transaction((tx) => createTransportLegInTransaction(ctx, tx, input, "form"));
+}
+
+export async function createTransportLegInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   input: CreateTransportLegInput,
+  source: ActivityEventInput["source"],
 ): Promise<TransportLeg> {
   requireOrgScope(ctx);
   assertTransportEntryType(input.entityType);
 
-  await resolveEntityFacility(ctx, input.entityType, input.entityId);
+  await resolveEntityFacility(ctx, input.entityType, input.entityId, tx);
 
-  const [row] = await db.transaction(async (tx) => {
-    if (input.entityType === "sample") {
-      // The pre-check above read the parent outside this transaction. A Sample
-      // parent takes the Sample writers' full lock scope (artifacts, every
-      // batch its lineage reaches, the Sample) and its lineage is re-checked
-      // under those locks, so neither a concurrent Sample delete nor a Removal
-      // assigned while the leg waited can be missed.
-      const parent = await lockSampleParent(ctx, tx, input.entityId, { mutation: "create", subjectEntityType: "transportLeg", lineageRelationship: "linked" });
-      if (!parent) throw new SafeError(`${ENTITY_LABEL.sample} not found`);
-    } else {
-      await assertCanMutateCertifiedLineage(
-        ctx,
-        tx,
-        {
-          entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
-          entityId: input.entityId,
-        },
-        "create",
-        "transportLeg",
-        "linked",
-      );
-    }
+  if (input.entityType === "sample") {
+    // The pre-check above resolved the parent inside this transaction. A Sample
+    // parent takes the Sample writers' full lock scope (artifacts, every
+    // batch its lineage reaches, the Sample) and its lineage is re-checked
+    // under those locks, so neither a concurrent Sample delete nor a Removal
+    // assigned while the leg waited can be missed.
+    const parent = await lockSampleParent(ctx, tx, input.entityId, { mutation: "create", subjectEntityType: "transportLeg", lineageRelationship: "linked" });
+    if (!parent) throw new SafeError(`${ENTITY_LABEL.sample} not found`);
+  } else {
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      {
+        entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
+        entityId: input.entityId,
+      },
+      "create",
+      "transportLeg",
+      "linked",
+    );
+  }
 
-    const rows = await tx
-      .insert(transportLegs)
-      .values({
-        ...input,
-        organizationId: ctx.organizationId,
-        entityType: input.entityType,
-      })
-      .returning();
-    const [saved] = rows;
-    if (saved) await recordScopedActivityChange(ctx, tx, {
-      entityType: "transport_leg", entityId: saved.id, action: "created", source: "form",
-    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId), null, saved);
-    return rows;
-  });
+  const rows = await tx
+    .insert(transportLegs)
+    .values({
+      ...input,
+      organizationId: ctx.organizationId,
+      entityType: input.entityType,
+    })
+    .returning();
+  const [row] = rows;
+  if (row) await recordScopedActivityChange(ctx, tx, {
+    entityType: "transport_leg", entityId: row.id, action: "created", source,
+  }, await resolveWriteActivityScopes(ctx, tx, row.entityType, row.entityId), null, row);
 
   if (!row) {
     throw new SafeError(
@@ -359,6 +366,7 @@ export async function deleteTransportLeg(
   ctx: OrgContext,
   id: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"] = "form",
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -389,7 +397,7 @@ export async function deleteTransportLeg(
     assertRowVersion({ entity: "transportLeg", id, expectedVersion, actualVersion: versionRow.version });
     const activityScopes = await resolveWriteActivityScopes(ctx, tx, versionRow.entityType, versionRow.entityId);
     await recordScopedActivityChange(ctx, tx, {
-      entityType: "transport_leg", entityId: id, action: "deleted", source: "form",
+      entityType: "transport_leg", entityId: id, action: "deleted", source, actorUserId: ctx.userId,
     }, activityScopes, versionRow, null);
     const rows = await tx
       .delete(transportLegs)
@@ -397,7 +405,7 @@ export async function deleteTransportLeg(
       .returning({ id: transportLegs.id });
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "transport_leg", entityId: id, activityScopes },
-    ], "form");
+    ], source, ctx.userId);
     return rows;
   });
 
@@ -538,28 +546,23 @@ async function replaceDerivedTransportLeg(
 // Auto-derived legs (feedstock)
 // ============================================
 
-export interface FeedstockTransportOverride {
-  distanceKm?: number | null;
-  distanceSource?: "map_estimate" | "manual" | "document" | null;
-  /** Route anchors changed, so the previous route's distance is not reusable. */
-  resetDistanceToRoute?: boolean;
-}
-
 /**
- * Recompute a feedstock's derived supplier-to-facility leg on the caller's
- * transaction. The form-only distance override is consumed here and persisted
- * only on the derived leg, so no duplicate feedstock column is required.
+ * Sync the supplier-to-facility leg from the persisted feedstock override.
+ * Derived distances stay frozen unless explicitly refreshed or still missing.
+ * The caller owns the transaction and certification guard.
  */
 export async function syncFeedstockTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockId: string,
-  distanceOverride?: FeedstockTransportOverride,
+  options?: { refreshFromLocation?: boolean; requireLocationDistance?: boolean },
 ): Promise<void> {
   requireOrgScope(ctx);
 
   const [row] = await tx
     .select({
+      distanceKmOverride: feedstocks.distanceKmOverride,
+      distanceSource: feedstocks.distanceSource,
       supplierName: suppliers.name,
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
@@ -607,17 +610,13 @@ export async function syncFeedstockTransportLeg(
     throw new SafeError("Feedstock not found");
   }
 
+  // Validate the same snapshot passed to derivation, before replacing any leg.
+  if (options?.requireLocationDistance && row.locationDistanceFromFacilityKm == null) {
+    throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
+  }
   const storedDistanceKm = row.locationDistanceFromFacilityKm;
   const storedDistanceSource = row.locationDistanceSource;
-  const preserveExistingDistance =
-    distanceOverride?.distanceKm === undefined &&
-    distanceOverride?.resetDistanceToRoute !== true;
-  const distanceKmOverride = distanceOverride?.resetDistanceToRoute
-    ? undefined
-    : distanceOverride?.distanceKm;
-  const distanceSourceOverride = distanceOverride?.resetDistanceToRoute
-    ? undefined
-    : distanceOverride?.distanceSource;
+  const preserveExistingDistance = !options?.refreshFromLocation && row.existingDistanceKm != null;
 
   const derived = deriveTransportLeg({
     origin: {
@@ -634,15 +633,10 @@ export async function syncFeedstockTransportLeg(
     loadMassKg: row.loadMassKg,
     storedDistanceKm,
     storedDistanceSource,
-    distanceKmOverride: preserveExistingDistance
-      ? row.existingDistanceKm
-      : distanceKmOverride,
-    distanceSourceOverride:
-      distanceSourceOverride !== undefined
-        ? distanceSourceOverride
-        : preserveExistingDistance
-          ? row.existingDistanceSource
-          : undefined,
+    distanceKmOverride: row.distanceKmOverride ?? (preserveExistingDistance ? row.existingDistanceKm : undefined),
+    distanceSourceOverride: row.distanceKmOverride != null
+      ? row.distanceSource
+      : preserveExistingDistance ? row.existingDistanceSource : undefined,
   });
 
   await replaceDerivedTransportLeg(ctx, tx, "feedstock", feedstockId, derived);

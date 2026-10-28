@@ -283,7 +283,7 @@ it('membership refusal names an interrupted Removal and tells the operator to re
       await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toMatchObject({
         code: 'certification_locked', message: expect.stringContaining("Held by a Removal."),
       });
-      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('Delete or resume the interrupted Removal');
+      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('delete or resume that Removal');
     });
   });
 });
@@ -318,12 +318,26 @@ it('deduplicates lineage facts and refreshes each statement once across versions
   }, 'ghgStatement');
 });
 
-it.each(['VERIFIED', 'CREDITS_ISSUED', 'AWAITING_VERIFICATION', 'DRAFT'])('never refreshes non-reopenable saved %s', async status => {
+it.each(['VERIFIED', 'CREDITS_ISSUED', 'AWAITING_VERIFICATION', 'UNKNOWN'])('never refreshes non-reopenable saved %s', async status => {
   await withLineageFixture(async fixture => {
     await db.update(certificationSubmissions).set({ metadata: { remoteStatus: status } }).where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.ghgStatementId!)));
     await expect(db.transaction(tx => assertCanMutateCertifiedLineage(makeTestOrgContext(), tx, { entityType: 'feedstock', entityId: fixture.feedstockId }, 'update'))).rejects.toMatchObject({ code: 'certification_locked' });
     expect(remote.calls).toBe(0);
   }, 'ghgStatement');
+});
+
+it.each([false, true])('refreshes saved DRAFT and requires verifier submission evidence (%s)', async submitted => {
+  remote.submitted_at = submitted ? "2026-10-01T12:00:00Z" : null;
+  await withLineageFixture(async fixture => {
+    await db.update(certificationSubmissions).set({ metadata: { remoteStatus: "DRAFT" } }).where(and(
+      eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.ghgStatementId!),
+    ));
+    const mutation = db.transaction(tx => assertCanMutateCertifiedLineage(makeTestOrgContext(), tx,
+      { entityType: "feedstock", entityId: fixture.feedstockId }, "update"));
+    if (submitted) await expect(mutation).resolves.toBeUndefined();
+    else await expect(mutation).rejects.toMatchObject({ code: "certification_locked" });
+    expect(remote.calls).toBe(1);
+  }, "ghgStatement");
 });
 
 it('fails closed when a fresh statement read exceeds its timeout', async () => {

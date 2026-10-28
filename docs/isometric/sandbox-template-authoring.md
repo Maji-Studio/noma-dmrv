@@ -103,7 +103,6 @@ declares them:
 |---|---|---|---|
 | `biomass-feedstock-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Feedstock transport tonne-km |
 | `biochar-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Biochar delivery transport tonne-km |
-| `sampling-required-for-mrv` | `mass_distance_based_ci_emissions` | `mass_distance` | Sample transport tonne-km |
 | `pyrolysis` | `grid_electricity_use` | `electricity_use` | Production electricity kWh |
 | `pyrolysis` | `fuel_usage_by_volume` | `volume_of_fuel` | Component-specific diesel litres |
 | `miscellaneous` | `mass_based_ci_emissions` | `mass` | Safety-margin dry biochar mass only |
@@ -131,19 +130,17 @@ with a zero.
 
 ## PROJECT-scope components
 
-Do not place these monitored tuples in a Removal/GHG Entry template:
+Establishment and end-of-life components belong in Isometric at project scope
+and remain forbidden on Removals. Operating components, including staff travel,
+direct gases, storage fuel, lab electricity and sampling consumables, need a
+reviewed operating contract and a supported source under
+[ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
-- staff travel;
-- pyrolyzer direct-gas concentration or mass flow;
-- biochar-storage fuel;
-- sampling-consumable mass;
-- laboratory electricity;
-- miscellaneous LCA overhead other than the exact `Safety margin` carve-out.
-
-Where applicable, the operator authors them as PROJECT-scope Components in
-Isometric and attaches the supporting LCA Source there. noma intentionally has
-no project-emissions journal. The scope guard in `datapoint.ts` rejects a
-Removal template that crosses this boundary.
+Period inputs are never stubbed. Missing operating
+inputs require records, emissions entries or explicit zero confirmation on
+Empty components. The E2E template selector supplies no entries or confirmed
+zeros, so it rejects entry-only components using the normal submission coverage
+check. noma keeps no project-emissions journal.
 
 ## Fixed inputs
 
@@ -213,8 +210,11 @@ After saving the template:
 - **Unbound fixed input:** bind a registry Datapoint; noma will not invent one.
 - **Unsupported durability component:** tier, blueprint, or input table does not
   match the implemented path.
-- **Unrecognized diesel/Safety margin component:** restore the exact display
-  name or ship a reviewed mapping change.
-- **PROJECT-scope conflict:** move the component out of the Removal template.
+- **Unsettled line contract:** review missing, proposed, unassigned or ambiguous
+  contracts. Coverage uses the same line decisions as readiness and submission
+  (ADR 0032), keyed by component ID.
+- **Forbidden line:** move the component out of the Removal template.
+- **Entry-only operating line:** coverage warns without failing; supply its values
+  from emissions entries.
 - **Missing intended Source:** fix the evidence/lineage or template target; do
   not attach every Source to every input.

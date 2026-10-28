@@ -7,6 +7,7 @@ import { SubmissionStreamStalledError } from "@/lib/certification/submission-pro
 
 const reactQueryMocks = vi.hoisted(() => ({
   useQueries: vi.fn(),
+  useQuery: vi.fn(),
   useMutation: vi.fn(),
   useQueryClient: vi.fn(),
 }));
@@ -20,8 +21,11 @@ import {
   certificationKeys,
   getRemovalCertifyRefetchInterval,
   getRemovalPreflightRefetchInterval,
+  getRemovalsHubRefetchInterval,
   invalidateCertificationReadiness,
+  useFacilityCertifierSummary,
   useRemovalPreflightSummaries,
+  useRemovalsForFacility,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
 } from "./use-certification";
@@ -52,6 +56,7 @@ describe("useSaveFacilityCertifierMapping", () => {
       onboardingKeys.status(facilityId, "org-1"),
       creditBatchKeys.list({ facilityId }),
       creditBatchKeys.detail(batchId),
+      creditBatchKeys.pageModel(batchId),
       creditBatchKeys.previews([batchId]),
       activityKeys.creditBatch(batchId),
       activityKeys.creditBatchSummary(batchId),
@@ -90,7 +95,10 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
   });
@@ -118,6 +126,16 @@ describe("getRemovalCertifyRefetchInterval", () => {
       }),
     ).toBe(60_000);
   });
+
+  it("polls while a Removal deletion lease hides Delete", () => {
+    expect(
+      getRemovalCertifyRefetchInterval({
+        latestSubmission: null,
+        futureDatedMeasurements: [],
+        deletionInProgress: true,
+      }),
+    ).toBe(60_000);
+  });
 });
 
 describe("getRemovalPreflightRefetchInterval", () => {
@@ -129,6 +147,21 @@ describe("getRemovalPreflightRefetchInterval", () => {
     expect(getRemovalPreflightRefetchInterval({ lockInFlight: true })).toBe(
       60_000,
     );
+  });
+
+  it("polls while a Removal deletion lease hides Delete", () => {
+    expect(
+      getRemovalPreflightRefetchInterval({
+        lockInFlight: false,
+        deletionInProgress: true,
+      }),
+    ).toBe(60_000);
+    expect(
+      getRemovalPreflightRefetchInterval({
+        lockInFlight: false,
+        deletionInProgress: false,
+      }),
+    ).toBe(false);
   });
 
   it("is wired into every removal preflight query", () => {
@@ -158,17 +191,56 @@ describe("getRemovalPreflightRefetchInterval", () => {
   });
 });
 
+describe("getRemovalsHubRefetchInterval", () => {
+  it("polls while any hub row holds a Removal deletion lease", () => {
+    expect(getRemovalsHubRefetchInterval(undefined)).toBe(false);
+    expect(
+      getRemovalsHubRefetchInterval({
+        removals: [{ deletionInProgress: false }],
+      }),
+    ).toBe(false);
+    expect(
+      getRemovalsHubRefetchInterval({
+        removals: [{ deletionInProgress: false }, { deletionInProgress: true }],
+      }),
+    ).toBe(60_000);
+  });
+
+  it("is wired into the removals hub query, so the fallback lease refreshes without preflight", () => {
+    reactQueryMocks.useQuery.mockClear();
+    reactQueryMocks.useQuery.mockReturnValue({ data: undefined });
+
+    useRemovalsForFacility("facility-1");
+
+    const [options] = reactQueryMocks.useQuery.mock.calls[0] as [{
+      refetchInterval: (query: {
+        state: { data: { removals: { deletionInProgress: boolean }[] } | undefined };
+      }) => number | false;
+    }];
+    expect(
+      options.refetchInterval({
+        state: { data: { removals: [{ deletionInProgress: true }] } },
+      }),
+    ).toBe(60_000);
+    expect(options.refetchInterval({ state: { data: undefined } })).toBe(false);
+  });
+});
+
 describe("invalidateCertificationReadiness", () => {
   it("invalidates certification and activity projections by default", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await invalidateCertificationReadiness(queryClient);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.timelineFactsPrefix(),
     });
   });
 
@@ -180,7 +252,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
@@ -189,6 +261,24 @@ describe("invalidateCertificationReadiness", () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: creditBatchKeys.details(),
+    });
+  });
+});
+
+describe("useFacilityCertifierSummary", () => {
+  it("refetches on mount by default", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1");
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).not.toHaveProperty("refetchOnMount");
+  });
+
+  it("only reads the cache when asked to", () => {
+    reactQueryMocks.useQuery.mockClear();
+    useFacilityCertifierSummary("facility-1", true, { readCacheOnly: true });
+    expect(reactQueryMocks.useQuery.mock.calls[0][0]).toMatchObject({
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     });
   });
 });

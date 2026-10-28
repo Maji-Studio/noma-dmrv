@@ -244,11 +244,31 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
 
   it.each([false, true])("refuses deletion and relationship edits with a delivery (archived: %s)", async (archived) => {
     const row = await saved();
-    await insertReadDelivery(a, row.id, DELIVERED_KG, archived);
-    expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "certification_locked", issues: [{ pointer: "/orderId" }] } });
+    const delivery = await insertReadDelivery(a, row.id, DELIVERED_KG, archived);
+    expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "certification_locked",
+      detail: `Order ${row.code} was not deleted because delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`,
+      issues: [{ pointer: "/orderId", code: "certification_locked", meta: { reason: "in_use", deliveryCode: delivery.code, deliveryId: delivery.id } }] } });
     for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, formulationId: a.pure.id, customerLocationId: a.otherLocation.id })) {
       expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, [field]: value })).toMatchObject({ isError: true, structuredContent: { code: "certification_locked", issues: [{ pointer: `/${field}` }] } });
     }
+    expect((await readRestOrder(a, row.id)).row).toEqual(row);
+    expect(await orderAudits(a)).toHaveLength(1);
+  });
+
+  it("names both blocking deliveries in a delete refusal, including an archived delivery", async () => {
+    const row = await saved();
+    const deliveries = [
+      await insertReadDelivery(a, row.id, DELIVERED_KG),
+      await insertReadDelivery(a, row.id, DELIVERED_KG, true),
+    ].sort((left, right) => left.code.localeCompare(right.code));
+    const [first, second] = deliveries;
+    const refusal = await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey);
+    expect(refusal).toMatchObject({ isError: true, structuredContent: {
+      code: "certification_locked",
+      detail: `Order ${row.code} was not deleted because 2 deliveries still use it: ${first.code} and ${second.code}. Delete those deliveries first, or keep this order.`,
+      issues: [{ pointer: "/orderId", code: "certification_locked" }],
+    } });
+    expect(refusal.structuredContent.issues[0].meta).toEqual({ reason: "in_use", deliveryCode: first.code, deliveryId: first.id });
     expect((await readRestOrder(a, row.id)).row).toEqual(row);
     expect(await orderAudits(a)).toHaveLength(1);
   });

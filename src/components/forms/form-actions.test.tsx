@@ -1,10 +1,16 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useForm } from "react-hook-form";
+import { LOCK_REFUSAL_ROOT } from "./use-save-refusal";
 import { MapControls } from "@/components/map";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
+import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
 import { FormActions, reserveStickyFooterSpace } from "./form-actions";
 
 describe("FormActions", () => {
-  it("renders an action error inside the sticky footer immediately above the buttons", () => {
+  it("renders an action error as flow content directly above the sticky footer", () => {
     const markup = renderToStaticMarkup(
       <FormActions errorMessage="Action failed" submitLabel="Save record" />,
     );
@@ -16,10 +22,20 @@ describe("FormActions", () => {
     );
 
     expect(stickyFooterIndex).toBeGreaterThanOrEqual(0);
-    expect(alertIndex).toBeGreaterThan(stickyFooterIndex);
-    expect(buttonRowIndex).toBeGreaterThan(alertIndex);
+    expect(alertIndex).toBeGreaterThanOrEqual(0);
+    expect(alertIndex).toBeLessThan(stickyFooterIndex);
+    expect(buttonRowIndex).toBeGreaterThan(stickyFooterIndex);
     expect(markup.match(/role="alert"/g)).toHaveLength(1);
     expect(markup).toContain("Action failed");
+  });
+
+  it("keeps the submit label and marks it busy and disabled while submitting", () => {
+    const markup = renderToStaticMarkup(<FormActions isSubmitting submitLabel="Save record" />);
+    const button = markup.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "";
+
+    expect(button).toContain('aria-busy="true"');
+    expect(button).toContain("disabled");
+    expect(markup).toContain("Save record");
   });
 
   it("does not render an alert without an action error", () => {
@@ -87,6 +103,55 @@ describe("FormActions", () => {
   });
 });
 
+describe("FormActions preview slot", () => {
+  const PREVIEW = <p data-testid="association-preview">Credit batch: CB-1</p>;
+
+  it("renders the preview after the action error and directly above the buttons", () => {
+    const markup = renderToStaticMarkup(
+      <FormActions errorMessage="Action failed" submitLabel="Save record" preview={PREVIEW} />,
+    );
+    const alertIndex = markup.indexOf('role="alert"');
+    const previewIndex = markup.indexOf('data-testid="association-preview"');
+    const buttonRowIndex = markup.indexOf('class="flex items-center justify-start gap-16"');
+
+    expect(alertIndex).toBeGreaterThanOrEqual(0);
+    expect(previewIndex).toBeGreaterThan(alertIndex);
+    expect(buttonRowIndex).toBeGreaterThan(previewIndex);
+    expect(markup.indexOf("sticky bottom-0")).toBeLessThan(previewIndex);
+  });
+
+  it("sits below why Save is off, and never disables Save itself", () => {
+    const block: SubmitBlock = { reason: "Checking the record lock.", tone: "info", readOnly: false };
+    const blocked = renderToStaticMarkup(
+      <SubmitBlockContext.Provider value={block}>
+        <FormActions submitLabel="Save record" preview={PREVIEW} />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(blocked.indexOf("Checking the record lock.")).toBeLessThan(blocked.indexOf("association-preview"));
+
+    const open = renderToStaticMarkup(<FormActions submitLabel="Save record" preview={PREVIEW} />);
+    expect(open).toContain("association-preview");
+    const submit = open.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "";
+    expect(submit).not.toBe("");
+    expect(submit).not.toMatch(/\sdisabled(="[^"]*")?[\s>]/);
+  });
+
+  it("is hidden with the footer on a read-only form", () => {
+    const block: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
+    const markup = renderToStaticMarkup(
+      <SubmitBlockContext.Provider value={block}>
+        <FormActions submitLabel="Save record" preview={PREVIEW} />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(markup).not.toContain("association-preview");
+  });
+
+  it("keeps the submit button tied to its form id", () => {
+    const markup = renderToStaticMarkup(<FormActions submitLabel="Save record" formId="run-form" preview={PREVIEW} />);
+    expect(markup).toMatch(/<button[^>]*form="run-form"/);
+  });
+});
+
 describe("reserveStickyFooterSpace", () => {
   type FakeNode = {
     parentElement: FakeNode | null;
@@ -148,5 +213,76 @@ describe("reserveStickyFooterSpace", () => {
     const footer = node(node(null));
 
     expect(reserveStickyFooterSpace(footer as unknown as HTMLElement)).toBeUndefined();
+  });
+});
+
+/** FormActions with a form whose lock refusal is filed, as `useSaveRefusal` does. */
+function LockRefused({ message }: { message: string }) {
+  const { control } = useForm({ errors: { root: { lockRefusal: { type: "locked" } } } });
+  return <div data-testid="form"><FormActions control={control} errorMessage={message} submitLabel="Save record" /></div>;
+}
+
+describe("FormActions refusal on a read-only form", () => {
+  const SENT: SubmitBlock = { reason: "Sent", tone: "error", readOnly: true };
+  afterEach(cleanup);
+
+  it("portals the error box into the sheet's refusal slot", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}>
+          <LockRefused message="Locked. Its Removal was sent." />
+        </SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    // A lock refusal says what happened to the edit; the lock line keeps the reason.
+    expect(slot.textContent).toBe("Your changes were not saved.");
+    expect(slot.textContent).not.toContain("Its Removal was sent.");
+    expect(screen.getByTestId("form").textContent).not.toContain("Its Removal was sent.");
+    const box = slot.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(document.activeElement).toBe(box);
+    expect(box?.getAttribute("role")).toBe("group");
+    expect(box?.getAttribute("aria-labelledby")).toBe(box?.querySelector("[data-tone]")?.id);
+    expect(slot.querySelector('[role="alert"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+    slot.remove();
+  });
+
+  it("shows a refusal that is not a lock as the server worded it", () => {
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    function Plain() {
+      const { control } = useForm();
+      return <FormActions control={control} errorMessage="Updated the application. The photo was not uploaded." />;
+    }
+    render(
+      <RefusalSlotContext.Provider value={slot}>
+        <SubmitBlockContext.Provider value={SENT}><Plain /></SubmitBlockContext.Provider>
+      </RefusalSlotContext.Provider>,
+    );
+    expect(slot.textContent).toContain("Updated the application.");
+    expect(slot.textContent).toContain("The photo was not uploaded.");
+    expect(slot.textContent).not.toContain("Your changes were not saved.");
+    slot.remove();
+  });
+
+  it("renders the box inline without a slot instead of vanishing", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <LockRefused message="Locked. Its Removal was sent." />
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toContain("Your changes were not saved.");
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+  });
+
+  it("shows nothing for a read-only form with no refusal", () => {
+    render(
+      <SubmitBlockContext.Provider value={SENT}>
+        <div data-testid="form"><FormActions submitLabel="Save record" /></div>
+      </SubmitBlockContext.Provider>,
+    );
+    expect(screen.getByTestId("form").textContent).toBe("");
   });
 });

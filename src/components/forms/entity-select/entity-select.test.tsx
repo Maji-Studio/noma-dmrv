@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 it("guards the Base UI version used by the EntitySelect navigation adapter", () => {
@@ -39,6 +38,7 @@ const entityState = vi.hoisted(() => ({
   selectedError: null as Error | null,
 }));
 
+vi.mock("@/hooks/use-refresh-entity-options-on-return", () => ({ useRefreshEntityOptionsOnReturn: () => () => {} }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({
     data: entityState.options,
@@ -152,30 +152,28 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
     expect(html).toContain('aria-describedby="field-helper ');
     expect(html).toContain('aria-invalid="true"');
   });
 
-  it("keeps the selected input, helper and remaining stock caption in Simple", () => {
+  it("keeps the selected input, helper and remaining stock caption", () => {
     entityState.selected = {
       id: "bin-1", code: "BIN-01", name: "North product bin",
       remainingMass: { wetKg: 3000, dryKg: 2900 },
     };
     entityState.selectedPending = false;
     const html = renderToStaticMarkup(
-      <FormDetailProvider scope="simple-selector">
-        <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />
-      </FormDetailProvider>,
+      <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />,
     );
     expect(html).toContain("North product bin");
-    // Remaining stock informs the pick, so Simple shows it too and the
+    // Remaining stock informs the pick, so it is always shown and the
     // control is described by the helper, the stock caption and the label.
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");
     expect(describedBy).toHaveLength(3);
-    expect(html).toContain("Remaining now: 3,000 kg wet, 2,900 kg dry biochar");
+    expect(html).toContain("Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {
@@ -200,7 +198,7 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining, excluding this order: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining, excluding this order: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
@@ -222,7 +220,7 @@ describe("EntitySelect selected-value display", () => {
       />,
     );
 
-    expect(html).toContain("Remaining now: 500 kg wet");
+    expect(html).toContain("Remaining now: 500 kg wet mass");
     expect(html).not.toContain("dry mass");
   });
 
@@ -274,7 +272,7 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain("Detail label");
     expect(html).not.toContain("List label");
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 
@@ -298,7 +296,7 @@ describe("EntitySelect selected-value display", () => {
     entityState.selectedPending = false;
 
     expect(render("reactor-1")).toContain(
-      "Remaining now: 2,000 kg wet, 1,900 kg dry biochar",
+      "Remaining now: 2,000 kg wet mass, 1,900 kg dry biochar",
     );
   });
 
@@ -327,7 +325,7 @@ describe("EntitySelect selected-value display", () => {
     const html = render("reactor-1");
     expect(html).toContain("Retained detail label");
     expect(html).toContain(
-      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
+      "Remaining now: 3,000 kg wet mass, 2,900 kg dry biochar",
     );
   });
 

@@ -1,0 +1,157 @@
+/**
+ * Customer location archive E2E (Phase 7c): Delete archives a used location
+ * (there is no separate Archive button), restore from the customer sheet, the default moving to another active location, the last
+ * active location staying put, pickers hiding archived locations for new
+ * orders, and an existing order keeping its archived destination.
+ *
+ * Rows are seeded through DB helpers; every assertion runs against the live UI.
+ */
+import { eq } from "drizzle-orm";
+import * as crypto from "node:crypto";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import * as schema from "../../src/db/schema";
+import { test, expect, waitForSideSheet } from "./fixtures";
+import { createDbConnection } from "./fixtures/db";
+import { deleteLocation, openCustomerSheet, SECOND_LOCATION_NAME, seedSecondLocation } from "./fixtures/customer-sheet-helpers";
+import { clickRowMenuItem } from "./fixtures/page-helpers";
+
+const SEARCH_TIMEOUT_MS = 15_000;
+const DEFAULT_MOVED = `${SECOND_LOCATION_NAME} is now the default location.`;
+const archivedByDelete = (name: string) => `${name} is used by orders, so it was archived. Restore it from Archived locations.`;
+
+async function confirmDelete(page: import("@playwright/test").Page) {
+  await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).last().click();
+}
+
+async function seedOrder(seeded: { facility: { id: string }; customer: { id: string }; formulation: { id: string } }, locationId: string, code: string) {
+  const { db, pool } = createDbConnection();
+  try {
+    await db.insert(schema.orders).values({
+      organizationId: DEC_ORG_ID, code, facilityId: seeded.facility.id, orderDate: new Date(),
+      customerId: seeded.customer.id, customerLocationId: locationId, formulationId: seeded.formulation.id,
+      quantityKg: 100, packaging: "loose",
+    });
+  } finally {
+    await pool.end();
+  }
+}
+
+async function setDefault(locationId: string) {
+  const { db, pool } = createDbConnection();
+  try {
+    await db.update(schema.customerLocations).set({ isDefault: true }).where(eq(schema.customerLocations.id, locationId));
+  } finally {
+    await pool.end();
+  }
+}
+
+async function readLocation(locationId: string) {
+  const { db, pool } = createDbConnection();
+  try {
+    const [row] = await db.select().from(schema.customerLocations).where(eq(schema.customerLocations.id, locationId));
+    return row;
+  } finally {
+    await pool.end();
+  }
+}
+
+test.describe("Customer location archive", () => {
+  test("deleting a used default archives it and moves the default, and restore brings one back", async ({ adminPage: page, seededData }) => {
+    const { customer, customerLocation, facility } = seededData;
+    const secondId = await seedSecondLocation(customer.id);
+    await setDefault(customerLocation.id);
+    await seedOrder(seededData, customerLocation.id, `E2E-OR-LOC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
+    try {
+      const sheet = await openCustomerSheet(page, facility.id, customer.code);
+
+      // Delete is the only action: no Archive button, and no archived group exists yet.
+      await expect(sheet.getByRole("button", { name: /^Archive / })).toHaveCount(0);
+      await expect(sheet.getByRole("group", { name: "Archived locations" })).toHaveCount(0);
+
+      await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
+      await confirmDelete(page);
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible();
+      await expect(page.getByText(DEFAULT_MOVED)).toBeVisible();
+
+      const archivedGroup = sheet.getByRole("group", { name: "Archived locations" });
+      await expect(archivedGroup.getByRole("button", { name: "Archived locations (1)" })).toHaveAttribute("aria-expanded", "false");
+      await archivedGroup.getByRole("button", { name: "Archived locations (1)" }).click();
+      await expect(archivedGroup.getByText(customerLocation.name)).toBeVisible();
+      await expect(archivedGroup.getByRole("button", { name: `Edit ${customerLocation.name}` })).toHaveCount(0);
+      expect((await readLocation(customerLocation.id))?.archivedAt).not.toBeNull();
+      expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
+      expect(await readLocation(secondId)).toMatchObject({ isDefault: true });
+
+      await archivedGroup.getByRole("button", { name: `Restore ${customerLocation.name}` }).click();
+      await expect(page.getByText(`${customerLocation.name} restored.`)).toBeVisible();
+      await expect(sheet.getByRole("group", { name: "Archived locations" })).toHaveCount(0);
+      expect((await readLocation(customerLocation.id))?.archivedAt).toBeNull();
+      // The restored location does not take the default back from the one that holds it.
+      expect(await readLocation(customerLocation.id)).toMatchObject({ isDefault: false });
+    } finally {
+      await deleteLocation(secondId);
+    }
+  });
+
+  test("deleting a location that an order uses archives it and says so", async ({ adminPage: page, seededData }) => {
+    const { customer, customerLocation, facility } = seededData;
+    const secondId = await seedSecondLocation(customer.id);
+    await seedOrder(seededData, customerLocation.id, `E2E-OR-LOC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
+    try {
+      const sheet = await openCustomerSheet(page, facility.id, customer.code);
+      await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
+      await confirmDelete(page);
+
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await sheet.getByRole("button", { name: "Archived locations (1)" }).click();
+      await expect(sheet.getByRole("group", { name: "Archived locations" }).getByText(customerLocation.name)).toBeVisible();
+      await expect(page.getByRole("dialog").getByText(`${customerLocation.name} is in use`)).toHaveCount(0);
+    } finally {
+      await deleteLocation(secondId);
+    }
+  });
+
+  test("a new order's picker hides an archived location, and an existing order keeps it without an editor", async ({ adminPage: page, seededData }) => {
+    const { customer, customerLocation, facility } = seededData;
+    const secondId = await seedSecondLocation(customer.id);
+    const orderCode = `E2E-OR-LOC-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    await seedOrder(seededData, customerLocation.id, orderCode);
+    try {
+      const sheet = await openCustomerSheet(page, facility.id, customer.code);
+      await sheet.getByRole("button", { name: `Delete ${customerLocation.name}` }).click();
+      await confirmDelete(page);
+      await expect(page.getByText(archivedByDelete(customerLocation.name))).toBeVisible();
+      await page.keyboard.press("Escape");
+
+      // A new order cannot pick the archived location.
+      await page.goto(`/orders?facility=${facility.id}`);
+      await page.getByRole("button", { name: "New order" }).click();
+      await waitForSideSheet(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.locator("label").filter({ hasText: "Customer" }).first()
+        .locator("xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]")
+        .locator('[data-testid="entity-select-trigger"]').click();
+      await page.getByTestId(`entity-option-${customer.id}`).click();
+      await dialog.getByRole("combobox", { name: /^Customer location/ }).click();
+      await expect(page.getByTestId("entity-select-listbox")).toBeVisible();
+      await expect(page.getByTestId(`entity-option-${secondId}`)).toBeVisible();
+      await expect(page.getByTestId(`entity-option-${customerLocation.id}`)).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+
+      // The existing order keeps its stored destination, offers no location editor, and can move to an active one.
+      await page.goto(`/orders?facility=${facility.id}`);
+      await expect(page.locator("table tbody tr", { hasText: orderCode }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+      await clickRowMenuItem(page, page.getByRole("button", { name: `Actions for ${orderCode}` }).first(), "Edit");
+      await waitForSideSheet(page);
+      const destination = page.getByRole("dialog").getByRole("combobox", { name: /^Customer location/ });
+      await expect(destination).toContainText(`${customerLocation.name} (Archived)`);
+      await destination.click();
+      await expect(page.getByTestId("entity-select-edit")).toHaveCount(0);
+      await expect(page.getByTestId(`entity-option-${secondId}`)).toBeVisible();
+      await page.keyboard.press("Escape");
+    } finally {
+      await deleteLocation(secondId);
+    }
+  });
+});

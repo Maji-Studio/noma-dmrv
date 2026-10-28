@@ -18,7 +18,7 @@ import {
   orders,
   transportLegs,
 } from "@/db/schema";
-import { updateCustomerLocation } from "@/data-access/customers";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
 import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
 

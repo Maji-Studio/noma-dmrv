@@ -4,6 +4,9 @@
  */
 "use client";
 
+import { useId } from "react";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
@@ -22,6 +25,10 @@ import {
   type ProductionSampleFormData,
 } from "@/schemas/production-samples";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(productionSampleFormSchema);
 
 // ============================================
 // Component
@@ -31,7 +38,7 @@ interface ProductionSampleFormProps {
   productionRunId: string;
   facilityId: string;
   sample?: ProductionSampleWithRelations;
-  onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
+  onSubmit: (data: ProductionSampleFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -52,6 +59,8 @@ export function ProductionSampleForm({
   onRetryDeferredAttachment,
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!sample;
   // A saved measurement inherits its run's lineage; once submitted its files cannot change.
   const locked = useIsRecordCertificationLocked("production_sample", sample?.id);
@@ -62,6 +71,8 @@ export function ProductionSampleForm({
     handleSubmit,
     control,
     trigger,
+    resetField,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionSampleFormSchema),
@@ -86,10 +97,11 @@ export function ProductionSampleForm({
 
   // Rendered via the parent ProductionRunForm's `children` slot, which lives
   // outside its <form> element — so a real <form> is safe here (no nesting).
-  const onFormSubmit = handleSubmit((data) => onSubmit(data as ProductionSampleFormData));
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data as ProductionSampleFormData, refuseSave)));
 
   return (
-    <form className="space-y-20" onSubmit={onFormSubmit}>
+    <form id={formId} className="space-y-20" onSubmit={onFormSubmit}>
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Sample info */}
       <FormSection title="Sample info" divider={false}>
@@ -122,6 +134,7 @@ export function ProductionSampleForm({
               render={({ field }) => (
                 <EntitySelect
                   id="production-sample-sampledById"
+                  fieldName="sampledById"
                   entityType="operator"
                   allowEdit
                   value={field.value ?? ""}
@@ -148,7 +161,7 @@ export function ProductionSampleForm({
             <FormInput
               id="weightGrams"
               type="number"
-              step="any"
+              {...numberBounds("weightGrams")}
               placeholder="e.g. 250"
               disabled={isSubmitting}
               error={!!errors.weightGrams}
@@ -164,7 +177,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volumeMl"
               type="number"
-              step="any"
+              {...numberBounds("volumeMl")}
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.volumeMl}
@@ -180,7 +193,7 @@ export function ProductionSampleForm({
             <FormInput
               id="temperatureC"
               type="number"
-              step="any"
+              {...numberBounds("temperatureC")}
               placeholder="e.g. 550"
               disabled={isSubmitting}
               error={!!errors.temperatureC}
@@ -211,7 +224,7 @@ export function ProductionSampleForm({
             <FormInput
               id="fixedCarbonPercent"
               type="number"
-              step="any"
+              {...numberBounds("fixedCarbonPercent")}
               placeholder="e.g. 75.0"
               disabled={isSubmitting}
               error={!!errors.fixedCarbonPercent}
@@ -227,7 +240,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volatileMatterPercent"
               type="number"
-              step="any"
+              {...numberBounds("volatileMatterPercent")}
               placeholder="e.g. 15.0"
               disabled={isSubmitting}
               error={!!errors.volatileMatterPercent}
@@ -243,7 +256,7 @@ export function ProductionSampleForm({
             <FormInput
               id="ashContentPercent"
               type="number"
-              step="any"
+              {...numberBounds("ashContentPercent")}
               placeholder="e.g. 4.8"
               disabled={isSubmitting}
               error={!!errors.ashContentPercent}
@@ -271,7 +284,6 @@ export function ProductionSampleForm({
           <FormField
             id="attachments"
             label="Attachments"
-            helperText="Upload measurement photos or records"
           >
             <FormFileUpload
               id="attachments"
@@ -309,6 +321,7 @@ export function ProductionSampleForm({
 
       <FormActions
         control={control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

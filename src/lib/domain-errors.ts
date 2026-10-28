@@ -3,14 +3,18 @@ import { SafeError } from "@/lib/errors";
 import type { StockEffect } from "@/lib/representations/stock-effects";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 
+export const SESSION_EXPIRED = "session_expired";
+
 export type DomainErrorCode =
   | "validation_failed"
+  | typeof SESSION_EXPIRED
   | "not_found"
   | "stale_version"
   | "conflict"
   | "certification_locked"
   | "insufficient_stock"
   | "stock_basis_changed"
+  | "cascade_changed"
   | "forbidden"
   | "reference_not_found"
   | "reference_ambiguous"
@@ -44,6 +48,12 @@ export interface StockPreview {
   allocations?: unknown[];
 }
 
+export interface CascadePreview {
+  orders: { id: string; code: string; facilityId: string }[];
+  cascadeFingerprint: string;
+}
+export type OperationPreview = StockPreview | CascadePreview;
+
 interface DomainErrorOptions {
   conflict?: ConflictRef;
   blockers?: ConflictRef[];
@@ -51,8 +61,8 @@ interface DomainErrorOptions {
   retryable?: boolean;
   /** Seconds a client should wait before retrying. */
   retryAfterSeconds?: number;
-  /** Only on `stock_basis_changed`, when the adapter could compute the current preview. */
-  preview?: StockPreview;
+  /** Fresh stock or customer cascade preview, when the fallback succeeds. */
+  preview?: OperationPreview;
   cause?: unknown;
 }
 
@@ -63,7 +73,7 @@ export class DomainError extends SafeError {
   readonly issues: DomainIssue[];
   readonly retryable: boolean;
   readonly retryAfterSeconds?: number;
-  readonly preview?: StockPreview;
+  readonly preview?: OperationPreview;
 
   constructor(code: DomainErrorCode, message: string, options: DomainErrorOptions = {}) {
     super(message);

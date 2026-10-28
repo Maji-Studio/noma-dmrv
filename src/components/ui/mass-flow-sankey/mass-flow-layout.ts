@@ -49,7 +49,7 @@ export interface MassFlowNode {
   id: string;
   column: number;
   name: string;
-  /** The figure line under the name, such as "4,000 kg wet". */
+  /** The figure line under the name, such as "4,000 kg wet mass". */
   caption?: string;
   /** The name is a placeholder for an unselected record, drawn muted. */
   placeholder?: boolean;

@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ActionError } from "@/lib/action-error";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SampleWithRelations } from "@/data-access/samples";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { SampleForm } from "./sample-form";
 
+const autoSelect = vi.hoisted(() => ({ on: false }));
 const batch = vi.hoisted(() => ({
   data: undefined as undefined | {
     durabilityOption: "200_year" | "1000_year";
@@ -24,19 +27,23 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 vi.mock("@/components/forms", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/forms")>(),
-  EntitySelect: ({ id, value, onChange, disabled }: { id: string; value: string; onChange: (value: string) => void; disabled: boolean }) => (
+  EntitySelect: ({ id, value, onChange, onAutoSelect, disabled }: { id: string; value: string; onChange: (value: string) => void; onAutoSelect?: (value: string) => void; disabled: boolean }) => {
+    // The real select picks a facility's only batch by itself (autoSelectSingle).
+    useEffect(() => { if (autoSelect.on && !value) (onAutoSelect ?? onChange)("00000000-0000-4000-8000-000000000001"); }, [value, onChange, onAutoSelect]);
+    return (
     <select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
       <option value="">Choose a batch</option>
       <option value="00000000-0000-4000-8000-000000000001">CB-1</option>
     </select>
-  ),
+    );
+  },
 }));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock("./sample-batch-progress", () => ({ SampleBatchProgress: () => null }));
-vi.mock("./sample-trailing-sections", () => ({ SampleEvidenceSection: () => null, SampleTransportSection: () => null }));
+vi.mock("./sample-trailing-sections", () => ({ SampleEvidenceSection: () => null, SampleTransportSection: () => <div data-testid="sample-transport-step" /> }));
 
 const saved = {
   id: "sample", creditBatchId: "00000000-0000-4000-8000-000000000001",
@@ -58,8 +65,16 @@ function input(container: HTMLElement, id: string) {
   return container.querySelector<HTMLInputElement>(`#${id}`)!;
 }
 
-beforeEach(() => { batch.data = undefined; batch.status = "pending"; });
+beforeEach(() => { batch.data = undefined; batch.status = "pending"; autoSelect.on = false; });
 afterEach(cleanup);
+
+describe("SampleForm transport step", () => {
+  it("hides the Transport step", () => {
+    loadBatch();
+    const { queryAllByTestId } = render(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} />);
+    expect(queryAllByTestId("sample-transport-step")).toHaveLength(0);
+  });
+});
 
 describe("SampleForm defaults and batch hydration", () => {
   it("starts sampling time empty and requires an explicit time on create", async () => {
@@ -85,6 +100,7 @@ describe("SampleForm defaults and batch hydration", () => {
     fireEvent.submit(container.querySelector("form")!);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit.mock.calls[0][0].samplingTime).toEqual(saved.samplingTime);
+    expect(onSubmit.mock.calls[0][1]).toBeTypeOf("function");
   });
 
   it.each([null, "200_year", "1000_year"])("preserves all saved 1,000-year evidence while the batch tier loads (saved mirror %s)", async (durabilityOption) => {
@@ -162,5 +178,81 @@ describe("SampleForm contextual CERT chips", () => {
     for (const field of ["organicCarbonPercent", "totalHydrogenPercent", "oToCOrgRatio", "totalCarbonPercent", "sReflectanceFraction"]) {
       expect(container.querySelector(`#${field}-cert`) !== null).toBe(sampling === "sampled");
     }
+  });
+});
+
+describe("SampleForm unsaved changes", () => {
+  it("stays clean when the only batch is picked for the operator and its tier resolves", async () => {
+    autoSelect.on = true;
+    loadBatch("1000_year");
+    const { states, container } = renderReportingDirty(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect(input(container, "creditBatchId").value).toBe("00000000-0000-4000-8000-000000000001"));
+    expectStayedClean(states);
+  });
+
+  it("stays clean when a preselected batch resolves", async () => {
+    loadBatch("1000_year");
+    const { states } = renderReportingDirty(<SampleForm creditBatchId={saved.creditBatchId!} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect(states.length).toBeGreaterThan(0));
+    expectStayedClean(states);
+  });
+
+  it("turns dirty once the operator picks a batch", async () => {
+    loadBatch("1000_year");
+    const { states, container } = renderReportingDirty(<SampleForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const select = input(container, "creditBatchId");
+    fireEvent.change(select, { target: { value: "00000000-0000-4000-8000-000000000001" } });
+    await waitFor(() => expect(states.at(-1)).toBe(true));
+  });
+});
+
+describe("SampleForm save refusal (#1327)", () => {
+  const LOCK_REASON = "A Removal holds this sample. Correct the Removal first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingSampleForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <SampleForm
+        sample={saved}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, "Sample was not saved. Try again.")); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (container: HTMLElement) => void) {
+    loadBatch();
+    const view = render(<RefusingSampleForm refusal={refusal} />);
+    edit?.(view.container);
+    await waitFor(() => expect(input(view.container, "labName")).not.toBeNull());
+    fireEvent.submit(view.container.querySelector("form")!);
+    return view.container;
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const container = await saveRefused(new ActionError({
+      error: "Lab was not found.", code: "validation_failed", issues: [issue(["labName"], "Lab was not found.")],
+    }));
+    await waitFor(() => expect(container.querySelector("#labName-error")?.textContent).toBe("Lab was not found."));
+    expect(container.textContent).not.toContain("Try again.");
+  });
+
+  it("keeps a code clash in the footer, since the sample form has no code field", async () => {
+    const message = 'Code "SMP-26-001" already exists. Use a different code.';
+    const container = await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    await waitFor(() => expect(container.textContent).toContain("already exists"));
+    expect(container.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("sends a locked field back to the saved value and says why once", async () => {
+    const container = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["labName"], LOCK_REASON, "certification_locked")] }),
+      (form) => fireEvent.change(input(form, "labName"), { target: { value: "Typed lab" } }),
+    );
+    await waitFor(() => expect(container.querySelector("#labName-error")?.textContent).toBe("Locked. Your change was not saved."));
+    expect(input(container, "labName").value).toBe(String((saved as { labName?: string | null }).labName ?? ""));
+    expect(container.textContent?.split("A Removal holds this sample").length).toBe(2);
   });
 });

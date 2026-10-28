@@ -39,8 +39,8 @@ export async function adoptCreditBatchesForIsometric(
   if (overlong.length > 0) {
     const codes = overlong.map(batch => batch.code).join(", ");
     const problem = overlong.length === 1
-      ? `Credit batch ${codes} spans more than one calendar month.`
-      : `Credit batches ${codes} span more than one calendar month.`;
+      ? `Credit batch ${codes} spans one calendar month or more.`
+      : `Credit batches ${codes} span one calendar month or more.`;
     throw new SafeError(`${problem} Shorten or archive ${overlong.length === 1 ? "it" : "them"} before linking this facility to Isometric.`);
   }
 

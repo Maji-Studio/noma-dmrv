@@ -22,20 +22,51 @@ retired questions do not belong in this file.
   and provide an explicit recovery path that preserves the original journal
   and prevents duplicate Biochar Applications after an ambiguous POST.
 
-### Biochar Application Source attachment is never read back (`isometric/biochar-application-source-readback`, opened 2026-09-08, `needs-registry-check`)
+### Biochar Application Source readback awaits a staging retest (`isometric/biochar-application-source-readback`, opened 2026-09-08)
 
-- **Observed** — `CreateBiocharApplicationRequest` accepts `source_ids`, but
-  the `BiocharApplication` response (POST and GET) and `GET /sources` expose
-  no Application-to-Source link (public Certify OpenAPI, checked 2026-09-08).
-  Only the GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field does.
-- **Decision** — the accepted create request is the attachment contract:
-  `src/lib/isometric/biochar-applications.ts:sourceSetMismatchMessage`
-  compares the reviewed set only when a readback carries `source_ids`, treats
-  an omitted or null field as nothing to verify, and reports any other shape
-  as drift. The immutable submission snapshot keeps the IDs sent. A strict
-  readback guard had blocked every evidence-bearing Removal on staging.
-- **To resolve** — read the attachment back through GraphQL (issue #737) and
-  make the exact-set comparison unconditional again.
+- **Verified probe (2026-10-19):** Certify REST accepts `source_ids` but omits
+  them on POST and GET. GraphQL uses `POST /graphql` at the same origin:
+  `https://api.sandbox.isometric.com/graphql` or `https://api.isometric.com/graphql`.
+  Authentication requires both Certify headers: `Authorization: Bearer <accessToken>`
+  and `X-Client-Secret: <clientSecret>`. Omitting the latter returns HTTP 401.
+- **Query:** the root has no Biochar Spread Event lookup; query through the project:
+
+  ```graphql
+  query BiocharApplicationSources($projectId: ID!, $ids: [ID!]) {
+    project(id: $projectId) {
+      __typename
+      ... on Project {
+        biocharSpreadEvents(first: 2, filter: { idIn: $ids }) {
+          nodes { id biocharSpreadEventSources { source { id } } }
+        }
+      }
+      ... on ObjectNotFoundError { message }
+    }
+  }
+  ```
+
+- **Observed shapes:** an unknown event returns
+  `{"data":{"project":{"__typename":"Project","biocharSpreadEvents":{"nodes":[]}}}}`.
+  An unknown project returns
+  `{"data":{"project":{"__typename":"ObjectNotFoundError","message":"..."}}}`.
+  GraphQL errors use `{"errors":[...],"data":null}` or partial data with HTTP 200.
+- **Implemented (#737, decision 737-q2):** after Application confirmation,
+  GraphQL compares the expected Source set, ignoring order and duplicates.
+  Missing, unexpected, empty or malformed sets stop submission with
+  `source_set_mismatch` drift. No answer continues with persisted `unconfirmed`
+  status and an ID-only warning. Summary reloads retry only unconfirmed,
+  lifecycle-confirmed registrations; success clears the note, and a new mismatch
+  is recorded without changing submission drift or failing the summary.
+  Empty expected sets stay `not_checked`; confirmed checks are reused.
+  REST still skips omitted/null `source_ids` and rejects malformed or wrong sets.
+- **Verified on a live record (2026-10-19):** a sandbox Biochar Application
+  created with noma's request builder came back with id `bse_...`, which is
+  also its `BiocharSpreadEvent.id`. `biocharSpreadEventSources` listed exactly
+  the `source_ids` sent on create; REST still omitted them. After
+  `DELETE /biochar_applications/{id}` the event no longer resolves.
+- **To resolve:** retest one fresh evidence-bearing Removal through the full
+  submit path on staging (issue #737 step 4), then retire this entry. Until
+  then event-not-found stays no answer, never drift.
 
 ### Removal deletion leaves Datapoints behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
 
@@ -90,16 +121,15 @@ retired questions do not belong in this file.
 
 PR #1067 resolves runtime display-name binding: observations persist contracts
 by component ID, bootstrap the three known templates and carry surviving IDs
-forward. Owner/Admin assignment is limited to proposed, unassigned or invalid
+forward. Admin assignment is limited to proposed, unassigned or invalid
 lines inside the change review. A general binding editor (#894) stays closed.
 The remaining #893 work is to include observation identity and contracts in
 immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
 Entry-only period-input lines now block coverage in every environment until
 entries compile. Only the datapoint-builder stub plumbing remains, to be removed
-when entries compile (plan §4.5). Sample transport legs still feed the known
-bootstrap sample lines that have an automatic source. Retire those legs and
-replace their contributions with per-line entries in the app, API and MCP
-when entries compile (plan §4.5).
+when entries compile (plan §4.5). Sample transport legs no longer feed any
+line: sample shipping lines take only per-line entries (#1324). Old legs are
+deleted per organization with the retirement CLI (plan §5).
 
 ### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
 
@@ -229,6 +259,16 @@ uses it.
   Production Batch and measurement-sample lists hit the client default first;
   raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
   deletion.
+
+### Future-application check compares a calendar date with an instant (`isometric/application-future-facility-day`, opened 2026-10-21)
+
+- **Observed:** `src/fn/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture` compares the application's UTC-midnight
+  calendar date with `now` as an instant. East of UTC a valid same-day application
+  is refused until UTC midnight; west of UTC a next-day application passes while
+  the facility is still on the earlier day.
+- **To resolve:** compare the application calendar day with
+  `src/lib/date-utils.ts:formatFacilityDate` (`now`, `facilityTimezone`); keep the instant comparison for
+  production end.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 
@@ -598,7 +638,7 @@ are clean deferrals.
 ### Annual-test attribution for `pyrolyzer_direct` (`isometric/pyrolyzer-direct-attribution`)
 
 `pyrolyzer_direct` is already settled as a registry-owned PROJECT-scope
-Component, guarded against Removal-scope zero stubs by
+Component, guarded against Removal-scope bindings by
 `PERIOD_INPUT_TUPLES`.
 
 - **Still open — needs-registry-check:** whether Isometric or a verifier accepts
@@ -679,3 +719,22 @@ Three failure-path gaps, each a surprising mode before a registry write:
   needs a separate extraction and consistent blueprint handling.
 - **To resolve**: extract that validation, pass resolved blueprints through every
   coverage caller, and test each refusal before registry writes.
+
+### Per-project `protocolVersion`: write it or drop it (`isometric/project-protocol-version`, opened 2026-10-17)
+
+- **Anchor**: `certifier_projects.protocol_version` (`src/db/schema/certification.ts`) and `src/fn/certification/protocol-version-preflight.ts`.
+- **Current handling**: Settings, Registry shows the pinned versions from `docs/isometric/versions.json` (#1092). The column is nullable and the mapping action never sets it, so the submit preflight normally warns "missing" and records a sync event.
+- **Options**: (a) let the operator record the Certify project's protocol version per project, so the preflight can detect a mismatch; (b) drop the column and the preflight warning, since the Certify API exposes no protocol version and the pin is global.
+- **To resolve**: Kenji picks one. Not decided in #1092.
+
+### Corrections after finalization (`isometric/post-finalization-correction`, opened 2026-10-19) - **parked**
+
+- **Anchor**: `src/lib/isometric/production-batches.ts:createProductionBatch` and `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion`.
+- **Current handling**: Certify has no PATCH for Production Batches or MeasurementSamples. Before finalization, deleting the Removal removes the owned registry records and is the correction path. After finalization, noma builds no replacement flow: the operator is told to contact an admin or Isometric.
+- **Parked** on 2026-10-19 (Kenji, epic #632): #1112 (replace a registered batch) and #1113 (show superseded resources) are closed until a real case appears. Reopening this starts with asking Isometric whether it accepts a replacement resource after finalization or amends on its side.
+
+### Documents UI still offers Delete on mirrored documents to Members (`isometric/mirrored-document-delete-ui`, opened 2026-10-20) - **deferred**
+
+- **Anchor**: `src/data-access/documents.ts:releaseUnreferencedIsometricMapping` and the document panels that offer Delete (for example `src/components/samples/sample-documents-panel.tsx`).
+- **Current handling**: since #1188 the server refuses a Member who deletes a document with an Isometric mapping, or a parent record holding one (for example a credit batch), and shows the role message. The documents UI does not know about mappings, so it still offers Delete.
+- **To resolve**: expose the mapping as a document fact and hide or disable Delete for viewers below `REMOVAL_REGISTRY_DELETION_MIN_ROLE`, on document panels and on parent records.

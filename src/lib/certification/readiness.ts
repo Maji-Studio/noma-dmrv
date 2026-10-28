@@ -1,4 +1,5 @@
-import type { RemovalBlocker } from "./removal-blockers";
+import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
+import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
@@ -24,8 +25,8 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
-import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
+import { CERT_REQUIREMENT_META, EMISSION_ENTRIES_TO_CHECK_LABEL, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
+import { removalTemplateBlockerDestination, type RemovalTemplateBlocker } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -63,6 +64,8 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  /** Current template components without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
@@ -166,6 +169,14 @@ function futureDatedMeasurementSummary(measurement: string): string {
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
+}
+
+/** Whether the only template problem is that no Removal template is chosen. */
+function noTemplateChosen(facts: RemovalReadinessFacts): boolean {
+  const blockers = facts.templateBlockers ?? [];
+  return blockers.length > 0
+    ? blockers.every((blocker) => blocker.code === "unpinnedTemplate")
+    : !facts.hasRemovalTemplate;
 }
 
 // The one canonical template-resolution blocker reason. Returns null when the
@@ -473,7 +484,9 @@ const TRANSPORT_UNIFORMITY_LABEL = "Transport legs aggregate cleanly";
 export type RemovalRequirementKey =
   | "mapping"
   | "credentials"
-  | "template"
+  | "templateSet"
+  | "templateLines"
+  | "emissions"
   | "transport"
   | "transportUniformity"
   | "production"
@@ -493,6 +506,8 @@ export interface RemovalRequirementCheck {
    * (Phase 0). Attached uniformly from `CERT_REQUIREMENT_META`.
    */
   requirementLabel: string;
+  /** The problem, named; rendered instead of `requirementLabel` while unmet (`certCheckLabel`). */
+  unmetLabel: string;
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
@@ -504,7 +519,8 @@ export interface RemovalRequirementCheck {
   fixTargetId?: string;
   transportCategory?: TransportCategory;
   /** Removal template blocker codes behind an unmet template check, for its fix links. */
-  templateBlockerCodes?: RemovalTemplateBlockerCode[];
+  templateBlockerCodes?: RemovalBlockerCode[];
+  templateFixTargets?: TemplateFixTarget[];
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -512,8 +528,11 @@ export interface RemovalRequirementCheck {
 
 type RemovalRequirementCheckBase = Omit<
   RemovalRequirementCheck,
-  "requirementLabel" | "whyDetail"
->;
+  "requirementLabel" | "unmetLabel" | "whyDetail"
+> & {
+  /** Overrides the shared unmet label for a missing pin or a known line count. */
+  unmetLabel?: string;
+};
 
 function withRequirementMeta(
   check: RemovalRequirementCheckBase,
@@ -522,8 +541,75 @@ function withRequirementMeta(
   return {
     ...check,
     requirementLabel: meta.requirementLabel,
+    unmetLabel: check.unmetLabel ?? meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
+}
+
+function templateRequirementChecks(facts: RemovalReadinessFacts): RemovalRequirementCheckBase[] {
+  const canEvaluate = facts.hasMapping && facts.hasOrgCredentials;
+  const pinBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateSetup",
+  );
+  const lineBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) !== "templateSetup",
+  );
+  // Unbindable inputs come from the line decisions, so they belong to the lines check.
+  const pinFacts = { ...facts, templateBlockers: pinBlockers, emissionLineBlockers: [], unbindableTemplateInputs: [] };
+  const templateSet = templateResolvesCleanly(pinFacts);
+  // Entry problems (a missing file, an entry to check) are fixed on Emissions,
+  // so they get their own check rather than reading as a component to decide.
+  const entryBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget === "emissions");
+  const emissionBlockers = (facts.emissionLineBlockers ?? []).filter((blocker) => blocker.fixTarget !== "emissions");
+  const linesToDecide = new Set(facts.undecidedLineIds).size;
+  const lineMessages = [...new Set(lineBlockers.length
+    ? lineBlockers.map((blocker) => blocker.message)
+    : facts.unbindableTemplateInputs.length
+      ? [formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs)]
+      : emissionBlockers.map((blocker) => blocker.message))];
+  const codes = [...new Set([...lineBlockers, ...emissionBlockers].map((blocker) => blocker.code))];
+  if (linesToDecide > 0 || codes.includes("lineNeedsReview") || codes.includes("templateLinesNeedReview")) {
+    if (!codes.includes("templateLinesNeedReview")) codes.push("templateLinesNeedReview");
+  }
+  const targets = [...new Set([
+    ...lineBlockers.map(templateLineFixTarget),
+    ...facts.unbindableTemplateInputs.map(templateCoverageFixTarget),
+    ...emissionBlockers.map(templateLineFixTarget),
+    ...(linesToDecide > 0 ? ["templateLineReview" as const] : []),
+  ])];
+  const linesUnmet = lineMessages.length > 0 || linesToDecide > 0;
+  const entriesNeedFiles = entryBlockers.every((blocker) => blocker.code === "entryMissingEvidence");
+  return [
+    {
+      key: "templateSet",
+      label: CERT_REQUIREMENT_META.templateSet.requirementLabel,
+      status: !canEvaluate ? "skipped" : templateSet ? "met" : "unmet",
+      detail: canEvaluate ? templateBlockerReason(pinFacts) ?? undefined : undefined,
+      ...(canEvaluate && pinBlockers.length
+        ? { templateBlockerCodes: pinBlockers.map((blocker) => blocker.code) } : {}),
+      ...(noTemplateChosen(pinFacts) ? { unmetLabel: NO_REMOVAL_TEMPLATE_LABEL } : {}),
+    },
+    {
+      key: "templateLines",
+      label: CERT_REQUIREMENT_META.templateLines.requirementLabel,
+      status: !canEvaluate || !templateSet ? "skipped" : linesUnmet ? "unmet" : "met",
+      detail: canEvaluate && templateSet
+        ? lineMessages.join(" ") || (linesToDecide > 0 ? REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview : undefined)
+        : undefined,
+      ...(canEvaluate && templateSet && linesUnmet
+        ? { templateBlockerCodes: codes, templateFixTargets: targets }
+        : {}),
+      unmetLabel: templateLinesUnmetLabel(linesToDecide, [...lineBlockers, ...emissionBlockers].map((blocker) => blocker.code)),
+    },
+    // Only an open entry problem adds this check; batch health covers the met case.
+    ...(canEvaluate && templateSet && entryBlockers.length ? [{
+      key: "emissions" as const,
+      label: CERT_REQUIREMENT_META.emissions.requirementLabel,
+      status: "unmet" as const,
+      detail: [...new Set(entryBlockers.map((blocker) => blocker.message))].join(" "),
+      ...(entriesNeedFiles ? {} : { unmetLabel: EMISSION_ENTRIES_TO_CHECK_LABEL }),
+    }] : []),
+  ];
 }
 
 /**
@@ -665,23 +751,7 @@ export function buildRemovalRequirementsChecklist(
           ? NO_ORG_CREDENTIALS_REASON
           : undefined,
     },
-    {
-      key: "template",
-      label: "Removal template resolved",
-      status:
-        !linked || !credentialsConfigured
-          ? "skipped"
-          : templateClean
-            ? "met"
-            : "unmet",
-      detail:
-        !linked || !credentialsConfigured
-          ? undefined
-          : (templateBlockerReason(facts) ?? undefined),
-      ...(linked && credentialsConfigured && facts.templateBlockers?.length
-        ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
-        : {}),
-    },
+    ...templateRequirementChecks(facts),
     ...transport,
     ...uniformity,
     production,

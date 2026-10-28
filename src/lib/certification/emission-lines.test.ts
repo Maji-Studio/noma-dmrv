@@ -13,13 +13,32 @@ function facts(): BatchEmissionLineFacts {
 function entry(f: BatchEmissionLineFacts, overrides: Partial<EmissionLineEntryFact> = {}): EmissionLineEntryFact {
   return { componentId: f.definition.groups[0].components[0].id, counts: true, kind: "value", hasEvidence: true, total: { magnitude: "0.2", unit: "kWh" }, ...overrides };
 }
+it("returns the raw template order and group names without changing the normalized definition", () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const before = structuredClone(definition);
+  const sources = resolveLineSources({ definition });
+  const lineSources = Object.fromEntries(fixture.groups.flatMap((group, groupPosition) =>
+    group.components.map((component, position) => [component.id, {
+      ...sources[component.id], templateOrder: { groupPosition, position },
+    }]),
+  ));
+  const lines = deriveBatchEmissionLines({ definition, lineSources,
+    problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+  });
+  expect(lines.map((line) => line.componentId)).toEqual(fixture.groups.flatMap((group) => group.components.map((component) => component.id)));
+  for (const [index, expected] of fixture.groups.flatMap((group, groupPosition) =>
+    group.components.map((component, position) => ({ componentId: component.id,
+      groupName: group.display_name, groupPosition, position })),
+  ).entries()) expect(lines[index]).toMatchObject(expected);
+  expect(definition).toEqual(before);
+});
 describe("batch emission line states", () => {
   it.each([
     ["empty", false, []], ["filled", true, []],
     ["missingEvidence", true, [{ hasEvidence: false }]],
-    ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", total: null, hasEvidence: false }]],
+    ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false }]],
     ["needsReview", false, [{ counts: false, hasEvidence: false }]],
-    ["filled", false, [{ kind: "zero", total: null }, {}]],
+    ["filled", false, [{ kind: "zero", confirmedForRemovalId: "removal", total: null }, {}]],
   ] as const)("derives %s with automatic=%s and entries=%j", (state, automatic, overrides) => {
     const f = facts();
     f.automaticFigures = { "run-electricity": automatic ? { magnitude: "0", unit: "kWh" } : null };
@@ -56,7 +75,7 @@ describe("batch emission line states", () => {
   });
   it.each([
     ["filled", { kind: "value", hasEvidence: true }],
-    ["confirmedZero", { kind: "zero", total: null, hasEvidence: false }],
+    ["confirmedZero", { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false }],
     ["missingEvidence", { kind: "value", hasEvidence: false }],
   ] as const)("keeps the entry-only source blocker when entries display as %s", (state, overrides) => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
@@ -65,7 +84,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: state === "missingEvidence" ? "entryMissingEvidence" : "lineHasNoSource" } });
   });
   it("exports the agreed labels", () => {
-    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });
+    expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Check entry", needsSetup: "Not set up", confirmedZero: "Recorded as zero" });
   });
 });
 
@@ -78,8 +97,8 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
 });
 
 it.each([
-  "Confirm this entry for the changed template line.",
-  "Enter the values again for the current template line.",
+  "Confirm this entry for the changed template component.",
+  "Enter the values again for the current template component.",
 ])("keeps stale entries visible with the action: %s", (reason) => {
   const f = facts();
   f.entries = [entry(f, { counts: false, reason })];
@@ -87,4 +106,79 @@ it.each([
     state: "needsReview", total: null, entries: f.entries,
     blocker: { code: "lineNeedsReview", message: reason },
   });
+});
+
+it("keeps a Removal-owned zero confirmed when the line has no automatic figure", () => {
+  const f = facts();
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  f.automaticFigures = { "run-electricity": null };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero" });
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+  f.lineSources[f.entries[0].componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero", blocker: { code: "lineHasNoSource" } });
+});
+
+it.each(["0", "1"])("uses an automatic figure of %s instead of a Removal-owned zero", (magnitude) => {
+  const f = facts();
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  f.automaticFigures = { "run-electricity": { magnitude, unit: "kWh" } };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "filled", total: { magnitude, unit: "kWh" } });
+});
+
+it("reports the automatic record kind, count and figure independently of entries", () => {
+  const f = facts();
+  f.automaticRecordCounts = { "run-electricity": 22 };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({
+    records: { source: "productionRuns", count: 22, figure: null }, entryPolicy: "additive",
+  });
+  f.automaticFigures = { "run-electricity": { magnitude: "18420", unit: "kWh" } };
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.records).toEqual({ source: "productionRuns", count: 22, figure: line.automaticFigure });
+  f.lineSources[line.componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  expect(deriveBatchEmissionLines(f)[0].records).toBeNull();
+});
+
+it("reports catalog transport and stored sources using their record kinds", () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const lines = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),
+    problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+    automaticRecordCounts: { "feedstock-transport": 3, "delivery-transport": 4, sequestration: 5 },
+  });
+  expect(lines.find((line) => line.contract?.automaticSource === "feedstock-transport")?.records)
+    .toEqual({ source: "transportLegs", count: 3, figure: null });
+  expect(lines.find((line) => line.contract?.automaticSource === "delivery-transport")?.records)
+    .toEqual({ source: "deliveries", count: 4, figure: null });
+  expect(lines.find((line) => line.contract?.automaticSource === "sequestration")?.records)
+    .toEqual({ source: "applications", count: 5, figure: null });
+});
+
+it("permits counted entry-only values and zeros, but keeps the Removal's empty line blocker", () => {
+  const f = facts(); const id = f.definition.groups[0].components[0].id;
+  f.lineSources[id] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  f.entriesCanSubmit = true;
+  expect(deriveBatchEmissionLines(f)[0].blocker?.code).toBe("lineHasNoSource");
+  f.entries = [entry(f)];
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+  f.entries = [entry(f, { kind: "zero", confirmedForRemovalId: "removal", total: null, hasEvidence: false })];
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero" });
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+});
+
+it("discards stale sample automatic facts while retaining additive entries", () => {
+  const f = facts();
+  const component = f.definition.groups[0].components[0];
+  component.blueprintKey = "mass_distance_based_ci_emissions";
+  component.inputs = [{ key: "mass_distance", type: "monitored", quantityKind: "mass_distance" }];
+  f.definition.groups[0].key = "sampling-required-for-mrv";
+  f.lineSources[component.id] = { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "reviewed" };
+  f.automaticFigures = { "sample-transport": { magnitude: "20", unit: "km * tonne" } };
+  f.automaticRecordCounts = { "sample-transport": 3 };
+  f.entries = [entry(f, { total: { magnitude: "5", unit: "km * tonne" } })];
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.state).toBe("filled");
+  expect(line.entryPolicy).toBe("additive");
+  expect(line.total).toEqual({ magnitude: "5", unit: "km * tonne" });
+  expect(line.records === null).toBe(true);
+  f.entries = [];
+  expect(deriveBatchEmissionLines(f)[0].state).toBe("empty");
 });

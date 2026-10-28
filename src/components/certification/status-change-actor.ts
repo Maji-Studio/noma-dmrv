@@ -3,7 +3,7 @@
  * the attribution copy is testable apart from the popover.
  */
 import type { SubmissionStatusHistoryEntry } from "@/lib/certification/status-history";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { UNKNOWN_USER } from "@/lib/copy-utils";
 
 type Source = NonNullable<SubmissionStatusHistoryEntry["source"]>;
 
@@ -29,6 +29,6 @@ export function describeStatusChangeActor(
     return suffix ? `${entry.actorName} (${suffix})` : entry.actorName;
   }
   // The user record is gone or carries no name.
-  if (entry.actorUnavailable) return `Changed by: ${MISSING_VALUE.notAvailable}`;
+  if (entry.actorUnavailable) return suffix ? `${UNKNOWN_USER} (${suffix})` : UNKNOWN_USER;
   return (entry.source && ACTORLESS_SOURCE_LABEL[entry.source]) ?? null;
 }

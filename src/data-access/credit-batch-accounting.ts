@@ -127,7 +127,7 @@ async function loadLineageWithExecutor(
       runId: productionRuns.id,
       runCode: productionRuns.code,
       runStatus: productionRuns.status,
-      runDate: productionRunDateExpr(),
+      runDate: productionRunDateExpr(ctx.organizationId),
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
@@ -740,10 +740,16 @@ export async function loadCreditBatchRollups(
     /** Also load each member run's product layers and shipments (roll-forwards). */
     includeRunForwards?: boolean;
   },
+  executor: Executor = db,
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
+  if (executor !== db) {
+    return loadCreditBatchRollupsWithExecutor(
+      ctx, ids, executor, options?.removalId, options?.unassignedOnly, options?.includeRunForwards,
+    );
+  }
   return db.transaction((tx) =>
     loadCreditBatchRollupsWithExecutor(
       ctx,

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 
+vi.mock("./feedstock-run-allocations", () => ({ reallocateRunsForBins: vi.fn() }));
 vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [] }));
 vi.mock("./certification-lineage-guards", () => ({
   assertCanMutateCertifiedLineage: vi.fn(),
@@ -31,12 +32,14 @@ vi.mock("./transport-legs", () => ({
 }));
 vi.mock("./documents", () => ({ retireDocumentsForEntities: vi.fn() }));
 
+import { DomainError } from "@/lib/domain-errors";
+import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { updateFeedstockInTransaction } from "./feedstocks";
 
 const ctx: OrgContext = {
   organizationId: "org",
   userId: "user",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 
@@ -45,6 +48,7 @@ const STORED_ROW = {
   id: FEEDSTOCK_ID,
   version: 1,
   status: "available",
+  deliveryDate: new Date("2026-03-01T00:00:00Z"),
   storageLocationId: "bin",
   facilityId: "facility",
   feedstockTypeId: "type",
@@ -62,6 +66,7 @@ function selectReturning(read: { rows: unknown[] } | { error: Error }) {
     leftJoin: () => query,
     where: () => query,
     for: () => query,
+    limit: () => query,
     orderBy: () => query,
     then: (resolve: (rows: unknown) => unknown, reject: (e: unknown) => unknown) =>
       "error" in read
@@ -96,6 +101,23 @@ afterEach(() => {
 });
 
 describe("updateFeedstockInTransaction", () => {
+  it("refuses a source-only patch without a saved override before writing", async () => {
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, transportDistanceSource: "document",
+    })).rejects.toMatchObject({ code: "validation_failed",
+      message: "The feedstock distance source was not changed. Set transportDistanceKm to change its source." });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts a no-op null source on a derived record", async () => {
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, transportDistanceSource: null, notes: "checked",
+    })).resolves.toMatchObject({ id: FEEDSTOCK_ID });
+    expect(tx.update).toHaveBeenCalled();
+  });
+
   it("reads the updated feedstock back through its own transaction", async () => {
     const tx = makeTx({ rows: [ENRICHED_ROW] });
     const globalRead = watchGlobalReads();
@@ -104,8 +126,19 @@ describe("updateFeedstockInTransaction", () => {
       updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual({ ...ENRICHED_ROW, hasUsableTransportLeg: false, transportLegDistanceSource: null });
     expect(tx.update).toHaveBeenCalled();
+    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], { earliestDeliveryDate: STORED_ROW.deliveryDate });
     // Every read, including the locked existence check, stays on tx.
     expect(globalRead).not.toHaveBeenCalled();
+  });
+
+  it.each(["certification_locked", "insufficient_stock"] as const)("maps rebuild %s to the intake date", async code => {
+    vi.mocked(reallocateRunsForBins).mockRejectedValueOnce(new DomainError(code, "Rebuild refused"));
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, deliveryDate: new Date("2026-04-01T00:00:00Z"),
+    })).rejects.toMatchObject({ code, message: "Rebuild refused", issues: expect.arrayContaining([
+      { path: ["deliveryDate"], code, message: "Rebuild refused" },
+    ]) });
   });
 
   it("does not report a failed read as a feedstock that was not found", async () => {
@@ -117,4 +150,16 @@ describe("updateFeedstockInTransaction", () => {
     await expect(result).rejects.toThrow(READ_FAILURE);
     await expect(result).rejects.not.toThrow("Feedstock not found");
   });
+});
+
+it("clears the override note when the supplier route changes", async () => {
+  const reads = [
+    { rows: [{ id: "other-supplier" }] },
+    { rows: [{ ...STORED_ROW, distanceKmOverride: 25, distanceSource: "document", distanceNote: "Old route" }] },
+    { rows: [ENRICHED_ROW] },
+  ];
+  const set = vi.fn(() => ({ where: () => ({ returning: async () => [ENRICHED_ROW] }) }));
+  const tx = { select: () => selectReturning(reads.shift() ?? { rows: [] }), update: () => ({ set }) } as unknown as DbTransaction;
+  await updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, supplierId: "other-supplier" });
+  expect(set).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceSource: null, distanceNote: null }));
 });

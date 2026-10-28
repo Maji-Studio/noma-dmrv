@@ -58,7 +58,7 @@ export function deriveRequiredTransportCategories(
       }
     }
   }
-  return TRANSPORT_CATEGORIES.filter((category) => seen.has(category));
+  return TRANSPORT_CATEGORIES.filter((category) => seen.has(category) && category !== "sample");
 }
 
 export function buildTransportCoverage(
@@ -87,15 +87,12 @@ export function buildTransportCoverage(
       aggregationWarning: aggregateBiocharTransportMassDistance(legs.biochar).warning,
     },
     sample: {
-      vehicleAdvisories: transportVehicleAdvisories(legs.sample, "Sample"),
-      count: legs.sample.length,
-      entityIds: entityIds.sampleIds,
-      legIds: legs.sample.map((leg) => leg.id),
-      firstLegEntityId: legs.sample[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportMassDistance(
-        legs.sample,
-        "Sample",
-      ).warning,
+      vehicleAdvisories: [],
+      count: 0,
+      entityIds: [],
+      legIds: [],
+      firstLegEntityId: null,
+      aggregationWarning: null,
     },
   };
 }

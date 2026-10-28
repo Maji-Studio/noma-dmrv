@@ -13,7 +13,6 @@
 "use client";
 
 import * as React from "react";
-import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
@@ -22,6 +21,9 @@ import {
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 import { SideSheetActionsContext } from "./side-sheet-context";
+import { SHEET_FORM_FILL } from "./sheet-form-fill";
+import { SubmitBlockContext, type SubmitBlock } from "@/components/ui/submit-block-context";
+import { RefusalSlotContext } from "@/components/ui/refusal-slot-context";
 
 /* -------------------------------------------------------------------------------------------------
  * Back Arrow Icon
@@ -53,12 +55,6 @@ function ArrowLeftIcon() {
 type SideSheetMode = "view" | "edit" | "create";
 
 interface EntitySideSheetProps {
-  /**
-   * Explicit opt-in: `true` in every mode, `"view"` in saved read mode only,
-   * `"form"` in create and edit only (a read view with nothing optional).
-   */
-  detailToggle?: boolean | "view" | "form";
-  detailScope?: string;
   /** Controlled open state */
   open: boolean;
   /** Callback when the panel should close */
@@ -73,6 +69,16 @@ interface EntitySideSheetProps {
   title: string;
   /** Optional subtitle (entity name or helper text) */
   subtitle?: string;
+  /** A chip beside the title in view and edit mode (the record lock chip). */
+  titleBadge?: React.ReactNode;
+  /** Edit-mode banner above the form (the record lock line). */
+  editNotice?: React.ReactNode;
+  /**
+   * Edit mode: why the form cannot save. Save turns off with the reason
+   * beside it; a `readOnly` block also disables every field and offers only
+   * the way back. The draft stays in both cases.
+   */
+  submitBlock?: SubmitBlock | null;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
   /** Mirror a paired edit form's FormSpine numbering in read mode. */
@@ -97,6 +103,11 @@ interface EntitySideSheetProps {
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
   canEdit?: boolean;
+  /**
+   * A view-mode footer action that leads, ahead of Edit (a preview sheet's
+   * link to the record's own page). Edit then drops to secondary weight.
+   */
+  viewPrimaryAction?: React.ReactNode;
   /** The form component rendered in edit/create mode */
   children: React.ReactNode;
   /** Panel width */
@@ -108,8 +119,6 @@ interface EntitySideSheetProps {
  * -----------------------------------------------------------------------------------------------*/
 
 function EntitySideSheet({
-  detailToggle = false,
-  detailScope = "",
   open,
   onOpenChange,
   onCloseAttempt,
@@ -117,18 +126,25 @@ function EntitySideSheet({
   onModeChange,
   title,
   subtitle,
+  titleBadge,
+  editNotice,
+  submitBlock,
   sections,
   numberedSections = false,
   viewModeChildren,
   viewModeNotice,
   editLabel = "Edit",
   canEdit = true,
+  viewPrimaryAction,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
   const isViewMode = mode === "view";
+  const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  // Where FormActions shows a refusal once the record is read-only (Sent).
+  const [refusalSlot, setRefusalSlot] = React.useState<HTMLElement | null>(null);
   // Dirty tracking is two sources OR-ed together: a native input/change
   // heuristic (covers plain fields even in forms that don't report), and the
   // form's authoritative RHF `formState.isDirty` via `reportDirty` (covers
@@ -162,7 +178,7 @@ function EntitySideSheet({
       body.scrollTop = 0;
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, mode, detailScope]);
+  }, [open, mode]);
 
   function confirmDiscard(action: "close" | "view") {
     if (action === "close") onOpenChange(false);
@@ -210,15 +226,11 @@ function EntitySideSheet({
     dirtyRef.current = true;
   };
 
-  const showDetailToggle = detailToggle === true
-    || (detailToggle === "view" && isViewMode)
-    || (detailToggle === "form" && !isViewMode);
   return (
-    <FormDetailProvider scope={`${open}:${mode}:${detailScope}`} enabled={showDetailToggle}>
     <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
       <SlideOverPanel.Content size={size}>
         {/* Header */}
-        <SlideOverPanel.Header showClose actions={showDetailToggle ? <FormDetailControl /> : undefined}>
+        <SlideOverPanel.Header showClose>
           <div className="flex min-w-0 items-center gap-12">
             {/* Back arrow: only in edit mode when coming from view (not create) */}
             {mode === "edit" && (
@@ -233,9 +245,12 @@ function EntitySideSheet({
               </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
-              <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+              <div className="flex min-w-0 flex-wrap items-center gap-8">
+                <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+                {mode !== "create" && titleBadge}
+              </div>
               {subtitle && (
-                <SlideOverPanel.Description className={showDetailToggle ? "truncate" : undefined}>
+                <SlideOverPanel.Description>
                   {subtitle}
                 </SlideOverPanel.Description>
               )}
@@ -265,28 +280,41 @@ function EntitySideSheet({
             </>
           ) : (
             <SideSheetActionsContext.Provider value={sheetActions}>
-              {children}
+              <SubmitBlockContext.Provider value={editBlock}>
+               <RefusalSlotContext.Provider value={refusalSlot}>
+                {mode === "edit" && <div ref={setRefusalSlot} className="empty:hidden pb-12" />}
+                {mode === "edit" && editNotice ? (
+                  <div className="flex flex-col gap-12 pb-20">{editNotice}</div>
+                ) : null}
+                {/* Always mounted, so turning read-only never remounts the form. */}
+                <fieldset disabled={!!editBlock?.readOnly} className={SHEET_FORM_FILL} data-submit-block-fieldset>{children}</fieldset>
+               </RefusalSlotContext.Provider>
+              </SubmitBlockContext.Provider>
             </SideSheetActionsContext.Provider>
           )}
         </SlideOverPanel.Body>
 
-        {/* Footer — only in view mode */}
+        {/* A read-only edit form hides its own actions; the way back stays. */}
+        {mode === "edit" && editBlock?.readOnly && (
+          <SlideOverPanel.Footer>
+            <Button variant="default" onClick={backToView} className="max-sm:flex-1">
+              Back to view
+            </Button>
+          </SlideOverPanel.Footer>
+        )}
+
+        {/* Footer — only in view mode: the actions at natural width, then Close
+            last. A preview's lead action (its link to the record's own page)
+            comes before Edit. A sheet without actions keeps Close alone. */}
         {isViewMode && (
-          <SlideOverPanel.Footer className="justify-stretch">
+          <SlideOverPanel.Footer>
+            {viewPrimaryAction}
             {canEdit && (
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => onModeChange("edit")}
-              >
+              <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
                 {editLabel}
               </Button>
             )}
-            <SlideOverPanel.Close>
-              <Button variant="default" className="flex-1">
-                Close
-              </Button>
-            </SlideOverPanel.Close>
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         )}
 
@@ -303,7 +331,6 @@ function EntitySideSheet({
         />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
-    </FormDetailProvider>
   );
 }
 EntitySideSheet.displayName = "EntitySideSheet";
@@ -322,5 +349,5 @@ function EntitySideSheetSections({
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet, EntitySideSheetSections };
+export { EntitySideSheet, EntitySideSheetSections, SHEET_FORM_FILL };
 export type { EntitySideSheetProps, SideSheetMode };

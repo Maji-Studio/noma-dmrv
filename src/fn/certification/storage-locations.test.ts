@@ -17,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   client: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }));
 
-vi.mock("@/config/env", () => ({ env: mocks.env }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: mocks.env };
+});
 
 // Spread the real module so withStorageLocationRegistrationLocks keeps
 // running against the mocked @/db advisory lock below.
@@ -270,6 +273,7 @@ describe("ensureStorageLocation", () => {
     const result = await ensure();
 
     const lockKeys = [
+      `certifier-storage-site:org-test:${CUSTOMER_LOCATION_ID}`,
       `certifier-storage-location:isometric:prj-test:${CUSTOMER_LOCATION_ID}`,
       "certifier-project-mapping:org-test:isometric:facility-1",
       "certifier-external-project:org-test:isometric:prj-test",

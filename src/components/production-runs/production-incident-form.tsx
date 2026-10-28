@@ -4,6 +4,9 @@
  */
 "use client";
 
+import { useId } from "react";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -31,7 +34,7 @@ interface ProductionIncidentFormProps {
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   incident?: ProductionIncidentWithRelations;
-  onSubmit: (data: ProductionIncidentFormData) => Promise<void> | void;
+  onSubmit: (data: ProductionIncidentFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -48,6 +51,8 @@ export function ProductionIncidentForm({
   isSubmitting = false,
   errorMessage,
 }: ProductionIncidentFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!incident;
   const { timeZone, hint } = useFacilityClock(facilityId);
 
@@ -55,6 +60,8 @@ export function ProductionIncidentForm({
     register,
     handleSubmit,
     control,
+    resetField,
+    setError,
     formState: { errors },
   } = useForm<ProductionIncidentFormData>({
     resolver: zodResolver(productionIncidentFormSchema),
@@ -70,10 +77,11 @@ export function ProductionIncidentForm({
     },
   });
 
-  const onFormSubmit = handleSubmit((data) => onSubmit(data));
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const onFormSubmit = latched(handleSubmit((data) => onSubmit(data, refuseSave)));
 
   return (
-    <form className="space-y-20" onSubmit={onFormSubmit}>
+    <form id={formId} className="space-y-20" onSubmit={onFormSubmit}>
       <FormSection title="Incident details" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
@@ -102,6 +110,7 @@ export function ProductionIncidentForm({
             <SegmentedControl
               id="severity"
               legend="Severity"
+              required
               disabled={isSubmitting}
               error={!!errors.severity}
               options={severityOptions}
@@ -122,6 +131,7 @@ export function ProductionIncidentForm({
               render={({ field }) => (
                 <EntitySelect
                   id="incident-reactorId"
+                  fieldName="reactorId"
                   entityType="reactor"
                   allowEdit
                   value={field.value ?? ""}
@@ -146,6 +156,7 @@ export function ProductionIncidentForm({
               render={({ field }) => (
                 <EntitySelect
                   id="incident-operatorId"
+                  fieldName="operatorId"
                   entityType="operator"
                   allowEdit
                   value={field.value ?? ""}
@@ -207,6 +218,7 @@ export function ProductionIncidentForm({
 
       <FormActions
         control={control}
+        formId={formId}
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}

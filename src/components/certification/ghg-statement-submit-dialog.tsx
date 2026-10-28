@@ -7,7 +7,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FormField,
@@ -15,6 +15,8 @@ import {
   FormTextarea,
   ServerError,
 } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { Button, Modal } from "@/components/ui";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
@@ -43,6 +45,7 @@ import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { ProductionConfirmation } from "./production-confirmation";
 import { SubmissionProgress } from "./submission-progress";
 import { Notice } from "@/components/ui/notice";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 
 const STEPS: StepFlowStep[] = [
   { key: "report", label: "Report", description: "Choose the attachment" },
@@ -158,11 +161,14 @@ function GhgStatementSubmitDialogContent({
     summaryOfChanges: isResubmit ? "" : undefined,
     confirmProduction: false,
   };
+  const formId = useId();
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     setError,
+    resetField,
     setValue,
     clearErrors,
     getValues,
@@ -171,6 +177,14 @@ function GhgStatementSubmitDialogContent({
     resolver: zodResolver(schema),
     defaultValues: initialValues,
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  // A field-named refusal lands at its field; registry and stream failures name
+  // no field and keep their exact text in the footer.
+  const showRefusal = (err: unknown, fallback: string) => {
+    const footer = refuseSave(err, toSaveErrorMessage(err, fallback));
+    if (footer) setError("root.serverError", { message: footer });
+  };
 
   const beginSubmission = () => {
     if (!canSubmit || submissionInFlight.current) return false;
@@ -206,12 +220,7 @@ function GhgStatementSubmitDialogContent({
         toast.success(resultMessage);
       }
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The GHG Statement was not submitted. Check the form and try again.",
-      });
+      showRefusal(err, "The GHG Statement was not submitted. Check the form and try again.");
     }
   };
 
@@ -280,12 +289,7 @@ function GhgStatementSubmitDialogContent({
       markSubmissionAttempt();
       await runSubmission(input);
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The report was not prepared. Check the preview and try again.",
-      });
+      showRefusal(err, "The report was not prepared. Check the preview and try again.");
     } finally {
       finishSubmission();
     }
@@ -335,16 +339,17 @@ function GhgStatementSubmitDialogContent({
       setReviewedReportId(null);
       setStepIndex(REVIEW_STEP_INDEX);
     } catch (err) {
-      setError("root.serverError", {
-        message:
-          err instanceof Error
-            ? err.message
-            : "The report was not prepared. Check the preview and try again.",
-      });
+      showRefusal(err, "The report was not prepared. Check the preview and try again.");
     } finally {
       finishSubmission();
     }
   };
+
+  // The report step runs inside react-hook-form's submit cycle, so a refused
+  // advance counts as a failed submit and its field error shows under the field.
+  const onAdvance = handleSubmit(async () => {
+    await advance();
+  });
 
   const returnToReportStep = () => {
     setPreparedReport(null);
@@ -395,10 +400,10 @@ function GhgStatementSubmitDialogContent({
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         if (stepIndex === REPORT_STEP_INDEX) {
-          event.preventDefault();
-          void advance();
+          void onAdvance(event);
           return;
         }
         void onSubmit(event);
@@ -425,7 +430,48 @@ function GhgStatementSubmitDialogContent({
             {displayedServerError && (
               <ServerError message={displayedServerError} />
             )}
-            <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+            <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+              {!isPending && (
+                <div className="flex items-center gap-12">
+                  {mutation.isSuccess && resultNeedsReview ? (
+                    <Button className={PHONE_TOUCH_TARGET}
+                      type="button"
+                      variant="primary"
+                      onClick={() => {
+                        mutation.reset();
+                        setProgressUpdates([]);
+                      }}
+                    >
+                      Review submission
+                    </Button>
+                  ) : mutation.isSuccess || submissionStalled ? (
+                    <Button className={PHONE_TOUCH_TARGET} type="button" variant="primary" onClick={onClose}>
+                      {submissionStalled || verificationFailed
+                        ? "Close"
+                        : "Done"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button className={PHONE_TOUCH_TARGET}
+                        type="button"
+                        variant="primary"
+                        onClick={() => void retrySubmission()}
+                      >
+                        Try again
+                      </Button>
+                      <Button className={PHONE_TOUCH_TARGET}
+                        type="button"
+                        onClick={() => {
+                          mutation.reset();
+                          setProgressUpdates([]);
+                        }}
+                      >
+                        Review submission
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {isPending
                   ? "noma is submitting the GHG Statement to the verifier."
@@ -441,47 +487,6 @@ function GhgStatementSubmitDialogContent({
                         ? "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again."
                         : "Completed registry operations are preserved for a safe retry."}
               </span>
-              {!isPending && (
-                <div className="flex items-center gap-12">
-                  {mutation.isSuccess && resultNeedsReview ? (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      onClick={() => {
-                        mutation.reset();
-                        setProgressUpdates([]);
-                      }}
-                    >
-                      Review submission
-                    </Button>
-                  ) : mutation.isSuccess || submissionStalled ? (
-                    <Button type="button" variant="primary" onClick={onClose}>
-                      {submissionStalled || verificationFailed
-                        ? "Close"
-                        : "Done"}
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          mutation.reset();
-                          setProgressUpdates([]);
-                        }}
-                      >
-                        Review submission
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        onClick={() => void retrySubmission()}
-                      >
-                        Try again
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           </>
         ) : (
@@ -504,30 +509,12 @@ function GhgStatementSubmitDialogContent({
                 }
               }}
               footer={
-                <div className="flex flex-wrap justify-end gap-12">
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={onClose}
-                    disabled={submissionPending}
-                  >
-                    Cancel
-                  </Button>
-                  {stepIndex === REVIEW_STEP_INDEX && (
-                    <Button
-                      type="button"
-                      variant="default"
-                      onClick={returnToReportStep}
-                      disabled={submissionPending}
-                    >
-                      Back
-                    </Button>
-                  )}
+                <div className="flex flex-wrap justify-start gap-12">
                   {stepIndex === REPORT_STEP_INDEX ? (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="button"
                       variant="primary"
-                      onClick={advance}
+                      onClick={() => void onAdvance()}
                       disabled={
                         !canSubmit ||
                         (reportSource === "generated" &&
@@ -537,7 +524,7 @@ function GhgStatementSubmitDialogContent({
                       Next
                     </Button>
                   ) : (
-                    <Button
+                    <Button className={PHONE_TOUCH_TARGET}
                       type="submit"
                       variant="primary"
                       busy={submissionPending}
@@ -557,6 +544,24 @@ function GhgStatementSubmitDialogContent({
                           : "Submit"}
                     </Button>
                   )}
+                  {stepIndex === REVIEW_STEP_INDEX && (
+                    <Button className={PHONE_TOUCH_TARGET}
+                      type="button"
+                      variant="default"
+                      onClick={returnToReportStep}
+                      disabled={submissionPending}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  <Button className={PHONE_TOUCH_TARGET}
+                    type="button"
+                    variant="default"
+                    onClick={onClose}
+                    disabled={submissionPending}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               }
             >

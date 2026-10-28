@@ -2,112 +2,44 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { capturePasswordResetNotice, deliverPasswordNotice } from "./account-notice-hooks";
+import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice, sendEmailChangeNotice } from "@/lib/email/account-notices";
+import { randomUUID } from "node:crypto";
+import { guardEmailChangeVerification, readEmailVerificationToken } from "./email-change-guard";
+import { createOAuthProvider } from "./oauth-provider";
+import { createOAuthCimdPlugins } from "./oauth-cimd";
+import { oauthBefore } from "./oauth-hooks";
+import { OAUTH_ENDPOINT_LIMITS } from "@/config/oauth";
 import { apiKey } from "@better-auth/api-key";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx, getSessionFromCtx } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
-import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
+import { defaultStatements, ownerAc, memberAc } from "better-auth/plugins/organization/access";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { z } from "zod";
+import { revokeDeletedMemberOAuthGrants, revokeMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
+import { oauthRolePolicy } from "./oauth-role-policy";
 import { canOwnApiKey } from "./api-scopes";
-import { betterAuth } from "better-auth";
+import { assertOrganizationRole, translateLastAdminError, validateOrganizationRoleInput } from "./organization-role-policy";
+import { BASE_ERROR_CODES, betterAuth } from "better-auth";
+import { withLastAdminGuard } from "./last-admin-adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
-import { Resend } from "resend";
-import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
+import { CHANGE_EMAIL_MAX_ATTEMPTS, CHANGE_EMAIL_WINDOW_SECONDS, AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
+import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
+import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
+import { emailChangeConfirmEmail } from "@/lib/email/templates/email-change-confirm-email";
+import { getEmailAppUrl } from "@/lib/email/app-url";
+import { sendAuthEmail } from "@/lib/email/auth-email";
+import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
 import { selectActiveOrganizationId } from "@/lib/auth/organization-selection";
 import { logger } from "@/lib/log";
-
-/** Pending invitations expire after 7 days. */
-const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
-
-/**
- * Build the URL an invitee follows to accept an org invitation. The invitation
- * id is the only token; the accept page (src/app/(auth)/accept-invitation)
- * establishes the session and calls the plugin's accept endpoint.
- */
-function buildInvitationAcceptUrl(invitationId: string): string {
-  const base = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  return `${base}/accept-invitation/${invitationId}`;
-}
-
-const hasEmailConfig = Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
-const resend = hasEmailConfig ? new Resend(env.RESEND_API_KEY) : null;
-const isProduction = process.env.NODE_ENV === "production";
-
-function sanitizeAuthUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    const redactedPath = parsed.pathname
-      .split("/")
-      .map((segment) => (segment.length >= 20 ? "<redacted>" : segment))
-      .join("/");
-    return `${parsed.origin}${redactedPath}`;
-  } catch {
-    const base = url.split("?")[0];
-    return base || "<invalid-url>";
-  }
-}
-
-// User-controlled values (profile name, organization name) are interpolated
-// into email HTML; escape them so a crafted name can't inject markup into
-// what email clients render.
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function logAuthEmailFallback(args: {
-  type: "reset-password" | "verify-email";
-  userId: string;
-  url: string;
-}) {
-  const sanitizedUrl = sanitizeAuthUrl(args.url);
-  console.warn(
-    `[auth:${args.type}] RESEND_* env vars are not configured, using local fallback.`
-  );
-  // Never log the user's email — log userId only (see CLAUDE.md: no PII in logs).
-  console.warn(
-    `[auth:${args.type}] userId=${args.userId} url=${sanitizedUrl}`
-  );
-  if (!isProduction) {
-    console.warn(`[auth:${args.type}] fullUrl=${args.url}`);
-  }
-}
-
-async function sendAuthEmail(args: {
-  type: "reset-password" | "verify-email";
-  userId: string;
-  to: string;
-  subject: string;
-  html: string;
-  url: string;
-}) {
-  if (!resend || !env.RESEND_FROM_EMAIL) {
-    logAuthEmailFallback({
-      type: args.type,
-      userId: args.userId,
-      url: args.url,
-    });
-    return;
-  }
-
-  await resend.emails.send({
-    from: env.RESEND_FROM_EMAIL,
-    to: args.to,
-    subject: args.subject,
-    html: args.html,
-  });
-}
 
 /**
  * Build the list of origins Better Auth accepts on auth requests.
@@ -144,26 +76,73 @@ function buildTrustedOrigins(): string[] {
   return [...new Set(origins)];
 }
 
+const removedMemberResult = z.object({ id: z.string(), organizationId: z.string(), userId: z.string() });
+const MILLISECONDS_PER_SECOND = 1000;
+
 const apiKeyActions = ["create", "read", "update", "delete"] as const;
 const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
 
 export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      validateOrganizationRoleInput(ctx.path, ctx.body);
+      if (ctx.path === "/change-email") {
+        // 1.7.10's sensitiveSessionMiddleware re-reads the session but does not
+        // check freshness. Enforce it here before any email can be sent.
+        const session = await getAuthoritativeSessionFromCtx(ctx);
+        if (!session) throw new APIError("UNAUTHORIZED", { code: "UNAUTHORIZED", message: "Unauthorized" });
+        const freshAge = ctx.context.sessionConfig.freshAge;
+        const createdAt = new Date(session.session.createdAt).getTime();
+        if (freshAge !== 0 && Date.now() - createdAt >= freshAge * MILLISECONDS_PER_SECOND) {
+          throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
+        }
+      }
+      if (ctx.path === "/verify-email") await guardEmailChangeVerification(ctx);
+      await capturePasswordResetNotice(ctx);
       // HTTP callers cannot bypass the guarded application actions. Block reads
       // too, so plugin responses cannot expose credential hashes or metadata.
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
         throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
       }
+      if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      await deliverPasswordNotice(ctx);
+      const returned = ctx.context.returned;
+      if (returned instanceof APIError && returned.body?.code?.startsWith("YOU_CANNOT_LEAVE_THE_ORGANIZATION")) {
+        const session = await getSessionFromCtx(ctx);
+        const organizationId = ctx.body?.organizationId ?? session?.session.activeOrganizationId;
+        const member = session && organizationId ? await ctx.context.adapter.findOne<{ role: string }>({
+          model: "member",
+          where: [{ field: "organizationId", value: organizationId }, { field: "userId", value: session.user.id }],
+        }) : null;
+        translateLastAdminError(returned, member?.role);
+      }
+      // Better Auth's leave endpoint does not invoke afterRemoveMember.
+      // Only a successful, server-returned member can trigger this revocation,
+      // and only once that membership row is gone. A refused leave returns an
+      // APIError, which does not parse. After hooks do not carry the endpoint's
+      // session, so the database, not the session, confirms the removal.
+      if (ctx.path !== "/organization/leave") return;
+      const result = removedMemberResult.safeParse(ctx.context.returned);
+      if (!result.success) return;
+      await revokeDeletedMemberOAuthGrants(result.data);
     }),
   },
-  database: drizzleAdapter(db, {
+  database: withLastAdminGuard(drizzleAdapter(db, {
     provider: "pg",
     // Better Auth composes several writes (for example user + credential
     // account) through adapter transactions. Drizzle leaves this disabled by
     // default, so opt in explicitly or those writes can commit independently.
     transaction: true,
     schema: {
+      oauthClient: schema.oauthClients,
+      oauthResource: schema.oauthResources,
+      oauthClientResource: schema.oauthClientResources,
+      oauthConsent: schema.oauthConsents,
+      oauthAccessToken: schema.oauthAccessTokens,
+      oauthRefreshToken: schema.oauthRefreshTokens,
+      oauthClientAssertion: schema.oauthClientAssertions,
       apikey: schema.apiKeys,
       user: schema.users,
       session: schema.sessions,
@@ -173,8 +152,11 @@ export const auth = betterAuth({
       member: schema.members,
       invitation: schema.invitations,
     },
-  }),
+  })),
   user: {
+    changeEmail: {
+      enabled: true,
+    },
     additionalFields: {
       // Surfaces the `role` column (admin | user) on the session user so
       // requireAdmin() can gate admin routes. input:false keeps it out
@@ -189,63 +171,53 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    disableSignUp: !env.ALLOW_SELF_SIGNUP,
+    disableSignUp: true,
     requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
+    resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN_SECONDS,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
-      try {
-        await sendAuthEmail({
-          type: "reset-password",
-          userId: user.id,
-          to: user.email,
-          subject: "Reset your password",
-          url,
-          html: `
-            <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>Use the link below to choose a new password:</p>
-            <p><a href="${url}">Choose a new password</a></p>
-            <p>This link expires in 24 hours.</p>
-            <p>If you did not request a password reset, ignore this email.</p>
-          `,
-        });
-      } catch (error) {
-        console.error("Failed to send password reset email:", {
-          userId: user.id,
-          from: env.RESEND_FROM_EMAIL,
-          error,
-        });
-        throw error;
-      }
+      await sendAuthEmail({
+        type: "reset-password",
+        userId: user.id,
+        to: user.email,
+        url,
+        ...resetPasswordEmail({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
+      });
     },
   },
   emailVerification: {
     sendOnSignUp: true,
-    expiresIn: 60 * 60 * 24, // 24 hours
+    expiresIn: EMAIL_VERIFICATION_EXPIRES_IN_SECONDS,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      try {
+    sendVerificationEmail: async ({ user, url, token }) => {
+      // Only the server-signed token identifies an email-change request.
+      // Never infer the old address from client input or an unverified decode.
+      const verification = await readEmailVerificationToken(token, env.BETTER_AUTH_SECRET);
+      if (!verification) throw new Error("Invalid email verification token.");
+      if (verification.requestType === "change-email-verification") {
+        const { email: currentEmail, updateTo } = verification;
+        if (updateTo !== user.email) throw new Error("Invalid email verification token.");
+        const appUrl = getEmailAppUrl();
         await sendAuthEmail({
-          type: "verify-email",
+          type: "email-change-confirm",
           userId: user.id,
           to: user.email,
           url,
-          subject: "Verify your email",
-          html: `
-            <p>Hello ${escapeHtml(user.name || "there")},</p>
-            <p>Use the link below to verify your email address:</p>
-            <p><a href="${url}">Verify email</a></p>
-            <p>This link expires in 24 hours.</p>
-          `,
+          idempotencyKey: `email-change-confirm/${user.id}/${randomUUID()}`,
+          ...emailChangeConfirmEmail({ to: user.email, currentEmail, url, appUrl }),
         });
-      } catch (error) {
-        console.error("Failed to send verification email:", {
-          userId: user.id,
-          from: env.RESEND_FROM_EMAIL,
-          error,
-        });
-        throw error;
+        await sendEmailChangeNotice({ userId: user.id, email: currentEmail, newEmail: user.email });
+        return;
       }
+      await sendAuthEmail({
+        type: "verify-email",
+        userId: user.id,
+        to: user.email,
+        url,
+        ...verifyEmailEmail({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
+      });
     },
   },
   session: {
@@ -253,7 +225,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // Refresh every 24 hours
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60, // 5 minutes
+      maxAge: SESSION_COOKIE_CACHE_SECONDS,
     },
   },
   rateLimit: {
@@ -261,9 +233,11 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
+      ...(env.OAUTH_PROVIDER_ENABLED ? { "/oauth2/consent": OAUTH_ENDPOINT_LIMITS.consent, "/oauth2/continue": OAUTH_ENDPOINT_LIMITS.continue } : {}),
       "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 3 },
       "/request-password-reset": { window: 15 * 60, max: 5 },
+      "/change-email": { window: CHANGE_EMAIL_WINDOW_SECONDS, max: CHANGE_EMAIL_MAX_ATTEMPTS },
       "/reset-password": { window: 15 * 60, max: 10 },
     },
   },
@@ -354,6 +328,8 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    ...(env.OAUTH_PROVIDER_ENABLED ? [createOAuthProvider()] : []),
+    ...createOAuthCimdPlugins(),
     apiKey({
       references: "organization",
       defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,
@@ -368,30 +344,52 @@ export const auth = betterAuth({
       startingCharactersConfig: { shouldStore: false },
     }),
     organization({
+      // 1.7.10 uses creatorRole in remove, demote, invite and leave checks.
+      // Keep full member management, but reserve lifecycle for Platform Admins.
+      disableOrganizationDeletion: true,
+      creatorRole: "admin",
       ac: organizationAccess,
       roles: {
-        owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
-        admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: apiKeyActions }),
+        admin: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
         member: organizationAccess.newRole(memberAc.statements),
       },
       // Organization creation is reserved for app-level Platform Admins. The
-      // guarded server action uses the server-only userId path so the selected
-      // user, rather than the acting Platform Admin, becomes the Owner.
+      // guarded server action creates the org and selected Admin membership
+      // atomically in data-access; the acting Platform Admin is not enrolled.
       allowUserToCreateOrganization: false,
       organizationHooks: {
-        afterRemoveMember: async ({ member }) => {
-          await disableOwnerApiKeys(member.organizationId, member.userId);
+        beforeAddMember: async ({ member }) => {
+          assertOrganizationRole(member.role);
         },
-        afterUpdateMemberRole: async ({ member }) => {
+        beforeAcceptInvitation: async ({ invitation }) => {
+          assertOrganizationRole(invitation.role);
+        },
+        afterRemoveMember: async ({ member, user, organization }) => {
+          await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
+          await disableOwnerApiKeys(member.organizationId, member.userId);
+          await sendRemovedFromOrganizationNotice({
+            userId: user.id, email: user.email, memberId: member.id,
+            organizationId: organization.id, organizationName: organization.name,
+          });
+        },
+        afterUpdateMemberRole: async ({ member, previousRole, user, organization }) => {
+          if (!oauthRolePolicy(member.role).connect) {
+            await revokeMemberOAuthGrants(member.organizationId, member.userId, member.id);
+          }
           if (!canOwnApiKey(member.role)) {
             await disableOwnerApiKeys(member.organizationId, member.userId);
           }
+          await sendRoleChangedNotice({
+            userId: user.id, email: user.email, memberId: member.id,
+            organizationId: organization.id, organizationName: organization.name,
+            fromRole: previousRole, toRole: member.role,
+          });
         },
         afterCreateOrganization: async ({ organization }) => {
           try {
             await seedOrgDefaults(db, organization.id);
           } catch (error) {
-            // Organization and owner membership are already committed before
+            // Organization and admin membership are already committed before
             // this hook runs. Starter types are optional and can be recreated,
             // so do not turn a recoverable seed failure into a wedged retry.
             logger.error(
@@ -402,44 +400,22 @@ export const auth = betterAuth({
         },
       },
       invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,
+      invitationLimit: ORGANIZATION_INVITATION_LIMIT,
       // Re-inviting the same email cancels the stale pending invite so the
       // pending list never shows duplicates.
       cancelPendingInvitationsOnReInvite: true,
-      sendInvitationEmail: async (data) => {
-        const acceptUrl = buildInvitationAcceptUrl(data.id);
-        // The UI also surfaces a copyable accept link from the invite action,
-        // so email is best-effort. Never log the invitee email (PII) — log the
-        // invitation and organization ids only.
-        if (!resend || !env.RESEND_FROM_EMAIL) {
-          console.warn(
-            `[auth:org-invite] RESEND_* not configured; using copyable-link fallback. invitationId=${data.id} organizationId=${data.organization.id}`
-          );
-          if (!isProduction) {
-            console.warn(`[auth:org-invite] acceptUrl=${acceptUrl}`);
-          }
-          return;
-        }
-        try {
-          await resend.emails.send({
-            from: env.RESEND_FROM_EMAIL,
-            to: data.email,
-            subject: `You're invited to join ${data.organization.name}`,
-            html: `
-              <p>Hello,</p>
-              <p>Join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
-              <p><a href="${acceptUrl}">Accept invitation</a></p>
-              <p>This invitation expires in 7 days.</p>
-            `,
-          });
-        } catch (error) {
-          console.error("Failed to send org invitation email:", {
-            invitationId: data.id,
-            organizationId: data.organization.id,
-            from: env.RESEND_FROM_EMAIL,
-            error,
-          });
-          // Swallow — the copyable link in the UI is the reliable path.
-        }
+      sendInvitationEmail: async (data, request) => {
+        // Server actions own delivery and its result after createInvitation
+        // returns. Direct HTTP plugin calls still send here. Never send twice.
+        if (!request) return;
+        await sendOrganizationInvitation({
+          invitationId: data.id,
+          organizationId: data.organization.id,
+          organizationName: data.organization.name,
+          inviterName: data.inviter?.user?.name,
+          email: data.email,
+          role: data.role,
+        });
       },
     }),
     nextCookies(),

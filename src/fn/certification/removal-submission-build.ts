@@ -1,3 +1,4 @@
+import { generatedEvidenceFacts, type GeneratedEvidenceFacts } from "./generated-evidence-facts";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 export { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -5,7 +6,6 @@ import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -61,8 +61,9 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+import { normalizeCarriedEntriesForHash, normalizeEntryContributionsForHash, normalizeEntrySourceBindingForHash } from "./removal-entry-hash";
 import { planRemovalEvidence } from "./removal-evidence-plan";
-import type { PreparedRemovalSubmission } from "./removal-submission-prepare";
+import { removalSubmissionBindingOptions, type PreparedRemovalSubmission } from "./removal-submission-prepare";
 
 export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
@@ -76,6 +77,9 @@ export interface RemovalSubmissionBuild {
   datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
+  generatedEvidenceFacts?: GeneratedEvidenceFacts;
+  templateObservationId?: string;
+  frozenEntrySet?: { entryId: string; contentRevision: number }[];
   monitored: ResolvedMonitoredInput[];
   fixed: ResolvedFixedInput[];
   datapointBodyByKey: Map<string, CreateDatapointRequest>;
@@ -128,6 +132,8 @@ export interface RemovalSubmissionReview {
     deliveryCode: string;
   }>;
   reportingWindow: { startedOn: string; completedOn: string };
+  /** Components this Removal leaves out: already sent with, or claimed by, an earlier Removal. */
+  omittedComponentIds?: string[];
   productionEmissionClaims?: Array<{
     creditBatchId: string;
     creditBatchCode: string;
@@ -166,7 +172,10 @@ export interface CompiledRemovalSubmission {
 export interface MaterializedRemovalSubmissionSnapshot {
   payloadSnapshot: {
     __mappingRevision: string;
+    templateObservationId?: string;
+    frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
+    generatedEvidenceFacts?: GeneratedEvidenceFacts;
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
@@ -235,7 +244,10 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources });
+  const unbindable = findUnbindableTemplateInputs(
+    args.prepared.removalTemplate,
+    removalSubmissionBindingOptions(args.ctx, args.prepared.lineSources),
+  );
   if (unbindable.length > 0) {
     return {
       review: emptyReview(args.prepared.removalTemplate),
@@ -345,18 +357,30 @@ export async function compileRemovalSubmission(
       wireUnit: input.quantity.unit,
       wireType: input.datapointType,
     })),
-    ...build.fixed.map((input) => ({
-      componentId: input.removalTemplateComponentId,
-      componentBlueprintKey:
-        templateComponentById.get(input.removalTemplateComponentId)
-          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
-      componentDisplayName: templateComponentById.get(
+    ...build.fixed.map((input) => {
+      const component = templateComponentById.get(
         input.removalTemplateComponentId,
-      )?.display_name,
-      inputKey: input.inputKey,
-      binding: "fixed" as const,
-      fixedDatapointId: input.preboundDatapointId,
-    })),
+      );
+      const fixedValue = args.ctx.fixedInputValues?.find(
+        (value) =>
+          value.componentId === input.removalTemplateComponentId &&
+          value.inputKey === input.inputKey,
+      );
+      return {
+        componentId: input.removalTemplateComponentId,
+        componentBlueprintKey:
+          // A fixed input whose component the template no longer carries keeps a string key, saying so.
+          component?.blueprint_key ?? "Component not in the template",
+        componentDisplayName: component?.display_name,
+        inputKey: input.inputKey,
+        binding: "fixed" as const,
+        // The datapoint's own value, read with the template observation.
+        ...(fixedValue
+          ? { wireMagnitude: fixedValue.magnitude, wireUnit: fixedValue.unit }
+          : {}),
+        fixedDatapointId: input.preboundDatapointId,
+      };
+    }),
     ...args.prepared.removalTemplate.groups.flatMap((group) =>
       group.components
         .filter((component) =>
@@ -407,6 +431,7 @@ export async function compileRemovalSubmission(
       mappingRevision: MAPPING_REVISION,
     },
     bindings,
+    omittedComponentIds: [...build.omittedTemplateComponentIds],
     measurementSamples,
     directSequestrationDatapoints,
     sourceIds: [...build.sourceIds],
@@ -562,6 +587,9 @@ export function materializeRemovalSubmissionSnapshot(args: {
     payloadSnapshot: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
+      generatedEvidenceFacts: compiled.generatedEvidenceFacts,
+      ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
+        frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
       memberCreditBatchIds: compiled.memberCreditBatchIds,
       sourceBindingPlan: compiled.sourceBindingPlan,
       transport: {
@@ -622,7 +650,6 @@ export async function buildRemovalSubmissionBuild(args: {
     removalTemplate,
     blueprintsByKey,
     externalProjectId,
-    allowPeriodInputStub,
     hasDurabilityComponents,
   } = args.prepared;
 
@@ -699,6 +726,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const agg = transportAgg;
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
+    facilityTimezone: ctx.facilityTimezone,
     lineages: ctx.lineages,
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),
@@ -709,6 +737,7 @@ export async function buildRemovalSubmissionBuild(args: {
     latestApplicationTime,
   });
   const reportingWindow = resolveRemovalReportingWindow({
+    facilityTimezone: ctx.facilityTimezone,
     earliestProductionStartTime: agg.earliestStartTime,
     latestProductionEndTime: agg.latestEndTime,
     latestApplicationTime,
@@ -747,12 +776,13 @@ export async function buildRemovalSubmissionBuild(args: {
   } = resolveTemplateInputs({
     template: removalTemplate,
     lineSources: args.prepared.lineSources,
+    emissionLines: ctx.emissionLines,
+    entryContributions: ctx.removalEntryContext?.contributions,
     blueprintsByKey,
     agg,
     externalProjectId,
     sourceIds: datapointSourceIds,
     sourceBindingPlan,
-    allowPeriodInputStub,
     omitProductionComponents: !hasProductionContribution,
   });
   const hasOnly1000YearBatches =
@@ -783,9 +813,13 @@ export async function buildRemovalSubmissionBuild(args: {
       )
     : [];
 
+  const carriedEntriesForHash = normalizeCarriedEntriesForHash(ctx.removalEntryContext?.contributions.carriedEntries) ?? [];
   const semanticPayload = {
     removalId,
     mappingRevision: MAPPING_REVISION,
+    ...(ctx.removalEntryContext ? { templateSemanticFingerprint: ctx.removalEntryContext.semanticFingerprint,
+      ...(carriedEntriesForHash.length > 0 ? { carriedEntries: carriedEntriesForHash } : {}),
+      entryContributions: normalizeEntryContributionsForHash(ctx.removalEntryContext.contributions.manifest) } : {}),
     externalProjectId,
     templateId: removalTemplate.id,
     omittedTemplateComponentIds,
@@ -796,11 +830,11 @@ export async function buildRemovalSubmissionBuild(args: {
     startedOn: reportingWindow.startedOn.toISOString(),
     completedOn: reportingWindow.completedOn.toISOString(),
     sourceIds,
-    sourceBindingPlan: semanticSourceBindingPlan,
+    sourceBindingPlan: semanticSourceBindingPlan.map(normalizeEntrySourceBindingForHash),
     candidateSources: candidateSourceDocuments
       .map((candidate) => ({
         documentId: candidate.documentId,
-        binding: candidate.binding,
+        binding: candidate.binding ? normalizeEntrySourceBindingForHash(candidate.binding) : null,
         biocharApplicationId: candidate.biocharApplicationId,
       }))
       .sort((left, right) =>
@@ -843,6 +877,9 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
+    generatedEvidenceFacts: generatedEvidenceFacts(ctx),
+    templateObservationId: ctx.removalEntryContext?.observationId,
+    frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
     monitored,
     fixed,
     datapointBodyByKey,

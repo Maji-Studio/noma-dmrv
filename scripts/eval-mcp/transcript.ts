@@ -1,4 +1,5 @@
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { TOOL_TEXT_SEPARATOR } from "@/lib/mcp/tool-text";
 
 export interface ToolCall {
   id: string;
@@ -32,12 +33,23 @@ function object(value: unknown): Record<string, unknown> {
     ? value as Record<string, unknown> : {};
 }
 
+/** Accept JSON wrappers and the summary plus compact JSON emitted by MCP. */
+function parseResultText(text: string): unknown {
+  try { return JSON.parse(text); } catch { /* Try the JSON after the summary. */ }
+  const separator = text.lastIndexOf(TOOL_TEXT_SEPARATOR);
+  if (separator !== -1) {
+    try { return JSON.parse(text.slice(separator + TOOL_TEXT_SEPARATOR.length)); } catch { /* Plain result text. */ }
+  }
+  return undefined;
+}
+
 function resultHasError(value: unknown): boolean {
+  if (typeof value === "string") return resultHasError(parseResultText(value));
   if (Array.isArray(value)) return value.some(resultHasError);
   const result = object(value);
   if (result.isError === true || result.is_error === true) return true;
   if (typeof result.text === "string") {
-    try { return resultHasError(JSON.parse(result.text)); } catch { /* Plain result text. */ }
+    if (resultHasError(result.text)) return true;
   }
   return Array.isArray(result.content) && result.content.some(resultHasError);
 }
@@ -45,7 +57,7 @@ function resultHasError(value: unknown): boolean {
 function stockBody(value: unknown): Record<string, unknown> | undefined {
   if (value == null) return undefined;
   if (typeof value === "string") {
-    try { return stockBody(JSON.parse(value)); } catch { return undefined; }
+    return stockBody(parseResultText(value));
   }
   if (Array.isArray(value)) {
     for (const block of value) {
@@ -63,7 +75,7 @@ function stockBody(value: unknown): Record<string, unknown> | undefined {
 function partyRows(value: unknown): Record<string, unknown>[] | undefined {
   if (value == null) return undefined;
   if (typeof value === "string") {
-    try { return partyRows(JSON.parse(value)); } catch { return undefined; }
+    return partyRows(parseResultText(value));
   }
   if (Array.isArray(value)) {
     for (const block of value) { const rows = partyRows(block); if (rows) return rows; }
@@ -71,6 +83,7 @@ function partyRows(value: unknown): Record<string, unknown>[] | undefined {
   }
   const result = object(value);
   if (Array.isArray(result.data)) return result.data.map(object);
+  if (typeof object(result.data).id === "string") return [object(result.data)];
   return partyRows(result.structuredContent) ?? partyRows(result.content) ?? partyRows(result.text);
 }
 
@@ -78,7 +91,7 @@ function partyRows(value: unknown): Record<string, unknown>[] | undefined {
 function applicationBody(value: unknown): Record<string, unknown> | undefined {
   if (value == null) return undefined;
   if (typeof value === "string") {
-    try { return applicationBody(JSON.parse(value)); } catch { return undefined; }
+    return applicationBody(parseResultText(value));
   }
   if (Array.isArray(value)) {
     for (const item of value) { const body = applicationBody(item); if (body) return body; }
@@ -119,7 +132,7 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
           if (call.name === "mcp__noma__record_application") {
             call.applicationResult = applicationBody(event.tool_use_result) ?? applicationBody(block.content);
           }
-          if (call.name === "mcp__noma__find_suppliers" || call.name === "mcp__noma__find_customers") {
+          if (["find_suppliers", "find_customers", "find_supplier_locations", "find_customer_locations", "get_supplier_location", "get_customer_location", "get_order", "find_orders"].some(name => call.name === `mcp__noma__${name}`)) {
             call.partyRows = partyRows(event.tool_use_result) ?? partyRows(block.content);
           }
           if (call.name === "mcp__noma__create_supplier") {

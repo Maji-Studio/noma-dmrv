@@ -24,7 +24,7 @@ it("commits one audit and replays its effect without another event", async () =>
   expect(first.effect).toEqual({
     outcome: "created", entityType: "feedstock", entityIds: first.data.feedstocks.map((item) => item.id),
     versionBefore: null, versionAfter: 1,
-    changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId", "transportDistanceKm", "transportDistanceSource"],
+    changedFields: ["code", "deliveryDate", "distanceKmOverride", "distanceSource", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId", "transportDistanceKm", "transportDistanceSource"],
   });
   const events = await rows();
   expect(events).toHaveLength(1);
@@ -168,7 +168,7 @@ it("stores mass and link changes but only the note name, and omits re-sent uncha
     massWetKg: { from: String(before.massWetKg), to: String(massWetKg) },
     supplierId: { from: before.supplierId, to: supplier.id },
   });
-  expect(events[0].changedFields).toEqual(["massDryKg", "massWetKg", "notes", "supplierId", "transportDistanceKm", "transportDistanceSource"]);
+  expect(events[0].changedFields).toEqual(["distanceKmOverride", "distanceSource", "massDryKg", "massWetKg", "notes", "supplierId", "transportDistanceKm", "transportDistanceSource"]);
   expect(updated.effect?.changedFields).toEqual(events[0].changedFields);
   expect(updated.effect).not.toHaveProperty("changes");
   expect(events[0].changes).not.toHaveProperty("notes");

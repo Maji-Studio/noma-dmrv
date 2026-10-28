@@ -1,5 +1,6 @@
 "use client";
 
+import { orderDeepLinkHref } from "@/lib/order-links";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
@@ -11,6 +12,10 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { deliveryDeepLinkHref } from "@/lib/delivery-links";
+import { ActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -24,7 +29,7 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useOrderStats, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import {
@@ -39,11 +44,22 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
 /** The customer filter also lists archived customers, so their orders stay findable. */
 const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
+
+/** Record detail an operator can add from the Columns menu. */
+const ORDER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  customerLocation: false,
+  formulation: false,
+  packaging: false,
+};
 
 // ============================================
 // Column Definitions
@@ -51,12 +67,13 @@ const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
 
 function createColumns(
   onEdit: (order: OrderWithRelations) => void,
-  onDelete: (orderId: string) => void
+  onDelete: (orderId: string) => void,
+  locks: RecordLockViews,
 ): ColumnDef<OrderWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>,
     },
@@ -73,19 +90,30 @@ function createColumns(
       cell: ({ row }) => row.original.customerName || MISSING_VALUE.notRecorded,
     },
     {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
+      id: "customerLocation",
+      header: "Customer location",
+      accessorFn: (row) => row.customerLocationName ?? "",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {row.original.facilityName || MISSING_VALUE.notAvailable}
-        </span>
+        <span className="block max-w-xs truncate">{row.original.customerLocationName || MISSING_VALUE.notSet}</span>
+      ),
+    },
+    {
+      id: "formulation",
+      header: "Formulation",
+      accessorFn: (row) => row.formulationName ?? "",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.formulationName || MISSING_VALUE.notSet}</span>
       ),
     },
     {
       accessorKey: "quantityKg",
       header: "Requested wet mass (kg)",
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
+    },
+    {
+      accessorKey: "packaging",
+      header: "Packaging",
+      cell: ({ row }) => <span className="capitalize">{row.original.packaging}</span>,
     },
     {
       accessorKey: "deliveryCount",
@@ -119,17 +147,20 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        // Never offer what the server refuses: Sent locks every field, and an
+        // order with deliveries cannot be deleted.
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -172,6 +203,8 @@ export function OrderList() {
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
@@ -206,7 +239,8 @@ export function OrderList() {
   const toast = useToast();
 
   const orders = ordersData?.items ?? [];
-  const totalOrders = ordersData?.total ?? 0;
+  const orderLocks = useRecordLocks("order", orders.map((order) => order.id));
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("order", displaySideSheet?.entity?.id);
   const totalPages = ordersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -214,11 +248,11 @@ export function OrderList() {
     isLoading,
     setCurrentPage,
   });
-  const totalDeliveries = orders.reduce((sum, o) => sum + o.deliveryCount, 0);
-  const totalQuantityKg = orders.reduce((sum, o) => sum + o.quantityKg, 0);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useOrderStats(facilityId || undefined, { enabled: !!facilityId });
 
   // Side sheet helpers
   const openCreate = () => {
+    createOrder.startDraft();
     void setFocusedOrderId(null);
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });
@@ -275,18 +309,18 @@ export function OrderList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: OrderFormData) => {
+  const handleCreate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
       toast.success("Order created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: OrderFormData) => {
+  const handleUpdate = async (data: OrderFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     try {
@@ -294,7 +328,7 @@ export function OrderList() {
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Order was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Order was not saved. Try again."));
     }
   };
 
@@ -313,7 +347,21 @@ export function OrderList() {
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
+      const message = toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const row = orders.find((item) => item.id === deletingOrderId);
+        const meta = error instanceof ActionError ? error.issues.find((issue) => issue.meta?.reason === "in_use")?.meta : undefined;
+        const deliveryId = typeof meta?.deliveryId === "string" ? meta.deliveryId : null;
+        const deliveryCode = typeof meta?.deliveryCode === "string" ? meta.deliveryCode : null;
+        setInUseRefusal({
+          code: row?.code ?? "Order",
+          message,
+          reference: deliveryId && deliveryCode ? { href: deliveryDeepLinkHref(deliveryId, row?.facilityId), code: deliveryCode, kind: "delivery" } : undefined,
+        });
+        setDeletingOrderId(null);
+        return;
+      }
+      setDeleteError(message);
     }
   };
 
@@ -325,7 +373,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
 
   if (!facilityId) {
     return (
@@ -333,7 +381,6 @@ export function OrderList() {
         <PageHeader
           area="distribution"
           title="Orders"
-          subtitle="Customer orders for biochar products"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
       </div>
@@ -362,19 +409,21 @@ export function OrderList() {
       <PageHeader
         area="distribution"
         title="Orders"
-        subtitle="Customer orders for biochar products"
         actions={
           <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New order</Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Total orders" value={statsData?.totalOrders ?? 0} description="All orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
+        <StatCard title="Total deliveries" value={statsData?.totalDeliveries ?? 0} description="On all orders in this facility" icon={<TruckIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
+        <StatCard title="Total quantity" value={`${(statsData?.totalQuantityKg ?? 0).toLocaleString()} kg`} description="Ordered across all orders in this facility" icon={<PackageIcon size={24} weight="bold" />} isLoading={statsLoading} isError={statsError} />
       </div>
 
+      <RecordLockListNotice read={orderLocks} />
+
       <DataTable
+        defaultColumnVisibility={ORDER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={orders}
         enableSorting={false}
@@ -393,6 +442,7 @@ export function OrderList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => orderDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -444,10 +494,8 @@ export function OrderList() {
       </DataTable>
 
       {/* Unified Side Sheet */}
-      {/* Both modes: the form hides matching stock in Simple too. */}
       <EntitySideSheet
         numberedSections
-        detailToggle
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
@@ -459,12 +507,15 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={displaySideSheet?.entity as Order | undefined}
+          lock={sheetLock}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}
@@ -473,8 +524,14 @@ export function OrderList() {
         />
       </EntitySideSheet>
 
-      {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+        </InUseDeleteDialog>
+      )}
+
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} errorMessage={deleteError ?? undefined} />
     </div>
   );
 }

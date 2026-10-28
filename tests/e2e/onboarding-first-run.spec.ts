@@ -10,7 +10,7 @@ import {
   E2E_CERTIFIER_CLIENT_SECRET,
   maskedCertifierAccessToken,
 } from "./fixtures/certifier-credentials";
-import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
+import { openCertifierKeys, saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
@@ -20,7 +20,7 @@ const ACCESS_TOKEN = "e2e-onboarding-access-9999";
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
-  name: "E2E Onboarding Owner",
+  name: "E2E Onboarding Admin",
   role: "user" as const,
   password: "TestPassword123!",
 };
@@ -59,7 +59,7 @@ test.describe("First-run onboarding", () => {
         id: `e2e-onboarding-member-${RUN_TAG}`,
         organizationId: ORG_ID,
         userId: USER_ID,
-        role: "owner",
+        role: "admin",
       });
     });
 
@@ -84,9 +84,8 @@ test.describe("First-run onboarding", () => {
       await guide.getByRole("button", { name: "Add facility" }).click();
       const facilitySheet = page.getByRole("dialog", { name: "Create facility" });
       await expect(facilitySheet.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
-      const tierGroup = facilitySheet.getByRole("radiogroup", { name: "Durability tier" });
-      await expect(tierGroup.getByRole("radio", { name: /1000-year/i })).toHaveAttribute("aria-checked", "true");
-      await expect(tierGroup.getByRole("radio", { name: /200-year/i })).toHaveAttribute("aria-disabled", "true");
+      // Q9 (#1277): the tier lives in Settings, Facilities, not on the create form.
+      await expect(facilitySheet.getByText("Durability tier")).toHaveCount(0);
       await facilitySheet.getByRole("textbox", { name: /facility name/i }).fill(`E2E Onboarding Facility ${RUN_TAG}`);
       await facilitySheet.getByRole("textbox", { name: /^country/i }).fill("Tanzania");
       await page.locator("#gps-latitude").fill("-8.3");
@@ -111,8 +110,8 @@ test.describe("First-run onboarding", () => {
 
       await guide.getByRole("button", { name: "Connect registry" }).click();
       const registry = page.getByRole("dialog", { name: "Connect your registry", exact: true });
-      await expect(registry.getByText("Puro.earth")).toBeVisible();
-      await expect(registry.getByText("CSI")).toBeVisible();
+      // Q8 (#1277): one registry, named in a status line, not a row of cards.
+      await expect(registry.getByText("Registry: Isometric")).toBeVisible();
       await expect(registry.getByLabel("Access token")).toBeVisible();
       await expect(registry.getByLabel("Client secret")).toBeVisible();
       await registry.getByLabel("Access token").fill("e2e-unsaved-token");
@@ -126,7 +125,7 @@ test.describe("First-run onboarding", () => {
       await expect(registry).not.toBeVisible();
       await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
 
-      // Save the keys through the Platform Admin directory so the app server
+      // Save the keys on the Platform Organizations page so the app server
       // encrypts them (#1010). The fixture secret cannot form an HTTP header,
       // so the post-save connection check fails offline and the journey stays
       // hermetic. Then reload to read the stored status back.
@@ -137,15 +136,10 @@ test.describe("First-run onboarding", () => {
       await expect(
         keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.network, { exact: true }),
       ).toBeVisible();
-      await adminPage.reload();
-      const organization = adminPage
-        .getByRole("listitem")
-        .filter({ hasText: ORG_NAME });
-      await expect(organization).toBeVisible();
-      await expect(organization.getByText("Keys saved")).toBeVisible();
-      await organization.getByRole("button", { name: "Isometric keys" }).click();
+      const storedKeys = await openCertifierKeys(adminPage, ORG_NAME);
+      await expect(storedKeys.getByText("Saved", { exact: true })).toBeVisible();
       await expect(
-        adminPage.getByRole("dialog").getByText(maskedCertifierAccessToken(ACCESS_TOKEN), { exact: false }),
+        storedKeys.getByText(maskedCertifierAccessToken(ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
 
       await expect(guide.getByText("Build your first traceability chain")).toBeVisible();
@@ -225,11 +219,13 @@ test.describe("First-run onboarding", () => {
         schema.suppliers,
         schema.reactors,
         schema.facilities,
-        schema.members,
       ] as const;
       for (const table of orgTables) {
         await db.delete(table).where(eq(table.organizationId, ORG_ID));
       }
+      await db
+        .delete(schema.organizations)
+        .where(eq(schema.organizations.id, ORG_ID));
       await db
         .delete(schema.sessions)
         .where(eq(schema.sessions.userId, USER_ID));
@@ -237,9 +233,6 @@ test.describe("First-run onboarding", () => {
         .delete(schema.accounts)
         .where(eq(schema.accounts.userId, USER_ID));
       await db.delete(schema.users).where(eq(schema.users.id, USER_ID));
-      await db
-        .delete(schema.organizations)
-        .where(eq(schema.organizations.id, ORG_ID));
       await pool.end();
     }
   });

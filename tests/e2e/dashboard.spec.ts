@@ -256,7 +256,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 });
 
 test.describe("Credit batch view sheet (Phase 5)", () => {
-  test("retired detail route opens the view sheet with sections and edit mode", async ({
+  test("the list sheet previews the batch, edits it and links to its page", async ({
     adminPage,
     seededData,
   }) => {
@@ -266,10 +266,8 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
       seededData.feedstockType.id,
     );
     const page = adminPage;
-    await page.goto(`/credit-batches/${batch.id}`);
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}&batch=${batch.id}`);
 
-    // The old detail URL redirects into the list's deep-linked view sheet.
-    await expect(page).toHaveURL(new RegExp(`[?&]batch=${batch.id}`));
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: batch.code })).toBeVisible();
 
@@ -280,22 +278,27 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     // Sentence case (docs/design-system.md › Label casing); `exact: true` is
     // case-sensitive, so this string must match the UI's casing exactly.
     await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
-    // This fixture has no preview: no summary metric, and an explicit missing figure.
+    // This fixture has no preview: no summary metric, and the derived figure is left out, not a placeholder.
     await expect(sheet.getByText("Estimated CO₂e stored", { exact: true })).toHaveCount(0);
     const carbonEstimate = sheet.getByRole("region", {
       name: "Carbon estimate, before project emissions",
       exact: true,
     });
-    await expect(carbonEstimate.getByText("Not available", { exact: true })).toBeVisible();
+    await expect(carbonEstimate).toBeVisible();
+    await expect(carbonEstimate).not.toContainText("≈");
+    await expect(carbonEstimate).not.toContainText("Not available");
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(
       sheet.getByText("Production runs", { exact: true }),
     ).toBeVisible();
 
-    // Readiness and lab samples render below the sections.
-    await expect(sheet.getByTestId("batch-health-strip")).toBeVisible();
-    await expect(sheet.getByText("Certification requirements")).toBeVisible();
-    await expect(sheet.getByText("Lab Samples", { exact: true })).toBeVisible();
+    // A preview: the checklist and Samples live on the batch page it links to.
+    await expect(sheet.getByTestId("batch-health-strip")).toHaveCount(0);
+    await expect(sheet.getByText("Lab Samples", { exact: true })).toHaveCount(0);
+    await expect(sheet.getByRole("link", { name: "Open credit batch" })).toHaveAttribute(
+      "href",
+      `/credit-batches/${batch.id}?facility=${seededData.facility.id}`,
+    );
 
     // Registry/accounting fields are deliberately absent; the form mounts only
     // after the footer edit action is used.
@@ -303,7 +306,7 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     await expect(page.locator("#startDate")).toHaveCount(0);
 
     // Footer edit swaps the sheet to the form; cancel closes the sheet.
-    await sheet.getByRole("button", { name: "Edit credit batch" }).click();
+    await sheet.getByRole("button", { name: "Edit", exact: true }).click();
     await expect(page.locator("#startDate")).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator("#startDate")).toHaveCount(0);

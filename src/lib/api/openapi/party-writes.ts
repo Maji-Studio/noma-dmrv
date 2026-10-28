@@ -10,9 +10,10 @@ import { itemEnvelopeSchema } from "@/lib/representations/envelopes";
 import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
 import { createSupplierApiInput, updateSupplierApiInput } from "@/schemas/supplier-input";
 import type { JsonSchema } from "@/lib/operations/json-schema";
-import { mutationQuerySchema } from "../query";
+import { cascadePreviewSchema, customerDeleteConflictSchema } from "../problem-schema";
+import { customerDeleteQuerySchema, mutationQuerySchema } from "../query";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
-import { etagHeader, idempotencyParameter, ifMatchParameter, jsonResponse, locationHeader, privateHeaders, problemResponses, queryParameters, targetParameter, writeHeaders } from "./transport";
+import { etagHeader, idempotencyParameter, ifMatchParameter, jsonResponse, locationHeader, privateHeaders, problemResponseComponents, problemResponses, queryParameters, targetParameter, writeHeaders } from "./transport";
 
 interface PartyWriteKit {
   publishOutput: (schema: z.ZodType) => JsonSchema;
@@ -103,12 +104,15 @@ export function addCustomerWritePaths(paths: Paths, { publishOutput, writeErrors
   };
   paths["/customers/{idOrCode}"].delete = {
     ...privateOperation("delete_customer", "customers:delete",
-      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Orders, including archived orders, answer 409 conflict with orderCodes metadata; registered storage-site locations answer 409 with locationIds metadata. Blockers point at /customerId. ${RETRY_GUIDANCE}`,
+      `Delete by UUID, including archived rows; deletes its locations and facility pairs. Orders without deliveries, including archived orders, are deleted with the customer under customers:delete alone. Deliveries answer 409 conflict with deliveryCodes metadata; registered storage-site locations answer 409 with locationIds metadata. Optional cascadeFingerprint from the dry run fences the order set after If-Match: a mismatch answers 409 cascade_changed at /cascadeFingerprint with a fresh preview of orders and cascadeFingerprint when available. Omission deletes the current order set. Keyed replay precedes both fences. Blockers point at /customerId. ${RETRY_GUIDANCE}`,
       {
         ...existingErrors,
+        "409": { ...problemResponseComponents().Problem409,
+          content: { "application/problem+json": { schema: publishOutput(customerDeleteConflictSchema) } },
+        },
         "204": { description: "Deleted, or replayed; no body or ETag.", headers: { ...privateHeaders, ...writeHeaders } },
-        "200": jsonResponse("Dry-run representation that would be deleted.", envelope, writeHeaders),
-      }, existingParameters),
+        "200": jsonResponse("Dry-run representation that would be deleted.", publishOutput(z.object({ data: customerRepresentationSchema.describe("Customer that would be deleted."), cascade: cascadePreviewSchema.describe("Orders that would be deleted with this customer."), warnings: z.array(z.string()).optional().describe("Cascade warnings, when present.") })), writeHeaders),
+      }, [targetParameter(true), ...queryParameters(customerDeleteQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: emptyBody,
   };
   for (const command of ["archive", "restore"] as const) {

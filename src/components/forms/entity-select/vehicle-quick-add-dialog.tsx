@@ -1,8 +1,7 @@
 /**
  * Vehicle Quick Add Dialog
  * Inline dialog for adding a vehicle from the EntitySelect dropdown, and for
- * editing one when `vehicle` is passed (the picker's edit action and the
- * settings list). Embeds the full VehicleForm inside QuickAddDialogShell.
+ * editing one when `vehicle` is passed (the picker's edit action). Embeds the full VehicleForm inside QuickAddDialogShell.
  */
 "use client";
 
@@ -17,6 +16,7 @@ import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateVehicle } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
@@ -32,7 +32,7 @@ interface VehicleQuickAddDialogProps {
 const VEHICLE_NOT_SAVED = "The vehicle was not saved. Try again.";
 
 /** The form's L/100km becomes the stored L/km; blank or electric is null. */
-function toVehiclePayload(data: VehicleFormData): VehicleQuickAddData {
+export function toVehiclePayload(data: VehicleFormData): VehicleQuickAddData {
   const isElectric = data.fuelType === "Electric";
   const fuelConsumption =
     isElectric || data.fuelConsumptionLPer100Km == null
@@ -57,7 +57,7 @@ export function VehicleQuickAddDialog({
 }: VehicleQuickAddDialogProps) {
   const create = useQuickAddSubmit<VehicleFormData>({
     entityType: "vehicle",
-    serverFn: (data) => createVehicleFn(toVehiclePayload(data)),
+    serverFn: (data, intentKey) => createVehicleFn(toVehiclePayload(data), { intentKey }),
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
@@ -67,7 +67,7 @@ export function VehicleQuickAddDialog({
   const update = useUpdateVehicle();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: VehicleFormData) => {
+  const handleEdit = async (data: VehicleFormData, onRefusal: SaveRefusalHandler) => {
     if (!vehicle) return;
     setEditError(null);
     try {
@@ -78,7 +78,7 @@ export function VehicleQuickAddDialog({
       });
       onClose();
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, VEHICLE_NOT_SAVED));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, VEHICLE_NOT_SAVED)));
     }
   };
 
@@ -90,7 +90,7 @@ export function VehicleQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
-      onOpen={() => setEditError(null)}
+      onOpen={() => { create.startDraft(); setEditError(null); }}
       title={isEdit ? "Edit vehicle" : "New vehicle"}
       testId={isEdit ? "vehicle-edit-dialog" : "vehicle-quick-add-dialog"}
       dismissible={!isSubmitting}

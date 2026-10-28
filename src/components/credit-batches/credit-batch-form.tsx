@@ -11,14 +11,17 @@
  */
 "use client";
 
-import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { formatUtcDate, toDateInputValue, facilityToday } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -42,6 +45,8 @@ import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 import { Notice } from "@/components/ui/notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
+import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 
 type CreditBatchFormInput = z.input<ReturnType<typeof creditBatchFormSchemaForCertifier>>;
 type CreditBatchFormResolver = Resolver<CreditBatchFormInput, unknown, CreditBatchFormData>;
@@ -72,7 +77,8 @@ interface CreditBatchFormProps {
     appliedWeightTons?: number;
   };
   /** Form submission handler */
-  onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: CreditBatchFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Called when the user edits the date range — used to clear a stale submit-time server error (e.g. an overlap message that no longer applies) */
   onClearServerError?: () => void;
   /** Cancel button handler */
@@ -85,8 +91,17 @@ interface CreditBatchFormProps {
   submitLabel?: string;
   /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
   stickyActions?: boolean;
-  /** Owner/admin capability, computed on the server by the page. */
+  /** Admin capability, computed on the server by the page. */
   canManage?: boolean;
+  /** Create mode only: the values the form opens with instead of today's date. */
+  defaultValues?: { feedstockTypeId?: string; startDate?: string; endDate?: string };
+  /**
+   * Create mode only: the window to propose once a feedstock is picked, as
+   * `YYYY-MM-DD`. Applied only while the operator has not edited a date.
+   */
+  windowForFeedstock?: (feedstockTypeId: string) => { startDate: string; endDate: string } | null;
+  /** The saved batch's lock: a Removal holding its slices fixes its definition. */
+  lock?: RecordLockView;
 }
 
 export function CreditBatchForm({
@@ -99,29 +114,43 @@ export function CreditBatchForm({
   submitLabel,
   stickyActions = true,
   canManage = false,
+  defaultValues,
+  windowForFeedstock,
+  lock,
 }: CreditBatchFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!creditBatch;
+  // Fail closed: the definition stays fixed until the lock answers, so a
+  // lock that arrives Held can never meet an edited membership.
+  const membershipLocked = isEditMode && (!lock || isCreditBatchMembershipLocked(lock));
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(creditBatch?.facilityId ?? contextFacilityId);
+  const today = facilityToday(timeZone);
 
   const {
     register,
     handleSubmit,
     control,
     trigger,
-    formState: { errors, isSubmitted },
+    formState: { errors, isSubmitted, dirtyFields },
     setValue,
+    resetField,
+    setError,
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
-      feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
-      startDate: toDateInputValue(creditBatch?.startDate),
-      endDate: toDateInputValue(creditBatch?.endDate),
+      feedstockTypeId: creditBatch?.feedstockTypeId ?? defaultValues?.feedstockTypeId ?? "",
+      startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate, today),
+      endDate: toDateInputValue(creditBatch?.endDate ?? defaultValues?.endDate, today),
       sampling: creditBatch?.sampling ?? "sampled",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
+
+  register("productionRunIds");
 
   // Sync facilityId from context when it arrives after mount
   useEffect(() => {
@@ -179,7 +208,11 @@ export function CreditBatchForm({
 
   // ResolvedErrorRevalidator covers value changes, but not policy query updates.
   // Recheck only surfaced errors or a submitted form when the policy changes.
-  const shouldRevalidateEndDate = isSubmitted || Boolean(errors.endDate);
+  // A refused save names the end date for a reason the client cannot recompute
+  // (a lock, the server's rule): revalidating would clear it at once. The next
+  // edit of the field clears it, as for any server error.
+  const endDateRefused = errors.endDate?.type === SERVER_ERROR_TYPE || errors.endDate?.type === LOCKED_ERROR_TYPE;
+  const shouldRevalidateEndDate = !endDateRefused && (isSubmitted || Boolean(errors.endDate));
   useEffect(() => {
     if (hasBothDates && shouldRevalidateEndDate) void trigger("endDate");
   }, [certifier, effectiveFacilityId, hasBothDates, shouldRevalidateEndDate, trigger]);
@@ -306,17 +339,24 @@ export function CreditBatchForm({
     ? "Update credit batch"
     : "Create credit batch";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const refuseSave = useSaveRefusal({
+    control, setError, resetField, formId,
+    dependents: {
+      startDate: ["productionRunIds"], endDate: ["productionRunIds"],
+      feedstockTypeId: ["productionRunIds"], facilityId: ["productionRunIds"],
+    },
+  });
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const sampling =
       isEditMode ||
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    onSubmit({ ...data, sampling });
-  });
+    return onSubmit({ ...data, sampling }, refuseSave);
+  }));
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* ── Batch definition ── */}
       <FormSection title="Batch definition" divider={false}>
@@ -329,10 +369,27 @@ export function CreditBatchForm({
             entityType="feedstockType"
             allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || membershipLocked}
             required
             filterBy={{ usage: "pyrolysis" }}
-            onChange={() => onClearServerError?.()}
+            onChange={(value, { asDefault }) => {
+              onClearServerError?.();
+              // A new batch proposes the feedstock's next free month, until
+              // the operator has typed a date of their own.
+              const proposed = !isEditMode && value && !dirtyFields.startDate && !dirtyFields.endDate
+                ? windowForFeedstock?.(String(value))
+                : null;
+              if (!proposed) return;
+              if (asDefault) {
+                // The lone feedstock was picked for the operator, so its
+                // window is the untouched form's baseline too.
+                resetField("startDate", { defaultValue: proposed.startDate as never });
+                resetField("endDate", { defaultValue: proposed.endDate as never });
+              } else {
+                setValue("startDate", proposed.startDate as never);
+                setValue("endDate", proposed.endDate as never);
+              }
+            }}
           />
         </div>
 
@@ -372,7 +429,7 @@ export function CreditBatchForm({
             <FormInput
               id="startDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.startDate}
               {...register("startDate", {
                 onChange: () => onClearServerError?.(),
@@ -389,7 +446,7 @@ export function CreditBatchForm({
             <FormInput
               id="endDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || membershipLocked}
               error={!!errors.endDate}
               {...register("endDate", {
                 onChange: () => onClearServerError?.(),

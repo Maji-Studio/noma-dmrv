@@ -18,6 +18,8 @@ import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/s
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
@@ -30,6 +32,7 @@ import {
   useCreateReactor,
   useDeleteReactor,
   useReactors,
+  useReactorStats,
   useUpdateReactor,
 } from "@/hooks/use-reactors";
 import {
@@ -37,12 +40,18 @@ import {
   type CreateReactorData,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { formatTotalThroughputTph } from "./reactor-throughput";
+import { formatThroughputTph } from "./reactor-throughput";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
+
+/** Throughput is optional detail an operator can add from the Columns menu. */
+const REACTOR_COLUMNS_HIDDEN_BY_DEFAULT = {
+  nominalThroughputTph: false,
+};
 
 // ============================================
 // Column Definitions
@@ -55,7 +64,7 @@ function createColumns(
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -67,23 +76,20 @@ function createColumns(
       cell: ({ row }) => <span>{row.original.identifier}</span>,
     },
     {
-      accessorKey: "facilityName",
-      header: "Facility",
-      cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-          {row.original.facilityCode && (
-            <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-              {row.original.facilityCode}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
+    },
+    {
+      accessorKey: "nominalThroughputTph",
+      header: "Nominal throughput (tph)",
+      cell: ({ row }) => (
+        <span>
+          {row.original.nominalThroughputTph === null
+            ? MISSING_VALUE.notRecorded
+            : row.original.nominalThroughputTph.toLocaleString()}
+        </span>
+      ),
     },
     {
       id: "actions",
@@ -123,6 +129,8 @@ export function ReactorList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
 
   // Server-side search: debounce the search input before querying
   const [searchInput, setSearchInput] = useState("");
@@ -143,6 +151,10 @@ export function ReactorList() {
     filters,
     { enabled: !!contextFacilityId },
   );
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useReactorStats(
+    contextFacilityId || undefined,
+    { enabled: !!contextFacilityId },
+  );
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();
@@ -150,6 +162,7 @@ export function ReactorList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    createReactor.startDraft();
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
@@ -170,18 +183,18 @@ export function ReactorList() {
   useOpenCreateIntent(openCreate);
 
   // Handlers
-  const handleCreate = async (data: CreateReactorData) => {
+  const handleCreate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       await createReactor.mutateAsync(data);
       setSideSheet(null);
       toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Reactor was not created. Check the form.");
+      setCreateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: CreateReactorData) => {
+  const handleUpdate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -189,11 +202,12 @@ export function ReactorList() {
       setSideSheet(null);
       toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Reactor was not saved. Try again.");
+      setUpdateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not saved. Try again."));
     }
   };
 
   const handleDelete = (reactorId: string) => {
+    setDeleteError(null);
     setDeletingReactor((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 
@@ -205,15 +219,20 @@ export function ReactorList() {
       setDeletingReactor(null);
       toast.success("Reactor deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Reactor ${deletingReactor.code}`, "Reactor was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        setInUseRefusal({ code: deletingReactor.code, message });
+        setDeletingReactor(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeletingReactor(null);
-      setDeleteError(toDeleteErrorMessage(error, `Reactor ${deletingReactor.code}`, "Reactor was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
   const columns = createColumns(openEdit, handleDelete);
 
   const reactors = reactorsData?.items ?? [];
-  const totalReactors = reactorsData?.total ?? 0;
   const totalPages = reactorsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -221,7 +240,9 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputValue = formatTotalThroughputTph(reactors);
+  const totalThroughputValue = formatThroughputTph(
+    statsData?.totalNominalThroughputTph ?? null,
+  );
   const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {
@@ -230,7 +251,6 @@ export function ReactorList() {
         <PageHeader
           area="infrastructure"
           title="Reactors"
-          subtitle="Pyrolysis equipment and facility capacity"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
       </div>
@@ -261,7 +281,6 @@ export function ReactorList() {
       <PageHeader
         area="infrastructure"
         title="Reactors"
-        subtitle="Pyrolysis equipment and facility capacity"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -274,22 +293,25 @@ export function ReactorList() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total reactors"
-          value={totalReactors}
+          value={statsData?.totalReactors ?? 0}
+          description="All reactors in this facility"
           icon={<LightningIcon size={24} weight="bold" />}
-          description="Pyrolysis equipment units"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Throughput on this page"
+          title="Nominal throughput"
           value={totalThroughputValue}
+          description="Combined across all reactors in this facility"
           icon={<FlaskIcon size={24} weight="bold" />}
-          description="Combined nominal throughput on this page"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={REACTOR_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={reactors}
         onRowClick={openView}
@@ -338,19 +360,26 @@ export function ReactorList() {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deletingReactor && <ServerError message={deleteError} />}
+
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingReactor}
         title="Delete reactor"
-        message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
+        message="Are you sure you want to delete this reactor? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingReactor(null);
           setDeleteError(null);
         }}
         isPending={deleteReactor.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Unified Side Sheet */}

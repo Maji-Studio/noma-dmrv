@@ -1,7 +1,9 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   getCertifierProjectByFacility,
+  updateFacilityRemovalTemplateInTransaction,
   upsertCertifierProject,
 } from "@/data-access/certification";
 import { db } from "@/db";
@@ -113,10 +115,7 @@ describe("upsertCertifierProject organization guard", () => {
  * mapping identifiers via `hasBlockingFacilitySubmission`.
  */
 async function insertBlockingSubmission(facilityId: string): Promise<void> {
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({ organizationId: TEST_ORG_ID, facilityId })
-    .returning({ id: certifierRemovals.id });
+  const [removal] = await insertRemovalFixture(db, { organizationId: TEST_ORG_ID, facilityId });
   removalIds.push(removal.id);
 
   const [submission] = await db
@@ -238,6 +237,76 @@ describe("upsertCertifierProject protocol version", () => {
       "isometric",
     );
     expect(mapping?.protocolVersion).toBe("1.2");
+  });
+});
+
+/** The setup apply transaction is the only writer of the default; its guards run inside it. */
+function updateFacilityRemovalTemplate(ctx: Parameters<typeof updateFacilityRemovalTemplateInTransaction>[0], input: Parameters<typeof updateFacilityRemovalTemplateInTransaction>[2]) {
+  return db.transaction((tx) => updateFacilityRemovalTemplateInTransaction(ctx, tx, input));
+}
+
+describe("facility default Removal template", () => {
+  it("preserves the default on the same project and clears it on a project change", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const mapping = {
+      facilityId, provider: "isometric" as const,
+      externalFacilityId: `fcl_test_${facilityId}`, externalProjectId: "prj_default_original",
+    };
+    await upsertCertifierProject(ctx, { ...mapping, removalTemplateId: "template-original" });
+    const unchanged = await upsertCertifierProject(ctx, mapping);
+    expect(unchanged.removalTemplateId).toBe("template-original");
+    const rebound = await upsertCertifierProject(ctx, { ...mapping, externalProjectId: "prj_default_new" });
+    expect(rebound.removalTemplateId).toBeNull();
+  });
+
+  it("changes only the default and refuses foreign scope or a stale project", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_setter";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, protocolVersion: "1.1",
+    });
+    const input = { facilityId, externalProjectId, removalTemplateId: "template-chosen" };
+    const updated = await updateFacilityRemovalTemplate(ctx, input);
+    expect(updated).toEqual({
+      ...original, removalTemplateId: input.removalTemplateId, updatedAt: updated.updatedAt,
+    });
+    await expect(updateFacilityRemovalTemplate({ ...ctx, organizationId: "foreign-org" }, input)).rejects.toThrow(new SafeError("Facility not found or archived."));
+    await expect(updateFacilityRemovalTemplate(ctx, { ...input, externalProjectId: "stale-project" })).rejects.toThrow(/project link changed/);
+    expect((await getCertifierProjectByFacility(ctx, facilityId))?.removalTemplateId).toBe(input.removalTemplateId);
+  });
+
+  it("refuses a member context and preserves the mapping", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_member";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, removalTemplateId: "template-original",
+    });
+
+    await expect(updateFacilityRemovalTemplate({ ...ctx, orgRole: "member" }, {
+      facilityId, externalProjectId, removalTemplateId: "template-chosen",
+    })).rejects.toThrow(new SafeError("You don't have permission to perform this action."));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);
+  });
+
+  it("refuses an archived facility and preserves the mapping", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_default_archived";
+    const original = await upsertCertifierProject(ctx, {
+      facilityId, provider: "isometric", externalFacilityId: `fcl_test_${facilityId}`,
+      externalProjectId, removalTemplateId: "template-original",
+    });
+    await archiveFacility(ctx, facilityId, await masterDataVersion(ctx, "facilities", facilityId));
+
+    await expect(updateFacilityRemovalTemplate(ctx, {
+      facilityId, externalProjectId, removalTemplateId: "template-chosen",
+    })).rejects.toThrow(new SafeError("Facility not found or archived."));
+    expect(await getCertifierProjectByFacility(ctx, facilityId)).toEqual(original);
   });
 });
 
@@ -367,7 +436,7 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect(first.certifier).toBeNull();
     const codes = [first.code, second.code].sort().join(", ");
     await expect(link(facilityId)).rejects.toThrow(new SafeError(
-      `Credit batches ${codes} span more than one calendar month. Shorten or archive them before linking this facility to Isometric.`,
+      `Credit batches ${codes} span one calendar month or more. Shorten or archive them before linking this facility to Isometric.`,
     ));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
     for (const batch of [first, second]) {
@@ -392,13 +461,13 @@ describe("upsertCertifierProject credit batch adoption", () => {
     const restoredBatch = await storedBatch(batch.id);
     expect(restoredBatch).toMatchObject({ archivedAt: null, certifier: null });
     await expect(link(facilityId)).rejects.toThrow(new SafeError(
-      `Credit batch ${batch.code} spans more than one calendar month. Shorten or archive it before linking this facility to Isometric.`,
+      `Credit batch ${batch.code} spans one calendar month or more. Shorten or archive it before linking this facility to Isometric.`,
     ));
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
     expect(await storedBatch(batch.id)).toEqual(restoredBatch);
   });
 
-  it.each(["2027-02-27", "2027-02-28"])("links and stamps a period ending %s from January 31", async endDate => {
+  it.each(["2027-02-26", "2027-02-27"])("links and stamps a period ending %s from January 31", async endDate => {
     const facilityId = await createFacility();
     const batch = await createBatch(facilityId, "2027-01-31", endDate);
     await link(facilityId);
@@ -406,7 +475,7 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect(adopted).toMatchObject({ certifier: "isometric", version: batch.version + 1 });
     await expect(updateCreditBatch(ctx, batch.id, {
       expectedVersion: adopted.version, endDate: new Date("2027-04-30"),
-    })).rejects.toThrow(/at most one month/);
+    })).rejects.toThrow(/less than one month/);
     await expect(db.update(creditBatches).set({ endDate: "2027-04-30" })
       .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId))))
       .rejects.toMatchObject({ cause: { constraint: "credit_batches_isometric_max_one_month" } });
@@ -420,13 +489,31 @@ describe("upsertCertifierProject credit batch adoption", () => {
     expect((await storedBatch(batch.id)).version).toBe(adopted.version);
   });
 
+  it.each([
+    ["2027-01-01", "2027-01-31", "2027-02-01"],
+    ["2027-02-15", "2027-03-14", "2027-03-15"],
+    ["2027-01-31", "2027-02-27", "2027-02-28"],
+    ["2024-01-31", "2024-02-28", "2024-02-29"],
+  ])("enforces the strict DB boundary from %s", async (start, allowed, boundary) => {
+    const facilityId = await createFacility();
+    const batch = await createBatch(facilityId, start, boundary);
+    // Uncertified batches may reach or exceed the boundary.
+    await expect(link(facilityId)).rejects.toThrow(/one calendar month or more/);
+    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date(allowed) });
+    await link(facilityId);
+    await expect(db.update(creditBatches).set({ endDate: boundary })
+      .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId))))
+      .rejects.toMatchObject({ cause: { constraint: "credit_batches_isometric_max_one_month" } });
+    expect((await storedBatch(batch.id)).endDate).toBe(allowed);
+  });
+
   it("allows linking after an overlong batch is shortened", async () => {
     const facilityId = await createFacility();
     const batch = await createBatch(facilityId, "2027-01-01", "2027-04-30");
     await expect(link(facilityId)).rejects.toThrow(
-      `Credit batch ${batch.code} spans more than one calendar month. Shorten or archive it before linking this facility to Isometric.`,
+      `Credit batch ${batch.code} spans one calendar month or more. Shorten or archive it before linking this facility to Isometric.`,
     );
-    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date("2027-02-01") });
+    await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, endDate: new Date("2027-01-31") });
     await link(facilityId);
     expect((await storedBatch(batch.id)).certifier).toBe("isometric");
   });
@@ -450,7 +537,11 @@ describe("upsertCertifierProject credit batch adoption", () => {
     await expect(upsertCertifierProject(ctx, {
       facilityId, provider: "isometric", externalProjectId: owner.externalProjectId,
       externalFacilityId: owner.externalFacilityId,
-    })).rejects.toThrow(/already linked/);
+    })).rejects.toMatchObject({
+      message: expect.stringMatching(/already linked/),
+      code: "validation_failed",
+      issues: [expect.objectContaining({ path: ["externalFacilityId"], code: "validation_failed" })],
+    });
     expect(await storedBatch(batch.id)).toMatchObject({ certifier: null, version: batch.version });
     expect(await getCertifierProjectByFacility(ctx, facilityId)).toBeNull();
   });

@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { activityEvents } from "@/db/schema/activity";
 import { listEntityActivity } from "@/data-access/activity-events";
 import { masterDataVersion } from "./helpers/master-data-version";
@@ -117,14 +118,11 @@ async function createFixture(
   const localEntityId =
     entityType === "removal"
       ? (
-          await db
-            .insert(certifierRemovals)
-            .values({
+          await insertRemovalFixture(db, {
               organizationId: TEST_ORG_ID,
               facilityId: facility.id,
               provider: PROVIDER,
             })
-            .returning({ id: certifierRemovals.id })
         )[0].id
       : (
           await db
@@ -309,7 +307,7 @@ describe("claimSubmissionDraft — create path", () => {
     await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
       await db
         .update(certifierProjects)
-        .set({ defaultRemovalTemplateId: "rvt_other" })
+        .set({ removalTemplateId: "rvt_other" })
         .where(eq(certifierProjects.facilityId, fixture.facilityId));
 
       // A default change only affects batches created afterwards.

@@ -27,7 +27,7 @@ it.each([getFeedstockTypeByIdFn, getReactorByIdFn, getOrderByIdFn])("validates t
 it.each([
   { orgRole: "member", isPlatformAdmin: false, allowed: false },
   { orgRole: "admin", isPlatformAdmin: false, allowed: true },
-  { orgRole: "owner", isPlatformAdmin: false, allowed: true },
+  { orgRole: "admin", isPlatformAdmin: false, allowed: true },
   { orgRole: null, isPlatformAdmin: true, allowed: true },
   { orgRole: null, isPlatformAdmin: false, allowed: false },
 ])("resolves management permission from the session: %s", async ({ orgRole, isPlatformAdmin, allowed }) => {

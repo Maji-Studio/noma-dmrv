@@ -1,3 +1,7 @@
+vi.mock("@/data-access/credit-batch-removal-holders", () => ({
+  getCreditBatchUndeletableRemovalCodes: vi.fn(async () => new Map()),
+}));
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({
@@ -9,6 +13,7 @@ vi.mock("@/data-access/removal-production-batch-deletion", () => ({
 }));
 
 import type { OrgContext } from "@/lib/auth/server";
+import { getCreditBatchUndeletableRemovalCodes } from "@/data-access/credit-batch-removal-holders";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
@@ -75,10 +80,6 @@ vi.mock("./registry-create", () => ({
   }),
 }));
 
-import {
-  applyProductionBatchIds,
-  creditBatchIdsForMeasurementSamples,
-} from "./durability-measurement-samples";
 import { bindProductionBatchesToMeasurementSamples, ensureProductionBatchesForCreditBatches } from "./production-batches";
 import { performRegistryCreate } from "./registry-create";
 
@@ -115,6 +116,7 @@ function registryInput(
     totalDryMassKg: 2_000,
     runsMissingDryMass: 0,
     runsMissingEndTime: 0,
+    latestEndingRunCode: "RUN-LAST",
     ...patch,
   };
 }
@@ -188,6 +190,29 @@ beforeEach(() => {
 });
 
 describe("ensureProductionBatchesForCreditBatches", () => {
+  it.each([false, true])("refuses a one-month run span before registry access (registered: %s)", async (registered) => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({
+      endedAt: "2026-04-01T07:15:00.000Z",
+    })]);
+    if (registered) mocks.getProductionBatchRegistrations.mockResolvedValue([await upsertReturning(PRODUCTION_BATCH_ID)(orgCtx, { supplierReference: await currentSupplierRef() })]);
+    await expect(ensure()).rejects.toThrow("Production run RUN-LAST ends on or after");
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("names the current undeletable Removal before registry access", async () => {
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([registryInput({
+      endedAt: "2026-04-01T07:15:00.000Z",
+    })]);
+    vi.mocked(getCreditBatchUndeletableRemovalCodes).mockResolvedValueOnce(
+      new Map([[CREDIT_BATCH_ID, ["RM-1"]]]),
+    );
+    await expect(ensure()).rejects.toThrow("Removal RM-1 was sent to Isometric and cannot be deleted");
+    expect(getCreditBatchUndeletableRemovalCodes).toHaveBeenCalledWith(orgCtx, [CREDIT_BATCH_ID]);
+    expect(mocks.client.get).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("recovers a missing registered batch before binding durability measurements", async () => {
     const missingId = "ptb_1M203VTR2SBXHRRC";
     const supplierReference = await currentSupplierRef();
@@ -906,45 +931,6 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     });
     expect(registered.size).toBe(0);
     expect(mocks.getProductionBatchRegistryInputs).not.toHaveBeenCalled();
-  });
-});
-
-describe("measurement-sample binding", () => {
-  const perSample = [1, 2, 3].map(
-    (index) =>
-      ({
-        creditBatchId: CREDIT_BATCH_ID,
-        sampleId: `sample-${index}`,
-        creditBatchProductMassKg: 1_970,
-        operationKey: `pb:${CREDIT_BATCH_ID}:sample:sample-${index}`,
-        supplierRefId: `nm-mts-x-pb-y-s-${index}-v1`,
-        label: `Sample sample-${index}`,
-        body: { production_batch_id: null },
-      }) as unknown as DurabilityMeasurementSampleSubmission,
-  );
-
-  it("collects one credit batch for all of its local Samples", () => {
-    expect(creditBatchIdsForMeasurementSamples(perSample)).toEqual([
-      CREDIT_BATCH_ID,
-    ]);
-  });
-
-  it("stamps the same registered production batch onto every local Sample", () => {
-    const bound = applyProductionBatchIds(
-      perSample,
-      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
-    );
-    expect(bound.map((submission) => submission.body.production_batch_id)).toEqual([
-      PRODUCTION_BATCH_ID,
-      PRODUCTION_BATCH_ID,
-      PRODUCTION_BATCH_ID,
-    ]);
-  });
-
-  it("fails closed rather than submitting a null production batch", () => {
-    expect(() => applyProductionBatchIds(perSample, new Map())).toThrow(
-      /production batch/,
-    );
   });
 });
 

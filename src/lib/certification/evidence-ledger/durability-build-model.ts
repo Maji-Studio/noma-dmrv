@@ -11,7 +11,7 @@
  * (measured, else Eq.2-derived) so the displayed rows feed the submitted mean.
  */
 import type { Sample } from "@/db/schema";
-import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
+import { evaluateRunEligibility, isUsableRatio } from "@/lib/calculations/biochar-eligibility";
 import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import {
   buildPerBatchDurabilityData,
@@ -58,7 +58,7 @@ function statOf(value: ValueWithStdDev | null): LedgerStat | null {
 // (light fixtures). Reads an existing Date/string — no clock access. Typed
 // `unknown` because the column maps to `Date` but raw rows / test fixtures can
 // carry a string.
-function samplingDayOf(
+export function samplingDayOf(
   samplingTime: unknown,
   facilityTimezone: string | null | undefined,
 ): string | null {
@@ -125,8 +125,8 @@ function buildReplicate(
     sampleCode: s.sampleCode,
     samplingDay: samplingDayOf(s.samplingTime, facilityTimezone),
     labName: s.labName ?? null,
-    hToCorg: isUsableNumber(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
-    oToCorg: isUsableNumber(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
+    hToCorg: isUsableRatio(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
+    oToCorg: isUsableRatio(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
     totalCarbonPercent: isUsableNumber(s.totalCarbonPercent)
       ? s.totalCarbonPercent
       : null,
@@ -165,7 +165,7 @@ export function buildDurabilityLedgerModel(
     // replicateCount → the H/C_org-usable set (dp.replicateCount is
     // hValues.length in buildPerBatchDurabilityData).
     const usableHReplicates = samples.filter((s) =>
-      isUsableNumber(s.hToCOrgRatio),
+      isUsableRatio(s.hToCOrgRatio),
     );
     const eligibility = evaluateRunEligibility(
       samples.map((s) => ({
@@ -175,7 +175,7 @@ export function buildDurabilityLedgerModel(
     );
     const oValues = samples
       .map((s) => s.oToCOrgRatio)
-      .filter(isUsableNumber);
+      .filter(isUsableRatio);
 
     batches.push({
       creditBatchId: dp.creditBatchId,

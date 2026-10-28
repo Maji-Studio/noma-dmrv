@@ -1,7 +1,8 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
-import { TransportLegsSummary } from "@/components/transport-legs";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { certificationDetailField, isCertifyEntityField } from "@/lib/certification/certify-field-registry";
+import { formatDate, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -10,23 +11,25 @@ import type { SampleWithRelations } from "@/data-access/samples";
 
 const LAB_PERCENT_FRACTION_DIGITS = 2;
 /** Atomic ratios (H:C org, O:C org) read at four decimals. */
-const RATIO_DIGITS = 4;
+export const RATIO_DIGITS = 4;
 
-function formatLabPercent(value: number | null | undefined): string {
+export function formatLabPercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
 }
 
 /**
  * Sampling time on the credit batch facility's clock, the clock it is entered
- * on (round 7 Q51). Without a configured facility zone, use the viewer's clock.
+ * on (round 7 Q51). Unknown facilities use the shared UTC fallback.
  */
 export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTime" | "facilityTimezone">): string {
-  return sample.facilityTimezone
-    ? formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone)
-    : formatDateTime(sample.samplingTime);
+  return formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone ?? UNKNOWN_FACILITY_TIMEZONE);
 }
 
-export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSection[] {
+/** `labReportStatus` is the saved lab-report state of the Sample: neutral until its files load. */
+export function sampleSheetSections(
+  sample: SampleWithRelations,
+  labReportStatus: CertFieldStatus = "neutral",
+): DetailPanelSection[] {
   const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
     {
@@ -105,13 +108,10 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
     },
     {
       title: "Evidence & documents",
+      certifyRequired: isCertifyEntityField("sample", "labReport", certificationContext),
+      certifyStatus: labReportStatus,
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
-    },
-    {
-      title: "Transport",
-      fields: [],
-      content: <TransportLegsSummary entityType="sample" entityId={sample.id} />,
     },
   ];
 }

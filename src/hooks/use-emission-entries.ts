@@ -1,0 +1,118 @@
+/**
+ * Emissions entries on one credit batch (epic #1058): the batch's emission
+ * lines and the manual entry writes. Every write refreshes the lines, the
+ * facility Emissions overview, certification readiness and the Energy page,
+ * because all of them read the same entries.
+ */
+"use client";
+
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { useIntentMutation } from "./use-create-intent-key";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  confirmEmissionEntryFn,
+  createEmissionEntryFn,
+  deleteEmissionEntryFn,
+  getBatchEmissionLinesFn,
+  replaceEmissionEntryFn,
+  restoreEmissionEntryFn,
+  updateEmissionEntryFn,
+} from "@/fn/emission-entries";
+import { throwActionError } from "@/lib/stale-version";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
+import type { ActionResult } from "@/types/actions";
+import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { invalidateCertificationReadiness } from "./use-certification";
+import { energyKeys } from "./use-energy";
+
+type LinesResult = Awaited<ReturnType<typeof getBatchEmissionLinesFn>>;
+type LinesData = Extract<LinesResult, { success: true }>["data"];
+type ServerLine = Extract<LinesData, { status: "ready" }>["lines"][number];
+
+const EMISSION_LINES_RETRY_LIMIT = 3;
+
+export type RecordsSource = EmissionRecordSource;
+export type LineRecords = EmissionLineRecords;
+export type EmissionLine = ServerLine;
+export type EmissionEntry = EmissionLine["entries"][number];
+export type EmissionInput = EmissionLine["inputShape"][number];
+
+function unwrapEntry<T>(result: ActionResult<T>): T {
+  if (!result.success) throwActionError(result);
+  return result.data;
+}
+
+export interface EmissionBatchScope {
+  facilityId: string;
+  creditBatchId: string;
+}
+
+export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
+  return useQuery({
+    queryKey: scope
+      ? creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId)
+      : creditBatchKeys.emissionLines("", ""),
+    queryFn: async (): Promise<EmissionLine[]> => {
+      const result = unwrapEntry(await getBatchEmissionLinesFn(scope!));
+      if (result.status === "blocked") {
+        // Other reads may write the missing observation; retain the normal retry path.
+        if (result.blocker === "templateNotFullyRead") throw new Error(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+        throw new EmissionLinesBlockedError(removalTemplateBlocker(result.blocker));
+      }
+      return result.lines;
+    },
+    retry: (failureCount, error) => !(error instanceof EmissionLinesBlockedError) && failureCount < EMISSION_LINES_RETRY_LIMIT,
+    enabled: !!scope,
+    // Records come from runs, legs, deliveries and applications edited on
+    // other pages; refetch on every visit rather than wiring all of them here.
+    staleTime: 0,
+  });
+}
+
+/** Everything that reads emissions entries. Also used after a file upload. */
+export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: EmissionBatchScope) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId) }),
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionsOverview(scope.facilityId) }),
+    queryClient.invalidateQueries({ queryKey: energyKeys.all }),
+    // Batch health, batch-health summaries, the certification overview, removal preflight and activity.
+    invalidateCertificationReadiness(queryClient),
+  ]);
+}
+
+function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
+    mutationFn: async (input: TInput) => unwrapEntry(await run(input)),
+    // Refresh after failures too: a stale version means the lines moved.
+    onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
+  });
+}
+
+export function useCreateEmissionEntry(scope: EmissionBatchScope) {
+  const queryClient = useQueryClient();
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
+    mutationFn: async (input: Parameters<typeof createEmissionEntryFn>[0], intentKey) =>
+      unwrapEntry(await createEmissionEntryFn(input, { intentKey })),
+    onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
+  });
+}
+export function useUpdateEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, updateEmissionEntryFn);
+}
+export function useConfirmEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, confirmEmissionEntryFn);
+}
+export function useDeleteEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, deleteEmissionEntryFn);
+}
+export function useRestoreEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, restoreEmissionEntryFn);
+}
+export function useReplaceEmissionEntry(scope: EmissionBatchScope) {
+  return useEntryMutation(scope, replaceEmissionEntryFn);
+}

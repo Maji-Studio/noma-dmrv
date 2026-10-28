@@ -1,7 +1,8 @@
-import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
-import { StaleVersionError } from "@/lib/stale-version";
+import { invalidateRecordedTransport } from "./transport-distance-query-keys";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import { outputStockKeys } from "./use-output-stock";
+import { invalidateAfterFailedStockSave, outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
  * Client-side state management for delivery operations
@@ -99,6 +100,19 @@ export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
 }
 
 /**
+ * Reads one delivery fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchDeliveryWithRelations() {
+  const queryClient = useQueryClient();
+  return (deliveryId: string) => queryClient.fetchQuery({
+    queryKey: deliveryKeys.detailWithRelations(deliveryId),
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
+    staleTime: 0,
+  });
+}
+
+/**
  * Hook to fetch delivery statistics
  */
 export function useDeliveryStats(
@@ -131,9 +145,10 @@ export function useCreateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: CreateDeliveryData) => {
       const result = await createDeliveryFn(data);
-      if (!result.success) throwDeliveryActionError(result);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -145,12 +160,14 @@ export function useCreateDelivery(
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
       }
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -165,7 +182,7 @@ export function useCreateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -183,10 +200,11 @@ export function useUpdateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -269,6 +287,7 @@ export function useUpdateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -281,7 +300,7 @@ export function useUpdateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -322,10 +341,11 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (variables: DeleteDeliveryData) => {
       const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return;
     },
@@ -371,7 +391,9 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void invalidateRecordedTransport(queryClient);
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
@@ -386,7 +408,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     },
     onError: async (error, variables, context) => {
       const { deliveryId } = variables;
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {

@@ -1,3 +1,5 @@
+import { generateNextCodes } from "./code-generator";
+import { REMOVAL_CODE_PREFIX } from "./certifier-removals";
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 /** Real PostgreSQL query tests in session-local TEMP tables, always rolled back.
  * These verify consumer SQL, not the conductor's combined migration/FKs.
@@ -25,7 +27,7 @@ const probe = new Client({ connectionString: url, connectionTimeoutMillis: CONNE
 const available = await probe.connect().then(() => true, () => false);
 await probe.end();
 if (!available && process.env.CI) throw new Error("Provenance tests require PostgreSQL in CI");
-const ctx: OrgContext = { organizationId: "provenance-org", userId: "provenance-user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "provenance-org", userId: "provenance-user", orgRole: "admin", isPlatformAdmin: false };
 const other: OrgContext = { ...ctx, organizationId: "other-org" };
 const ids = Object.fromEntries(["formulation", "facility", "A", "B", "C", "runA", "runB", "delivery", "order", "app", "batchA", "batchB", "removal", "bin"].map(key => [key, randomUUID()]));
 const org = { organizationId: ctx.organizationId };
@@ -129,7 +131,8 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
   });
 
   it("resolves a B-only captured lineage through truck, product, application and source without locking unused C", async () => {
-    await executor.insert(schema.certifierRemovals).values({ ...org, id: ids.removal, facilityId: ids.facility });
+    const [code] = await generateNextCodes(ctx, REMOVAL_CODE_PREFIX, schema.certifierRemovals, schema.certifierRemovals.code, 1, executor);
+    await executor.insert(schema.certifierRemovals).values({ ...org, code, id: ids.removal, facilityId: ids.facility });
     await executor.update(schema.creditBatchApplications).set({ removalId: ids.removal }).where(eq(schema.creditBatchApplications.creditBatchId, ids.batchB));
     for (const [entityType, entityId] of [["delivery", ids.delivery], ["application", ids.app], ["biocharProduct", ids.B], ["productionRun", ids.runB]] as const) {
       expect(await getCertifiedLineage(ctx, tx, { entityType, entityId })).toHaveLength(1);

@@ -2,13 +2,16 @@ import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
 /**
  * Explicit credit-batch create, update and delete lock sequence:
- * 1. Discover the batch (update/delete), current/prospective runs and artifacts
- *    without row locks.
- * 2. Lock the batch's certification artifacts. Both artifact helpers delegate
- *    to acquireCertificationArtifactLocksSorted, using one global key order.
+ * 1. Discover the batch's facility (update/delete) without row locks.
+ * 2. Facilities FOR SHARE, sorted, before reading facility-local dates or
+ *    taking any other locks. Facility UPDATE holders take the facility first.
+ *    Then their certifier_projects rows FOR SHARE, sorted: Set template
+ *    updates that row before it locks batches and artifacts, so a batch
+ *    writer must hold it before step 3 or the two wait on each other.
+ * 3. Discover current/prospective runs and lock the batch's certification
+ *    artifacts. Both helpers use acquireCertificationArtifactLocksSorted
+ *    with one global key order.
  *    Create has no existing batch or certification lineage to guard.
- * 3. Facilities FOR SHARE, sorted, before runs and batch: facility archive and
- *    Removal create take the facility first, including before child FK checks.
  * 4. Current/prospective runs FOR UPDATE, sorted, on create or membership refresh.
  * 5. Production-process advisory scope. Keep runs before scope: auto-attachment
  *    already holds its run before requesting this scope. Other scope holders
@@ -56,6 +59,7 @@ import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
+import { certifierProjects } from "@/db/schema/certification";
 import { feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -63,21 +67,24 @@ import {
 } from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
-import { productionRunDateExpr } from "./production-runs/date-expr";
+import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
 import { requireOrgScope } from "./utils";
+import { creditBatchMemberConflict } from "./credit-batch-member-fit";
 import { CreditBatchLineageChangedError, isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
+
+export { creditBatchMemberConflict } from "./credit-batch-member-fit";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
   code: string;
   facilityId: string;
   status: string;
-  date: string;
+  membershipDate: string | null;
 }
 
 /**
@@ -92,6 +99,7 @@ export async function lockCreditBatchProductionRuns(
   productionRunIds: readonly string[],
   options?: { skipLocked?: boolean },
 ): Promise<LockedCreditBatchProductionRun[]> {
+  requireOrgScope(ctx);
   const sortedRunIds = [...new Set(productionRunIds)].sort();
   if (sortedRunIds.length === 0) return [];
 
@@ -101,7 +109,7 @@ export async function lockCreditBatchProductionRuns(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(and(
@@ -131,6 +139,7 @@ export async function lockCreditBatchDeclarationRuns(
   runIds: string[];
   lockedRuns: LockedCreditBatchProductionRun[];
 }> {
+  await lockMembershipFacilities(ctx, tx, [params.facilityId]);
   const matchingBeforeLock = params.matchingProductionRunIds ?? await findMatchingUnassignedProductionRunIds(
     ctx,
     tx,
@@ -142,7 +151,6 @@ export async function lockCreditBatchDeclarationRuns(
       ...matchingBeforeLock,
     ]),
   ].sort();
-  await lockMembershipFacilities(ctx, tx, [params.facilityId]);
   const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
     ...(params.currentProductionRunIds ?? []),
     ...runIds,
@@ -191,9 +199,13 @@ function sameIds(before: readonly string[], after: readonly string[]): boolean {
 }
 
 async function lockMembershipFacilities(ctx: OrgContext, tx: DbTransaction, ids: string[]) {
+  requireOrgScope(ctx);
   await tx.select({ id: facilities.id }).from(facilities)
     .where(and(inArray(facilities.id, [...new Set(ids)].sort()), eq(facilities.organizationId, ctx.organizationId)))
     .orderBy(facilities.id).for("share");
+  await tx.select({ id: certifierProjects.id }).from(certifierProjects)
+    .where(and(inArray(certifierProjects.facilityId, [...new Set(ids)]), eq(certifierProjects.organizationId, ctx.organizationId)))
+    .orderBy(certifierProjects.id).for("share");
 }
 
 const batchMembershipFields = {
@@ -213,7 +225,7 @@ async function readMembershipRunIds(ctx: OrgContext, tx: DbTransaction, id: stri
   return links.map(link => link.id);
 }
 
-/** Discover before any row locks; update then locks its prospective runs too. */
+/** First transaction locks: facilities, before date reads and certification artifacts. */
 export async function prepareCreditBatchMembershipWrite(
   ctx: OrgContext,
   tx: DbTransaction,
@@ -225,6 +237,7 @@ export async function prepareCreditBatchMembershipWrite(
   const [snapshot] = await tx.select(batchMembershipFields).from(creditBatches)
     .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
   if (!snapshot) throw new SafeError("Credit batch not found");
+  await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
   const currentProductionRunIds = await readMembershipRunIds(ctx, tx, id);
   const certifier = await getFacilityCertifierWithExecutor(ctx, tx, target.facilityId ?? snapshot.facilityId);
   const matchingProductionRunIds = refreshMembership
@@ -237,7 +250,6 @@ export async function prepareCreditBatchMembershipWrite(
       })
     : undefined;
   const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
-  await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
   return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals, certifier };
 }
 
@@ -334,7 +346,7 @@ export async function lockCreditBatchForUpdate(
 
 /**
  * Validate that all production run IDs exist, belong to the credit batch's
- * facility and production window, and are not already assigned elsewhere.
+ * facility, end inside its production window, and are not assigned elsewhere.
  */
 export async function validateProductionRunIds(
   ctx: OrgContext,
@@ -347,6 +359,7 @@ export async function validateProductionRunIds(
   excludeCreditBatchId?: string,
   lockedRows?: readonly LockedCreditBatchProductionRun[],
 ): Promise<void> {
+  requireOrgScope(ctx);
   if (productionRunIds.length === 0) return;
 
   // Reject duplicates
@@ -366,7 +379,7 @@ export async function validateProductionRunIds(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(and(
@@ -405,7 +418,7 @@ export async function validateProductionRunIds(
       certifier,
     );
     const outsideWindow = rows.filter((r) => {
-      return r.date < startStr || r.date > endStr;
+      return r.membershipDate == null || r.membershipDate < startStr || r.membershipDate > endStr;
     });
 
     if (outsideWindow.length > 0) {
@@ -573,7 +586,7 @@ export async function assertDeclaredFeedstockType(
 }
 
 /**
- * Find every currently unassigned completed run inside a declared cohort.
+ * Find every unassigned completed run whose end date is inside the cohort window.
  * Feedstock identity is resolved from the run's actual feedstock links; empty
  * and mixed-feedstock runs stay unassigned because they cannot belong to a
  * single-feedstock credit batch.
@@ -589,6 +602,7 @@ export async function findMatchingUnassignedProductionRunIds(
     endDate: string | Date;
   },
 ): Promise<string[]> {
+  requireOrgScope(ctx);
   const { startStr, endStr } = assertCreditBatchProductionWindow(
     params.startDate,
     params.endDate,
@@ -635,8 +649,8 @@ export async function findMatchingUnassignedProductionRunIds(
         eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, params.facilityId),
         eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-        gte(productionRunDateExpr(), startStr),
-        lte(productionRunDateExpr(), endStr),
+        gte(productionRunMembershipDateExpr(ctx.organizationId), startStr),
+        lte(productionRunMembershipDateExpr(ctx.organizationId), endStr),
         isNull(productionRuns.archivedAt),
         isNull(creditBatchProductionRuns.creditBatchId),
       ),
@@ -660,9 +674,10 @@ export async function findMatchingUnassignedProductionRunIds(
 
 /**
  * Attach one completed run to the credit batch identified by its facility,
- * single feedstock type, and production date. Called inside the production-run
- * write transaction after feedstock allocation is final, so membership and
- * sample back-filling commit atomically with completion.
+ * single feedstock type, and facility-local end day. Called inside the
+ * production-run write transaction after feedstock allocation is final,
+ * so membership commits atomically with completion. The caller holds the run's
+ * facility FOR SHARE from before its first child lock.
  */
 export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,
@@ -676,7 +691,7 @@ export async function attachProductionRunToMatchingCreditBatch(
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      membershipDate: productionRunMembershipDateExpr(ctx.organizationId),
     })
     .from(productionRuns)
     .where(
@@ -687,7 +702,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     )
     .limit(1);
 
-  if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS) return null;
+  if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS || run.membershipDate == null) return null;
 
   const [existingMembership] = await tx
     .select({
@@ -724,12 +739,9 @@ export async function attachProductionRunToMatchingCreditBatch(
   );
   if (
     existingMembership &&
-    (
-      run.facilityId !== existingMembership.facilityId ||
-      run.date < existingMembership.startDate ||
-      run.date > existingMembership.endDate ||
-      feedstockTypeId !== existingMembership.feedstockTypeId
-    )
+    creditBatchMemberConflict(existingMembership, {
+      facilityId: run.facilityId, feedstockTypeId, day: run.membershipDate,
+    }) !== null
   ) {
     throw new SafeError(
       `Production run ${run.code} cannot be edited outside its declared cohort while it belongs to credit batch ${existingMembership.creditBatchCode}.`,
@@ -746,23 +758,9 @@ export async function attachProductionRunToMatchingCreditBatch(
     facilityId: run.facilityId,
     feedstockTypeId,
   });
-  const matchingBatches = await tx
-    .select({
-      id: creditBatches.id,
-      code: creditBatches.code,
-    })
-    .from(creditBatches)
-    .where(
-      and(
-        eq(creditBatches.organizationId, ctx.organizationId),
-        eq(creditBatches.facilityId, run.facilityId),
-        eq(creditBatches.feedstockTypeId, feedstockTypeId),
-        lte(creditBatches.startDate, run.date),
-        gte(creditBatches.endDate, run.date),
-        isNull(creditBatches.archivedAt),
-      ),
-    )
-    .orderBy(creditBatches.id);
+  const matchingBatches = await findCreditBatchesCoveringDay(ctx, tx, {
+    facilityId: run.facilityId, feedstockTypeId, day: run.membershipDate,
+  });
 
   if (matchingBatches.length === 0) return null;
   if (matchingBatches.length > 1) {
@@ -777,7 +775,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     .from(creditBatches)
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
       eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
-      lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
+      lte(creditBatches.startDate, run.membershipDate), gte(creditBatches.endDate, run.membershipDate), isNull(creditBatches.archivedAt)))
     .for("update");
   if (!lockedBatch) return null;
   try {
@@ -811,4 +809,26 @@ export async function attachProductionRunToMatchingCreditBatch(
 
   await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
   return batch.id;
+}
+
+/** The shared, inclusive cohort predicate for preview and automatic attachment. */
+export async function findCreditBatchesCoveringDay(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  input: { facilityId: string; feedstockTypeId: string; day: string },
+) {
+  requireOrgScope(ctx);
+  return executor.select({
+    id: creditBatches.id,
+    code: creditBatches.code,
+    startDate: creditBatches.startDate,
+    endDate: creditBatches.endDate,
+  }).from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId),
+    eq(creditBatches.facilityId, input.facilityId),
+    eq(creditBatches.feedstockTypeId, input.feedstockTypeId),
+    lte(creditBatches.startDate, input.day),
+    gte(creditBatches.endDate, input.day),
+    isNull(creditBatches.archivedAt),
+  )).orderBy(creditBatches.id);
 }

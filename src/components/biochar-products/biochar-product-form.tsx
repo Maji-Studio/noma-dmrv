@@ -6,14 +6,19 @@
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
-import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
+import { outputDrawCreditBatchPreview } from "@/components/credit-batches/record-credit-batch-preview-input";
+import { EntitySelect, FormActions, FormError, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { isActionError } from "@/lib/action-error";
+import { INSUFFICIENT_STOCK_CODE } from "@/lib/save-refusal";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -22,34 +27,28 @@ import { StockChangeLabel } from "@/components/storage-locations/stock-change-la
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
+import { focusMoistureField, moistureFieldSelectors, ReestimateNotice } from "@/components/storage-locations/reestimate-notice";
+import { showsReestimate } from "@/components/storage-locations/reestimate-flow";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
-import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
+import { BIOCHAR_PRODUCT_MASS_ISSUE_PATH, BIOCHAR_PRODUCT_REFUSAL_ALIASES, prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   SOURCE_BIOCHAR_MASS_ERROR,
   useBiocharComposition,
-  ZERO_SOURCE_BIOCHAR_ERROR,
 } from "@/lib/biochar-composition";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { MASS_MOISTURE_LABELS, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
-import {
-  binStockOverdrawMessage,
-} from "@/lib/stock-overdraw";
 import {
   biocharProductEntrySchema,
   biocharProductFrozenEditSchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
-import {
-  MASS_KG_INPUT_STEP,
-} from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
@@ -60,8 +59,19 @@ import { formProductComposition, type FormProductComposition } from "./form-prod
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
+import { isRecordFieldHeld, type RecordLockView } from "@/lib/record-lock-view";
+import { recordInUseFreeFields } from "@/lib/record-lock";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(biocharProductEntrySchema);
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
+
+/** The refusal says the source bin holds less than the biochar mass asked for. */
+function refusesSourceBinStock(error: unknown): boolean {
+  return isActionError(error) && error.issues.some((issue) => issue.code === INSUFFICIENT_STOCK_CODE && issue.path.join(".") === BIOCHAR_PRODUCT_MASS_ISSUE_PATH);
+}
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 type MassMoistureFieldsProps = ComponentProps<typeof MassMoistureFields>;
@@ -93,10 +103,10 @@ export function BiocharSourceMassFields({
 }
 
 /**
- * The product composition under the mix fields, at both levels once the
- * biochar or an ingredient has a mass. Before that it is a key of
- * "Not available" rows that only explains what will appear, so only Detailed
- * shows it. Stock history lives on the storage bin, not here.
+ * The product composition under the mix fields, once the biochar or an
+ * ingredient has a mass. Before that it is a key of named parts with no
+ * figures that only explains what will appear, so nothing renders. Stock
+ * history lives on the storage bin, not here.
  */
 export function ProductCompositionBlock({
   composition,
@@ -116,7 +126,7 @@ export function ProductCompositionBlock({
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
     />
   );
-  return <DetailedOnly unless={started}>{preview}</DetailedOnly>;
+  return started ? preview : null;
 }
 
 // ============================================
@@ -125,7 +135,8 @@ export function ProductCompositionBlock({
 
 interface BiocharProductFormProps {
   product?: BiocharProductWithRelations;
-  onSubmit: (data: BiocharProductFormData) => Promise<void> | void;
+  /** The form hands `onRefusal` on, in create and edit, so a refused save shows at its fields (#1298). */
+  onSubmit: (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -137,7 +148,12 @@ interface BiocharProductFormProps {
    */
   children?: React.ReactNode;
   focusTarget?: EntityFocusTarget | null;
+  /** The saved product's lock; Sent disables every field before typing. */
+  lock?: RecordLockView;
 }
+
+/** Shown on the posted fields a saved product keeps (`POSTED_FIELDS` on the server). */
+const POSTED_FIELD_HINT = "Fixed once the product is posted to stock. Record a stock correction in the bin to change it.";
 
 export function BiocharProductForm({
   product,
@@ -148,10 +164,15 @@ export function BiocharProductForm({
   submitLabel,
   children,
   focusTarget,
+  lock,
 }: BiocharProductFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
+  // Posted fields are refused on every saved product; the rest follow the lock.
+  // Fail closed: until the lock answers, fields an In use biocharProduct holds stay disabled.
+  const locked = (field: string) => isEditMode && isRecordFieldHeld(lock, recordInUseFreeFields("biocharProduct"), field);
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
   );
@@ -201,8 +222,15 @@ export function BiocharProductForm({
     control,
     getValues,
     setValue,
+    setError,
+    clearErrors,
+    resetField,
     formState: { errors },
   } = form;
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: BIOCHAR_PRODUCT_REFUSAL_ALIASES });
+  // What the form held when a server error was filed at the mass, and whether it
+  // was a short source bin (the one that offers the reconciliation link).
+  const [massRefusal, setMassRefusal] = useState<{ drawFingerprint: string; shortSourceBin: boolean } | null>(null);
 
   const selectedFacilityId = useWatch({ control, name: "facilityId" }) || contextFacilityId || "";
   const placementClock = useFacilityClock(selectedFacilityId);
@@ -265,7 +293,7 @@ export function BiocharProductForm({
     occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
   });
   const [attempted, setAttempted] = useState(false);
-  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
+  const { preview: sourcePreview, input: sourceDrawInput, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: isEditMode,
     singleMoistureReady: watchedMoisture != null,
     moisturePercent: Number(watchedMoisture),
@@ -279,6 +307,9 @@ export function BiocharProductForm({
       if (split) setValue("moistureContentPercent", undefined);
     },
   });
+  // A saved product keeps its source bin, so only a new one previews its batches.
+  const creditBatchPreview = isEditMode ? undefined
+    : outputDrawCreditBatchPreview("biochar-product", { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt }, sourceDrawInput);
   // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
   const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
@@ -296,45 +327,46 @@ export function BiocharProductForm({
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
   const { canSave, submitDisabled, basisFingerprint } = gate({ unavailable: affectedBinsUnavailable, basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint });
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
-  const refreshStockPreview = sourcePreview.refetch;
-  useEffect(() => {
-    if (errorMessage && !isEditMode) void refreshStockPreview();
-  }, [errorMessage, isEditMode, refreshStockPreview]);
-
-  const massFieldFingerprint = [
+  // Every input the source draw is planned from; a server refusal at the mass answers for these only.
+  const drawFingerprint = [
     sourceBiocharStorageLocationId,
     selectedFormulationId,
+    watchedPlacedAt,
     watchedMassKg,
+    // A split draw carries its readings in the sources; submitting clears the single moisture.
+    draw.active ? "" : watchedMoisture,
+    JSON.stringify(draw.sources ?? null),
     ...(watchedIngredientBins ?? []).map((ingredient) => ingredient.massKg),
   ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    massFieldFingerprint,
-    (message) =>
-      message === binStockOverdrawMessage("biochar") ||
-      message === SOURCE_BIOCHAR_MASS_ERROR ||
-      message === ZERO_SOURCE_BIOCHAR_ERROR,
-  );
-  const massKgError =
-    errors.massKg?.message ??
-    biocharStockError ??
-    routedServerError.inlineError;
+  const massRefusalIsStale = massRefusal !== null && massRefusal.drawFingerprint !== drawFingerprint;
+  // The draw inputs live in many components, so one effect watches them: a handler on each cannot cover them all.
+  const massErrorIsServer = errors.massKg?.type === SERVER_ERROR_TYPE;
+  useEffect(() => {
+    if (massRefusalIsStale && massErrorIsServer) clearErrors("massKg");
+  }, [massRefusalIsStale, massErrorIsServer, clearErrors]);
+  const massKgError = errors.massKg?.message ?? biocharStockError;
+  const serverRefusedMass = massErrorIsServer && !massRefusalIsStale && massRefusal?.shortSourceBin === true;
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     if (!canSave) return;
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
+    const onRefusal: SaveRefusalHandler = (error, fallback) => {
+      setMassRefusal(isActionError(error) ? { drawFingerprint, shortSourceBin: refusesSourceBinStock(error) } : null);
+      return refuseSave(error, fallback);
+    };
     await onSubmit({
       ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
       basisFingerprint: basisFingerprint ?? data.basisFingerprint,
       idempotencyKey,
-    });
-  });
+    }, onRefusal);
+  }));
 
   // A stock change label only advertises a fresh, unblocked projection. The
   // product's projection is one plan across every bin, so a refusal in any bin
   // withdraws every label it would otherwise show.
   const sourcePreviewFresh = !isEditMode && !sourcePreview.isFetching && !sourcePreview.error;
+  const reestimating = sourcePreviewFresh && showsReestimate(sourcePreview.data);
   const productPreviewsAvailable = !isEditMode && !affectedBinsUnavailable;
   const affectedBins = productStockPreview.data ?? [];
   const biocharLanePreview = affectedBins.find((bin) => bin.lane === "biochar");
@@ -471,7 +503,7 @@ export function BiocharProductForm({
           // Loading or failed sub-bins replace the single field too: a split bin is never drawn at one reading.
           readings={!draw.usesSingleMoisture ? (
             <>
-              {draw.active && <SubBinDrawField draw={draw} timeZone={placementClock.timeZone} idPrefix="product-source" disabled={isSubmitting} showErrors={attempted} />}
+              {draw.active && <SubBinDrawField draw={draw} timeZone={placementClock.timeZone} idPrefix="product-source" disabled={isSubmitting} showErrors={attempted} hideDeviationWarning={reestimating} />}
               {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             </>
           ) : undefined}
@@ -490,22 +522,24 @@ export function BiocharProductForm({
             id: "moistureContentPercent",
             error: errors.moistureContentPercent?.message,
             required: true,
-            disabled: isSubmitting,
+            disabled: isSubmitting || isEditMode,
             placeholder: "e.g. 2",
-            helperText: "Typically 1 to 2% for biochar",
+            helperText: isEditMode ? POSTED_FIELD_HINT : "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
+            hideDeviationWarning: reestimating,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={
             ((biocharStockError !== undefined &&
               biocharStockError !== SOURCE_BIOCHAR_MASS_ERROR) ||
-              routedServerError.inlineError ===
-                binStockOverdrawMessage("biochar")) && (
+              serverRefusedMass) && (
               <StockReconciliationLink facilityId={contextFacilityId} />
             )
           }
         />
+        {/* A draw wetter than the bin's estimate re-estimates what stays; the notice replaces the field's own advisory. */}
+        {reestimating && sourcePreview.data && <ReestimateNotice preview={sourcePreview.data} kind="biochar" onMeasureAgain={(layerId) => focusMoistureField(moistureFieldSelectors("product-source", "moistureContentPercent", layerId))} />}
         {/* The biochar reading resets the sub-bin it was taken from. */}
         {sourcePreviewFresh && sourcePreview.data && !sourcePreview.data.blockingMessage && sourcePreview.data.moistureReset && (
           <MoistureResetChange reset={sourcePreview.data.moistureReset} />
@@ -542,13 +576,19 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <IngredientBinRows
-          composition={ingredientComposition}
-          isSubmitting={isSubmitting}
-          allocationFrozen={hasFrozenSourceAllocation}
-          previews={productStockPreview.data}
-          previewsAvailable={productPreviewsAvailable}
-        />
+        {ingredientComposition.rows.length > 0 && (
+          // Named for the error summary, which reads a refusal of the whole set (a lock) from here.
+          <div role="group" aria-label="Ingredients" data-field-name="ingredientBins" tabIndex={-1} className="space-y-20">
+            <IngredientBinRows
+              composition={ingredientComposition}
+              isSubmitting={isSubmitting}
+              allocationFrozen={hasFrozenSourceAllocation}
+              previews={productStockPreview.data}
+              previewsAvailable={productPreviewsAvailable}
+            />
+            <FormError id="ingredientBins-error" message={errors.ingredientBins?.message} />
+          </div>
+        )}
       </FormSection>
 
       <FormSection
@@ -561,17 +601,16 @@ export function BiocharProductForm({
             id="waterAddedKg"
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
-            helperText="Water added to reach target moisture"
+            helperText={isEditMode ? POSTED_FIELD_HINT : undefined}
             hint="Dry mass is unchanged by added water."
             required
           >
             <FormInput
               id="waterAddedKg"
               type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
+              {...numberBounds("waterAddedKg")}
               placeholder="e.g., 50"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isEditMode}
               error={!!errors.waterAddedKg}
               {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
             />
@@ -584,10 +623,9 @@ export function BiocharProductForm({
             <FormInput
               id="densityKgM3"
               type="number"
-              step="any"
-              min="0"
+              {...numberBounds("densityKgM3")}
               placeholder="e.g., 350"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("densityKgM3")}
               error={!!errors.densityKgM3}
               {...register("densityKgM3")}
             />
@@ -599,9 +637,11 @@ export function BiocharProductForm({
           label="Product bin"
           error={errors.storageLocationId?.message}
           helperText={
-            selectedFormulationId
-              ? "Bins for this formulation, or unassigned bins (claimed on first use)."
-              : "Pure-biochar or unassigned bins."
+            isEditMode
+              ? POSTED_FIELD_HINT
+              : selectedFormulationId
+                ? "Bins for this formulation, or unassigned bins (claimed on first use)."
+                : "Pure-biochar or unassigned bins."
           }
           required
         >
@@ -624,13 +664,14 @@ export function BiocharProductForm({
                   />
                 )}
                 disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
                 filterBy={{
                   ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
                   type: "product_bin",
                   formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                 }}
-                allowCreate
+                allowCreate={!isEditMode}
                 onCreateNew={() => storageLocationDialog.open()}
               />
             )}
@@ -678,10 +719,11 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
         submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="biochar-product" id={product?.id} preview={creditBatchPreview} facilityId={selectedFacilityId} />}
       />
     </div>
   );

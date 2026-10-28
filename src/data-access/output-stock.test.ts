@@ -10,7 +10,7 @@ import { assertProductionRunBiocharStockNotOverdrawn, deriveProductionRunUpdateB
 // Layer rules are tested with plain rows in lib/output-stock/layer-projection.test.ts.
 // These cases pin what only the readers own: scope predicates, batching and wiring.
 
-const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
 const input = { storageLocationId: 'bin', facilityId: 'facility', occurredAt: '2026-09-14T12:00:00.000Z' };
 const bin = { id: 'bin', facilityId: 'facility', type: 'biochar_bin', archivedAt: null };
 const run = { id: 'run', binId: 'bin', facilityId: 'facility', archivedAt: null, dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
@@ -73,7 +73,7 @@ describe('batched stock read', () => {
 
   it.each([null, 'NaN', 'Infinity'])('reads an unresolved bin as unavailable while another bin stays readable (%s)', async dryKg => {
     const other = { ...bin, id: 'other' };
-    const read = reader([[storageLocations, [[bin, other]]], [productionRuns, [[{ ...run, dryKg }, { ...run, id: 'other-run', binId: 'other' }], [{ id: 'other-run', wet: '125.000' }]]]]);
+    const read = reader([[storageLocations, [[bin, other]]], [productionRuns, [[{ ...run, dryKg }, { ...run, id: 'other-run', binId: 'other' }], [{ id: 'other-run', wet: '125.000', recordedAt: new Date('2026-01-01T00:00:00.000Z') }]]]]);
     const stocks = await getOutputBinStocks(ctx, ['bin', 'other'], read.executor);
     expect(stocks.get('bin')).toEqual({ allLayersDryKg: null, availableDryKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null });
     expect(stocks.get('other')).toEqual({ allLayersDryKg: 100, availableDryKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 });

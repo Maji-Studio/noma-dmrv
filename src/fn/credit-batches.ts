@@ -1,19 +1,20 @@
 "use server";
 
+import { createCreditBatch } from "@/lib/operations/credit-batches";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { SafeError } from "@/lib/errors";
-import { creditBatches } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
   getCreditBatchCertifierForFacility,
-  createCreditBatch as createCreditBatchData,
+  describeSavedCreditBatch,
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
@@ -113,24 +114,17 @@ export async function getCreditBatchProductionRunOptionsFn(
  * Create a new credit batch
  */
 export async function createCreditBatchFn(
-  data: z.infer<typeof createCreditBatchSchema>
+  data: z.infer<typeof createCreditBatchSchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<SavedCreditBatch>> {
-  const result = await withAction(async (ctx) => {
+  const result = await withCreate(async (ctx, create) => {
     const { facilityId } = creditBatchFacilitySchema.parse(data);
     const certifier = await getCreditBatchCertifierForFacility(ctx, facilityId);
     const validated = creditBatchFormSchemaForCertifier(certifier).parse(data);
 
-    const creditBatch = await withAutoCode(
-      ctx,
-      "CB",
-      creditBatches,
-      creditBatches.code,
-      undefined,
-      (code) => createCreditBatchData(ctx, { ...validated, code })
-    );
-
-    return creditBatch;
-  }, {
+    const committed = await create(createCreditBatch, validated);
+    return describeSavedCreditBatch(ctx, committed);
+  }, options, {
     fallbackMessage: "Failed to create credit batch",
     log: { message: "Failed to create credit batch", context: { op: "credit-batch:create" } },
   });
@@ -172,6 +166,7 @@ export async function updateCreditBatchFn(
       }
     }
 
+    // The locked writer checks entry dates; withAction preserves its conflict and recovery copy.
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
     return creditBatch;
   }, { fallbackMessage: "Failed to update credit batch", log: { message: "Failed to update credit batch", context: { op: "credit-batch:update" } } });

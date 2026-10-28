@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/server", () => ({
   resolveOrgContext: mocks.resolveOrgContext,
+  hasOrgRole: vi.fn().mockReturnValue(false),
 }));
 vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: mocks.requireOrgFacility,
@@ -48,9 +49,10 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
-vi.mock("@/config/env", () => ({
-  env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
+});
 vi.mock("@/lib/log", () => ({
   logger: mocks.logger,
   sanitizeErrorMessage: (error: unknown) =>
@@ -244,6 +246,7 @@ const endpoints: Record<string, ReadEndpoint> = {
       linkedFacilityCount: 0,
       isProduction: false,
       viewerCanManage: false,
+      viewerCanDeleteRegistryRemovals: false,
     },
     badInput: () =>
       certifierSummaryRoute(
@@ -321,7 +324,7 @@ describe.each(Object.entries(endpoints))(
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toEqual({
         success: false,
-        error: "Select an Organization to continue.",
+        error: "Select an organization to continue.",
       });
       expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     });

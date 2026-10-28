@@ -1,12 +1,66 @@
 # Isometric Docs Change Log
 
+## 2026-10-21: Held emission replacements and Removal correction read data (#1335)
+
+Re-entered sent entries stay unsent and held for their original Removal through
+`replaces_entry_id` (migration 0170). Stamping happens only in
+`markSubmissionSubmitted` on the corrected resubmit. `RemovalCorrection` read data
+supplies the screens with returned-statement details, member batches and changed
+components for Returned by Isometric and Resubmit needed states.
+No binding or `MAPPING_REVISION` change. No backfill.
+
+## 2026-10-20: Emissions entries always on
+
+The activation flag is removed. Entries and sample-leg retirement apply in every environment.
+No binding, revision or schema change. Run the retirement CLI per organization to delete old sample legs.
+
+## 2026-10-20: Remove the sandbox zero stub
+
+Removed the sandbox-only period-input escape hatch and its submission plumbing
+in every environment, independently of the emissions-entry activation gate.
+Missing operating inputs now require records, entries or Removal-confirmed
+zeros on Empty components. Project-level scope guards remain. The E2E template
+selector uses the same coverage check and supplies no implicit zeros.
+See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md)
+and [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
+
+## 2026-10-20: Emissions entry evidence binding
+
+Entry files now bind as `emission_entry` Sources to every contributed component/input
+in the frozen manifest. Explicit targets fail closed outside the template or entry
+set. Automatic targets and ordering are unchanged; the Source mapping revision
+includes the new explicit-target vocabulary. No schema change or backfill.
+
+## 2026-10-20: Removal entry claims and frozen payloads (#1242)
+
+With `EMISSIONS_ENTRIES_ENABLED` on, emissions entries and recorded zeros feed
+Removal inputs with per-entry reservation and sending claims. The contribution
+manifest participates in the payload hash. `PRODUCTION_CLAIM_POLICY` is now
+`application-slice-delivery-entry-contributions-v2`, bumping `MAPPING_REVISION`
+in every environment. Mutation-free claimed drafts with an older revision are
+retired for review; attempts with possible registry writes require reconciliation.
+The flag remains off by default, preserving the automatic-input path. Migration
+0167 freezes `payload_snapshot` after draft, except its `journaled` recovery key.
+
+## 2026-10-20: Retire sample transport automatic figures on activation (#1058)
+
+With `EMISSIONS_ENTRIES_ENABLED` on, sample shipping lines take only emissions
+entries. Legacy sample legs no longer supply aggregation, automatic figures,
+transport coverage, readiness or dashboard gaps. The declarative catalog and
+`MAPPING_REVISION` stay stable across flag states; runtime source availability
+retires the binding. With the gate off, legacy behavior is preserved.
+The activation CLI deletes old legs and their owned evidence through the
+existing scoped, logged deletion path; no migration deletes data. Run it per
+organization as described in the [plan activation notes](../plans/2026-10-15-template-driven-emissions.md#5-delivery).
+The sample-template drift question closes on activation, not on merge.
+
 ## 2026-10-16: Emissions entries behind EMISSIONS_ENTRIES_ENABLED (#1058)
 
 Added the `emission_entries` and `emission_entry_values` tables and the
 `emission_entry` document owner for entry evidence. Writes are behind
 `EMISSIONS_ENTRIES_ENABLED`, which is off by default; the flag also refuses new
-sample transport legs. No binding or submitted value changed. Entry aggregation
-for submission remains deferred to PR 4. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+sample transport legs. This table addition changed no binding or submitted value;
+Removal input compilation is covered by #1242 above. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
 ## 2026-10-16: Energy page estimates and the Emission factors settings section removed (#1091)
 
@@ -822,3 +876,34 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
+
+## 2026-10-16: stored-entry display facts
+
+Batch health uses batch-scoped stored entries and automatic figures.
+Facility Energy activity includes counting entries only on reviewed facility
+energy sources. These local changes remain behind `EMISSIONS_ENTRIES_ENABLED`;
+PR 4 owns Removal-flow zero confirmation and registry contribution compilation.
+
+## 2026-10-21: reporting window dates are facility days (#1282)
+
+Resolves `isometric/reporting-window-utc-days`. GHG Entry `started_on` and
+`completed_on` carry the facility's local calendar day, and the reporting-window
+refusal compares and prints only the facility day. Verified 2026-10-21:
+
+- Isometric API standards, "Dates": "Datetime fields in the APIs conform to the
+  ISO 8601 date and time format in UTC." This covers datetime fields, not
+  date-only ones.
+- Certify `CreateGhgEntryRequest.started_on` / `completed_on` are `format: date`
+  ("The date at which activities related to this GHG entry started" / "The date
+  by which activities related to this GHG entry finished") with no time-zone
+  wording.
+- Biochar Protocol v1.1.1: the reporting period "ends upon application of
+  biochar from that batch at the storage site".
+
+Rule in `resolveRemovalReportingWindow`: production start and end are instants
+and convert to the facility day through the facility's IANA time zone.
+Application dates are stored calendar dates (UTC midnight) and are used as
+written, never converted. The application day must not precede the production
+end's facility day. The returned `startedOn` and `completedOn` are calendar dates
+at UTC midnight; the same-day production-end floor is gone because the fields
+are date-only.

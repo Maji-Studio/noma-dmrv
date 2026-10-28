@@ -11,6 +11,7 @@ import { SupplierQuickAddDialog } from "./forms/entity-select/supplier-quick-add
 import { QuickAddDialogShell } from "./forms/entity-select/quick-add-dialog-shell";
 
 const observed = vi.hoisted(() => ({ form: null as Pick<import("react-hook-form").UseFormReturn, "getValues" | "formState"> | null }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock("react-hook-form", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-hook-form")>();
   return { ...actual, useForm: (...args: Parameters<typeof actual.useForm>) => {
@@ -28,12 +29,12 @@ const facilities = [
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities, selectedFacility: facilities[0] }) }));
 vi.mock("@/hooks/use-organization-settings", () => ({ useOrganizationDefaultValues: () => ({ defaults: { defaultCountry: "Tanzania" } }) }));
 vi.mock("@/hooks/use-suppliers", () => ({
-  useCreateSupplierWithLocations: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCreateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplierWithLocations: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useCreateSupplierLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateSupplierLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/use-customers", () => ({
-  useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomerLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/use-geo", () => ({

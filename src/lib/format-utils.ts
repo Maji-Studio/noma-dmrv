@@ -4,20 +4,21 @@
  * Every formatter here absorbs null itself and returns a shared missing-value
  * token, so no component ever needs `?? 0` or a hand-written placeholder.
  * Which token depends on what the formatter's input is, not on its unit:
- * a value an operator records returns "Not recorded" when null and
- * "Not available" when it cannot be parsed; a value the app derives returns
- * "Not available", because there was never an operator to record it. The full
- * rule lives with the vocabulary in `@/lib/copy-utils`.
+ * a value an operator records returns "Not recorded" when null and a short
+ * reason ("Unreadable date") when it cannot be parsed. A formatter for a value
+ * the app derives (CO₂e, tonnes, file size) takes a number only, so the caller
+ * leaves the figure out when there is none. The full rule lives with the
+ * vocabulary in `@/lib/copy-utils`.
  */
 
 import { format } from "date-fns/format";
 import { isValid } from "date-fns/isValid";
 import { parseISO } from "date-fns/parseISO";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, UNREADABLE_DATE, UNREADABLE_TIME } from "@/lib/copy-utils";
 import { formatFacilityTime, formatUtcDate, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const TIME_FORMAT = "HH:mm";
 const DATE_TIME_FORMAT = `MMM d, yyyy, ${TIME_FORMAT}`;
@@ -50,13 +51,13 @@ function parseDateValue(value: DateValue): Date | null {
 /**
  * Format a calendar date for user-facing display. Bare `YYYY-MM-DD` values are
  * parsed in local time so they cannot drift to the previous day west of UTC.
- * Returns "Not recorded" for null or undefined and "Not available" for a value
- * it cannot parse.
+ * Returns "Not recorded" for null or undefined and "Unreadable date" for a
+ * value it cannot parse.
  */
 export function formatDate(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
-  return date ? format(date, DATE_FORMAT) : MISSING_VALUE.notAvailable;
+  return date ? format(date, DATE_FORMAT) : UNREADABLE_DATE;
 }
 
 /**
@@ -65,14 +66,14 @@ export function formatDate(value: DateValue): string {
  * facility-local day never drifts into the viewer's timezone. Use this for
  * server-computed day strings (e.g. `nextCountableSamplingDay`); use `formatDate`
  * for `Date`/timestamp values. Returns "Not recorded" for null or undefined and
- * "Not available" for malformed input.
+ * "Unreadable date" for malformed input.
  */
 export function formatDayString(day: string | null | undefined): string {
   if (!day) return MISSING_VALUE.notRecorded;
-  if (!DATE_ONLY_PATTERN.test(day)) return MISSING_VALUE.notAvailable;
+  if (!DATE_ONLY_PATTERN.test(day)) return UNREADABLE_DATE;
   const [year, month, dayOfMonth] = day.split("-").map(Number);
   const monthName = SHORT_MONTH_NAMES[month - 1];
-  if (!monthName) return MISSING_VALUE.notAvailable;
+  if (!monthName) return UNREADABLE_DATE;
   return `${monthName} ${dayOfMonth}, ${year}`;
 }
 
@@ -81,29 +82,36 @@ export function formatCalendarDate(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   if (typeof value === "string" && DATE_ONLY_PATTERN.test(value)) return formatDayString(value);
   const date = typeof value === "string" ? parseISO(value) : value;
-  return isValid(date) ? formatDayString(formatUtcDate(date)) : MISSING_VALUE.notAvailable;
+  return isValid(date) ? formatDayString(formatUtcDate(date)) : UNREADABLE_DATE;
 }
 
 /**
  * Format a date and time for user-facing display using a 24-hour clock.
- * Returns "Not recorded" for null or undefined and "Not available" for a value
- * it cannot parse.
+ * Returns "Not recorded" for null or undefined and "Unreadable date" for a
+ * value it cannot parse.
  */
 export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
-  return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+  return date ? format(date, DATE_TIME_FORMAT) : UNREADABLE_DATE;
 }
 
 /**
  * Format the time of day on a 24-hour clock ("14:30"), on the viewer's clock.
- * Returns "Not recorded" for null or undefined and "Not available" for a value
- * it cannot parse.
+ * Returns "Not recorded" for null or undefined and "Unreadable time" for a
+ * value it cannot parse.
  */
 export function formatTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
-  return date ? format(date, TIME_FORMAT) : MISSING_VALUE.notAvailable;
+  return date ? format(date, TIME_FORMAT) : UNREADABLE_TIME;
+}
+
+/** Time of day on the facility clock, using the app's 24-hour format. */
+export function formatFacilityClockTime(value: DateValue, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, TIME_FORMAT) : UNREADABLE_TIME;
 }
 
 /**
@@ -113,7 +121,7 @@ export function formatTime(value: DateValue): string {
 export function formatFacilityDateTime(value: Date | string | null | undefined, timeZone: string): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = typeof value === "string" ? new Date(value) : value;
-  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : UNREADABLE_DATE;
 }
 
 /**
@@ -123,7 +131,7 @@ export function formatFacilityDateTime(value: Date | string | null | undefined, 
 export function formatFacilityDay(value: Date | string | null | undefined, timeZone: string): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = typeof value === "string" ? new Date(value) : value;
-  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_FORMAT) : MISSING_VALUE.notAvailable;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_FORMAT) : UNREADABLE_DATE;
 }
 
 /** Format an instant in a facility's timezone with its numeric UTC offset. */
@@ -142,13 +150,13 @@ export function formatFacilityDateTimeWithOffset(
  * Format a user-facing date range. Ranges within one calendar year omit the
  * year from the start; cross-year ranges show both years in full.
  * Returns "Not recorded" when either boundary is null or undefined, and
- * "Not available" when either cannot be parsed.
+ * "Unreadable date" when either cannot be parsed.
  */
 export function formatDateRange(start: DateValue, end: DateValue): string {
   if (!start || !end) return MISSING_VALUE.notRecorded;
   const startDate = parseDateValue(start);
   const endDate = parseDateValue(end);
-  if (!startDate || !endDate) return MISSING_VALUE.notAvailable;
+  if (!startDate || !endDate) return UNREADABLE_DATE;
 
   if (startDate.getFullYear() === endDate.getFullYear()) {
     return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} to ${format(endDate, DATE_FORMAT)}`;
@@ -221,15 +229,15 @@ export function formatPercent(
  * decimals, trailing zeros trimmed) once the magnitude reaches 1 t, otherwise
  * whole kg. Unlike `formatMass` (1-decimal tonnes) this keeps small deltas
  * legible, so a 15 kg uncertainty haircut next to a 1.04 t sequestration both
- * read true. Returns "Not available" for null/undefined, because CO₂e is derived
- * rather than recorded. `signed` prepends +/− (zero stays
- * unsigned). The unit suffix is dropped when `unit` is the empty string.
+ * read true. Takes a number only: CO₂e is derived rather than recorded, so a
+ * caller with no figure leaves it out or says why (`docs/ux-writing.md`).
+ * `signed` prepends +/− (zero stays unsigned). The unit suffix is dropped when
+ * `unit` is the empty string.
  */
 export function formatCo2e(
-  kg: number | null | undefined,
+  kg: number,
   opts?: { signed?: boolean; unit?: string }
 ): string {
-  if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notAvailable;
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
   const inTonnes = abs >= KG_PER_TONNE;
@@ -250,15 +258,14 @@ export function formatCo2e(
 
 /**
  * Format a value already expressed in tonnes (NOT kg — use `formatMass` for kg).
- * Returns "Not available" for null/undefined: callers pass derived registry and
- * roll-up figures, not a value an operator typed. Defaults to 2 decimals and a "t" unit; pass
- * `unit: "t CO₂e"` for stored-carbon displays.
+ * Takes a number only: callers pass derived registry and roll-up figures, so a
+ * caller with no figure leaves it out. Defaults to 2 decimals and a "t" unit;
+ * pass `unit: "t CO₂e"` for stored-carbon displays.
  */
 export function formatTonnes(
-  value: number | null | undefined,
+  value: number,
   opts?: { digits?: number; unit?: string }
 ): string {
-  if (value == null) return MISSING_VALUE.notAvailable;
   const { digits = 2, unit = "t" } = opts ?? {};
   return `${value.toFixed(digits)} ${unit}`;
 }
@@ -324,8 +331,8 @@ export const ONE_WAY_CUE = "One way";
 export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 
-export function formatFileSize(bytes: number | null | undefined): string {
-  if (bytes == null) return MISSING_VALUE.notAvailable;
+/** Format a stored file size. Takes a number only; a caller without one leaves the size out. */
+export function formatFileSize(bytes: number): string {
   if (bytes < BYTES_PER_KB) return `${bytes} B`;
   if (bytes < BYTES_PER_MB) return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
   return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;

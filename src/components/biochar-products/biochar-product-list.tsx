@@ -3,6 +3,7 @@
  * Main biochar product listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
@@ -11,6 +12,9 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
@@ -18,10 +22,12 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
   PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
+import type { BiocharProductStats } from "@/data-access/biochar-product-stats";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
   useBiocharProduct,
   useBiocharProducts,
+  useBiocharProductStats,
   useCreateBiocharProduct,
   useDeleteBiocharProduct,
   useUpdateBiocharProduct,
@@ -36,7 +42,6 @@ import {
 } from "@/hooks/use-list-pagination";
 import {
   deriveBlendEffectiveMoisturePercent,
-  deriveSourceBiocharDryMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -45,11 +50,12 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDayString, formatDateRange } from "@/lib/format-utils";
+import { formatDayString } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   formatMoisturePercent,
 } from "@/lib/mass-moisture";
-import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
+import { finalWetProductMassKg, sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import {
   CubeIcon,
@@ -60,37 +66,15 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { BIOCHAR_PRODUCT_DEEP_LINK_PARAM } from "@/lib/biochar-product-links";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useEffect, useState } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { BiocharProductForm } from "./biochar-product-form";
-import { productSheetSections } from "./product-read-details";
+import { formatSavedMassKg, productSheetSections } from "./product-read-details";
 import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrations";
 
 const WET_PRODUCT_LABEL = "Wet product";
 const DRY_BIOCHAR_LABEL = "Dry biochar";
-
-function sourceBiocharDryMassKg(
-  product: Pick<
-    BiocharProductWithRelations,
-    | "massKg"
-    | "moistureContentPercent"
-    | "composition"
-    | "sourceAllocatedDryMassKg"
-  >,
-): number | null {
-  return product.sourceAllocatedDryMassKg ?? deriveSourceBiocharDryMassKg(
-    product.massKg,
-    product.moistureContentPercent,
-    fromCompositionJsonb(product.composition),
-  );
-}
-
-function finalWetProductMassKg(
-  product: Pick<BiocharProductWithRelations, "massKg" | "waterAddedKg">,
-): number | null {
-  return product.massKg == null
-    ? null
-    : sumNullable([product.massKg, product.waterAddedKg]);
-}
 
 function productEffectiveMoisturePercent(
   product: Pick<
@@ -111,18 +95,25 @@ function productEffectiveMoisturePercent(
   });
 }
 
+/** Water added and density are optional detail an operator can add from the Columns menu. */
+const PRODUCT_COLUMNS_HIDDEN_BY_DEFAULT = {
+  waterAddedKg: false,
+  densityKgM3: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
 
 function createColumns(
   onEdit: (product: BiocharProductWithRelations) => void,
-  onDelete: (productId: string) => void
+  onDelete: (productId: string) => void,
+  locks: RecordLockViews,
 ): ColumnDef<BiocharProductWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -133,13 +124,6 @@ function createColumns(
       meta: { nowrap: true },
       header: "Production date",
       cell: ({ row }) => formatDayString(row.original.productionDate),
-    },
-    {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facility?.name ?? "",
-      cell: ({ row }) =>
-        row.original.facility?.name || MISSING_VALUE.notAvailable,
     },
     {
       id: "formulation",
@@ -177,6 +161,24 @@ function createColumns(
       ),
     },
     {
+      accessorKey: "waterAddedKg",
+      header: "Water added",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatSavedMassKg(row.original.waterAddedKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "densityKgM3",
+      header: "Density",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.densityKgM3 == null
+            ? MISSING_VALUE.notRecorded
+            : `${row.original.densityKgM3} kg/m³`}
+        </span>
+      ),
+    },
+    {
       id: "storageLocation",
       header: "Storage",
       accessorFn: (row) => row.storageLocation?.name ?? "",
@@ -187,17 +189,21 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
-        </div>
-      ),
+      // Edit until Sent; Delete only while Open (the server archives the product).
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock)
+            ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }]
+            : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -212,36 +218,33 @@ type SideSheetState =
   | { mode: "view"; entity: BiocharProductWithRelations }
   | { mode: "edit"; entity: BiocharProductWithRelations };
 
-interface BiocharProductPageMassSummaryProps {
-  products: BiocharProductWithRelations[];
+interface BiocharProductMassSummaryProps {
+  stats: Pick<BiocharProductStats, "totalWetMassKg" | "totalDryBiocharMassKg"> | undefined;
   isLoading?: boolean;
+  isError?: boolean;
 }
 
-export function BiocharProductPageMassSummary({
-  products,
+export function BiocharProductMassSummary({
+  stats,
   isLoading = false,
-}: BiocharProductPageMassSummaryProps) {
-  const wetKg = sumNullableBy(products, finalWetProductMassKg);
-  const dryMassesKg = products.map(sourceBiocharDryMassKg);
-  const dryKg = dryMassesKg.some((massKg) => massKg === null)
-    ? null
-    : sumNullable(dryMassesKg);
-
+  isError = false,
+}: BiocharProductMassSummaryProps) {
   return (
     <StatCard
-      title="Mass on this page"
+      title="Total mass"
+      description="Across all products in this facility"
       value={
         <MassPair
-          wetKg={wetKg}
-          dryKg={dryKg}
+          wetKg={stats?.totalWetMassKg ?? null}
+          dryKg={stats?.totalDryBiocharMassKg ?? null}
           wetLabel={WET_PRODUCT_LABEL}
           dryLabel={DRY_BIOCHAR_LABEL}
         />
       }
       valueLayout="breakdown"
       icon={<ScalesIcon size={24} weight="bold" />}
-      description="Combined product mass on the current page"
       isLoading={isLoading}
+      isError={isError}
     />
   );
 }
@@ -305,7 +308,10 @@ export function BiocharProductList() {
   const toast = useToast();
 
   const products = productsData?.items ?? [];
-  const setDeletingProductId = (id: string | null) => setDeleting(products.find(row => row.id === id) ?? null);
+  const setDeletingProductId = (id: string | null) => {
+    setDeleteError(null);
+    setDeleting(products.find(row => row.id === id) ?? null);
+  };
   // Freeze the version beneath a deep-linked edit draft across refetches.
   const [deepLinkSnapshot, setDeepLinkSnapshot] = useState<BiocharProductWithRelations | null>(null);
   if (!focusedProductId && deepLinkSnapshot) setDeepLinkSnapshot(null);
@@ -320,6 +326,10 @@ export function BiocharProductList() {
         } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
+  // A lock that arrives as Sent keeps an open draft, read-only, with the way
+  // back (`submitBlock`).
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("biocharProduct", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -344,8 +354,10 @@ export function BiocharProductList() {
     toast,
   ]);
 
-  // Computed stats
-  const totalProducts = productsData?.total ?? 0;
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useBiocharProductStats(
+    contextFacilityId || undefined,
+    { enabled: !!contextFacilityId },
+  );
   const totalPages = productsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -363,18 +375,18 @@ export function BiocharProductList() {
   };
 
   // Handlers
-  const handleCreate = async (data: BiocharProductFormData) => {
+  const handleCreate = async (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createProduct.mutateAsync(data);
       setSideSheet(null);
       toast.success("Biochar product created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Biochar product was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Biochar product was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: BiocharProductFormData) => {
+  const handleUpdate = async (data: BiocharProductFormData, onRefusal: SaveRefusalHandler) => {
     // Deep-linked edits render via `displaySideSheet` while `sideSheet` state
     // is still null — resolving the target here keeps dashboard edit links
     // saveable, not just list-opened sheets.
@@ -390,11 +402,9 @@ export function BiocharProductList() {
       setDeepLinkFocus(null);
       toast.success("Biochar product updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Biochar product was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Biochar product was not saved. Try again."));
     }
   };
-
-  const handleDelete = (productId: string) => setDeletingProductId(productId);
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -416,6 +426,7 @@ export function BiocharProductList() {
     setFormError(null);
     setSideSheet({ mode: "create", entity: null });
   };
+  useOpenCreateIntent(openCreate);
   const openView = (product: BiocharProductWithRelations) => {
     setFocusedProductId(product.id);
     setDeepLinkMode(null);
@@ -448,7 +459,7 @@ export function BiocharProductList() {
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, setDeletingProductId, productLocks.locks);
 
   if (!contextFacilityId) {
     return (
@@ -456,7 +467,6 @@ export function BiocharProductList() {
         <PageHeader
           area="production"
           title="Biochar Products"
-          subtitle="Finished biochar inventory and certifications"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
       </div>
@@ -476,7 +486,6 @@ export function BiocharProductList() {
       <PageHeader
         area="production"
         title="Biochar Products"
-        subtitle="Finished biochar inventory and certifications"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -489,19 +498,20 @@ export function BiocharProductList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total products"
-          value={totalProducts}
+          value={statsData?.totalProducts ?? 0}
+          description="All products in this facility"
           icon={<CubeIcon size={24} weight="bold" />}
-          description="Finished product batches"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
-        <BiocharProductPageMassSummary
-          products={products}
-          isLoading={isLoading}
-        />
+        <BiocharProductMassSummary stats={statsData} isLoading={statsLoading} isError={statsError} />
       </div>
+
+      <RecordLockListNotice read={productLocks} />
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={PRODUCT_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={products}
         enableSorting={false}
@@ -520,6 +530,7 @@ export function BiocharProductList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => biocharProductDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -564,7 +575,7 @@ export function BiocharProductList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -580,7 +591,7 @@ export function BiocharProductList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
 
       <DeleteConfirmDialog
         isOpen={!!deletingProductId}
@@ -592,23 +603,26 @@ export function BiocharProductList() {
           setDeleteError(null);
         }}
         isPending={deleteProduct.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet
         numberedSections
-        detailToggle
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
         <BiocharProductForm
           key={editingEntity?.id ?? "create"}
           product={editingEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}

@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { throwActionError } from "@/lib/stale-version";
 import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
-import { deliveryActionFieldIssues, throwDeliveryActionError } from "@/lib/delivery-action-errors";
+import { planSaveRefusal } from "@/lib/save-refusal";
+import { DELIVERY_REFUSAL_ALIASES } from "@/schemas/deliveries";
+import { outputStockCommandSchema } from "@/schemas/output-stock";
 import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn(), update: vi.fn() }));
@@ -16,8 +19,12 @@ vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: 
 vi.mock("@/data-access/deliveries", () => ({}));
 vi.mock("@/lib/operations/deliveries", () => ({ recordDeliveryForUi: { id: "record_posted_delivery" }, updateDelivery: mocks.update }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
+vi.mock("@/data-access/biochar-product-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
-vi.mock("@/db/schema", () => ({ biocharProducts: { code: "code" }, deliveries: { code: "code" } }));
+vi.mock("@/db/schema", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/db/schema")>();
+  return { ...actual, biocharProducts: { code: "code" }, deliveries: { code: "code" } };
+});
 vi.mock("@/data-access/code-generator", () => ({ withAutoCode: mocks.autoCode, CODE_CONFLICT_MESSAGES: { biocharProduct: "Product code conflict", delivery: "Delivery code conflict" } }));
 import { createBiocharProductFn } from "./biochar-products";
 import { createDeliveryFn, updateDeliveryFn } from "./deliveries";
@@ -116,7 +123,12 @@ describe("product posting boundary", () => {
   it("validates before running the operation, and refuses a blend with no biochar", async () => {
     expect(await createBiocharProductFn({ ...product, formulationId: "invalid" })).toMatchObject({ success: false });
     const allIngredient = { formulationIngredientId: id, feedstockTypeId: id, feedstockTypeName: "Compost", feedstockTypeCategory: "compost", massKg: 100, moistureContentPercent: 30 };
-    expect(await createBiocharProductFn({ ...product, ingredientBins: [allIngredient] })).toEqual({ success: false, error: "A product requires positive source biochar." });
+    expect(await createBiocharProductFn({ ...product, ingredientBins: [allIngredient] })).toEqual({
+      success: false,
+      error: "A product requires positive source biochar.",
+      code: "validation_failed",
+      issues: [{ path: ["biocharWetMassKg"], code: "validation_failed", message: "A product requires positive source biochar." }],
+    });
     expect(mocks.run).not.toHaveBeenCalled();
   });
   it("requires organization authentication", async () => {
@@ -161,18 +173,39 @@ describe("delivery action field mapping and partial notes", () => {
     expect(result).toEqual({ success: false, error: message, code: "certification_locked", issues });
     if (result.success) throw new Error("Expected a lineage refusal");
     try {
-      throwDeliveryActionError(result);
+      throwActionError(result);
       expect.fail("Expected the action refusal to throw");
     }
     catch (error) {
       expect(error).toMatchObject({ message, issues });
-      expect(deliveryActionFieldIssues(error, ["deliveryDate", "deliveredWetMassKg"])).toBeUndefined();
+      expect(planSaveRefusal(error, { isShown: (field) => field !== "deliveryId", isChanged: () => true })).toEqual({ fieldErrors: [], footer: message });
     }
     expect(mocks.log).not.toHaveBeenCalled();
   });
-  it("maps the future instant issue to deliveryDate", async () => {
+  it("keeps the future instant issue at deliveredAt", async () => {
     mocks.run.mockRejectedValue(new DomainError("validation_failed", "Date and time cannot be in the future.", { issues: [{ path: ["deliveredAt"], code: "validation_failed", message: "Date and time cannot be in the future." }] }));
-    expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveryDate"] }] });
+    expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveredAt"] }] });
+  });
+  /** The exception a cleared load mass really raises: the posting schema rejects `wetMassKg: null`. */
+  const clearedMassError = () => {
+    const parsed = outputStockCommandSchema.safeParse({ storageLocationId: id, facilityId: id, kind: "delivery", occurredAt: "2026-10-02T09:30:00.000Z", wetMassKg: null, moisturePercent: 10, idempotencyKey: "key", reason: "Delivery" });
+    if (parsed.success) throw new Error("Expected the cleared mass to fail");
+    return parsed.error;
+  };
+  it.each([
+    ["occurredAt", "deliveryDate", () => new DomainError("validation_failed", "Date and time cannot be in the future. Enter a time at or before now.", { issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Date and time cannot be in the future. Enter a time at or before now." }] }), "Date and time cannot be in the future. Enter a time at or before now."],
+    ["wetMassKg", "deliveredWetMassKg", clearedMassError, "Enter the wet mass."],
+  ])("sends the posting path %s on an edit and the form maps it to %s", async (path, field, makeError, message) => {
+    // Stock posting names these two paths; the update action does not rename them.
+    mocks.update.mockRejectedValueOnce(makeError());
+    const result = await updateDeliveryFn({ deliveryId: id, expectedVersion: 1 });
+    if (result.success) throw new Error("Expected a posting refusal");
+    expect(result).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: [path], code: path === "wetMassKg" ? "invalid_type" : "validation_failed", message }] });
+    try { throwActionError(result); expect.fail("Expected the action refusal to throw"); }
+    catch (error) {
+      expect(planSaveRefusal(error, { aliases: DELIVERY_REFUSAL_ALIASES, isShown: () => true, isChanged: () => true }))
+        .toMatchObject({ fieldErrors: [{ field, message }], footer: null });
+    }
   });
   it("keeps an omitted note and lets an empty form field clear it", async () => {
     mocks.update.mockResolvedValue({ id });
@@ -183,13 +216,13 @@ describe("delivery action field mapping and partial notes", () => {
   });
 });
 
-it("preserves preview and unexpected cause when remapping delivery issues", async () => {
+it("preserves preview and unexpected cause with operation delivery issues", async () => {
   const preview = { basisFingerprint: "fresh", stockEffects: [] };
   mocks.run.mockRejectedValue(new DomainError("stock_basis_changed", "Refresh the preview.", {
     preview, cause: new Error("Unexpected cause"), retryable: true, retryAfterSeconds: 2,
     issues: [{ path: ["moisturePercent"], code: "validation_failed", message: "Enter moisture." }],
   }));
-  expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, preview, issues: [{ path: ["moistureContentPercent"] }] });
+  expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, preview, issues: [{ path: ["moisturePercent"] }] });
   expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: "delivery:create", errorName: "Error" }), "delivery action failed");
 });
 

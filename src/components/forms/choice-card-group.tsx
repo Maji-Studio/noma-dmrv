@@ -21,6 +21,7 @@ import {
 } from "react";
 import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { RequiredMarker } from "./required-marker";
 
 export interface ChoiceCardOption {
   value: string;
@@ -45,12 +46,20 @@ export interface ChoiceCardGroupProps {
   onValueChange?: (value: string) => void;
   onBlur?: FocusEventHandler<HTMLInputElement>;
   disabled?: boolean;
+  /** Adds "Required" to the legend; the visible star stays on the FormField label. */
+  required?: boolean;
   error?: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   className?: string;
   /** Put the art above the text at every width, for drawings too wide to sit beside it. */
   stackArt?: boolean;
+  /** Keep two-up options in one column until the group is about 24rem wide (phones), for long titles. */
+  stackNarrow?: boolean;
+  /** One card per line at every width, for a list of long choices read top to bottom. */
+  singleColumn?: boolean;
+  /** Draw a radio circle at the left of each card (empty, or filled when picked) instead of the check glyph. */
+  radioIndicator?: boolean;
 }
 
 /** Width of the group at which each column count starts. Cards keep about 176px. */
@@ -89,9 +98,13 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
       onValueChange,
       onBlur,
       disabled = false,
+      required = false,
       error,
       className,
       stackArt = false,
+      stackNarrow = false,
+      singleColumn = false,
+      radioIndicator = false,
       ...aria
     },
     ref,
@@ -99,7 +112,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
     const generatedName = useId();
     const groupName = name ?? generatedName;
     const controlled = value !== undefined;
-    const columns = wideColumns(options.length);
+    const columns = singleColumn ? 1 : wideColumns(options.length);
 
     return (
       <fieldset
@@ -108,9 +121,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
         aria-describedby={aria["aria-describedby"]}
         aria-invalid={error ? true : aria["aria-invalid"]}
       >
-        <legend className="sr-only">{legend}</legend>
+        <legend className="sr-only">
+          {legend}
+          {required && <RequiredMarker visual={false} />}
+        </legend>
         <div className="@container">
-          <div className={cn("grid grid-cols-1 gap-8", COLUMN_CLASSES[columns], className)}>
+          <div className={cn("grid grid-cols-1 gap-8", columns === 2 && stackNarrow ? "@min-[24rem]:grid-cols-2" : COLUMN_CLASSES[columns], className)}>
             {options.map((option) => {
               const optionDisabled = disabled || option.disabled;
               return (
@@ -140,20 +156,34 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       "flex w-full items-center gap-12 border px-12 py-10 text-left transition-colors duration-300",
                       STACK_CLASSES[columns],
                       stackArt && "flex-col items-start",
-                      "border-[var(--color-border-secondary)] bg-[var(--color-background-white)]",
-                      "hover:border-[var(--color-border-primary)]",
+                      "bg-[var(--color-background-white)]",
+                      // The hover variants (hover:, peer-disabled:hover:) outrank a base error colour, so the hover colours are left off while in error. A disabled card cannot be the fix, so it stays grey.
+                      error && !optionDisabled
+                        ? "border-[var(--color-signal-red)]"
+                        : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] peer-disabled:hover:border-[var(--color-border-secondary)]",
                       "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-interaction-light)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)]",
                       "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                       "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
-                      "peer-disabled:opacity-60 peer-disabled:hover:border-[var(--color-border-secondary)]",
-                      error && "border-[var(--color-signal-red)]",
                     )}
                   >
+                    {radioIndicator && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex size-16 shrink-0 items-center justify-center rounded-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)]",
+                          "group-has-[input:checked]:border-[var(--color-interaction)]",
+                          "group-has-[input:disabled]:border-[var(--color-border-secondary)] group-has-[input:disabled]:bg-[var(--color-background-medium)]",
+                          "forced-colors:group-has-[input:checked]:border-[Highlight]",
+                        )}
+                      >
+                        <span className="size-8 rounded-full bg-[var(--color-interaction)] opacity-0 group-has-[input:checked]:opacity-100 forced-colors:bg-[Highlight]" />
+                      </span>
+                    )}
                     {option.art && (
                       <span
                         aria-hidden
                         className={cn(
-                          "shrink-0 items-center text-[var(--color-text-secondary)]",
+                          "shrink-0 items-center text-[var(--color-text-secondary)] group-has-[input:disabled]:opacity-60",
                           stackArt ? "flex" : "hidden @min-[22rem]:flex",
                         )}
                       >
@@ -161,12 +191,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                       </span>
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-4">
-                      <span className="flex items-center gap-8">
-                        <span className="body-small font-medium text-[var(--color-text-primary)]">
+                      <span className="flex flex-wrap items-center gap-x-8 gap-y-2">
+                        <span className="body-small font-medium text-[var(--color-text-primary)] group-has-[input:disabled]:opacity-60">
                           {option.title}
                         </span>
                         {option.badge && (
-                          <span className="body-caption text-[var(--color-text-tertiary)]">
+                          <span className="body-caption whitespace-nowrap text-[var(--color-text-tertiary)]">
                             {option.badge}
                           </span>
                         )}
@@ -177,12 +207,12 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                         </span>
                       )}
                     </span>
-                    <span
+                    {!radioIndicator && <span
                       aria-hidden
                       className="absolute right-8 top-8 flex size-16 items-center justify-center rounded-full bg-[var(--color-interaction)] opacity-0 group-has-[input:checked]:opacity-100 text-[var(--color-background-white)] forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]"
                     >
                       <CheckIcon size={10} weight="bold" />
-                    </span>
+                    </span>}
                   </span>
                 </label>
               );

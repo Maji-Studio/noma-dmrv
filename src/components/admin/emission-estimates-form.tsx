@@ -9,15 +9,16 @@
 
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui";
 import {
+  FormActions,
   FormField,
   FormInput,
   SectionLabel,
-  ServerError,
 } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useToast } from "@/components/ui/toast";
 import {
   SOIL_TEMPERATURE_SOURCE_MAX_LENGTH,
@@ -26,6 +27,10 @@ import {
 } from "@/schemas/certification";
 import { useSaveFacilityEmissionConfig } from "@/hooks/use-certification";
 import type { CertifierProjectRow } from "@/data-access/certification";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(facilityEmissionConfigSchema);
 
 interface EmissionEstimatesFormProps {
   facilityId: string;
@@ -39,6 +44,19 @@ interface EmissionEstimatesFormProps {
   durabilityOption: "200_year" | "1000_year";
 }
 
+/** Inputs hold strings, so a baseline must too or retyping a saved value reads dirty. */
+function toInputValues(
+  facilityId: string,
+  temperature: number | null | undefined,
+  source: string | null | undefined,
+) {
+  return {
+    facilityId,
+    defaultSoilTemperatureC: temperature == null ? "" : String(temperature),
+    defaultSoilTemperatureSource: source ?? "",
+  };
+}
+
 export function EmissionEstimatesForm({
   facilityId,
   mapping,
@@ -47,27 +65,33 @@ export function EmissionEstimatesForm({
   const certStatus = makeCertFieldStatus(mapping ?? undefined);
   const toast = useToast();
   const saveMutation = useSaveFacilityEmissionConfig();
+  const formId = useId();
+  const [serverError, setServerError] = useState("");
 
   const {
     register,
+    control,
     handleSubmit,
+    reset,
+    resetField,
     setError,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(facilityEmissionConfigSchema),
-    defaultValues: {
+    defaultValues: toInputValues(
       facilityId,
-      defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
-      defaultSoilTemperatureSource:
-        mapping?.defaultSoilTemperatureSource ?? undefined,
-    },
+      mapping?.defaultSoilTemperatureC,
+      mapping?.defaultSoilTemperatureSource,
+    ),
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   if (!mapping) {
     return (
       <p className="body-medium text-[var(--color-text-secondary)]">
         This facility isn&apos;t linked to an Isometric project yet. Link it
-        from the facility settings before configuring emission estimates.
+        in Settings, Facilities before configuring emission estimates.
       </p>
     );
   }
@@ -87,25 +111,34 @@ export function EmissionEstimatesForm({
   }
 
   const onSubmit = async (raw: unknown) => {
+    setServerError("");
     try {
-      await saveMutation.mutateAsync(raw as FacilityEmissionConfigFormData);
+      const values = raw as FacilityEmissionConfigFormData;
+      await saveMutation.mutateAsync(values);
+      // Saved values are the new baseline, so the form is no longer unsaved.
+      reset(
+        toInputValues(
+          facilityId,
+          values.defaultSoilTemperatureC,
+          values.defaultSoilTemperatureSource,
+        ),
+      );
       toast.success("Emission estimates saved");
     } catch (error) {
-      setError("root.serverError", {
-        type: "server",
-        message:
-          error instanceof Error ? error.message : "The estimates were not saved. Try again.",
-      });
+      setServerError(refuseSave(
+        error,
+        error instanceof Error ? error.message : "The estimates were not saved. Try again.",
+      ) ?? "");
     }
   };
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-form flex flex-col gap-32"
     >
       <input type="hidden" {...register("facilityId")} />
-
       <div className="flex flex-col gap-16">
         <SectionLabel>Soil durability reference</SectionLabel>
         <FormField
@@ -121,7 +154,8 @@ export function EmissionEstimatesForm({
           <FormInput
             id="defaultSoilTemperatureC"
             type="number"
-            step="any"
+            {...numberBounds("defaultSoilTemperatureC")}
+            disabled={isSubmitting}
             error={!!errors.defaultSoilTemperatureC}
             {...register("defaultSoilTemperatureC")}
           />
@@ -136,27 +170,22 @@ export function EmissionEstimatesForm({
             id="defaultSoilTemperatureSource"
             type="text"
             maxLength={SOIL_TEMPERATURE_SOURCE_MAX_LENGTH}
+            disabled={isSubmitting}
             error={!!errors.defaultSoilTemperatureSource}
             {...register("defaultSoilTemperatureSource")}
           />
         </FormField>
       </div>
 
-      {errors.root?.serverError?.message && (
-        <ServerError message={errors.root.serverError.message} />
-      )}
-
-      <div>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting || saveMutation.isPending}
-        >
-          {isSubmitting || saveMutation.isPending
-            ? "Saving..."
-            : "Save estimates"}
-        </Button>
-      </div>
+      {/* control also reports this form's dirty state to a surrounding
+          unsaved-changes guard such as the settings rail. */}
+      <FormActions
+        control={control}
+        isSubmitting={isSubmitting || saveMutation.isPending}
+        errorMessage={serverError}
+        submitLabel="Save estimates"
+        sticky={false}
+      />
     </form>
   );
 }

@@ -21,7 +21,7 @@ import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
-import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, UNKNOWN_USER } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/schemas/documents";
 
@@ -42,6 +42,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   emission_entry: "Emissions entry",
+  emission_line_comment: "Component comment",
   credit_batch: "Credit batch",
   production_run: "Production run",
   feedstock: "Feedstock",
@@ -64,7 +65,7 @@ export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
 
 /** Record types in custody order, then master data, for the record type filter. */
 export const ACTIVITY_RECORD_TYPE_ORDER: readonly ActivityEntityType[] = [
-  "credit_batch", "emission_entry", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
+  "credit_batch", "emission_entry", "emission_line_comment", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
   "order", "delivery", "transport_leg", "application", "document",
   "supplier", "supplier_location", "customer", "customer_location", "formulation",
   "removal", "ghg_statement",
@@ -101,11 +102,11 @@ export interface ActivityActorDisplay {
 export function activityActorDisplay(item: Pick<ActivityItem, "actor" | "source">): ActivityActorDisplay {
   if (!item.actor) {
     const name = ACTORLESS_SOURCE_LABELS[item.source];
-    return name ? { name, missing: false, channel: null } : { name: MISSING_VALUE.notAvailable, missing: true, channel: null };
+    return name ? { name, missing: false, channel: null } : { name: UNKNOWN_USER, missing: true, channel: null };
   }
   const channel = SOURCE_CHANNEL_LABELS[item.source];
   return {
-    name: item.actor.name ?? MISSING_VALUE.notAvailable,
+    name: item.actor.name ?? UNKNOWN_USER,
     missing: item.actor.name == null,
     channel: channel ? `via ${channel}` : null,
   };

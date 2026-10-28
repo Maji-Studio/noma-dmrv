@@ -1,61 +1,35 @@
-/** Groups the newest-first list by local calendar day, each with its heading ("Today", "Yesterday", or the app date). */
-import { format } from "date-fns/format";
-import { isToday } from "date-fns/isToday";
-import { isYesterday } from "date-fns/isYesterday";
-import { formatDate, formatTime } from "@/lib/format-utils";
+/** Groups activity by the facility calendar, preserving newest-first order. */
+import { addDaysIso, facilityToday, formatFacilityDate } from "@/lib/date-utils";
+import { formatDayString } from "@/lib/format-utils";
 import type { ActivityItem } from "./activity-display";
 
-const DAY_KEY_FORMAT = "yyyy-MM-dd";
-
-/** Changes by one actor within this long of the burst's newest change read as one burst (a seed, an import, a save). */
-export const ACTIVITY_CLUSTER_WINDOW_MS = 60_000;
-
-/** One burst: its head is the newest entry, which carries the actor and time once for the rest. */
-export interface ActivityCluster {
-  key: string;
-  items: ActivityItem[];
-}
+const YESTERDAY_OFFSET_DAYS = -1;
 
 export interface ActivityDayGroup {
   key: string;
   label: string;
-  clusters: ActivityCluster[];
+  items: ActivityItem[];
 }
 
-function actorKey(item: ActivityItem): string {
-  return `${item.actor?.id ?? "none"}:${item.source}`;
-}
-
-export function activityDayLabel(date: Date): string {
-  if (isToday(date)) return "Today";
-  if (isYesterday(date)) return "Yesterday";
-  return formatDate(date);
-}
-
-/** The time of day on the viewer's clock, as the day heading carries the date. */
-export function activityTimeLabel(date: Date): string {
-  return formatTime(date);
+export function activityDayLabel(date: Date, timeZone: string, now = new Date()): string {
+  const day = formatFacilityDate(date, timeZone);
+  const today = facilityToday(timeZone, now);
+  if (day === today) return "Today";
+  if (day === addDaysIso(today, YESTERDAY_OFFSET_DAYS)) return "Yesterday";
+  return formatDayString(day);
 }
 
 /** Keeps the incoming order; a day that reappears after another (it cannot, for a sorted list) starts a new group. */
-export function groupActivityByDay(items: readonly ActivityItem[]): ActivityDayGroup[] {
+export function groupActivityByDay(items: readonly ActivityItem[], timeZone: string, now = new Date()): ActivityDayGroup[] {
   const groups: ActivityDayGroup[] = [];
   for (const item of items) {
-    const key = format(item.occurredAt, DAY_KEY_FORMAT);
+    const key = formatFacilityDate(item.occurredAt, timeZone);
     let group = groups.at(-1);
     if (!group || group.key !== key) {
-      group = { key, label: activityDayLabel(item.occurredAt), clusters: [] };
+      group = { key, label: activityDayLabel(item.occurredAt, timeZone, now), items: [] };
       groups.push(group);
     }
-    const cluster = group.clusters.at(-1);
-    // Measured from the cluster head, so a steady stream cannot chain into one long burst.
-    const head = cluster?.items[0];
-    const joins =
-      cluster && head &&
-      actorKey(head) === actorKey(item) &&
-      Math.abs(head.occurredAt.getTime() - item.occurredAt.getTime()) <= ACTIVITY_CLUSTER_WINDOW_MS;
-    if (joins) cluster.items.push(item);
-    else group.clusters.push({ key: item.id, items: [item] });
+    group.items.push(item);
   }
   return groups;
 }

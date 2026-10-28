@@ -1,15 +1,15 @@
-import type { ReactNode } from "react";
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
-import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import { readableText } from "../../../tests/helpers/readable-text";
 
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
-vi.mock("@/components/ui/tooltip", () => ({
-  InfoHint: ({ children, label }: { children: ReactNode; label: string }) => <span aria-label={label}>{children}</span>,
-  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
+
+afterEach(cleanup);
+
+const text = readableText;
 
 import { productSheetSections, savedProductComposition } from "./product-read-details";
 
@@ -43,75 +43,53 @@ describe("Saved product composition", () => {
   });
 });
 
-function visibleText(node: ReactTestInstance | string): string {
-  return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visibleText).join(" ");
-}
-const text = (node: ReactTestInstance) => visibleText(node).replace(/\s+/g, " ");
 
-describe("Product read view levels", () => {
-  it("shows saved fields, dry lines, the composition picture and transport at both levels, and adds the ledger behind Show calculation in Detailed", async () => {
-    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-    let renderer!: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(
-        <FormDetailProvider scope="product">
-          <FormDetailControl />
-          <EntitySideSheetSections numbered sections={productSheetSections(product, "UTC")} />
-        </FormDetailProvider>,
-      );
-    });
-    const simple = text(renderer.root);
-    expect(simple).toContain("Product store");
-    expect(simple).toContain("Chicken manure wet mass (kg)");
-    expect(simple).toContain("Product composition");
+describe("Product read view", () => {
+  it("shows saved fields, dry lines, the composition picture and transport inline, and the ledger behind the (i)", async () => {
+    const { container } = render(<EntitySideSheetSections numbered sections={productSheetSections(product, "UTC")} />);
+    const shown = text(container);
+    expect(shown).toContain("Product store");
+    expect(shown).toContain("Chicken manure wet mass (kg)");
+    expect(shown).toContain("Product composition");
     // Headline and key at save precision, from the saved allocation.
-    expect(simple).toContain("400 kg");
-    expect(simple).toContain("Dry biochar 200 kg");
+    expect(shown).toContain("400 kg");
+    expect(shown).toContain("200 kg dry biochar");
     // The form's split rule and labels: each ingredient as its solids, one pooled water.
-    expect(simple).toContain("Chicken manure solids 80 kg");
-    expect(simple).toContain("Water 70 kg");
+    expect(shown).toContain("Chicken manure solids 80 kg");
+    expect(shown).toContain("Water 70 kg");
     // The picture is the mass flow: each input, then the product it makes.
-    const flows = renderer.root.findAll(node => node.props["data-mass-flow"] !== undefined && typeof node.type === "string");
+    const flows = container.querySelectorAll("[data-mass-flow]");
     expect(flows).toHaveLength(1);
     expect(text(flows[0]).trim()).toBe(
-      "Biochar 250 kg wet Chicken manure 100 kg wet Water added 50 kg Wet biochar product 400 kg " +
+      "Biochar 250 kg wet mass Chicken manure 100 kg wet mass Water added 50 kg Wet biochar product 400 kg " +
         "Dry biochar 200 kg (50%) Chicken manure solids 80 kg (20%) Water 70 kg (18%) Water added 50 kg (12%)",
     );
     // Dry figures are data: a secondary line under each wet mass.
-    expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
-    expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
+    expect(shown).toContain("Source biochar wet mass (kg) 250 kg 200 kg dry biochar");
+    expect(shown).toContain("Chicken manure wet mass (kg) 100 kg 80 kg dry solids");
     // Goods move on deliveries, so transport reads there, not on the product.
-    expect(simple).not.toMatch(/transport/i);
-    for (const hidden of ["% of total", "Show calculation"]) {
-      expect(simple).not.toContain(hidden);
+    expect(shown).not.toMatch(/transport/i);
+    for (const hidden of ["% of total", "Show calculation", "is the sum of its parts"]) {
+      expect(shown).not.toContain(hidden);
     }
 
-    await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-    const detailed = text(renderer.root);
-    expect(detailed).toContain("Show calculation");
-    const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
-    await act(async () => disclosure.props.onClick());
-    const disclosed = text(renderer.root);
-    expect(disclosed).toContain("% of total");
-    expect(disclosed).toContain("Wet biochar product is the sum of its parts: 200 kg + 80 kg + 70 kg + 50 kg = 400 kg.");
-    expect(disclosed).toContain("source allocation saved with the product");
-    expect(disclosed).toContain("snapshot saved with the product");
-    await act(async () => renderer.unmount());
+    fireEvent.click(screen.getByRole("button", { name: "About Product composition" }));
+    const panel = text(await screen.findByRole("dialog"));
+    expect(panel).toContain("% of total");
+    expect(panel).toContain("Wet biochar product is the sum of its parts: 200 kg + 80 kg + 70 kg + 50 kg = 400 kg.");
+    expect(panel).toContain("source allocation saved with the product");
+    expect(panel).toContain("snapshot saved with the product");
   });
 
-  it("shows masses at save precision and omits the bar when a saved part is missing", async () => {
-    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  it("shows masses at save precision and omits the bar when a saved part is missing", () => {
     const precise = { ...product, waterAddedKg: 50.125, composition: { ingredients: [{ ...(product.composition as { ingredients: Record<string, unknown>[] }).ingredients[0], massDryKg: null }] } } as unknown as BiocharProductWithRelations;
-    let renderer!: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(<EntitySideSheetSections sections={productSheetSections(precise, "UTC")} />);
-    });
-    const shown = text(renderer.root);
+    const { container } = render(<EntitySideSheetSections sections={productSheetSections(precise, "UTC")} />);
+    const shown = text(container);
     expect(shown).toContain("50.125 kg");
-    expect(shown).toContain("Chicken manure solids Not available");
+    expect(shown).toContain("Chicken manure solids");
+    expect(shown).not.toContain("Not available");
     // The key reads at save precision too, not only the saved field.
     expect(shown).toContain("Water added 50.125 kg");
-    expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(0);
-    await act(async () => renderer.unmount());
+    expect(container.querySelectorAll('[role="img"]')).toHaveLength(0);
   });
 });

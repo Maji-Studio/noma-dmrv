@@ -13,7 +13,7 @@ import { SafeError } from "@/lib/errors";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi
     .fn()
-    .mockRejectedValue(new SafeError("Select an Organization to continue.")),
+    .mockRejectedValue(new SafeError("Select an organization to continue.")),
 }));
 
 // ============================================
@@ -76,13 +76,14 @@ describe("data-access/quick-add: auth enforcement", () => {
   });
 
   it("createFeedstockType rejects empty userId", async () => {
-    const { createFeedstockType } = await import("@/data-access/quick-add");
+    const { createFeedstockType } = await import("@/lib/operations/feedstock-types");
+    const { runOperationInProcess } = await import("@/lib/operations/runner");
 
     await expect(
-      createFeedstockType(makeTestOrgContext(""), {
-        code: "FT-001",
+      runOperationInProcess(createFeedstockType, makeTestOrgContext(""), {
         name: "Test Type",
         category: "forestry",
+        usage: "pyrolysis",
       })
     ).rejects.toThrow("Unauthorized");
   });
@@ -112,7 +113,7 @@ describe("fn/entities: auth enforcement", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Select an Organization to continue.",
+      error: "Select an organization to continue.",
     });
   });
 
@@ -122,7 +123,7 @@ describe("fn/entities: auth enforcement", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Select an Organization to continue.",
+      error: "Select an organization to continue.",
     });
   });
 });

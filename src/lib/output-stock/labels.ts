@@ -22,3 +22,20 @@ export const LOST_MASS_SUBMIT_LABEL = "Save lost mass";
 
 /** An application builds on the delivery, so its stock can no longer change. */
 export const deliveryAppliedLockedReason = (applicationCode: string) => `Locked because application ${applicationCode} uses this delivery. Correct or remove the application first.`;
+
+/**
+ * The parts of a bin's stock beside its dry biochar, named the way the product
+ * composition names them: each ingredient's solids by material ("Compost
+ * solids", `ingredientSolidsLabel`) where the bin knows them, all of them
+ * together where it does not, and the water the records estimate.
+ */
+export const INGREDIENT_SOLIDS_LABEL = "Ingredient solids";
+export const ESTIMATED_WATER_LABEL = "Water, estimated";
+export const ESTIMATED_WET_LABEL = "Wet, estimated";
+
+/** What an output bin's wet stock is, said once for every hint that needs it. */
+export const WET_STOCK_DEFINITION = "Estimated: the wet mass that went in, minus what was taken out. Drying isn't tracked, so the real figure may be lower.";
+
+/** The output bin history's hint: what an entry is, and what a later entry does to it. */
+export const STOCK_HISTORY_HINT =
+  "Each entry is one measurement. Wet stock is wet mass added less wet mass taken out. A later entry never changes what an earlier one measured; wet estimates update.";

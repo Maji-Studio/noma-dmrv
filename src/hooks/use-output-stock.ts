@@ -1,10 +1,11 @@
 "use client";
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
-import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
+import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn, removeOutputLossFn } from "@/fn/output-stock";
 import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 import { biocharProductKeys } from "./use-biochar-products";
@@ -15,6 +16,9 @@ import { storageLocationKeys } from "./use-storage-locations";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { unwrap } from "@/hooks/types";
+import type { BiocharProductRecord, Delivery } from "@/db/schema";
+import type { RemoveLossData } from "@/schemas/bin-movements";
+import { throwRecordLossError } from "./use-bin-movements";
 import { activityKeys } from "./activity-query-keys";
 
 export const outputStockKeys = {
@@ -94,29 +98,56 @@ export function useOutputStockHistory(storageLocationId: string, enabled = true)
   });
 }
 
+/**
+ * A failed stock save can mean the stock moved under the form: refresh every
+ * stock preview, and the credit batch previews planned on that stock (#1350),
+ * so neither keeps an answer for stock that is gone.
+ */
+export function invalidateAfterFailedStockSave(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: outputStockKeys.all });
+  void client.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
+}
+
 export function usePostOutputStock() {
   const client = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (input: OutputStockPostInput) => {
       const result = await postOutputStockFn(input);
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: (data) => {
-      void client.invalidateQueries({ queryKey: activityKeys.all });
-      for (const row of data.savedDeliveries) {
-        patchListCachesWithSavedRow(client, deliveryKeys.lists(), row);
-        client.setQueriesData({ queryKey: deliveryKeys.detail(row.id) }, (old: object | undefined) => old ? { ...old, ...row } : old);
-      }
-      for (const row of data.savedProducts) {
-        patchListCachesWithSavedRow(client, biocharProductKeys.lists(), row);
-        client.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
-      }
-      for (const key of [outputStockKeys.all, storageLocationKeys.all, biocharProductKeys.all, deliveryKeys.all, orderKeys.all, dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
-        void client.invalidateQueries({ queryKey: key });
-      }
-      invalidateStockEntityQueries(client, "delivery");
-    },
-    onError: () => { void client.invalidateQueries({ queryKey: outputStockKeys.all }); },
+    onSuccess: (data) => updateOutputStockCaches(client, data),
+    onError: () => invalidateAfterFailedStockSave(client),
   });
+}
+
+export function useRemoveOutputLoss() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
+    mutationFn: async (input: RemoveLossData) => {
+      const result = await removeOutputLossFn(input);
+      if (!result.success) throwRecordLossError(result);
+      return result.data;
+    },
+    onSuccess: (data) => updateOutputStockCaches(client, data),
+    onError: () => invalidateAfterFailedStockSave(client),
+  });
+}
+
+function updateOutputStockCaches(client: QueryClient, data: { savedProducts: BiocharProductRecord[]; savedDeliveries: Delivery[] }) {
+  void client.invalidateQueries({ queryKey: activityKeys.all });
+  for (const row of data.savedDeliveries) {
+    patchListCachesWithSavedRow(client, deliveryKeys.lists(), row);
+    client.setQueriesData({ queryKey: deliveryKeys.detail(row.id) }, (old: object | undefined) => old ? { ...old, ...row } : old);
+  }
+  for (const row of data.savedProducts) {
+    patchListCachesWithSavedRow(client, biocharProductKeys.lists(), row);
+    client.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+  }
+  for (const key of [outputStockKeys.all, storageLocationKeys.all, biocharProductKeys.all, deliveryKeys.all, orderKeys.all, dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
+    void client.invalidateQueries({ queryKey: key });
+  }
+  invalidateStockEntityQueries(client, "delivery");
 }

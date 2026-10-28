@@ -1,23 +1,28 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ActionError } from "@/lib/action-error";
+import { OPEN_LOCK } from "../../../tests/helpers/record-lock-mocks";
 import { useController, type Control } from "react-hook-form";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import type { CreditBatch } from "@/db/schema/credits";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 import { CreditBatchForm } from "./credit-batch-form";
 
 const mocks = vi.hoisted(() => ({
   certifierSummary: vi.fn(), methodBEligibility: vi.fn(), recordPrerequisites: vi.fn(),
-  showFacilitySelect: false, showFeedstockSelect: false,
+  claimedRun: null as null | { endsOn: string; run: Record<string, unknown> },
+  showFacilitySelect: false, showFeedstockSelect: false, realPicker: false, autoPick: false, timeZone: "UTC",
 }));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
 const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
 const FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000003";
+const OTHER_FEEDSTOCK_TYPE_ID = "00000000-0000-4000-8000-000000000004";
 const EARLIER_PROCESS_ID = "00000000-0000-4000-8000-000000000005";
 const LATER_PROCESS_ID = "00000000-0000-4000-8000-000000000006";
-const MONTH_REFUSAL = "A credit batch may span at most one month (one calendar month; noma rule).";
+const MONTH_REFUSAL = "Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.";
 
 type SelectFields = { facilityId: string; feedstockTypeId: string };
 
@@ -37,11 +42,13 @@ function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
     <select aria-label="Feedstock type" {...field}>
       <option value="">Select feedstock type</option>
       <option value={FEEDSTOCK_TYPE_ID}>Pyrolysis feedstock</option>
+      <option value={OTHER_FEEDSTOCK_TYPE_ID}>Other feedstock</option>
     </select>
   );
 }
 
-vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility" }) }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: mocks.timeZone, hint: "" }),
+  useFacilityContext: () => ({ facilityId: "facility" }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: mocks.certifierSummary,
@@ -57,14 +64,41 @@ vi.mock("@/hooks/use-production-processes", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
-  useCreditBatchProductionRunOptions: () => ({ data: [], isSuccess: true }),
+  useCreditBatchProductionRunOptions: (params: { endDate?: string }) => ({
+    // A claimed run is in the window once the batch ends on or after the run's own end.
+    data: mocks.claimedRun && params.endDate && params.endDate >= mocks.claimedRun.endsOn ? [mocks.claimedRun.run] : [],
+    isSuccess: true,
+  }),
 }));
-vi.mock("@/components/forms", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/components/forms")>(),
-  // Expose selected fields without coupling this test to the entity picker.
-  FormEntitySelect: ({ control }: { control: Control<SelectFields> }) =>
-    mocks.showFacilitySelect ? <FacilitySelect control={control} />
-      : mocks.showFeedstockSelect ? <FeedstockSelect control={control} /> : null,
+vi.mock("@/components/forms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/forms")>();
+  return {
+    ...actual,
+    // Expose selected fields without coupling this test to the entity picker.
+    FormEntitySelect: (props: Parameters<typeof actual.FormEntitySelect>[0]) => {
+      const control = props.control as unknown as Control<SelectFields>;
+      return mocks.realPicker ? <actual.FormEntitySelect {...props} />
+        : mocks.showFacilitySelect ? <FacilitySelect control={control} />
+        : mocks.showFeedstockSelect ? <FeedstockSelect control={control} /> : null;
+    },
+  };
+});
+// Under the real FormEntitySelect: a plain select that, like the real one,
+// picks the lone feedstock type by itself when asked (autoSelectSingle).
+vi.mock("@/components/forms/entity-select/entity-select", () => ({
+  EntitySelect: ({ id, value, onChange, onAutoSelect, autoSelectSingle }: {
+    id: string; value: string; onChange: (value: string) => void; onAutoSelect?: (value: string) => void; autoSelectSingle?: boolean;
+  }) => {
+    useEffect(() => {
+      if (mocks.autoPick && autoSelectSingle && !value) (onAutoSelect ?? onChange)(FEEDSTOCK_TYPE_ID);
+    }, [value, onChange, onAutoSelect, autoSelectSingle]);
+    return (
+      <select id={id} aria-label="Feedstock type" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select feedstock type</option>
+        <option value={FEEDSTOCK_TYPE_ID}>Pyrolysis feedstock</option>
+      </select>
+    );
+  },
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/components/ui/tooltip", () => ({
@@ -77,7 +111,11 @@ beforeEach(() => {
   mocks.methodBEligibility.mockClear();
   mocks.methodBEligibility.mockReturnValue({ data: undefined });
   mocks.showFacilitySelect = false;
+  mocks.claimedRun = null;
+  mocks.timeZone = "UTC";
   mocks.showFeedstockSelect = false;
+  mocks.realPicker = false;
+  mocks.autoPick = false;
   mocks.recordPrerequisites.mockReset();
   mocks.recordPrerequisites.mockResolvedValue(undefined);
   mocks.certifierSummary.mockReturnValue({ data: undefined });
@@ -104,6 +142,17 @@ describe("CreditBatchForm required dates", () => {
       expect(label.textContent).toContain("Required");
       expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
     }
+  });
+});
+
+describe("CreditBatchForm month window", () => {
+  it("keeps the supplied month window when the facility zone resolves late", () => {
+    const defaultValues = { startDate: "2026-09-01", endDate: "2026-09-30" };
+    const { container, rerender } = render(<CreditBatchForm defaultValues={defaultValues} onSubmit={vi.fn()} />);
+    mocks.timeZone = "Africa/Dar_es_Salaam";
+    rerender(<CreditBatchForm defaultValues={defaultValues} onSubmit={vi.fn()} />);
+    expect(container.querySelector<HTMLInputElement>('input[name="startDate"]')?.value).toBe("2026-09-01");
+    expect(container.querySelector<HTMLInputElement>('input[name="endDate"]')?.value).toBe("2026-09-30");
   });
 });
 
@@ -169,7 +218,7 @@ describe("CreditBatchForm certifier period policy", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       startDate: new Date("2026-01-01"),
       endDate: new Date("2026-04-30"),
-    })));
+    }), expect.any(Function)));
   });
 
   it("refuses the same period for an Isometric facility", async () => {
@@ -177,7 +226,7 @@ describe("CreditBatchForm certifier period policy", () => {
     const onSubmit = vi.fn();
     const { container } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
     fireEvent.submit(container.querySelector("form")!);
-    await waitFor(() => expect(screen.getByText("A credit batch may span at most one month (one calendar month; noma rule).")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Choose an end date on or before Jan 31, 2026. Isometric credit batches must cover less than one month.")).toBeTruthy());
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -198,7 +247,7 @@ describe("CreditBatchForm certifier period policy", () => {
     await waitFor(() => expect(screen.queryByText(MONTH_REFUSAL)).toBeNull());
     expect(mocks.certifierSummary).toHaveBeenLastCalledWith(UNMAPPED_FACILITY_ID, true);
     fireEvent.submit(form);
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ facilityId: UNMAPPED_FACILITY_ID })));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ facilityId: UNMAPPED_FACILITY_ID }), expect.any(Function)));
 
     onSubmit.mockClear();
     fireEvent.change(screen.getByRole("combobox", { name: "Facility" }), {
@@ -229,5 +278,150 @@ describe("CreditBatchForm certifier period policy", () => {
     await screen.findByText(MONTH_REFUSAL);
     await act(async () => { fireEvent.submit(container.querySelector("form")!); });
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("CreditBatchForm unsaved changes", () => {
+  const SEPTEMBER = { startDate: "2026-09-01", endDate: "2026-09-30" };
+  const dateValue = (container: HTMLElement, name: string) => container.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value;
+
+  it("stays clean when the only feedstock type and its month are picked for the operator", async () => {
+    mocks.realPicker = true;
+    mocks.autoPick = true;
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    await waitFor(() => expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate));
+    expect(dateValue(container, "endDate")).toBe(SEPTEMBER.endDate);
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Feedstock type" }).value).toBe(FEEDSTOCK_TYPE_ID);
+    expectStayedClean(states);
+  });
+
+  it("turns dirty once the operator picks the feedstock type", async () => {
+    mocks.realPicker = true;
+    const { states, container } = renderReportingDirty(<CreditBatchForm onSubmit={vi.fn()} onCancel={vi.fn()} windowForFeedstock={() => SEPTEMBER} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Feedstock type" }), { target: { value: FEEDSTOCK_TYPE_ID } });
+    await waitFor(() => expect(states.at(-1)).toBe(true));
+    expect(dateValue(container, "startDate")).toBe(SEPTEMBER.startDate);
+  });
+});
+
+describe("CreditBatchForm save refusal (#1327)", () => {
+  const creditBatch = {
+    id: "00000000-0000-4000-8000-000000000001",
+    facilityId: "00000000-0000-4000-8000-000000000002",
+    feedstockTypeId: "00000000-0000-4000-8000-000000000003",
+    startDate: "2026-01-01",
+    endDate: "2026-04-30",
+    sampling: "sampled",
+    certifier: null,
+    productionRunIds: [],
+  } as unknown as CreditBatch;
+  const LOCK_REASON = "A Removal holds this batch. Correct the Removal first.";
+  const issue = (path: string[], message: string, code = "validation_failed") => ({ path, code, message });
+
+  /** The parent's catch: `setError(onRefusal(error, fallback))`. */
+  function RefusingBatchForm({ refusal }: { refusal: unknown }) {
+    const [error, setError] = useState<string | null>(null);
+    return (
+      <CreditBatchForm
+        creditBatch={creditBatch}
+        lock={OPEN_LOCK}
+        errorMessage={error ?? undefined}
+        onSubmit={(_data, onRefusal) => { setError(onRefusal(refusal, "Credit batch was not saved. Try again.")); }}
+      />
+    );
+  }
+
+  async function saveRefused(refusal: unknown, edit?: (endDate: HTMLInputElement) => void | Promise<void>) {
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    const { container } = render(<RefusingBatchForm refusal={refusal} />);
+    const endDate = container.querySelector<HTMLInputElement>('input[name="endDate"]')!;
+    await edit?.(endDate);
+    await act(async () => { fireEvent.submit(container.querySelector("form")!); });
+    return { container, endDate };
+  }
+
+  it("shows a refusal that names a field at that field and not in the footer", async () => {
+    const { container } = await saveRefused(new ActionError({
+      error: "The end date is after today.", code: "validation_failed", issues: [issue(["endDate"], "The end date is after today.")],
+    }));
+    await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("The end date is after today."));
+    await act(async () => {});
+    expect(container.querySelector("#endDate-error")?.textContent).toBe("The end date is after today.");
+    expect(container.textContent).not.toContain("Try again.");
+  });
+
+  it("keeps a code clash in the footer, since the credit batch form has no code field", async () => {
+    const message = 'Code "CB-26-001" already exists. Use a different code.';
+    const { container } = await saveRefused(new ActionError({ error: message, code: "validation_failed", issues: [issue(["code"], message, "conflict")] }));
+    await waitFor(() => expect(container.textContent).toContain("already exists"));
+    expect(container.querySelector('[id$="-error"]')).toBeNull();
+  });
+
+  it("sends a locked field back to the saved value and says why once", async () => {
+    const { container, endDate } = await saveRefused(
+      new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["endDate"], LOCK_REASON, "certification_locked")] }),
+      (field) => { fireEvent.change(field, { target: { value: "2026-05-31" } }); },
+    );
+    await waitFor(() => expect(container.querySelector("#endDate-error")?.textContent).toBe("Locked. Your change was not saved."));
+    await act(async () => {});
+    expect(container.querySelector("#endDate-error")?.textContent).toBe("Locked. Your change was not saved.");
+    expect(endDate.value).toBe("2026-04-30");
+    expect(container.textContent?.split("A Removal holds this batch").length).toBe(2);
+  });
+
+  it("brings the saved production runs back with a reverted date", async () => {
+    const RUN_ID = "00000000-0000-4000-8000-0000000000aa";
+    const batch = creditBatch as unknown as { productionRunIds: string[] };
+    batch.productionRunIds = [RUN_ID];
+    mocks.claimedRun = {
+      endsOn: "2026-04-15",
+      run: { id: RUN_ID, code: "PR-1", status: "complete", feedstockTypeIds: [creditBatch.feedstockTypeId], assignedCreditBatchId: creditBatch.id },
+    };
+    try {
+      const { container, endDate } = await saveRefused(
+        new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["endDate"], LOCK_REASON, "certification_locked")] }),
+        async (field) => {
+          fireEvent.change(field, { target: { value: "2026-03-31" } });
+          await act(async () => {});
+          // Moving the end date back drops the claimed run, as the notice says.
+          expect(document.body.textContent).toContain("Saving removes a claimed production run");
+        },
+      );
+      await waitFor(() => expect(endDate.value).toBe("2026-04-30"));
+
+      await act(async () => {});
+      expect(container.textContent).not.toContain("Saving removes a claimed production run");
+      expect(container.textContent).toContain("Not saved. 1 field is locked.");
+    } finally {
+      batch.productionRunIds = [];
+    }
+  });
+
+  it("brings the saved production runs back with a reverted feedstock type", async () => {
+    const RUN_ID = "00000000-0000-4000-8000-0000000000aa";
+    const batch = creditBatch as unknown as { productionRunIds: string[] };
+    batch.productionRunIds = [RUN_ID];
+    mocks.showFeedstockSelect = true;
+    mocks.claimedRun = {
+      endsOn: "2026-04-15",
+      run: { id: RUN_ID, code: "PR-1", status: "complete", feedstockTypeIds: [creditBatch.feedstockTypeId], assignedCreditBatchId: creditBatch.id },
+    };
+    try {
+      const { container } = await saveRefused(
+        new ActionError({ error: LOCK_REASON, code: "certification_locked", issues: [issue(["feedstockTypeId"], LOCK_REASON, "certification_locked")] }),
+        async () => {
+          fireEvent.change(screen.getByLabelText("Feedstock type"), { target: { value: OTHER_FEEDSTOCK_TYPE_ID } });
+          await act(async () => {});
+          expect(document.body.textContent).toContain("Saving removes a claimed production run");
+        },
+      );
+      await waitFor(() => expect((screen.getByLabelText("Feedstock type") as HTMLSelectElement).value).toBe(FEEDSTOCK_TYPE_ID));
+
+      await act(async () => {});
+      expect(container.textContent).not.toContain("Saving removes a claimed production run");
+      expect(container.textContent).toContain("Not saved. 1 field is locked.");
+    } finally {
+      batch.productionRunIds = [];
+    }
   });
 });

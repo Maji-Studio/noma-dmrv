@@ -1,3 +1,7 @@
+import type { BatchEntityReadinessIssue } from "@/lib/certification/batch-health";
+import type { EntryCorrectionState } from "@/lib/certification/removal-entry-correction";
+import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
+import type { loadRemovalEntryContext } from "./removal-entry-context";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -19,10 +23,12 @@ import type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 import type { MemberCreditBatch } from "./member-credit-batch";
 import type { RemovalLedgerPreview } from "./removal-ledger-preview";
 import type { TransportCategory, TransportCoverage } from "./certify-transport-coverage";
+import type { FixedInputValue } from "./resolve-removal-template";
 
 type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
+  carriedEntries?: RemovalEntryContributions["carriedEntries"];
   facilityId: string;
   hasOrgCredentials: boolean;
   // Null when the credit batch is not yet grouped into a removal (a 1:1
@@ -36,6 +42,10 @@ export interface RemovalCertifyContext {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   templateBlockers: RemovalTemplateBlocker[];
+  /** Current template components without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
+  emissionLinesByBatchId?: Record<string, BatchEmissionLine[]>;
+  entryCorrectionsByBatchId?: Record<string, EntryCorrectionState[]>;
   emissionLines?: BatchEmissionLine[] | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -61,7 +71,7 @@ export interface RemovalCertifyContext {
   submissionLineageBlockers: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers: string[];
   templateTierBlocker?: string | null;
-  entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
+  entityReadinessIssues?: BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
@@ -90,6 +100,8 @@ export interface RemovalCertifyContext {
   // A submit attempt opened the registry boundary (Source mirroring) before
   // any ledger row existed. Deletion treats it as registry exposure.
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   // The GHG Statement this removal rolls into + its verifier status, or null
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
@@ -99,6 +111,11 @@ export interface RemovalCertifyContext {
 // Extends the UI context with the raw chain data the submit pipeline needs.
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
+  facilityTimezone: string;
+  /** Datapoints fixed in the template, for the compiled review's value column. */
+  fixedInputValues?: readonly FixedInputValue[];
+  correctionWindowOpen?: boolean;
+  removalEntryContext?: Omit<NonNullable<Awaited<ReturnType<typeof loadRemovalEntryContext>>>, "batchFacts">;
   lineages: ChainOfCustodyData[];
   runs: ProductionRunForCertification[];
   // The removal's member credit batches with their pooled lab Samples (by
@@ -122,6 +139,7 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
     code: string;
     durabilityOption: DurabilityOption;
     claimedByRemovalId: string | null;
+    claimingRemovalCode?: string | null;
     productionRunIds: string[];
     applicationIds: string[];
     applicationSlices?: {
@@ -140,5 +158,4 @@ export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "e
   // durability gate blocker, so the Phase-3 step can assume non-null here.
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
-
 

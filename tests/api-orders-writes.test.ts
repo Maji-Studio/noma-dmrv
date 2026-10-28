@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, apiIdempotencyRecords, organizationSettings, orders } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, deliveries, organizationSettings, orders } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { orderRepresentationSchema } from "@/lib/representations/orders";
@@ -20,6 +20,7 @@ const ALLOCATED_KG = 50;
 const BELOW_ALLOCATED_KG = 49;
 const UPDATED_KG = 120;
 const LATER_KG = 130;
+const BLOCKING_DELIVERY_COUNT = 5;
 const INITIAL_ETAG = '"1.1"';
 const NEXT_ETAG = '"2.1"';
 type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -298,9 +299,44 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   });
   it.each([false, true])("refuses orders with a delivery (archived: %s)", async (archived) => {
     const order = await saved();
-    await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
-    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked");
+    const delivery = await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
+    const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
+    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because delivery ${delivery.code} still uses it. Delete that delivery first, or keep this order.`);
+    expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: delivery.code, deliveryId: delivery.id });
     expect(await rows(a)).toHaveLength(1);
+  });
+  it("names the first delivery by code even when it was inserted later and is archived", async () => {
+    const order = await saved();
+    const laterCode = await insertReadDelivery(a, order.id, ALLOCATED_KG);
+    const firstCode = await insertReadDelivery(a, order.id, ALLOCATED_KG, true);
+    const lastCode = `E2E-Z-${a.tag}`;
+    await db.update(deliveries).set({ code: lastCode }).where(eq(deliveries.id, laterCode.id));
+    const code = `E2E-A-${a.tag}`;
+    await db.update(deliveries).set({ code }).where(eq(deliveries.id, firstCode.id));
+    const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
+    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because 2 deliveries still use it: ${code} and ${lastCode}. Delete those deliveries first, or keep this order.`);
+    expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: code, deliveryId: firstCode.id });
+    expect(await rows(a)).toHaveLength(1);
+  });
+  it("caps delivery names in code order and counts archived blockers without counting other orders", async () => {
+    const order = await saved();
+    const otherOrder = await saved();
+    const foreignOrder = await saved(b);
+    await insertReadDelivery(a, otherOrder.id, ALLOCATED_KG);
+    await insertReadDelivery(b, foreignOrder.id, ALLOCATED_KG);
+    let firstId = "";
+    for (const index of [5, 3, 1, 4, 2]) {
+      const delivery = await insertReadDelivery(a, order.id, ALLOCATED_KG / BLOCKING_DELIVERY_COUNT, index === 1 || index === BLOCKING_DELIVERY_COUNT);
+      await db.update(deliveries).set({ code: `E2E-DL-${index}-${a.tag}` }).where(eq(deliveries.id, delivery.id));
+      if (index === 1) firstId = delivery.id;
+    }
+    const refusal = await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
+    expect(refusal.detail).toBe(`Order ${order.code} was not deleted because 5 deliveries still use it: E2E-DL-1-${a.tag}, E2E-DL-2-${a.tag}, E2E-DL-3-${a.tag} and 2 more. Delete those deliveries first, or keep this order.`);
+    expect(refusal.errors[0].meta).toEqual({ reason: "in_use", deliveryCode: `E2E-DL-1-${a.tag}`, deliveryId: firstId });
+    expect((await read(a, order.id)).row).toEqual(order);
+    expect(await rows(a)).toHaveLength(2);
+    expect(await rows(b)).toHaveLength(1);
+    expect((await audits(a)).filter(row => row.operationId === "delete_order")).toEqual([]);
   });
   it("previews an archived order without deleting it, then allows a committed deletion", async () => {
     const order = await saved();

@@ -16,7 +16,7 @@ import { SampleList } from "./sample-list";
 const SAMPLE_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-type SubmitHandler = (data: Record<string, unknown>) => Promise<void>;
+type SubmitHandler = (data: Record<string, unknown>, onRefusal?: (error: unknown, fallback: string) => string | null) => Promise<void>;
 type ModeChange = (mode: "view" | "edit" | "create") => void;
 
 const harness = vi.hoisted(() => ({
@@ -26,8 +26,12 @@ const harness = vi.hoisted(() => ({
   onSubmit: null as SubmitHandler | null,
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
+  startDraft: vi.fn(),
+  createIntentOpen: false,
+  onOpenChange: null as ((open: boolean) => void) | null,
 }));
 
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: (key: string) => [
@@ -46,7 +50,7 @@ vi.mock("@/hooks/use-samples", () => ({
     error: null,
     isSuccess: true,
   }),
-  useCreateSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateSample: () => ({ startDraft: harness.startDraft, isPending: false, mutateAsync: vi.fn() }),
   useUpdateSample: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
@@ -66,7 +70,7 @@ vi.mock("@/hooks/use-list-pagination", () => ({
   useReconcileListPage: () => undefined,
 }));
 vi.mock("@/hooks/use-open-create-intent", () => ({
-  useOpenCreateIntent: () => ({ isOpen: false, context: null, clear: vi.fn() }),
+  useOpenCreateIntent: () => ({ isOpen: harness.createIntentOpen, context: null, clear: () => { harness.createIntentOpen = false; } }),
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
   useCreateWithEvidence: () => ({
@@ -88,6 +92,9 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   FireIcon: () => null,
   CertificateIcon: () => null,
 }));
+vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
+vi.mock("@/components/record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).stubRecordLockComponentsModule);
+
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,
@@ -108,10 +115,12 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     open: boolean;
     mode: string;
     onModeChange: ModeChange;
+    onOpenChange: (open: boolean) => void;
     children?: ReactNode;
   }) => {
     harness.sheet = { open: props.open, mode: props.mode };
     harness.onModeChange = props.onModeChange;
+    harness.onOpenChange = props.onOpenChange;
     return props.open ? <div>{props.children}</div> : null;
   },
 }));
@@ -140,6 +149,22 @@ describe("SampleList deep-linked sheet", () => {
     harness.update.mockReset().mockResolvedValue(undefined);
     harness.onSubmit = null;
     harness.onModeChange = null;
+    harness.onOpenChange = null;
+    harness.createIntentOpen = false;
+    harness.startDraft.mockReset();
+  });
+
+  it("starts a new create draft when a deep-linked create sheet closes", async () => {
+    harness.query = {};
+    harness.createIntentOpen = true;
+    await act(async () => { renderer = create(<SampleList />); });
+    expect(harness.sheet).toEqual({ open: true, mode: "create" });
+    expect(harness.startDraft).not.toHaveBeenCalled();
+    await act(async () => { harness.onOpenChange?.(false); });
+    await act(async () => { renderer?.update(<SampleList />); });
+    expect(harness.startDraft).toHaveBeenCalledOnce();
+    expect(harness.sheet.open).toBe(false);
+    renderer?.unmount();
   });
 
   it("saves and closes a sheet deep-linked straight into edit mode", async () => {
@@ -194,7 +219,7 @@ describe("SampleList deep-linked sheet", () => {
     harness.sample = { ...SAMPLE, version: SAMPLE.version + 1 };
     await act(async () => { renderer?.update(<SampleList />); });
     const draft = { labName: "Unsaved draft" };
-    await act(async () => { await harness.onSubmit?.(draft); });
+    await act(async () => { await harness.onSubmit?.(draft, (_error: unknown, fallback: string) => fallback); });
     expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ ...draft, sampleId: SAMPLE_ID, expectedVersion: SAMPLE.version }));
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
     expect(harness.query.sample).toBe(SAMPLE_ID);

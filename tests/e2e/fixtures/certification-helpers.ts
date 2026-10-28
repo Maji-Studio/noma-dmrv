@@ -1,3 +1,4 @@
+import { insertRemovalFixture } from "../../helpers/removal-fixture";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
 import { formatUtcDate } from "@/lib/date-utils";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
@@ -276,7 +277,7 @@ export async function seedGroupedRemovalWithChain(
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
       // Group: a Removal ledger row plus one immutable application slice.
-      await tx.insert(schema.certifierRemovals).values({
+      await insertRemovalFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.removal,
         facilityId: refs.facilityId,
@@ -404,8 +405,8 @@ export interface ReadyBatchOptions {
   /**
    * Omit the lab samples and the batch → production-run link. The batch still
    * has an unassigned application slice (so the wizard lists it) but is
-   * deterministically NOT ready: gaps "Lab chemistry results" and "Linked
-   * production data". Defaults to the full ready chain.
+   * deterministically NOT ready: gaps "No lab chemistry results" and "No
+   * production run linked". Defaults to the full ready chain.
    */
   incomplete?: boolean;
 }
@@ -427,7 +428,7 @@ export interface SeededReadyBatch {
 /** createCreditBatch pins new batches to the facility default; raw inserts must too. */
 async function facilityDefaultRemovalTemplateId(tx: DbTransaction, facilityId: string): Promise<string | null> {
   const [project] = await tx
-    .select({ id: schema.certifierProjects.defaultRemovalTemplateId })
+    .select({ id: schema.certifierProjects.removalTemplateId })
     .from(schema.certifierProjects)
     .where(and(eq(schema.certifierProjects.organizationId, DEC_ORG_ID), eq(schema.certifierProjects.facilityId, facilityId)));
   return project?.id || null;

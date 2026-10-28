@@ -1,24 +1,26 @@
 import { z } from "zod";
-import { LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM, PARTY_MAX_LOCATIONS } from "@/config/party-input";
+import { LOCATION_DISTANCE_MIN_KM, LOCATION_DISTANCE_MAX_KM, PARTY_MAX_LOCATIONS, PARTY_NAME_MAX, LOCATION_PLACE_MAX, PARTY_ADDRESS_MAX } from "@/config/party-input";
 import { SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_MAX_C, expectedVersionSchema, gpsPairSuperRefine, requiredLatitudeSchema, requiredLongitudeSchema, uuidSchema } from "./helpers";
 import { distanceSources } from "./distance-source";
 
-const NAME_MAX = 255;
-const PLACE_MAX = 100;
-const ADDRESS_MAX = 500;
-export const partyName = z.string().trim().min(1).max(NAME_MAX).describe(`Display name, trimmed, from 1 to ${NAME_MAX} characters.`);
-export const partyOptionalText = z.string().max(NAME_MAX).nullable().optional().describe(`Optional plain text, at most ${NAME_MAX} characters; null clears it.`);
-export const partyAddress = z.string().max(ADDRESS_MAX).nullable().optional().describe(`Site description, at most ${ADDRESS_MAX} characters; null clears it.`);
+export const partyName = z.string().trim().min(1).max(PARTY_NAME_MAX).describe(`Display name, trimmed, from 1 to ${PARTY_NAME_MAX} characters.`);
+export const partyOptionalText = z.string().max(PARTY_NAME_MAX).nullable().optional().describe(`Optional plain text, at most ${PARTY_NAME_MAX} characters; null clears it.`);
+export const partyAddress = z.string().max(PARTY_ADDRESS_MAX).nullable().optional().describe(`Site description, at most ${PARTY_ADDRESS_MAX} characters; null clears it.`);
 export const partyVersionFields = { expectedVersion: expectedVersionSchema };
+/** Refine for a location PATCH: at least one field besides the parent, location and version keys. */
+export const requireLocationUpdateField = (parentKey: "supplierId" | "customerId") => [
+  (input: Record<string, unknown>) => Object.entries(input).some(([key, value]) => ![parentKey, "locationId", "expectedVersion"].includes(key) && value !== undefined),
+  "Supply at least one field to update.",
+] as const;
 export const partyFacilityDistanceInput = z.strictObject({
   facilityId: uuidSchema().describe("Facility identifier in this Organization, UUID; archived facilities cannot be newly referenced."),
   distanceKm: z.number().min(LOCATION_DISTANCE_MIN_KM).max(LOCATION_DISTANCE_MAX_KM).nullable().describe(`One-way distance in km from ${LOCATION_DISTANCE_MIN_KM} to ${LOCATION_DISTANCE_MAX_KM}; null removes the pair. The server counts the round trip.`),
   distanceSource: z.enum(distanceSources).describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence."),
 });
 const fields = {
-  country: z.string().min(1).max(PLACE_MAX).describe("Country of the location, required on create."),
-  stateRegion: z.string().max(PLACE_MAX).nullable().optional().describe("State or region; null clears it."),
-  city: z.string().max(PLACE_MAX).nullable().optional().describe("City; null clears it."),
+  country: z.string().min(1).max(LOCATION_PLACE_MAX).describe("Country of the location, required on create."),
+  stateRegion: z.string().max(LOCATION_PLACE_MAX).nullable().optional().describe("State or region; null clears it."),
+  city: z.string().max(LOCATION_PLACE_MAX).nullable().optional().describe("City; null clears it."),
   gpsLatitude: requiredLatitudeSchema.describe("WGS 84 latitude in decimal degrees."),
   gpsLongitude: requiredLongitudeSchema.describe("WGS 84 longitude in decimal degrees."),
   isDefault: z.boolean().optional().describe("Whether to make this the default location; the last true value wins, otherwise the first location is default."),

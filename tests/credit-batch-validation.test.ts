@@ -237,7 +237,7 @@ beforeAll(async () => {
         biocharOutputKg: 100,
         biocharDryMassKg: 100,
       },
-    ].map((row) => ({ ...row, status: "complete" as const, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
+    ].map((row) => ({ ...row, status: "complete" as const, biocharOutputKg: row.biocharOutputKg ?? row.biocharDryMassKg, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,
@@ -572,7 +572,7 @@ describe("Credit Batch Production-Run Validation", () => {
       startDate: "2025-06-01",
       endDate: "2025-09-30",
     };
-    const message = "A credit batch may span at most one month (one calendar month; noma rule).";
+    const message = "Choose an end date on or before Jun 30, 2025. Isometric credit batches must cover less than one month.";
     const calls = [
       () => db.transaction((tx) => assertNoOverlappingCreditBatchCohort(ctx, tx, period)),
       () => db.transaction((tx) => findMatchingUnassignedProductionRunIds(ctx, tx, period)),

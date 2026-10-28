@@ -1,6 +1,6 @@
 /**
- * Credit batch Activity: the side sheet summary and latest entries, the link
- * to the Traceability Activity segment, its filters, record deep links,
+ * Credit batch Activity: the batch page's Activities tab and the Traceability
+ * Activity segment, their filters, record deep links,
  * tombstones, paging, and the empty state that names when recording started.
  *
  * Events are seeded with an explicit credit batch link, so global teardown
@@ -77,7 +77,7 @@ async function seedBatchActivity(seededData: SeededChainData, creditBatchId: str
 }
 
 test.describe("credit batch activity", () => {
-  test("summarises activity in the side sheet, filters the Activity segment and opens a record", async ({
+  test("lists activity on the batch page, filters it and opens a record", async ({
     adminPage: page,
     seededData,
     testUsers,
@@ -90,29 +90,17 @@ test.describe("credit batch activity", () => {
     await seedBatchActivity(seededData, batch.id, order.id, testUsers.admin.id);
     const total = SEEDED_EVENTS;
 
-    await page.goto(`/credit-batches?facility=${seededData.facility.id}&batch=${batch.id}`);
-    const sheet = page.getByRole("dialog");
-    const section = sheet.getByTestId("credit-batch-activity-section");
-    await expect(section).toBeVisible();
-    // Exact summary: last change and who, then changes per kind in reading order.
-    const summary = section.locator("dl[aria-label='Activity summary']");
-    await expect(summary.locator("dt")).toHaveText(["Last change", "Created", "Updated", "Status changed", "Deleted"]);
-    await expect(summary.locator("dd")).toHaveText([
-      new RegExp(`^[A-Z][a-z]{2} \\d{1,2}, \\d{4}, \\d{2}:\\d{2} by ${testUsers.admin.name}$`), "1", "4", "1", "1",
-    ]);
-    // The latest five, newest first.
-    const latest = section.getByTestId("activity-entry");
-    await expect(latest).toHaveCount(5);
-    expect(await latest.evaluateAll(rows => rows.map(row => `${row.getAttribute("data-kind")}:${row.getAttribute("data-record-type")}`))).toEqual([
+    await page.goto(`/credit-batches/${batch.id}?facility=${seededData.facility.id}&tab=activities`);
+    const view = page.getByTestId("credit-batch-activity-view");
+    await expect(view).toBeVisible();
+    // Newest first: the latest five lead the batch page's Activities tab.
+    const latest = view.getByTestId("activity-entry");
+    await expect(latest.nth(4)).toBeVisible();
+    expect((await latest.evaluateAll(rows => rows.map(row => `${row.getAttribute("data-kind")}:${row.getAttribute("data-record-type")}`))).slice(0, 5)).toEqual([
       "updated:credit_batch", "updated:order", "deleted:lab_sample", "updated:feedstock", "status_changed:credit_batch",
     ]);
     await expect(latest.first().getByTestId("activity-field-change")).toHaveText("Removal template: changed");
 
-    await section.getByRole("link", { name: new RegExp(`Open all activity \\(${total} changes\\)`) }).click();
-
-    await expect(page).toHaveURL(/\/traceability\?.*view=activity/);
-    const view = page.getByTestId("credit-batch-activity-view");
-    await expect(view).toBeVisible();
     const entries = view.getByTestId("activity-entry");
     await expect(entries).toHaveCount(total);
     // Actorless and API changes read as their source.

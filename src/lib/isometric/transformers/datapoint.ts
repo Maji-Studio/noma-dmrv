@@ -1,3 +1,7 @@
+import { carriedEntryDatapointDescription, type CarriedEntryNote } from "@/lib/certification/emission-entry-carry-copy";
+import { sumFigures, type EmissionFigure } from "@/lib/certification/emission-lines";
+import { canonicalUnit } from "../template-observations/units";
+import { effectiveContract } from "../template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { emissionLineBindingDecision } from "@/lib/certification/emission-line-binding";
 import { type LineContract } from "../template-observations/line-sources";
@@ -130,7 +134,7 @@ function declarativeSequestrationBindingRevision(
   return blueprints;
 }
 
-const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-only-v1";
+const PRODUCTION_CLAIM_POLICY = "application-slice-delivery-entry-carry-v5";
 
 export function buildMappingRevisionInput(
   sequestrationBindings: MappingRevisionSequestrationBindings =
@@ -154,6 +158,9 @@ export interface BuildCreateDatapointArgs {
   // Display label for operator messages only.
   componentDisplayName?: string;
   lineContract?: LineContract;
+  entryContribution?: EmissionFigure;
+  carriedEntries?: readonly CarriedEntryNote[];
+  omitAutomaticProduction?: boolean;
   rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
@@ -161,18 +168,6 @@ export interface BuildCreateDatapointArgs {
   supplierRefId: string;
   // Resolved Isometric Source IDs intended for this exact Datapoint target.
   sourceIds?: string[];
-  // Sandbox escape hatch (default false). When a Removal Template still
-  // declares a PERIOD_INPUT_TUPLES input — which ADR 0005 says belongs to a
-  // PROJECT-scope Component, not a Removal datapoint — the default behaviour
-  // is to fail closed with the scope-conflict SafeError below. When this flag
-  // is set, the builder instead emits a 0-magnitude REPORTED stub so the
-  // submit pipeline can be exercised before the real LCA value exists.
-  // `submitRemoval` only sets it for the SANDBOX environment, so a false `0`
-  // can never reach a production credit. Tracked in docs/open-questions.md
-  // ("stakeholder ask: why do we not have this data, and is an interim 0
-  // acceptable?"). Remove once the operator publishes the real value as a
-  // Project Component and the template drops the input (ADR 0018).
-  allowPeriodInputStub?: boolean;
 }
 
 export function buildCreateDatapointRequest(
@@ -189,13 +184,29 @@ export function buildCreateDatapointRequest(
     projectId,
     supplierRefId,
     sourceIds,
-    allowPeriodInputStub,
   } = args;
   if (lineContract) {
-    const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true,
+    const decision = emissionLineBindingDecision({ groupKey, contract: lineContract, problems: [], enrichmentComplete: true, entriesCanSubmit: !!args.entryContribution,
       component: { id: "", displayName: componentDisplayName ?? "", description: null, blueprintKey: componentBlueprintKey,
         inputs: [{ key: rtcInput.input_key, type: rtcInput.type, quantityKind: rtcInput.quantity_kind }] } });
     if (decision) throw new SafeError(removalLineBlockerMessage(decision.blocker));
+  }
+  const contract = lineContract && effectiveContract(lineContract);
+  if (args.entryContribution) {
+    if (contract?.scope !== "operating" || contract.entryPolicy === "none") throw new SafeError("This component does not take manual entries.");
+    const unit = canonicalUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit);
+    if (!unit || args.entryContribution.unit !== unit || rtcInput.quantity_kind !== blueprintInput.quantity_kind) throw new SafeError("The emissions entry unit does not match this template input.");
+    let figure = args.entryContribution;
+    const mapping = lookupInputMapping(groupKey, componentBlueprintKey, rtcInput.input_key, lineContract);
+    if (contract.automaticSource && mapping && agg[resolveDatapointSource(mapping, lineContract)] != null && !(args.omitAutomaticProduction && mapping?.bucket === "production")) {
+      const automatic = buildCreateDatapointRequest({ ...args, entryContribution: undefined });
+      const automaticUnit = canonicalUnit(blueprintInput.quantity_kind, automatic.quantity.unit ?? "");
+      figure = sumFigures([figure, { magnitude: String(automatic.quantity.magnitude), unit: automaticUnit ?? "" }])!;
+    }
+    const magnitude = Number(figure.magnitude);
+    if (!Number.isFinite(magnitude)) throw new SafeError("The emissions entry value is too large to submit.");
+    return { description: carriedEntryDatapointDescription(args.carriedEntries ?? []), display_name: blueprintInput.input_key, project_id: projectId,
+      quantity: { magnitude, unit: blueprintInput.compatible_unit }, source_ids: sourceIds ?? [], supplier_reference_id: supplierRefId, type: "REPORTED" };
   }
   const inputKey = rtcInput.input_key;
   const componentLabel =
@@ -216,26 +227,6 @@ export function buildCreateDatapointRequest(
     lineContract,
   );
   if (periodTuple) {
-    // Sandbox-only escape hatch. The real fix is removing this input from
-    // the Removal Template (ADR 0005); until the LCA value exists we let
-    // sandbox submit a 0-magnitude stub so the pipeline can be exercised.
-    // NOTE: 0 is an *over-claim* for these positive emissions — it is NOT a
-    // neutral placeholder — which is exactly why production fails closed.
-    if (allowPeriodInputStub) {
-      return {
-        description:
-          `Sandbox 0-stub for project-scope period input ` +
-          `"${groupKey}/${componentBlueprintKey}/${inputKey}" ` +
-          `(category="${periodTuple.category}"). A real LCA value is still required. ` +
-          `See ADR 0018 + docs/open-questions.md. Production fails closed.`,
-        display_name: blueprintInput.input_key,
-        project_id: projectId,
-        quantity: { magnitude: 0, unit: blueprintInput.compatible_unit },
-        source_ids: sourceIds ?? [],
-        supplier_reference_id: supplierRefId,
-        type: "REPORTED",
-      };
-    }
     throw new SafeError(
       `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.`,
     );

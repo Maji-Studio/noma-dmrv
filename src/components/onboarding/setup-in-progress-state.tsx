@@ -1,5 +1,5 @@
 /**
- * SetupInProgressState — what a plain Member sees while an Owner/Admin is still
+ * SetupInProgressState — what a plain Member sees while an Admin is still
  * provisioning the facility. Calm and non-actionable: setup is not their job.
  */
 "use client";

@@ -13,6 +13,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Keep the statement guard real; content comparison has its own agreement tests.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
+vi.mock("@/data-access/removal-entry-correction", () => ({
+  listNomaSentRemovalsForRemoteEntries: vi.fn(async () => []),
+  listStatementRemovalIdentities: vi.fn(async () => [{ id: "member", code: "R-12" }]),
+}));
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
 }));
@@ -68,7 +78,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
     userId: "user-test-1",
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   }),
 }));
@@ -202,7 +212,7 @@ beforeEach(() => {
   vi.mocked(authServer.requireOrgContext).mockResolvedValue({
     userId: "user-test-1",
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   });
 

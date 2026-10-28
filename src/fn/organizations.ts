@@ -3,9 +3,9 @@
 /**
  * Server actions for the Organization foundation (multi-tenancy PR 1):
  * org switching, member management, invitations, and Platform-Admin org
- * lifecycle. Member/invitation mutations use the Better Auth organization
- * plugin for real org members and scoped data-access overrides for Platform
- * Admins, who deliberately have no membership rows.
+ * lifecycle. Most member/invitation mutations use Better Auth for real org
+ * members and scoped overrides for Platform Admins. Invitation replacement
+ * uses one scoped transaction for both roles.
  */
 import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { organizations, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/better-auth";
 import {
+  isAdmin,
   requireOrgContext,
   requireOrgRole,
   requirePlatformAdmin,
@@ -27,18 +28,25 @@ import {
   type ResultWithWarning,
 } from "@/fn/action-errors";
 import { saveOrgPreference } from "@/fn/org-preference";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { parseCreateIntentKey } from "./with-create";
 import { withAction } from "@/fn/with-action";
-import { env } from "@/config/env";
+import { createAndDeliverInvitation } from "@/fn/organization-invitation-core";
+import { sendOrganizationInvitation } from "@/lib/email/organization-invitation";
+import { sendRoleChangedNotice, sendRemovedFromOrganizationNotice } from "@/lib/email/account-notices";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
-  createOrganizationWithOwner,
+  createOrganizationWithAdmin,
   findMembershipRole,
-  findUserIdByEmail,
+  replacePendingInvitation,
   listAllOrganizations,
+  listPlatformOrganizationDirectory,
+  type PlatformOrganizationDirectoryRow,
   listOrgInvitations,
   listOrgMembers,
   removeMemberAsPlatformAdmin,
+  renameActiveOrganization,
   updateMemberRoleAsPlatformAdmin,
   type OrganizationSummary,
   type OrgInvitationRow,
@@ -48,7 +56,9 @@ import type { ActionResult } from "@/types/actions";
 import {
   createOrganizationSchema,
   inviteMemberSchema,
+  invitationIdSchema,
   orgRoleSchema,
+  renameOrganizationSchema,
 } from "@/schemas/organizations";
 
 const LOG_MESSAGE = "organization action failed";
@@ -110,10 +120,6 @@ function extractApiErrorMessage(error: unknown): string | null {
   return null;
 }
 
-function buildAcceptUrl(invitationId: string): string {
-  return `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/accept-invitation/${invitationId}`;
-}
-
 // --- Reads ----------------------------------------------------------------
 
 export async function listMembersFn(): Promise<ActionResult<OrgMemberRow[]>> {
@@ -144,26 +150,31 @@ export async function listOrganizationsFn(): Promise<
   }, "Failed to load organizations.");
 }
 
+export async function listPlatformOrganizationsFn(): Promise<ActionResult<PlatformOrganizationDirectoryRow[]>> {
+  return toResult(async () => {
+    await requirePlatformAdmin();
+    return listPlatformOrganizationDirectory();
+  }, "Failed to load organizations.");
+}
+
 // --- Member management ----------------------------------------------------
 
 export async function inviteMemberAction(
   input: unknown
-): Promise<ActionResult<{ invitationId: string; acceptUrl: string }>> {
+): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
   return toResult(async () => {
     const { email, role } = inviteMemberSchema.parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    const result =
-      ctx.orgRole !== null
+    return createAndDeliverInvitation(ctx, async () => {
+      const result = ctx.orgRole !== null
         ? await auth.api.createInvitation({
-            body: { email, role, organizationId: ctx.organizationId },
-            headers: await headers(),
-          })
+          body: { email, role, organizationId: ctx.organizationId },
+          headers: await headers(),
+        })
         : await createInvitationAsPlatformAdmin(ctx, { email, role });
-    return {
-      invitationId: result.id,
-      acceptUrl: buildAcceptUrl(result.id),
-    };
+      return { id: result.id, email, role };
+    });
   }, "Failed to send invitation.");
 }
 
@@ -188,6 +199,27 @@ export async function revokeInvitationAction(
   }, "Failed to revoke invitation.");
 }
 
+export async function resendInvitationAction(
+  input: unknown,
+): Promise<ActionResult<{ invitationId: string; acceptUrl: string; emailSent: boolean }>> {
+  return withAction(async (ctx) => {
+    const { invitationId } = invitationIdSchema.parse(input);
+    requireOrgRole(ctx, "admin");
+    return createAndDeliverInvitation(ctx, () =>
+      replacePendingInvitation(ctx, { invitationId }).catch(rethrowOrganizationApiError));
+  }, {
+    fallbackMessage: "Failed to send invitation.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:resend-invitation" } },
+  });
+}
+
+/** Translate only the plugin's intentional messages, preserving unexpected failures. */
+function rethrowOrganizationApiError(error: unknown): never {
+  const message = extractApiErrorMessage(error);
+  if (message) throw new SafeError(message);
+  throw error;
+}
+
 export async function changeMemberRoleAction(
   input: unknown
 ): Promise<ActionResult<{ memberId: string }>> {
@@ -203,7 +235,8 @@ export async function changeMemberRoleAction(
         headers: await headers(),
       });
     } else {
-      await updateMemberRoleAsPlatformAdmin(ctx, memberId, role);
+      const notice = await updateMemberRoleAsPlatformAdmin(ctx, memberId, role);
+      await sendRoleChangedNotice(notice);
     }
     return { memberId };
   }, "Failed to change member role.");
@@ -224,13 +257,69 @@ export async function removeMemberAction(
         headers: await headers(),
       });
     } else {
-      await removeMemberAsPlatformAdmin(ctx, memberIdOrEmail);
+      const notice = await removeMemberAsPlatformAdmin(ctx, memberIdOrEmail);
+      await sendRemovedFromOrganizationNotice(notice);
     }
     return { memberIdOrEmail };
   }, "Failed to remove member.");
 }
 
+/** Clear the active organization; the caller must hard-navigate out of its workspace. */
+export async function leaveOrganizationAction(): Promise<ActionResult<{ organizationId: null }>> {
+  return withAction(async (ctx) => {
+    if (ctx.orgRole === null) {
+      throw new SafeError("You are not a member of this organization, so you cannot leave it.");
+    }
+    // The plugin enforces the last-Admin rule and clears the stored active org.
+    // Our /organization/leave after hook revokes OAuth grants and API keys.
+    await auth.api.leaveOrganization({
+      body: { organizationId: ctx.organizationId }, headers: await headers(),
+    }).catch(rethrowOrganizationApiError);
+    await clearSessionDataCookies();
+    return { organizationId: null };
+  }, {
+    fallbackMessage: "Failed to leave organization.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:leave" } },
+  });
+}
+
 // --- Org switching --------------------------------------------------------
+
+// The switch toast reads "<Org> did not open. <reason>", so each reason says
+// why in the switcher's own words. Better Auth's texts are system language.
+const SWITCH_ACCESS_LOST = "You no longer have access to it. If you still need it, ask one of its Admins.";
+const SWITCH_ORG_GONE = "It no longer exists.";
+const SWITCH_REASONS_BY_CODE: Record<string, string> = {
+  USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION: SWITCH_ACCESS_LOST,
+  ORGANIZATION_NOT_FOUND: SWITCH_ORG_GONE,
+};
+
+/** Better Auth's setActiveOrganization, with its error codes worded for the switcher. */
+async function setActiveOrganizationAsMember(organizationId: string): Promise<void> {
+  try {
+    await auth.api.setActiveOrganization({
+      body: { organizationId },
+      headers: await headers(),
+    });
+  } catch (error) {
+    if (error instanceof SafeError) throw error;
+    const code = apiErrorCode(error);
+    const reason = code ? SWITCH_REASONS_BY_CODE[code] : undefined;
+    if (reason) throw new SafeError(reason);
+    // Unmapped: keep Better Auth's system wording out of the toast ("Try again."),
+    // but log what it was: the code is not PII, the error name is the fallback.
+    const detail = code ? `code: ${code}` : `error: ${error instanceof Error ? error.name : typeof error}`;
+    throw new Error(`Better Auth could not set the active organization (${detail}).`, { cause: error });
+  }
+}
+
+function apiErrorCode(error: unknown): string | null {
+  if (error && typeof error === "object" && "body" in error) {
+    const code = (error.body as { code?: unknown } | null)?.code;
+    if (typeof code === "string") return code;
+  }
+  return null;
+}
 
 /**
  * Switch the session's active organization. Members go through the plugin
@@ -255,11 +344,11 @@ export async function setActiveOrganizationAction(
     const membershipRole = await findMembershipRole(organizationId);
     if (membershipRole) {
       // Target-org member: let the plugin verify membership and refresh cookie.
-      await auth.api.setActiveOrganization({
-        body: { organizationId },
-        headers: await headers(),
-      });
+      await setActiveOrganizationAsMember(organizationId);
     } else {
+      // No membership row: a removed member looks the same as a stranger. Say
+      // the same thing for every id, existing or not, so nothing leaks.
+      if (!(await isAdmin())) throw new SafeError(SWITCH_ACCESS_LOST);
       await requirePlatformAdmin();
       await setActiveOrgForPlatformAdmin(sessionId, organizationId);
     }
@@ -268,7 +357,9 @@ export async function setActiveOrganizationAction(
     // failure here is a warning, never a failed switch (issue #769).
     const warning = await saveOrgPreference(session.user.id, organizationId);
     return { data: { organizationId }, warning };
-  }, "Failed to switch organization.");
+    // The toast already says "<Org> did not open.", so the catch-all carries
+    // only the next step; a "Failed to switch ..." sentence would repeat it.
+  }, "Try again.");
 }
 
 async function setActiveOrgForPlatformAdmin(
@@ -281,12 +372,16 @@ async function setActiveOrgForPlatformAdmin(
     .where(eq(organizations.id, organizationId))
     .limit(1);
   if (!org) {
-    throw new SafeError("Organization not found.");
+    throw new SafeError(SWITCH_ORG_GONE);
   }
   await db
     .update(sessions)
     .set({ activeOrganizationId: organizationId })
     .where(eq(sessions.id, sessionId));
+  await clearSessionDataCookies();
+}
+
+async function clearSessionDataCookies(): Promise<void> {
   // Drop the cookie-cached session snapshot so the next getSession reads the
   // new active org from the database instead of the 5-minute cache.
   const cookieStore = await cookies();
@@ -300,24 +395,36 @@ async function setActiveOrgForPlatformAdmin(
 // --- Platform-Admin org lifecycle -----------------------------------------
 
 export async function createOrganizationAction(
-  input: unknown
-): Promise<ActionResult<{ organizationId: string }>> {
+  input: unknown,
+  options?: CreateIntentOptions,
+): Promise<ActionResult<{
+  organizationId: string;
+  organizationName: string;
+  firstAdmin: { kind: "member" } | { kind: "invited"; acceptUrl: string; emailSent: boolean };
+}>> {
   return toResult(async () => {
-    const { name, slug, ownerEmail } = createOrganizationSchema.parse(input);
-    await requirePlatformAdmin();
-
-    const ownerUserId = await findUserIdByEmail(ownerEmail);
-    if (!ownerUserId) {
-      throw new SafeError(
-        "No user account found for the owner email. The owner must have an account first."
-      );
-    }
-    const organization = await createOrganizationWithOwner({
-      name,
-      slug,
-      ownerUserId,
-    });
-    return { organizationId: organization.id };
+    const platformAdmin = await requirePlatformAdmin();
+    const values = createOrganizationSchema.parse(input);
+    const intentKey = parseCreateIntentKey(options);
+    const organization = await createOrganizationWithAdmin({ ...values, organizationId: intentKey });
+    const firstAdmin = organization.firstAdmin.kind === "member"
+      ? { kind: "member" as const }
+      : {
+          kind: "invited" as const,
+          ...await sendOrganizationInvitation({
+            invitationId: organization.firstAdmin.invitationId,
+            organizationId: organization.id,
+            organizationName: organization.name,
+            inviterName: platformAdmin?.name,
+            email: values.adminEmail,
+            role: "admin",
+          }),
+        };
+    return {
+      organizationId: organization.id,
+      organizationName: organization.name,
+      firstAdmin,
+    };
   }, "Failed to create organization.");
 }
 
@@ -356,4 +463,17 @@ export async function acceptInvitationAction(
     const warning = await saveOrgPreference(session.user.id, organizationId);
     return { data: { organizationId }, warning };
   }, "Failed to accept invitation.");
+}
+
+export async function renameOrganizationAction(
+  input: unknown,
+): Promise<ActionResult<{ name: string; slug: string }>> {
+  return withAction(async (ctx) => {
+    const values = renameOrganizationSchema.parse(input);
+    requireOrgRole(ctx, "admin");
+    return renameActiveOrganization(ctx, values);
+  }, {
+    fallbackMessage: "Failed to rename the organization.",
+    log: { message: LOG_MESSAGE, context: { op: "organization:rename" } },
+  });
 }

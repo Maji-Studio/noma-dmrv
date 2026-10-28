@@ -4,16 +4,20 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
+import { formatMassKg } from "@/lib/format-utils";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
- * The split bar divides a wet mass into dry solids and water, and dry solids are
- * not the tracked quantity: a blended product bin holding 84 kg of dry solids
- * holds 70 kg of dry biochar. Naming the segment "dry biochar" would put two
- * different masses under one label on the same block, so the bar says solids and
- * the balance pair keeps the tracked quantity.
+ * The dry part of the split bar, which divides a wet mass into its dry part and
+ * water. In a biochar bin that dry part is dry biochar. In a product or
+ * ingredient bin it is not the tracked quantity: a blended product bin holding
+ * 84 kg of dry solids holds 70 kg of dry biochar, so naming the segment "dry
+ * biochar" there would put two different masses under one label on the same
+ * block. The bar says dry solids and the balance pair keeps the tracked quantity.
  */
-export const SPLIT_MATERIAL_LABEL = "Solids";
+export function splitDryLabel(preview: Pick<Preview, "lane">): string {
+  return preview.lane === "biochar" ? "Dry biochar" : "Dry solids";
+}
 
 /**
  * Wet estimates are whole kilograms. They are computed at an entered moisture,
@@ -39,12 +43,24 @@ export function batchSegments(allocations: readonly OutputStockBalanceView[]): M
 
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
 /** Key figures under a wet headline: batches are tracked dry, so they say so. */
-export function formatDryKeyMass(kg: number | null): string {
+export function formatDryKeyMass(kg: number): string {
   return `${formatCompositionMass(kg)} dry`;
 }
 
 export function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
+}
+
+/**
+ * An output bin's headline figure: the wet mass operators find on site. Every
+ * run and product enters its bin with a wet mass (a complete run must carry
+ * moisture, output and a bin, #1255), so the figure is known once the stock is
+ * read. A wet figure that is still missing is a defect, not a state: the known
+ * dry biochar stands in, never a placeholder (Kenji, #1243). The stock card, the
+ * board's tile and the stock history all read a bin this way.
+ */
+export function outputStockFigure(wetKg: number | null, dryKg: number): string {
+  return wetKg !== null ? `${formatWetEstimate(wetKg)} kg wet mass` : `${formatMassKg(dryKg)} dry biochar`;
 }
 
 /**

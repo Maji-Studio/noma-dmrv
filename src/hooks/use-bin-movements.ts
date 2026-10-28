@@ -7,18 +7,21 @@ import { outputStockKeys } from "./use-output-stock";
  * (and the negative-stock badge) refresh immediately.
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
-import type { DomainIssue } from "@/lib/domain-errors";
+import { ActionError, type ActionFailure } from "@/lib/action-error";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getFeedstockBinStockFn,
   recordLossFn,
+  removeLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
 import { stockAvailabilityKeys } from "@/hooks/use-stock-availability";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
 import type {
   RecordLossData,
+  RemoveLossData,
   RecordStockTakeData,
 } from "@/schemas/bin-movements";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,30 +51,30 @@ export type RecordLossConflict = ConflictRef;
  */
 export class RecordLossConflictError extends Error {
   readonly conflict: RecordLossConflict;
+  readonly blockers?: ConflictRef[];
 
-  constructor(message: string, conflict: RecordLossConflict) {
+  constructor(message: string, conflict: RecordLossConflict, blockers?: ConflictRef[]) {
     super(message);
     this.name = "RecordLossConflictError";
     this.conflict = conflict;
+    this.blockers = blockers;
   }
 }
 
 /** Turn a failed loss action into a thrown error, keeping its structure. */
-export function throwRecordLossError(result: {
-  error: string;
-  field?: "lossMassKg";
-  issues?: DomainIssue[];
-  conflict?: RecordLossConflict;
-}): never {
+export function throwRecordLossError(result: ActionFailure & { field?: "lossMassKg" }): never {
   const timeIssue = result.issues?.find(issue => issue.path[0] === "occurredAt");
   if (timeIssue) throw new RecordLossFieldError(timeIssue.message, "occurredAt");
   if (result.field) {
     throw new RecordLossFieldError(result.error, result.field);
   }
-  if (result.conflict) {
-    throw new RecordLossConflictError(result.error, result.conflict);
+  // Only a reused request key is a conflict; a locked entry carries its bin too but reads as its own message.
+  if (result.conflict && (result.code === undefined || result.code === "conflict")) {
+    throw new RecordLossConflictError(result.error, result.conflict, result.blockers);
   }
-  throw new Error(result.error);
+  // Not throwActionError: it would turn the locked entry's `conflict` (its bin) into a ConflictError, reading as a reused key.
+  // Any other refusal keeps its issues, so the form can show them at its fields.
+  throw new ActionError(result);
 }
 
 /** Client-side carrier for a structured stock-take action field error. */
@@ -105,6 +108,7 @@ function useInvalidateAfterMovement() {
 export function useRecordStockTake() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordStockTakeData) => {
       const result = await recordStockTakeFn(data);
       if (!result.success) {
@@ -122,11 +126,25 @@ export function useRecordStockTake() {
 export function useRecordLoss() {
   const invalidate = useInvalidateAfterMovement();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
     mutationFn: async (data: RecordLossData) => {
       const result = await recordLossFn(data);
       if (!result.success) {
         throwRecordLossError(result);
       }
+      return result.data;
+    },
+    onSuccess: (_data, variables) => invalidate(variables.storageLocationId),
+  });
+}
+
+export function useRemoveLoss() {
+  const invalidate = useInvalidateAfterMovement();
+  return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.stock),
+    mutationFn: async (data: RemoveLossData) => {
+      const result = await removeLossFn(data);
+      if (!result.success) throwRecordLossError(result);
       return result.data;
     },
     onSuccess: (_data, variables) => invalidate(variables.storageLocationId),

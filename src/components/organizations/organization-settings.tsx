@@ -1,38 +1,32 @@
 /**
- * OrganizationSettings — member-management surface for org Owners/Admins
- * (and Platform Admins). Invite by email, manage roles, remove members, and
+ * OrganizationSettings — member-management surface for org Admins
+ * (and Platform Admins). Invite by email (in a dialog), manage roles, remove members, and
  * revoke pending invitations. Read-only members see the roster without controls.
  *
- * Invitation delivery is best-effort email; the reliable path is the copyable
- * accept link surfaced here after an invite is created.
+ * After an invite is created the pane says whether the email went out and keeps
+ * the accept link copyable.
  */
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { inviteMemberSchema } from "@/schemas/organizations";
-import {
-  CheckCircleIcon,
-  CopyIcon,
-} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import {
-  FormActions,
-  FormField,
-  FormInput,
-  FormSelect,
-} from "@/components/forms";
+import { FormSelect } from "@/components/forms/form-select";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { formatDate } from "@/lib/format-utils";
+import { InvitationLinkNotice, type InvitationDelivery } from "./invitation-link-notice";
 import {
   useChangeMemberRole,
-  useInviteMember,
+  useLeaveOrganization,
   useOrgInvitations,
   useOrgMembers,
+  useResendInvitation,
+  useResetAfterOrgSwitch,
   useRevokeInvitation,
   useRemoveMember,
 } from "@/hooks/use-organizations";
@@ -41,79 +35,71 @@ import {
   OrganizationRosterRow,
 } from "./organization-roster-list";
 import { Notice } from "@/components/ui/notice";
+import { InviteMemberDialog } from "./invite-member-dialog";
+import { ORG_ROLE_OPTIONS as ROLE_OPTIONS } from "./organization-roles";
 import { ILLUSTRATION_SIZE, EnvelopeArt, MembersArt } from "@/components/ui/illustrations";
-
-const ROLE_OPTIONS = [
-  { value: "owner", label: "Owner" },
-  { value: "admin", label: "Admin" },
-  { value: "member", label: "Member" },
-] as const;
 
 const ROLE_LABELS: Record<string, string> = Object.fromEntries(
   ROLE_OPTIONS.map((option) => [option.value, option.label]),
 );
 
-type InviteForm = z.infer<typeof inviteMemberSchema>;
+/** After leaving, the hard load lands here: no organization is active any more. */
+const AFTER_LEAVE_HREF = "/";
 
-export function OrganizationSettings({ canManage }: { canManage: boolean }) {
+interface OrganizationSettingsProps {
+  canManage: boolean;
+  /** The organization being worked in; names the Leave control. */
+  organizationName: string;
+  /** True only for a member of this organization, never a Platform Admin without a membership. */
+  canLeave: boolean;
+}
+
+/** "Expires Oct 29, 2026" on a live invitation; an expired one carries its date in the badge. */
+function expiresText(expiresAt: Date | string | null, expired: boolean): string | null {
+  if (!expiresAt || expired) return null;
+  return `Expires ${formatDate(expiresAt)}`;
+}
+
+/**
+ * Ref callback for the delivery notice: runs once when a new notice mounts, so a
+ * result that lands below the fold (Send again on a phone) is brought into view
+ * and announced by moving focus to it. A module-level function keeps its
+ * identity stable, so re-renders never re-run it.
+ */
+function revealNotice(node: HTMLDivElement | null) {
+  if (!node) return;
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  node.scrollIntoView?.({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+  node.focus({ preventScroll: true });
+}
+
+export function OrganizationSettings({ canManage, organizationName, canLeave }: OrganizationSettingsProps) {
   const toast = useToast();
   const { data: members, isLoading: membersLoading } = useOrgMembers();
   const { data: invitations, isLoading: invitationsLoading } =
     useOrgInvitations(canManage);
 
-  const inviteMember = useInviteMember();
   const changeRole = useChangeMemberRole();
   const removeMember = useRemoveMember();
   const revokeInvitation = useRevokeInvitation();
+  const resendInvitation = useResendInvitation();
+  const leaveOrganization = useLeaveOrganization();
+  const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
-  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [lastInvitation, setLastInvitation] = useState<InvitationDelivery | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<{
     memberId: string;
     email: string;
   } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | undefined>();
   const [revokingInvite, setRevokingInvite] = useState<{
     id: string;
     email: string;
   } | null>(null);
-
-  const {
-    control,
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<InviteForm>({
-    resolver: zodResolver(inviteMemberSchema),
-    defaultValues: { role: "member" },
-  });
-
-  async function onInvite(values: InviteForm) {
-    try {
-      const result = await inviteMember.mutateAsync(values);
-      setLastInviteLink(result.acceptUrl);
-      setCopied(false);
-      reset({ email: "", role: "member" });
-      toast.success("Invitation created.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "The invitation was not created. Check the email and try again.",
-      );
-    }
-  }
-
-  async function copyLink() {
-    if (!lastInviteLink) return;
-    try {
-      await navigator.clipboard.writeText(lastInviteLink);
-      setCopied(true);
-      toast.success("Invitation link copied.");
-    } catch {
-      toast.error("The invitation link was not copied. Select and copy it manually.");
-    }
-  }
 
   async function onChangeRole(memberId: string, role: string) {
     try {
@@ -144,6 +130,40 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     }
   }
 
+  async function sendAgain(invite: { id: string; email: string }) {
+    setResendingId(invite.id);
+    try {
+      const result = await resendInvitation.mutateAsync(invite.id);
+      setLastInvitation({ email: invite.email, acceptUrl: result.acceptUrl, emailSent: result.emailSent });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "The invitation was not sent again. Try again."
+      );
+    } finally {
+      setResendingId(null);
+    }
+  }
+
+  async function confirmLeave() {
+    setLeaveError(undefined);
+    try {
+      await leaveOrganization.mutateAsync();
+    } catch (error) {
+      setLeaveError(
+        error instanceof Error ? error.message : "You were not removed from the organization. Try again."
+      );
+      return;
+    }
+    // The dialog stays busy until the hard load replaces the page.
+    setLeaving(true);
+    resetAfterOrgSwitch(undefined, undefined, AFTER_LEAVE_HREF);
+  }
+
+  function closeLeave() {
+    setLeaveOpen(false);
+    setLeaveError(undefined);
+  }
+
   async function confirmRevoke() {
     if (!revokingInvite) return;
     try {
@@ -160,86 +180,33 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     }
   }
 
+  const inviteButton = canManage ? (
+    <Button
+      type="button"
+      size="small"
+      className="shrink-0 max-sm:h-44"
+      onClick={() => setInviteOpen(true)}
+    >
+      Invite member
+    </Button>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-32">
-      {/* Invite */}
-      {canManage && (
-        <section className="flex flex-col gap-16">
-          <h2 className="title-heading-3">Invite a member</h2>
-          <form
-            onSubmit={handleSubmit(onInvite)}
-            className="content-measure-form flex flex-col gap-16"
-          >
-            <div className="grid grid-cols-1 gap-16">
-              <FormField
-                id="invite-email"
-                label="Email"
-                error={errors.email?.message}
-                required
-              >
-                <FormInput
-                  id="invite-email"
-                  type="email"
-                  placeholder="teammate@example.com"
-                  autoComplete="off"
-                  {...register("email")}
-                />
-              </FormField>
-              <FormField
-                id="invite-role"
-                label="Role"
-                error={errors.role?.message}
-                required
-              >
-                <FormSelect
-                  id="invite-role"
-                  options={ROLE_OPTIONS}
-                  {...register("role")}
-                />
-              </FormField>
-            </div>
-            {lastInviteLink && (
-              <Notice tone="success" title="Share this link with the invitee">
-                <div className="mt-8 flex items-center gap-8">
-                  <input
-                    readOnly
-                    value={lastInviteLink}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="min-w-0 flex-1 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-8 py-6 body-caption font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="weak"
-                    size="small"
-                    onClick={copyLink}
-                  >
-                    {copied ? (
-                      <CheckCircleIcon size={16} weight="fill" />
-                    ) : (
-                      <CopyIcon size={16} />
-                    )}
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-              </Notice>
-            )}
-            <FormActions
-              control={control}
-              isSubmitting={inviteMember.isPending}
-              submitLabel="Send invitation"
-              submittingLabel="Sending…"
-              sticky={false}
-            />
-          </form>
-        </section>
+      {canManage && lastInvitation && (
+        <div key={lastInvitation.acceptUrl} ref={revealNotice} tabIndex={-1} className="outline-none">
+          <InvitationLinkNotice invitation={lastInvitation} />
+        </div>
       )}
 
       {/* The roster. Named "Current members" rather than "Members" because the
-          pane it sits in is already titled Members — and because it reads as
-          one of three states beside "Pending invitations" and "Invite a
-          member". */}
+          pane it sits in is already titled Members. The invite button sits in
+          its heading row and opens the invite dialog. */}
       <section className="flex flex-col gap-16">
-        <h2 className="title-heading-3">Current members</h2>
+        <div className="flex items-start justify-between gap-12">
+          <h2 className="title-heading-3 min-w-0 flex-1">Current members</h2>
+          {inviteButton}
+        </div>
         {membersLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !members || members.length === 0 ? (
@@ -248,6 +215,13 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
             title="No members yet"
             description="Invite teammates to give them access to this organization."
             padding="md"
+            action={
+              canManage ? (
+                <Button type="button" size="small" onClick={() => setInviteOpen(true)}>
+                  Invite your first member
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <OrganizationRosterList>
@@ -265,7 +239,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                         onChange={(e) =>
                           onChangeRole(member.memberId, e.target.value)
                         }
-                        className="w-[140px]"
+                        className={cn("w-[140px]", PHONE_TOUCH_TARGET)}
                         aria-label={`Role for ${member.email}`}
                       />
                     ) : (
@@ -316,19 +290,43 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               {invitations.map((invite) => (
                 <OrganizationRosterRow
                   key={invite.id}
-                  primary={invite.email}
-                  secondary={ROLE_LABELS[invite.role] ?? invite.role}
+                  primary={
+                    <span className="flex min-w-0 items-center gap-8">
+                      <span className="truncate">{invite.email}</span>
+                      {invite.expired && (
+                        <StatusBadge
+                          status="expired"
+                          size="small"
+                          label={`Expired ${formatDate(invite.expiresAt)}`}
+                        />
+                      )}
+                    </span>
+                  }
+                  secondary={[ROLE_LABELS[invite.role] ?? invite.role, expiresText(invite.expiresAt, invite.expired)]
+                    .filter(Boolean)
+                    .join(" \u00b7 ")}
                   actions={
-                    <Button
-                      type="button"
-                      variant="weak"
-                      size="small"
-                      onClick={() =>
-                        setRevokingInvite({ id: invite.id, email: invite.email })
-                      }
-                    >
-                      Revoke
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="weak"
+                        size="small"
+                        busy={resendingId === invite.id}
+                        onClick={() => sendAgain({ id: invite.id, email: invite.email })}
+                      >
+                        Send again
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="weak"
+                        size="small"
+                        onClick={() =>
+                          setRevokingInvite({ id: invite.id, email: invite.email })
+                        }
+                      >
+                        Revoke
+                      </Button>
+                    </>
                   }
                 />
               ))}
@@ -337,6 +335,25 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         </section>
       )}
 
+      {canLeave && (
+        <section className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-24">
+          <h2 className="title-heading-3">Your membership</h2>
+          <div>
+            <Button type="button" variant="destructive" size="small" className="max-sm:h-44" onClick={() => setLeaveOpen(true)}>
+              Leave {organizationName}
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {canManage && inviteOpen && (
+        // Mounted only while open, so a discarded draft never comes back.
+        <InviteMemberDialog
+          isOpen
+          onClose={() => setInviteOpen(false)}
+          onInvited={setLastInvitation}
+        />
+      )}
       <DeleteConfirmDialog
         isOpen={Boolean(removingMember)}
         title="Remove member"
@@ -344,6 +361,16 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
         onConfirm={confirmRemoveMember}
         onCancel={() => setRemovingMember(null)}
         isPending={removeMember.isPending}
+      />
+      <DeleteConfirmDialog
+        isOpen={leaveOpen}
+        title={`Leave ${organizationName}?`}
+        message="You lose access to its data straight away."
+        confirmLabel="Leave organization"
+        errorMessage={leaveError}
+        onConfirm={confirmLeave}
+        onCancel={closeLeave}
+        isPending={leaveOrganization.isPending || leaving}
       />
       <DeleteConfirmDialog
         isOpen={Boolean(revokingInvite)}

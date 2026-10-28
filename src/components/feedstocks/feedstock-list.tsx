@@ -4,16 +4,22 @@
  */
 "use client";
 
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
@@ -24,20 +30,25 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatCalendarDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
+import { DISTANCE_FIELD_LABEL } from "@/components/transport-legs/distance-override";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { FeedstockForm } from "./feedstock-form";
+import { feedstockUpdatePayload } from "./feedstock-update-payload";
 import {
   useFeedstocks,
   useFeedstock,
+  useFetchFeedstock,
   useCreateFeedstock,
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useTransportDistanceDrift } from "@/hooks/use-transport-distance-refresh";
 import {
   useListPagination,
   useReconcileListPage,
@@ -60,6 +71,13 @@ import {
 } from "./use-feedstock-type-filter";
 import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 
+/** Record details an operator can add from the Columns menu. */
+const FEEDSTOCK_COLUMNS_HIDDEN_BY_DEFAULT = {
+  vehiclePlateNumber: false,
+  distance: false,
+  notes: false,
+};
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -67,11 +85,12 @@ import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
+  locks: RecordLockViews,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -82,38 +101,21 @@ function createColumns(
       meta: { nowrap: true },
       header: "Delivery date",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatCalendarDate(row.original.deliveryDate)}</span>
-        </div>
+        <span>{formatCalendarDate(row.original.deliveryDate)}</span>
       ),
     },
     {
       accessorKey: "supplierName",
       header: "Supplier",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.supplierName || MISSING_VALUE.notRecorded}</span>
-          {row.original.supplierCode && (
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              {row.original.supplierCode}
-            </span>
-          )}
-        </div>
+        <span>{row.original.supplierName || MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
       accessorKey: "feedstockTypeName",
       header: "Feedstock type",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.feedstockTypeName || MISSING_VALUE.notRecorded}</span>
-          {row.original.feedstockTypeCategory && (
-            <span className="body-small text-[var(--color-text-tertiary)] capitalize">
-              {row.original.feedstockTypeCategory}
-            </span>
-          )}
-        </div>
+        <span>{row.original.feedstockTypeName || MISSING_VALUE.notRecorded}</span>
       ),
     },
     // Wet and dry sit side by side, so both stay in fixed kg — auto-tonne
@@ -137,8 +139,8 @@ function createColumns(
       header: "Storage bin",
       cell: ({ row }) => (
         <span>
-          {row.original.storageLocationCode ??
-            row.original.storageLocationName ??
+          {row.original.storageLocationName ??
+            row.original.storageLocationCode ??
             MISSING_VALUE.notSet}
         </span>
       ),
@@ -150,6 +152,29 @@ function createColumns(
         <span className="font-mono">
           {formatMoisturePercent(row.original.moistureContentPercent)}
         </span>
+      ),
+    },
+    {
+      accessorKey: "vehiclePlateNumber",
+      header: "Vehicle",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.vehiclePlateNumber || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      id: "distance",
+      header: DISTANCE_FIELD_LABEL,
+      // An override wins; otherwise the leg derived from the supplier location.
+      accessorFn: (row) => row.distanceKmOverride ?? row.transportDistanceKm,
+      cell: ({ getValue }) => (
+        <span className="font-mono">
+          {formatDistanceKm(getValue<number | null>())}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate">{row.original.notes || MISSING_VALUE.notRecorded}</span>
       ),
     },
     {
@@ -174,17 +199,18 @@ function createColumns(
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -200,7 +226,7 @@ function buildFeedstockTransferToast(feedstocks: FeedstockWithRelations[]) {
     0,
   );
   const binLabels = feedstocks
-    .map((feedstock) => feedstock.storageLocationCode ?? feedstock.storageLocationName)
+    .map((feedstock) => feedstock.storageLocationName ?? feedstock.storageLocationCode)
     .filter((label): label is string => Boolean(label));
   const uniqueBinLabels = [...new Set(binLabels)];
 
@@ -252,6 +278,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   // error can show them next to the draft instead of only a sentence.
   const [updateBlockers, setUpdateBlockers] = useState<ConflictRef[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const { feedstockTypeId, setFeedstockTypeId } = useFeedstockTypeFilter();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
@@ -280,12 +308,13 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
+  const fetchFeedstock = useFetchFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
     entityType: "feedstock",
     entityNoun: "Feedstock",
-    executeCreate: async (data: FeedstockFormData) => {
+    executeCreate: async ({ data }: { data: FeedstockFormData; onRefusal: SaveRefusalHandler }) => {
       const result = await createFeedstock.mutateAsync(
         createFeedstockSchema.parse(data),
       );
@@ -293,8 +322,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Feedstock was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) =>
+      onRefusal(error, error instanceof Error ? error.message : "Feedstock was not created. Check the form."),
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this feedstock.",
     openEditOnFailure: (feedstock) =>
@@ -315,9 +344,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   } = createWithEvidence;
 
   // Handlers
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: FeedstockFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
-  const handleUpdate = async (data: FeedstockFormData) => {
+  const handleUpdate = async (data: FeedstockFormData, onRefusal?: SaveRefusalHandler) => {
     const editing =
       displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
     if (!editing) return;
@@ -325,24 +355,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setUpdateBlockers([]);
     if (createWithEvidence.guardUpdate()) return;
     try {
-      await updateFeedstock.mutateAsync({
-        feedstockId: editing.id,
-        // The version the side sheet opened on, never a refetched one, so a
-        // concurrent edit is refused instead of silently overwritten (#768).
-        expectedVersion: editing.version,
-        facilityId: data.facilityId,
-        deliveryDate: data.deliveryDate,
-        supplierId: data.supplierId,
-        vehicleId: data.vehicleId || null,
-        transportDistanceKm: data.transportDistanceKm ?? null,
-        transportDistanceSource: data.transportDistanceSource ?? null,
-        feedstockTypeId: data.feedstockTypeId,
-        massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
-        moistureContentPercent: data.moisturePercent,
-        storageLocationId: data.allocations[0].storageLocationId,
-        overrideJustification: data.overrideJustification || null,
-        notes: data.notes || null,
-      });
+      await updateFeedstock.mutateAsync(feedstockUpdatePayload(data, editing));
       createWithEvidence.reset();
       setSideSheet(null);
       setFocusedFeedstockId(null);
@@ -352,7 +365,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Feedstock was not saved. Try again.");
+      setUpdateError(onRefusal ? onRefusal(error, fallback) : fallback);
       const refused = getConflict(error);
       if (refused?.conflict.entity === STOCK_CONFLICT_ENTITY.storageLocation) {
         setUpdateBlockers(refused.blockers ?? []);
@@ -360,7 +374,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     }
   };
 
-  const handleDelete = (feedstock: FeedstockWithRelations) => setDeleting(feedstock);
+  const handleDelete = (feedstock: FeedstockWithRelations) => {
+    setDeleteError(null);
+    setDeleting(feedstock);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -370,7 +387,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeleting(null);
       toast.success("Feedstock deleted.");
     } catch (error) {
-      if (error instanceof StaleVersionError) {
+      if (isInUseDeleteRefusal(error)) {
+        setInUseRefusal({ code: deleting.code, message: error instanceof Error ? error.message : "" });
+        setDeleting(null);
+      } else if (error instanceof StaleVersionError) {
         setDeleting(null);
         setDeleteError(staleDeleteMessage(`Feedstock ${deleting.code}`));
       } else {
@@ -380,6 +400,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
 
   const openCreate = () => {
+    createFeedstock.startDraft();
     setFocusedFeedstockId(null);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
@@ -415,9 +436,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
   useOpenCreateIntent(openCreate);
 
-  const columns = createColumns(openEdit, handleDelete);
-
   const feedstockItems = feedstocksData?.items ?? [];
+  const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -484,7 +505,22 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       : focusedFeedstock.data
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // View mode reads the live record, so a deliberate distance refresh shows
+  // at once and Edit freezes the refreshed version (#768 freezes on entry).
+  const liveViewEntity =
+    sideSheet?.mode === "view" && sideSheet.entity && focusedFeedstock.data?.id === sideSheet.entity.id
+      ? focusedFeedstock.data
+      : null;
+  const displaySideSheet = liveViewEntity
+    ? ({ entity: liveViewEntity, mode: "view" } as const)
+    : sideSheet ?? deepLinkedSideSheet;
+  const viewedFeedstockId =
+    displaySideSheet?.mode === "view" ? displaySideSheet.entity?.id ?? "" : "";
+  const recordedDistance = useTransportDistanceDrift(
+    { entityType: "feedstock", entityId: viewedFeedstockId },
+    !!viewedFeedstockId,
+  );
+  const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -495,7 +531,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         <PageHeader
           area="production"
           title="Feedstocks"
-          subtitle="Track incoming biomass deliveries and bin allocations"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
       </div>
@@ -536,7 +571,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       <PageHeader
         area="production"
         title="Feedstocks"
-        subtitle="Track incoming biomass deliveries and bin allocations"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -548,8 +582,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {/* Stats */}
       {stats}
 
+      <RecordLockListNotice read={feedstockLocks} />
+
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={FEEDSTOCK_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={feedstockItems}
         enableSorting={false}
@@ -568,6 +605,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => feedstockDeepLinkHref(row.id, row.facilityId)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -622,22 +660,27 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
+
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
         isOpen={!!deleting}
         title="Delete feedstock"
-        message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
+        message="Are you sure you want to delete this feedstock? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       {/* Side Sheet */}
       <EntitySideSheet
-        detailToggle
-        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -650,11 +693,20 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"
-        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
+        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
+          distanceKm: recordedDistance.data?.recordedDistanceKm,
+          source: recordedDistance.data?.recordedDistanceSource,
+          locationDefaultKm: recordedDistance.data?.currentDistanceKm,
+          pending: recordedDistance.isPending,
+        }) : undefined}
       >
         <FeedstockForm
-          key={sideSheetEntity?.id ?? "create"}
+          // The version keys the form too, so a refresh from location reopens
+          // it on the record it saved instead of a stale draft.
+          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
           feedstock={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
@@ -662,7 +714,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
           serverError={createError || updateError || undefined}
           serverErrorAction={
-            updateError && updateBlockers.length > 0 ? (
+            updateBlockers.length > 0 ? (
               <span>
                 {BLOCKERS_LEAD}{" "}
                 {updateBlockers.map((blocker) => blocker.code).join(", ")}
@@ -672,6 +724,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           deferredAttachments={deferredAttachments}
           retryEntityIds={createdFeedstockIds}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+          onDistanceRefreshed={async () => {
+            if (!sideSheetEntity) return;
+            const fresh = await fetchFeedstock(sideSheetEntity.id);
+            setSideSheet({ entity: fresh, mode: "edit" });
+          }}
         />
       </EntitySideSheet>
     </div>

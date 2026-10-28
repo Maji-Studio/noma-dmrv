@@ -51,6 +51,11 @@ export interface SubmissionClaimPolicy {
   allowEvidenceRefresh?: boolean;
 }
 
+export const REMOVAL_SUBMISSION_CLAIM_POLICY = {
+  onSubmittedHashChanged: "supersede",
+  allowEvidenceRefresh: true,
+} as const satisfies SubmissionClaimPolicy;
+
 export interface SubmissionClaimInput {
   latest: SubmissionClaimRow | null;
   payloadHash: string;

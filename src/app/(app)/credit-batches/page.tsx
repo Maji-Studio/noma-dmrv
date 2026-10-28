@@ -19,12 +19,13 @@ export default async function CreditBatchesPage({
   const ctx = await getOrgContext();
   const canManage =
     !!ctx &&
-    (ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin");
+    (ctx.isPlatformAdmin || ctx.orgRole === "admin");
 
   return (
     <CreditBatchList
       canManage={canManage}
       initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
+      initialView={query.view === "list" ? "list" : "timeline"}
     />
   );
 }

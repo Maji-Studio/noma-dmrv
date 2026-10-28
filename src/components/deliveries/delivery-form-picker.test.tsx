@@ -4,11 +4,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Delivery } from "@/db/schema";
+import { ActionError } from "@/lib/action-error";
 import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
+import { expectStayedClean, renderReportingDirty } from "../../../tests/helpers/form-dialog-dirty";
 
-const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+const BOTH_ORDERS = [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }];
+const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn(), options: [] as { id: string; code: string; name: string }[] }));
 vi.mock("@/fn/deliveries", () => ({ getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }) }));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
@@ -41,7 +44,7 @@ vi.mock("@/components/transport-legs", () => ({ TransportRoutePreview: () => nul
 vi.mock("./delivery-stock-details", () => ({ DeliveryStockDetails: () => null }));
 vi.mock("./delivery-trailing-sections", () => ({ DeliveryEvidenceSection: () => null }));
 vi.mock("@/hooks/use-entities", () => ({
-  useEntityOptions: () => ({ data: [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }] }),
+  useEntityOptions: () => ({ data: state.options }),
   useEntityById: (entityType: string) => ({ data: entityType === "storageLocation"
     ? { id: "bin-one", code: "BIN-1", name: "Source bin" }
     : { id: "order-one", code: "ORD-1", name: "Order one" } }),
@@ -61,6 +64,7 @@ beforeEach(() => {
   state.refreshed = undefined;
   state.distance = 12;
   state.locked = false;
+  state.options = BOTH_ORDERS;
   vi.clearAllMocks();
   state.save.mockImplementation(async () => {
     state.distance = 34;
@@ -127,45 +131,73 @@ it("shows the recorded distance even when the order already has a different live
   expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("12");
 });
 
-it("allows latest delivery mass edits and keeps its event time locked", () => {
+it("allows an Open delivery's mass, moisture and event time to be edited", () => {
   state.locked = false;
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
   expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(false);
   expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(false);
-  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(false);
 });
 
-it("locks delivery mass and moisture with the newer-stock reason", () => {
+it("locks delivery date, mass and moisture with the newer-stock reason", () => {
   state.locked = true;
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
   expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(true);
   expect(screen.getByText("Locked because newer stock entries were recorded on this bin after it.")).toBeTruthy();
 });
 
-it("shows typed server refusals beside the delivery field", async () => {
+it.each([
+  ["deliveredAt", "Enter a time at or before now."],
+  ["moisturePercent", "Enter a valid moisture reading."],
+  ["sources", "Refresh the source stock."],
+  // Stock posting names on a delivery edit: a future posting date and a cleared load mass.
+  ["occurredAt", "Date and time cannot be in the future. Enter a time at or before now."],
+  ["wetMassKg", "Enter the wet mass."],
+])("shows the operation's %s refusal beside the delivery field", async (path, message) => {
   const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
-  const onSubmit = vi.fn((_data, onError) => onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }] })));
+  const onSubmit = vi.fn((_data, onRefusal) => {
+    expect(onRefusal(new ActionError({ error: "Refused", issues: [{ path: [path], code: path === "wetMassKg" ? "invalid_type" : "validation_failed", message }] }), "Delivery was not saved. Try again.")).toBeNull();
+  });
+  const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
+  fireEvent.submit(container.querySelector("form")!);
+  expect(await screen.findByText(message)).toBeTruthy();
+});
+
+it("splits a partly shown refusal: the date at its field, the driver in the footer text", async () => {
+  const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
+  let footer: string | null | undefined;
+  const onSubmit = vi.fn((_data, onRefusal) => {
+    footer = onRefusal(new ActionError({ error: "Refused", issues: [
+      { path: ["deliveredAt"], code: "validation_failed", message: "Enter a time at or before now." },
+      { path: ["driverId"], code: "validation_failed", message: "Driver was not found." },
+    ] }), "Delivery was not saved. Try again.");
+  });
   const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
   fireEvent.submit(container.querySelector("form")!);
   expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
+  expect(footer).toBe("Driver was not found.");
 });
 
-it("refuses a typed zero distance with the server's message", async () => {
+it("refuses a typed zero override with the server's message", async () => {
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
-  fireEvent.change(screen.getByRole("spinbutton", { name: /One-way distance/ }), { target: { value: "0" } });
+  fireEvent.click(screen.getByRole("button", { name: "Override the one-way distance" }));
+  const input = screen.getByRole("spinbutton", { name: /One-way distance/ });
+  fireEvent.change(input, { target: { value: "0" } });
+  fireEvent.blur(input);
   expect(await screen.findByText("Distance must be greater than 0")).toBeTruthy();
 });
 
 it("reports a handled mass refusal and focuses its field", async () => {
   const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
-  const onSubmit = vi.fn((_data, onError) => {
-    expect(onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveredWetMassKg"], code: "conflict", message: "Only 100 kg remains on this order." }] }))).toBe(true);
+  const onSubmit = vi.fn((_data, onRefusal) => {
+    expect(onRefusal(new ActionError({ error: "Refused", issues: [{ path: ["deliveredWetMassKg"], code: "conflict", message: "Only 100 kg remains on this order." }] }), "Delivery was not saved. Try again.")).toBeNull();
   });
   const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
   fireEvent.submit(container.querySelector("form")!);
   await screen.findByText("Only 100 kg remains on this order.");
-  expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ })));
 });
 
 it("refreshes a missing snapshot after a nested repair without discarding the delivery draft", async () => {
@@ -190,4 +222,20 @@ it("refreshes a missing snapshot after a nested repair without discarding the de
   await waitFor(() => expect(parentSave).toHaveBeenCalledWith(
     expect.objectContaining({ deliveredWetMassKg: 125 }), expect.any(Function), 4,
   ));
+});
+
+const dirtyStates = () => renderReportingDirty(<DeliveryForm onSubmit={vi.fn()} onCancel={vi.fn()} />, { wrapper }).states;
+
+it("stays clean when the facility's only order is picked for the operator", async () => {
+  state.options = [BOTH_ORDERS[0]];
+  const states = dirtyStates();
+  await waitFor(() => expect(screen.getByRole("combobox", { name: /Order/ }).textContent).toContain("Order one"));
+  expectStayedClean(states);
+});
+
+it("turns dirty once the operator picks an order", async () => {
+  const states = dirtyStates();
+  fireEvent.click(screen.getByRole("combobox", { name: /Order/ }));
+  fireEvent.click(await screen.findByTestId("entity-option-order-two"));
+  await waitFor(() => expect(states.at(-1)).toBe(true));
 });

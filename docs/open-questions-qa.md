@@ -61,7 +61,7 @@ bound); these are the decisions it deliberately did not make.
   three photo roles). The counts are consistent across surfaces, but the
   wording never says "1 gap group · 4 missing fields".
 - **Resolve via:** pick one convention (group count with expanded field list,
-  or field count everywhere) and apply it to the card tag, health strip, and
+  or field count everywhere) and apply it to the card tag, the batch page's open items, and
   Removal wizard copy (S).
 
 ### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)
@@ -71,9 +71,8 @@ bound); these are the decisions it deliberately did not make.
   `fn/production-samples` parse a zoneless `"YYYY-MM-DDTHH:mm"` string with
   `new Date(...)` on the **server**, so the stored instant depends on the server
   process timezone; `data-access/production-runs/overlap` formats conflict
-  messages in that same zone; and `productionRunDateExpr` casts `start_time` to
-  a **UTC** calendar day rather than the facility day, so a near-midnight run
-  can land in the wrong cohort date. Display counterparts in
+  messages in that same zone. `productionRunDateExpr` now derives the
+  facility-local start day from `start_time`. Display counterparts in
   `production-incident-form`, `production-sample-form` and
   `components/samples/sample-form` render in the browser zone (the
   production-run side sheet was moved to the facility zone on 2026-07-25).
@@ -210,4 +209,3 @@ bound); these are the decisions it deliberately did not make.
   Edit affordance with the amendment entry point (M). Per project memory,
   verify any Isometric requirement verbatim before building a gate.
   Follow-up issue: #687.
-

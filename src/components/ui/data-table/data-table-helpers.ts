@@ -11,6 +11,22 @@ declare module "@tanstack/react-table" {
      * cell carries a leading hairline as the in-region overflow signal.
      */
     stickyEnd?: boolean;
+    /**
+     * The record's identity column (code or name). In a table with
+     * `onRowClick` its cell renders as the record link, and it cannot be
+     * hidden. Never mark a column whose cell renders its own controls.
+     */
+    recordLink?: boolean;
+    /**
+     * Only with `recordLink`: a mark rendered right before the record link,
+     * outside it, so no control nests inside the link. Return null for none.
+     */
+    recordLinkBefore?: (row: TData) => React.ReactNode;
+    /**
+     * Lines rendered under the cell, outside the record link, so they may
+     * carry their own link (a registry record beside the record code).
+     */
+    recordLinkDetails?: (row: TData) => React.ReactNode;
   }
 }
 
@@ -20,6 +36,29 @@ export const STICKY_END_CELL_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-bg)] [border-left:var(--hair-3)] group-hover/row:bg-[var(--row-hover-bg-solid)]";
 export const STICKY_END_HEADER_CLASSES =
   "sticky right-0 z-10 bg-[var(--panel-head-bg-solid)] [border-left:var(--hair-3)]";
+
+/** A record code such as "OR-26-002": letters and digits joined by hyphens. */
+const RECORD_CODE_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$/;
+
+/**
+ * Whether a cell's value is a figure or a record code, which read as one
+ * token and never wrap (#1162: one line per cell). A figure formatted into
+ * text with its unit ("1,000 kg") has a number accessor, so the value decides
+ * rather than the rendered text. Display columns opt in with `meta.nowrap`.
+ */
+export function isSingleLineValue(value: unknown): boolean {
+  if (typeof value === "number" || typeof value === "bigint") return true;
+  return typeof value === "string" && RECORD_CODE_PATTERN.test(value);
+}
+
+/** Whether a body cell stays on one line: its column says so, or its value is a figure or a record code. */
+export function cellKeepsOneLine(cell: {
+  column: { columnDef: { meta?: { nowrap?: boolean } } };
+  getValue: () => unknown;
+}): boolean {
+  return !!cell.column.columnDef.meta?.nowrap || isSingleLineValue(cell.getValue());
+}
+
 const INTERACTIVE_ROW_CONTROL_SELECTOR =
   'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
 
@@ -51,22 +90,11 @@ function isFromPortal(event: React.SyntheticEvent<HTMLElement>): boolean {
   return !event.currentTarget.contains(event.target as Node);
 }
 
-/** Activate a clickable row or card with Enter/Space. */
-export function handleRowActivationKeyDown(
-  event: React.KeyboardEvent<HTMLElement>,
-  activate: () => void,
-) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  if (isFromPortal(event)) return;
-  const interactive = (event.target as HTMLElement).closest(
-    INTERACTIVE_ROW_CONTROL_SELECTOR,
-  );
-  if (interactive && interactive !== event.currentTarget) return;
-  event.preventDefault();
-  activate();
-}
-
-/** Activate a clickable row or card unless a nested control was clicked. */
+/**
+ * Pointer-only row click. Keyboard and screen-reader users activate the
+ * record link (`meta.recordLink`) instead (see `row-link.tsx`); a nested control keeps its own
+ * press.
+ */
 export function handleRowActivationClick(
   event: React.MouseEvent<HTMLElement>,
   activate: () => void,

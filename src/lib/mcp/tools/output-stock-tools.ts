@@ -15,7 +15,7 @@ const recordOutput = stockBasisWriteEnvelopeSchema(outputStockMovementRepresenta
 
 export const outputStockWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "record_output_stock_movement", scope: "biochar-products:write", input: recordInput, output: recordOutput,
+    kind: "write", name: "record_output_stock_movement", scope: "biochar-products:write", requiredScopes: () => ["biochar-products:write"], input: recordInput, output: recordOutput,
     annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: true },
     description: `Record a loss or a count on a biochar or product bin, by bin UUID. A loss is wet mass that left the bin. Call whoami and find_storage_locations first. For a split-bin loss, take sources[].layerId from get_bin_stock. ${OUTPUT_STOCK_GUIDANCE} ${REQUEST_KEY_RULE} ${STOCK_EFFECTS_RULE} ${UNTRUSTED_TEXT}`,
     async execute(context, raw) {
@@ -28,7 +28,7 @@ export const outputStockWriteTools: WriteTool[] = [
     },
     summarize(body, dryRun) {
       const row = body.data as OutputStockMovementRepresentation;
-      return dryRun ? `Dry run: would record a ${row.kind} of ${row.wetMassKg} kg wet.` : `Recorded a ${row.kind} of ${row.wetMassKg} kg wet.`;
+      return dryRun ? `Dry run: would record a ${row.kind} of ${row.wetMassKg} kg wet mass.` : `Recorded a ${row.kind} of ${row.wetMassKg} kg wet mass.`;
     },
   },
 ];

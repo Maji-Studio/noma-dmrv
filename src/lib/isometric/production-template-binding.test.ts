@@ -19,6 +19,7 @@ const expectedFindings = [
   ["rtc_1KWKNGJZY1S032A6", "distance", "unmapped"],
   ["rtc_1KWKNGJZY1S0AC1G", "electricity_use", "unmapped"],
   ["rtc_1KWKNGJZY1S0Y0X5", "mass", "unmapped"],
+  ["rtc_1KWKNGJZY1S0HNRT", "mass_distance", "unmapped"],
   ["rtc_1KWKNGJZY1S05AMF", "distance", "unmapped"],
   ["rtc_1KWKNGJZY1S0RZG4", "distance", "unmapped"],
   ["rtc_1KWKNGJZY1S0CMBS", "mass", "project-scope"],
@@ -28,7 +29,6 @@ const acceptedInputs: Record<string, { unit: string; magnitude: number }> = {
   "rtc_1KWKNGJZY1S083Q7/volume_of_fuel": { unit: "l", magnitude: 50 },
   "rtc_1KWKNGJZY1S0PQ5V/carbon_content": { unit: "dimensionless", magnitude: 0.8 },
   "rtc_1KWKNGJZY1S0PQ5V/product_mass": { unit: "kg", magnitude: 1000 },
-  "rtc_1KWKNGJZY1S0HNRT/mass_distance": { unit: "tonne * km", magnitude: 12 },
 };
 const agg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
@@ -61,16 +61,16 @@ describe("production template binding coverage", () => {
     for (const finding of findings.filter((input) => input.blueprintKey === "transport")) {
       expect(formatUnbindableTemplateInputsText([finding])).toBe(`The Removal template has 1 component noma cannot submit.\n${finding.componentDisplayName} (${finding.componentId}; blueprint ${finding.blueprintKey}; input ${finding.inputKey}): Replace it with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`);
     }
-    expect(findings.some((input) => input.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(false);
+    expect(findings.some((input) => input.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(true);
     expect(() => assertSequestrationTemplateBindings(template)).not.toThrow();
   });
 
   it("groups production copy and keeps forbidden scope after a rename", () => {
     const copy = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(template));
     expect(copy.split("\n")).toEqual([
-      "The Removal template has 10 components noma cannot submit.",
+      "The Removal template has 11 components noma cannot submit.",
       "Biomass transportation to processing site via truck (rtc_1KWKNGJZY1S0D548; blueprint transport; input distance) and Biochar transportation to storage site via truck (rtc_1KWKNGJZY1S032A6; blueprint transport; input distance): Replace each one with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.",
-      "Metered electricity use emissions (rtc_1KWKNGJZY1S0MEVJ; blueprint metered_energy_based_ci_emissions; inputs final_readout, initial_readout), Pyrolyzer CO emissions (rtc_1KWKNGJZY1S0VRJW; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Pyrolyzer CH4 emissions (rtc_1KWKNGJZY1S0FDEH; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Laboratory analysis electricity use (rtc_1KWKNGJZY1S0AC1G; blueprint grid_electricity_use; input electricity_use), Sampling consumables (rtc_1KWKNGJZY1S0Y0X5; blueprint mass_based_ci_emissions; input mass), Staff travel flights (rtc_1KWKNGJZY1S05AMF; blueprint distance_based_ci_emissions; input distance) and Staff travel local (rtc_1KWKNGJZY1S0RZG4; blueprint distance_based_ci_emissions; input distance): Pick another Removal template or ask support to add the mapping.",
+      "Metered electricity use emissions (rtc_1KWKNGJZY1S0MEVJ; blueprint metered_energy_based_ci_emissions; inputs final_readout, initial_readout), Pyrolyzer CO emissions (rtc_1KWKNGJZY1S0VRJW; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Pyrolyzer CH4 emissions (rtc_1KWKNGJZY1S0FDEH; blueprint ghg_direct_emissions; inputs concentration, mass_flow), Laboratory analysis electricity use (rtc_1KWKNGJZY1S0AC1G; blueprint grid_electricity_use; input electricity_use), Sampling consumables (rtc_1KWKNGJZY1S0Y0X5; blueprint mass_based_ci_emissions; input mass), Mass-distance-based CI emissions samples to EU (rtc_1KWKNGJZY1S0HNRT; blueprint mass_distance_based_ci_emissions; input mass_distance), Staff travel flights (rtc_1KWKNGJZY1S05AMF; blueprint distance_based_ci_emissions; input distance) and Staff travel local (rtc_1KWKNGJZY1S0RZG4; blueprint distance_based_ci_emissions; input distance): Pick another Removal template or ask support to add the mapping.",
       "Mass-based CI emissions (rtc_1KWKNGJZY1S0CMBS; blueprint mass_based_ci_emissions; input mass): Add it as a project component in Isometric, then remove it from the Removal template.",
     ]);
     expect(copy.match(/Metered electricity use emissions/g)).toHaveLength(1);
@@ -80,7 +80,7 @@ describe("production template binding coverage", () => {
     expect(findUnbindableTemplateInputs(renamed).some((input) => input.componentId === "rtc_1KWKNGJZY1S0CMBS")).toBe(true);
   });
 
-  it.each([false, true])("agrees with actual datapoint builds (sandbox stubs: %s)", (allowPeriodInputStub) => {
+  it("agrees with actual datapoint builds", () => {
     const findings = findUnbindableTemplateInputs(template);
     for (const group of template.groups) for (const component of group.components) {
       for (const input of component.inputs) {
@@ -101,7 +101,7 @@ describe("production template binding coverage", () => {
           // Snapshot has no complete REST blueprint metadata. Use explicit test
           // units for supported mappings; rejected tuples fail before unit checks.
           blueprintInput: { input_key: input.input_key, compatible_unit: accepted?.unit ?? "dimensionless", quantity_kind: input.quantity_kind, data_shape: "SCALAR", description: "" },
-          agg, projectId: template.project_id, supplierRefId: "test-production-coverage", allowPeriodInputStub,
+          agg, projectId: template.project_id, supplierRefId: "test-production-coverage",
         });
         expect(findings.some((finding) => finding.componentId === component.id && (finding.inputKey === input.input_key || component.blueprint_key === "transport"))).toBe(shouldReject);
         if (shouldReject) {
@@ -117,3 +117,8 @@ describe("production template binding coverage", () => {
 function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
   return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
 }
+
+it("reports legacy sample shipping as entry-only after retirement", () => {
+  const findings = findUnbindableTemplateInputs(template);
+  expect(findings.some((finding) => finding.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(true);
+});

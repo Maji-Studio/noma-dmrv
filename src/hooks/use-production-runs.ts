@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Production Runs React Query Hooks
@@ -5,6 +6,7 @@ import { patchListCachesWithSavedRow } from "./list-cache-utils";
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   useMutation,
@@ -169,9 +171,10 @@ export function useCreateProductionRun(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (data: CreateProductionRunData) => {
-      const result = await createProductionRunFn(data);
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
+    mutationFn: async (data: CreateProductionRunData, intentKey) => {
+      const result = await createProductionRunFn(data, { intentKey });
       if (!result.success) {
         throwProductionRunActionError(result);
       }
@@ -202,6 +205,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, data.facilityId);
@@ -229,6 +233,7 @@ export function useUpdateProductionRun(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (data: UpdateProductionRunData) => {
       const result = await updateProductionRunFn(data);
       if (!result.success) {
@@ -378,10 +383,12 @@ export function useDeleteProductionRun(
   const { optimistic = true } = options ?? {};
 
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
     mutationFn: async (variables: DeleteProductionRunData) => {
       const result = await deleteProductionRunFn(variables);
       if (!result.success) {
-        throwProductionRunActionError(result);
+        // Not an overlap: keep the code, issues and conflict so an in-use refusal is recognised.
+        throwActionError(result);
       }
       return;
     },
@@ -437,6 +444,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       // Invalidate facility data

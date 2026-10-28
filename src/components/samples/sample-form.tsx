@@ -9,8 +9,8 @@
  * 1000-year sections appear when the batch is 1000-year, nutrient fields with
  * the claim checkbox.
  *
- * Spine steps (Evidence & Transport sit OUTSIDE the `<form>` element — they
- * nest their own forms — but FormSpine numbers them on the same rail):
+ * The Evidence step sits outside the form so its document editor can nest
+ * its own form. FormSpine numbers it on the same rail:
  * 1. Sample information - credit batch, samplingTime, lab details
  * 2. Lab analysis - carbon, ash and elemental percentages in one grid
  * 3. Physical properties - bulkDensity, pH, saltContent, moisture
@@ -19,20 +19,21 @@
  * Optional 1000-year measurements: mean R₀ reflectance and TGA carbon
  * 5. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
  * 6. Evidence & documents
- * 7. Transport (lab shipment legs)
  */
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { numericValue } from "@/lib/form-utils";
 import { facilityTimeCue } from "@/lib/date-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useController, Controller } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus, useSelectDefault } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { labOToCOrgRatioDefault, prepareSampleSubmission, resolveSamplingClock } from "./sample-form-values";
 import { ResolvedErrorRevalidator } from "@/components/forms";
@@ -49,18 +50,15 @@ import {
   getSampleCarbonReconciliationErrors,
   type SampleFormData,
 } from "@/schemas/samples";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
 import { SampleDerivedRatios } from "./sample-derived-ratios";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { SampleCreditBatchLine } from "./sample-credit-batch-line";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
-import {
-  SampleEvidenceSection,
-  SampleTransportSection,
-} from "./sample-trailing-sections";
+import { SampleEvidenceSection } from "./sample-trailing-sections";
 import type { SampleWithRelations } from "@/data-access/samples";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import type { TransportLegFormData } from "@/schemas/transport-legs";
-import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -71,6 +69,8 @@ import {
 // ============================================
 
 const NO_FACILITY_SENTINEL = "__none__";
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(sampleFormSchema);
 
 // ============================================
 // Component
@@ -82,7 +82,8 @@ interface SampleFormProps {
   /** Pre-selected credit batch ID (e.g. from a batch detail deep link) */
   creditBatchId?: string;
   /** Form submission handler */
-  onSubmit: (data: SampleFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: SampleFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -94,10 +95,6 @@ interface SampleFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   onRetryDeferredAttachments?: (key?: string) => Promise<unknown>;
   onRemoveDeferredAttachment?: (key: string) => void;
-  deferredLegs?: TransportLegFormData[];
-  onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
-  onRetryDeferredLegs?: () => Promise<void>;
-  focusTarget?: EntityFocusTarget | null;
 }
 
 export function SampleForm({
@@ -111,11 +108,8 @@ export function SampleForm({
   deferredAttachments,
   onRetryDeferredAttachments,
   onRemoveDeferredAttachment,
-  deferredLegs,
-  onDeferredLegsChange,
-  onRetryDeferredLegs,
-  focusTarget,
 }: SampleFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -126,7 +120,8 @@ export function SampleForm({
       samplingTime: sample?.samplingTime ? new Date(sample.samplingTime).toISOString() : "",
       labName: sample?.labName ?? "",
       labAccreditation: sample?.labAccreditation ?? "",
-      analysisDate: sample?.analysisDate ?? "",
+      // null, not "": the field reads an empty date as null, so "" would read as an edit.
+      analysisDate: sample?.analysisDate ?? null,
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       totalCarbonPercent: sample?.totalCarbonPercent ?? undefined,
@@ -167,6 +162,7 @@ export function SampleForm({
     trigger,
     watch,
     setValue,
+    resetField,
     setError,
     formState: { errors, dirtyFields },
   } = useForm({
@@ -191,6 +187,8 @@ export function SampleForm({
   const watchedTotalCarbonPercent = watch("totalCarbonPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
   const watchedInorganicCarbonPercent = watch("inorganicCarbonPercent");
+  const watchedReactiveCarbonPercent = watch("reactiveCarbonPercent");
+  const watchedResidualCarbonPercent = watch("residualCarbonPercent");
   const watchedOToCOrgRatio = watch("oToCOrgRatio");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
@@ -215,8 +213,13 @@ export function SampleForm({
     placeholderTimeZone: contextClock.timeZone,
     cue: facilityTimeCue,
   });
+  const setSelectDefault = useSelectDefault(control);
+  // resetField only acts on a registered field; this one has no input of its own.
+  useController({ name: "durabilityOption", control });
   useEffect(() => {
-    setValue("durabilityOption", batchDurabilityOption ?? null);
+    // Derived from the batch, not typed: it becomes the form's baseline, so an
+    // untouched form stays clean (no discard prompt on Cancel).
+    resetField("durabilityOption", { defaultValue: batchDurabilityOption ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchDurabilityOption]);
 
@@ -264,6 +267,8 @@ export function SampleForm({
     totalCarbonPercent: watchedTotalCarbonPercent,
     organicCarbonPercent: watchedOrganicCarbonPercent,
     inorganicCarbonPercent: watchedInorganicCarbonPercent,
+    reactiveCarbonPercent: watchedReactiveCarbonPercent,
+    residualCarbonPercent: watchedResidualCarbonPercent,
   });
   const organicCarbonError =
     liveCarbonErrors.organicCarbonPercent ??
@@ -271,6 +276,9 @@ export function SampleForm({
   const inorganicCarbonError =
     liveCarbonErrors.inorganicCarbonPercent ??
     errors.inorganicCarbonPercent?.message;
+  const residualCarbonError =
+    liveCarbonErrors.residualCarbonPercent ??
+    errors.residualCarbonPercent?.message;
 
   // O:Corg is the only typed ratio; H:Corg is always derived, so it reads as a
   // figure in the derived line below rather than as an input nobody can edit.
@@ -287,7 +295,7 @@ export function SampleForm({
         <FormInput
           id="oToCOrgRatio"
           type="number"
-          step="any"
+          {...numberBounds("oToCOrgRatio")}
           placeholder={
             ratioPreview.oToCOrgSource === "calculated" && ratioPreview.oToCOrgRatio !== null
               ? formatSampleRatio(ratioPreview.oToCOrgRatio)
@@ -305,7 +313,8 @@ export function SampleForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
-  const handleFormSubmit = handleSubmit((entered) => {
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+  const handleFormSubmit = latched(handleSubmit((entered) => {
     if (!samplingClock.ready) {
       setError("samplingTime", { type: "validate", message: samplingClock.hint });
       return;
@@ -322,13 +331,12 @@ export function SampleForm({
       setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });
       return;
     }
-    onSubmit(submission as unknown as SampleFormData);
-  });
+    return onSubmit(submission as unknown as SampleFormData, refuseSave);
+  }));
 
   return (
     <div className="space-y-20">
-      {/* The spine wraps the <form> AND the trailing field-less steps (Evidence,
-          Transport) that must live outside it — one continuous numbered rail. */}
+      {/* The spine numbers the form and the Evidence step on one rail. */}
       <FormSpine control={control}>
       <form id={formId} onSubmit={handleFormSubmit}>
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
@@ -353,6 +361,8 @@ export function SampleForm({
                       entityType="creditBatch"
                       value={field.value}
                       onChange={field.onChange}
+                      // The select's own pick of a facility's only batch is a default, not an edit.
+                      onAutoSelect={(id) => setSelectDefault("creditBatchId", id, field.onChange)}
                       placeholder={contextFacilityId ? "Select a credit batch..." : "Select a facility first"}
                       disabled={isSubmitting || !!preselectedCreditBatchId || !contextFacilityId}
                       error={!!errors.creditBatchId}
@@ -441,7 +451,7 @@ export function SampleForm({
                   <FormInput
                     id="weightGrams"
                     type="number"
-                    step="any"
+                    {...numberBounds("weightGrams")}
                     placeholder="e.g., 50"
                     disabled={isSubmitting}
                     error={!!errors.weightGrams}
@@ -459,7 +469,7 @@ export function SampleForm({
                   <FormInput
                     id="volumeMl"
                     type="number"
-                    step="any"
+                    {...numberBounds("volumeMl")}
                     placeholder="e.g., 100"
                     disabled={isSubmitting}
                     error={!!errors.volumeMl}
@@ -490,7 +500,7 @@ export function SampleForm({
                   <FormInput
                     id="totalCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalCarbonPercent")}
                     placeholder="e.g., 75.5"
                     disabled={isSubmitting}
                     error={!!errors.totalCarbonPercent}
@@ -513,7 +523,7 @@ export function SampleForm({
                   <FormInput
                     id="organicCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("organicCarbonPercent")}
                     placeholder="e.g., 72.0"
                     disabled={isSubmitting}
                     error={!!organicCarbonError}
@@ -534,7 +544,7 @@ export function SampleForm({
                   <FormInput
                     id="inorganicCarbonPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("inorganicCarbonPercent")}
                     placeholder="e.g., 3.5"
                     disabled={isSubmitting}
                     error={!!inorganicCarbonError}
@@ -553,7 +563,7 @@ export function SampleForm({
                   <FormInput
                     id="ashContentPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("ashContentPercent")}
                     placeholder="e.g., 8.5"
                     disabled={isSubmitting}
                     error={!!errors.ashContentPercent}
@@ -574,7 +584,7 @@ export function SampleForm({
                   <FormInput
                     id="totalHydrogenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalHydrogenPercent")}
                     placeholder="e.g., 2.5"
                     disabled={isSubmitting}
                     error={!!errors.totalHydrogenPercent}
@@ -593,7 +603,7 @@ export function SampleForm({
                   <FormInput
                     id="totalNitrogenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalNitrogenPercent")}
                     placeholder="e.g., 0.8"
                     disabled={isSubmitting}
                     error={!!errors.totalNitrogenPercent}
@@ -613,7 +623,7 @@ export function SampleForm({
                   <FormInput
                     id="totalOxygenPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalOxygenPercent")}
                     placeholder="e.g., 12.0"
                     disabled={isSubmitting}
                     error={!!errors.totalOxygenPercent}
@@ -632,7 +642,7 @@ export function SampleForm({
                   <FormInput
                     id="totalSulfurPercent"
                     type="number"
-                    step="any"
+                    {...numberBounds("totalSulfurPercent")}
                     placeholder="e.g., 0.1"
                     disabled={isSubmitting}
                     error={!!errors.totalSulfurPercent}
@@ -659,7 +669,7 @@ export function SampleForm({
                   <FormInput
                     id="bulkDensityKgPerM3"
                     type="number"
-                    step="any"
+                    {...numberBounds("bulkDensityKgPerM3")}
                     placeholder="e.g., 350"
                     disabled={isSubmitting}
                     error={!!errors.bulkDensityKgPerM3}
@@ -677,9 +687,7 @@ export function SampleForm({
                   <FormInput
                     id="ph"
                     type="number"
-                    step="any"
-                    min="0"
-                    max="14"
+                    {...numberBounds("ph")}
                     placeholder="e.g., 9.5"
                     disabled={isSubmitting}
                     error={!!errors.ph}
@@ -697,7 +705,7 @@ export function SampleForm({
                   <FormInput
                     id="saltContentGPerKg"
                     type="number"
-                    step="any"
+                    {...numberBounds("saltContentGPerKg")}
                     placeholder="e.g., 5.0"
                     disabled={isSubmitting}
                     error={!!errors.saltContentGPerKg}
@@ -781,7 +789,7 @@ export function SampleForm({
                     <FormInput
                       id="randomReflectanceR0Percent"
                       type="number"
-                      step="any"
+                      {...numberBounds("randomReflectanceR0Percent")}
                       placeholder="e.g., 2.5"
                       disabled={isSubmitting}
                       error={!!errors.randomReflectanceR0Percent}
@@ -834,8 +842,7 @@ export function SampleForm({
                     <FormInput
                       id="r0MeasurementCount"
                       type="number"
-                      step="1"
-                      min="0"
+                      {...numberBounds("r0MeasurementCount")}
                       placeholder="e.g., 100"
                       disabled={isSubmitting}
                       error={!!errors.r0MeasurementCount}
@@ -878,7 +885,7 @@ export function SampleForm({
                     <FormInput
                       id="reactiveCarbonPercent"
                       type="number"
-                      step="any"
+                      {...numberBounds("reactiveCarbonPercent")}
                       placeholder="e.g., 15.0"
                       disabled={isSubmitting}
                       error={!!errors.reactiveCarbonPercent}
@@ -892,17 +899,17 @@ export function SampleForm({
                     id="residualCarbonPercent"
                     label="Residual carbon"
                     unit="%"
-                    error={errors.residualCarbonPercent?.message}
+                    error={residualCarbonError}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}
                   >
                     <FormInput
                       id="residualCarbonPercent"
                       type="number"
-                      step="any"
+                      {...numberBounds("residualCarbonPercent")}
                       placeholder="e.g., 85.0"
                       disabled={isSubmitting}
-                      error={!!errors.residualCarbonPercent}
+                      error={!!residualCarbonError}
                       {...register("residualCarbonPercent", {
                         setValueAs: numericValue,
                       })}
@@ -942,23 +949,13 @@ export function SampleForm({
 
       </form>
 
-      {/* ── Trailing field-less steps — outside the <form> (their editors nest
-             their own forms), numbered by the spine as the final two steps. ── */}
+      {/* Evidence stays outside the form because its editor nests a form. */}
       <SampleEvidenceSection
         sample={sample}
         isEditMode={isEditMode}
         deferredAttachments={deferredAttachments}
         onRetryAttachments={onRetryDeferredAttachments}
         onRemoveAttachment={onRemoveDeferredAttachment}
-        isSubmitting={isSubmitting}
-      />
-      <SampleTransportSection
-        sample={sample}
-        isEditMode={isEditMode}
-        deferredLegs={deferredLegs}
-        onDeferredLegsChange={onDeferredLegsChange}
-        onRetryLegs={onRetryDeferredLegs}
-        focusTarget={focusTarget}
         isSubmitting={isSubmitting}
       />
       </FormSpine>
@@ -971,6 +968,7 @@ export function SampleForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<SampleCreditBatchLine creditBatchId={watchedCreditBatchId} />}
       />
     </div>
   );

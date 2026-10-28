@@ -159,7 +159,7 @@ const APPLICATION_ID = crypto.randomUUID();
 const orgCtx: OrgContext = {
   userId: `user_src_audit_${RUN_ID}`,
   organizationId: ORG_ID,
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

@@ -9,10 +9,9 @@
  * and moisture.
  *
  * The composition is the form's `ProductCompositionPreview` fed the saved
- * parts, so one split rule serves both. Both detail levels show every saved
- * field, the dry figures as a secondary line under each wet mass and the
- * composition picture. Detailed adds only the ledger and arithmetic behind
- * Show calculation. Masses read at save precision. No transport here: goods
+ * parts, so one split rule serves both. The view shows every saved field, the
+ * dry figures as a secondary line under each wet mass and the composition
+ * picture. The ledger and arithmetic open from the composition's (i). Masses read at save precision. No transport here: goods
  * move on deliveries, so the route reads on each delivery.
  */
 "use client";
@@ -29,7 +28,6 @@ import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -59,11 +57,6 @@ const INGREDIENT_BASIS =
 
 export function formatSavedMassKg(mass: number | null | undefined): string {
   return formatMassKg(mass, { digits: MASS_KG_STORAGE_DECIMALS });
-}
-
-/** A composition part is derived, so a missing one is not available rather than not recorded. */
-function formatSavedPart(mass: number | null): string {
-  return mass === null ? MISSING_VALUE.notAvailable : formatSavedMassKg(mass);
 }
 
 /**
@@ -108,7 +101,7 @@ function SavedProductComposition({ product, composition }: {
       sources={composition.productSources}
       wetLabel={WET_PRODUCT_LABEL}
       note={COMPOSITION_HINT}
-      formatMass={formatSavedPart}
+      formatMass={formatSavedMassKg}
       headline={<DerivedHeadline label={WET_PRODUCT_LABEL} value={total === null ? null : formatSavedMassKg(total)} />}
       basis={
         <p className="body-caption text-[var(--color-text-tertiary)]">

@@ -1,7 +1,9 @@
 "use client";
 
+import { FormError } from "@/components/forms/form-error";
 import { FormField } from "@/components/forms/form-field";
-import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
+import { RequiredMarker } from "@/components/forms/required-marker";
+import { GPS_FIELD_NAMES, PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 
 export type FieldPositionMode = "derive" | "manual";
@@ -13,8 +15,6 @@ const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
 
 /** Deriving has a consequence the operator needs to see: the position moves with the delivery. */
 const DERIVE_CUE = "Follows the delivery destination, and updates if you change it.";
-/** Entering by hand only needs an explanation, behind the ⓘ. */
-const MANUAL_HELPER = "Search an address, click the map, or type the coordinates.";
 
 export interface DerivedPosition {
   gpsLatitude: number;
@@ -22,20 +22,21 @@ export interface DerivedPosition {
 }
 
 type PositionFieldName = "gpsLatitude" | "gpsLongitude";
-type ResetPositionField = (
+type SetPositionField = (
   name: PositionFieldName,
-  options: { defaultValue: number | null },
+  value: number | null,
+  options: { shouldValidate: boolean; shouldDirty: boolean },
 ) => void;
 
-export function resetFieldPosition(
-  resetField: ResetPositionField,
+export function setFieldPosition(
+  setValue: SetPositionField,
   derived: DerivedPosition | null,
 ): void {
-  resetField("gpsLatitude", {
-    defaultValue: derived?.gpsLatitude ?? null,
+  setValue("gpsLatitude", derived?.gpsLatitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
-  resetField("gpsLongitude", {
-    defaultValue: derived?.gpsLongitude ?? null,
+  setValue("gpsLongitude", derived?.gpsLongitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
 }
 
@@ -62,6 +63,7 @@ export function FieldPositionField({
   latitudeError,
   longitudeError,
   disabled = false,
+  required = false,
   mode,
   onModeChange,
   onPositionChange,
@@ -74,6 +76,8 @@ export function FieldPositionField({
   latitudeError?: string;
   longitudeError?: string;
   disabled?: boolean;
+  /** The pin is needed to save: true while the evidence method is Customer location. */
+  required?: boolean;
   mode: FieldPositionMode;
   onModeChange: (mode: FieldPositionMode) => void;
   onPositionChange: (position: PositionValue) => void;
@@ -86,7 +90,6 @@ export function FieldPositionField({
           id="fieldPositionMode"
           label="Field position"
           cue={mode === "derive" ? DERIVE_CUE : undefined}
-          helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
           <SegmentedControl
             id="fieldPositionMode"
@@ -104,6 +107,7 @@ export function FieldPositionField({
           <div className="flex flex-col gap-4">
             <span className="body-small text-[var(--color-text-secondary)]">
               Customer location
+              {required && <RequiredMarker />}
             </span>
             <span className="body-small font-medium text-[var(--color-text-primary)]">
               {derived
@@ -119,6 +123,7 @@ export function FieldPositionField({
                   : "Choose a delivery in step 1 and the position follows its destination."}
               </span>
             )}
+            <FormError id="derivedPosition-error" message={latitudeError ?? longitudeError} />
           </div>
         )}
       </div>
@@ -126,6 +131,7 @@ export function FieldPositionField({
       {mode === "manual" && (
         <PositionPicker
           idPrefix="gps"
+          fieldNames={GPS_FIELD_NAMES}
           label="Set the pin"
           accent="pink"
           latitude={latitude ?? null}
@@ -134,6 +140,7 @@ export function FieldPositionField({
           latitudeError={latitudeError}
           longitudeError={longitudeError}
           disabled={disabled}
+          required={required}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { updateCustomerLocation } from "@/data-access/customers";
+import { updateCustomerLocation } from "./helpers/customer-location-operations";
 import { customerLocations, customerLocationFacilityDistances, certificationSubmissions } from "@/db/schema";
 import { createTestApplication } from "./helpers/application-writers";
 import { beforeAll, describe, expect, it } from "vitest";

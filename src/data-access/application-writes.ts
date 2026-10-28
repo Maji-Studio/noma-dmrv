@@ -1,3 +1,4 @@
+import { canonicalJson } from "@/lib/canonical-json";
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
@@ -10,7 +11,7 @@ import type { CaptureActivity } from "@/lib/activity-changes";
  * Never lock a newly discovered row late. See application-write-scope.ts for
  * the cross-writer proof, including artifacts-first credit-batch membership.
  */
-import { and, eq, ne, sum } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, applicationOutputAllocations, creditBatchApplications, soilTemperatureMeasurements, type Application } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -25,7 +26,7 @@ import { parseGisBoundary } from "@/schemas/gis-boundary";
 import { z } from "zod";
 import { lockApplicationWriteScope, applicationNotFound } from "./application-write-scope";
 import { withUniqueCodeGuard } from "./code-generator";
-import { saveApplicationOutputAllocations, getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
+import { appliedOnDelivery, saveApplicationOutputAllocations, getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { retireDocumentsForEntities } from "./documents";
 import { massGrams } from "./delivery-allocation-math";
@@ -67,12 +68,10 @@ function assertMutableSlices(scope: Scope, mutation: "update" | "delete") {
 }
 async function dryMass(ctx: OrgContext, tx: DbTransaction, delivery: Scope["deliveries"][number], wetKg: number, excludeId?: string) {
   requireOrgScope(ctx);
-  const [{ wet, dry }] = await tx.select({ wet: sum(applications.biocharAppliedTons), dry: sum(applications.biocharAppliedDryTons) }).from(applications)
-    .where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, delivery.id), excludeId ? ne(applications.id, excludeId) : undefined));
-  const alreadyAppliedWetKg = tonnesToKg(Number(wet ?? 0));
-  assertApplicationCapacity(delivery.deliveredWetMassKg, alreadyAppliedWetKg, wetKg);
+  const applied = await appliedOnDelivery(ctx, tx, delivery.id, excludeId);
+  assertApplicationCapacity(delivery.deliveredWetMassKg, applied.wetKg, wetKg);
   await withFeedstockErrors(() => getDeliveryAllocationProvenance(ctx, [delivery.id], tx), "conflict", ["deliveryId"]);
-  return resolveApplicationDryMassTons({ requestedWetKg: wetKg, deliveryWetKg: delivery.deliveredWetMassKg, deliveryDryBiocharKg: delivery.massDryKg, alreadyAppliedWetKg, alreadyAppliedDryKg: tonnesToKg(Number(dry ?? 0)) });
+  return resolveApplicationDryMassTons({ requestedWetKg: wetKg, deliveryWetKg: delivery.deliveredWetMassKg, deliveryDryBiocharKg: delivery.massDryKg, alreadyAppliedWetKg: applied.wetKg, alreadyAppliedDryKg: applied.dryKg });
 }
 async function saveShares(ctx: OrgContext, tx: DbTransaction, application: Application) {
   requireOrgScope(ctx);
@@ -108,7 +107,18 @@ export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTran
 export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateApplicationInput, capture?: CaptureActivity) {
   requireOrgScope(ctx);
   const { applicationId, expectedVersion, appliedWetMassKg, applicationMethod, ...fields } = input;
-  const scope = await lockApplicationWriteScope(ctx, tx, { applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update" });
+  const scope = await lockApplicationWriteScope(ctx, tx, {
+    applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update",
+    updateComparison: saved => ({
+      previous: { ...saved, appliedWetMassKg: tonnesToKg(saved.biocharAppliedTons), applicationMethod: saved.applicationMethodType, gisBoundary: canonicalJson(saved.gisBoundary ?? null) },
+      changes: {
+        ...fields, appliedWetMassKg, applicationMethod,
+        fieldIdentifier: fields.fieldIdentifier === undefined ? undefined : optionalText(fields.fieldIdentifier),
+        cropType: fields.cropType === undefined ? undefined : optionalText(fields.cropType),
+        gisBoundary: fields.gisBoundary === undefined ? undefined : canonicalJson(reparseBoundaryEnvelope(fields.gisBoundary)),
+      },
+    }),
+  });
   const existing = scope.application!;
   const previousAllocations = await readApplicationAllocations(ctx, tx, existing.id);
   const previousActivityScopes = await resolveWriteActivityScopes(ctx, tx, "application", existing.id);

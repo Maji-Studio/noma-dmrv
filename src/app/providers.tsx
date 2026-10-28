@@ -1,22 +1,29 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useState } from "react";
 import { ToastProvider } from "@/components/ui/toast";
+import { invalidateRecordLocksAfter } from "@/hooks/record-lock-query-keys";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            refetchOnWindowFocus: false,
-          },
+  const [queryClient] = useState(() => {
+    const client: QueryClient = new QueryClient({
+      // Mutation hooks declare which record kinds' locks a write can change
+      // (`recordLockMeta`); those mounted reads refetch after success or a lock
+      // refusal, or any registry outcome. Refusal-only meta skips other outcomes.
+      mutationCache: new MutationCache({
+        onSettled: (data, error, variables, _context, mutation) => invalidateRecordLocksAfter(client, data, error, mutation, variables),
+      }),
+      defaultOptions: {
+        queries: {
+          staleTime: 30_000,
+          refetchOnWindowFocus: false,
         },
-      })
-  );
+      },
+    });
+    return client;
+  });
 
   return (
     <NuqsAdapter>

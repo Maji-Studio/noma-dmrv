@@ -7,6 +7,12 @@ import type { GhgStatement } from "@/lib/isometric";
 
 // Keep ledger reads, status writes, and activity persistence real; stub the
 // registry and unrelated report/session-lock dependencies of the submit core.
+// Keep the statement guard real; content comparison has its own agreement tests.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => ({})),
 }));
@@ -41,7 +47,7 @@ let facilityId: string;
 beforeEach(async () => {
   vi.clearAllMocks();
   const id = `org_submit_activity_${crypto.randomUUID()}`;
-  ctx = { organizationId: id, userId: "submit-actor", orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: id, userId: "submit-actor", orgRole: "admin", isPlatformAdmin: false };
   await db.insert(organizations).values({ id, name: "Submit activity fixture", slug: id });
   facilityId = crypto.randomUUID();
   await db.insert(facilities).values({

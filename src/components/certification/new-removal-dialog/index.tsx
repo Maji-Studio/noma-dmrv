@@ -16,6 +16,11 @@
  *      closing the dialog leaves the created removal as a draft, recoverable from
  *      the Removals list (`?resume=<id>` / the detail sheet).
  *
+ *   2. Empty components — only when a selected batch has components with
+ *      nothing recorded for this Removal: record them as zero or add an entry
+ *      on the batch's Emissions page. Skipped otherwise; a reopened draft lands
+ *      here while any component is unconfirmed.
+ *
  * State lives in the inner body, which is a child of `Modal` — `Modal` unmounts
  * its children when closed, so each open starts clean. Pass `resumeRemovalId` to
  * reopen an existing draft straight at the confirm-&-submit step.
@@ -35,16 +40,34 @@ import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
+import {
+  EmptyComponentsCheckError,
+  useEmptyComponentsActions,
+  useLoadRemovalEmptyComponents,
+  useRefreshRemovalReview,
+  useRemovalEmptyComponents,
+  useRemovalLanding,
+} from "@/hooks/use-removal-empty-components";
+import {
+  CHECK_FAILED_MESSAGE,
+  EmptyComponentsStep,
+  type FocusRequest,
+} from "./empty-components-step";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { Notice } from "@/components/ui/notice";
+import {
+  continueRefusal,
+  hasEmptyComponentsStep,
+} from "@/lib/certification/empty-components-state";
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
 import { shouldBlockRemovalResume } from "./resume-state";
 
-const STEPS: StepFlowStep[] = [
-  { key: "select", label: "Select batches" },
-  { key: "submit", label: "Confirm & submit" },
-];
-const STEP_KEYS = ["select", "submit"] as const;
-type StepKey = (typeof STEP_KEYS)[number];
+const SELECT_STEP: StepFlowStep = { key: "select", label: "Select batches" };
+const EMPTY_STEP: StepFlowStep = { key: "empty", label: "Empty components" };
+const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Confirm & submit" };
+type StepKey = "select" | "empty" | "submit";
+
 
 interface NewRemovalDialogProps {
   facilityId: string;
@@ -109,11 +132,28 @@ function WizardBody({
   resumeRemovalId: string | null;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
 }) {
-  const [step, setStep] = useState<StepKey>(
-    resumeRemovalId ? "submit" : "select",
+  // A new or reopened Removal has no chosen step yet: it lands where the
+  // server's answer sends it, resolved once (the empty components while any is
+  // unconfirmed, the submit step otherwise).
+  const [chosenStep, setChosenStep] = useState<StepKey | null>(
+    resumeRemovalId ? null : "select",
   );
   const [removalId, setRemovalId] = useState<string | null>(resumeRemovalId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [advancing, setAdvancing] = useState(false);
+  // What a pressed Continue found: components still open, or a failed read.
+  const [pressed, setPressed] = useState<"open" | "failed" | null>(null);
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+
+  const landing = useRemovalLanding(removalId, facilityId, chosenStep === null);
+  const step: StepKey | null = chosenStep ?? landing.data?.step ?? null;
+  const emptyQuery = useRemovalEmptyComponents(removalId, {
+    enabled: !!landing.data,
+    refetchOnFocus: step === "empty",
+  });
+  const actions = useEmptyComponentsActions();
+  const loadEmptyComponents = useLoadRemovalEmptyComponents();
+  const refreshReview = useRefreshRemovalReview();
 
   const selectable = useSelectableBatches(facilityId, step === "select");
   const ctxQuery = useRemovalCertifyContext(
@@ -125,6 +165,14 @@ function WizardBody({
   const toast = useToast();
 
   const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? false;
+  const showEmptyStep =
+    step === "empty" ||
+    (!!landing.data &&
+      !!emptyQuery.data &&
+      hasEmptyComponentsStep(emptyQuery.data));
+  const steps = showEmptyStep
+    ? [SELECT_STEP, EMPTY_STEP, SUBMIT_STEP]
+    : [SELECT_STEP, SUBMIT_STEP];
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {
@@ -152,8 +200,9 @@ function WizardBody({
       { facilityId, creditBatchIds: [...selectedIds] },
       {
         onSuccess: ({ removalId: newId }) => {
+          // The draft exists now: the landing read picks the next step.
           setRemovalId(newId);
-          setStep("submit");
+          setChosenStep(null);
         },
         onError: (err) =>
           toast.error(
@@ -165,7 +214,43 @@ function WizardBody({
     );
   };
 
-  const currentIndex = STEP_KEYS.indexOf(step);
+  // No step is current while the landing is unresolved (the rail shows none).
+  const currentIndex = step ? steps.findIndex((item) => item.key === step) : -1;
+
+  // Continue from the empty components re-reads the server first, so an entry
+  // added in another tab counts, then refreshes the review the submit step reads.
+  const continueFromEmpty = async () => {
+    if (!removalId) return;
+    setAdvancing(true);
+    setPressed(null);
+    const fresh = await loadEmptyComponents(removalId);
+    if (!fresh) {
+      setPressed("failed");
+      setAdvancing(false);
+      return;
+    }
+    const found = continueRefusal(fresh);
+    if (found.reason) {
+      setPressed("open");
+      const batchId = found.firstBatchId;
+      setFocusRequest((previous) =>
+        batchId ? { batchId, nonce: (previous?.nonce ?? 0) + 1 } : previous,
+      );
+      setAdvancing(false);
+      return;
+    }
+    await refreshReview();
+    setChosenStep("submit");
+    setAdvancing(false);
+  };
+  const liveRefusal = emptyQuery.data ? continueRefusal(emptyQuery.data) : null;
+  // The reason shows after a refused press only: the card headers already count.
+  const continueReason =
+    pressed === "failed"
+      ? CHECK_FAILED_MESSAGE
+      : pressed === "open"
+        ? (liveRefusal?.reason ?? null)
+        : null;
 
   // A live submission lock is the only resume blocker. Submitted Removals may
   // re-enter this step: the backend returns the existing version when nothing
@@ -189,7 +274,7 @@ function WizardBody({
             ? "The progress connection stopped responding. The registry submission may still be running. Close this dialog and refresh the page to reconcile its status."
             : "A submission for this Removal is in progress. Wait for it to finish before making changes."}
         </p>
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <Button variant="primary" onClick={onClose}>
             Close
           </Button>
@@ -207,8 +292,20 @@ function WizardBody({
       </div>
 
       <StepFlow
-        steps={STEPS}
+        steps={steps}
         current={currentIndex}
+        // The empty components stay reachable from the submit step to undo a
+        // recorded zero; the selection is fixed once the draft exists.
+        furthest={currentIndex}
+        onNavigate={(index) => {
+          setPressed(null);
+          setChosenStep(steps[index].key as StepKey);
+        }}
+        canNavigate={(index) =>
+          steps[index].key === "empty" &&
+          !submitMutation.isPending &&
+          !submitMutation.isSuccess
+        }
         footer={null}
         className="gap-16"
       >
@@ -221,6 +318,46 @@ function WizardBody({
             onToggle={toggle}
             isLoading={selectable.isLoading}
             isError={selectable.isError}
+          />
+        )}
+        {step === null &&
+          (landing.error instanceof EmptyComponentsCheckError ? (
+            <Notice
+              tone="error"
+              action={
+                <Button variant="default" onClick={() => void landing.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              {CHECK_FAILED_MESSAGE}
+            </Notice>
+          ) : landing.isError ? (
+            // The context itself failed to load: the message the dialog always showed.
+            <p className="body-small text-[var(--clr-red)]" role="alert">
+              This Removal could not be loaded. Refresh the page.
+            </p>
+          ) : (
+            <p className="body-small text-[var(--color-text-tertiary)]">
+              Loading…
+            </p>
+          ))}
+        {step === "empty" && removalId && (
+          <EmptyComponentsStep
+            removalId={removalId}
+            facilityId={facilityId}
+            data={emptyQuery.data}
+            isLoading={emptyQuery.isLoading}
+            isError={emptyQuery.isError}
+            onRetry={() => void emptyQuery.refetch()}
+            actions={actions}
+            focusRequest={focusRequest}
+            batchDates={Object.fromEntries(
+              (ctxQuery.data?.memberBatches ?? []).map((batch) => [
+                batch.id,
+                { startDate: batch.startDate, endDate: batch.endDate },
+              ]),
+            )}
           />
         )}
         {step === "submit" &&
@@ -241,12 +378,20 @@ function WizardBody({
               facilityName={facilityName}
               onDone={onClose}
               submitMutation={submitMutation}
+              onBackToEmpty={
+                showEmptyStep
+                  ? () => {
+                      setPressed(null);
+                      setChosenStep("empty");
+                    }
+                  : undefined
+              }
             />
           ))}
       </StepFlow>
 
       <Footer
-        step={step}
+        step={step ?? "submit"}
         selectable={{
           ready:
             selectable.data?.batches.filter(
@@ -265,6 +410,42 @@ function WizardBody({
           !selectable.isLoading
         }
       />
+      {step === "empty" && (
+        <EmptyStepFooter
+          reason={continueReason}
+          busy={advancing || actions.busy}
+          onContinue={() => void continueFromEmpty()}
+          onCancel={onClose}
+        />
+      )}
+    </div>
+  );
+}
+
+function EmptyStepFooter({
+  reason,
+  busy,
+  onContinue,
+  onCancel,
+}: {
+  /** Why the last press of Continue was refused, announced where the action is. */
+  reason: string | null;
+  busy: boolean;
+  onContinue: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-16">
+      <div className="flex items-center gap-12">
+        {/* BTN-09: Continue stays pressable; pressing it while blocked names what is missing. */}
+        <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onContinue} busy={busy}>
+          Continue
+        </Button>
+        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {reason && <Notice tone="error">{reason}</Notice>}
     </div>
   );
 }
@@ -284,28 +465,29 @@ export function Footer({
   onConfirm: () => void;
   canConfirm: boolean;
 }) {
-  // The confirm-&-submit step owns its own action row (and success "Done").
-  if (step === "submit") return null;
+  // The later steps own their action rows (the submit step also its success "Done").
+  if (step !== "select") return null;
 
   return (
-    <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {selectable.ready} of {selectable.total} batches with complete data ·{" "}
-        {selectable.selected} selected
-      </span>
+    <div className="flex flex-wrap items-center justify-start gap-x-16 gap-y-12 border-t border-[var(--color-border-secondary)] pt-16">
       <div className="flex items-center gap-12">
-        <Button variant="default" onClick={onCancel}>
-          Cancel
-        </Button>
         <Button
           variant="primary"
+          className={PHONE_TOUCH_TARGET}
           onClick={onConfirm}
           disabled={!canConfirm}
           busy={confirmBusy}
         >
           Continue
         </Button>
+        <Button variant="default" className={PHONE_TOUCH_TARGET} onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
+      <span className="body-caption text-[var(--color-text-tertiary)]">
+        {selectable.ready} of {selectable.total} batches with complete data ·{" "}
+        {selectable.selected} selected
+      </span>
     </div>
   );
 }

@@ -18,9 +18,10 @@ vi.hoisted(() => { process.env.DB_POOL_MAX = "1"; });
 const ALLOCATED_KG = 50;
 const ONE_GRAM_KG = 0.001;
 async function addDelivery(f: OrderFixture, orderId: string, archived = false) {
-  await db.insert(deliveries).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, orderId,
+  const [delivery] = await db.insert(deliveries).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, orderId,
     code: `E2E-D-${f.tag}`, storageLocationId: f.bin.id, deliveryDate: new Date("2026-09-14T12:00:00Z"),
-    deliveredWetMassKg: ALLOCATED_KG, massDryKg: ALLOCATED_KG, archivedAt: archived ? new Date() : null });
+    deliveredWetMassKg: ALLOCATED_KG, massDryKg: ALLOCATED_KG, archivedAt: archived ? new Date() : null }).returning();
+  return delivery;
 }
 const SUITE_TIMEOUT_MS = 60_000;
 const NO_SELF_WAIT_MS = 5_000;
@@ -52,7 +53,7 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
   it.each([false, true])("freezes relationships with an archived delivery: %s", async (archived) => {
     const f = await fixture();
     const order = (await record(f)).data;
-    await addDelivery(f, order.id, archived);
+    const delivery = await addDelivery(f, order.id, archived);
     const patch = { orderId: order.id, expectedVersion: 1 };
     for (const [field, value] of Object.entries({ customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id,
       formulationId: f.pure.id, facilityId: f.otherFacility.id })) {
@@ -61,7 +62,7 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
     }
     const saved = await runOperation(updateOrder, f.ctx, { ...patch, customerId: undefined, customerLocationId: undefined, code: "OR-KEPT" });
     expect(saved.data).toMatchObject({ customerId: f.customer.id, customerLocationId: f.location.id, code: "OR-KEPT" });
-    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(runOperation(deleteOrder, f.ctx, { orderId: order.id, expectedVersion: 2 })).rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked", meta: { reason: "in_use", deliveryCode: delivery.code, deliveryId: delivery.id } }] });
   });
 
   it("moves an order without deliveries to another facility", async () => {
