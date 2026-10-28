@@ -9,5 +9,5 @@ export function feedstockDeepLinkHref(feedstockId: string, facilityId?: string):
   const params = new URLSearchParams();
   if (facilityId) params.set("facility", facilityId);
   params.set(FEEDSTOCK_DEEP_LINK_PARAM, feedstockId);
-  return `/feedstocks?${params.toString()}`;
+  return `/feedstock-intake?${params.toString()}`;
 }

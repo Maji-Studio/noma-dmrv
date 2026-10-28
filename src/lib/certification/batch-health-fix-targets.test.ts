@@ -72,7 +72,7 @@ describe("batchHealthFixLinkFor", () => {
     );
     expect(link.label).toBe("Add Sample data");
     expect(link.href).toBe(
-      `/samples?facility=${facilityId}&create=true&createCreditBatch=batch-001`,
+      `/lab-samples?facility=${facilityId}&create=true&createCreditBatch=batch-001`,
     );
   });
 
@@ -191,7 +191,7 @@ describe("batchHealthFixLinkFor", () => {
 
     expect(link.label).toBe("Review feedstock transport");
     expect(link.href).toBe(
-      `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
+      `/feedstock-intake?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
     );
   });
 

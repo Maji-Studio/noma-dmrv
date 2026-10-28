@@ -35,7 +35,7 @@ describe("records copy", () => {
   it("links runs, deliveries and applications filtered to the credit batch", () => {
     const ids = { facilityId: "fac", creditBatchId: "cb" };
     expect(recordsHref(RUNS, ids)).toBe("/production-runs?facility=fac&creditBatch=cb");
-    expect(recordsHref({ source: "transportLegs", count: 2, figure: null }, ids)).toBe("/feedstocks?facility=fac");
+    expect(recordsHref({ source: "transportLegs", count: 2, figure: null }, ids)).toBe("/feedstock-intake?facility=fac");
   });
 });
 

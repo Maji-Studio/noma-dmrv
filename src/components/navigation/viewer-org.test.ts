@@ -32,7 +32,7 @@ describe("shouldShowPlatformAdminBar", () => {
     expect(shouldShowPlatformAdminBar(null, "/dashboard")).toBe(false);
   });
 
-  it.each(["/admin", "/admin/organizations"])("hides on the Platform page %s", (path) => {
+  it.each(["/platform", "/platform/organizations"])("hides on the Platform page %s", (path) => {
     expect(shouldShowPlatformAdminBar({ orgRole: null, isPlatformAdmin: true }, path)).toBe(false);
   });
 

@@ -780,7 +780,7 @@ export function CreditBatchList({
           message={deleteConflict.message}
           action={deleteConflict.conflict.entity === "sample" && (
             <Link
-              href={`/samples?${new URLSearchParams({ facility: contextFacilityId ?? "", sample: deleteConflict.conflict.id })}`}
+              href={`/lab-samples?${new URLSearchParams({ facility: contextFacilityId ?? "", sample: deleteConflict.conflict.id })}`}
               className="body-small underline"
             >
               Open {deleteConflict.conflict.code}

@@ -173,7 +173,7 @@ describe("RecordLockNotice", () => {
     expect(screen.getByRole("status").textContent).toBe(
       "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
     );
-    expect(screen.getByRole("link").getAttribute("href")).toBe(`/certification/removals?facility=${FACILITY}&removal=removal-1`);
+    expect(screen.getByRole("link").getAttribute("href")).toBe(`/removals?facility=${FACILITY}&removal=removal-1`);
   });
 
   it("says sending was started and not finished for an interrupted Removal", () => {
@@ -248,7 +248,7 @@ describe("returned by Isometric", () => {
       "Returned by IsometricGHG Statement Jul 1 to Sep 30, 2026 failed verification. Changes here go to Removal Jan 1 to Mar 31, 2026 when you resubmit it.",
     );
     expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
-      .toBe(`/certification/ghg-statements?facility=${FACILITY}&statement=statement-1`);
+      .toBe(`/ghg-statements?facility=${FACILITY}&statement=statement-1`);
     expect(inUse.textContent).toContain("because production run PR-26-004 uses its figures");
   });
 

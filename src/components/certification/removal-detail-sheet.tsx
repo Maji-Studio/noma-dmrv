@@ -220,9 +220,7 @@ export function RemovalDetailSheet({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
-  // The legacy `/removals/[id]/review` route only redirects here (dropping any
-  // `?step=`), so we skip the hop and build the resume URL it resolves to.
-  const reviewHref = `/certification/removals?resume=${encodeURIComponent(
+  const reviewHref = `/removals?resume=${encodeURIComponent(
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
 

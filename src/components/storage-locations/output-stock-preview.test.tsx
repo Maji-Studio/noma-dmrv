@@ -72,8 +72,8 @@ describe("OutputStockPreview", () => {
       { entity: "ghgStatement", id: "statement-id", code: "GHG Statement" },
     ] }} />);
     expect(html).toContain('/applications?ids=app-id');
-    expect(html).toContain('/certification/removals?removal=removal-id');
-    expect(html).toContain('/certification/ghg-statements?statement=statement-id');
+    expect(html).toContain('/removals?removal=removal-id');
+    expect(html).toContain('/ghg-statements?statement=statement-id');
   });
 
   it("shows an unavailable ingredient dry estimate without claiming zero dry solids", () => {

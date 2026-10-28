@@ -12,7 +12,7 @@ import { test, expect } from "@playwright/test";
 // Test Constants
 // ============================================
 
-const SAMPLES_URL = "/samples";
+const SAMPLES_URL = "/lab-samples";
 
 // ============================================
 // Role-Based Access Control Tests

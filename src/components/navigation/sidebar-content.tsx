@@ -118,7 +118,7 @@ const navSections: NavSection[] = [
     title: "Production",
     accent: SECTION_ACCENTS.production,
     items: [
-      { href: "/feedstocks", label: "Feedstocks", icon: LeafIcon },
+      { href: "/feedstock-intake", label: "Feedstocks", icon: LeafIcon },
       { href: "/production-runs", label: "Production Runs", icon: FactoryIcon },
       { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
       { href: "/biochar-products", label: "Biochar Products", icon: CubeIcon },
@@ -129,7 +129,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.infrastructure,
     items: [
       { href: "/reactors", label: "Reactors", icon: FlaskIcon },
-      { href: "/storage-locations", label: "Storage Bins", icon: PackageIcon },
+      { href: "/storage-bins", label: "Storage Bins", icon: PackageIcon },
       { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
       { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
@@ -151,7 +151,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.verification,
     items: [
       { href: "/credit-batches", label: "Credit Batches", icon: CertificateIcon },
-      { href: "/samples", label: "Lab Samples", icon: TestTubeIcon },
+      { href: "/lab-samples", label: "Lab Samples", icon: TestTubeIcon },
     ],
   },
   {
@@ -162,8 +162,8 @@ const navSections: NavSection[] = [
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification/removals", label: "Removals", icon: StackIcon },
-      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
+      { href: "/removals", label: "Removals", icon: StackIcon },
+      { href: "/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
     ],
   },
 ];

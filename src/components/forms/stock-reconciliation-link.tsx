@@ -8,8 +8,8 @@ export function StockReconciliationLink({
   facilityId,
 }: StockReconciliationLinkProps) {
   const href = facilityId
-    ? `/storage-locations?facility=${encodeURIComponent(facilityId)}`
-    : "/storage-locations";
+    ? `/storage-bins?facility=${encodeURIComponent(facilityId)}`
+    : "/storage-bins";
 
   return (
     <p className="mt-8 body-caption">

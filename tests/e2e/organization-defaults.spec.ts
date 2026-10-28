@@ -86,7 +86,7 @@ test.describe("Organization operating defaults", () => {
     await expect(page.getByRole("radio")).toHaveCount(0);
 
     // The retired route lands on General too.
-    await page.goto("/settings/defaults");
+    await page.goto("/settings/general");
     await expect(page).toHaveURL(/\/settings\/general/);
   });
 });

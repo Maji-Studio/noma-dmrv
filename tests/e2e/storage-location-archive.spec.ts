@@ -60,12 +60,12 @@ test.describe("Storage-bin archive", () => {
     adminPage,
   }) => {
     const page = adminPage;
-    await page.goto(`/storage-locations?facility=${facility.id}`);
+    await page.goto(`/storage-bins?facility=${facility.id}`);
     await expect(page.getByRole("heading", { name: "Storage" })).toBeVisible();
     const filteredListResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/storage-locations",
+        new URL(response.url()).pathname === "/storage-bins",
     );
     await page.getByLabel("Search storage").fill(bin.name);
     await filteredListResponse;

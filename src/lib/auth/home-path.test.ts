@@ -4,7 +4,7 @@ import { homePathFor, isPlatformPath, MEMBER_HOME_HREF, PLATFORM_HOME_HREF } fro
 describe("homePathFor", () => {
   it("sends Platform Admins to the Platform home", () => {
     expect(homePathFor({ role: "admin" })).toBe(PLATFORM_HOME_HREF);
-    expect(PLATFORM_HOME_HREF).toBe("/admin/organizations");
+    expect(PLATFORM_HOME_HREF).toBe("/platform/organizations");
   });
 
   it.each([{ role: "user" }, {}, { role: null }, null, undefined])(
@@ -18,8 +18,8 @@ describe("homePathFor", () => {
 
 describe("isPlatformPath", () => {
   it.each([
-    ["/admin", true],
-    ["/admin/organizations", true],
+    ["/platform", true],
+    ["/platform/organizations", true],
     ["/administration", false],
     ["/dashboard", false],
     [null, false],

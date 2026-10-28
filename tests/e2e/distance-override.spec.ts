@@ -66,7 +66,7 @@ async function expectReadProvenance(page: Page, dialog: Locator, provenance: str
 }
 
 async function openFeedstock(page: Page, seededData: SeededChainData, id: string) {
-  await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+  await page.goto(`/feedstock-intake?facility=${seededData.facility.id}&feedstock=${id}`);
   await waitForFacilityHydration(page, seededData.facility.name);
   await waitForSideSheet(page);
   return page.locator('[role="dialog"]');
@@ -103,7 +103,7 @@ test.describe("Distance override (#420)", () => {
       });
 
       // Create: the supplier's location distance is derived and read-only.
-      await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+      await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
       await waitForFacilityHydration(page, seededData.facility.name);
       await page.getByRole("button", { name: "New feedstock" }).click();
       await waitForSideSheet(page);

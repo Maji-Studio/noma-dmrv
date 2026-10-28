@@ -141,7 +141,7 @@ inside batch context, with a "Batch roll-up" button back.
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
 | Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, Flow chart (`chain-flow-graph.tsx`, `flow-layout.ts`), `sankey/`, `trail/`, `map/` |
-| Route | `src/app/(app)/traceability/page.tsx` | Canonical entry; legacy `/chain-of-custody` redirects here with query string intact |
+| Route | `src/app/(app)/traceability/page.tsx` | Canonical entry with query-based deep links |
 
 ## Graph behavior (Flow chart)
 
