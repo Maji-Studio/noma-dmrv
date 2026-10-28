@@ -46,6 +46,7 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
 export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
+export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 
 export interface CreditBatchOpenItem {
   id: string;
@@ -168,7 +169,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     for (const run of uncoveredProductionRuns(late)) {
       const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
       check.push({
-        id: `late-production-run:${run.id}`,
+        id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
+        productionRun: { id: run.id, code: run.code },
         title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { tab: "emissions" },

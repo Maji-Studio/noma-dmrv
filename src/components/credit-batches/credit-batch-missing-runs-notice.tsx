@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
-import { MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
+import { LATE_PRODUCTION_RUN_ITEM_PREFIX, MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { cn } from "@/lib/utils";
 
 export interface MissingRunRef {
@@ -74,5 +75,68 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       <MissingRunLinks runs={runs} facilityId={facilityId} />
       {`. ${one ? "Its" : "Their"} emissions are not counted.${canManage ? "" : ` An admin can add ${one ? "it" : "them"} in Edit.`}`}
     </Notice>
+  );
+}
+
+/** A Sent batch's late-run Check, as the sheet reads it: the Check's own words. */
+export interface LateRunRef extends MissingRunRef {
+  title: string;
+  detail?: string;
+}
+
+export function lateRunsFromTodos(
+  check: readonly { id: string; productionRun?: MissingRunRef; title: string; detail?: string }[] | undefined,
+): LateRunRef[] {
+  return (check ?? []).flatMap((item) =>
+    item.id.startsWith(LATE_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun
+      ? [{ ...item.productionRun, title: item.title, detail: item.detail }]
+      : [],
+  );
+}
+
+/**
+ * View mode of a Sent batch: a completed run that fits it was recorded after
+ * its Removal was sent. Sent stays locked, so the next step is the Emissions
+ * tab (open to everyone, as the Check's own target is), not Edit. One notice
+ * per run, because each Check dates its own entry.
+ */
+export function CreditBatchLateRunsNotice({
+  runs,
+  creditBatchId,
+  facilityId,
+}: {
+  runs: readonly LateRunRef[];
+  creditBatchId: string;
+  facilityId: string;
+}) {
+  return (
+    <>
+      {runs.map((run) => {
+        const rest = run.title.startsWith(run.code) ? run.title.slice(run.code.length) : null;
+        return (
+          <Notice
+            key={run.id}
+            tone="warning"
+            data-testid="credit-batch-late-run"
+            title={rest === null ? run.title : (
+              <>
+                <MissingRunLinks runs={[run]} facilityId={facilityId} />
+                {`${rest}.`}
+              </>
+            )}
+            action={
+              <Link
+                href={creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" })}
+                className={cn(buttonVariants({ variant: "weak", size: "small" }), CENTRED_HIT_AREA)}
+              >
+                Open Emissions
+              </Link>
+            }
+          >
+            {run.detail}
+          </Notice>
+        );
+      })}
+    </>
   );
 }

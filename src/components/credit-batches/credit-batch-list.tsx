@@ -49,7 +49,7 @@ import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
 import { creditBatchSheetSections } from "./credit-batch-view";
-import { missingRunsFromTodos } from "./credit-batch-missing-runs-notice";
+import { lateRunsFromTodos, missingRunsFromTodos } from "./credit-batch-missing-runs-notice";
 import {
   CreditBatchFilters,
   type CreditBatchReadinessFilter,
@@ -494,6 +494,7 @@ export function CreditBatchList({
     ? { facilityId: viewEntity.facilityId, creditBatchId: viewEntity.id }
     : null);
   const missingRuns = sheetTodos.isError ? [] : missingRunsFromTodos(sheetTodos.data?.check);
+  const lateRuns = sheetTodos.isError ? [] : lateRunsFromTodos(sheetTodos.data?.check);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -841,6 +842,7 @@ export function CreditBatchList({
                   ? null
                   : sheetPageModel.data?.mass.appliedDryKg,
                 missingRuns,
+                lateRuns,
                 onEditMissingRuns: canManage && isRecordEditable(sheetLock)
                   ? () => handleModeChange("edit")
                   : undefined,

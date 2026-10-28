@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
-import { CreditBatchMissingRunsNotice, missingRunsFromTodos } from "./credit-batch-missing-runs-notice";
+import { LATE_PRODUCTION_RUN_ITEM_PREFIX, MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
+import { CreditBatchLateRunsNotice, CreditBatchMissingRunsNotice, lateRunsFromTodos, missingRunsFromTodos } from "./credit-batch-missing-runs-notice";
 
 afterEach(cleanup);
 
@@ -12,7 +12,7 @@ describe("missingRunsFromTodos", () => {
   it("keeps only the missing-run Checks that name their run", () => {
     expect(missingRunsFromTodos([
       { id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0] },
-      { id: "late-production-run:run-2", productionRun: RUNS[1] },
+      { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-2`, productionRun: RUNS[1] },
       { id: "document:lab-report" },
     ])).toEqual([RUNS[0]]);
     expect(missingRunsFromTodos(undefined)).toEqual([]);
@@ -40,6 +40,39 @@ describe("CreditBatchMissingRunsNotice", () => {
 
   it("shows nothing without missing runs", () => {
     const { container } = render(<CreditBatchMissingRunsNotice runs={[]} facilityId="facility-1" canManage />);
+    expect(container.textContent).toBe("");
+  });
+});
+
+const LATE = [
+  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], title: "RUN-1 was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 10, 2026." },
+  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-2`, productionRun: RUNS[1], title: "RUN-2 was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 11, 2026." },
+  { id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-3`, productionRun: { id: "run-3", code: "RUN-3" }, title: "RUN-3 is not in this credit batch yet" },
+];
+
+describe("lateRunsFromTodos", () => {
+  it("keeps only the Sent late-run Checks, with their own words", () => {
+    expect(lateRunsFromTodos(LATE).map((run) => run.code)).toEqual(["RUN-1", "RUN-2"]);
+    expect(lateRunsFromTodos(undefined)).toEqual([]);
+  });
+});
+
+describe("CreditBatchLateRunsNotice", () => {
+  it("says what the Check says, links the run and opens the Emissions tab", () => {
+    render(<CreditBatchLateRunsNotice runs={lateRunsFromTodos(LATE)} creditBatchId="batch-1" facilityId="facility-1" />);
+    const notices = screen.getAllByTestId("credit-batch-late-run");
+    expect(notices).toHaveLength(2);
+    expect(notices[0].textContent).toContain("RUN-1 was recorded after RM-9 was sent.");
+    expect(notices[0].textContent).toContain("Record its diesel and power on the Emissions tab, dated Sep 10, 2026.");
+    expect(screen.getByRole("link", { name: "RUN-1" }).getAttribute("href")).toContain("run-1");
+    const open = screen.getAllByRole("link", { name: "Open Emissions" })[0].getAttribute("href")!;
+    expect(open).toContain("/credit-batches/batch-1");
+    expect(open).toContain("tab=emissions");
+    expect(screen.queryByRole("button", { name: "Add in Edit" })).toBeNull();
+  });
+
+  it("shows nothing without late runs", () => {
+    const { container } = render(<CreditBatchLateRunsNotice runs={[]} creditBatchId="batch-1" facilityId="facility-1" />);
     expect(container.textContent).toBe("");
   });
 });

@@ -14,6 +14,7 @@ describe("late production run Check to-dos", () => {
     const items = buildCreditBatchOpenItems({ ...context, missingProductionRuns });
     expect(items).toEqual({ blocking: [], check: [{
       id: "late-production-run:run",
+      productionRun: { id: "run", code: "PR-112" },
       title: "PR-112 was recorded after RM-009 was sent",
       detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
       target: { tab: "emissions" },

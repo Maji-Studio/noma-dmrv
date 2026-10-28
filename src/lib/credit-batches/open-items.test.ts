@@ -433,6 +433,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, sentRemovalCodes: ["RM-008"],
     } })).toEqual({ blocking: [], check: [{
       id: "late-production-run:run",
+      productionRun: { id: "run", code: "RUN-112" },
       title: "RUN-112 was recorded after RM-008 was sent",
       detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
       target: { tab: "emissions" },

@@ -35,7 +35,7 @@ import {
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
 import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
-import { CreditBatchMissingRunsNotice, type MissingRunRef } from "./credit-batch-missing-runs-notice";
+import { CreditBatchLateRunsNotice, CreditBatchMissingRunsNotice, type LateRunRef, type MissingRunRef } from "./credit-batch-missing-runs-notice";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -279,6 +279,8 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   appliedDryKg?: number | null;
   /** Completed runs that fit the batch but are not in it (unsent holder only). */
   missingRuns?: readonly MissingRunRef[];
+  /** Completed runs recorded after the batch's Removal was sent (Sent only). */
+  lateRuns?: readonly LateRunRef[];
   /** Opens Edit, where Add run lives; undefined when the batch cannot be edited. */
   onEditMissingRuns?: () => void;
 }
@@ -298,6 +300,7 @@ export function creditBatchSheetSections({
   inRemoval = false,
   appliedDryKg,
   missingRuns = [],
+  lateRuns = [],
   onEditMissingRuns,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
@@ -407,6 +410,11 @@ export function creditBatchSheetSections({
             facilityId={creditBatch.facilityId}
             canManage={canManage}
             onEdit={onEditMissingRuns}
+          />
+          <CreditBatchLateRunsNotice
+            runs={lateRuns}
+            creditBatchId={creditBatch.id}
+            facilityId={creditBatch.facilityId}
           />
           <CreditBatchCarbonEstimate
             creditBatch={creditBatch}
