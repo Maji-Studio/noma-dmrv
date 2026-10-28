@@ -6,12 +6,16 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { readCreditBatchesMembershipSubmissionLocks } from "./credit-batch-certification-lock";
+import { isSentRemoval, readsAsReturnedFromPersisted } from "@/lib/record-lock";
+import { listCreditBatchCertificationLinks } from "./credit-batch-certification-links";
 import { productionRunDateExpr, productionRunMembershipDateExpr } from "./production-runs/date-expr";
+import { readRecordLockLineage } from "./record-lock-lineage";
 import { requireOrgScope } from "./utils";
 
-export interface CreditBatchLateProductionRuns {
+export interface CreditBatchMissingProductionRuns {
   sentRemovalCodes: string[];
+  /** Draft or returned holders, only when no holder keeps the batch Sent. */
+  heldRemovalCodes: string[];
   /** First day of the batch period; entries must be dated inside it. */
   batchStartDate: string;
   runs: { id: string; code: string; startDate: string; createdAt: Date }[];
@@ -20,14 +24,33 @@ export interface CreditBatchLateProductionRuns {
 }
 
 /** Read-only, set-based facts for the Check to-dos, independent of template availability. */
-export async function loadCreditBatchesLateProductionRuns(
+export async function loadCreditBatchesMissingProductionRuns(
   ctx: OrgContext,
   creditBatchIds: readonly string[],
-): Promise<Map<string, CreditBatchLateProductionRuns>> {
+): Promise<Map<string, CreditBatchMissingProductionRuns>> {
   requireOrgScope(ctx);
-  const sentByBatch = await readCreditBatchesMembershipSubmissionLocks(ctx, db, creditBatchIds);
+  if (!creditBatchIds.length) return new Map();
+  const links = await listCreditBatchCertificationLinks(ctx, [...creditBatchIds]);
+  const facts = await readRecordLockLineage(ctx, db, links.flatMap(link => link.removalId
+    ? [{ removalId: link.removalId, ghgStatementId: link.ghgStatementId }] : []));
+  // Display uses persisted return evidence. Writes still require fresh lineage under locks.
+  const sentIds = new Set(facts.filter(fact => isSentRemoval(fact) && !readsAsReturnedFromPersisted(fact))
+    .map(fact => fact.id));
+  const sentByBatch = new Map<string, string[]>();
+  const heldByBatch = new Map<string, string[]>();
+  for (const link of links.sort((a, b) => (a.removalCode ?? "").localeCompare(b.removalCode ?? "") ||
+    (a.removalId ?? "").localeCompare(b.removalId ?? ""))) {
+    if (!link.removalId || !link.removalCode) continue;
+    const holders = sentIds.has(link.removalId) ? sentByBatch : heldByBatch;
+    const codes = holders.get(link.id) ?? [];
+    if (!codes.includes(link.removalCode)) codes.push(link.removalCode);
+    holders.set(link.id, codes);
+  }
+  for (const id of sentByBatch.keys()) heldByBatch.delete(id);
   const sentBatchIds = [...sentByBatch.keys()];
-  if (!sentBatchIds.length) return new Map();
+  // Unheld batches attach matching runs on completion and expand membership on save.
+  const batchIds = [...sentBatchIds, ...heldByBatch.keys()];
+  if (!batchIds.length) return new Map();
   const [rows, entries] = await Promise.all([
     db.selectDistinct({
       creditBatchId: creditBatches.id,
@@ -56,7 +79,7 @@ export async function loadCreditBatchesLateProductionRuns(
       eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
     )).where(and(
       eq(creditBatches.organizationId, ctx.organizationId),
-      inArray(creditBatches.id, sentBatchIds),
+      inArray(creditBatches.id, batchIds),
       isNull(creditBatches.archivedAt),
       isNull(creditBatchProductionRuns.creditBatchId),
     )).orderBy(productionRuns.code, productionRuns.id),
@@ -70,8 +93,9 @@ export async function loadCreditBatchesLateProductionRuns(
         isNull(emissionEntries.deletedAt),
       )),
   ]);
-  const result = new Map<string, CreditBatchLateProductionRuns>(sentBatchIds.map(id => [id, {
-    sentRemovalCodes: sentByBatch.get(id)!, batchStartDate: "", runs: [], manualEntries: [],
+  const result = new Map<string, CreditBatchMissingProductionRuns>(batchIds.map(id => [id, {
+    sentRemovalCodes: sentByBatch.get(id) ?? [], heldRemovalCodes: heldByBatch.get(id) ?? [],
+    batchStartDate: "", runs: [], manualEntries: [],
   }]));
   // Match attachment's single-feedstock rule: mixed and empty runs cannot join a cohort.
   const candidates = new Map<string, { row: typeof rows[number]; types: Set<string> }>();

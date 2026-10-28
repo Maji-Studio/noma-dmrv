@@ -1,6 +1,6 @@
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
-import type { CreditBatchLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
+import type { CreditBatchMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -65,7 +65,7 @@ export interface CreditBatchOpenItemsInput {
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
-  lateProductionRuns?: CreditBatchLateProductionRuns;
+  missingProductionRuns?: CreditBatchMissingProductionRuns;
   /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
 }
@@ -151,7 +151,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
 
-  const late = input.lateProductionRuns;
+  const late = input.missingProductionRuns;
   if (late?.sentRemovalCodes.length) {
     const codes = joinWithAnd(late.sentRemovalCodes);
     for (const run of late.runs) {
@@ -162,6 +162,18 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { tab: "emissions" },
+      });
+    }
+  } else if (late?.heldRemovalCodes.length) {
+    const codes = joinWithAnd(late.heldRemovalCodes);
+    for (const run of late.runs) {
+      check.push({
+        id: `missing-production-run:${run.id}`,
+        title: `${run.code} is not in this credit batch yet`,
+        detail: canManage
+          ? `Its emissions are not counted. Add it in Edit before ${codes} ${late.heldRemovalCodes.length === 1 ? "is" : "are"} sent.`
+          : "Its emissions are not counted. An admin can add it in Edit.",
+        target: canManage ? { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW } : null,
       });
     }
   }

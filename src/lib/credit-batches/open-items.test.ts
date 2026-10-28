@@ -364,6 +364,64 @@ it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
 
 });
 
+describe("missing production runs", () => {
+  const run = { id: "run", code: "RUN-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01") };
+  const missingProductionRuns = { sentRemovalCodes: [], heldRemovalCodes: ["RM-009"],
+    batchStartDate: "2026-09-01", runs: [run], manualEntries: [] };
+
+  it.each([
+    { heldRemovalCodes: ["RM-009"], holders: "RM-009 is" },
+    { heldRemovalCodes: ["RM-009", "RM-010"], holders: "RM-009 and RM-010 are" },
+  ])("names the unsent holders $holders and opens Edit", ({ heldRemovalCodes, holders }) => {
+    const items = buildCreditBatchOpenItems({ ...batchContext,
+      missingProductionRuns: { ...missingProductionRuns, heldRemovalCodes } });
+    expect(items).toEqual({ blocking: [], check: [{
+      id: "missing-production-run:run",
+      title: "RUN-112 is not in this credit batch yet",
+      detail: `Its emissions are not counted. Add it in Edit before ${holders} sent.`,
+      target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
+    }] });
+    expect(overviewBadgeCount({ ...items, waiting: [] })).toBe(1);
+    expect(tabBadge("overview", { ...items, waiting: [] })).toEqual({ count: 1, blocking: false });
+  });
+
+  it("asks an admin to add the run when the viewer cannot manage", () => {
+    expect(buildCreditBatchOpenItems({ ...batchContext, canManage: false, missingProductionRuns }))
+      .toEqual({ blocking: [], check: [{
+        id: "missing-production-run:run",
+        title: "RUN-112 is not in this credit batch yet",
+        detail: "Its emissions are not counted. An admin can add it in Edit.",
+        target: null,
+      }] });
+  });
+
+  it("keeps one Check per missing run even after a manual emissions entry", () => {
+    const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
+      ...missingProductionRuns, runs: [run, { ...run, id: "second", code: "RUN-113" }],
+      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
+    } });
+    expect(blocking).toEqual([]);
+    expect(check.map(item => item.id)).toEqual(["missing-production-run:run", "missing-production-run:second"]);
+  });
+
+  it("omits unheld unsent batches whose membership expands automatically", () => {
+    expect(buildCreditBatchOpenItems({ ...batchContext,
+      missingProductionRuns: { ...missingProductionRuns, heldRemovalCodes: [] } }))
+      .toEqual({ blocking: [], check: [] });
+  });
+
+  it.each([true, false])("keeps Sent copy and its Emissions target unchanged (canManage %s)", canManage => {
+    expect(buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: {
+      ...missingProductionRuns, sentRemovalCodes: ["RM-008"],
+    } })).toEqual({ blocking: [], check: [{
+      id: "late-production-run:run",
+      title: "RUN-112 was recorded after RM-008 was sent",
+      detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
+      target: { tab: "emissions" },
+    }] });
+  });
+});
+
 describe("entries recorded after the Removal was sent", () => {
   const line = (carry: unknown, extra: object = {}) => ({
     componentId: "diesel", displayName: "Diesel use", state: "filled", groupKey: "production", groupName: "Production", groupPosition: 0, position: 0,
@@ -390,7 +448,7 @@ describe("entries recorded after the Removal was sent", () => {
 
   it("places a waiting entry immediately after late production runs and keeps the list non-blocking", () => {
     const items = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"))],
-      lateProductionRuns: { sentRemovalCodes: ["RM-009"], batchStartDate: "2026-09-01", manualEntries: [],
+      missingProductionRuns: { sentRemovalCodes: ["RM-009"], heldRemovalCodes: [], batchStartDate: "2026-09-01", manualEntries: [],
         runs: [{ id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01") }] } });
     expect(items.blocking).toEqual([]);
     expect(items.check.map(item => item.id)).toEqual(["late-production-run:run", "late-entry:e1"]);
