@@ -1,7 +1,34 @@
 import { API_BODY_MAX_BYTES, API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
+import { DomainError } from "@/lib/domain-errors";
 import { ApiHttpError } from "./http-error";
 
 export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7e]+$/;
+
+const NUL_CHARACTER = "\u0000";
+const NUL_CHARACTER_MESSAGE = "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.";
+
+type JsonPath = { part: string | number; parent?: JsonPath };
+
+/** JSON from a bounded body cannot contain cycles. Linked paths keep deep walks linear. */
+export function rejectNulStrings(body: unknown): void {
+  const pending: { value: unknown; path?: JsonPath }[] = [{ value: body }];
+  while (pending.length) {
+    const { value, path } = pending.pop()!;
+    if ((typeof path?.part === "string" && path.part.includes(NUL_CHARACTER))
+      || (typeof value === "string" && value.includes(NUL_CHARACTER))) {
+      const parts: (string | number)[] = [];
+      for (let segment = path; segment; segment = segment.parent) parts.push(segment.part);
+      throw new DomainError("validation_failed", NUL_CHARACTER_MESSAGE, {
+        issues: [{ path: parts.reverse(), code: "custom", message: NUL_CHARACTER_MESSAGE }],
+      });
+    }
+    if (value === null || typeof value !== "object") continue;
+    // Reverse the stack insertion order to visit each property's key and value in order.
+    for (const [key, child] of Object.entries(value).reverse()) {
+      pending.push({ value: child, path: { part: Array.isArray(value) ? Number(key) : key, parent: path } });
+    }
+  }
+}
 
 /** Read at most the shared JSON body limit, including requests without a length. */
 export async function readBoundedBody(request: Request): Promise<Buffer<ArrayBuffer>> {
@@ -38,11 +65,14 @@ function requireJsonMediaType(request: Request): void {
 }
 
 function parseJsonBytes(bytes: Uint8Array): unknown {
+  let body: unknown;
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     throw new ApiHttpError(400, "malformed_json", "Send a valid JSON body.");
   }
+  rejectNulStrings(body);
+  return body;
 }
 
 export async function readJsonBody(request: Request): Promise<unknown> {

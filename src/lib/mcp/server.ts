@@ -8,6 +8,7 @@ import type { ApiRouteContext } from "@/lib/api/route";
 import { oauthRoleCeiling } from "@/lib/auth/oauth-scopes";
 import { principalAllows } from "@/lib/auth/api-scopes";
 import { ApiHttpError } from "@/lib/api/http-error";
+import { rejectNulStrings } from "@/lib/api/request-body";
 import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { readTools } from "./tools/read-tools";
@@ -76,8 +77,9 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
         if (!tool.requiredScopes(rpc.params.arguments ?? {}).every(scope => principalAllows(context.ctx, scope))) {
           throw new ApiHttpError(403, "missing_scope", "The credential cannot authorize this request.");
         }
+        if (tool.kind === "write" && env.API_WRITES_DISABLED) return writesDisabledResult();
+        rejectNulStrings(rpc.params.arguments ?? {});
         if (tool.kind === "write") {
-          if (env.API_WRITES_DISABLED) return writesDisabledResult();
           const result = await tool.execute(context, rpc.params.arguments ?? {});
           tool.output.parse(result.body);
           return toolSuccess(result.body, `${result.replayed ? "Replayed: " : ""}${tool.summarize(result.body, result.dryRun)}`);

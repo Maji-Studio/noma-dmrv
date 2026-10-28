@@ -372,6 +372,21 @@ it.each([undefined, "", "a b", "é"])("reports requestKey %j at its argument pat
     } },
   });
 });
+it("refuses NUL in tool arguments with the shared field validation problem", async () => {
+  const response = await call("create_supplier", {
+    requestKey: "nul-regression", name: "Supplier",
+    locations: [{ name: "\u0000K\u00971", country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0 }],
+  });
+  expect(response.status).toBe(200);
+  expect(await body(response)).toMatchObject({ result: {
+    isError: true,
+    structuredContent: {
+      code: "validation_failed", retryable: false,
+      issues: [{ pointer: "/locations/0/name", code: "custom", detail: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry." }],
+    },
+  } });
+});
+
 it("publishes scoped write hints and optional requestKey", async () => {
   mocks.resolve.mockResolvedValue({ ok: true, ctx: apiKeyContext({ orgRole: "admin", scopes: ["feedstocks:write"] }) });
   const { result } = await body(await POST(rpc("tools/list")));
