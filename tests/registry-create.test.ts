@@ -343,11 +343,13 @@ describe("performRegistryCreate", () => {
       }),
     });
 
-    await expect(performRegistryCreate(args)).rejects.toThrowError(
-      new SafeError(
-        `${FAILURE_PREFIX}: Provider rejected the request (422): quantity must be positive`,
-      ),
+    const failure = await performRegistryCreate(args).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(SafeError);
+    expect((failure as SafeError).message).toBe(
+      `${FAILURE_PREFIX}: Provider rejected the request (422): quantity must be positive`,
     );
+    // The registry error stays as the cause, so the attempt summary can tell a refusal from no answer.
+    expect((failure as SafeError).cause).toBeInstanceOf(IsometricApiError);
 
     expect(args.reconcile).toHaveBeenCalledTimes(1);
     expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(USER_ID), {
