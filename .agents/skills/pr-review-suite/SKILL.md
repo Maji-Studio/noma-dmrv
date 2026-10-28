@@ -13,19 +13,21 @@ creates or updates one GitHub comment.
 
 ## Submit and review
 
-When the request includes submitting or publishing the current changes:
+The **implement-ticket** skill owns when the suite runs: full rounds locally
+before the PR opens, then one `--profile light` pass on the ready PR. When the
+request is only to submit the current changes and review them:
 
 1. Inspect `git status -sb` and the complete diff. If unrelated changes are
    present, confirm scope and stage explicit paths only.
 2. Stay on the current feature branch, or create a repository-conformant feature
    branch when still on `staging` or `main`.
 3. Run the relevant checks, commit the intended scope, push with tracking, and
-   open a **draft** PR to the requested base (`staging` by default).
+   open a **ready** PR to the requested base (`staging` by default).
 4. Capture the created PR number and run the suite with
    `--pr <number> --publish`.
 5. Return the PR, validation, reviewed head, comment, and artifact paths.
 
-Do not mark the PR ready, fix model findings, or merge it in this workflow.
+This workflow does not fix model findings or merge the PR.
 
 ## Review an existing PR
 
@@ -120,6 +122,5 @@ until a human or a separate remediation pass checks them against the code.
 
 ## PR submission integration
 
-After a draft PR is opened by the repository's publish workflow, invoke this
-skill with that PR number. On later pushes, invoke it again; the same comment is
-updated for the new head.
+After a PR is opened, invoke this skill with that PR number. On later pushes,
+invoke it again; the same comment is updated for the new head.
