@@ -1,10 +1,46 @@
 import { expect, it, vi } from "vitest";
 import { API_BODY_MAX_BYTES, API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
+import { DomainError } from "@/lib/domain-errors";
+import { actionFailureResponse } from "./problem";
 import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
+
+const DEEPLY_NESTED_JSON_DEPTH = 65_536;
 
 const request = (body: string, contentType = "application/json") => new Request("https://example.test", {
   method: "POST", headers: { "content-type": contentType }, body,
 });
+
+it.each([
+  { body: "\u0000", pointer: "" },
+  { body: { locations: [{ name: "\u0000K\u00971" }] }, pointer: "/locations/0/name" },
+  { body: { "a/b~\u0000": "value" }, pointer: "/a~1b~0\u0000" },
+  { body: { first: ["\u0000"], later: "\u0000" }, pointer: "/first/0" },
+])("refuses the first NUL string at $pointer", async ({ body, pointer }) => {
+  for (const read of [readJsonBody, readOptionalJsonBody]) {
+    const error = await read(request(JSON.stringify(body))).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(DomainError);
+    if (!(error instanceof DomainError)) throw new Error("Expected a validation refusal.");
+    const response = actionFailureResponse({ success: false, error: error.message, code: error.code, issues: error.issues }, "/api/v1/suppliers", "request-id");
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      code: "validation_failed", retryable: false,
+      errors: [{ pointer, code: "custom", detail: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry." }],
+    });
+  }
+});
+
+it("preserves unicode and other control characters in values and keys", async () => {
+  const body = { "é😀\u0015": ["é", "😀", "\u0015", "\\u0000", null, true, 0] };
+  for (const read of [readJsonBody, readOptionalJsonBody]) {
+    expect(await read(request(JSON.stringify(body)))).toEqual(body);
+  }
+});
+
+it("walks deeply nested JSON within the body limit without overflowing the call stack", async () => {
+  const body = "[".repeat(DEEPLY_NESTED_JSON_DEPTH) + '"ok"' + "]".repeat(DEEPLY_NESTED_JSON_DEPTH);
+  expect(await readJsonBody(request(body))).toBeInstanceOf(Array);
+});
+
 it("accepts JSON with a charset", async () => {
   expect(await readJsonBody(request('{"massWetKg":0}', "Application/JSON; charset=utf-8"))).toEqual({ massWetKg: 0 });
 });
