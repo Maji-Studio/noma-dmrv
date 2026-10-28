@@ -11,7 +11,7 @@ import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutp
  * through the browser UI.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { DEC_ORG_ID } from "@/db/org-defaults";
+import { fixtureOrgId } from "./fixture-org";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import { createDbConnection } from "./db";
@@ -64,7 +64,7 @@ export async function seedChainData(
     await db.transaction(async (tx) => {
       // 1. Facility (needed by storage locations, biochar product, orders, etc.)
       await tx.insert(schema.facilities).values({ timezone: "UTC",
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: facilityId,
         code: `E2E-FAC-${testRunId}`,
         name: `E2E Seed Facility ${testRunId}`,
@@ -83,7 +83,7 @@ export async function seedChainData(
 
       // 2. Reactor (needs facility)
       await tx.insert(schema.reactors).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: reactorId,
         code: `E2E-RCT-${testRunId}`,
         identifier: `E2E Seed Reactor ${testRunId}`,
@@ -93,21 +93,21 @@ export async function seedChainData(
 
       // 3. Supplier
       await tx.insert(schema.suppliers).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
       });
 
       await tx.insert(schema.supplierLocations).values({
-        organizationId: DEC_ORG_ID, supplierId, country: "Tanzania",
+        organizationId: fixtureOrgId(), supplierId, country: "Tanzania",
         gpsLatitude: -6.8, gpsLongitude: 39.28, isDefault: true,
       });
 
       // 3. Feedstock Type
       await tx.insert(schema.feedstockTypes).values({
         usage: "pyrolysis",
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: feedstockTypeId,
         code: `E2E-FST-${testRunId}`,
         name: `E2E Seed Feedstock Type ${testRunId}`,
@@ -116,7 +116,7 @@ export async function seedChainData(
 
       // 4. Customer
       await tx.insert(schema.customers).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: customerId,
         code: `E2E-CUST-${testRunId}`,
         name: `E2E Seed Customer ${testRunId}`,
@@ -126,7 +126,7 @@ export async function seedChainData(
       // app derive a biochar distribution leg when a test records a delivery
       // to this location.
       await tx.insert(schema.customerLocations).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: customerLocationId,
         customerId: customerId,
         name: `E2E Seed Location ${testRunId}`,
@@ -136,11 +136,11 @@ export async function seedChainData(
         gpsLongitude: 39.28,
       });
 
-      await tx.insert(schema.customerLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: customerLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
+      await tx.insert(schema.customerLocationFacilityDistances).values({ organizationId: fixtureOrgId(), locationId: customerLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
 
       // 6. Formulation
       await tx.insert(schema.formulations).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: formulationId,
         code: `E2E-FORM-${testRunId}`,
         name: `E2E Seed Formulation ${testRunId}`,
@@ -149,7 +149,7 @@ export async function seedChainData(
 
       // 7. Storage Locations (need facility)
       await tx.insert(schema.storageLocations).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: feedstockStorageId,
         code: `E2E-SL-FS-${testRunId}`,
         name: `E2E Feedstock Bin ${testRunId}`,
@@ -159,7 +159,7 @@ export async function seedChainData(
       });
 
       await tx.insert(schema.storageLocations).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: biocharStorageId,
         code: `E2E-SL-BC-${testRunId}`,
         name: `E2E Biochar Pile ${testRunId}`,
@@ -168,7 +168,7 @@ export async function seedChainData(
       });
 
       await tx.insert(schema.storageLocations).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: productStorageId,
         code: `E2E-SL-PR-${testRunId}`,
         name: `E2E Product Bin ${testRunId}`,
@@ -180,7 +180,7 @@ export async function seedChainData(
       // 8. Biochar Product (needs facility + formulation)
       const productionDate = "2025-01-01";
       await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: biocharProductId,
         code: `E2E-BP-${testRunId}`,
         facilityId: facilityId,
@@ -200,7 +200,7 @@ export async function seedChainData(
 
       // 9. Vehicle
       await tx.insert(schema.vehicles).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: vehicleId,
         code: `E2E-VEH-${testRunId}`,
         name: `E2E Seed Vehicle ${testRunId}`,
@@ -217,7 +217,7 @@ export async function seedChainData(
 
       // 11. Feedstock (needs facility + supplier + type)
       await tx.insert(schema.feedstocks).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: feedstockId,
         code: `E2E-FS-${testRunId}`,
         facilityId: facilityId,
@@ -282,14 +282,14 @@ export async function seedCreditBatch(
       .toISOString()
       .slice(0, 10);
     await db.insert(schema.productionProcesses).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
       id: productionProcessId,
       facilityId,
       feedstockTypeId,
     });
 
     await db.insert(schema.creditBatches).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
       id,
       code,
       facilityId,
@@ -341,13 +341,13 @@ export async function seedCreditBatchProductionLineage(
         .where(eq(schema.biocharProductSourceAllocations.biocharProductId, data.biocharProduct.id));
       if (!source) throw new Error("Shared product requires a saved source allocation");
       await tx.insert(schema.productionProcesses).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: productionProcessId,
         facilityId: data.facility.id,
         feedstockTypeId: data.feedstockType.id,
       });
       await tx.insert(schema.creditBatches).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: creditBatchId,
         code,
         facilityId: data.facility.id,
@@ -357,7 +357,7 @@ export async function seedCreditBatchProductionLineage(
         endDate: end,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         creditBatchId,
         productionRunId: source.productionRunId,
       });
@@ -421,7 +421,7 @@ export async function seedDurabilityBatch(
       { suffix: "2", runId: run1Id, samplingTime: day1, hToC: 0.41, oToC: 0.13, totalC: 82, orgC: 80 },
       { suffix: "3", runId: run2Id, samplingTime: day2, hToC: 0.36, oToC: 0.11, totalC: 79, orgC: 77 },
     ].map((r) => ({
-      organizationId: DEC_ORG_ID,
+      organizationId: fixtureOrgId(),
       id: crypto.randomUUID(),
       sampleCode: `${code}-S${r.suffix}`,
       creditBatchId,
@@ -435,7 +435,7 @@ export async function seedDurabilityBatch(
 
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionProcesses).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: productionProcessId,
         facilityId,
         feedstockTypeId,
@@ -450,7 +450,7 @@ export async function seedDurabilityBatch(
       // distinct calendar days; give each a closed 6-hour window.
       await tx.insert(schema.productionRuns).values([
         {
-          organizationId: DEC_ORG_ID,
+          organizationId: fixtureOrgId(),
           id: run1Id,
           code: `${code}-PR1`,
           facilityId,
@@ -460,7 +460,7 @@ export async function seedDurabilityBatch(
           biocharDryMassKg: 1000,
         },
         {
-          organizationId: DEC_ORG_ID,
+          organizationId: fixtureOrgId(),
           id: run2Id,
           code: `${code}-PR2`,
           facilityId,
@@ -473,7 +473,7 @@ export async function seedDurabilityBatch(
       // Credit batch must exist before the samples — `samples.credit_batch_id`
       // FKs it (migration 0057). Mirrors `seedCreditBatch`'s 200-year shape.
       await tx.insert(schema.creditBatches).values({
-        organizationId: DEC_ORG_ID,
+        organizationId: fixtureOrgId(),
         id: creditBatchId,
         code,
         facilityId,
@@ -483,8 +483,8 @@ export async function seedDurabilityBatch(
         endDate: end,
       });
       await tx.insert(schema.creditBatchProductionRuns).values([
-        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run1Id },
-        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run2Id },
+        { organizationId: fixtureOrgId(), creditBatchId, productionRunId: run1Id },
+        { organizationId: fixtureOrgId(), creditBatchId, productionRunId: run2Id },
       ]);
       await tx.insert(schema.samples).values(sampleRows);
     });

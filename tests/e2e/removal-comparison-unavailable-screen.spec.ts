@@ -53,7 +53,7 @@ async function shoot(page: Page, name: string, width: keyof typeof WIDTHS, targe
 test.describe("Comparison unavailable screens", () => {
   test.skip(!returnedRemovalSeedsEnabled(), "Needs CREDENTIALS_ENCRYPTION_KEY and the registry stub preload.");
 
-  test("a returned Removal noma cannot compare and the batch it holds", async ({ adminPage: page, seededData }) => {
+  test("a returned Removal noma cannot compare and the batch it holds", async ({ adminPage: page, seededData, testUsers }) => {
     test.setTimeout(300_000);
     const facilityId = seededData.facility.id;
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -61,6 +61,7 @@ test.describe("Comparison unavailable screens", () => {
     const cleanups: Array<() => Promise<void>> = [];
     try {
       const removal = await seedReturnedRemoval(seededData, `${tag}L`, {
+        adminUserId: testUsers.admin.id,
         changed: false, statementStatus: "FAILED_VERIFICATION", periodStartOn: "2026-07-01", periodEndOn: "2026-09-30" });
       cleanups.push(removal.cleanup);
       await addEntryWithoutFile(removal.creditBatch.id);
@@ -82,6 +83,7 @@ test.describe("Comparison unavailable screens", () => {
         console.log(`SHEET[${PHASE}/${size}]: ${(await page.getByRole("dialog").innerText()).replace(/\n+/g, " | ").slice(0, 600)}`);
         const notice = page.locator('[data-removal-correction="resubmit"]').first();
         await expect(notice).toBeVisible();
+        await expect(notice).toContainText("noma could not compare this Removal with what it sent.");
         await shoot(page, "removal-notice", size, notice);
         await shoot(page, "removal-sheet", size);
 

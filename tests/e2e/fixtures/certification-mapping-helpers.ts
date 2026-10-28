@@ -9,7 +9,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
 import { and, eq } from "drizzle-orm";
-import { DEC_ORG_ID } from "@/db/org-defaults";
+import { fixtureOrgId } from "./fixture-org";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
@@ -45,7 +45,7 @@ export async function seedCertifierMapping(
   const { db, pool } = createDbConnection();
   try {
     await db.insert(schema.certifierProjects).values({
-      organizationId: DEC_ORG_ID,
+      organizationId: fixtureOrgId(),
       facilityId,
       provider: "isometric",
       externalProjectId: opts.externalProjectId,
