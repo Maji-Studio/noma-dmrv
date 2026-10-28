@@ -52,7 +52,7 @@ describe("PlatformAdminBar", () => {
     expect(html).toContain('aria-label="Platform Admin"');
     expect(html).toContain("Platform Admin in");
     expect(html).toContain("Mafinga Biochar");
-    expect(html).toContain('href="/admin/organizations"');
+    expect(html).toContain('href="/platform/organizations"');
     expect(html).toContain("Back to Platform");
   });
 
@@ -66,7 +66,7 @@ describe("PlatformAdminBar", () => {
   });
 
   it("is absent on the Platform home it links back to", () => {
-    state.pathname = "/admin/organizations";
+    state.pathname = "/platform/organizations";
 
     expect(render(outsider)).toBe("");
   });

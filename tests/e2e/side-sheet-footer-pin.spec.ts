@@ -80,7 +80,7 @@ test.describe("Side sheet footer pinning", () => {
   test("the Lost mass sheet pins its actions for a feedstock bin and a biochar bin", async ({ adminPage: page, seededData }) => {
     await page.setViewportSize(TALL_DESKTOP);
     for (const bin of [seededData.feedstockStorageLocation, seededData.biocharStorageLocation]) {
-      await openList(page, "storage-locations", seededData.facility.id);
+      await openList(page, "storage-bins", seededData.facility.id);
       await page.getByPlaceholder("Search by code or name…").fill(bin.code);
       await page.getByText(bin.name, { exact: true }).first().click();
       await waitForSideSheet(page);

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   certificationRemovalsHref,
   facilityCertificationSettingsHref,
-  legacyCertificationSettingsRedirect,
   productionRunDeepLinkHref,
   registrySettingsHref,
   removalTemplatesSettingsHref,
@@ -41,56 +40,14 @@ describe("settings link builders", () => {
   });
 });
 
-describe("legacyCertificationSettingsRedirect", () => {
-  it.each([
-    [undefined, "/settings/registry"],
-    ["certifier", "/settings/registry"],
-    ["connection", "/settings/registry"],
-    ["credentials", "/settings/registry"],
-    ["sources", "/settings/registry"],
-    ["removal-templates", "/settings/removal-templates"],
-    ["emission-estimates", "/settings/facilities"],
-    ["diagnostics", "/admin/diagnostics"],
-    ["template-mapping", "/admin/template-mapping"],
-    ["not-a-section", "/settings/registry"],
-    ["toString", "/settings/registry"],
-    ["constructor", "/settings/registry"],
-    ["__proto__", "/settings/registry"],
-  ])("maps ?section=%s onto %s for a Platform Admin", (section, target) => {
-    expect(legacyCertificationSettingsRedirect(section ? { section } : {}, { isPlatformAdmin: true })).toBe(target);
-  });
-
-  it.each(["diagnostics", "template-mapping"])("lands anyone else on Registry for ?section=%s", (section) => {
-    expect(legacyCertificationSettingsRedirect({ section, facility: "f" })).toBe("/settings/registry?facility=f");
-    expect(legacyCertificationSettingsRedirect({ section }, { isPlatformAdmin: false })).toBe("/settings/registry");
-  });
-
-  it("keeps the facility and template, and drops the section", () => {
-    expect(
-      legacyCertificationSettingsRedirect({
-        section: "removal-templates",
-        facility: "fac 1",
-        template: "rvt_new",
-        other: "x",
-      }),
-    ).toBe("/settings/removal-templates?facility=fac+1&template=rvt_new");
-  });
-
-  it("reads the first value of a repeated parameter", () => {
-    expect(
-      legacyCertificationSettingsRedirect({ section: ["emission-estimates", "sources"], facility: ["a", "b"] }),
-    ).toBe("/settings/facilities?facility=a");
-  });
-});
-
 describe("certificationRemovalsHref", () => {
-  it("redirects to removals without a query when searchParams is empty", () => {
-    expect(certificationRemovalsHref({})).toBe("/certification/removals");
+  it("links to removals without a query when searchParams is empty", () => {
+    expect(certificationRemovalsHref({})).toBe("/removals");
   });
 
   it("preserves a single facility param", () => {
     expect(certificationRemovalsHref({ facility: "fac-abc123" })).toBe(
-      "/certification/removals?facility=fac-abc123",
+      "/removals?facility=fac-abc123",
     );
   });
 

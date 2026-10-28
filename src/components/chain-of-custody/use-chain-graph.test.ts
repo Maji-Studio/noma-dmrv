@@ -150,7 +150,7 @@ describe("biochar mass labels", () => {
         wetMassUsedKg: 3_000,
         supplierName: "Supplier",
         feedstockTypeName: "Wood chips",
-        href: "/feedstocks",
+        href: "/feedstock-intake",
       },
     ];
 
@@ -429,7 +429,7 @@ function rollForward(runId: string): ChainRunRollForward {
           wetMassUsedKg: 3_000,
           supplierName: "Supplier",
           feedstockTypeName: "Wood chips",
-          href: "/feedstocks",
+          href: "/feedstock-intake",
         },
       ],
       allocatedWetMassKg: null,

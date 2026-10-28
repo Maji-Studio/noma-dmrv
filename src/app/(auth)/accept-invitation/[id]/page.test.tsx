@@ -67,7 +67,7 @@ describe("invitation proxy and landing page", () => {
     mocks.getState.mockResolvedValue({ success: true, data: { ...state, accountExists: true } });
     expect(renderToStaticMarkup(await visitInvitation())).toContain("Accept invitation</button>");
   });
-  it.each(["/dashboard", "/settings/organization", "/accept-invitation-other/token"])("keeps %s protected", async (path) => {
+  it.each(["/dashboard", "/settings/members", "/accept-invitation-other/token"])("keeps %s protected", async (path) => {
     const response = await proxy(new NextRequest(`${APP_ORIGIN}${path}`));
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(`${APP_ORIGIN}/login?from=${encodeURIComponent(path)}`);

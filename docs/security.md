@@ -116,7 +116,7 @@ Non-obvious semantics only:
   guards return retryable 503 while enabled, including for dry runs. MCP returns
   an `isError` tool result with code `api_writes_disabled`; reads keep working.
   Organization API access defaults to enabled and only Platform Admins
-  can toggle it at `/admin/organizations`; disabled organizations receive
+  can toggle it at `/platform/organizations`; disabled organizations receive
   403 `api_access_disabled` on API requests. This does not revoke their keys.
 - **`API_FUZZ_DISABLE_RATE_LIMIT`**: `true` or `false`, defaults to `false`.
   Skips API token buckets for the production-bundle Schemathesis harness.
@@ -375,7 +375,7 @@ their own mapping:
 
 1. Settings, Registry says Connected.
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
-3. `/certification/removals` opens without redirecting to Settings, Registry.
+3. `/removals` opens without redirecting to Settings, Registry.
 
 ## Operational Defaults
 

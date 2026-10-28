@@ -13,6 +13,7 @@ import { db } from "@/db";
 import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
 import { certifierProjects } from "@/db/schema/certification";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
+import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import type { OrgContext } from "@/lib/auth/server";
@@ -352,4 +353,29 @@ export async function replaceMissingProductionBatchRegistration(
     eq(certifierProductionBatches.payloadHash, expected.payloadHash),
   )).returning();
   return row ?? null;
+}
+
+/** Display names for Isometric ids: facility by its linked Isometric facility id, feedstock type by its Isometric id. */
+export async function resolveRegistryDisplayNames(
+  ctx: OrgContext,
+  args: { facilityIds: string[]; feedstockTypeIds: string[] },
+): Promise<{ facilities: Map<string, string>; feedstockTypes: Map<string, string> }> {
+  requireOrgScope(ctx);
+  const facilityIds = [...new Set(args.facilityIds)];
+  const feedstockTypeIds = [...new Set(args.feedstockTypeIds)];
+  const [facilityRows, feedstockRows] = await Promise.all([
+    facilityIds.length === 0 ? [] : db
+      .select({ externalId: certifierProjects.externalFacilityId, name: facilities.name })
+      .from(certifierProjects)
+      .innerJoin(facilities, and(eq(facilities.id, certifierProjects.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .where(and(eq(certifierProjects.organizationId, ctx.organizationId), inArray(certifierProjects.externalFacilityId, facilityIds))),
+    feedstockTypeIds.length === 0 ? [] : db
+      .select({ externalId: feedstockTypes.isometricFeedstockTypeId, name: feedstockTypes.name })
+      .from(feedstockTypes)
+      .where(and(eq(feedstockTypes.organizationId, ctx.organizationId), inArray(feedstockTypes.isometricFeedstockTypeId, feedstockTypeIds))),
+  ]);
+  return {
+    facilities: new Map(facilityRows.map((row) => [row.externalId, row.name])),
+    feedstockTypes: new Map(feedstockRows.flatMap((row) => (row.externalId ? [[row.externalId, row.name] as const] : []))),
+  };
 }

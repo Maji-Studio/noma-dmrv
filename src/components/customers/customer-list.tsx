@@ -472,7 +472,7 @@ export function CustomerList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="partners"
         title="Customers"
         actions={
           <Button variant="primary" onClick={openCreate}>

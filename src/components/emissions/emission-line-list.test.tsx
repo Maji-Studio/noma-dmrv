@@ -301,6 +301,6 @@ describe("EmissionLineList", () => {
     renderList([makeLine({ entries: [makeEntry(), late], entryPolicy: "additive" })], ["line-1"]);
     expect(screen.getAllByText(/Recorded after/)).toHaveLength(1);
     expect(screen.getByText(/Waiting for a Removal\. No later draft/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "New Removal" }).getAttribute("href")).toBe("/certification/removals?facility=fac&create=true");
+    expect(screen.getByRole("link", { name: "New Removal" }).getAttribute("href")).toBe("/removals?facility=fac&create=true");
   });
 });

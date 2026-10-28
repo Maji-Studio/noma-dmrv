@@ -23,7 +23,7 @@ test.describe("Platform Organizations", () => {
     const context = await createDirectAuthContext(browser, testUsers.admin, baseURL!);
     try {
       const page = await context.newPage();
-      await page.goto(`/admin/organizations?org=${fixture.organizationId}`);
+      await page.goto(`/platform/organizations?org=${fixture.organizationId}`);
       const panel = page.getByRole("article", { name: fixture.organizationName });
       await expect(panel.getByRole("region", { name: "Isometric keys" }).getByText("Missing", { exact: true })).toBeVisible();
       await expect(panel.getByText(`Switches you to ${fixture.organizationName}, then opens Settings, Members.`)).toBeVisible();
@@ -36,7 +36,7 @@ test.describe("Platform Organizations", () => {
       await expect(page).toHaveURL(DASHBOARD_URL);
       await expect(page.getByText(`Now working in ${fixture.organizationName}.`)).toBeVisible();
 
-      await page.goto(`/admin/organizations?org=${fixture.organizationId}`);
+      await page.goto(`/platform/organizations?org=${fixture.organizationId}`);
       const current = page.getByRole("article", { name: fixture.organizationName });
       await expect(current.getByText(`You're working in ${fixture.organizationName}.`)).toBeVisible();
       await expect(current.getByRole("button", { name: /^Switch to/ })).toHaveCount(0);
@@ -53,7 +53,7 @@ test.describe("Platform Organizations", () => {
     const fixture = await seedDedicatedOrg({ role: "member", withRegistryKeys: false });
     const { db, pool } = createDbConnection();
     try {
-      await page.goto("/admin/organizations");
+      await page.goto("/platform/organizations");
       await page.getByRole("navigation", { name: "Organizations" }).getByRole("button", { name: "New organization" }).click();
       const form = page.getByRole("form", { name: "New organization" });
       await expect(form.getByRole("textbox", { name: /Slug/ })).toHaveCount(0);

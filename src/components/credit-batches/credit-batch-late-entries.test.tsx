@@ -27,7 +27,7 @@ describe("CreditBatchLateEntries", () => {
     const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />);
     expect(container.querySelector("h3")?.textContent).toContain("Recorded after RM-26-009 was sent");
     expect(screen.getAllByRole("link", { name: "RM-26-009" })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "RM-26-009" })[0].getAttribute("href")).toBe("/certification/removals?facility=f1&removal=rm-9");
+    expect(screen.getAllByRole("link", { name: "RM-26-009" })[0].getAttribute("href")).toBe("/removals?facility=f1&removal=rm-9");
     expect(screen.getAllByRole("link", { name: "CB-26-010" })[0].getAttribute("href")).toBe("/credit-batches/cb-10?facility=f1");
     expect(container.textContent).toContain("Goes into RM-26-010 of credit batch CB-26-010.");
   });
@@ -38,7 +38,7 @@ describe("CreditBatchLateEntries", () => {
     const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />);
     expect(container.textContent).toContain("Goes into the revision of RM-26-009.");
     expect(screen.getAllByRole("link", { name: "RM-26-009" }).map(link => link.getAttribute("href")))
-      .toEqual(["/certification/removals?facility=f1&removal=rm-9", "/certification/removals?facility=f1&removal=rm-9"]);
+      .toEqual(["/removals?facility=f1&removal=rm-9", "/removals?facility=f1&removal=rm-9"]);
   });
 
   it("joins several earlier Removals", () => {

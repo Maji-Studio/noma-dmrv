@@ -310,7 +310,7 @@ export function FormulationList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="production"
+        area="setup"
         title="Formulations"
         actions={
           <Button variant="primary" onClick={openCreate}>

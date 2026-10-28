@@ -1,5 +1,5 @@
 /**
- * One kind's list state on the Vehicles and crew page: its records, the side
+ * One kind's list state on the Vehicles and Crew pages: its records, the side
  * sheet (view, edit, create) and the delete confirmation. The page calls it
  * once per kind and mounts `overlays`.
  */

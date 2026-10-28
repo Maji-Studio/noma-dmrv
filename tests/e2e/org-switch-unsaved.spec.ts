@@ -35,7 +35,7 @@ test("an organization switch asks about unsaved changes first", async ({ adminPa
     void dialog.dismiss();
   });
 
-  await page.goto("/settings/defaults");
+  await page.goto("/settings/general");
   const country = page.locator("main input:not([type=hidden]):not([type=checkbox]):not([type=radio])").first();
   await expect(country).toBeVisible({ timeout: 30_000 });
   await country.click();

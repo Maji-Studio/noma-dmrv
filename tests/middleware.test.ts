@@ -164,7 +164,7 @@ describe("OAuth login continuation", () => {
 
 describe("Home after signing in", () => {
   it.each([
-    { role: "admin", home: "/admin/organizations" },
+    { role: "admin", home: "/platform/organizations" },
     { role: "user", home: "/dashboard" },
     { role: undefined, home: "/dashboard" },
   ])("sends a $role session from / and the auth pages to $home", async ({ role, home }) => {

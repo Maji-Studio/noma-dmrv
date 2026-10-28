@@ -569,7 +569,7 @@ describe("EntitySelect menu interactions", () => {
     state.options = [];
     const close = vi.fn();
     const fields = <>
-      <EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-locations", linkLabel: "Create storage bin" }} />
+      <EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-bins", linkLabel: "Create storage bin" }} />
       <input aria-label="Next field" />
     </>;
     render(inModal ? <Modal isOpen onClose={close} ariaLabel="Entry form">{fields}</Modal> : fields);
@@ -597,7 +597,7 @@ describe("EntitySelect menu interactions", () => {
 
   it.each([false, true])("returns focus from the recovery link on Tab (shift: %s)", async (shiftKey) => {
     state.options = [];
-    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-locations" }} />);
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-bins" }} />);
     trigger().focus(); open();
     fireEvent.keyDown(trigger(), { key: "Tab" });
     const link = screen.getByRole("link");
@@ -980,7 +980,7 @@ it.each([false, true])("preserves recovery-link Enter activation (None row: %s)"
     onChange={change}
     onBlur={blur}
     noneOption={withNone ? { label: "None" } : undefined}
-    emptyHint={{ message: "Create a bin first", href: "/storage-locations" }}
+    emptyHint={{ message: "Create a bin first", href: "/storage-bins" }}
   />);
   act(() => trigger().focus());
   key("ArrowDown");

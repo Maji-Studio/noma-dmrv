@@ -44,7 +44,7 @@ test.describe("Certification — GHG statement empty-period guard", () => {
     });
 
     try {
-      await page.goto(`/certification/ghg-statements?facility=${facilityId}`);
+      await page.goto(`/ghg-statements?facility=${facilityId}`);
 
       await page
         .getByRole("button", { name: "New GHG Statement", exact: true })
