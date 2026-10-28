@@ -66,7 +66,7 @@ A backend-only change shows a test that fails on `origin/staging` and passes on 
 
 Give the valid findings to an implementer routed like step 2 (Codex for non-UI). Prompt:
 
-> Fix these review findings in the worktree `<path>` (branch `<branch>`), each with the smallest change that removes the defect: `<id, path:lines, problem, smallest safe fix>` per finding. Leave everything else as it is. Commit one `fix:` commit per finding or one per round, body naming the finding ids. Run `pnpm verify:static` and `<tests>`. Return under ~200 words: finding id → commit sha, and the gate results.
+> Fix these review findings in the worktree `<path>` (branch `<branch>`), each with the smallest change that removes the defect: `<id, path:lines, problem, smallest safe fix>` per finding. Leave everything else as it is. Follow `.claude/CLAUDE.md`. Run `pnpm verify:static` and `<tests>`; once they are green, commit one `fix:` commit per finding or one per round, body naming the finding ids. Return under ~200 words: finding id → commit sha, and the gate results.
 
 ## Opening the PR
 

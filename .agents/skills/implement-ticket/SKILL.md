@@ -39,7 +39,7 @@ A plan target uses `--spec <plan path>` instead of `--issue`. Round 1 runs with 
 For each round:
 
 1. The conductor verifies every P0-P2 finding against the code. A finding is **valid** when the code at the reviewed head shows the defect. Check fixes that add compatibility for old rows against the issue and the pre-production policy in `.claude/CLAUDE.md` first.
-2. An implementer fixes the valid ones (playbook: Fixer); the conductor reviews the fix diff and commits.
+2. An implementer fixes the valid ones and commits once the gates are green (playbook: Fixer); the conductor reviews the fix diff.
 3. Declined findings get a one-line reason in `report.json`. P3s are fixed only when trivial; otherwise decline them with a reason.
 4. Rerun the gates from step 3.
 
@@ -59,7 +59,7 @@ Push from the main checkout, open the PR against `staging` with the **pr** skill
 | 1 | `abc1234` | 0 | 2 | 5 | 6 | 6 | 7 |
 | 2 | `def5678` | 0 | 0 | 1 | 3 | 0 | 4 |
 
-Last reviewed head: `def5678…` (full SHA). Profile: full (gpt-6-astra medium + Opus high).
+Last reviewed head: `def5678…` (full SHA). Models: <the last round's `Models:` header line>.
 Declined: <one line per declined P0-P2: id, title, reason>.
 ```
 
@@ -73,13 +73,13 @@ Done when: the PR is open and ready (not draft), the section's last reviewed hea
 node .agents/skills/pr-review-suite/scripts/run-pr-review-suite.mjs --pr <n> --profile light --publish
 ```
 
-Verify each finding against the code. Fix valid P0 and P1 only. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data-access code gets a **codex-review** (gpt-6.1-sol) of that delta before landing; no second suite pass.
+Verify each finding against the code. Fix valid P0 and P1 only. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** (gpt-6.1-sol) of that delta before landing; no second suite pass.
 
 Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, and CI is green on the head.
 
 ## 7. Merge
 
-Publish the merge card per the **pr** skill's Done state. Once Kenji's saved `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
+Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc says `choice: merge` and its `sha` equals the PR head, land with `scripts/pr-land.sh <pr> --teardown <worktree-name>`.
 
 Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
 

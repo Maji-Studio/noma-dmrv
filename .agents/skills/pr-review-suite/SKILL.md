@@ -13,21 +13,11 @@ creates or updates one GitHub comment.
 
 ## Submit and review
 
-The **implement-ticket** skill owns when the suite runs: full rounds locally
-before the PR opens, then one `--profile light` pass on the ready PR. When the
-request is only to submit the current changes and review them:
-
-1. Inspect `git status -sb` and the complete diff. If unrelated changes are
-   present, confirm scope and stage explicit paths only.
-2. Stay on the current feature branch, or create a repository-conformant feature
-   branch when still on `staging` or `main`.
-3. Run the relevant checks, commit the intended scope, push with tracking, and
-   open a **ready** PR to the requested base (`staging` by default).
-4. Capture the created PR number and run the suite with
-   `--pr <number> --publish`.
-5. Return the PR, validation, reviewed head, comment, and artifact paths.
-
-This workflow does not fix model findings or merge the PR.
+Submitting changes for review follows the **implement-ticket** skill, steps 3
+to 6: gates, full suite rounds locally with `--local`, a **ready** PR, then one
+`--profile light --publish` pass on it. Inspect `git status -sb` and the
+complete diff first; when unrelated changes are present, confirm scope and stage
+explicit paths only.
 
 ## Review an existing PR
 
@@ -122,5 +112,7 @@ until a human or a separate remediation pass checks them against the code.
 
 ## PR submission integration
 
-After a PR is opened, invoke this skill with that PR number. On later pushes,
-invoke it again; the same comment is updated for the new head.
+After a PR is opened, run the light pass once with that PR number. Fix commits
+after it get a **codex-review** delta review when the implement-ticket flow asks
+for one, not another suite pass. A rerun on the same PR updates the same comment
+for the new head.
