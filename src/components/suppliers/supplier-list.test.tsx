@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
 import type { ReactNode } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within as inDialog } from "@testing-library/react";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { SupplierList } from "./supplier-list";
 
-function inUseError(message: string): ActionError {
-  return new ActionError({ error: message, ...inUseDeleteRefusal(message, []) });
+function inUseError(message: string, meta?: Record<string, unknown>): ActionError {
+  return new ActionError({ error: message, ...inUseDeleteRefusal(message, [], meta ? { meta } : {}) });
 }
 
 const state = vi.hoisted(() => ({
@@ -180,6 +181,29 @@ describe("SupplierList archive view", () => {
     await waitFor(() => expect(screen.queryByText("SUP-0001 is in use")).toBeNull());
   });
 
+  it("links every feedstock intake the refusal names, and stays text-only without a list", async () => {
+    const message = "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
+    state.remove.mockRejectedValueOnce(inUseError(message, { feedstockCodes: ["FS-001", "FS-002"], feedstocks: [{ id: "fs-1", code: "FS-001", facilityId: "fac-1" }, { id: "fs-2", code: "FS-002", facilityId: "fac-2" }] }));
+    const view = render(<SupplierList />);
+    fireEvent.click(within("Actions for SUP-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0001 is in use" }));
+    const links = dialog.getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("aria-label"))).toEqual(["Open feedstock FS-001", "Open feedstock FS-002"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([feedstockDeepLinkHref("fs-1", "fac-1"), feedstockDeepLinkHref("fs-2", "fac-2")]);
+    expect(dialog.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
+    expect(dialog.getByRole("button", { name: "Archive instead" })).toBeTruthy();
+    view.unmount();
+
+    state.remove.mockRejectedValueOnce(inUseError(message));
+    render(<SupplierList />);
+    fireEvent.click(within("Actions for SUP-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const plain = inDialog(await screen.findByRole("dialog", { name: "SUP-0001 is in use" }));
+    expect(plain.queryAllByRole("link")).toHaveLength(0);
+    expect(plain.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
+  });
+
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
     state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     state.archive.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0001", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);
@@ -255,6 +279,19 @@ describe("SupplierList archive view", () => {
 
     await act(async () => finishReload({ ...stale, version: 7 }));
     expect(screen.queryByLabelText("Sheet")).toBeNull();
+  });
+
+  it("links the blocking intakes of an archived supplier in a Close-only dialog", async () => {
+    state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it.", { feedstocks: [{ id: "fs-1", code: "FS-001", facilityId: "f2" }] }));
+    render(<SupplierList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(within("Actions for SUP-0002", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0002 is in use" }));
+    expect(dialog.getByRole("link", { name: "Open feedstock FS-001" }).getAttribute("href")).toBe(feedstockDeepLinkHref("fs-1", "f2"));
+    expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(dialog.queryByText(/Archive it instead/)).toBeNull();
+    expect(dialog.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
   });
 
   it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {

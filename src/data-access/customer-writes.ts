@@ -129,10 +129,10 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     .orderBy(asc(orders.id)).for("update");
   const orderIds = tx.select({ id: orders.id }).from(orders)
     .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.customerId, customerId)));
-  const uses = await tx.select({ code: deliveries.code }).from(deliveries)
+  const uses = await tx.select({ id: deliveries.id, code: deliveries.code, facilityId: deliveries.facilityId }).from(deliveries)
     .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.orderId, orderIds)))
     .orderBy(asc(deliveries.code)).limit(BLOCKER_LIMIT);
-  if (uses.length) throw customerHasDeliveries(uses.map(row => row.code));
+  if (uses.length) throw customerHasDeliveries(uses);
   const children = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, customerId)))
     .orderBy(asc(customerLocations.id)).for("update");
   for (const child of children) {

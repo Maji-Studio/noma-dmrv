@@ -391,7 +391,7 @@ describe("customer destination refusals", () => {
     const delivery = await insertReadDelivery(a, order.id, order.quantityKg);
     const problem = await refusal("customer", "delete", t, "conflict", "/locationId", {},
       "Customer location was not deleted because orders use it. Archive it instead.");
-    expect(problem.errors[0].meta).toEqual({ orderCodes: [order.code], reason: "in_use" });
+    expect(problem.errors[0].meta).toEqual({ orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
     const [project] = await db.insert(certifierProjects).values({ organizationId: a.ctx.organizationId, facilityId: a.facility.id,
       provider: "isometric", externalProjectId: `prj-${randomUUID()}`, externalFacilityId: `fcl-${randomUUID()}` }).returning();
     const [mapping] = await db.insert(certifierStorageLocations).values({ organizationId: a.ctx.organizationId, customerLocationId: t.locationId,
@@ -407,7 +407,7 @@ describe("customer destination refusals", () => {
     expect(listing.result.structuredContent.data).toContainEqual(expect.objectContaining({ id: t.locationId }));
     const archivedProblem = await refusal("customer", "delete", { ...t, version: 2 }, "conflict", "/locationId", {},
       "Customer location was not deleted because orders use it.");
-    expect(archivedProblem.errors[0].meta).toEqual({ orderCodes: [order.code], reason: "in_use" });
+    expect(archivedProblem.errors[0].meta).toEqual({ orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
   }, TIMEOUT_MS);
 
   it("matches a storage-site-only delete refusal", async () => {

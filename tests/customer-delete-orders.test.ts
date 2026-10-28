@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BLOCKER_LIMIT } from "@/config/party-input";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
@@ -15,7 +16,7 @@ import { lockBiocharTransportRouteTopology } from "@/data-access/transport-legs"
 import { createDeliveryInTransaction } from "@/data-access/delivery-output-writes";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { __setStorageProviderForTests } from "@/lib/storage";
-import { cleanupOrderFixture, createOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
+import { cleanupOrderFixture, createOrderFixture, createOrderDestination, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
 import { createDeliveryFixture } from "./helpers/delivery-create-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { insertManagedDocument, RetirementStorageProvider } from "./helpers/document-retirement";
@@ -82,11 +83,38 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
 
   it("refuses an archived delivery with its code", async () => {
     const f = await fixture(); const order = (await record(f)).data;
-    await db.insert(deliveries).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+    const [delivery] = await db.insert(deliveries).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
       orderId: order.id, storageLocationId: f.bin.id, code: "DEL-ARCHIVED", deliveryDate: new Date("2026-09-14"),
-      deliveredWetMassKg: 10, massDryKg: 10, archivedAt: new Date() });
+      deliveredWetMassKg: 10, massDryKg: 10, archivedAt: new Date() }).returning();
     await expect(runOperation(deleteCustomer, f.ctx, input(f))).rejects.toMatchObject({ code: "conflict",
-      issues: [{ path: ["customerId"], meta: { deliveryCodes: ["DEL-ARCHIVED"] } }] });
+      issues: [{ path: ["customerId"], meta: { deliveryCodes: ["DEL-ARCHIVED"], deliveries: [{ id: delivery.id, code: delivery.code, facilityId: delivery.facilityId }], reason: "in_use" } }] });
+  });
+
+  it("caps delivery references in code order across facilities, excluding other customers and orgs", async () => {
+    const f = await fixture();
+    const foreign = await fixture();
+    const firstOrder = (await record(f)).data;
+    const otherOrder = (await runOperation(recordOrder, f.ctx, orderInput(f, { facilityId: f.otherFacility.id }))).data;
+    const insertDelivery = async (owner: OrderFixture, orderId: string, facilityId: string, code: string) => {
+      const [row] = await db.insert(deliveries).values({ organizationId: owner.ctx.organizationId, facilityId,
+        orderId, storageLocationId: owner.bin.id, code, deliveryDate: new Date("2026-09-14"),
+        deliveredWetMassKg: 10, massDryKg: 10, archivedAt: new Date() }).returning();
+      return { id: row.id, code: row.code, facilityId: row.facilityId };
+    };
+    const references: { id: string; code: string; facilityId: string }[] = [];
+    for (const index of [6, 3, 1, 5, 2, 4]) {
+      const order = index % 2 ? firstOrder : otherOrder;
+      references.push(await insertDelivery(f, order.id, order.facilityId, `E2E-DL-${index}-${f.tag}`));
+    }
+    const unrelated = (await runOperation(recordOrder, f.ctx, orderInput(f, {
+      customerId: f.otherCustomer.id, customerLocationId: (await createOrderDestination(f, f.otherCustomer.id)).id,
+    }))).data;
+    await insertDelivery(f, unrelated.id, f.facility.id, `E2E-DL-0-${f.tag}`);
+    const foreignOrder = (await record(foreign)).data;
+    await insertDelivery(foreign, foreignOrder.id, foreign.facility.id, `E2E-DL-0-${foreign.tag}`);
+    const named = references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_LIMIT);
+    await expect(runOperation(deleteCustomer, f.ctx, input(f))).rejects.toMatchObject({ code: "conflict",
+      issues: [{ path: ["customerId"], meta: { reason: "in_use", deliveryCodes: named.map(row => row.code), deliveries: named } }] });
   });
 
   it("returns a fresh cascade on mismatch without consuming the key, and replays after deletion", async () => {
