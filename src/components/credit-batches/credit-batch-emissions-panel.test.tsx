@@ -29,14 +29,14 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.getByText("File missing")).toBeTruthy();
     expect(screen.queryByText("Grid")).toBeNull();
     expect(screen.queryByText("Zero")).toBeNull();
-    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
+    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/credit-batches/cb-1?facility=f-1&tab=emissions");
   });
 
   it("states that all lines are recorded and keeps the link", () => {
     query.data = [line("b", "Grid", "filled")];
     render_();
     expect(screen.getByText("All components recorded")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/emissions/cb-1?facility=f-1");
+    expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/credit-batches/cb-1?facility=f-1&tab=emissions");
   });
 
   it("explains an unpinned template and links to the Set template setup in Settings, without Retry", () => {

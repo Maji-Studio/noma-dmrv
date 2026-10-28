@@ -134,7 +134,7 @@ test.describe("Returned Removal screens", () => {
         await shoot(page, "batch-open-items-returned", size, page.getByRole("region", { name: "Open to-dos" }));
 
         // The re-entered Diesel use entry waits for the Removal to be resubmitted.
-        await page.goto(`/emissions/${changed.creditBatch.id}?facility=${facilityId}`);
+        await page.goto(`/credit-batches/${changed.creditBatch.id}?facility=${facilityId}&tab=emissions`);
         const dieselLine = page.getByRole("button", { name: /Diesel use/ }).locator("visible=true").first();
         await expect(dieselLine).toBeVisible({ timeout: 30_000 });
         await dieselLine.click({ timeout: 10_000 });

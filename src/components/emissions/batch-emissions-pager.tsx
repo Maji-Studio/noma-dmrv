@@ -1,7 +1,8 @@
 /**
- * Breadcrumb back to the (still filtered) Emissions overview, and the
- * previous / next credit batch in the overview's filter and sort, with the
- * `[` and `]` keys (never while typing or while a dialog is open).
+ * On a credit batch's Emissions tab opened from the Emissions list: a link back
+ * to the (still filtered) list, and the previous / next credit batch in the
+ * list's filter and sort, with the `[` and `]` keys (never while typing or
+ * while a dialog is open). The tab shows it only for that origin.
  */
 "use client";
 
@@ -9,13 +10,15 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import type { FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
+import { useEmissionsOverview, type FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDate } from "@/lib/date-utils";
 import {
   emissionsBatchHref,
   emissionsOverviewHref,
   filterAndSortBatches,
   sortBatches,
-  type EmissionsOverviewQuery,
+  useEmissionsOverviewQuery,
 } from "./emissions-overview-query";
 import { lineQueryParams } from "./batch-emissions-query";
 import type { LineFilter, LineSort } from "./emission-line-display";
@@ -29,23 +32,23 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-interface BatchEmissionsTopBarProps {
-  code: string;
+interface BatchEmissionsPagerProps {
   creditBatchId: string;
   facilityId: string;
-  batches: readonly FacilityEmissionsOverviewBatch[];
-  query: EmissionsOverviewQuery;
-  /** The facility's calendar day, YYYY-MM-DD: the overview's period presets resolve on it. */
-  today: string;
   lineFilter: LineFilter | null;
   lineSort: LineSort;
 }
 
-export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches, query, today, lineFilter, lineSort }: BatchEmissionsTopBarProps) {
+export function BatchEmissionsPager({ creditBatchId, facilityId, lineFilter, lineSort }: BatchEmissionsPagerProps) {
   const router = useRouter();
+  const { timeZone } = useFacilityClock(facilityId);
+  const today = formatFacilityDate(new Date(), timeZone);
+  const overview = useEmissionsOverview(facilityId);
+  const { query } = useEmissionsOverviewQuery();
+  const batches = overview.data?.batches ?? [];
   const filtered = filterAndSortBatches(batches, query, today);
   const inFilter = filtered.some((batch) => batch.creditBatchId === creditBatchId);
-  // A batch outside the overview filter (a deep link) walks every batch instead.
+  // A batch outside the list's filter (an edited link) walks every batch instead.
   const list = inFilter ? filtered : sortBatches(batches, query.sort, query.dir);
   const index = list.findIndex((batch) => batch.creditBatchId === creditBatchId);
   const prev = index > 0 ? list[index - 1] : null;
@@ -54,7 +57,7 @@ export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches,
   const hrefFor = (batch: FacilityEmissionsOverviewBatch) => {
     const href = emissionsBatchHref(batch.creditBatchId, { ...query, facility: facilityId });
     const extra = lineParams.toString();
-    return extra ? `${href}${href.includes("?") ? "&" : "?"}${extra}` : href;
+    return extra ? `${href}&${extra}` : href;
   };
   const prevHref = prev ? hrefFor(prev) : null;
   const nextHref = next ? hrefFor(next) : null;
@@ -73,20 +76,12 @@ export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches,
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-16 gap-y-4">
-      <nav aria-label="Breadcrumb" className="body-small text-[var(--color-text-secondary)]">
-        <ol className="flex items-center gap-6">
-          <li>
-            <Link
-              href={emissionsOverviewHref({ ...query, facility: facilityId })}
-              className="inline-flex min-h-44 items-center underline underline-offset-4 hover:text-[var(--color-text-primary)]"
-            >
-              Emissions
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li aria-current="page" className="font-medium text-[var(--color-text-primary)]">{code}</li>
-        </ol>
-      </nav>
+      <Link
+        href={emissionsOverviewHref({ ...query, facility: facilityId })}
+        className="inline-flex min-h-44 items-center body-small underline underline-offset-4 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+      >
+        Back to Emissions
+      </Link>
       {index >= 0 && (
         <nav aria-label="Credit batches" className="flex items-center gap-4">
           {prev && prevHref ? (
@@ -99,7 +94,7 @@ export function BatchEmissionsTopBar({ code, creditBatchId, facilityId, batches,
           )}
           <span
             className="whitespace-nowrap px-4 body-caption tabular-nums text-[var(--color-text-secondary)]"
-            title={inFilter ? "Position in the filtered overview" : "Not in the overview filter, so this walks every credit batch"}
+            title={inFilter ? "Position in the filtered Emissions list" : "Not in the Emissions list filter, so this walks every credit batch"}
           >
             {`${index + 1} of ${list.length}${inFilter ? "" : " (all)"}`}
           </span>

@@ -154,7 +154,7 @@ function TabBody() {
   switch (tab) {
     case "production": return <CreditBatchProductionTab />;
     case "samples": return <CreditBatchSamplesTab />;
-    case "emissions": return <CreditBatchEmissionsTab creditBatchId={batch.id} facilityId={batch.facilityId} />;
+    case "emissions": return <CreditBatchEmissionsTab />;
     case "removals": return <CreditBatchRemovalsTab />;
     case "activities": return <CreditBatchActivitiesTab />;
     default: return <CreditBatchOverview />;

@@ -1,8 +1,8 @@
 /**
  * CreditBatchEmissionsPanel: the batch sheet's "Emissions" section. It lists
  * the template components that still need an operator (Not recorded, File missing,
- * Check entry, Not set up) and links to the Emissions page for the batch.
- * Self-fetching and read-only; recording happens on the Emissions page.
+ * Check entry, Not set up) and links to the batch page's Emissions tab.
+ * Self-fetching and read-only; recording happens on the batch page's Emissions tab.
  */
 "use client";
 
@@ -14,8 +14,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 // By file, not the emissions barrel: the batch sheet needs only these.
 import { EmissionLineBadge } from "@/components/emissions/emission-line-badge";
 import { isOpen } from "@/components/emissions/emission-line-display";
-import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { TemplateSetupNotice } from "@/components/emissions/template-setup-notice";
+import { recordHref } from "@/lib/record-links";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { isEmissionLinesBlocked } from "@/lib/certification/emission-lines-blocked-error";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ const OPEN_EMISSIONS_LABEL = "Open emissions";
 
 function OpenEmissionsLink({ creditBatchId, facilityId }: { creditBatchId: string; facilityId: string }) {
   return (
-    <Link href={emissionsBatchHref(creditBatchId, { facility: facilityId })} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
+    <Link href={recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" })} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
       {OPEN_EMISSIONS_LABEL}
       <ArrowRightIcon size={14} aria-hidden />
     </Link>

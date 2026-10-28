@@ -21,7 +21,6 @@ import { Button } from "@/components/ui";
 import { FormField } from "@/components/forms/form-field";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { InfoHint } from "@/components/ui/tooltip";
-import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
 import { MAX_NOTE_LENGTH } from "@/schemas/emission-entry-form";
 import { formatDateRange, formatFacilityDateTime } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -249,9 +248,7 @@ function BatchCard({
               >
                 <span className="min-w-0">{row.name}</span>
                 <Link
-                  href={emissionsBatchHref(batch.creditBatchId, {
-                    facility: facilityId,
-                  })}
+                  href={recordHref("creditBatch", batch.creditBatchId, { facilityId, tab: "emissions" })}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Add entry for ${row.name}`}
