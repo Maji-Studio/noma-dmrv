@@ -1,22 +1,24 @@
 # implement-ticket playbook
 
-Concrete IDs, commands, and prompt skeletons for the conductor. Pull the piece you need when you spawn each subagent; don't load the whole thing into the main thread unless you need it.
+IDs, commands and prompt skeletons for the conductor. Pull the section you need when its step comes up.
 
 ## Contents
-- [Project board (ProjectV2 "noma dMRV" #9)](#project-board)
-- [UI verification](#ui-verification)
-- [Codex review](#codex-review)
-- [Subagent prompt skeletons](#subagent-prompt-skeletons)
+- [Board](#board)
+- [Implementer](#implementer)
+- [Evidence](#evidence)
+- [Local review rounds](#local-review-rounds)
+- [Fixer](#fixer)
+- [Opening the PR](#opening-the-pr)
 
-## Project board
+## Board
 
-Repo `Maji-Studio/noma-dmrv`. Priority and status live on the org ProjectV2 board **"noma dMRV" (project #9, owner Maji-Studio)** — NOT on labels.
+Repo `Maji-Studio/noma-dmrv`. Priority and status live on the org ProjectV2 board **"noma dMRV" (project #9, owner Maji-Studio)**, not on labels. Board edits need the `project` token scope.
 
 - projectId `PVT_kwDOCWqE184BTV0X`
 - Status fieldId `PVTSSF_lADOCWqE184BTV0XzhAnD1E`
   - In progress `47fc9ee4` · **In review (Maji) `520dec10`** · In review (DEC) `df73e18b` · Reviewed `98420ff6` · Done `98236657` · Ready `61e4505c` · Backlog `f75ad846`
 
-Find an issue's board item id (it is usually already on the board):
+Find an issue's board item id:
 
 ```bash
 gh api graphql -f query='
@@ -27,61 +29,51 @@ query($owner:String!,$repo:String!,$num:Int!){
 }' -F owner=Maji-Studio -F repo=noma-dmrv -F num=<ISSUE_NUMBER>
 ```
 
-Pick the node whose `project.number == 9`; that `id` is the itemId. If the issue is not on the board yet, add it: `gh project item-add 9 --owner Maji-Studio --url <ISSUE_URL> --format json` (returns the item `id`).
-
-Set the status:
+Pick the node whose `project.number == 9`. If the issue is not on the board, add it: `gh project item-add 9 --owner Maji-Studio --url <ISSUE_URL> --format json`.
 
 ```bash
 gh project item-edit --id <ITEM_ID> \
   --project-id PVT_kwDOCWqE184BTV0X \
   --field-id PVTSSF_lADOCWqE184BTV0XzhAnD1E \
-  --single-select-option-id <OPTION_ID>   # 47fc9ee4 = In progress, 520dec10 = In review (Maji)
+  --single-select-option-id <OPTION_ID>
 ```
 
-A plan-file target has no issue → skip all board ops and the `Closes #` reference.
+A plan-file target has no issue: skip board moves and `Closes #`.
 
-## UI verification
+## Implementer
 
-Give this to the implementer subagent. **Pick the path by session mode first** — in auto/unattended runs the permission classifier denies `codex exec -s danger-full-access` and every credential-materialization workaround (verified 2026-07-09, PR #409); do not burn attempts on them. In interactive sessions the codex path works because the user can approve the permission prompt.
+Non-UI: run the **codex-implementation** skill yourself with the worktree as `-C`; its prompt carries the brief's goal and acceptance criteria. UI: spawn a Claude subagent (Sonnet for a picked design, Opus for variants) with this prompt:
 
-**Step 0 — dev server on :3100 (all paths).** Check `curl -sf http://localhost:3100 >/dev/null`. If it's down, start it: `pnpm dev` runs `dev:docker` (needs Docker Postgres up) — launch it in the background and wait for :3100 to answer. `.env.local` sets `DISABLE_RATE_LIMIT=true`, so repeated logins are fine. The seeded admin can access every facility, so it can reach any changed page.
+> Implement the change in `<brief path>` in the worktree `<path>` (branch `<branch>`). Load the `noma-design` skill and follow `.claude/CLAUDE.md`. Commit on this branch with conventional commits whose body says why. Kill only the PID on your own port (`lsof -nP -iTCP:<port> -sTCP:LISTEN -t`); set work aside with a WIP commit, never `git stash`. Return under ~200 words: files changed, decisions and deviations, what you ran and its result. No diffs or file contents.
 
-**Interactive default — delegate to gpt-6.1-sol via the codex-computer-use skill** (`.claude/skills/codex-computer-use/SKILL.md`). Follow that skill's mechanics: binary lookup, artifact dir, self-contained prompt (repo path, `http://localhost:3100`, sign-in via `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env.local` — never printed, the exact flow to drive, acceptance checks, screenshots into the artifact dir), `codex exec ... -s danger-full-access` (expect a permission prompt the user approves). Then **read the report and screenshots and judge them yourself** — codex output is evidence, not authority. Codex runs can exceed Bash's 10-min timeout: pass a longer timeout or background+poll.
+The conductor reads the diff before step 3.
 
-**Auto/unattended default — Playwright e2e spec** (sanctioned: credentials never surface). Write or extend a spec covering the changed flow using the fixtures in `tests/e2e/fixtures/auth-fixtures.ts` (`adminPage` does HTTP-API auth internally; see `docs/testing.md`). Run just that spec (`pnpm test:e2e -- --grep "<name>"` or the spec path), read the real output — never trust a piped exit code — and commit it as a `test:` commit so it doubles as regression coverage.
+## Evidence
 
-**Fallback — claude-in-chrome recipe** (codex absent/errors, spec impractical, or the flow needs the user's own browser session):
+UI changes get Before | After at the same viewport and state (1440 and 390), before on `origin/staging`, after on the branch head. Interactive session: the **codex-computer-use** skill drives the worktree's dev server. Auto mode: a Playwright spec takes the shots (`adminPage` fixture, see `docs/testing.md`). Hosting and the PR body block: `scripts/pr-evidence/README.md`. Look at every image before uploading; uploads are public.
 
-1. **Credentials from `.env.local`** (interactive sessions only — never hardcode, never log the value). In auto mode, credential extraction is also classifier-blocked: ask the user to sign in at :3100 themselves, then drive their session.
-   ```bash
-   EMAIL=$(grep -E '^ADMIN_EMAIL=' .env.local | cut -d= -f2- | tr -d '"')
-   # read ADMIN_PASSWORD the same way; keep it out of any echo/log
-   ```
-2. **Drive Chrome via MCP.** Load the browser tools in one ToolSearch call (`tabs_context_mcp,navigate,computer,read_page,form_input,tabs_create_mcp`), open a new tab, navigate to `http://localhost:3100`, sign in (or continue the user's signed-in session), then navigate to the page the change touches, exercise the changed flow, and capture a screenshot as evidence. After `navigate`, `find` refs go stale — re-click by coordinates and batch click+wait+screenshot in one `browser_batch`.
+A backend-only change shows a test that fails on `origin/staging` and passes on the head instead.
 
-Any path: report what was exercised and the result. Backend-only change with no UI surface → run the matching `pnpm test:e2e` spec or unit path instead and say which.
+## Local review rounds
 
-## Codex review
+- One suite at a time across all sessions: two in parallel hit Codex rate limits (429), and a run with a failed reviewer writes no complete report. When only some reviewers failed, rerun the same round command (every `--prior` included) with `--models <m> --practices <list>` added, into a new artifact dir and merge the two `report.json` files by hand before setting dispositions.
+- Run it from the worktree root. The suite refuses a dirty worktree, so commit first.
+- `report.json` sits in the `--artifact-dir`. Set each finding's `disposition` to `fixed` or `declined`, and `reason` (required for `declined`), then pass the file as `--prior` to the next round. The P0-P3 counts for the PR table come from its `counts`.
+- A finding that re-raises a declined item without new evidence is declined again with the same reason.
+- `--profile full` is the default and the local setting. `--profile light` is for the PR pass only.
 
-Follow the **codex-review skill** (`.claude/skills/codex-review/SKILL.md`) for mechanics — binary lookup (`CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"`), artifact dir, and the Mode A/B split. PR reviews run on gpt-6-astra, so use `-m gpt-6-astra -c 'model_reasoning_effort="medium"'` in either mode instead of the skill's gpt-6.1-sol default. For this phase, prefer Mode B (custom prompt naming the target `git diff staging...HEAD` plus the brief's requirements); Mode A is `"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="medium"' -C "$PWD" review --base staging > "$REPORT"`.
+## Fixer
 
-Run it in Phase 4, before the resolver changes anything. Codex runs can exceed Bash's 10-min timeout: pass a longer timeout or background+poll. Post the substantive findings: `gh pr comment <PR> --body-file "$REPORT"` under a "Codex review (gpt-6-astra)" heading, noting they are unverified gpt-6-astra output (the Phase 5 resolver verifies every comment against the code). Best-effort: if codex is missing or errors, skip and note it in the Phase 6 report.
+Give the valid findings to an implementer routed like step 2 (Codex for non-UI). Prompt:
 
-## Subagent prompt skeletons
+> Fix these review findings in the worktree `<path>` (branch `<branch>`), each with the smallest change that removes the defect: `<id, path:lines, problem, smallest safe fix>` per finding. Leave everything else as it is. Follow `.claude/CLAUDE.md`. Run `pnpm verify:static` and `<tests>`; once they are green, commit one `fix:` commit per finding or one per round, body naming the finding ids. Return under ~200 words: finding id → commit sha, and the gate results.
 
-Each skeleton ends by demanding a summary under ~200 words. Fill the `<…>` slots.
+## Opening the PR
 
-**Implementer (Phase 2)** — synchronous:
-> Implement the change described in `<brief path>`. Repo root `<path>`; follow `.claude/CLAUDE.md` (layered flow schema→data-access+guards→fn→hooks→components, `pnpm` only, reuse existing hooks/utilities). Per the shared model policy (`~/.claude/model-selection.md`), delegate non-UI patches to Codex via `.claude/skills/codex-implementation/SKILL.md` and then inspect the diff yourself; user-facing UI/copy you write yourself. Keep `pnpm lint` and `pnpm typecheck` green — read real output, don't trust piped exit codes. Commit on the current feature branch with conventional commits (body says why). Then verify per the UI verification section of `references/playbook.md` — pick the path by session mode (interactive: codex-computer-use skill; auto/unattended: Playwright e2e spec, never codex full-access) — and judge the evidence yourself. Return under ~200 words: files changed, key decisions/deviations, lint+typecheck status, what was exercised and its result. Do NOT paste diffs or file contents.
+Push from the main checkout (`git -C "<main checkout>" push -u origin <branch>`); a push from the worktree cwd gets blocked in auto mode. Then:
 
-**Codex reviewer (Phase 4)** — background, concurrent:
-> Run a gpt-6-astra review of PR #`<n>`'s branch against `staging` per `.claude/skills/codex-review/SKILL.md` and the Codex review section of `references/playbook.md` (Mode B preferred; include the brief's requirements in the prompt). Post the substantive findings as ONE `gh pr comment` under a "Codex review (gpt-6-astra)" heading, noting they are unverified. If codex is missing or errors, post nothing and return the error. Return under ~200 words: findings posted (or the skip reason).
+```bash
+gh pr create --base staging --head <branch> --title "<type>: <lowercase imperative>" --body-file <body.md>
+```
 
-**Publisher (Phase 3)** — synchronous:
-> Push the current branch with `-u` and open a PR to `staging` for `<repo>`. Title/body from the branch commits + `<brief path>`; include `Closes #<n>` if there is an issue. Then move board item `<itemId>` to In review (Maji) per `references/playbook.md`. Return only: PR number and URL.
-
-**Fresh reviewer (Phase 4)** — background, concurrent:
-> Review PR #`<n>` in `<repo>` against `<brief/issue>` and the repo's documented standards. Verify every finding against the actual code before you report it — false positives, including bogus P0s, are common. Post ONE `gh pr comment`, signed "session-local reviewer". Return under ~200 words: the findings you posted, ranked by severity.
-
-**Resolver (Phase 5)** — synchronous:
-> Address every review comment on PR #`<n>` in `<repo>` (fresh reviewer, Codex, CodeRabbit). For each: verify against the actual code; fix valid ones with the minimal change; decline false positives and over-engineering with a one-line reason. Reply to each thread and resolve the addressed/declined ones; leave genuine open questions unresolved. One commit per addressed comment; keep lint+typecheck green; push. Return under ~200 words: a table of comment → verdict (fixed / declined+reason).
+The body follows the **pr** skill, with `Closes #<n>`, the Evidence section, and `## Reviewed before opening` from step 5 of the flow.
