@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
+  attempts: [] as Array<{ errorMessage: string | null; outcome: { kind: string } }>,
   deleteAccess: {
     viewerCanDeleteRegistryRemovals: true as boolean | null,
     hasRegisteredProductionBatches: false as boolean | null,
@@ -72,7 +73,16 @@ vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));
 
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));
+
+vi.mock("../submission-outcome-notice", () => ({
+  SubmissionOutcomeNotice: ({ outcome }: { outcome: { kind: string } }) => <div>{`Outcome notice: ${outcome.kind}`}</div>,
+}));
+
 vi.mock("@/hooks/use-certification", () => ({
+  useRemovalSubmissionAttempts: () => ({ data: state.attempts }),
   useDeleteRemoval: () => ({
     mutate: state.discardMutate,
     isPending: false,
@@ -164,6 +174,7 @@ beforeEach(() => {
   state.toastSuccess.mockReset();
   state.discardMutate.mockReset();
   state.discardReset.mockReset();
+  state.attempts = [];
   state.deleteAccess = {
     viewerCanDeleteRegistryRemovals: true,
     hasRegisteredProductionBatches: false,
@@ -234,6 +245,48 @@ describe("SubmitStep", () => {
       await act(async () => { renderer!.unmount(); });
     },
   );
+
+  it.each([
+    ["differs", true],
+    ["no-answer", false],
+  ])("shows the %s outcome notice for the attempt that just ended (close only: %s)", async (kind, closeOnly) => {
+    state.attempts = [{ errorMessage: "Registry check failed", outcome: { kind } }];
+    const mutation = {
+      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
+      error: new Error("Registry check failed"), reset: vi.fn(),
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+          onDone={vi.fn()} submitMutation={mutation as never} />,
+      );
+    });
+    const text = JSON.stringify(renderer!.toJSON());
+    expect(text).toContain(`Outcome notice: ${kind}`);
+    expect(findButton(renderer!, "Close") !== undefined).toBe(closeOnly);
+    expect(findButton(renderer!, "Try again") !== undefined).toBe(!closeOnly);
+    await act(async () => renderer?.unmount());
+  });
+
+  it("keeps the plain error when the newest attempt is an older failure", async () => {
+    state.attempts = [{ errorMessage: "An older failure", outcome: { kind: "differs" } }];
+    const mutation = {
+      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
+      error: new Error("Registry check failed"), reset: vi.fn(),
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+          onDone={vi.fn()} submitMutation={mutation as never} />,
+      );
+    });
+    const text = JSON.stringify(renderer!.toJSON());
+    expect(text).toContain("Registry check failed");
+    expect(text).not.toContain("Outcome notice");
+    await act(async () => renderer?.unmount());
+  });
 
   it("discards a local draft only after confirmation", async () => {
     const onDone = vi.fn();

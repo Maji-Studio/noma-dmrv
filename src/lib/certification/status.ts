@@ -123,6 +123,12 @@ export type RemovalWorkflowStatusKind =
   | "submitted"
   | "superseded";
 
+/** Generic reasons the Removal sheet drops when the submission outcome notice says it better. */
+export const REMOVAL_FAILED_REVIEW_REASON =
+  "Review submission history, then select Review & submit.";
+export const REMOVAL_INTERRUPTED_RECONCILE_REASON =
+  "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.";
+
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 
@@ -342,9 +348,7 @@ export function deriveRemovalWorkflowStatus({
       );
     }
     return interruptedWorkflowStatus(
-      [
-        "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.",
-      ],
+      [REMOVAL_INTERRUPTED_RECONCILE_REASON],
       true,
       false,
     );
@@ -363,7 +367,7 @@ export function deriveRemovalWorkflowStatus({
     const reasons =
       enrichmentStatus === "available" && readiness?.state === "blocked"
         ? readiness.reasons
-        : ["Review submission history, then select Review & submit."];
+        : [REMOVAL_FAILED_REVIEW_REASON];
     return {
       ...REMOVAL_SUBMISSION_FAILED,
       reasons,

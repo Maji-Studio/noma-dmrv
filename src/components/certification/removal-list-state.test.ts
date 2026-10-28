@@ -49,6 +49,7 @@ function enrichment(
     evidenceLinks: { unconfirmedCount: 1, mismatchCount: 2, checkedAt: null },
     submissionWarnings: [],
     recentSyncEvents: [],
+  submissionAttempts: [],
   };
 }
 

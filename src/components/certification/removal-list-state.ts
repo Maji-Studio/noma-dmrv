@@ -37,6 +37,7 @@ export interface RemovalListRow {
   evidenceLinks: RemovalPreflightSummary["evidenceLinks"] | null;
   submissionWarnings: string[];
   recentSyncEvents: RemovalPreflightSummary["recentSyncEvents"];
+  submissionAttempts: RemovalPreflightSummary["submissionAttempts"];
   enrichmentStatus: RemovalEnrichmentStatus;
   retry?: () => unknown;
 }
@@ -95,6 +96,7 @@ export function buildRemovalListRows(
       evidenceLinks: data?.evidenceLinks ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
       recentSyncEvents: data?.recentSyncEvents ?? [],
+      submissionAttempts: data?.submissionAttempts ?? [],
       enrichmentStatus: enrichment.status,
       retry: enrichment.retry,
     };

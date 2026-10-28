@@ -34,7 +34,7 @@ import { adoptCreditBatchesForIsometric } from "./certifier-project-credit-batch
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
-export { appendSyncEvent, listRecentSyncEvents } from "./certifier-sync-events";
+export { appendSyncEvent, listRecentSyncEvents, listRemovalAttemptEvents } from "./certifier-sync-events";
 export type { AppendSyncEventInput } from "./certifier-sync-events";
 
 export interface UpsertCertifierProjectInput {

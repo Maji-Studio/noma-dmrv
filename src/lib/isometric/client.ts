@@ -30,6 +30,7 @@ const MAX_ATTEMPTS = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
 const REQUEST_TIMEOUT_MS = 30_000;
+export const ISOMETRIC_REQUEST_TIMEOUT_MESSAGE = "Isometric request timed out";
 export const SOURCE_READBACK_TIMEOUT_MS = 10_000;
 const GRAPHQL_MAX_ATTEMPTS = 2;
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -154,7 +155,7 @@ async function isometricRequest<T = unknown>(
     }
     const timeoutController = new AbortController();
     const timer = setTimeout(
-      () => timeoutController.abort(new Error("Isometric request timed out")),
+      () => timeoutController.abort(new Error(ISOMETRIC_REQUEST_TIMEOUT_MESSAGE)),
       REQUEST_TIMEOUT_MS
     );
     const onExternalAbort = () =>

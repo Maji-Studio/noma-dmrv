@@ -62,6 +62,8 @@ export async function ensureRemovalBiocharApplications(args: {
       expectedLockedAt: args.expectedLockedAt,
       deferRejectionToAttempt: true,
       onExternalMutation: args.onExternalMutation,
+      // The GHG Entry already exists; finish bookkeeping using its registered batch.
+      driftPolicy: "audit",
       creditBatchIds,
       log: args.log,
     });

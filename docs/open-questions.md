@@ -20,7 +20,6 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 - Monthly facility report (#1109): layout A, B or C.
 - Bin history (#1004): wet mass always, dry when available, the rest in the table, top to bottom on phones are settled; the layout pick is open.
 - Switch-template warning (#1144): how the warning leads to the template's line review.
-- Submission history (#1148): proposed statuses Fine / Stopped / Needs support.
 - Row links (#1130): the user wants the full row clickable.
 
 ## Open-item problem wording
