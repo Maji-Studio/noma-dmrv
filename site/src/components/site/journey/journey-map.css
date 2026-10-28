@@ -71,6 +71,7 @@
 .jr-conv.trail { stroke: var(--lit-mid); }
 .jr-tile { position: absolute; width: 30px; height: 30px; display: block; pointer-events: none; }
 .is-live .jr-tile { pointer-events: auto; cursor: pointer; }
+.jr-tile-hit { position: absolute; left: 50%; top: 50%; width: var(--tap); height: var(--tap); transform: translate(-50%, -50%); }
 .jr-tile::before { content: ""; position: absolute; inset: 0; background: var(--k, var(--prod)); opacity: 0.5; border: 1px solid rgba(255, 249, 247, 0.3); transition: opacity 0.35s, background 0.35s; }
 .jr-tile.d-prod { --k: var(--prod); } .jr-tile.d-dist { --k: var(--dist); } .jr-tile.d-ver { --k: var(--ver); } .jr-tile.d-infra { --k: var(--infra); }
 .jr-tile svg { position: absolute; inset: 3px; width: 24px; height: 24px; fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; }

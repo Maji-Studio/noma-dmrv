@@ -28,7 +28,7 @@ export function createPlant(host, { onPick, codes }) {
     btn.className = `jr-tile d-${KIND[k][1]}`;
     btn.type = "button";
     btn.setAttribute("aria-label", `${KIND[k][0]} ${codes[k]}`);
-    btn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GL[k]}"/></svg><span class="jr-tile-lab mono">${k === "run" ? "Reactor" : codes[k]}</span>`;
+    btn.innerHTML = `<i class="jr-tile-hit"></i><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GL[k]}"/></svg><span class="jr-tile-lab mono">${k === "run" ? "Reactor" : codes[k]}</span>`;
     btn.addEventListener("click", (e) => { e.stopPropagation(); onPick(codes[k]); });
     root.appendChild(btn);
     return { k, dx, row, btn, c: [0, 0] };

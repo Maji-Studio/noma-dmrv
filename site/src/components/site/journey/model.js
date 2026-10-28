@@ -71,9 +71,9 @@ SUPS.forEach((c) => {
   const s = supBy[c];
   const fs = J.heroFeedstockDeliveries.filter((f) => f.supplier === c).map((f) => f.code);
   const where = [s.location.city, s.location.stateRegion].filter(Boolean).join(", ");
-  add({ id: c, k: "sup", code: c, date: null, sub: [supShort(s), supTown(s)].filter(Boolean).join(" · "),
+  add({ id: c, k: "sup", code: c, date: null, sub: [s.feedstockType?.replace(/ \(.*\)/, ""), s.location.city].filter(Boolean).join(" · "),
     stats: [["To plant", s.distanceToPlantKm, "km"], ["Intakes", s.deliveriesToPineOffcutBin, ""], ["Wet mass", nf(s.wetKgToPineOffcutBin / 1000, 1), "t"]],
-    rows: [["Supplier", s.name], ["Location", where || "Not recorded"], ["Region", s.region], ["Feedstock", s.feedstockType], ["Distance to plant", `${s.distanceToPlantKm} km one way, entered per supplier`], [`Intakes into ${FEED_BIN}`, String(s.deliveriesToPineOffcutBin)], [`Wet mass into ${FEED_BIN}`, kg(s.wetKgToPineOffcutBin)]],
+    rows: [["Location", where || "Not recorded"], ["Region", s.region], ["Feedstock", s.feedstockType], ["Distance to plant", `${s.distanceToPlantKm} km one way, entered per supplier`], [`Intakes into ${FEED_BIN}`, String(s.deliveriesToPineOffcutBin)], [`Wet mass into ${FEED_BIN}`, kg(s.wetKgToPineOffcutBin)]],
     br: [{ dir: "peer", label: `${SUPS.length} suppliers feed ${FEED_BIN}`, ids: SUPS }, ...(fs.length ? [{ dir: "down", label: `${plural(fs.length, "intake", "intakes")} on ${dt(J.heroFeedstockDeliveries[0].date).replace(/ \d{4}$/, "")}`, ids: fs }] : [])],
     geo: P(s.location.lat, s.location.lng), mc: [`s:${c}`, `l:${c}`], mr: ["t:fbin"] });
 });
@@ -82,7 +82,7 @@ J.heroFeedstockDeliveries.forEach((f) => {
   const day = dt(f.date).replace(/ \d{4}$/, "");
   add({ id: f.code, k: "fs", code: f.code, date: f.date, sub: `${supShort(s)} · truck, ${f.transport.distanceKmOneWay} km`,
     stats: [["Wet mass", nf(f.wetKg), "kg"], ["Moisture", nf(f.moisturePercent, 1), "%"], ["Dry mass", nf(Math.round(f.dryKg)), "kg"]],
-    rows: [["Date", dt(f.date)], ["Supplier", `${s.name} (${s.code})`], ["Wet mass", kg(f.wetKg)], ["Moisture", pc(f.moisturePercent)], ["Dry mass", `${nf(f.dryKg, 1)} kg, derived`], ["Transport", `Truck, ${f.transport.distanceKmOneWay} km one way`], ["Round trip", `${f.transport.distanceKmOneWay * 2} km, one way × 2`], ["Into bin", f.bin], [`Drawn by ${HERO.run}`, `${kg(f.kgDrawnByPR_26_005)}, inferred`]],
+    rows: [["Date", dt(f.date)], ["Supplier", `${s.code}, ${s.location.city || "town not recorded"}`], ["Wet mass", kg(f.wetKg)], ["Moisture", pc(f.moisturePercent)], ["Dry mass", `${nf(f.dryKg, 1)} kg, derived`], ["Transport", `Truck, ${f.transport.distanceKmOneWay} km one way`], ["Round trip", `${f.transport.distanceKmOneWay * 2} km, one way × 2`], ["Into bin", f.bin], [`Drawn by ${HERO.run}`, `${kg(f.kgDrawnByPR_26_005)}, inferred`]],
     note: ["Attribution", "Inferred from the bin's oldest-first draw order. The pooled bin does not record which load went into which run."],
     miss: "Weigh ticket, photo. No documents attached.",
     br: [{ dir: "peer", label: `${HERO.intakes.length} intakes on ${day}`, ids: HERO.intakes }, { dir: "up", label: `${SUPS.length} suppliers feed ${FEED_BIN}`, ids: SUPS }],
@@ -110,8 +110,8 @@ runs.forEach((r) => {
   if (p.length > 1) br.push({ dir: "down", label: `Made into ${p.length} products`, ids: p });
   br.push({ dir: "peer", label: `${mates.length} runs in ${r.outputBin}`, ids: mates });
   add({ id: r.code, k: "run", code: r.code, date: r.date, sub: `Run ${r.n} of ${runs.length} · reactor ${reactorName}`,
-    stats: [["Feedstock in", nf(r.feedstockWetKg / 1000, 1), "t wet"], ["Biochar out", nf(r.biocharOutputKg), "kg"], ["Moisture in", nf(r.feedstockMoisturePercent, 1), "%"]],
-    rows: [["Date", dt(r.date)], ["Status", "Complete"], ["Reactor", `${reactorName} (${r.reactor})`], ["Feedstock bin", r.feedstockBin], ["Feedstock in", `${kg(r.feedstockWetKg)} wet`], ["Feedstock moisture", pc(r.feedstockMoisturePercent)], ["Biochar out", kg(r.biocharOutputKg)], ["Biochar moisture", pc(r.biocharMoisturePercent)], ["Yield", `${pc((r.biocharOutputKg / r.feedstockWetKg) * 100)} of wet feedstock, derived`], ["Diesel", `${nf(r.dieselOperationL + r.dieselGensetL, 1)} L`], ["Electricity", `${nf(r.electricityKwh)} kWh`], ["Output bin", r.outputBin], ["Credit batch", r.creditBatch],
+    stats: [["Feedstock in", nf(r.feedstockWetKg / 1000, 1), "t wet"], ["Biochar out", nf(r.biocharOutputKg), "kg wet"], ["Moisture in", nf(r.feedstockMoisturePercent, 1), "%"]],
+    rows: [["Date", dt(r.date)], ["Status", "Complete"], ["Reactor", `${reactorName} (${r.reactor})`], ["Feedstock bin", r.feedstockBin], ["Feedstock in", `${kg(r.feedstockWetKg)} wet`], ["Feedstock moisture", pc(r.feedstockMoisturePercent)], ["Biochar output", `${kg(r.biocharOutputKg)} wet`], ["Biochar moisture", pc(r.biocharMoisturePercent)], ["Yield", `${pc((r.biocharOutputKg / r.feedstockWetKg) * 100)} of wet feedstock, derived`], ["Diesel", `${nf(r.dieselOperationL + r.dieselGensetL, 1)} L`], ["Electricity", `${nf(r.electricityKwh)} kWh`], ["Output bin", r.outputBin], ["Credit batch", r.creditBatch],
       ["Biochar now", f.length ? `On ${plural(f.length, "field", "fields")}` : `In ${r.outputBin}, ${nowhere}`]],
     miss: "Temperatures, residence time, feeding rate.",
     br, mc: ["t:run", ...f.map((x) => `f:${x}`)], mr: ["t:fbin", "t:bbin", ...f.map((x) => `l:${appBy(x).delivery}`)], g: r.creditBatch === ANCHOR ? r.code : `agg-${r.creditBatch}`, fields: f });
@@ -122,8 +122,8 @@ J.feedstockBins.filter((b) => b.type === "biochar_bin").forEach((b) => {
   const f = fieldsOfBin(b.code);
   const ss = sams.filter((s) => s.creditBatch === b.creditBatch).map((s) => s.code);
   add({ id: b.code, k: "bbin", code: b.code, date: null, dlabel: `${binName(b)} ${J.meta.generated.slice(0, 4)}`, sub: `${binName(b)} · ${plural(rs.length, "run", "runs")} · ${b.creditBatch}`,
-    stats: [["Biochar in", nf(made / 1000, 1), "t"], b.currentDryKg ? ["Still here", nf(b.currentDryKg / 1000, 1), "t dry"] : ["Still here", nf(made / 1000, 1), "t"], ["Fields", f.length, ""]],
-    rows: [["Runs", `${rs.length}, ${rs[0].code} to ${rs.at(-1).code}`], ["Biochar in", kg(made)], ["Still in bin", b.currentDryKg ? `${kg(b.currentDryKg)} dry, ${kg(b.currentEstWetKg)} wet est.` : `${kg(made)}, ${nowhere}`], ["Left as products", f.length ? `${prods.length} products, ${dels.length} deliveries` : "None yet"], ["Credit batch", `${b.creditBatch}, pending`], ["Lab samples", String(ss.length)]],
+    stats: [["Made", nf(made / 1000, 1), "t wet"], ["Still here", nf((b.currentEstWetKg || made) / 1000, 1), "t wet"], ["Fields", f.length, ""]],
+    rows: [["Runs", `${rs.length}, ${rs[0].code} to ${rs.at(-1).code}`], ["Biochar made", `${kg(made)} wet`], ["Still in bin", b.currentEstWetKg ? `${kg(b.currentEstWetKg)} wet est., ${kg(b.currentDryKg)} dry` : `${kg(made)} wet, ${nowhere}`], ["Left as products", f.length ? `${prods.length} products, ${dels.length} deliveries` : "None yet"], ["Credit batch", `${b.creditBatch}, pending`], ["Lab samples", String(ss.length)]],
     br: [{ dir: "up", label: `Came from ${rs.length} runs`, ids: rs.map((r) => r.code) }, ...(f.length ? [{ dir: "down", label: `Went to ${f.length} fields`, ids: f }] : []), { dir: "peer", label: `${ss.length} lab samples`, ids: ss }],
     mc: ["t:bbin"], mr: ["t:run", ...f.map((x) => `f:${x}`)] });
 });
@@ -181,8 +181,8 @@ cbs.forEach((c) => {
   const range = c.runCodeRange.replace("..", " to PR-26-");
   const hRange = `${nf(Math.min(...hs), 2)} to ${nf(Math.max(...hs), 2)}`;
   add({ id: c.code, k: "cb", code: c.code, date: null, dlabel: monthYear(c.reportingPeriod.start), pill: "Pending", sub: `${rs.length} runs · ${range}`,
-    stats: [["Biochar", nf(c.biocharKg / 1000, 1), "t"], ["Applied", nf(c.appliedDryKg / 1000, 1), "t dry"], ["H/Corg", hRange, ""]],
-    rows: [["Status", "Pending, not yet verified or issued"], ["Period", `${dt(c.reportingPeriod.start)} to ${dt(c.reportingPeriod.end)}`], ["Runs", `${rs.length}, ${range}`], ["Feedstock", c.feedstockType], ["Biochar", kg(c.biocharKg)], ["Applied", c.appliedDryKg ? `${kg(c.appliedDryKg)} dry on ${plural(f.length, "field", "fields")}` : "None yet"], ["Lab samples", `${ss.length}, H/Corg ${hRange}, limit ${H_CORG_LIMIT}`], ["Durability option", c.durabilityPathway.replace(/^(\d)(\d{3})_year.*$/, "$1,$2 year")], ["Registry id", "Not issued"]],
+    stats: [["Made", nf(c.biocharKg / 1000, 1), "t wet"], ["Applied", nf(c.appliedWetKg / 1000, 1), "t wet"], ["H/Corg", hRange, ""]],
+    rows: [["Status", "Pending, not yet verified or issued"], ["Period", `${dt(c.reportingPeriod.start)} to ${dt(c.reportingPeriod.end)}`], ["Runs", `${rs.length}, ${range}`], ["Feedstock", c.feedstockType], ["Biochar made", `${kg(c.biocharKg)} wet`], ["Applied", c.appliedWetKg ? `${kg(c.appliedWetKg)} wet, ${kg(c.appliedDryKg)} dry, on ${plural(f.length, "field", "fields")}` : "None yet"], ["Lab samples", `${ss.length}, H/Corg ${hRange}, limit ${H_CORG_LIMIT}`], ["Durability option", c.durabilityPathway.replace(/^(\d)(\d{3})_year.*$/, "$1,$2 year")], ["Registry id", "Not issued"]],
     note: ["Counts toward removal", "Only biochar applied to a field. Biochar still in the bin does not count yet."],
     miss: "CO2e removed, registry id.",
     br: [{ dir: "up", label: `Came from ${rs.length} runs`, ids: rs }, ...(f.length ? [{ dir: "down", label: `Applied on ${f.length} fields`, ids: f }] : []), { dir: "peer", label: `${cbs.length} credit batches`, ids: cbs.map((x) => x.code) }],
