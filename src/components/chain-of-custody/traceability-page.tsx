@@ -36,6 +36,13 @@ import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
 import { type RunPickerOption } from "./run-picker";
 import { BatchSankey } from "./sankey";
+// PROTOTYPE: Sankey waterfall variants (?variant=a|b|c). Delete with the losers.
+import {
+  parseSankeyVariant,
+  SankeyVariantEmpty,
+  SankeyVariantSwitcher,
+  SankeyVariantView,
+} from "./sankey/variants";
 import { TraceabilityHeader } from "./traceability-header";
 import { ApplicationTrail } from "./trail";
 import {
@@ -172,6 +179,7 @@ export function TraceabilityPage() {
       : "none";
   const applicationView = parseApplicationView(searchParams.get("view"));
   const batchView = parseBatchView(searchParams.get("view"));
+  const sankeyVariant = parseSankeyVariant(searchParams.get("variant"));
 
   // Cross-link selection (Flow record ⇄ map marker / rails). The nonce lets a
   // repeat click on the same node re-trigger the map's ease-to.
@@ -666,8 +674,25 @@ export function TraceabilityPage() {
       );
     }
     if ((filteredBatchLineages?.length ?? 0) === 0) {
+      if (sankeyVariant) {
+        return (
+          <SankeyVariantEmpty
+            onOpenFlow={() => handleViewChange(DEFAULT_BATCH_VIEW, DEFAULT_BATCH_VIEW)}
+          />
+        );
+      }
       return (
         <CenteredMessage>{NO_APPLICATION_SANKEY_MESSAGE}</CenteredMessage>
+      );
+    }
+    if (sankeyVariant) {
+      return (
+        <SankeyVariantView
+          variant={sankeyVariant}
+          sankey={filteredSankey ?? batchData.sankey}
+          lineages={batchLineages ?? []}
+          batchCode={batchData.batch.code}
+        />
       );
     }
     return (
@@ -761,6 +786,8 @@ export function TraceabilityPage() {
           )}
         </div>
       </div>
+
+      {anchor === "batch" && batchView === "sankey" ? <SankeyVariantSwitcher /> : null}
 
       <ChainNodeSheet
         node={sheetNode}
