@@ -66,9 +66,12 @@ export function outcomeLine(outcome: NoticeOutcome, facilityId: string): ReactNo
 }
 
 function outcomeTitle(outcome: NoticeOutcome, facilityId: string): ReactNode {
-  if (outcome.kind === "interrupted") return outcomeLine(outcome, facilityId);
+  // An interrupted attempt and a lost response may have committed, so neither claims "Not submitted".
+  if (outcome.kind === "interrupted" || outcome.kind === "no-answer") return outcomeLine(outcome, facilityId);
   return <>Not submitted: {outcomeLine(outcome, facilityId)}</>;
 }
+
+const CHECK_RUNS = "Check the production runs in this credit batch for later edits.";
 
 function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean): ReactNode {
   switch (outcome.kind) {
@@ -76,11 +79,12 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
       return null;
     case "differs":
       if (finalized) {
-        return "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.";
+        return `${CHECK_RUNS} This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.`;
       }
       if (outcome.shared) {
         return (
           <>
+            {CHECK_RUNS}{" "}
             {outcome.sharedWith ? (
               <RemovalLink id={outcome.sharedWith.id} code={outcome.sharedWith.code} facilityId={facilityId} />
             ) : (
@@ -90,7 +94,7 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
           </>
         );
       }
-      return "If the figures in noma are right, delete this Removal and submit again.";
+      return `${CHECK_RUNS} If the figures in noma are right, delete this Removal and submit again.`;
     case "no-answer":
       return "Anything already sent stays in Isometric. Review and submit again to send the rest.";
     case "interrupted":
@@ -103,7 +107,7 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
 }
 
 function whyItStopped(outcome: AttemptOutcome & { kind: "differs" }, finalized: boolean): string {
-  return `Isometric got ${outcome.creditBatchCode} in an earlier attempt. A production run in it was edited since. noma never changes Isometric by itself.${
+  return `Isometric holds different figures for ${outcome.creditBatchCode} than noma has now, for example after a production run was edited. noma never changes Isometric by itself.${
     finalized || outcome.shared
       ? ""
       : " Deleting this Removal also removes what it created in Isometric, so the next submission sends the figures noma has now."

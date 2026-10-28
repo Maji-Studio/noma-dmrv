@@ -13,6 +13,8 @@ import { ISOMETRIC_KILOGRAM_UNIT, kilogramUnitsMatch } from "@/lib/isometric/qua
 const WINDOW_FORMATS = ["MMM d, yyyy, HH:mm", "MMM d, yyyy, HH:mm:ss"] as const;
 const MILLISECOND_DIGITS = 3;
 const OFFSET_FORMAT = "xxx";
+/** Qualifier for a registry id noma has no name for. */
+const REGISTRY_RECORD = "Isometric record";
 
 const LABELS: Record<DriftDifference["field"], string> = {
   facility: "Facility",
@@ -56,7 +58,11 @@ export function formatDifference(difference: DriftDifference, timeZone: string):
   const label = LABELS[difference.field];
   switch (difference.field) {
     case "feedstockTypes":
-      return { label, isometric: difference.isometric.join(", "), noma: difference.noma.join(", ") };
+      return {
+        label,
+        isometric: difference.isometricLabel ?? difference.isometric.map((id) => `${REGISTRY_RECORD} ${id}`).join(", "),
+        noma: difference.nomaLabel ?? difference.noma.map((id) => `${REGISTRY_RECORD} ${id}`).join(", "),
+      };
     case "dryMass":
       return { label, isometric: formatMass(difference.isometric), noma: formatMass(difference.noma) };
     case "windowStart":
@@ -64,6 +70,12 @@ export function formatDifference(difference: DriftDifference, timeZone: string):
       const [isometric, noma] = formatInstantPair(difference.isometric, difference.noma, timeZone);
       return { label, isometric, noma };
     }
+    case "facility":
+      return {
+        label,
+        isometric: difference.isometricLabel ?? `${REGISTRY_RECORD} ${difference.isometric}`,
+        noma: difference.nomaLabel ?? `${REGISTRY_RECORD} ${difference.noma}`,
+      };
     default:
       return { label, isometric: difference.isometric, noma: difference.noma };
   }

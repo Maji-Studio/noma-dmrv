@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   markSubmissionRejected: vi.fn(),
   isShared: vi.fn(),
   findSharing: vi.fn(),
+  names: vi.fn(),
 }));
 vi.mock("./shared", () => ({
   ...mocks,
@@ -20,6 +21,9 @@ vi.mock("./shared", () => ({
 vi.mock("@/data-access/removal-production-batch-deletion", () => ({
   isProductionBatchSharedWithOtherRemovals: mocks.isShared,
   findRemovalSharingCreditBatch: mocks.findSharing,
+}));
+vi.mock("@/data-access/certifier-production-batches", () => ({
+  resolveRegistryDisplayNames: mocks.names,
 }));
 vi.mock("@/data-access/certification", () => ({
   markSubmissionRejected: mocks.markSubmissionRejected,
@@ -60,6 +64,7 @@ beforeEach(() => {
   mocks.markSubmissionRejected.mockResolvedValue(undefined);
   mocks.isShared.mockResolvedValue(false);
   mocks.findSharing.mockResolvedValue(null);
+  mocks.names.mockResolvedValue({ facilities: new Map(), feedstockTypes: new Map() });
 });
 
 describe("assertRegisteredProductionBatchMatches", () => {
@@ -109,6 +114,34 @@ describe("assertRegisteredProductionBatchMatches", () => {
     });
     expect(mocks.appendSyncEventBestEffort.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.markSubmissionRejected.mock.invocationCallOrder[0]);
+  });
+
+  it("saves the facility and feedstock type names next to the raw ids when noma knows them", async () => {
+    const args = fixture();
+    Object.assign(args.remote, { facility_id: "fcl_registered", feedstock_type_ids: ["ftt_registered", "ftt_2"] });
+    mocks.names.mockResolvedValue({
+      facilities: new Map([["fcl_registered", "Mafinga old site"], ["fcl_current", "Mafinga"]]),
+      feedstockTypes: new Map([["ftt_registered", "Teak"], ["ftt_1", "Pine"], ["ftt_2", "Eucalyptus"]]),
+    });
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toBeInstanceOf(SafeError);
+    expect(mocks.names).toHaveBeenCalledWith(orgCtx, {
+      facilityIds: ["fcl_registered", "fcl_current"], feedstockTypeIds: ["ftt_2", "ftt_registered", "ftt_1", "ftt_2"],
+    });
+    const { differences } = mocks.appendSyncEventBestEffort.mock.calls[0][1].responsePayload.drift;
+    expect(differences).toEqual(expect.arrayContaining([
+      { field: "facility", isometric: "fcl_registered", noma: "fcl_current", isometricLabel: "Mafinga old site", nomaLabel: "Mafinga" },
+      { field: "feedstockTypes", isometric: ["ftt_2", "ftt_registered"], noma: ["ftt_1", "ftt_2"], isometricLabel: "Eucalyptus, Teak", nomaLabel: "Pine, Eucalyptus" },
+    ]));
+  });
+
+  it("saves no label when a registry id has no name, and keeps unresolved ids as ids", async () => {
+    const args = fixture();
+    Object.assign(args.remote, { facility_id: "fcl_registered", feedstock_type_ids: ["ftt_unknown"] });
+    mocks.names.mockResolvedValue({ facilities: new Map([["fcl_current", "Mafinga"]]), feedstockTypes: new Map([["ftt_1", "Pine"]]) });
+    await expect(assertRegisteredProductionBatchMatches(args)).rejects.toBeInstanceOf(SafeError);
+    const { differences } = mocks.appendSyncEventBestEffort.mock.calls[0][1].responsePayload.drift;
+    expect(differences).toContainEqual({ field: "facility", isometric: "fcl_registered", noma: "fcl_current", nomaLabel: "Mafinga" });
+    expect(differences).toContainEqual({ field: "feedstockTypes", isometric: ["ftt_unknown"], noma: ["ftt_1", "ftt_2"], nomaLabel: "Pine, ftt_2" });
   });
 
   it("saves the shared Removal on the drift details", async () => {

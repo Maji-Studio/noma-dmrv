@@ -1,3 +1,4 @@
+import { resolveRegistryDisplayNames } from "@/data-access/certifier-production-batches";
 import { findRemovalSharingCreditBatch, isProductionBatchSharedWithOtherRemovals } from "@/data-access/removal-production-batch-deletion";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -52,13 +53,33 @@ export async function assertRegisteredProductionBatchMatches(args: {
     differences.push(difference);
     lines.push(`${label}: Isometric ${registry}, noma ${noma}.`);
   };
+  const registryFeedstocks = [...remote.feedstock_type_ids].sort();
+  const nomaFeedstocks = [...current.feedstock_type_ids].sort();
+  const names = !matches.facility || !matches.feedstocks
+    ? await resolveRegistryDisplayNames(args.orgCtx, {
+        facilityIds: matches.facility ? [] : [remote.facility_id, current.facility_id],
+        feedstockTypeIds: matches.feedstocks ? [] : [...registryFeedstocks, ...nomaFeedstocks],
+      })
+    : null;
   if (!matches.facility) {
-    describe({ field: "facility", isometric: remote.facility_id, noma: current.facility_id }, "Facility", remote.facility_id, current.facility_id);
+    const isometricLabel = names?.facilities.get(remote.facility_id);
+    const nomaLabel = names?.facilities.get(current.facility_id);
+    describe(
+      { field: "facility", isometric: remote.facility_id, noma: current.facility_id, ...(isometricLabel ? { isometricLabel } : {}), ...(nomaLabel ? { nomaLabel } : {}) },
+      "Facility", isometricLabel ?? remote.facility_id, nomaLabel ?? current.facility_id,
+    );
   }
   if (!matches.feedstocks) {
-    const registry = [...remote.feedstock_type_ids].sort();
-    const noma = [...current.feedstock_type_ids].sort();
-    describe({ field: "feedstockTypes", isometric: registry, noma }, "Feedstock types", registry.join(", "), noma.join(", "));
+    // A label only when at least one id resolves; ids with no name stay as the registry id.
+    const label = (ids: string[]) => ids.some((id) => names?.feedstockTypes.has(id))
+      ? ids.map((id) => names?.feedstockTypes.get(id) ?? id).join(", ")
+      : undefined;
+    const isometricLabel = label(registryFeedstocks);
+    const nomaLabel = label(nomaFeedstocks);
+    describe(
+      { field: "feedstockTypes", isometric: registryFeedstocks, noma: nomaFeedstocks, ...(isometricLabel ? { isometricLabel } : {}), ...(nomaLabel ? { nomaLabel } : {}) },
+      "Feedstock types", isometricLabel ?? registryFeedstocks.join(", "), nomaLabel ?? nomaFeedstocks.join(", "),
+    );
   }
   if (!matches.kind) describe({ field: "kind", isometric: remote.kind, noma: current.kind }, "Kind", remote.kind, current.kind);
   if (!matches.mass || !matches.massUnit) {

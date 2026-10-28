@@ -31,7 +31,7 @@ describe("SubmissionOutcomeNotice", () => {
     expect(html).toContain("1,150 kg");
     expect(html).toContain("Mar 28, 2026, 22:45");
     expect(html).toContain("Mar 28, 2026, 21:45");
-    expect(html).toContain("If the figures in noma are right, delete this Removal and submit again.");
+    expect(html).toContain("Check the production runs in this credit batch for later edits. If the figures in noma are right, delete this Removal and submit again.");
     expect(html).toContain("About Why it stopped");
     expect(html).not.toContain("<button");
   });
@@ -40,18 +40,20 @@ describe("SubmissionOutcomeNotice", () => {
     const html = render(differs({ shared: true, sharedWith: { id: "rm-3", code: "RM-26-003" } }));
     expect(html).toContain("RM-26-003");
     expect(html).toContain("removal=rm-3");
+    expect(html).toContain("Check the production runs in this credit batch for later edits.");
     expect(html).toContain("so deleting this Removal does not fix it. Contact support.");
     expect(html).not.toContain("delete this Removal and submit again");
   });
 
   it("sends a finalized Removal to an admin or Isometric", () => {
-    expect(render(differs(), true)).toContain("Contact an admin or Isometric.");
+    expect(render(differs(), true)).toContain("Check the production runs in this credit batch for later edits. This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.");
   });
 
   it("keeps retry states at warning tone and points at Review and submit", () => {
     const noAnswer = render({ kind: "no-answer" });
     expect(noAnswer).toContain('data-tone="warning"');
-    expect(noAnswer).toContain("Not submitted: Isometric did not answer");
+    expect(noAnswer).toContain("Isometric did not answer");
+    expect(noAnswer).not.toContain("Not submitted");
     expect(noAnswer).toContain("Anything already sent stays in Isometric. Review and submit again to send the rest.");
     const interrupted = render({ kind: "interrupted" });
     expect(interrupted).toContain("Submission interrupted");
@@ -95,5 +97,24 @@ describe("figure formatting", () => {
     );
     expect(html).toContain("+02:00");
     expect(html).toContain("+01:00");
+  });
+});
+
+describe("figure names", () => {
+  const facility = (extra: Record<string, unknown>): NoticeOutcome => ({
+    kind: "differs", creditBatchId: "cb", creditBatchCode: "CB-1", shared: false, sharedWith: null,
+    differences: [{ field: "facility", isometric: "fcl_old", noma: "fcl_new", ...extra }],
+  }) as NoticeOutcome;
+
+  it("shows names when saved", () => {
+    const html = render(facility({ isometricLabel: "Mafinga old site", nomaLabel: "Mafinga" }));
+    expect(html).toContain("Mafinga old site");
+    expect(html).not.toContain("fcl_old");
+  });
+
+  it("qualifies an id noma has no name for", () => {
+    const html = render(facility({}));
+    expect(html).toContain("Isometric record fcl_old");
+    expect(html).toContain("Isometric record fcl_new");
   });
 });

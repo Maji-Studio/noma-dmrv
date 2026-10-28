@@ -3,8 +3,10 @@
  * sync event as raw values. Display code formats them at render time.
  */
 export type DriftDifference =
-  | { field: "facility" | "kind"; isometric: string; noma: string }
-  | { field: "feedstockTypes"; isometric: string[]; noma: string[] }
+  | { field: "kind"; isometric: string; noma: string }
+  /** Raw Isometric ids, with the facility's or feedstock types' names when noma knows them. */
+  | { field: "facility"; isometric: string; noma: string; isometricLabel?: string; nomaLabel?: string }
+  | { field: "feedstockTypes"; isometric: string[]; noma: string[]; isometricLabel?: string; nomaLabel?: string }
   | { field: "dryMass"; isometric: { magnitude: number; unit: string }; noma: { magnitude: number; unit: string } }
   | { field: "windowStart" | "windowEnd"; isometric: string; noma: string };
 
