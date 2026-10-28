@@ -555,7 +555,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="distribution"
+          area="records"
           title="Applications"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
@@ -600,7 +600,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="records"
         title="Applications"
         actions={
           <Button variant="primary" onClick={openCreate}>

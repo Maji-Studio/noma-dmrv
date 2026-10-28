@@ -24,8 +24,9 @@ export { PLATFORM_HOME_HREF as ADMIN_ORGANIZATIONS_HREF } from "@/lib/auth/home-
 export const PLATFORM_DIAGNOSTICS_HREF = "/platform/diagnostics";
 export const PLATFORM_TEMPLATE_MAPPING_HREF = "/platform/template-mapping";
 
-/** Vehicles and crew is a list page under Distribution, not a setting. */
-export const VEHICLES_AND_CREW_HREF = "/vehicles-and-crew";
+/** Vehicles and Crew are list pages under Setup, not settings. */
+export const VEHICLES_HREF = "/vehicles";
+export const CREW_HREF = "/crew";
 
 /** The working facility rides along in `?facility=`, as on every sidebar link. */
 export const FACILITY_PARAM = "facility";

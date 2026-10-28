@@ -534,7 +534,7 @@ export function CreditBatchList({
       <div className="container-max page-shell">
         <PageHeader
           area="verification"
-          title="Credit Batches"
+          title="Credit batches"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its credit batches." />
       </div>
@@ -586,7 +586,7 @@ export function CreditBatchList({
       {/* Header */}
       <PageHeader
         area="verification"
-        title="Credit Batches"
+        title="Credit batches"
         actions={
           <Button variant="primary" onClick={() => openCreate()}>
             <PlusIcon size={20} weight="bold" />

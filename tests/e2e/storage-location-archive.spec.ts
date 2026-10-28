@@ -61,7 +61,7 @@ test.describe("Storage-bin archive", () => {
   }) => {
     const page = adminPage;
     await page.goto(`/storage-bins?facility=${facility.id}`);
-    await expect(page.getByRole("heading", { name: "Storage" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Storage bins" })).toBeVisible();
     const filteredListResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&

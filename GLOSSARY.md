@@ -101,6 +101,11 @@ and are **never submitted** to a registry.
 _Avoid_: ingredient, material (the catalog is one thing; usage
 disambiguates).
 
+**Feedstock record**:
+Material received into one feedstock bin, with its feedstock type, supplier,
+wet mass, moisture and delivery date.
+_On screen_: the list of feedstock records is called Feedstock intake.
+
 **Feedstock bin**:
 A storage bin holding one **feedstock type**, set when the bin is created.
 A bin without a type gets one on its first intake.

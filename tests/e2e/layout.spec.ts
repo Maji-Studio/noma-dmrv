@@ -82,8 +82,8 @@ test.describe("App Routes Structure", () => {
       { path: "/storage-bins", name: "Storage Locations" },
       { path: "/suppliers", name: "Suppliers" },
       { path: "/customers", name: "Customers" },
-      { path: "/feedstock-intake", name: "Feedstocks" },
-      { path: "/production-runs", name: "Production Runs" },
+      { path: "/feedstock-intake", name: "Feedstock intake" },
+      { path: "/production-runs", name: "Production runs" },
     ];
 
     for (const route of entityRoutes) {

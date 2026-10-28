@@ -465,8 +465,8 @@ export function BiocharProductList() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="production"
-          title="Biochar Products"
+          area="records"
+          title="Biochar products"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
       </div>
@@ -484,8 +484,8 @@ export function BiocharProductList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="production"
-        title="Biochar Products"
+        area="records"
+        title="Biochar products"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />

@@ -51,7 +51,8 @@ const ROUTES = [
   "/settings/members",
   "/settings/registry",
   "/settings/facilities",
-  "/vehicles-and-crew",
+  "/vehicles",
+  "/crew",
   "/platform/organizations",
 ] as const;
 

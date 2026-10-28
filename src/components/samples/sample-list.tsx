@@ -565,7 +565,7 @@ export function SampleList({
       <div className="container-max page-shell">
         <PageHeader
           area="verification"
-          title="Lab Samples"
+          title="Lab samples"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
       </div>
@@ -586,7 +586,7 @@ export function SampleList({
     <div className="container-max page-shell">
       <PageHeader
         area="verification"
-        title="Lab Samples"
+        title="Lab samples"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />

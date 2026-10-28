@@ -1,5 +1,5 @@
 /**
- * Vehicles and crew E2E
+ * Crew E2E
  *
  * One driver through the list page: create from the Drivers tab, open the view
  * sheet (and its `?driver=<id>` link), edit it, delete it from the row menu. Ends in deletion so the spec
@@ -14,7 +14,7 @@ import * as schema from "../../src/db/schema";
 
 const NAME_PREFIX = "E2E Driver";
 
-test.describe("Vehicles and crew", () => {
+test.describe("Crew", () => {
   // The UI delete step is the happy path; this sweeps what a failed run leaves.
   test.afterAll(async () => {
     const connection = createDbConnection();
@@ -30,7 +30,7 @@ test.describe("Vehicles and crew", () => {
     const editedName = `${name} Edited`;
     const row = (text: string) => page.locator("table tbody tr", { hasText: text });
 
-    await page.goto("/vehicles-and-crew?tab=driver");
+    await page.goto("/crew");
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("tab", { name: /^Drivers/ })).toHaveAttribute("aria-selected", "true");
 
@@ -44,7 +44,7 @@ test.describe("Vehicles and crew", () => {
 
     // View, then edit from the sheet
     const href = await row(name).getByRole("link", { name }).getAttribute("href");
-    expect(href).toMatch(/^\/vehicles-and-crew\?driver=/);
+    expect(href).toMatch(/^\/crew\?driver=/);
     await row(name).getByRole("link", { name }).click();
     await waitForSideSheet(page);
     await expect(page.getByRole("dialog")).toContainText(name);

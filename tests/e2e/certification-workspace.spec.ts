@@ -46,7 +46,7 @@ import { createDbConnection } from "./fixtures/db";
 
 const SECTIONS = [
   { label: "Removals", path: "/removals" },
-  { label: "GHG Statements", path: "/ghg-statements" },
+  { label: "GHG statements", path: "/ghg-statements" },
 ] as const;
 
 // DB-only link target to un-gate the operational routes; never reaches

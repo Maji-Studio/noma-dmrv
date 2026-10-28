@@ -428,7 +428,7 @@ export function SupplierList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="partners"
         title="Suppliers"
         actions={
           <Button variant="primary" onClick={openCreate}>

@@ -43,7 +43,9 @@ import {
   GearSixIcon,
   BuildingsIcon,
   SignOutIcon,
-  SteeringWheelIcon,
+  VanIcon,
+  UsersThreeIcon,
+  WarehouseIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import {
@@ -59,7 +61,8 @@ import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   SETTINGS_GENERAL_HREF,
-  VEHICLES_AND_CREW_HREF,
+  CREW_HREF,
+  VEHICLES_HREF,
   withFacilityParam,
 } from "@/lib/settings/links";
 
@@ -80,13 +83,13 @@ interface NavSection {
 }
 
 const SECTION_ACCENTS = {
-  production: "var(--clr-orange)",
-  infrastructure: "var(--clr-purple)",
-  distribution: "var(--clr-rose)",
+  records: "var(--clr-orange)",
   verification: "var(--clr-pink)",
+  partners: "var(--clr-rose)",
   // Certification is its own first-class section (ADR 0007); it gets a distinct
   // accent key rather than reusing `verification`, even though both read pink.
   certification: "var(--clr-pink)",
+  setup: "var(--clr-purple)",
   admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
@@ -106,6 +109,9 @@ const SHOT_MODE = process.env.NODE_ENV !== "production" &&
 const SIDEBAR_BACKGROUND_GRADIENT =
   "linear-gradient(180deg, rgba(15, 2, 26, 1) 0%, rgba(10, 1, 18, 1) 100%)";
 
+// Groups follow how often a page is used (2026-10-28): Records are the daily
+// entries, Verification the checks on them, Partners the parties they name,
+// Certification the registry artifacts, Setup the things configured once.
 const navSections: NavSection[] = [
   {
     items: [
@@ -115,55 +121,56 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.default,
   },
   {
-    title: "Production",
-    accent: SECTION_ACCENTS.production,
+    title: "Records",
+    accent: SECTION_ACCENTS.records,
     items: [
-      { href: "/feedstock-intake", label: "Feedstocks", icon: LeafIcon },
-      { href: "/production-runs", label: "Production Runs", icon: FactoryIcon },
-      { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
-      { href: "/biochar-products", label: "Biochar Products", icon: CubeIcon },
-    ],
-  },
-  {
-    title: "Infrastructure",
-    accent: SECTION_ACCENTS.infrastructure,
-    items: [
-      { href: "/reactors", label: "Reactors", icon: FlaskIcon },
-      { href: "/storage-bins", label: "Storage Bins", icon: PackageIcon },
-      { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
-      { href: "/emissions", label: "Emissions", icon: CloudIcon },
-    ],
-  },
-  {
-    title: "Distribution",
-    accent: SECTION_ACCENTS.distribution,
-    items: [
-      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
-      { href: "/customers", label: "Customers", icon: UsersIcon },
+      { href: "/feedstock-intake", label: "Feedstock intake", icon: LeafIcon },
+      { href: "/production-runs", label: "Production runs", icon: FactoryIcon },
+      { href: "/biochar-products", label: "Biochar products", icon: CubeIcon },
       { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
       { href: "/deliveries", label: "Deliveries", icon: TruckIcon },
       { href: "/applications", label: "Applications", icon: MapPinIcon },
-      { href: VEHICLES_AND_CREW_HREF, label: "Vehicles and crew", icon: SteeringWheelIcon },
     ],
   },
   {
     title: "Verification",
     accent: SECTION_ACCENTS.verification,
     items: [
-      { href: "/credit-batches", label: "Credit Batches", icon: CertificateIcon },
-      { href: "/lab-samples", label: "Lab Samples", icon: TestTubeIcon },
+      { href: "/credit-batches", label: "Credit batches", icon: CertificateIcon },
+      { href: "/lab-samples", label: "Lab samples", icon: TestTubeIcon },
+      { href: "/emissions", label: "Emissions", icon: CloudIcon },
+    ],
+  },
+  {
+    title: "Partners",
+    accent: SECTION_ACCENTS.partners,
+    items: [
+      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
+      { href: "/customers", label: "Customers", icon: UsersIcon },
     ],
   },
   {
     // First-class section (ADR 0007, amended 2026-06-13): surface only the
-    // concrete artifact/setup routes. The root `/certification` route redirects
-    // to Removals for old bookmarks and broad entry points.
-    //
+    // concrete artifact routes, /removals and /ghg-statements.
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
       { href: "/removals", label: "Removals", icon: StackIcon },
-      { href: "/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
+      { href: "/ghg-statements", label: "GHG statements", icon: FileTextIcon },
+    ],
+  },
+  {
+    title: "Setup",
+    accent: SECTION_ACCENTS.setup,
+    items: [
+      { href: "/storage-bins", label: "Storage bins", icon: PackageIcon },
+      { href: "/feedstock-types", label: "Feedstock types", icon: TagIcon },
+      { href: "/reactors", label: "Reactors", icon: FlaskIcon },
+      { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
+      { href: VEHICLES_HREF, label: "Vehicles", icon: VanIcon },
+      { href: CREW_HREF, label: "Crew", icon: UsersThreeIcon },
+      // Organization-wide: the page lists every facility, so no `?facility=`.
+      { href: "/facilities", label: "Facilities", icon: WarehouseIcon, skipFacilityParam: true },
     ],
   },
 ];

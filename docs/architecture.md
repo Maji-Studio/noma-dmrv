@@ -329,10 +329,10 @@ runtime.
   Certification panes configure the working facility from
   `FacilityProvider`; there is no second facility picker. The settings index
   opens General, preserving its query. Legacy settings paths are deleted.
-  Vehicles and crew is a list page at
-  `/vehicles-and-crew` under Distribution (tabs per kind on the shared
-  `DataTable`; `?tab=`, `?create=`, and `?vehicle=`/`?driver=`/`?operator=<id>`
-  (+ `mode=edit`) open a record's sheet); every member can edit and delete
+  Vehicles and Crew are list pages under Setup: `/vehicles` is one
+  `DataTable` (`?create=`, `?vehicle=<id>` and `mode=edit` open a record's
+  sheet); `/crew` has Drivers | Operators tabs (`?tab=operator`, `?create=`,
+  `?driver=`/`?operator=<id>` + `mode=edit`). Every member can edit and delete
   vehicles, drivers and operators there, as every member can create them from
   a picker. Platform administration (`users.role === "admin"`) lives at
   `/platform/organizations`, `/platform/diagnostics` and
