@@ -5,11 +5,12 @@ import { creditBatches, creditBatchApplications, certifierRemovals, certificatio
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityToday } from "@/lib/date-utils";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied } from "@/lib/credit-batches/application-mass";
-import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination } from "@/lib/certification/emission-entry-carry";
+import { removalEntryCarryOwner, type CarryContender, type EntryCarryDestination, type EntryRevisionDestination } from "@/lib/certification/emission-entry-carry";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { deriveRemovalEntryWindow, isLiveEntryReservation, removalEntryOwner } from "@/lib/certification/removal-emission-contributions";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
-import { readsAsReturnedFromPersisted } from "@/lib/record-lock";
+import { readsAsCorrectionWindowOpenFromPersisted } from "@/lib/record-lock";
+import { loadPersistedEmissionCorrectionLineages } from "./emission-entry-revisions";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { EntryContender } from "@/lib/certification/removal-emission-contributions";
 import { requireOrgScope } from "./utils";
@@ -87,6 +88,7 @@ export async function loadFacilityEmissionEntryCarry(
     return [{ contenderKind: "correction" as const, removalId: fact.id, createdAt: rows[0].removal.createdAt.toISOString(),
       creditBatchIds: [...new Set(rows.map(row => row.batch.id))], window }];
   })];
+  const correctionLineages = await loadPersistedEmissionCorrectionLineages(ctx, executor, correctionOriginIds);
   const previousById = new Map(previous.map(observation => [observation.id, observation]));
   const entries = stored.flatMap(entry => {
     const { batch, timezone } = selected.find(row => row.entry.id === entry.id)!;
@@ -115,11 +117,11 @@ export async function loadFacilityEmissionEntryCarry(
     // Display only: an uncertain conservative owner must not announce a returned revision.
     const ownerId = removalEntryOwner(resolved, ownContenders);
     const owner = ownContenders.find(contender => contender.removalId === ownerId && contender.contenderKind === "correction");
-    const ownerLineage = owner && lineage.find(fact => fact.id === owner.removalId);
+    const ownerLineage = correctionLineages.get(entry.creditBatchId);
     // Late against the elected owner's own sent attempt, not the batch's latest one.
     const ownerSentBefore = owner && attempts.some(attempt => attempt.localEntityId === owner.removalId && attempt.submittedAt && attempt.submittedAt <= entry.createdAt);
     const revisionRemoval = !entry.deletedAt && entry.kind === "value" && !entry.sentByRemovalId && !entry.heldForRemovalId &&
-      !retained && resolved.reservationKnownInactive && ownerSentBefore && ownerLineage && readsAsReturnedFromPersisted(ownerLineage)
+      !retained && resolved.reservationKnownInactive && ownerSentBefore && ownerLineage && readsAsCorrectionWindowOpenFromPersisted(owner.removalId, ownerLineage)
       ? removals.find(removal => removal.id === owner.removalId) : null;
     const revisionOf = revisionRemoval ? { removalId: revisionRemoval.id, removalCode: revisionRemoval.code } : null;
     return [{ ...resolved, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,
@@ -133,7 +135,7 @@ export async function loadFacilityEmissionEntryCarry(
 type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
   reservedByRemovalId: string | null; reservationKnownInactive: boolean;
   carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
-  revisionOf: { removalId: string; removalCode: string } | null;
+  revisionOf: EntryRevisionDestination | null;
   earlierRemovalCode: string | undefined; earlierRemovalId?: string; creditBatchCode: string;
   entryObservation: Awaited<ReturnType<typeof getTemplateObservationsByIds>>[number];
 };

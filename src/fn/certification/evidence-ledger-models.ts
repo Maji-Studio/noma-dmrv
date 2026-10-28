@@ -1,4 +1,4 @@
-import type { TransportLeg } from "@/db/schema";
+import { orderedTransportLedgerLegs } from "@/lib/certification/evidence-ledger/input-selection";
 import { createHash } from "node:crypto";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
@@ -12,11 +12,6 @@ export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
 ): string {
   const stable = { ...model, generatedAtIso: "" };
   return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
-}
-
-/** Retain the historical created-at ordering, resolving ties by stable identity. */
-export function orderedLegs(legs: TransportLeg[]) {
-  return [...legs].sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) || a.id.localeCompare(b.id));
 }
 
 export function orderedDurabilityBatches(ctx: RemovalSubmissionContext) {
@@ -36,12 +31,7 @@ export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName
   const memberBatchCodes = memberCodes(ctx);
 
   return buildLedgerModel({
-    legsByCategory: {
-      feedstock: orderedLegs(ctx.transportLegs.feedstock),
-      // Delivery-derived legs have always been ordered by delivery identity.
-      biochar: [...ctx.transportLegs.biochar].sort((a, b) => a.id.localeCompare(b.id)),
-      sample: orderedLegs(ctx.transportLegs.sample),
-    },
+    legsByCategory: orderedTransportLedgerLegs(ctx.transportLegs),
     memberBatchCodes,
     facilityName,
     externalProjectId: ctx.mapping!.externalProjectId,

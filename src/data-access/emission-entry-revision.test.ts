@@ -6,7 +6,7 @@ import { selectRemovalEntries } from "@/lib/certification/removal-entry-selectio
 import { entriesWithoutRemoval } from "@/lib/certification/removal-emission-contributions";
 
 const mocks = vi.hoisted(() => ({ select: vi.fn(), candidates: vi.fn(), owned: vi.fn(), unsent: vi.fn(), members: vi.fn(),
-  hydrate: vi.fn(), reservations: vi.fn(), observations: vi.fn(), rollups: vi.fn(), lineage: vi.fn(), registry: vi.fn() }));
+  hydrate: vi.fn(), reservations: vi.fn(), observations: vi.fn(), rollups: vi.fn(), lineage: vi.fn(), registry: vi.fn(), correctionLineages: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("./emission-entry-carry-queries", () => ({ listCarryCandidates: mocks.candidates,
   listOwnedCarryEntries: mocks.owned, listUnsentBatchEntries: mocks.unsent, listCarryRemovalMembers: mocks.members }));
@@ -16,6 +16,7 @@ vi.mock("./removal-template-observations", () => ({ getTemplateObservationsByIds
   getLatestTemplateObservations: mocks.observations }));
 vi.mock("./credit-batch-accounting", () => ({ loadCreditBatchRollups: mocks.rollups }));
 vi.mock("./record-lock-lineage", () => ({ readRecordLockLineage: mocks.lineage }));
+vi.mock("./emission-entry-revisions", () => ({ loadPersistedEmissionCorrectionLineages: mocks.correctionLineages }));
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: mocks.registry }));
 const ctx = makeTestOrgContext();
 const observation = { id: "observation", externalTemplateId: "template",
@@ -46,6 +47,9 @@ beforeEach(() => {
   mocks.observations.mockResolvedValue([observation]);
   mocks.rollups.mockResolvedValue({ batch: { lineageFacts: { runs: [{ biocharDryMassKg: 190 }] } } });
   mocks.lineage.mockResolvedValue(ownLineage([statement]));
+  // The persisted correction union reads the same lineage per batch.
+  mocks.correctionLineages.mockImplementation(async (_ctx, _executor, batchIds: readonly string[]) =>
+    new Map(await Promise.all(batchIds.map(async id => [id, await mocks.lineage()] as const))));
   mocks.select.mockReturnValueOnce(query([{ creditBatchId: batch.id, removalId: removal.id, allocatedDryMassKg: 190 }]))
     .mockReturnValueOnce(query([removal])).mockReturnValueOnce({ from: () => ({ innerJoin: () => ({ where: async () => [] }) }) })
     .mockReturnValueOnce(query([{ id: "sent", localEntityId: removal.id, submittedAt: new Date("2026-10-01") }]));
