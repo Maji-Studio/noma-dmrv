@@ -452,7 +452,7 @@ interface NoPositionEntry {
 /**
  * Everything the map cannot draw, kept visible rather than dropped: nodes that
  * inherit (or lack) a position, plus legs missing an endpoint. Clicking one
- * still focuses its sub-chain so the DAG and popups stay reachable.
+ * still focuses its sub-chain so the Flow chart and popups stay reachable.
  *
  * The two passes dedupe on different keys: a record is listed once, but every
  * unplottable leg gets its own row — several legs can share an anchor record,

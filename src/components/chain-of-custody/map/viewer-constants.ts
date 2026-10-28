@@ -31,7 +31,7 @@ export type ViewerMarkerKind = "supplier" | "facility" | "field";
 
 /**
  * Rail/chip accent per chain node kind. On the map, distribution uses PINK
- * (not the DAG's rose — rose fails contrast on white; see plan token mapping).
+ * (not the rose accent — rose fails contrast on white; see plan token mapping).
  */
 export const NODE_ACCENT_VAR: Record<ChainGeoNodeKind, string> = {
   facility: "var(--clr-purple)",

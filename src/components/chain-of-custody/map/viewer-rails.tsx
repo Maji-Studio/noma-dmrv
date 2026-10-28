@@ -4,7 +4,7 @@
  * Carbon Viewer overlays — legend, not-geolocated chip box, warning banner,
  * and empty state. Plain React absolutely positioned over the map; all
  * interactions route through onSelectNode so the page can drive both map and
- * DAG highlights.
+ * Flow highlights.
  */
 
 import type { CSSProperties } from "react";

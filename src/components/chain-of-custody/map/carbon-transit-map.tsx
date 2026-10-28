@@ -85,7 +85,7 @@ const BLANK_STYLE: maplibregl.StyleSpecification = {
   layers: [],
 };
 
-/** Popup body per chain node id (codes + detail rows from the lineage DAG). */
+/** Popup body per chain node id (codes + detail rows from the Flow chart). */
 export type PopupContentByNodeId = Record<
   string,
   Pick<PopupCardInput, "typeLabel" | "status" | "details">
@@ -96,7 +96,7 @@ export interface CarbonTransitMapProps {
   /** Road polylines per leg id; absent/null entries draw the dashed arc. */
   routeGeometries: RouteGeometryByRequestId | undefined;
   popupContent: PopupContentByNodeId;
-  /** Cross-link from the DAG; nonce re-triggers for repeat clicks. */
+  /** Cross-link from the Flow chart; nonce re-triggers for repeat clicks. */
   highlight: { nodeId: string; nonce: number } | null;
   /**
    * Active focus sub-chain — markers, distance chips, and leg lines outside
@@ -586,7 +586,7 @@ export default function CarbonTransitMap({
     fitToGeography(false);
   }, [geo, routeGeometries, popupContent, readyMap]);
 
-  // Cross-link highlight from the DAG (ungeolocated nodes resolve to facility).
+  // Cross-link highlight from the Flow chart (ungeolocated nodes resolve to facility).
   useEffect(() => {
     const map = mapRef.current;
     if (readyMap === null || readyMap !== map || !highlight) return;
@@ -612,7 +612,7 @@ export default function CarbonTransitMap({
 
   // Cross-surface focus — dim markers, distance chips, and leg lines outside
   // the active sub-chain (driven by the shared selection, in sync with the bar
-  // and DAG). Persistent: holds until the focus clears, unlike the transient
+  // and Flow). Persistent: holds until the focus clears, unlike the transient
   // highlight ring above.
   useEffect(() => {
     const map = mapRef.current;

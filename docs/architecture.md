@@ -807,7 +807,7 @@ forwards — do not add a page there. Deep links: `?batch=<id>` opens the batch
 roll-up, `?application=<id>` an application drill-down.
 
 Batch roll-up merges every member application's rollback, dedupes production
-runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
+runs, and exposes **Flow | Map | Sankey**. Drill-down exposes **Flow | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
 conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
@@ -818,8 +818,9 @@ Anchor model: ADR
   `use-chain-graph.ts` / `chain-node.tsx` / `chain-edge.tsx`, plus `map/`,
   `sankey/`, `trail/`, `chain-constants.ts`.
 - **Data**: `src/data-access/chain-of-custody{,-batch,-trail}.ts`.
-- **Layout**: dagre LR layout on a React Flow canvas with minimap, hover focus,
-  and record-opening side sheets.
+- **Layout**: the Flow chart's column layout (`flow-layout.ts`) on a React
+  Flow canvas, no minimap, with hover and selection focus and record-opening
+  side sheets.
 - **Scope**: selectors and resolved anchors are filtered against the active
   facility so stale or foreign deep links cannot render another facility's
   provenance. Full detail in [traceability.md](./traceability.md).

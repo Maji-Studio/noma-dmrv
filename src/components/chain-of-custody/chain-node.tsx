@@ -1,158 +1,204 @@
 "use client";
 
-import { ChainStatusBadge } from "./chain-status-badge";
+import { Button } from "@/components/ui/button";
 import type { Icon } from "@phosphor-icons/react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
+import type { CSSProperties } from "react";
+import {
+  FLOW_HEADER_WIDTH,
+  FLOW_ICON_SIZE,
+  FLOW_NODE_BOX_HEIGHT,
+  FLOW_NODE_BOX_WIDTH,
+  FLOW_NODE_SIZE,
+  type LineageNodeKind,
+} from "./chain-constants";
 import type { LineageDetailRow } from "./use-chain-graph";
 
-export interface ChainNodeData {
+/** Lighting the Flow chart stamps on at render. */
+export interface FlowLighting {
+  /** Outside the focused record's lineage: fade back. */
+  dimmed?: boolean;
+  /** On the focused record's lineage. */
+  lit?: boolean;
+  /** The hovered record, or the group holding the focused record. */
+  current?: boolean;
+}
+
+export interface ChainNodeData extends FlowLighting {
+  kind: LineageNodeKind;
+  /** Kind label ("Feedstock", "Production run"). */
   label: string;
+  /** Sheet heading. */
   code: string;
+  /** The record's own code, shown under its node. */
+  shortCode: string;
   icon: Icon;
-  /** Fill accent — left edge + highlight ring. */
+  /** Display fill for the node square. */
   accent: string;
-  /** Ink variant — header type label text (always passes contrast). */
+  /** Ink variant: kind label text in the sheet (always passes contrast). */
   accentInk: string;
   href: string | null;
   status?: string | null;
-  /** Formatted event date — the card's primary line (code is secondary). */
   date: string | null;
-  /** Label/value rows (masses, parties, identifiers). */
   details: LineageDetailRow[];
-  /** Cross-link highlight (map marker / rail selection). */
+  /** The shared selection (map marker, rail, chip or a click here). */
   highlighted?: boolean;
-  /** Outside the hovered card's lineage — fade back (hover focus). */
-  dimmed?: boolean;
-  /** Batch DAG application card — click drills into the rollback. */
+  /** Batch Flow application record: its sheet offers "Trace rollback". */
   drillable?: boolean;
   [key: string]: unknown;
 }
 
-export function ChainNode({ data }: NodeProps) {
-  const {
-    label,
-    code,
-    icon: Icon,
-    accent,
-    accentInk,
-    status,
-    date,
-    details,
-    highlighted,
-    dimmed,
-    drillable,
-  } = data as unknown as ChainNodeData;
-  // Every card is clickable now — a click opens the detail side-sheet (or, in
-  // split view, locates the record on the map). Navigation moved into the
-  // sheet's "View full record" action.
-  const interactive = true;
+export interface FlowGroupNodeData extends FlowLighting {
+  kind: LineageNodeKind;
+  /** "34 feedstocks" */
+  title: string;
+  memberIds: string[];
+  icon: Icon;
+  accent: string;
+  [key: string]: unknown;
+}
 
-  const card = (
+export interface FlowColumnNodeData {
+  kind: LineageNodeKind;
+  title: string;
+  count: number;
+  /** Off for a single record and for a collapsed column (its group counts). */
+  showCount: boolean;
+  /** Expanded past the group threshold: offers to collapse again. */
+  onCollapse?: () => void;
+  [key: string]: unknown;
+}
+
+const DIMMED_OPACITY = 0.18;
+const SQUARE_INSET = (FLOW_NODE_BOX_WIDTH - FLOW_NODE_SIZE) / 2;
+const STACK_OFFSETS = [4, 2] as const;
+const RING_OFFSET = 3;
+/** Keyboard focus on the node wrapper rings the square, like a selection. */
+const FOCUS_RING_CLASS =
+  "in-focus-visible:[outline:1.5px_solid_var(--ink)] in-focus-visible:[outline-offset:3px]";
+
+// Edges meet the square's sides, not the wider label box.
+const TARGET_HANDLE_STYLE: CSSProperties = { left: SQUARE_INSET, top: FLOW_NODE_SIZE / 2 };
+const SOURCE_HANDLE_STYLE: CSSProperties = { right: SQUARE_INSET, top: FLOW_NODE_SIZE / 2 };
+const HANDLE_CLASS = "!h-1 !w-1 !min-h-0 !min-w-0 !border-0 !bg-transparent";
+
+function ringStyle(on: boolean, strong: boolean): CSSProperties {
+  if (!on) return {};
+  return {
+    outline: `1.5px solid ${strong ? "var(--ink)" : "var(--clr-dark-purple-40)"}`,
+    outlineOffset: RING_OFFSET,
+  };
+}
+
+function labelClass(lit: boolean | undefined) {
+  return `mt-6 block max-w-full truncate text-center font-mono text-[10px] font-medium leading-none tracking-[0.04em] ${
+    lit ? "text-[var(--ink)]" : "text-[var(--color-text-secondary)]"
+  }`;
+}
+
+function NodeShell({
+  dimmed,
+  ariaLabel,
+  children,
+}: {
+  dimmed?: boolean;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
     <div
-      data-highlighted={highlighted ? "true" : undefined}
-      className={`
-        group flex flex-col border-[1.5px] bg-[var(--paper)] transition-[border-color,background-color,opacity] duration-150
-        ${interactive ? "cursor-pointer" : "cursor-default"}
-        ${dimmed ? "opacity-20" : "opacity-100"}
-        border-[var(--clr-dark-purple-20)] hover:border-[var(--ink)] hover:bg-[var(--clr-dark-purple-1)]
-      `}
+      aria-label={ariaLabel}
+      className="relative flex cursor-pointer flex-col items-center transition-opacity duration-150"
       style={{
-        width: 260,
-        minHeight: 132,
-        borderLeftWidth: "3px",
-        borderLeftStyle: "solid",
-        borderLeftColor: accent,
-        ...(highlighted
-          ? {
-              borderColor: accent,
-              boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 28%, transparent)`,
-            }
-          : null),
+        width: FLOW_NODE_BOX_WIDTH,
+        height: FLOW_NODE_BOX_HEIGHT,
+        opacity: dimmed ? DIMMED_OPACITY : 1,
       }}
     >
-      <div className="flex items-center justify-between gap-10 px-12 pt-12">
-        <span
-          className="inline-flex min-w-0 items-center gap-6 text-[10px] font-medium"
-          style={{ color: accentInk }}
-        >
-          <Icon size={13} weight="bold" className="shrink-0" />
-          <span className="truncate">{label}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-8">
-          <ChainStatusBadge status={status} />
-          {/* Hover affordance — open the record / trace the rollback. */}
-          {interactive ? (
-            drillable ? (
-              <TreeStructureIcon
-                size={12}
-                weight="bold"
-                className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                style={{ color: accentInk }}
-                aria-hidden
-              />
-            ) : (
-              <ArrowUpRightIcon
-                size={12}
-                weight="bold"
-                className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                style={{ color: accentInk }}
-                aria-hidden
-              />
-            )
-          ) : null}
-        </span>
-      </div>
-
-      {/* Date leads; the record code is secondary identification. */}
-      <div className="px-12 pt-10">
-        <p className="break-words font-mono text-[21px] font-medium leading-none tracking-[0.03em]">
-          {date ?? code}
-        </p>
-        {date ? (
-          <p className="mt-4 font-mono text-[11px] text-[var(--clr-dark-purple-40)]">
-            {code}
-          </p>
-        ) : null}
-      </div>
-
-      {details.length > 0 ? (
-        <div className="flex flex-col gap-4 px-12 pb-12 pt-10">
-          {details.map((row) => (
-            <div
-              key={`${row.label}:${row.value}`}
-              className="flex items-baseline justify-between gap-12"
-            >
-              <span className="whitespace-nowrap text-[9px] font-medium text-[var(--clr-dark-purple-40)]">
-                {row.label}
-              </span>
-              <span className="text-right text-[12.5px] font-light leading-[1.3] break-words">
-                {row.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="pb-12" />
-      )}
+      <Handle type="target" position={Position.Left} className={HANDLE_CLASS} style={TARGET_HANDLE_STYLE} />
+      {children}
+      <Handle type="source" position={Position.Right} className={HANDLE_CLASS} style={SOURCE_HANDLE_STYLE} />
     </div>
   );
+}
 
+/** One record: a square in its kind's colour with the kind's icon, code below. */
+export function ChainNode({ data }: NodeProps) {
+  const { label, shortCode, icon: KindIcon, accent, highlighted, dimmed, lit, current } =
+    data as unknown as ChainNodeData;
   return (
-    <>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0"
-      />
+    <NodeShell dimmed={dimmed} ariaLabel={`${label} ${shortCode}`}>
+      <div
+        data-highlighted={highlighted ? "true" : undefined}
+        className={`grid shrink-0 place-items-center ${FOCUS_RING_CLASS}`}
+        style={{
+          width: FLOW_NODE_SIZE,
+          height: FLOW_NODE_SIZE,
+          background: accent,
+          ...ringStyle(Boolean(highlighted || current), Boolean(highlighted)),
+        }}
+      >
+        <KindIcon size={FLOW_ICON_SIZE} weight="bold" color="var(--paper)" aria-hidden />
+      </div>
+      <span className={labelClass(lit || highlighted || current)}>{shortCode}</span>
+    </NodeShell>
+  );
+}
 
-      {card}
+/** A collapsed column: a stacked square with the count. A click lists them. */
+export function FlowGroupNode({ data }: NodeProps) {
+  const { title, icon: KindIcon, accent, dimmed, lit, current } = data as unknown as FlowGroupNodeData;
+  return (
+    <NodeShell dimmed={dimmed} ariaLabel={`Show all ${title}`}>
+      <div className="relative shrink-0" style={{ width: FLOW_NODE_SIZE, height: FLOW_NODE_SIZE }}>
+        {STACK_OFFSETS.map((offset) => (
+          <span
+            key={offset}
+            aria-hidden
+            className="absolute inset-0 border border-[var(--clr-dark-purple-30)] bg-[var(--paper)]"
+            style={{ transform: `translate(${offset}px, ${-offset}px)` }}
+          />
+        ))}
+        <div
+          className={`relative grid h-full w-full place-items-center ${FOCUS_RING_CLASS}`}
+          style={{ background: accent, ...ringStyle(Boolean(current), true) }}
+        >
+          <KindIcon size={FLOW_ICON_SIZE} weight="bold" color="var(--paper)" aria-hidden />
+        </div>
+      </div>
+      <span className={labelClass(true)}>{title}</span>
+      {lit ? <span className="sr-only">On the focused lineage</span> : null}
+    </NodeShell>
+  );
+}
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0"
-      />
-    </>
+/** Column header: the kind and how many records it holds. */
+export function FlowColumnNode({ data }: NodeProps) {
+  const { title, count, showCount, onCollapse } = data as unknown as FlowColumnNodeData;
+  // Sentence case like the Sankey's column labels; codes stay mono below.
+  return (
+    <div
+      className="flex cursor-default flex-col items-center gap-4 text-center"
+      style={{ width: FLOW_HEADER_WIDTH }}
+    >
+      <span className="body-small font-medium text-[var(--color-text-secondary)]">{title}</span>
+      {showCount ? (
+        <span className="body-caption text-[var(--color-text-tertiary)]">{count} records</span>
+      ) : null}
+      {onCollapse ? (
+        <Button
+          variant="noOutline"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCollapse();
+          }}
+          // 44px tall: a touch target at the phone's zoom of 1.
+          className="nodrag nopan h-44"
+        >
+          Collapse
+        </Button>
+      ) : null}
+    </div>
   );
 }

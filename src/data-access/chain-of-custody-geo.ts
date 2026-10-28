@@ -54,7 +54,7 @@ export type ChainGeoPositionSource =
   | "none";
 
 export interface ChainGeoNode {
-  /** Same id convention as the lineage DAG (`kind:entityId`) for cross-linking. */
+  /** Same id convention as the Flow chart (`kind:entityId`) for cross-linking. */
   id: string;
   kind: ChainGeoNodeKind;
   entityId: string;
@@ -100,7 +100,7 @@ export interface ChainGeoLeg {
   /** Record code of the outer party (feedstock code / application code). */
   outerCode: string | null;
   /**
-   * DAG/geo node id of that outer party (`feedstock:…` inbound,
+   * graph/geo node id of that outer party (`feedstock:…` inbound,
    * `application:…` outbound). A batch roll-up carries one outbound leg per
    * member application, so this is what keeps each leg on its own record
    * instead of collapsing them onto the shared biochar product.
@@ -430,7 +430,7 @@ function geoNodeResolver(facilityGps: GpsPair) {
   };
 }
 
-/** DAG node-id prefixes (`use-chain-graph.ts`) — kept in sync for cross-linking. */
+/** Graph node-id prefixes (`use-chain-graph.ts`) — kept in sync for cross-linking. */
 function idPrefix(kind: ChainGeoNodeKind): string {
   switch (kind) {
     case "biocharProduct":

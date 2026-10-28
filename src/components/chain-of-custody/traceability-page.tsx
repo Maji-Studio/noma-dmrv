@@ -4,11 +4,11 @@
  * The page re-anchors on the credit batch — the unit whose provenance
  * verification actually cares about — with the single application's rollback
  * as the drill-down. Header selectors: a credit batch resolves to the
- * roll-up readings (merged DAG | transit Map | mass-balance Sankey) plus
+ * roll-up readings (merged Flow | transit Map | mass-balance Sankey) plus
  * the batch's recorded Activity, and a
  * production-run filter (derived from the batch's rollbacks and roll-forwards) narrows the
- * roll-up to one run's flow. The application drill-down (Lineage | Map |
- * Split | Trail) opens by clicking an application card or via the
+ * roll-up to one run's flow. The application drill-down (Flow | Map |
+ * Split | Trail) opens from an application record's sheet or via the
  * `?application=` deep link; `?batch=` + `?application=` together =
  * drill-down within the batch context (a back-to-roll-up affordance keeps
  * the batch reachable). `?run=` deep-links the run filter.
@@ -27,30 +27,11 @@ import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
 import { TRACEABILITY_ACTIVITY_VIEW } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
-  ReactFlow,
-  useNodesInitialized,
-  useReactFlow,
-  type Edge,
-  type Node,
-  type NodeTypes,
-} from "@xyflow/react";
-import "@xyflow/react/dist/base.css";
+import type { Node } from "@xyflow/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  GRAPH_CANVAS_CLASS,
-  GRAPH_CONTROLS_CLASS,
-  GRAPH_DOTS,
-  GRAPH_MINIMAP_CLASS,
-  GRAPH_MINIMAP_MASK,
-} from "./chain-constants";
-import { ChainEdge } from "./chain-edge";
-import { ChainNode, type ChainNodeData } from "./chain-node";
+import { ChainFlowGraph } from "./chain-flow-graph";
+import type { ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
 import { type RunPickerOption } from "./run-picker";
@@ -69,33 +50,27 @@ import {
   NO_RUN_APPLICATION_YET_WARNING,
 } from "@/lib/chain-of-custody/copy";
 
-const nodeTypes: NodeTypes = {
-  chainNode: ChainNode,
-};
-
-const edgeTypes = {
-  chainEdge: ChainEdge,
-};
-
-type ApplicationViewMode = "lineage" | "map" | "split" | "trail";
-type BatchViewMode = "dag" | "map" | "sankey" | typeof TRACEABILITY_ACTIVITY_VIEW;
+// One chart, one name: the batch roll-up and the application drill-down both
+// call it Flow. Old `?view=dag` / `?view=lineage` links fall back to it.
+type ApplicationViewMode = "flow" | "map" | "split" | "trail";
+type BatchViewMode = "flow" | "map" | "sankey" | typeof TRACEABILITY_ACTIVITY_VIEW;
 
 const APPLICATION_VIEW_MODES: Array<{ value: ApplicationViewMode; label: string }> = [
-  { value: "lineage", label: "Lineage" },
+  { value: "flow", label: "Flow" },
   { value: "map", label: "Map" },
   { value: "split", label: "Split" },
   { value: "trail", label: "Trail" },
 ];
 
 const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
-  { value: "dag", label: "DAG" },
+  { value: "flow", label: "Flow" },
   { value: "map", label: "Map" },
   { value: "sankey", label: "Sankey" },
   { value: TRACEABILITY_ACTIVITY_VIEW, label: "Activities" },
 ];
 
-const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
-const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
+const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "flow";
+const DEFAULT_BATCH_VIEW: BatchViewMode = "flow";
 
 function parseApplicationView(raw: string | null): ApplicationViewMode {
   return APPLICATION_VIEW_MODES.some((mode) => mode.value === raw)
@@ -107,136 +82,6 @@ function parseBatchView(raw: string | null): BatchViewMode {
   return BATCH_VIEW_MODES.some((mode) => mode.value === raw)
     ? (raw as BatchViewMode)
     : DEFAULT_BATCH_VIEW;
-}
-
-function FitViewOnNodesReady({ nodeCount }: { nodeCount: number }) {
-  const nodesInitialized = useNodesInitialized();
-  const { fitView } = useReactFlow();
-
-  useEffect(() => {
-    if (!nodesInitialized || nodeCount === 0) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      void fitView({ padding: 0.18 });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [fitView, nodeCount, nodesInitialized]);
-
-  return null;
-}
-
-interface ChainFlowGraphProps {
-  nodes: Node[];
-  edges: Edge[];
-  warnings: string[];
-  /** Edge labels show mass (kg) or branch-share (%). */
-  labelMode: "kg" | "pct";
-  /**
-   * Persistent cross-surface focus (the shared selection's reachable
-   * sub-chain) — dims everything outside it. Hover focus takes precedence
-   * while the pointer is over a card.
-   */
-  focusNodeIds?: Set<string> | null;
-  onNodeClick: (event: React.MouseEvent, node: Node) => void;
-}
-
-/** Shared ReactFlow chrome for the single-rollback and merged batch DAGs. */
-function ChainFlowGraph({
-  nodes,
-  edges,
-  warnings,
-  labelMode,
-  focusNodeIds,
-  onNodeClick,
-}: ChainFlowGraphProps) {
-  // Hover focus — hovering a card fades back everything outside its lineage
-  // and emphasizes the path edges. Falls back to the persistent selection
-  // focus when the pointer isn't over a card.
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const related = reachableNodeIds(hoveredNodeId, edges) ?? focusNodeIds ?? null;
-  const displayNodes = related
-    ? nodes.map((node) =>
-        related.has(node.id)
-          ? node
-          : { ...node, data: { ...node.data, dimmed: true } }
-      )
-    : nodes;
-  // Always re-stamp the label mode onto edge data; layer hover focus on top.
-  // NB: never raise an edge's zIndex above 0 — xyflow would float the line
-  // above the HTML edge-label layer and bisect the chip text on hover. Hover
-  // emphasis reads through stroke width + dimming the rest, not stacking.
-  const displayEdges = edges.map((edge) => {
-    const onPath = related
-      ? related.has(edge.source) && related.has(edge.target)
-      : true;
-    return {
-      ...edge,
-      data: {
-        ...edge.data,
-        labelMode,
-        ...(related ? { dimmed: !onPath, emphasized: onPath } : {}),
-      },
-    };
-  });
-
-  return (
-    <div className="h-full w-full">
-      {warnings.length > 0 ? (
-        <div className="absolute top-16 left-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
-          <p className="text-[10px] font-medium text-[var(--st-wait)]">
-            Missing links
-          </p>
-          <ul className="mt-8 flex flex-col gap-6">
-            {warnings.map((warning) => (
-              <li
-                key={warning}
-                className="body-caption text-[var(--color-text-secondary)]"
-              >
-                {warning}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <ReactFlow
-        className={GRAPH_CANVAS_CLASS}
-        nodes={displayNodes}
-        edges={displayEdges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodeClick={onNodeClick}
-        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
-        onNodeMouseLeave={() => setHoveredNodeId(null)}
-        fitView
-        fitViewOptions={{ padding: 0.18 }}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        minZoom={0.3}
-        maxZoom={2}
-      >
-        <FitViewOnNodesReady nodeCount={nodes.length} />
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={GRAPH_DOTS.gap}
-          size={GRAPH_DOTS.size}
-          color={GRAPH_DOTS.color}
-        />
-        <Controls showInteractive={false} className={GRAPH_CONTROLS_CLASS} />
-        <MiniMap
-          className={GRAPH_MINIMAP_CLASS}
-          maskColor={GRAPH_MINIMAP_MASK}
-          nodeColor={(node) =>
-            (node.data as { accent?: string }).accent ??
-            "var(--color-background-medium)"
-          }
-        />
-      </ReactFlow>
-    </div>
-  );
 }
 
 function CenteredMessage({ children, tone = "secondary" }: {
@@ -328,7 +173,7 @@ export function TraceabilityPage() {
   const applicationView = parseApplicationView(searchParams.get("view"));
   const batchView = parseBatchView(searchParams.get("view"));
 
-  // Cross-link selection (DAG card ⇄ map marker / rails). The nonce lets a
+  // Cross-link selection (Flow record ⇄ map marker / rails). The nonce lets a
   // repeat click on the same node re-trigger the map's ease-to.
   const [selection, setSelection] = useState<{ nodeId: string; nonce: number } | null>(
     null
@@ -345,7 +190,7 @@ export function TraceabilityPage() {
 
   // Edge-label unit toggle (kg ⇄ branch-share %) for the graph views.
   const [massUnit, setMassUnit] = useState<"kg" | "pct">("kg");
-  // Node detail side-sheet — opened by a card click instead of navigating.
+  // Node detail side-sheet: opened by a record click instead of navigating.
   const [sheetNode, setSheetNode] = useState<ChainNodeSheetNode | null>(null);
   const toSheetNode = (node: Node): ChainNodeSheetNode => {
     const data = node.data as unknown as ChainNodeData;
@@ -401,8 +246,8 @@ export function TraceabilityPage() {
   const { nodes, edges } = useChainGraph(
     anchor === "application" ? chainData : undefined,
     {
-      // In split view, card clicks locate the record on the map instead of
-      // navigating (concept cross-linking); links stay live in lineage view.
+      // In split view, record clicks locate the record on the map instead of
+      // navigating (concept cross-linking); links stay live in Flow view.
       disableLinks: applicationView === "split",
       highlightedNodeId: selection?.nodeId ?? null,
       timeZone,
@@ -488,7 +333,7 @@ export function TraceabilityPage() {
     batchLineages,
     batchRollForwards,
     {
-      // Application cards drill down instead of navigating, so links drop.
+      // Application records drill down instead of navigating, so links drop.
       disableLinks: true,
       highlightedNodeId: selection?.nodeId ?? null,
       timeZone,
@@ -496,7 +341,7 @@ export function TraceabilityPage() {
   );
 
   // The shared focus: the selected node's reachable sub-chain, computed from
-  // the active graph's edges and fed to the DAG (dim), the map, and the bar so
+  // the active graph's edges and fed to the Flow (dim), the map, and the bar so
   // all three surfaces light the same sub-chain.
   const activeEdges = anchor === "batch" ? batchEdges : edges;
   const focusNodeIds = selection
@@ -558,7 +403,7 @@ export function TraceabilityPage() {
     });
   };
 
-  /** Batch DAG drill-down: open one member application, keeping the batch. */
+  /** Batch Flow drill-down: open one member application, keeping the batch. */
   const drillDownToApplication = (applicationId: string) => {
     updateParams((params) => {
       params.set("application", applicationId);
@@ -583,18 +428,27 @@ export function TraceabilityPage() {
     });
   };
 
-  const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
-    // Split view keeps the map cross-link (click locates the record); every
-    // other graph view opens the detail sheet.
+  /** Flow click: light the record's lineage and open its detail sheet. */
+  const focusAndOpenNode = (node: Node) => {
+    setSelection((current) => ({
+      nodeId: node.id,
+      nonce: (current?.nonce ?? 0) + 1,
+    }));
+    openNodeSheet(node);
+  };
+
+  const handleNodeClick = (node: Node) => {
+    // Split view keeps the map cross-link (click locates the record); the
+    // Flow view lights the lineage and opens the detail sheet.
     if (applicationView === "split") {
       selectNode(node.id);
       return;
     }
-    openNodeSheet(node);
+    focusAndOpenNode(node);
   };
 
-  const handleBatchNodeClick = (_event: React.MouseEvent, node: Node) => {
-    openNodeSheet(node);
+  const handleBatchNodeClick = (node: Node) => {
+    focusAndOpenNode(node);
   };
 
   /** Sheet "Trace rollback" — drill the batch into the application's lineage. */
@@ -648,9 +502,9 @@ export function TraceabilityPage() {
   // The kg/% toggle only applies to the graph views (it labels edges).
   const showMassToggle =
     anchor === "batch"
-      ? batchView === "dag"
+      ? batchView === "flow"
       : anchor === "application" &&
-        (applicationView === "lineage" || applicationView === "split");
+        (applicationView === "flow" || applicationView === "split");
 
   const applicationBody = (() => {
     if (!selectedApplicationId) return null;
@@ -664,15 +518,17 @@ export function TraceabilityPage() {
     if (chainLoading) {
       return <LoadingState label="Loading lineage..." />;
     }
-    if (applicationView === "lineage") {
+    if (applicationView === "flow") {
       return (
         <ChainFlowGraph
+          key={detailSourceKey}
           nodes={nodes}
           edges={edges}
           warnings={chainData?.warnings ?? []}
           labelMode={massUnit}
           focusNodeIds={focusNodeIds}
           onNodeClick={handleNodeClick}
+          onPaneClick={clearSelection}
         />
       );
     }
@@ -705,12 +561,14 @@ export function TraceabilityPage() {
       <div className="grid h-full grid-cols-1 gap-16 p-16 xl:grid-cols-[1.45fr_1fr]">
         <div className="relative min-h-0 overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
           <ChainFlowGraph
+            key={detailSourceKey}
             nodes={nodes}
             edges={edges}
             warnings={chainData?.warnings ?? []}
             labelMode={massUnit}
             focusNodeIds={focusNodeIds}
             onNodeClick={handleNodeClick}
+            onPaneClick={clearSelection}
           />
         </div>
         <div className="min-h-0">
@@ -770,15 +628,17 @@ export function TraceabilityPage() {
         <CenteredMessage>{NO_LINEAGE_FOR_SELECTED_RUN}</CenteredMessage>
       );
     }
-    if (batchView === "dag") {
+    if (batchView === "flow") {
       return (
         <ChainFlowGraph
+          key={detailSourceKey}
           nodes={batchNodes}
           edges={batchEdges}
           warnings={batchWarnings}
           labelMode={massUnit}
           focusNodeIds={focusNodeIds}
           onNodeClick={handleBatchNodeClick}
+          onPaneClick={clearSelection}
         />
       );
     }

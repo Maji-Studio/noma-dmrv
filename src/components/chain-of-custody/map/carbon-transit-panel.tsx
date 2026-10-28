@@ -8,7 +8,7 @@
  *
  * Two layouts off one fetch: `view="map"` is the full surface — the custody
  * stages rail beside the map, with a record's details docking over the map's
- * left edge; `view="split"` is the compact half beside the DAG, which keeps the
+ * left edge; `view="split"` is the compact half beside the Flow chart, which keeps the
  * legend and the collapsed not-geolocated chip box.
  *
  * Map view has a second shape for a viewer too narrow to carry the rail as a
@@ -112,14 +112,14 @@ export interface CarbonTransitPanelProps {
   facility?: ChainFacility;
   /** map = full side rails; split = collapsed not-geolocated chip box. */
   view: "map" | "split";
-  /** Cross-link highlight from the DAG (nonce re-triggers repeat clicks). */
+  /** Cross-link highlight from the Flow chart (nonce re-triggers repeat clicks). */
   highlight: { nodeId: string; nonce: number } | null;
   /**
    * Reachable sub-chain node ids for the active focus (the shared selection's
    * lineage); null = nothing focused, everything full strength.
    */
   focusNodeIds: Set<string> | null;
-  /** Marker / rail / chip selection — drives the DAG highlight upstream. */
+  /** Marker / rail / chip selection — drives the Flow chart highlight upstream. */
   onNodeSelect: (nodeId: string) => void;
   /** Clear the shared focus (hub click / basemap click). */
   onClearSelection: () => void;

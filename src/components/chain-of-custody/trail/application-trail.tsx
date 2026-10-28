@@ -9,7 +9,7 @@
  *
  * Step identity, dates, and masses come from the lineage payload the page
  * already holds; the evidence joins ride in via `useApplicationTrail`, keyed
- * by the shared DAG node-id convention.
+ * by the shared graph node-id convention.
  */
 
 import { useFacilityClock } from "@/hooks/use-facility-context";
