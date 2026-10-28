@@ -219,7 +219,10 @@ export async function performRegistryCreate(
     if (!mutationPossible) {
       await markSubmissionRejectedBestEffort(args, message);
     }
-    throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
+    // Keep the registry error as the cause so the attempt summary can tell "did not answer" from a refusal.
+    const failure = new SafeError(`${args.failureMessagePrefix}: ${message}`);
+    failure.cause = err;
+    throw failure;
   }
 
   args.onExternalMutation?.("confirmed");

@@ -114,3 +114,24 @@ export function describeIsometricApiError(
   }
   return fallback;
 }
+
+const REQUEST_TIMEOUT_TEXT = "Isometric request timed out";
+
+/**
+ * Whether Isometric never answered: a network failure, a read that timed out,
+ * or the client's own request deadline, on the error or anything in its cause
+ * chain. The registry may or may not have acted.
+ */
+export function isNoAnswerError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof IsometricApiError && (current.code === "network" || current.readFailureReason === "timeout")) {
+      return true;
+    }
+    if (current instanceof Error && current.message.includes(REQUEST_TIMEOUT_TEXT)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}

@@ -92,9 +92,9 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
       }
       return "If the figures in noma are right, delete this Removal and submit again.";
     case "no-answer":
-      return "What was already sent stays in Isometric. Review and submit again to send the rest.";
+      return "Anything already sent stays in Isometric. Review and submit again to send the rest.";
     case "interrupted":
-      return "Part of it is already in Isometric and is reused. Review and submit again to finish.";
+      return "Part of it may already be in Isometric. Review and submit again to finish it. What is there is reused.";
     case "failed":
       return outcome.message
         ? `${outcome.message} Review and submit again.`

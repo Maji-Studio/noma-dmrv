@@ -52,10 +52,10 @@ describe("SubmissionOutcomeNotice", () => {
     const noAnswer = render({ kind: "no-answer" });
     expect(noAnswer).toContain('data-tone="warning"');
     expect(noAnswer).toContain("Not submitted: Isometric did not answer");
-    expect(noAnswer).toContain("Review and submit again to send the rest.");
+    expect(noAnswer).toContain("Anything already sent stays in Isometric. Review and submit again to send the rest.");
     const interrupted = render({ kind: "interrupted" });
     expect(interrupted).toContain("Submission interrupted");
-    expect(interrupted).toContain("Review and submit again to finish.");
+    expect(interrupted).toContain("Part of it may already be in Isometric. Review and submit again to finish it. What is there is reused.");
     expect(render({ kind: "failed", message: "Removal needs a template." })).toContain("Removal needs a template. Review and submit again.");
   });
 
@@ -82,5 +82,18 @@ describe("SubmissionHistory", () => {
 
   it("renders nothing without attempts or events", () => {
     expect(renderToStaticMarkup(<SubmissionHistory attempts={[]} events={[]} facilityId={FACILITY} timeZone={TIME_ZONE} />)).toBe("");
+  });
+});
+
+describe("figure formatting", () => {
+  it("tells apart two instants of a repeated DST hour by their UTC offset", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionOutcomeNotice
+        outcome={{ kind: "differs", creditBatchId: "cb", creditBatchCode: "CB-1", shared: false, sharedWith: null,
+          differences: [{ field: "windowEnd", isometric: "2026-10-25T00:30:00.000Z", noma: "2026-10-25T01:30:00.000Z" }] }}
+        facilityId="f" timeZone="Europe/Zurich" />,
+    );
+    expect(html).toContain("+02:00");
+    expect(html).toContain("+01:00");
   });
 });

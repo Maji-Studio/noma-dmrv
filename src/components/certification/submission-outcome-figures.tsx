@@ -8,10 +8,11 @@ import { LedgerBeforeAfter } from "@/components/storage-locations/stock-ledger";
 import type { DriftDifference } from "@/lib/certification/production-batch-drift-details";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
-import { productionBatchMassUnitsMatch } from "@/lib/isometric/production-batches";
+import { ISOMETRIC_KILOGRAM_UNIT, kilogramUnitsMatch } from "@/lib/isometric/quantity-units";
 
 const WINDOW_FORMATS = ["MMM d, yyyy, HH:mm", "MMM d, yyyy, HH:mm:ss"] as const;
 const MILLISECOND_DIGITS = 3;
+const OFFSET_FORMAT = "xxx";
 
 const LABELS: Record<DriftDifference["field"], string> = {
   facility: "Facility",
@@ -23,7 +24,7 @@ const LABELS: Record<DriftDifference["field"], string> = {
 };
 
 function formatMass(mass: { magnitude: number; unit: string }): string {
-  if (productionBatchMassUnitsMatch(mass.unit, "kg")) {
+  if (kilogramUnitsMatch(mass.unit, ISOMETRIC_KILOGRAM_UNIT)) {
     return formatMassKg(mass.magnitude, { digits: MASS_KG_STORAGE_DECIMALS });
   }
   return `${mass.magnitude.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_STORAGE_DECIMALS })} ${mass.unit}`;
@@ -43,7 +44,11 @@ function formatInstantPair(registry: string, noma: string, timeZone: string): [s
     const right = formatInstant(noma, timeZone, pattern, false);
     if (left !== right) return [left, right];
   }
-  return [formatInstant(registry, timeZone, WINDOW_FORMATS[1], true), formatInstant(noma, timeZone, WINDOW_FORMATS[1], true)];
+  const left = formatInstant(registry, timeZone, WINDOW_FORMATS[1], true);
+  const right = formatInstant(noma, timeZone, WINDOW_FORMATS[1], true);
+  if (left !== right) return [left, right];
+  // A repeated DST hour prints the same wall clock twice: say which one by its UTC offset.
+  return [`${left} ${formatInstant(registry, timeZone, OFFSET_FORMAT, false)}`, `${right} ${formatInstant(noma, timeZone, OFFSET_FORMAT, false)}`];
 }
 
 /** Isometric value and noma value as display strings. */

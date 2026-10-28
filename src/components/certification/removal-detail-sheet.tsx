@@ -98,10 +98,13 @@ export function RemovalStorageSitesField({
 }
 
 /** The outcome the notice under the status tells, or null when nothing needs saying. */
-function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWorkflowStatus): NoticeOutcome | null {
-  if (status.kind === "interrupted") return { kind: "interrupted" };
+export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWorkflowStatus): NoticeOutcome | null {
   if (status.kind === "submitted" || status.kind === "submitting" || status.kind === "superseded") return null;
   const latest = summary.submissionAttempts[0]?.outcome;
+  // A retry of an interrupted draft can stop on drift before it claims anything, so the status stays
+  // "interrupted": the red stop still leads.
+  if (latest?.kind === "differs") return latest;
+  if (status.kind === "interrupted") return { kind: "interrupted" };
   return latest && latest.kind !== "submitted" ? latest : null;
 }
 

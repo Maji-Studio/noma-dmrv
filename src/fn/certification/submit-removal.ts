@@ -1,3 +1,4 @@
+import { isNoAnswerError } from "@/lib/isometric/error-utils";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -179,6 +180,8 @@ export async function submitRemoval(
         outcome,
         error_class: safeError.errorClass,
         error_message: safeError.errorMessage,
+        // Read back by the Removal sheet to say "Isometric did not answer".
+        failure_kind: isNoAnswerError(attemptError) ? "no_answer" : null,
         ghg_entry_external_mutation: attempt.externalMutation,
       },
       errorMessage: safeError.errorMessage,

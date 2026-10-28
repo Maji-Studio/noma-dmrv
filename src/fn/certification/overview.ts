@@ -80,7 +80,6 @@ const READINESS_CONCURRENCY = 8;
 // capping the cost of a single fan-out.
 const MAX_HEALTH_SUMMARIES = 50;
 const RECENT_SYNC_EVENTS_LIMIT = 10;
-const ATTEMPT_EVENTS_LIMIT = 60;
 
 /**
  * One credit batch's overview status: lightweight data readiness plus the
@@ -172,7 +171,7 @@ async function buildRemovalPreflightSummary(
       entityId: removalId,
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
-    listRemovalAttemptEvents(orgCtx, { removalId, limit: ATTEMPT_EVENTS_LIMIT }),
+    listRemovalAttemptEvents(orgCtx, { removalId }),
   ]);
   const facts = toRemovalReadinessFacts(ctx);
   const startedOn = scope.removal.startedOn ?? null;

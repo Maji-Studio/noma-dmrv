@@ -115,11 +115,12 @@ export function SubmitStep({
       : submitMutation.isError
         ? "The Removal was not submitted. Try again."
         : null);
-  // The attempt that just ended says why in structured form; its error text
-  // ties it to this failure rather than to an older attempt.
+  // The newest attempt says why in structured form; its error text ties it to this failure rather
+  // than to an older one. An unexpected error reaches the dialog worded differently from the attempt's
+  // summary ("The submission could not be completed..."), so it keeps the plain error. That is intended.
   const attemptsQuery = useRemovalSubmissionAttempts(facilityId, removalId, Boolean(terminalError));
   const endedAttempt = terminalError
-    ? attemptsQuery.data?.find((attempt) => attempt.errorMessage === terminalError)
+    ? attemptsQuery.data?.[0]?.errorMessage === terminalError ? attemptsQuery.data[0] : undefined
     : undefined;
   const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted" ? endedAttempt.outcome : null;
   const stopped = outcome?.kind === "differs";

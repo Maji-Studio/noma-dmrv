@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, max, notInArray, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, like, max, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -92,33 +92,44 @@ export async function listRecentSyncEvents(
     .limit(args.limit);
 }
 
+const ATTEMPT_SUMMARY_LIMIT = 20;
+const DRIFT_EVENT_LIMIT = 40;
+
 /**
- * What the Removal sheet needs to tell submit attempts apart: every attempt's
- * summary event, the drift stops, and any failed registry call. A successful
- * attempt writes dozens of events, so the plain recent list cannot hold it.
+ * What the Removal sheet needs to tell submit attempts apart: the newest
+ * attempt summaries, then the drift stops written since the oldest of them.
+ * Fetched separately so a run of failed events cannot push summaries out.
  */
 export async function listRemovalAttemptEvents(
   ctx: OrgContext,
-  args: { removalId: string; limit: number },
+  args: { removalId: string },
 ): Promise<CertifierSyncEventRow[]> {
   requireOrgScope(ctx);
-  return db
+  const scope = and(
+    eq(certifierSyncEvents.entityType, "removal"),
+    eq(certifierSyncEvents.entityId, args.removalId),
+    eq(certifierSyncEvents.organizationId, ctx.organizationId),
+  );
+  const summaries = await db
     .select()
     .from(certifierSyncEvents)
-    .where(
-      and(
-        eq(certifierSyncEvents.entityType, "removal"),
-        eq(certifierSyncEvents.entityId, args.removalId),
-        eq(certifierSyncEvents.organizationId, ctx.organizationId),
-        or(
-          eq(certifierSyncEvents.operation, "removal:submit:attempt-summary"),
-          like(certifierSyncEvents.operation, "production-batch:drift:%"),
-          eq(certifierSyncEvents.status, "failed"),
-        ),
-      ),
-    )
+    .where(and(scope, eq(certifierSyncEvents.operation, "removal:submit:attempt-summary")))
     .orderBy(desc(certifierSyncEvents.attemptedAt))
-    .limit(args.limit);
+    .limit(ATTEMPT_SUMMARY_LIMIT);
+  const oldest = summaries[summaries.length - 1];
+  if (!oldest) return [];
+  const drifts = await db
+    .select()
+    .from(certifierSyncEvents)
+    .where(and(
+      scope,
+      like(certifierSyncEvents.operation, "production-batch:drift:%"),
+      eq(certifierSyncEvents.status, "failed"),
+      gte(certifierSyncEvents.attemptedAt, oldest.attemptedAt),
+    ))
+    .orderBy(desc(certifierSyncEvents.attemptedAt))
+    .limit(DRIFT_EVENT_LIMIT);
+  return [...summaries, ...drifts];
 }
 
 /** Latest successful sync for all requested entities in one org-scoped query. */
