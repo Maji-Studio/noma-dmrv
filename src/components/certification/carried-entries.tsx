@@ -161,7 +161,7 @@ function EntryFigures({ entry }: { entry: CarriedEntry }) {
   const figures = entry.values && entry.values.length > 1 ? entry.values : [entry.value];
   return (
     <span className="flex flex-col text-right font-mono body-small tabular-nums">
-      {figures.map((figure) => <span key={`${figure.unit}:${figure.magnitude}`}>{formatFigure(figure)}</span>)}
+      {figures.map((figure, index) => <span key={index}>{formatFigure(figure)}</span>)}
     </span>
   );
 }
