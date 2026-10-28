@@ -62,6 +62,8 @@ export interface FlowColumnNodeData {
   kind: LineageNodeKind;
   title: string;
   count: number;
+  /** Off for a single record and for a collapsed column (its group counts). */
+  showCount: boolean;
   /** Expanded past the group threshold: offers to collapse again. */
   onCollapse?: () => void;
   [key: string]: unknown;
@@ -172,16 +174,17 @@ export function FlowGroupNode({ data }: NodeProps) {
 
 /** Column header: the kind and how many records it holds. */
 export function FlowColumnNode({ data }: NodeProps) {
-  const { title, count, onCollapse } = data as unknown as FlowColumnNodeData;
+  const { title, count, showCount, onCollapse } = data as unknown as FlowColumnNodeData;
+  // Sentence case like the Sankey's column labels; codes stay mono below.
   return (
     <div
-      className="flex cursor-default flex-col items-center gap-4 text-center font-mono text-[10px] font-medium uppercase leading-none tracking-[0.07em]"
+      className="flex cursor-default flex-col items-center gap-4 text-center"
       style={{ width: FLOW_HEADER_WIDTH }}
     >
-      <span className="text-[var(--color-text-secondary)]">{title}</span>
-      <span className="text-[var(--color-text-tertiary)]">
-        {count} {count === 1 ? "record" : "records"}
-      </span>
+      <span className="body-small font-medium text-[var(--color-text-secondary)]">{title}</span>
+      {showCount ? (
+        <span className="body-caption text-[var(--color-text-tertiary)]">{count} records</span>
+      ) : null}
       {onCollapse ? (
         <Button
           variant="noOutline"
@@ -190,7 +193,8 @@ export function FlowColumnNode({ data }: NodeProps) {
             event.stopPropagation();
             onCollapse();
           }}
-          className="nodrag nopan"
+          // 44px tall: a touch target at the phone's zoom of 1.
+          className="nodrag nopan h-44"
         >
           Collapse
         </Button>

@@ -16,6 +16,7 @@ import "@xyflow/react/dist/base.css";
 import { useEffect, useState } from "react";
 import {
   FLOW_FIT_PADDING,
+  FLOW_INFERRED_DASHARRAY,
   FLOW_MAX_ZOOM,
   FLOW_MIN_ZOOM,
   FLOW_NARROW_CANVAS_PX,
@@ -73,7 +74,8 @@ function FrameFlow({ nodeCount }: { nodeCount: number }) {
     }
     void setViewport({
       x: FLOW_NARROW_INSET_PX - bounds.x * FLOW_NARROW_ZOOM,
-      y: canvasHeight / 2 - (bounds.y + bounds.height / 2) * FLOW_NARROW_ZOOM,
+      // From the top-left corner, so the column headers stay in view.
+      y: FLOW_NARROW_INSET_PX - bounds.y * FLOW_NARROW_ZOOM,
       zoom: FLOW_NARROW_ZOOM,
     });
   }, [fitBounds, getNodes, setViewport, narrow, canvasWidth, canvasHeight, nodeCount]);
@@ -94,8 +96,11 @@ export interface ChainFlowGraphProps {
    * pointer is over a record.
    */
   focusNodeIds?: Set<string> | null;
-  /** A record was clicked (never a column header or a group). */
-  onNodeClick: (event: React.MouseEvent, node: Node) => void;
+  /**
+   * A record was opened: clicked, or Enter / Space on a focused record. Never
+   * a column header or a group (a group expands instead).
+   */
+  onNodeClick: (node: Node) => void;
   /** A click on the empty canvas. */
   onPaneClick?: () => void;
 }
@@ -188,8 +193,8 @@ export function ChainFlowGraph({
       ...graphEdge,
       data: {
         ...graphEdge.data,
-        labelMode,
         lit: litEdge(graphEdge),
+        labelText: labels.has(graphEdge.id) ? labelText(graphEdge) : null,
         dimmed: lit ? !litEdge(graphEdge) : false,
         labelX: labels.get(graphEdge.id)?.x,
         labelY: labels.get(graphEdge.id)?.y,
@@ -197,14 +202,14 @@ export function ChainFlowGraph({
     }));
   const showsInferred = layout.edges.some((graphEdge) => (graphEdge.data as ChainEdgeData | undefined)?.inferred);
 
-  const handleNodeClick = (event: React.MouseEvent, node: Node) => {
+  const openNode = (node: Node) => {
     if (node.type === "flowColumn") return;
     if (node.type === "flowGroup") {
       setHoveredNodeId(null);
       setExpanded((node.data as unknown as FlowGroupNodeData).kind, true);
       return;
     }
-    onNodeClick(event, node);
+    onNodeClick(node);
   };
 
   return (
@@ -244,7 +249,7 @@ export function ChainFlowGraph({
               y1={LEGEND_SAMPLE_HEIGHT / 2}
               y2={LEGEND_SAMPLE_HEIGHT / 2}
               stroke="var(--ink)"
-              strokeDasharray="4 4"
+              strokeDasharray={FLOW_INFERRED_DASHARRAY}
             />
           </svg>
           Inferred from the feedstock bin&apos;s draw order
@@ -257,7 +262,17 @@ export function ChainFlowGraph({
         edges={displayEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodeClick={handleNodeClick}
+        onNodeClick={(_, node) => openNode(node)}
+        // elementsSelectable is off, so React Flow ignores Enter and Space on
+        // a focused node: open it here, as a click would.
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          const nodeId = (event.target as HTMLElement).closest(".react-flow__node")?.getAttribute("data-id");
+          const node = nodeId ? displayNodes.find((candidate) => candidate.id === nodeId) : undefined;
+          if (!node || node.type === "flowColumn") return;
+          event.preventDefault();
+          openNode(node);
+        }}
         onPaneClick={onPaneClick}
         onNodeMouseEnter={(_, node) => {
           if (node.type !== "flowColumn") setHoveredNodeId(node.id);

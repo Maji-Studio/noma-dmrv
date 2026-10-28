@@ -22,15 +22,18 @@ export const FLOW_NODE_BOX_HEIGHT = 48;
 export const FLOW_COLUMN_PITCH = 208;
 export const FLOW_ROW_PITCH = 64;
 /** Column headers sit this far above the topmost record. */
-export const FLOW_HEADER_GAP = 72;
+/** Title, count and a 44px "Collapse" button must fit above the first row. */
+export const FLOW_HEADER_GAP = 104;
 export const FLOW_HEADER_WIDTH = 168;
-export const FLOW_HEADER_HEIGHT = 40;
+export const FLOW_HEADER_HEIGHT = 88;
 /**
  * A column with more records than this collapses into one stacked group
  * node. Clicking the group lists every record again.
  */
 export const FLOW_GROUP_THRESHOLD = 12;
 export const FLOW_ICON_SIZE = 16;
+/** Inferred links (feedstock intakes behind a run): edge and legend. */
+export const FLOW_INFERRED_DASHARRAY = "4 4";
 /** Zoom bounds; the low end lets a wide batch fit a phone screen. */
 export const FLOW_MIN_ZOOM = 0.2;
 export const FLOW_MAX_ZOOM = 2.5;
@@ -38,10 +41,12 @@ export const FLOW_FIT_PADDING = 0.12;
 /**
  * Below this canvas width (a phone) fitting every column would shrink the
  * codes past reading, so the chart opens at a readable zoom from its first
- * column instead, and the operator pans or pinches for the rest.
+ * column and its header instead, and the operator pans or pinches for the
+ * rest.
  */
 export const FLOW_NARROW_CANVAS_PX = 640;
-export const FLOW_NARROW_ZOOM = 0.75;
+/** Zoom 1 keeps every node's 48px hit box at least 44px on screen. */
+export const FLOW_NARROW_ZOOM = 1;
 export const FLOW_NARROW_INSET_PX = 16;
 
 /**
@@ -76,7 +81,7 @@ export interface LineageNodeStyle {
   /** Plural for a collapsed group ("34 feedstocks"). */
   plural: string;
   icon: Icon;
-  /** Fill accent — left edge, minimap, marker shapes. */
+  /** Fill accent: node square, marker shapes. */
   accent: string;
   /** Ink variant of the accent — text-on-light always passes contrast. */
   accentInk: string;

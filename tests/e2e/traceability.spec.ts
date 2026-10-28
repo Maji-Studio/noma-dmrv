@@ -545,9 +545,16 @@ test.describe("Traceability Visualization", () => {
       '[data-testid="rf__node-reactor:' + seededData.reactor.id + '"]'
     );
     await expect(reactorNode).toBeVisible({ timeout: 10000 });
-    await reactorNode.click();
     const sheet = adminPage.locator('[role="dialog"]').first();
-    await expect(sheet.getByRole("heading", { name: seededData.reactor.code })).toBeVisible();
+    const sheetHeading = sheet.getByRole("heading", { name: seededData.reactor.code });
+    // Keyboard: Enter on a focused record opens it like a click.
+    await reactorNode.focus();
+    await adminPage.keyboard.press("Enter");
+    await expect(sheetHeading).toBeVisible();
+    await adminPage.keyboard.press("Escape");
+    await expect(sheetHeading).toHaveCount(0);
+    await reactorNode.click();
+    await expect(sheetHeading).toBeVisible();
     await sheet.getByRole("button", { name: "View full record" }).click();
     await expect(adminPage).toHaveURL(/\/reactors/);
   });

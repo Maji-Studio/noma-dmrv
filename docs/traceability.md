@@ -202,8 +202,15 @@ theme.
   subtracting order quantity from product creation mass.
 - **Framing**: every Flow node carries its own width and height, so the chart
   frames itself from known bounds (no wait on DOM measurement). Below
-  `FLOW_NARROW_CANVAS_PX` (a phone) it opens at a readable zoom from the first
-  column instead of fitting every column.
+  `FLOW_NARROW_CANVAS_PX` (a phone) it opens at zoom 1 from the top-left
+  (first column and its header) instead of fitting every column, so every
+  node's 48px hit box and the 44px "Collapse" button stay touch-sized.
+- **Keyboard**: Enter or Space on a focused record opens it like a click; on
+  a group it expands the column (`elementsSelectable` is off, so React Flow
+  would otherwise ignore the keys).
+- **Column headers**: sentence case title and a "n records" count, shown only
+  when the count adds something (not for one record, not over a collapsed
+  group, which states its own count).
 
 ## Carbon Viewer — "Geography: carbon in transit"
 

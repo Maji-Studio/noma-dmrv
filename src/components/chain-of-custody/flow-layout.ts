@@ -107,7 +107,8 @@ export function layoutFlow(nodes: Node[], edges: Edge[], options: FlowLayoutOpti
     const collapsed = members.length > FLOW_GROUP_THRESHOLD && !options.expandedKinds.has(kind);
     if (!collapsed) {
       for (const member of members) {
-        displayNodes.push(member);
+        const data = nodeData(member);
+        displayNodes.push({ ...member, ariaLabel: `${data.label} ${data.shortCode}` });
         kindOf.set(member.id, kind);
         sortKey.set(member.id, nodeData(member).shortCode);
       }
@@ -207,7 +208,8 @@ export function layoutFlow(nodes: Node[], edges: Edge[], options: FlowLayoutOpti
 
   const headers: Node[] = columns.map((kind) => {
     const count = byKind.get(kind)!.length;
-    const expandedPastThreshold = count > FLOW_GROUP_THRESHOLD && options.expandedKinds.has(kind);
+    const crowded = count > FLOW_GROUP_THRESHOLD;
+    const expandedPastThreshold = crowded && options.expandedKinds.has(kind);
     return {
       id: flowColumnId(kind),
       type: "flowColumn",
@@ -220,6 +222,8 @@ export function layoutFlow(nodes: Node[], edges: Edge[], options: FlowLayoutOpti
         kind,
         title: LINEAGE_NODE_STYLES[kind].label,
         count,
+        // A collapsed group already says "34 feedstocks"; "1 record" says nothing.
+        showCount: count > 1 && (!crowded || expandedPastThreshold),
         onCollapse:
           expandedPastThreshold && options.onCollapse
             ? () => options.onCollapse?.(kind)

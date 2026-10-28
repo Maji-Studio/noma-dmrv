@@ -106,6 +106,8 @@ describe("layoutFlow", () => {
     const heights = nodes.map((node) => centreY(layout, node.id));
 
     expect(new Set(heights).size).toBe(1);
+    // One record per column: "1 record" adds nothing.
+    expect(layout.nodes.filter((node) => node.type === "flowColumn").every((node) => node.data.showCount === false)).toBe(true);
     expect(heights.every(Number.isFinite)).toBe(true);
   });
 
@@ -171,6 +173,9 @@ describe("layoutFlow", () => {
       const group = layout.nodes.find((node) => node.id === flowGroupId("feedstock"));
 
       expect(group?.type).toBe("flowGroup");
+      // The group says the count; the header does not repeat it.
+      expect(layout.nodes.find((node) => node.id === flowColumnId("feedstock"))?.data.showCount).toBe(false);
+      expect(layout.nodes.find((node) => node.id === flowColumnId("productionRun"))?.data.showCount).toBe(true);
       expect(group?.data.title).toBe(`${count} feedstocks`);
       expect(layout.nodes.some((node) => node.id === "feedstock:0")).toBe(false);
       expect(layout.displayIdOf("feedstock:3")).toBe(flowGroupId("feedstock"));
@@ -196,6 +201,7 @@ describe("layoutFlow", () => {
       expect(layout.nodes.filter((node) => node.type === "chainNode" && node.id.startsWith("feedstock:"))).toHaveLength(count);
       const header = layout.nodes.find((node) => node.id === flowColumnId("feedstock"));
       expect(header?.data.count).toBe(count);
+      expect(header?.data.showCount).toBe(true);
       expect(typeof header?.data.onCollapse).toBe("function");
       expect(layout.edges).toHaveLength(count);
     });
@@ -271,6 +277,31 @@ describe("merged group edges", () => {
     expect(pct(flowGroupId("biocharProduct"))).toBeNull();
     // The sibling into the same delivery must not read as the whole inflow.
     expect(pct("order:1")).toBeNull();
+    // Applied and recorded mass never sum, so the merge carries no figures.
+    const merged = layout.edges.find((graphEdge) => graphEdge.source === flowGroupId("biocharProduct"))!
+      .data as ChainEdgeBuildData;
+    expect(merged.wetKg).toBeNull();
+    expect(merged.dryKg).toBeNull();
+    expect(merged.kgLabel).toBeNull();
+  });
+
+  it("shows no % on a fan that mixes dry kg with the wet fallback", () => {
+    // Collapsed runs feed one product on dry kg and one on the wet fallback.
+    const runs = Array.from({ length: FLOW_GROUP_THRESHOLD + 1 }, (_, index) =>
+      record("productionRun", `production-run:${index}`, `PR-${index}`),
+    );
+    const dryProduct = record("biocharProduct", "biochar-product:dry");
+    const wetProduct = record("biocharProduct", "biochar-product:wet");
+    const edges = runs.flatMap((run) => [
+      link(run.id, dryProduct.id, { mass: 40, unit: "kg", massFooting: "dry", wetKg: 100, dryKg: 40 }),
+      link(run.id, wetProduct.id, { mass: 100, unit: "kg", massFooting: "wet", wetKg: 100, dryKg: null }),
+    ]);
+    const layout = layoutFlow([...runs, dryProduct, wetProduct], edges, noneExpanded);
+
+    expect(layout.edges).toHaveLength(2);
+    for (const graphEdge of layout.edges) {
+      expect((graphEdge.data as ChainEdgeBuildData).pctLabel).toBeNull();
+    }
   });
 });
 

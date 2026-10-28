@@ -437,7 +437,7 @@ export function TraceabilityPage() {
     openNodeSheet(node);
   };
 
-  const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
+  const handleNodeClick = (node: Node) => {
     // Split view keeps the map cross-link (click locates the record); the
     // Flow view lights the lineage and opens the detail sheet.
     if (applicationView === "split") {
@@ -447,7 +447,7 @@ export function TraceabilityPage() {
     focusAndOpenNode(node);
   };
 
-  const handleBatchNodeClick = (_event: React.MouseEvent, node: Node) => {
+  const handleBatchNodeClick = (node: Node) => {
     focusAndOpenNode(node);
   };
 

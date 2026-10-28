@@ -818,8 +818,9 @@ Anchor model: ADR
   `use-chain-graph.ts` / `chain-node.tsx` / `chain-edge.tsx`, plus `map/`,
   `sankey/`, `trail/`, `chain-constants.ts`.
 - **Data**: `src/data-access/chain-of-custody{,-batch,-trail}.ts`.
-- **Layout**: dagre LR layout on a React Flow canvas with minimap, hover focus,
-  and record-opening side sheets.
+- **Layout**: the Flow chart's column layout (`flow-layout.ts`) on a React
+  Flow canvas, no minimap, with hover and selection focus and record-opening
+  side sheets.
 - **Scope**: selectors and resolved anchors are filtered against the active
   facility so stale or foreign deep links cannot render another facility's
   provenance. Full detail in [traceability.md](./traceability.md).

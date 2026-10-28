@@ -1,18 +1,21 @@
 "use client";
 
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from "@xyflow/react";
+import { FLOW_INFERRED_DASHARRAY } from "./chain-constants";
 import type { ChainEdgeBuildData } from "./chain-edge-mass";
 import { flowEdgePath, LABEL_PART_SEPARATOR } from "./flow-edge-geometry";
 
 /** Per-edge flags: build-time flow data + render-time lighting and label mode. */
 export interface ChainEdgeData extends Partial<ChainEdgeBuildData> {
-  /** Which label the kg/% toggle is showing (injected at render). */
-  labelMode?: "kg" | "pct";
   /** Outside the focused record's lineage: fade back. */
   dimmed?: boolean;
   /** On the focused record's lineage: drawn dark, with its mass label. */
   lit?: boolean;
-  /** Chip centre, placed across all lit edges (flow-edge-geometry.ts). */
+  /**
+   * The chip: its text (kg or %, per the toggle) and centre, chosen and
+   * placed across all lit edges (flow-edge-geometry.ts). None at rest.
+   */
+  labelText?: string | null;
   labelX?: number;
   labelY?: number;
   [key: string]: unknown;
@@ -24,7 +27,6 @@ const LIT_STROKE = "var(--ink)";
 const REST_WIDTH = 1;
 const LIT_WIDTH = 2;
 const DIMMED_OPACITY = 0.12;
-const INFERRED_DASHARRAY = "4 4";
 
 /**
  * A quiet line at rest. Dashed when the link is inferred (which intakes a run
@@ -36,21 +38,13 @@ export function ChainEdge({ id, sourceX, sourceY, targetX, targetY, data }: Edge
   const {
     variant = "flow",
     inferred,
-    kgLabel,
-    pctLabel,
-    labelMode = "kg",
     dimmed,
     lit,
+    labelText,
     labelX,
     labelY,
   } = (data ?? {}) as ChainEdgeData;
   const isEquipment = variant === "equipment";
-  const labelText =
-    lit && !isEquipment && labelX !== undefined && labelY !== undefined
-      ? labelMode === "pct"
-        ? pctLabel
-        : kgLabel
-      : null;
 
   return (
     <>
@@ -60,12 +54,12 @@ export function ChainEdge({ id, sourceX, sourceY, targetX, targetY, data }: Edge
         style={{
           stroke: lit ? LIT_STROKE : isEquipment ? EQUIPMENT_STROKE : REST_STROKE,
           strokeWidth: lit ? LIT_WIDTH : REST_WIDTH,
-          strokeDasharray: inferred ? INFERRED_DASHARRAY : undefined,
+          strokeDasharray: inferred ? FLOW_INFERRED_DASHARRAY : undefined,
           opacity: dimmed ? DIMMED_OPACITY : 1,
           transition: "opacity 150ms, stroke 150ms",
         }}
       />
-      {labelText ? (
+      {labelText && labelX !== undefined && labelY !== undefined ? (
         <EdgeLabelRenderer>
           <div
             className="pointer-events-none absolute border border-[var(--ink)] bg-[var(--paper)] px-6 py-2 font-mono text-[10px] font-medium leading-[1.4] tracking-[0.04em] text-[var(--ink)]"
