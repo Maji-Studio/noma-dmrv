@@ -158,7 +158,12 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 
+vi.mock("@/hooks/use-feedstock-types", () => ({
+  useFeedstockTypeLinkLock: () => ({ data: undefined }),
+}));
+
 vi.mock("@/hooks/use-certification", () => ({
+  useIsometricFeedstockTypes: () => ({ data: undefined }),
   useFacilityCertifierSummary: () => ({
     data: {
       mapping: harness.certifierAvailable ? { provider: "isometric" } : null,
