@@ -21,7 +21,7 @@ import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-ch
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
-import { creditBatchName } from "@/lib/credit-batch-label";
+import { creditBatchName, creditBatchNameWithCode } from "@/lib/credit-batch-label";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
@@ -156,7 +156,7 @@ export function CreditBatchListRow({
   const name = creditBatchName(creditBatch);
   const named = name !== null;
   // Screen readers get the code too, so two batches with one name stay apart.
-  const accessibleName = named ? `${name} (${creditBatch.code})` : creditBatch.code;
+  const accessibleName = creditBatchNameWithCode(creditBatch);
   const codePrefix = named ? "" : CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
   return (
     // The whole row is a pointer convenience; the code link is the keyboard

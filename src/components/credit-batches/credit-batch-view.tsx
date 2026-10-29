@@ -354,7 +354,8 @@ export function creditBatchSheetSections({
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
-        { label: "Code", value: creditBatch.code },
+        // The title is the code for an unnamed batch, so the row only adds the code beside a name.
+        ...(creditBatch.name?.trim() ? [{ label: "Code", value: creditBatch.code }] : []),
         { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
         { label: "Start date", value: formatDate(creditBatch.startDate) },

@@ -10,3 +10,9 @@ export function creditBatchName(batch: { name?: string | null }): string | null 
 export function creditBatchLabel(batch: { code: string; name?: string | null }): string {
   return creditBatchName(batch) ?? batch.code;
 }
+
+/** "Name (CODE)" for a named batch, the code alone otherwise: where the name must stay tied to the code. */
+export function creditBatchNameWithCode(batch: { code: string; name?: string | null }): string {
+  const name = creditBatchName(batch);
+  return name ? `${name} (${batch.code})` : batch.code;
+}

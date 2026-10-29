@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, creditBatches, facilities, feedstockTypes, productionProcesses } from "@/db/schema";
+import { getCreditBatchEntityById, getCreditBatchesEntity } from "@/data-access/entities/credit-batches";
 import { createCreditBatch, getCreditBatchById, updateCreditBatch } from "@/data-access/credit-batches";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
@@ -62,5 +63,12 @@ describe("credit batch name round trip", () => {
     expect((await getCreditBatchById(ctx, saved.id))).toMatchObject({ name: NAME, code: `CB-NAME-C-${tag}` });
     await updateCreditBatch(ctx, saved.id, { expectedVersion: renamed.version, name: null });
     expect((await getCreditBatchById(ctx, saved.id))?.name).toBeNull();
+  });
+
+  it("finds a named batch by name in the entity picker and labels it with the name", async () => {
+    const saved = await create(`CB-NAME-D-${tag}`, `Harvest ${tag}`, "04");
+    const found = await getCreditBatchesEntity(ctx, { search: `harvest ${tag}`, facilityId, limit: 5 });
+    expect(found).toEqual([expect.objectContaining({ id: saved.id, code: `CB-NAME-D-${tag}`, name: expect.stringContaining(`Harvest ${tag} · `) })]);
+    expect(await getCreditBatchEntityById(ctx, saved.id)).toMatchObject({ name: expect.stringContaining(`Harvest ${tag} · `) });
   });
 });

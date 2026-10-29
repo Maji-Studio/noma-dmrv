@@ -1,4 +1,4 @@
-import { creditBatchName } from "@/lib/credit-batch-label";
+import { creditBatchNameWithCode } from "@/lib/credit-batch-label";
 import { formatDateRange } from "@/lib/format-utils";
 
 const LABEL_SEPARATOR = " · ";
@@ -16,7 +16,5 @@ export function creditBatchOptionLabel(batch: {
   startDate: string | Date | null | undefined;
   endDate: string | Date | null | undefined;
 }): string {
-  const name = creditBatchName(batch);
-  const label = name ? `${name} (${batch.code})` : batch.code;
-  return `${label}${LABEL_SEPARATOR}${formatDateRange(batch.startDate, batch.endDate)}`;
+  return `${creditBatchNameWithCode(batch)}${LABEL_SEPARATOR}${formatDateRange(batch.startDate, batch.endDate)}`;
 }
