@@ -170,17 +170,21 @@ through `project.biocharSpreadEvents.biocharSpreadEventSources` after Applicatio
 confirmation. The call uses `/graphql` at the Certify origin with both Certify
 authentication headers, a 10-second attempt timeout and at most two attempts.
 Wrong or malformed sets stop submission and record `source_set_mismatch` drift.
+An empty list right after create means Isometric has not attached the Sources yet:
+submission rereads after 1, 2 and 4 seconds, and a list that is still empty (or a
+reread with no answer after an empty one) is a mismatch.
 No answer continues with persisted `unconfirmed` status and an ID-only warning
 unless the previous readback was a mismatch. A retry without an answer keeps that
 mismatch, restores `source_set_mismatch` drift, and stops submission until an
 authoritative exact match confirms the corrected evidence set.
 The immutable snapshot retains the expected IDs; empty expected sets are not checked.
 
-Removal summary reloads recheck only unconfirmed, lifecycle-confirmed registrations.
-Each load rechecks at most three eligible registrations concurrently with one shared
+Removal summary reloads recheck unconfirmed and mismatch lifecycle-confirmed
+registrations, unconfirmed first. Each load rechecks at most three eligible registrations concurrently with one shared
 client resolution. Rows outside that limit retain their persisted status and counts;
 a failed recheck retains the row's previous status without failing the summary.
-Success clears the note. A mismatch on refresh records the evidence status and logs
+Success clears the note, including a stored mismatch that Isometric now matches;
+no answer keeps a stored mismatch, and an empty list on reload is a mismatch. A mismatch on refresh records the evidence status and logs
 IDs without failing the summary or marking submission drift. The summary and list
 row expose `evidenceLinks` counts and the latest check time for the UI.
 Confirmed checks are reused on submission retries. The sandbox confirmed the

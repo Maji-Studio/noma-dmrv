@@ -115,10 +115,11 @@ describe("Removal summary evidence re-check", () => {
     expect(mocks.graphql).toHaveBeenCalledTimes(EXPECTED_RECHECK_LIMIT);
     expect(mocks.record.mock.calls.map(([, id]) => id)).toEqual(["unconfirmed-1", "unconfirmed-2", "mismatch-1"]);
   });
-  it("keeps an empty remote Source list unconfirmed", async () => {
+  it("records an empty remote Source list as a mismatch on reload", async () => {
     mocks.graphql.mockResolvedValue(answer([]));
-    expect(await refresh()).toMatchObject({ unconfirmedCount: 1, mismatchCount: 0 });
-    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "unconfirmed");
+    expect(await refresh()).toMatchObject({ unconfirmedCount: 0, mismatchCount: 1 });
+    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "mismatch");
+    expect(mocks.drift).not.toHaveBeenCalled();
   });
   it("keeps the summary available when credential resolution fails", async () => {
     mocks.resolve.mockRejectedValue(new Error("not configured"));
@@ -186,6 +187,14 @@ describe("submission evidence recheck", () => {
     expect(mocks.graphql).toHaveBeenCalledTimes(2);
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");
     expect(mocks.drift).not.toHaveBeenCalled();
+  });
+  it.each(["not_checked", "unconfirmed"])("fails closed when a retry after an empty list gets no answer (stored %s)", async status => {
+    mocks.graphql.mockResolvedValueOnce(answer([])).mockResolvedValue({ errors: [{ message: "unavailable" }] });
+    const outcome = await settle(check(status));
+    expect(outcome).toMatchObject({ error: { name: "SafeError", message: expect.stringContaining("do not match its reviewed Sources") } });
+    expect(mocks.graphql).toHaveBeenCalledTimes(2);
+    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "mismatch");
+    expect(mocks.drift).toHaveBeenCalledWith(ctx, "journal-1", "source_set_mismatch");
   });
   it.each(["not_checked", "mismatch"])("fails closed when the Source list stays empty (stored %s)", async status => {
     mocks.graphql.mockResolvedValue(answer([]));

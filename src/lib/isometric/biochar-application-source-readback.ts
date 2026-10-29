@@ -21,7 +21,7 @@ export type SourceReadbackResult =
   | { kind: "no_answer"; reason: SourceReadbackNoAnswerReason };
 export type SourceReadbackOutcome =
   | { outcome: "confirmed" }
-  | { outcome: "mismatch"; missing: string[]; unexpected: string[]; reason: "missing" | "unexpected" | "garbled" }
+  | { outcome: "mismatch"; missing: string[]; unexpected: string[]; reason: "missing" | "unexpected" | "empty" | "garbled" }
   | { outcome: "unconfirmed"; reason: SourceReadbackNoAnswerReason };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,4 +88,16 @@ export function classifySourceReadback(
   if (!missing.length && !unexpected.length) return { outcome: "confirmed" };
   return { outcome: "mismatch", missing, unexpected,
     reason: missing.length ? "missing" : "unexpected" };
+}
+
+/**
+ * A found Application with none of its expected Sources, once any attach wait
+ * is over, is a mismatch: Isometric answered and lists no evidence.
+ */
+export function failClosedOnEmptySources(
+  expectedSourceIds: readonly string[],
+  outcome: SourceReadbackOutcome,
+): SourceReadbackOutcome {
+  if (outcome.outcome !== "unconfirmed" || outcome.reason !== "sources_not_attached") return outcome;
+  return { outcome: "mismatch", missing: [...new Set(expectedSourceIds)].sort(), unexpected: [], reason: "empty" };
 }
