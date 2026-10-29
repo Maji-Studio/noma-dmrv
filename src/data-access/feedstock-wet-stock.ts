@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { feedstocks } from "@/db/schema";
+import { feedstocks, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -15,7 +15,7 @@ type FeedstockStockReader = Pick<typeof db, "select">;
 
 const MASS_PRECISION_FACTOR = 1_000;
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
+  "has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -107,17 +107,18 @@ export async function allocateFeedstockWetMass(
     )
     .orderBy(asc(feedstocks.id));
 
-  if (batches.length === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
-  }
-
-  const totalUnits = toMassUnits(totalWetMassKg);
   const weights = batches.map((batch) => toMassUnits(batch.massWetKg ?? 0));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+    const [bin] = await executor.select({ name: storageLocations.name }).from(storageLocations).where(and(
+      eq(storageLocations.id, storageLocationId),
+      eq(storageLocations.organizationId, ctx.organizationId),
+    ));
+    const label = bin?.name?.trim() ? `Bin ${bin.name}` : "This bin";
+    throw new StockOverdrawError(`${label} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   }
 
+  const totalUnits = toMassUnits(totalWetMassKg);
   const availableWetKg = totalWeight / MASS_PRECISION_FACTOR;
   if (totalUnits > totalWeight) {
     throw new StockOverdrawError(

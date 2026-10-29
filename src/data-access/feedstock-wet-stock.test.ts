@@ -15,11 +15,28 @@ it("reports the available stock from the locked guard", async () => {
       meta: { storageLocationId: "bin", availableWetKg: 50, requestedWetKg: 100, unit: "kg" } }] });
 });
 
-it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("reports an empty allocation basis as insufficient stock", async ({ batches }) => {
-  const tx = { select: () => ({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) }) } as unknown as DbTransaction;
+it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("names the bin when the allocation basis is empty", async ({ batches }) => {
+  const select = vi.fn()
+    .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
+    .mockReturnValueOnce({ from: () => ({ where: async () => [{ name: "North intake" }] }) });
+  const tx = { select } as unknown as DbTransaction;
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 100, "2026-03-20"), path))
-    .rejects.toMatchObject({ code: "insufficient_stock", issues: [{ path,
+    .rejects.toMatchObject({ code: "insufficient_stock",
+      message: "Bin North intake has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
+      issues: [{ path,
       meta: { storageLocationId: "bin", availableWetKg: 0, requestedWetKg: 100, unit: "kg" } }] });
+});
+
+it.each([
+  { rows: [] }, { rows: [{ name: null }] }, { rows: [{ name: "" }] }, { rows: [{ name: "   " }] },
+])("falls back when the bin name is unavailable: %j", async ({ rows }) => {
+  const select = vi.fn()
+    .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) })
+    .mockReturnValueOnce({ from: () => ({ where: async () => rows }) });
+  await expect(allocateFeedstockWetMass(ctx, { select } as unknown as DbTransaction, "bin", 100, "2026-03-20"))
+    .rejects.toMatchObject({
+      message: "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
+    });
 });
 
 it("refuses a draw above the qualifying intake total with stock metadata", async () => {

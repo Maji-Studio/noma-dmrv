@@ -5,7 +5,7 @@ import { facilities, feedstocks, feedstockTypes, productionRunFeedstockDraws, pr
 import { createProductionRunInTransaction, updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { createFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
-import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
+import { allocateFeedstockWetMass, deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { reallocateRunsForBins, reallocateRunsForFacility } from "@/data-access/feedstock-run-allocations";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { cleanupLineageFixture, createLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -74,6 +74,32 @@ describe("facility-day feedstock allocations", () => {
       expectedVersion: run.version + 1, startTime: new Date("2026-03-11T08:00:00Z"),
       feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: DRAW_KG }],
     }))).rejects.toThrow(/archived/);
+  }));
+  it("rebuilds a date-only intake correction on an archived bin but refuses stock and reference changes", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    expect(await shares(tx, run.id)).toHaveLength(2);
+    await tx.update(storageLocations).set({ archivedAt: new Date() }).where(and(
+      eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, f.bins[0].id)));
+    const saved = await updateFeedstockInTransaction(ctx, tx, f.intakes[1].id, {
+      expectedVersion: f.intakes[1].version, deliveryDate: date("2026-04-02"),
+    });
+    expect(saved.deliveryDate).toEqual(date("2026-04-02"));
+    const expectedShares = [{ feedstockId: f.intakes[0].id, wetMassUsedKg: DRAW_KG }];
+    expect(await shares(tx, run.id)).toEqual(expectedShares);
+    for (const patch of [
+      { massWetKg: INTAKE_KG + 1 },
+      { massWetKg: INTAKE_KG + 1, deliveryDate: date("2026-03-15") },
+      { massWetKg: 0, deliveryDate: date("2026-03-15") },
+      { moistureContentPercent: 10, deliveryDate: date("2026-03-15") },
+      { storageLocationId: f.bins[1].id, deliveryDate: date("2026-03-15") },
+      { feedstockTypeId: f.type.id, deliveryDate: date("2026-03-15") },
+      { facilityId: f.facility.id, deliveryDate: date("2026-03-15") },
+    ]) {
+      await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, saved.id, {
+        expectedVersion: saved.version, ...patch,
+      }))).rejects.toThrow(/archived/);
+      expect(await shares(tx, run.id)).toEqual(expectedShares);
+    }
   }));
   it("keeps cancelled draws as history without consuming stock or blocking intake and timezone edits", () => scenario(async (tx, f) => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));
@@ -206,12 +232,21 @@ describe("facility-day feedstock allocations", () => {
   }));
   it("refuses a draw before any intake and rolls back an invalid start edit", () => scenario(async (tx, f) => {
     await expect(tx.transaction(savepoint => f.run(new Date("2026-02-20T08:00:00Z"), undefined, savepoint)))
-      .rejects.toMatchObject({ code: "insufficient_stock" });
+      .rejects.toMatchObject({ code: "insufficient_stock",
+        message: `Bin ${f.bins[0].name} has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.`,
+      });
     const run = await f.run();
     const before = await shares(tx, run.id);
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id,
       { expectedVersion: run.version, startTime: new Date("2026-02-20T08:00:00Z") }))).rejects.toMatchObject({ code: "insufficient_stock" });
     expect(await shares(tx, run.id)).toEqual(before);
+  }));
+  it("does not expose a bin name outside the caller's organization", () => scenario(async (tx, f) => {
+    const otherCtx = { ...ctx, organizationId: crypto.randomUUID() };
+    await expect(allocateFeedstockWetMass(otherCtx, tx, f.bins[0].id, DRAW_KG, "2026-02-20"))
+      .rejects.toMatchObject({
+        message: "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
+      });
   }));
   it("rolls back an intake edit that empties the qualifying basis", () => scenario(async (tx, f) => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));

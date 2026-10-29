@@ -741,12 +741,14 @@ export async function updateFeedstockInTransaction(
 
   const allocationChanged = stockDerivationChanged ||
     (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+  const dateOnlyAllocationChange = allocationChanged &&
+    !stockDerivationChanged && !storageReferenceNeedsValidation;
 
   if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
-    ]);
+    ], { allowArchived: dateOnlyAllocationChange });
   }
   if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
     await validateFeedstockStorageLocations(
