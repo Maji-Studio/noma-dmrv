@@ -137,7 +137,7 @@ async function updateFacilityRow(
   );
   if (!updated) throw new SafeError("Facility not found");
   // resolveFacilityTimezoneEdit returns undefined for unchanged zones/aliases.
-  if (data.timezone !== undefined) await reallocateRunsForFacility(ctx, executor, facilityId);
+  if (data.timezone !== undefined) await reallocateRunsForFacility(ctx, executor, facilityId, { mutation: "update", subject: "facility" });
   return updated;
 }
 
