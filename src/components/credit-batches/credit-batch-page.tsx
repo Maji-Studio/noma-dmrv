@@ -9,6 +9,7 @@
  * Edit opens the batch form in a side sheet over the page; delete sits under
  * ⋯. The route has already org-scoped the batch and matched its facility.
  */
+import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { recordHref, CREDIT_BATCH_TAB_PARAM } from "@/lib/record-links";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -323,7 +324,7 @@ export function CreditBatchPage({
         onOpenChange={(open) => !open && closeEdit()}
         mode="edit"
         onModeChange={(mode) => mode === "view" && closeEdit()}
-        title={batch.code}
+        title={creditBatchLabel(batch)}
         subtitle={formatDateRange(batch.startDate, batch.endDate)}
         canEdit={editable}
         {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, inUseLocksNothing: !membershipLocked })}

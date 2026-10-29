@@ -976,8 +976,11 @@ stays as a preview whose lead footer action opens the page
   filler subtitle in create mode**); view/edit subtitle = the identifying
   secondary. **Storage bins invert this**: the name is the title and the code
   the subtitle, because a bin's code is a lookup key for evidence and exports
-  while its name ("North hopper") is what operators say and search for. Follow
-  the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
+  while its name ("North hopper") is what operators say and search for. **Named
+  credit batches** are the other exception: the sheet title is the name, and the
+  code stays in the page header, the read sheet's Code row and the timeline hover
+  card (see [design-decisions.md](./design-decisions.md#credit-batches-and-locks)).
+  Follow the code-first default everywhere else. Edit sections use `FormSection`; read sections use `DetailSection`
   through the shared `DetailSpine`, with matching titles, order, and grouping.
   The read rail is numbered only when the paired edit form uses `FormSpine` —
   see [forms.md](./forms.md). The panel is `w-full` below `sm`, then

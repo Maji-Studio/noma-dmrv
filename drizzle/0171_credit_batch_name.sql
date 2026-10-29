@@ -1,0 +1,1 @@
+ALTER TABLE "credit_batches" ADD COLUMN "name" text;

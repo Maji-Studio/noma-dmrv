@@ -27,6 +27,7 @@ import type {
 } from "@/schemas/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
@@ -229,6 +230,8 @@ export function useUpdateCreditBatch() {
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      // A rename changes the picker label (name and dates) in the by-id and option caches.
+      invalidateEntityTypeQueries(queryClient, "creditBatch");
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
       });

@@ -10,6 +10,12 @@ describe("creditBatchOptionLabel", () => {
     ).toBe("CB-26-001 · Feb 1 to Feb 28, 2026");
   });
 
+  it("ties the name to the code when the batch has one", () => {
+    expect(
+      creditBatchOptionLabel({ code: "CB-26-001", name: "September maize", startDate: "2026-02-01", endDate: "2026-02-28" }),
+    ).toBe("September maize (CB-26-001) · Feb 1 to Feb 28, 2026");
+  });
+
   it("keeps the year on both ends for a window that crosses years", () => {
     expect(
       creditBatchOptionLabel({ code: "CB-26-009", startDate: "2026-12-15", endDate: "2027-01-10" }),

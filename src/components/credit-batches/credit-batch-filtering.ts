@@ -42,6 +42,7 @@ export function filterCreditBatches(
     const matchesSearch =
       !search ||
       batch.code.toLocaleLowerCase().includes(search) ||
+      batch.name?.toLocaleLowerCase().includes(search) ||
       batch.feedstockTypeName?.toLocaleLowerCase().includes(search);
     const overlapsDateRange =
       (!filters.startDate || batch.endDate >= filters.startDate) &&
