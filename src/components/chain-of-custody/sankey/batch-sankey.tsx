@@ -10,7 +10,7 @@
 import { useSearchParams } from "next/navigation";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
-import { NO_APPLICATION_SANKEY_MESSAGE, NO_RUN_APPLICATION_YET_WARNING } from "@/lib/chain-of-custody/copy";
+import { SANKEY_EMPTY_DESCRIPTION } from "@/lib/chain-of-custody/copy";
 import type { CreditBatchSankeyData } from "@/lib/chain-of-custody/sankey";
 import { RecordRows, RecordsPanel } from "./records-panel";
 import { WaterfallChart } from "./waterfall-chart";
@@ -87,8 +87,8 @@ export function SankeyEmpty({ runFiltered, onOpenFlow }: { runFiltered: boolean;
       <div className="w-full max-w-[640px]">
         <EmptyState
           icon={<ChartBarIcon size={48} weight="thin" />}
-          title={runFiltered ? "Nothing applied from this run" : "No mass balance yet"}
-          description={runFiltered ? NO_RUN_APPLICATION_YET_WARNING : NO_APPLICATION_SANKEY_MESSAGE}
+          title={runFiltered ? "Nothing applied from this run" : "Nothing applied yet"}
+          description={SANKEY_EMPTY_DESCRIPTION}
           action={
             <Button variant="weak" onClick={onOpenFlow}>
               Open Flow
