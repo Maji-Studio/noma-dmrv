@@ -13,7 +13,7 @@ interface RoutePointInput {
 }
 
 interface TransportRoutePreviewProps {
-  /** Route category; names the route and the CERT requirements. */
+  /** Route category; names the route. */
   entityType: TransportEntityTypeValue;
   originName: string | null | undefined;
   destinationName: string | null | undefined;

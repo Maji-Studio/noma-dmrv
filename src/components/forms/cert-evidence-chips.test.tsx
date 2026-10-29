@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DetailField } from "@/components/ui/detail-panel";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import type { Delivery } from "@/db/schema";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -23,8 +24,8 @@ vi.mock("@/components/forms/use-documents-cert-status", () => ({
 }));
 vi.mock("@/hooks/use-record-certification-lock", () => ({ useIsRecordCertificationLocked: () => false }));
 vi.mock("@/components/forms", () => ({
-  FormSection: ({ title, certifyRequired, certifyStatus, children }: { title: string; certifyRequired?: boolean; certifyStatus?: string; children?: ReactNode }) => (
-    <section aria-label={title} data-cert={certifyRequired ? "on" : "off"} data-status={certifyStatus}>{children}</section>
+  FormSection: ({ title, certifyRequired, certifyStatus, certifyDescription, children }: { title: string; certifyRequired?: boolean; certifyStatus?: string; certifyDescription?: string; children?: ReactNode }) => (
+    <section aria-label={title} data-cert={certifyRequired ? "on" : "off"} data-status={certifyStatus} data-description={certifyDescription}>{children}</section>
   ),
   FormField: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   FormFileUpload: () => null,
@@ -78,6 +79,35 @@ describe("edit mode evidence sections", () => {
     const section = screen.getByLabelText("Evidence & documents");
     expect(section.dataset.cert).toBe("on");
     expect(section.dataset.status).toBe(status);
+  });
+
+  it("creating a Sample shows the neutral lab report chip once the chosen batch is sampled", () => {
+    render(<SampleEvidenceSection isEditMode={false} creditBatchSampling="sampled" />);
+    const section = screen.getByLabelText("Evidence & documents");
+    expect(section.dataset.cert).toBe("on");
+    expect(section.dataset.status).toBe("neutral");
+    expect(mocks.lastEntityId).toBeUndefined();
+  });
+
+  it.each(["unsampled", undefined])("creating a Sample shows no chip for an %s batch", (sampling) => {
+    render(<SampleEvidenceSection isEditMode={false} creditBatchSampling={sampling} />);
+    expect(screen.getByLabelText("Evidence & documents").dataset.cert).toBe("off");
+  });
+
+  it.each([
+    ["neutral", "A lab report is required for certification"],
+    ["missing", "A lab report is required for certification. Not provided."],
+    ["satisfied", "A lab report is required for certification. Provided."],
+  ])("the lab report chip tooltip names the lab report (%s)", (status, text) => {
+    mocks.status = status;
+    render(<SampleEvidenceSection isEditMode sample={{ id: "s1", sampling: "sampled" } as SampleWithRelations} />);
+    expect(screen.getByLabelText("Evidence & documents").dataset.description).toBe(text);
+  });
+
+  it("other chips keep the default tooltip text", () => {
+    const html = renderToStaticMarkup(<CertificationFieldTag status="missing" />);
+    expect(html).toContain("Required for certification. Not provided.");
+    expect(html).not.toContain("lab report");
   });
 
   it("Sample form shows neither removed copy line", () => {

@@ -54,6 +54,14 @@ const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
 /** The chip's shape. */
 const CHIP_BASE = "body-caption inline-flex items-center border px-4 py-1";
 
+/** The chip's explanation for one requirement, e.g. "A lab report is required for certification". */
+export function certFieldStatusDescription(status: CertFieldStatus, requirement: string): string {
+  const base = `${requirement} is required for certification`;
+  if (status === "missing") return `${base}. Not provided.`;
+  if (status === "satisfied") return `${base}. Provided.`;
+  return base;
+}
+
 interface CertificationFieldTagProps {
   className?: string;
   description?: string;

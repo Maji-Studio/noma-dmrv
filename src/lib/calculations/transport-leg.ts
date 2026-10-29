@@ -175,6 +175,23 @@ export function resolveDeliveryTransportRoute(input: {
   };
 }
 
+/** One-way distance a saved delivery carries: its override, else its location's recorded distance. */
+export function savedDeliveryDistanceKm(delivery: {
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  recordedDistanceKm?: number | null;
+  recordedDistanceSource?: DistanceSourceValue | null;
+}): number | null {
+  return resolveDeliveryTransportRoute({
+    distanceKmOverride: delivery.distanceKmOverride,
+    distanceSource: delivery.distanceSource,
+    location: {
+      distanceKm: delivery.recordedDistanceKm ?? null,
+      distanceSource: delivery.recordedDistanceSource ?? null,
+    },
+  }).distanceKm;
+}
+
 export interface AggregatedDistributionLeg {
   /** Σ of qualifying deliveries' mass; 0 when none qualify. */
   totalMassKg: number;

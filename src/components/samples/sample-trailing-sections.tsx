@@ -8,6 +8,7 @@ import { SAMPLE_DOCUMENT_ACCEPT, SampleDocumentTypePicker, type SampleDocumentTy
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormFileUpload, FormSection } from "@/components/forms";
 import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
+import { certFieldStatusDescription } from "@/components/ui/certification-field-tag";
 import { isLabReportDocument } from "@/lib/certification/lab-report";
 import { isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
@@ -20,6 +21,8 @@ import { SampleDocumentsPanel } from "./sample-documents-panel";
 interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
   isEditMode: boolean;
+  /** Sampling of the credit batch chosen on the form; covers create, where there is no saved sample. */
+  creditBatchSampling?: string | null;
   deferredAttachments?: UseDeferredAttachmentsResult;
   /**
    * Retry/remove routed through the parent so it can reconcile its post-create
@@ -36,6 +39,7 @@ interface SampleTrailingSectionProps {
 export function SampleEvidenceSection({
   sample,
   isEditMode,
+  creditBatchSampling,
   deferredAttachments,
   onRetryAttachments,
   onRemoveAttachment,
@@ -45,11 +49,13 @@ export function SampleEvidenceSection({
   const [documentType, setDocumentType] = useState<SampleDocumentType>("lab_report");
   const locked = useIsRecordCertificationLocked("sample", isEditMode ? sample?.id : undefined);
   const labReportStatus = useDocumentsCertStatus("sample", isEditMode ? sample?.id : undefined, isLabReportDocument);
+  const sampling = creditBatchSampling ?? sample?.sampling;
   return (
     <FormSection
       title="Evidence & documents"
-      certifyRequired={isCertifyEntityField("sample", "labReport", { sampling: sample?.sampling, durabilityOption: sample?.durabilityOption })}
+      certifyRequired={isCertifyEntityField("sample", "labReport", { sampling, durabilityOption: sample?.durabilityOption })}
       certifyStatus={labReportStatus}
+      certifyDescription={certFieldStatusDescription(labReportStatus, "A lab report")}
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
