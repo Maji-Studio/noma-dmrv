@@ -204,6 +204,21 @@ describe("SupplierList archive view", () => {
     expect(plain.getByText("SUP-0001 cannot be deleted because feedstock intakes still use it.")).toBeTruthy();
   });
 
+  it.each([
+    { total: 5, more: null },
+    { total: 7, more: "and 2 more" },
+  ])("shows the overflow only past five intakes (total $total)", async ({ total, more }) => {
+    const named = [{ id: "fs1", code: "FS-001", facilityId: "f1" }, { id: "fs2", code: "FS-002", facilityId: "f1" }, { id: "fs3", code: "FS-003", facilityId: "f1" }, { id: "fs4", code: "FS-004", facilityId: "f1" }, { id: "fs5", code: "FS-005", facilityId: "f1" }];
+    state.remove.mockRejectedValueOnce(inUseError("Supplier was not deleted because feedstock intakes still use it.", { feedstocks: named, feedstockCount: total }));
+    render(<SupplierList />);
+    fireEvent.click(within("Actions for SUP-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0001 is in use" }));
+    expect(dialog.getAllByRole("link")).toHaveLength(5);
+    if (more) expect(dialog.getByText(more)).toBeTruthy();
+    else expect(dialog.queryByText(/ more$/)).toBeNull();
+  });
+
   it("retries Archive instead with the refreshed version after a stale refusal", async () => {
     state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     state.archive.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "supplier", id: "id-SUP-0001", code: STALE_VERSION_CONFLICT_CODE })).mockResolvedValue(undefined);

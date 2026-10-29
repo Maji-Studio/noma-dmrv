@@ -38,8 +38,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { supplierInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
+import { inUseMoreCount, supplierInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { SUPPLIER_INTAKES_REASON } from "@/lib/party-domain-errors";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -181,6 +182,7 @@ export function SupplierList() {
   const [deleteConflict, setDeleteConflict] = useState<SupplierWithRelations | null>(null);
   // The intakes the refusal names, so the in-use dialog can link each one.
   const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
+  const [conflictMore, setConflictMore] = useState(0);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -335,6 +337,7 @@ export function SupplierList() {
         // In use: the dialog gives way to the in-use dialog (Archive instead for an active supplier, Close only for an archived one).
         setDeleteConflict(deletingSupplier);
         setConflictReferences(supplierInUseReferences(error));
+        setConflictMore(inUseMoreCount(error, "feedstocks"));
         setDeletingSupplier(null);
         return;
       }
@@ -528,8 +531,9 @@ export function SupplierList() {
         <InUseDeleteDialog
           label={deleteConflict.code}
           onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
-          reason="feedstock intakes still use it"
+          reason={SUPPLIER_INTAKES_REASON}
           references={conflictReferences}
+          moreReferences={conflictMore}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);

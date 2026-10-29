@@ -26,6 +26,7 @@ import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operat
 const TIMEOUT_MS = 60_000;
 const CONNECTIONS = 4;
 const LOCATION_DISTANCE_KM = 25;
+const OVERFLOW_COUNT = 2;
 const fixtures: OrderFixture[] = [];
 const deliveryOrganizations: string[] = [];
 let pool: Pool;
@@ -87,7 +88,7 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
       orderId: order.id, storageLocationId: f.bin.id, code: "DEL-ARCHIVED", deliveryDate: new Date("2026-09-14"),
       deliveredWetMassKg: 10, massDryKg: 10, archivedAt: new Date() }).returning();
     await expect(runOperation(deleteCustomer, f.ctx, input(f))).rejects.toMatchObject({ code: "conflict",
-      issues: [{ path: ["customerId"], meta: { deliveryCodes: ["DEL-ARCHIVED"], deliveries: [{ id: delivery.id, code: delivery.code, facilityId: delivery.facilityId }], reason: "in_use" } }] });
+      issues: [{ path: ["customerId"], meta: { deliveryCount: 1, deliveryCodes: ["DEL-ARCHIVED"], deliveries: [{ id: delivery.id, code: delivery.code, facilityId: delivery.facilityId }], reason: "in_use" } }] });
   });
 
   it("caps delivery references in code order across facilities, excluding other customers and orgs", async () => {
@@ -102,7 +103,7 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
       return { id: row.id, code: row.code, facilityId: row.facilityId };
     };
     const references: { id: string; code: string; facilityId: string }[] = [];
-    for (const index of [6, 3, 1, 5, 2, 4]) {
+    for (const index of Array.from({ length: BLOCKER_LIMIT + OVERFLOW_COUNT }, (_, index) => index + 1).reverse()) {
       const order = index % 2 ? firstOrder : otherOrder;
       references.push(await insertDelivery(f, order.id, order.facilityId, `E2E-DL-${index}-${f.tag}`));
     }
@@ -114,7 +115,8 @@ describe("customer delete orders", { timeout: TIMEOUT_MS }, () => {
     await insertDelivery(foreign, foreignOrder.id, foreign.facility.id, `E2E-DL-0-${foreign.tag}`);
     const named = references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_LIMIT);
     await expect(runOperation(deleteCustomer, f.ctx, input(f))).rejects.toMatchObject({ code: "conflict",
-      issues: [{ path: ["customerId"], meta: { reason: "in_use", deliveryCodes: named.map(row => row.code), deliveries: named } }] });
+      message: `Customer was not deleted because deliveries were recorded on its orders: ${named.map(row => row.code).join(", ")} and ${OVERFLOW_COUNT} more. Archive it instead.`,
+      issues: [{ path: ["customerId"], meta: { reason: "in_use", deliveryCount: references.length, deliveryCodes: named.map(row => row.code), deliveries: named } }] });
   });
 
   it("returns a fresh cascade on mismatch without consuming the key, and replays after deletion", async () => {

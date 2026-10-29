@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { formulationInUse } from "@/lib/formulation-domain-errors";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within as queries } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { FormulationList } from "./formulation-list";
@@ -132,6 +133,33 @@ describe("FormulationList archive view", () => {
     expect(state.remove).toHaveBeenCalledWith({ formulationId: "id-BCF-0001", expectedVersion: 1 });
   });
 
+  it("gives an archived formulation the Close-only in-use dialog", async () => {
+    const message = "This formulation is still used.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["formulationId"]) }));
+    render(<FormulationList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("dialog", { name: "BCF-0002 is in use" })).toBeTruthy();
+    expect(screen.getByText("BCF-0002 cannot be deleted because other records still use it.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it.each([
+    { archived: false, code: "BCF-0001" },
+    { archived: true, code: "BCF-0002" },
+  ])("names what uses the formulation (archived: $archived)", async ({ archived, code }) => {
+    const error = formulationInUse("biochar products", ["BC-001"]);
+    state.remove.mockRejectedValue(new ActionError({ error: error.message, ...error }));
+    render(<FormulationList />);
+    if (archived) fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(rowDelete(code));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByText(`${code} cannot be deleted because biochar products use it.`)).toBeTruthy();
+  });
+
   it("keeps an unmarked conflict in the delete dialog", async () => {
     const message = "Formulation was not deleted because its name clashes.";
     state.remove.mockRejectedValue(new ActionError({ error: message, code: "conflict" }));
@@ -155,6 +183,10 @@ describe("FormulationList archive view", () => {
     expect(screen.getByText("Formulations you archive will appear here and can be restored.")).toBeTruthy();
   });
 });
+
+function rowDelete(code: string): HTMLElement {
+  return queries(screen.getByRole("list", { name: `Actions for ${code}` })).getByRole("button", { name: "Delete" });
+}
 
 function within(label: string): string[] {
   return Array.from(screen.getByRole("list", { name: label }).querySelectorAll("li")).map((item) => item.textContent ?? "");

@@ -70,7 +70,7 @@ describe("deleteCustomer", () => {
     state.deliveryCount = 2;
 
     await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
-      "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.",
+      "Customer was not deleted because deliveries were recorded on its orders: DEL-0 and DEL-1. Archive it instead.",
     );
     expect(state.deleted).toBe(false);
   });

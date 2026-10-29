@@ -247,6 +247,20 @@ describe("CustomerList archive view", () => {
     await waitFor(() => expect(state.restore).toHaveBeenLastCalledWith({ customerId: "id-CUST-0002", expectedVersion: 5 }));
   });
 
+  it.each([
+    { total: 5, more: null },
+    { total: 7, more: "and 2 more" },
+  ])("shows the overflow only past five deliveries (total $total)", async ({ total, more }) => {
+    state.remove.mockRejectedValueOnce(inUseError("Customer was not deleted because deliveries were recorded on its orders.", { deliveries: [{ id: "d1", code: "DL-001", facilityId: "f1" }, { id: "d2", code: "DL-002", facilityId: "f1" }, { id: "d3", code: "DL-003", facilityId: "f1" }, { id: "d4", code: "DL-004", facilityId: "f1" }, { id: "d5", code: "DL-005", facilityId: "f1" }], deliveryCount: total }));
+    render(<CustomerList />);
+    fireEvent.click(within("Actions for CUST-0001", "Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "CUST-0001 is in use" }));
+    expect(dialog.getAllByRole("link")).toHaveLength(5);
+    if (more) expect(dialog.getByText(more)).toBeTruthy();
+    else expect(dialog.queryByText(/ more$/)).toBeNull();
+  });
+
   it("lists the orders that go with the customer and sends the fingerprint with the delete", async () => {
     state.preview = { ...state.preview, data: { cascade: { orders: Array.from({ length: 7 }, (_, index) => ({ id: `o${index}`, code: `ORD-000${index + 1}`, facilityId: "f1" })), cascadeFingerprint: "v1:seven" } } };
     render(<CustomerList />);

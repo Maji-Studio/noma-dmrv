@@ -472,7 +472,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => {
+          onArchive={deleteConflict.archivedAt ? undefined : () => {
             setConflictArchiveError(null);
             void handleArchive(deleteConflict);
           }}

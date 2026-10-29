@@ -1,5 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
-import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, deleteRefusalList, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { SafeError } from "@/lib/errors";
 import { formatStockMinimumKg } from "@/lib/stock-overdraw";
@@ -42,10 +42,7 @@ export function orderHasDeliveries(deliveries: readonly { id: string; code: stri
   const first = deliveries[0];
   const total = Math.max(totalCount, deliveries.length);
   const named = deliveries.slice(0, ORDER_DELIVERY_NAME_CAP);
-  const names = named.map(delivery => delivery.code);
-  const remaining = total - names.length;
-  if (remaining > 0) names.push(`${remaining} more`);
-  const deliveryList = `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  const deliveryList = deleteRefusalList(named.map(delivery => delivery.code), total);
   const reason = total === 1
     ? `delivery ${first.code} still uses it. Delete that delivery first, or keep this order.`
     : `${total} deliveries still use it: ${deliveryList}. Delete those deliveries first, or keep this order.`;

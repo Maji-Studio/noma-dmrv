@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ActionError } from "@/lib/action-error";
 import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
-import { IN_USE_REASON, inUseDeleteRefusal, isInUseDeleteRefusal } from "./delete-refusal";
+import { IN_USE_REASON, deleteRefusalList, inUseDeleteRefusal, isInUseDeleteRefusal } from "./delete-refusal";
 import { customerHasDeliveries, customerHasStorageSites, customerLocationHasOrders, customerLocationHasStorageSite, supplierHasIntakes } from "./party-domain-errors";
 import { formulationInUse } from "./formulation-domain-errors";
 
@@ -77,5 +77,19 @@ describe("isInUseDeleteRefusal", () => {
       { path: ["driverId"], code: "conflict", message, meta: { reason: IN_USE_REASON } },
     ] });
     expect(isInUseDeleteRefusal(error)).toBe(false);
+  });
+});
+
+describe("deleteRefusalList", () => {
+  it.each([
+    { codes: [], total: 0, expected: "" },
+    { codes: ["A"], total: 1, expected: "A" },
+    { codes: ["A", "B"], total: 2, expected: "A and B" },
+    { codes: ["A", "B", "C"], total: 3, expected: "A, B and C" },
+    { codes: ["A", "B", "C"], total: 5, expected: "A, B, C and 2 more" },
+  ])("formats $expected without mutating codes", ({ codes, total, expected }) => {
+    const before = [...codes];
+    expect(deleteRefusalList(codes, total)).toBe(expected);
+    expect(codes).toEqual(before);
   });
 });

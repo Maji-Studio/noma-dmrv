@@ -390,8 +390,8 @@ describe("customer destination refusals", () => {
     const order = await insertReadOrder(a, "LOCATION-PARITY-ORDER", { customerId: t.parentId, customerLocationId: t.locationId });
     const delivery = await insertReadDelivery(a, order.id, order.quantityKg);
     const problem = await refusal("customer", "delete", t, "conflict", "/locationId", {},
-      "Customer location was not deleted because orders use it. Archive it instead.");
-    expect(problem.errors[0].meta).toEqual({ orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
+      `Customer location was not deleted because orders use it: ${order.code}. Archive it instead.`);
+    expect(problem.errors[0].meta).toEqual({ orderCount: 1, orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
     const [project] = await db.insert(certifierProjects).values({ organizationId: a.ctx.organizationId, facilityId: a.facility.id,
       provider: "isometric", externalProjectId: `prj-${randomUUID()}`, externalFacilityId: `fcl-${randomUUID()}` }).returning();
     const [mapping] = await db.insert(certifierStorageLocations).values({ organizationId: a.ctx.organizationId, customerLocationId: t.locationId,
@@ -406,8 +406,8 @@ describe("customer destination refusals", () => {
     const listing = await rpcBody(await MCP(rpc(a.partyKey, "tools/call", { name: "find_customer_locations", arguments: { idOrCode: t.parentId, archived: true } })));
     expect(listing.result.structuredContent.data).toContainEqual(expect.objectContaining({ id: t.locationId }));
     const archivedProblem = await refusal("customer", "delete", { ...t, version: 2 }, "conflict", "/locationId", {},
-      "Customer location was not deleted because orders use it.");
-    expect(archivedProblem.errors[0].meta).toEqual({ orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
+      `Customer location was not deleted because orders use it: ${order.code}.`);
+    expect(archivedProblem.errors[0].meta).toEqual({ orderCount: 1, orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
   }, TIMEOUT_MS);
 
   it("matches a storage-site-only delete refusal", async () => {
