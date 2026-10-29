@@ -73,6 +73,18 @@ describe("EmissionLineList", () => {
     expect(screen.queryByText(/0 legs/)).toBeNull();
   });
 
+  it("gives each of several counted-on codes its own 44px row, and a single code none", () => {
+    const records = (countedOn: { creditBatchId: string; code: string }[]) =>
+      makeLine({ state: "filled", records: { source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" }, countedOn } });
+    renderList([records([{ creditBatchId: "cb-1", code: "CB-26-001" }, { creditBatchId: "cb-2", code: "CB-26-002" }])]);
+    for (const code of ["CB-26-001", "CB-26-002"]) {
+      expect(screen.getByRole("link", { name: `Open credit batch ${code}` }).parentElement?.className).toContain("min-h-44");
+    }
+    cleanup();
+    renderList([records([{ creditBatchId: "cb-1", code: "CB-26-001" }])]);
+    expect(screen.getByRole("link", { name: "Open credit batch CB-26-001" }).parentElement?.className ?? "").not.toContain("min-h-44");
+  });
+
   it("shows records and manual entries as chips, with the records chip linking upstream", () => {
     renderList([
       makeLine({
