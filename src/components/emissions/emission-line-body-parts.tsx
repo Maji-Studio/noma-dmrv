@@ -36,7 +36,7 @@ import {
 } from "./emission-line-display";
 import type { EntryMenuItem } from "./emission-ledger-entries";
 import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
-import { CountedOnLinks, SOURCE_ICON } from "./emission-source-chips";
+import { CountedOnLink, SOURCE_ICON } from "./emission-source-chips";
 
 export const ICON = 14;
 
@@ -113,14 +113,14 @@ export function AddEntryLink({ line, onAdd, className }: { line: EmissionLine; o
   );
 }
 
-/** "3 production runs" as the link to them, with the source icon; a source that holds nothing reads in warning ink. */
+/** "3 production runs" as the link to them, with the source icon (counted elsewhere: the first counting batch, so pass one batch per row); a source that holds nothing reads in warning ink. */
 export function RecordsSourceLink({ records, scope, className }: { records: LineRecords; scope: EmissionBatchScope; className?: string }) {
   const SourceIcon = SOURCE_ICON[records.source];
   if (isCountedElsewhere(records)) {
     return (
       <span className={cn("inline-flex min-h-24 items-baseline gap-6 body-small text-[var(--color-text-primary)]", className)}>
         <SourceIcon size={ICON} aria-hidden="true" className="shrink-0 self-center" />
-        <CountedOnLinks records={records} facilityId={scope.facilityId} />
+        {records.countedOn[0] && <CountedOnLink batch={records.countedOn[0]} facilityId={scope.facilityId} wrap />}
       </span>
     );
   }

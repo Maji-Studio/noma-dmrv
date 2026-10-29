@@ -73,16 +73,37 @@ describe("EmissionLineList", () => {
     expect(screen.queryByText(/0 legs/)).toBeNull();
   });
 
-  it("gives each of several counted-on codes its own 44px row below md, and a single code none", () => {
+  it("sums several counted-on batches in the chip as plain text, and keeps one batch as a link", () => {
     const records = (countedOn: { creditBatchId: string; code: string }[]) =>
       makeLine({ state: "filled", records: { source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" }, countedOn } });
     renderList([records([{ creditBatchId: "cb-1", code: "CB-26-001" }, { creditBatchId: "cb-2", code: "CB-26-002" }])]);
-    for (const code of ["CB-26-001", "CB-26-002"]) {
-      expect(screen.getByRole("link", { name: `Open credit batch ${code}` }).parentElement?.className).toContain("max-md:min-h-44");
-    }
+    expect(screen.getByText("Counted on 2 credit batches").className).toContain("whitespace-nowrap");
+    expect(screen.queryByRole("link", { name: /Open credit batch/ })).toBeNull();
+    expect(screen.getByLabelText("Counted on CB-26-001, CB-26-002")).toBeTruthy();
     cleanup();
     renderList([records([{ creditBatchId: "cb-1", code: "CB-26-001" }])]);
-    expect(screen.getByRole("link", { name: "Open credit batch CB-26-001" }).parentElement?.className ?? "").not.toContain("max-md:min-h-44");
+    expect(screen.getAllByRole("link", { name: "Open credit batch CB-26-001" })).toHaveLength(1);
+    expect(screen.queryByText(/credit batches/)).toBeNull();
+  });
+
+  it("lists each counting batch as its own row in the open sources table", () => {
+    const records = (countedOn: { creditBatchId: string; code: string }[]) =>
+      makeLine({ state: "filled", records: { source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" }, countedOn } });
+    const open = (countedOn: { creditBatchId: string; code: string }[]) => {
+      renderList([records(countedOn)], ["line-1"]);
+      return within(screen.getByRole("region", { name: /details/ })).getByRole("table", { name: /Sources of/ });
+    };
+    const two = open([{ creditBatchId: "cb-1", code: "CB-26-001" }, { creditBatchId: "cb-2", code: "CB-26-002" }]);
+    const rows = within(two).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    ["CB-26-001", "CB-26-002"].forEach((code, i) => {
+      expect(within(rows[i]).getAllByRole("link")).toHaveLength(1);
+      expect(within(rows[i]).getByRole("link", { name: `Open credit batch ${code}` })).toBeTruthy();
+      expect(within(rows[i]).getAllByText("Whole credit batch").length).toBeGreaterThan(0);
+    });
+    cleanup();
+    const one = open([{ creditBatchId: "cb-1", code: "CB-26-001" }]);
+    expect(within(one).getAllByRole("row").slice(1)).toHaveLength(1);
   });
 
   it("shows records and manual entries as chips, with the records chip linking upstream", () => {

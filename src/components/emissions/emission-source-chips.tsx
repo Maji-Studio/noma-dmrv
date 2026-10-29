@@ -51,10 +51,7 @@ export const SOURCE_ICON: Record<RecordsSource, Icon> = {
   applications: PlantIcon,
 };
 
-const CHIP_BASE = "inline-flex min-h-28 items-center gap-6 body-caption md:px-8";
-const CHIP = `${CHIP_BASE} whitespace-nowrap`;
-/** The counted-on chip may hold several codes, so it wraps between them (each code stays unbreakable). */
-const WRAPPING_CHIP = `${CHIP_BASE} flex-wrap`;
+const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap body-caption md:px-8";
 /** Phones: the records link reads like the open row's records link, underlined. */
 const PHONE_LINK = "max-md:underline max-md:decoration-[color:var(--color-border-primary)] max-md:underline-offset-4";
 const ICON_SIZE = 14;
@@ -73,32 +70,27 @@ interface SourceChipsProps {
   emptyAction?: ReactNode;
 }
 
-/** "Counted on CB-26-001", each code a link to that credit batch's Emissions tab. */
-export function CountedOnLinks({ records, facilityId, interactive = true }: {
-  records: LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> };
+/** "Counted on CB-26-001", the code a link to that credit batch's Emissions tab. */
+export function CountedOnLink({ batch, facilityId, interactive = true, wrap = false }: {
+  batch: { creditBatchId: string; code: string };
   facilityId: string;
   interactive?: boolean;
+  /** Narrow cells let the code drop under "Counted on" rather than split the words. */
+  wrap?: boolean;
 }) {
-  // Several codes can wrap onto lines closer than the 44px hit areas; a 44px row per code below md keeps them apart.
-  const stackedRows = interactive && records.countedOn.length > 1;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-6 gap-y-8">
-      <span>{COUNTED_ON_PREFIX}</span>
-      {records.countedOn.map((batch, index) => (
-        <span key={batch.creditBatchId} className={stackedRows ? "max-md:inline-flex max-md:min-h-44 max-md:items-center" : undefined}>
-          {interactive ? (
-            <Link
-              href={countedOnHref(batch.creditBatchId, facilityId)}
-              onClick={(event) => event.stopPropagation()}
-              aria-label={`Open credit batch ${batch.code}`}
-              className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}
-            >
-              {batch.code}
-            </Link>
-          ) : <span className="font-mono whitespace-nowrap">{batch.code}</span>}
-          {index < records.countedOn.length - 1 && ","}
-        </span>
-      ))}
+    <span className={cn("inline-flex items-center gap-x-6", wrap && "flex-wrap")}>
+      <span className="whitespace-nowrap">{COUNTED_ON_PREFIX}</span>
+      {interactive ? (
+        <Link
+          href={countedOnHref(batch.creditBatchId, facilityId)}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Open credit batch ${batch.code}`}
+          className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}
+        >
+          {batch.code}
+        </Link>
+      ) : <span className="font-mono whitespace-nowrap">{batch.code}</span>}
     </span>
   );
 }
@@ -124,9 +116,11 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     );
     chips.push(
       isCountedElsewhere(records) ? (
-        <span key="records" className={cn(WRAPPING_CHIP, look)} aria-label={recordsText(records)}>
+        <span key="records" className={cn(CHIP, look)} aria-label={recordsText(records)}>
           <SourceIcon size={ICON_SIZE} aria-hidden="true" />
-          <CountedOnLinks records={records} facilityId={ids.facilityId} interactive={interactive} />
+          {records.countedOn.length === 1 ? (
+            <CountedOnLink batch={records.countedOn[0]} facilityId={ids.facilityId} interactive={interactive} />
+          ) : `${COUNTED_ON_PREFIX} ${records.countedOn.length} credit batches`}
         </span>
       ) : interactive ? (
         <Link
