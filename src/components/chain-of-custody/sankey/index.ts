@@ -1,1 +1,1 @@
-export { BatchSankey, type BatchSankeyProps } from "./batch-sankey";
+export { BatchSankey, SankeyEmpty, type BatchSankeyProps } from "./batch-sankey";
