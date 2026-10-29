@@ -21,6 +21,7 @@ import {
   type CertificationLineageLockEntityType,
   type CertificationLineageMutation,
 } from "@/lib/certification/lineage-lock-message";
+import { SUBMISSION_EXTERNAL_MUTATIONS, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { recordLocks, type RecordLockRemoval } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
 import {
@@ -81,8 +82,10 @@ function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarge
   // Any snapshot of the Removal that counted this record, or predates the
   // counted list (fails closed), keeps the lock. Drafts count too: an
   // interrupted attempt may already have reached the registry, and the lineage
-  // guard still decides whether a draft holds a lock at all. A Removal without a
-  // snapshot is covered by the current owner. Artifact/row lock order is unchanged.
+  // guard still decides whether a draft holds a lock at all. Rejected attempts
+  // with no registry mutation never reached Isometric, so cannot have counted
+  // anything and are excluded. A Removal without a snapshot is covered by the
+  // current owner. Artifact/row lock order is unchanged.
   const countedTransport = sql<boolean>`exists (
     select 1 from ${certificationSubmissions}
     where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
@@ -90,6 +93,13 @@ function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarge
       and ${certificationSubmissions.localEntityType} = 'removal'
       and ${certificationSubmissions.submissionType} = 'removal'
       and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
+      and not (
+        ${certificationSubmissions.status} = 'rejected'
+        and ${certificationSubmissions.externalId} is null
+        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
+          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
+        and ${certificationSubmissions.lockedAt} is null
+      )
       and ${certificationSubmissions.payloadSnapshot} is not null
       and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
         or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})

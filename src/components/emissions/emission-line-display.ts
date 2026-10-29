@@ -12,6 +12,7 @@ import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { recordHref } from "@/lib/record-links";
 import { entryFieldName, isDecimal } from "@/schemas/emission-entry-form";
 
 /* ---------- types ---------- */
@@ -137,9 +138,21 @@ export function hasRecordsFigure(records: LineRecords | null): records is LineRe
   return !!records?.figure && Number(records.figure.magnitude) > 0;
 }
 
+/** A recorded zero whose legs other credit batches count. */
+export function isCountedElsewhere(records: LineRecords | null): records is LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> } {
+  return !!records?.countedOn?.length;
+}
+
+export const COUNTED_ON_PREFIX = "Counted on";
+
+/** "Counted on CB-26-001, CB-26-002". */
+export function countedOnText(records: LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> }): string {
+  return `${COUNTED_ON_PREFIX} ${records.countedOn.map((batch) => batch.code).join(", ")}`;
+}
+
 /** The source exists but holds nothing for this line. */
 export function isRecordsGap(records: LineRecords | null): boolean {
-  return !!records && !hasRecordsFigure(records);
+  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records);
 }
 
 function countWords(count: number, one: string, many: string): string {
@@ -152,6 +165,7 @@ export function openSourceLabel(source: RecordsSource): string {
 
 /** Records chip label: "22 runs", "None on 22 runs", "No deliveries yet". */
 export function recordsChipText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   if (hasRecordsFigure(records)) return countWords(records.count, words.shortOne, words.shortMany);
   if (records.count > 0) return `None on ${countWords(records.count, words.shortOne, words.shortMany)}`;
@@ -160,6 +174,7 @@ export function recordsChipText(records: LineRecords): string {
 
 /** Full sentence: "120 L from 22 production runs", "Not recorded on 22 production runs", "No deliveries yet". */
 export function recordsText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   const counted = countWords(records.count, words.one, words.many);
   if (hasRecordsFigure(records)) return `${formatFigure(records.figure)} from ${counted}`;
@@ -169,8 +184,14 @@ export function recordsText(records: LineRecords): string {
 
 /** Where the figure comes from, without repeating it: "3 production runs", "Not recorded on 22 production runs". */
 export function recordsSourceText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   return hasRecordsFigure(records) ? countWords(records.count, words.one, words.many) : recordsText(records);
+}
+
+/** The credit batch that counts the legs, on its Emissions tab. */
+export function countedOnHref(creditBatchId: string, facilityId: string): string {
+  return recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" });
 }
 
 /** Where the records are made, filtered to the batch where the page supports it. */

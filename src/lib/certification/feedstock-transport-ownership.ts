@@ -34,3 +34,9 @@ export function ownedTransportFeedstockIds(runs: readonly FeedstockTransportRun[
 export function hasLinkedFeedstock(runs: readonly FeedstockTransportRun[]): boolean {
   return runs.some((run) => run.feedstocks.length > 0);
 }
+
+/** Linked feedstock ids whose transport another credit batch counts: the runs link feedstock but none owns its transport. */
+export function linkedFeedstockIdsOwnedElsewhere(runs: readonly (FeedstockTransportRun & { feedstocks: readonly { id: string }[] })[]): string[] {
+  if (!hasLinkedFeedstock(runs) || ownedTransportFeedstockIds(runs).length > 0) return [];
+  return [...new Set(runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))];
+}

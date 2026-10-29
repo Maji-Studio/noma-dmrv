@@ -14,6 +14,8 @@ import {
   multiplyDecimals,
   tonnesToKg,
   recordsChipText,
+  countedOnHref,
+  isRecordsGap,
   recordsHref,
   recordsText,
 } from "./emission-line-display";
@@ -30,6 +32,16 @@ describe("records copy", () => {
     expect(recordsText({ ...RUNS, figure: null })).toBe("Not recorded on 22 production runs");
     expect(recordsChipText({ source: "deliveries", count: 0, figure: null })).toBe("No deliveries yet");
     expect(recordsChipText({ source: "transportLegs", count: 1, figure: { magnitude: "5", unit: "km * tonne" } })).toBe("1 leg");
+  });
+
+  it("names the batches that count the legs instead of a bare zero", () => {
+    const zero = { magnitude: "0", unit: "km * tonne" };
+    const counted = { source: "transportLegs" as const, count: 0, figure: zero, countedOn: [{ creditBatchId: "a", code: "CB-26-001" }, { creditBatchId: "b", code: "CB-26-002" }] };
+    expect(recordsChipText(counted)).toBe("Counted on CB-26-001, CB-26-002");
+    expect(recordsText(counted)).toBe("Counted on CB-26-001, CB-26-002");
+    expect(isRecordsGap(counted)).toBe(false);
+    expect(countedOnHref("a", "fac")).toBe("/credit-batches/a?facility=fac&tab=emissions");
+    expect(recordsChipText({ ...counted, countedOn: undefined })).toBe("No transport legs yet");
   });
 
   it("links runs, deliveries and applications filtered to the credit batch", () => {

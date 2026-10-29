@@ -24,9 +24,13 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import {
-  hasRecordsFigure,
+  COUNTED_ON_PREFIX,
+  countedOnHref,
+  isCountedElsewhere,
+  isRecordsGap,
   lineRecords,
   manualEntriesText,
   openSourceLabel,
@@ -36,6 +40,7 @@ import {
   stoppedEntries,
   valueEntries,
   type EmissionLine,
+  type LineRecords,
   type RecordsSource,
 } from "./emission-line-display";
 
@@ -65,6 +70,31 @@ interface SourceChipsProps {
   emptyAction?: ReactNode;
 }
 
+/** "Counted on CB-26-001", the code a link to that credit batch's Emissions tab. */
+export function CountedOnLink({ batch, facilityId, interactive = true, wrap = false }: {
+  batch: { creditBatchId: string; code: string };
+  facilityId: string;
+  interactive?: boolean;
+  /** Narrow cells let the code drop under "Counted on" rather than split the words. */
+  wrap?: boolean;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-x-6", wrap && "flex-wrap")}>
+      <span className="whitespace-nowrap">{COUNTED_ON_PREFIX}</span>
+      {interactive ? (
+        <Link
+          href={countedOnHref(batch.creditBatchId, facilityId)}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Open credit batch ${batch.code}`}
+          className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}
+        >
+          {batch.code}
+        </Link>
+      ) : <span className="font-mono whitespace-nowrap">{batch.code}</span>}
+    </span>
+  );
+}
+
 export function SourceChips({ line, ids, onEntries, interactive = true, quietText = true, emptyAction }: SourceChipsProps) {
   if (line.state === "needsSetup") {
     return <span className="body-caption text-[var(--color-text-tertiary)]">{EMISSION_LINE_STATE_LABELS.needsSetup}</span>;
@@ -73,7 +103,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
   const chips: ReactNode[] = [];
   if (records) {
     const SourceIcon = SOURCE_ICON[records.source];
-    const gap = !hasRecordsFigure(records);
+    const gap = isRecordsGap(records);
     const look = gap
       ? "text-[var(--st-wait)] md:border md:border-dashed md:border-[var(--st-wait-border)]"
       : "text-[var(--color-text-primary)] md:border md:border-transparent md:bg-[var(--sea)]";
@@ -81,11 +111,18 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
       <>
         <SourceIcon size={ICON_SIZE} aria-hidden="true" />
         {recordsChipText(records)}
-        {interactive && <ArrowUpRightIcon size={ARROW_SIZE} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />}
+        {interactive && !isCountedElsewhere(records) && <ArrowUpRightIcon size={ARROW_SIZE} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />}
       </>
     );
     chips.push(
-      interactive ? (
+      isCountedElsewhere(records) ? (
+        <span key="records" className={cn(CHIP, look)} aria-label={recordsText(records)}>
+          <SourceIcon size={ICON_SIZE} aria-hidden="true" />
+          {records.countedOn.length === 1 ? (
+            <CountedOnLink batch={records.countedOn[0]} facilityId={ids.facilityId} interactive={interactive} />
+          ) : `${COUNTED_ON_PREFIX} ${records.countedOn.length} credit batches`}
+        </span>
+      ) : interactive ? (
         <Link
           key="records"
           href={recordsHref(records, ids)}

@@ -16,7 +16,7 @@ import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, useEntryActions } from "./emission-line-body-parts";
-import { formatFigure, hasRecordsFigure, type EmissionEntry, type EmissionLine } from "./emission-line-display";
+import { formatFigure, hasRecordsFigure, isCountedElsewhere, isRecordsGap, type EmissionEntry, type EmissionLine, type LineRecords } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 import { LateEntryStatus } from "./late-entry-status";
@@ -33,6 +33,12 @@ const DETAIL_CELL = cn("col-span-2 col-start-1 row-start-2 min-w-0 pb-10 md:col-
 const DIVIDER = "[border-top:var(--row-divider)]";
 const RECORDS_DATE = "Whole credit batch";
 
+/** One records row per counting batch, so each link is its own target; any other source is one row. */
+function recordRows(records: LineRecords): LineRecords[] {
+  if (!isCountedElsewhere(records) || !records.countedOn) return [records];
+  return records.countedOn.map((batch) => ({ ...records, countedOn: [batch] }));
+}
+
 interface SourcesTableProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
@@ -43,6 +49,7 @@ interface SourcesTableProps {
 
 export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: SourcesTableProps) {
   const { records } = model;
+  const shownFigure = records && (hasRecordsFigure(records) || isCountedElsewhere(records)) ? records.figure : null;
   const entryCount = model.values.length + model.stopped.length;
   const groupLabel = entryCount > 1 ? "Manual entries" : "Manual entry";
   return (
@@ -54,18 +61,18 @@ export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: Sour
         <span role="columnheader" className="col-start-2 row-start-1 pb-6 text-right md:col-start-4">Amount</span>
         <span role="columnheader" className="col-start-3 row-start-1 md:col-start-5"><span className="sr-only">Actions</span></span>
       </div>
-      {records && (
-        <div role="row" className={cn(TABLE_ROW, DIVIDER)}>
+      {records && recordRows(records).map((rowRecords, index) => (
+        <div key={rowRecords.countedOn?.[0]?.creditBatchId ?? index} role="row" className={cn(TABLE_ROW, DIVIDER)}>
           <span role="cell" className={SOURCE_CELL}>
-            <RecordsSourceLink records={records} scope={scope} className="self-start" />
+            <RecordsSourceLink records={rowRecords} scope={scope} className="self-start" />
             <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
-          <span role="cell" className={cn(AMOUNT_CELL, !hasRecordsFigure(records) && "text-[var(--color-text-tertiary)]")}>
-            {hasRecordsFigure(records) ? formatFigure(records.figure) : MISSING_VALUE.notRecorded}
+          <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(rowRecords) && "text-[var(--color-text-tertiary)]")}>
+            {shownFigure ? formatFigure(shownFigure) : MISSING_VALUE.notRecorded}
           </span>
         </div>
-      )}
+      ))}
       {model.values.map((entry, index) => (
         <EntryRow
           key={entry.id}

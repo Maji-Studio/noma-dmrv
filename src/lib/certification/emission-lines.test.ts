@@ -193,10 +193,12 @@ it("records a biomass transport zero with no records when every linked trip is o
   const lines = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),
     problems: [], enrichmentComplete: true, entriesCanSubmit: true, automaticFigures, entries: [],
     automaticRecordCounts: { "feedstock-transport": 0 },
+    feedstockTransportCountedOn: [{ creditBatchId: "cb", code: "CB-26-001" }],
   });
   const line = lines.find((line) => line.contract?.automaticSource === "feedstock-transport")!;
   expect(EMISSION_LINE_STATE_LABELS[line.state]).toBe("Recorded");
   expect(line.blocker).toBeUndefined();
-  expect(line.records).toEqual({ source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" } });
+  expect(line.records).toEqual({ source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" },
+    countedOn: [{ creditBatchId: "cb", code: "CB-26-001" }] });
   expect(line.total).toEqual({ magnitude: "0", unit: "km * tonne" });
 });
