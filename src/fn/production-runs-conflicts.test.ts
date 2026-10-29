@@ -16,6 +16,7 @@ import {
 } from "@/lib/stale-version";
 
 const mocks = vi.hoisted(() => ({
+  getLinkedProductionRunById: vi.fn(),
   requireOrgContext: vi.fn(),
   runOperationInProcess: vi.fn(),
   loggerError: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@/lib/operations/production-runs", () => ({
 }));
 vi.mock("@/data-access/production-runs", () => ({
   getProductionRunById: vi.fn(),
+  getLinkedProductionRunById: mocks.getLinkedProductionRunById,
 }));
 
 vi.mock("@/lib/log", () => ({
@@ -55,7 +57,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
-import { deleteProductionRunFn, updateProductionRunFn } from "./production-runs";
+import { deleteProductionRunFn, updateProductionRunFn, getLinkedProductionRunByIdFn } from "./production-runs";
 
 const RUN_ID = "00000000-0000-4000-8000-000000000001";
 const OTHER_RUN_ID = "00000000-0000-4000-8000-000000000002";
@@ -160,5 +162,22 @@ describe("deleteProductionRunFn", () => {
     await expect(
       deleteProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID }),
     ).resolves.toEqual({ success: true, data: undefined });
+  });
+});
+
+
+describe("getLinkedProductionRunByIdFn", () => {
+  it("validates the linked id before reading", async () => {
+    expect(await getLinkedProductionRunByIdFn("invalid")).toMatchObject({ success: false });
+    expect(mocks.getLinkedProductionRunById).not.toHaveBeenCalled();
+  });
+
+  it("passes authenticated organization context and returns the linked detail", async () => {
+    const run = { id: RUN_ID };
+    mocks.getLinkedProductionRunById.mockResolvedValue(run);
+    expect(await getLinkedProductionRunByIdFn(RUN_ID)).toEqual({ success: true, data: run });
+    expect(mocks.getLinkedProductionRunById).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org", userId: "user" }), RUN_ID,
+    );
   });
 });

@@ -99,17 +99,13 @@ Links into an archived facility open the record read only through
 `src/hooks/use-linked-record-facility.ts:useLinkedRecordFacility` and
 `src/lib/linked-record-read-only.ts:linkedRecordReadOnly` (#1499). Still open:
 
-- `src/data-access/production-runs/queries.ts:getProductionRunById` filters
-  archived runs, and `tests/production-run-feedstock-type-gate.test.ts` pins that,
-  so `src/components/production-runs/production-run-list.tsx:ProductionRunList`
-  is wired for read only but its link still says it could not be opened. Needs a
-  separate read-only detail read.
+- Wire the production-run sheet to `useLinkedProductionRun`; its separate
+  org-scoped read includes facility-cascade archives while keeping independently
+  archived runs hidden. The normal by-id read remains unchanged.
 - `src/components/credit-batches/credit-batch-list.tsx:CreditBatchList` (preview
   sheet and routed page) and
   `src/components/storage-locations/storage-location-list.tsx:StorageLocationList`
   (its own bin sheet) only wait for the facility; they do not open read only.
-- `src/data-access/orders.ts:deleteOrderInTransaction` does not refuse an
-  archived order.
 
 ## Account suspension across organizations (#1391 section 4) - **deferred**
 

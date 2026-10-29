@@ -19,6 +19,7 @@ export type {
 export {
   getProductionRuns,
   getProductionRunById,
+  getLinkedProductionRunById,
   getProductionRunStats,
   getProductionRunsForCertification,
 } from "./queries";
