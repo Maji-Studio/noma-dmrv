@@ -1,9 +1,9 @@
 import { beforeAll, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications, biocharProducts, certificationSubmissions, creditBatchApplications,
-  creditBatchProductionRuns, creditBatches, deliveries, facilities, feedstocks,
+  creditBatchProductionRuns, creditBatches, certifierRemovals, deliveries, facilities, feedstocks, reactors,
   orders, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, samples, storageLocations,
 } from "@/db/schema";
 import { updateProductionRun, createProductionRunInTransaction, deleteProductionRunInTransaction } from "@/data-access/production-runs/mutations";
@@ -14,6 +14,7 @@ import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { prepareFeedstockTransportOwnershipFreeze } from "@/data-access/feedstock-transport-ownership-freeze";
 import { reallocateRunsForBins } from "@/data-access/feedstock-run-allocations";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { lockBinStocks } from "@/data-access/lock-bin-stocks";
 import { withLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputOrderFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
@@ -43,9 +44,31 @@ async function withPair(mode: Mode, test: (a: LineageFixture, b: LineageFixture)
       await tx.update(productionRuns).set({ status: "complete", startTime: EARLY, endTime: EARLY_END })
         .where(eq(productionRuns.id, a.productionRunId));
     });
+    await db.update(creditBatches).set({ endDate: "2026-06-15" }).where(eq(creditBatches.id, a.batchId));
+    await db.update(feedstocks).set({ massWetKg: 2_000, massDryKg: 1_800 }).where(eq(feedstocks.id, a.feedstockId));
     await withLineageFixture(async b => {
-      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
-        .where(eq(productionRuns.id, b.productionRunId));
+      // Both runs draw the shared bin in one facility. Batch windows use end
+      // dates, so B can start between A's old/new dates without cohort overlap.
+      await db.transaction(async tx => {
+        // Keep facility-scoped names unique when merging the two fixtures.
+        await tx.update(reactors).set({ facilityId: a.facilityId,
+          identifier: sql`${reactors.identifier} || ' ' || ${reactors.id}` }).where(eq(reactors.id, b.reactorId));
+        await tx.update(storageLocations).set({ facilityId: a.facilityId,
+          name: sql`${storageLocations.name} || ' ' || ${storageLocations.id}` }).where(eq(storageLocations.facilityId, b.facilityId));
+        await tx.update(storageLocations).set({ feedstockTypeId: a.feedstockTypeId }).where(eq(storageLocations.id, b.feedstockBinId));
+        await tx.update(feedstocks).set({ facilityId: a.facilityId, feedstockTypeId: a.feedstockTypeId }).where(eq(feedstocks.id, b.feedstockId));
+        await tx.update(productionRuns).set({ facilityId: a.facilityId, status: "complete",
+          feedstockWetMassKg: 1_001, feedstockMassDryKg: 900.9, endTime: new Date("2026-06-16T12:00:00Z") })
+          .where(eq(productionRuns.id, b.productionRunId));
+        await tx.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
+          productionRunId: b.productionRunId, storageLocationId: a.feedstockBinId, wetMassKg: 1 });
+        await tx.update(creditBatches).set({ facilityId: a.facilityId, feedstockTypeId: a.feedstockTypeId,
+          productionProcessId: a.productionProcessId, startDate: "2026-06-16" }).where(eq(creditBatches.id, b.batchId));
+        await tx.update(certifierRemovals).set({ facilityId: a.facilityId }).where(eq(certifierRemovals.id, b.removalId));
+        await tx.update(biocharProducts).set({ facilityId: a.facilityId }).where(eq(biocharProducts.id, b.productId));
+        await tx.update(orders).set({ facilityId: a.facilityId }).where(eq(orders.id, b.orderId));
+        await tx.update(deliveries).set({ facilityId: a.facilityId }).where(eq(deliveries.id, b.deliveryId));
+      });
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: b.productionRunId, feedstockId: a.feedstockId, wetMassUsedKg: 1 });
       if (mode !== "unsent-moves") {
@@ -55,7 +78,7 @@ async function withPair(mode: Mode, test: (a: LineageFixture, b: LineageFixture)
           externalId: `ext_${b.removalId}`, payloadSnapshot: { transportFeedstockIds: countingSharedFeedstock ? [a.feedstockId, b.feedstockId] : [b.feedstockId] },
         });
       }
-      await test(a, b);
+      await test(a, { ...b, facilityId: a.facilityId, feedstockTypeId: a.feedstockTypeId });
     }, "none");
   }, "none");
 }
@@ -75,12 +98,13 @@ async function facilityVersion(a: LineageFixture) {
   const [row] = await db.select().from(facilities).where(eq(facilities.id, a.facilityId));
   return row.version;
 }
-async function expectFreeze(mode: Mode, write: Promise<unknown>, a: LineageFixture, expectedOwner: string | undefined) {
+async function expectFreeze(mode: Mode, write: Promise<unknown>, a: LineageFixture, expectedOwner: string | undefined, refusalPrefix?: string) {
   if (mode === "sent-moves") {
     const error = await write.then(() => null, (failure: unknown) => failure);
     const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
     expect(error).toMatchObject({ code: "certification_locked",
-      message: expect.stringContaining(`truck trips of feedstock ${stock.code}`) });
+      message: expect.stringContaining(`transport legs of feedstock ${stock.code}, and a Removal that uses this feedstock is already sent.`) });
+    if (refusalPrefix) expect(error).toMatchObject({ message: expect.stringContaining(refusalPrefix) });
   } else {
     await write;
   }
@@ -164,7 +188,7 @@ it.each(MODES)("explicit membership removal: %s", async mode => {
     if (mode === "sent-stays") await makeNonOwner(a);
     // Shrink the window too, otherwise declaration intentionally auto-expands.
     await expectFreeze(mode, updateCreditBatch(ctx, a.batchId, { expectedVersion: await batchVersion(a),
-      productionRunIds: [], startDate: new Date("2026-06-20T00:00:00Z") }),
+      productionRunIds: [], startDate: new Date("2026-06-15T00:00:00Z") }),
     a, mode === "sent-moves" ? a.productionRunId : b.productionRunId);
   });
 });
@@ -196,23 +220,15 @@ it.each(MODES)("credit batch deletion: %s", async mode => {
   });
 });
 
-it.each(MODES)("facility archive freezes both run and batch eligibility: %s", async mode => {
+it.each(MODES)("single-facility archive and restore retain transport ownership: %s", async mode => {
   await withPair(mode, async (a, b) => {
     if (mode === "sent-stays") await makeNonOwner(a);
-    await expectFreeze(mode, archiveFacility(ctx, a.facilityId, await facilityVersion(a)),
-      a, mode === "sent-moves" ? a.productionRunId : b.productionRunId);
-  });
-});
-
-it.each(MODES)("facility restore freezes both run and batch eligibility: %s", async mode => {
-  await withPair(mode, async (a, b) => {
-    if (mode === "sent-stays") await makeNonOwner(a);
-    // Set up a historical archive before attempting the supported restore path.
-    await db.update(facilities).set({ archivedAt: ARCHIVE_STAMP }).where(eq(facilities.id, a.facilityId));
-    await db.update(productionRuns).set({ archivedAt: ARCHIVE_STAMP }).where(eq(productionRuns.id, a.productionRunId));
-    await db.update(creditBatches).set({ archivedAt: ARCHIVE_STAMP }).where(eq(creditBatches.id, a.batchId));
-    await expectFreeze(mode, restoreFacility(ctx, a.facilityId, await facilityVersion(a)),
-      a, mode === "unsent-moves" ? a.productionRunId : b.productionRunId);
+    const expectedOwner = mode === "sent-stays" ? b.productionRunId : a.productionRunId;
+    expect(await owner(a)).toBe(expectedOwner);
+    await archiveFacility(ctx, a.facilityId, await facilityVersion(a));
+    expect(await owner(a)).toBeUndefined();
+    await restoreFacility(ctx, a.facilityId, await facilityVersion(a));
+    expect(await owner(a)).toBe(expectedOwner);
   });
 });
 
@@ -246,7 +262,7 @@ it.each(MODES)("new backdated completed run and automatic attachment: %s", async
         biocharOutputKg: 100, biocharMoisturePercent: 5,
       }));
       if (mode === "sent-moves") {
-        await expect(write).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining("truck trips") });
+        await expect(write).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining("Cannot create this production run because it would change which credit batch counts the transport legs") });
         expect(await owner(a)).toBe(b.productionRunId);
       } else {
         const created = await write;
@@ -273,10 +289,10 @@ it.each(MODES)("new credit batch membership: %s", async mode => {
     try {
       const write = db.transaction(tx => createCreditBatchInTransaction(ctx, tx, {
         code, facilityId: a.facilityId, feedstockTypeId: a.feedstockTypeId,
-        startDate: new Date("2026-06-01T00:00:00Z"), endDate: new Date("2026-06-30T00:00:00Z"),
+        startDate: new Date("2026-06-01T00:00:00Z"), endDate: new Date("2026-06-15T00:00:00Z"),
         productionRunIds: [a.productionRunId], sampling: "sampled",
       }, "form"));
-      await expectFreeze(mode, write, a, mode === "unsent-moves" ? a.productionRunId : b.productionRunId);
+      await expectFreeze(mode, write, a, mode === "unsent-moves" ? a.productionRunId : b.productionRunId, "Cannot create this credit batch because");
     } finally {
       const batches = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, TEST_ORG_ID), eq(creditBatches.code, code)));
       for (const batch of batches) {
@@ -357,6 +373,10 @@ it.each(MODES)("draw source replacement checks the newly selected feedstock: %s"
     await db.delete(productionRunFeedstocks).where(and(eq(productionRunFeedstocks.productionRunId, b.productionRunId), eq(productionRunFeedstocks.feedstockId, a.feedstockId)));
     await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
       productionRunId: b.productionRunId, feedstockId: nextFeedstockId, wetMassUsedKg: 1 });
+    await db.update(productionRunFeedstockDraws).set({ storageLocationId: nextBinId }).where(and(
+      eq(productionRunFeedstockDraws.productionRunId, b.productionRunId),
+      eq(productionRunFeedstockDraws.storageLocationId, a.feedstockBinId),
+    ));
     try {
       const write = db.transaction(async tx => {
         await lockBinStocks(ctx, tx, [a.feedstockBinId, nextBinId]);
@@ -378,6 +398,94 @@ it.each(MODES)("draw source replacement checks the newly selected feedstock: %s"
       await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.storageLocationId, nextBinId));
       await db.delete(feedstocks).where(eq(feedstocks.id, nextFeedstockId));
       await db.delete(storageLocations).where(eq(storageLocations.id, nextBinId));
+    }
+  });
+});
+
+it("refuses replacing a Sent run's draws with none before its last feedstock link disappears", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await makeNonOwner(a);
+    const before = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, b.productionRunId));
+    // The public update rejects a complete run with no feedstock in preflight.
+    await expect(updateProductionRun(ctx, b.productionRunId, {
+      expectedVersion: await runVersion(b), feedstockDraws: [],
+    })).rejects.toMatchObject({ code: "validation_failed" });
+    // Standalone replacement has no outer run guard. Preserve B's batch target
+    // so removing its last link cannot hide its Sent Removal from the freeze.
+    await expect(db.transaction(async tx => {
+      await lockBinStocks(ctx, tx, [a.feedstockBinId, b.feedstockBinId]);
+      return replaceProductionRunFeedstockDraws(ctx, tx, {
+        productionRunId: b.productionRunId, facilityId: a.facilityId, draws: [],
+      });
+    })).rejects.toMatchObject({ code: "certification_locked" });
+    const after = await db.select().from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, b.productionRunId));
+    expect(after).toEqual(before);
+    expect(await owner(a)).toBe(b.productionRunId);
+    expect(await runVersion(b)).toBe(1);
+  });
+});
+
+it("backdates and replaces a source in one production update without moving the final owner", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await makeNonOwner(a);
+    const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
+    const nextBinId = crypto.randomUUID();
+    const nextFeedstockId = crypto.randomUUID();
+    await db.insert(storageLocations).values({ id: nextBinId, organizationId: TEST_ORG_ID,
+      facilityId: a.facilityId, code: `E2E-FREEZE-${nextBinId}`, name: "E2E replacement source",
+      type: "feedstock_bin", feedstockTypeId: a.feedstockTypeId });
+    await db.insert(feedstocks).values({ ...stock, id: nextFeedstockId,
+      code: `E2E-FREEZE-${nextFeedstockId}`, storageLocationId: nextBinId });
+    try {
+      expect(await owner(a)).toBe(b.productionRunId);
+      await updateProductionRun(ctx, a.productionRunId, {
+        expectedVersion: await runVersion(a), startTime: EARLY, endTime: EARLY_END,
+        feedstockDraws: [{ storageLocationId: nextBinId, wetMassKg: 500 }],
+      });
+      expect(await owner(a)).toBe(b.productionRunId);
+      const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, a.productionRunId));
+      expect(saved.startTime).toEqual(EARLY);
+      const draws = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, a.productionRunId));
+      expect(draws.map(draw => draw.storageLocationId)).toEqual([nextBinId]);
+      expect((await getFeedstockTransportOwners(ctx, [nextFeedstockId])).get(nextFeedstockId)).toBe(a.productionRunId);
+    } finally {
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, nextFeedstockId));
+      await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.storageLocationId, nextBinId));
+      await db.delete(feedstocks).where(eq(feedstocks.id, nextFeedstockId));
+      await db.delete(storageLocations).where(eq(storageLocations.id, nextBinId));
+    }
+  });
+});
+
+it.each([false, true])("serializes with a draft Removal artifact only when ownership moves: %s", async moves => {
+  await withPair("unsent-moves", async (a, b) => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const holder = db.transaction(async tx => {
+      await acquireCertificationArtifactLocksSorted(tx, [{
+        provider: "isometric", localEntityType: "removal", localEntityId: b.removalId,
+      }]);
+      acquired();
+      await released;
+    });
+    try {
+      await Promise.race([ready, holder]);
+      const write = updateProductionRun(ctx, a.productionRunId, {
+        expectedVersion: await runVersion(a),
+        startTime: moves ? LATE : new Date("2026-06-12T09:00:00Z"),
+        endTime: moves ? LATE_END : EARLY_END,
+      });
+      if (moves) {
+        await expect(write).rejects.toMatchObject({ code: "conflict", retryable: true });
+      } else {
+        await write;
+      }
+      expect(await owner(a)).toBe(a.productionRunId);
+    } finally {
+      release();
+      await holder;
     }
   });
 });

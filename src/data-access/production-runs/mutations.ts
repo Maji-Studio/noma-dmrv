@@ -317,7 +317,7 @@ export async function createProductionRunInTransaction(
       cancellationReason: data.cancellationReason ?? null,
     });
 
-    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
+    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id, { mutation: "create" });
 
     const savedDraws = await readRunDrawSnapshot(ctx, tx, created.id);
     options.capture?.(created.id, null, { ...created, feedstockDraws: savedDraws });
@@ -693,7 +693,7 @@ export async function updateProductionRunInTransaction(
         runIds: [productionRunId],
         binIds: [...lockedFeedstockStorageLocationIds, ...(normalizedFeedstockDraws ?? []).map(draw => draw.storageLocationId)],
       }), { mutation: "update", subject: "production run" });
-    await freeze(async () => {
+    await freeze(async transportOwnershipFreeze => {
       await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
 
       // A cancelled run frees its slot, so only an occupying run needs this guard.
@@ -784,9 +784,10 @@ export async function updateProductionRunInTransaction(
           productionRunId,
           facilityId: lockedTargetFacilityId,
           draws: normalizedFeedstockDraws,
+          transportOwnershipFreeze,
         });
       } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId) {
-        await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId });
+        await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId, transportOwnershipFreeze });
       }
 
       const savedDraws = feedstockDrawsChanged
@@ -830,6 +831,7 @@ export async function updateProductionRunInTransaction(
         ctx,
         tx,
         productionRunId,
+        { transportOwnershipFreeze },
       );
     });
       },

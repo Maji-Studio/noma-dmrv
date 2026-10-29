@@ -23,12 +23,15 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > ownership is frozen (#1490), including when that Removal sent its transport
 > as zero because another batch owned it. Run dates, status, draws, batch
 > membership, deletion and facility archive/restore refuse if they change the
-> owner run. Writers capture owners and locked full-lineage facts before the
-> write, compare owners afterwards in the same transaction, and roll back with
+> owner from one defined run to another. Moves to or from no owner are allowed.
+> Writers capture owners and lineage targets before the write, compare owners
+> afterwards in the same transaction, then try-lock all full-lineage artifacts
+> of changed records and read Sent facts under those locks. They roll back with
 > `certification_locked` when a Sent record moves. Edits that keep the owner,
 > and ownership changes without Sent lineage, remain allowed subject to the
 > existing validation and dependency guards. Transport-leg locks and Removal
-> submission are unchanged.
+> submission are unchanged; counted-ID snapshot freshness when a write wins
+> before the claim remains an [open question](../open-questions.md#counted-transport-ids-when-an-ownership-write-precedes-a-claim-1490).
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per

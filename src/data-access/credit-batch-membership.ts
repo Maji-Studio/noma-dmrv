@@ -1,4 +1,4 @@
-import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
 /**
@@ -644,6 +644,7 @@ export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,
   tx: DbTransaction,
   productionRunId: string,
+  options: { mutation?: "create" | "update"; transportOwnershipFreeze?: TransportOwnershipFreezeScope } = {},
 ): Promise<string | null> {
   requireOrgScope(ctx);
   const [run] = await tx
@@ -759,7 +760,7 @@ export async function attachProductionRunToMatchingCreditBatch(
 
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], batchIds: [batch.id] }),
-    { mutation: "update", subject: "production run" });
+    { mutation: options.mutation ?? "update", subject: "production run" }, options.transportOwnershipFreeze);
   return freeze(async () => {
     await tx.insert(creditBatchProductionRuns).values({
       organizationId: ctx.organizationId,

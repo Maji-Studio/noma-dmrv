@@ -449,7 +449,7 @@ export async function archiveFacility(
 
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       await getTransportFreezeFeedstockIds(ctx, tx, { facilityId }),
-      { mutation: "archive", subject: "credit batch" });
+      { mutation: "archive", subject: "facility" });
     return freeze(async () => {
       const archiveStampResult = await tx.execute<{ archive_stamp: string }>(sql`
         select (
@@ -549,7 +549,7 @@ export async function restoreFacility(
 
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       await getTransportFreezeFeedstockIds(ctx, tx, { facilityId }),
-      { mutation: "restore", subject: "credit batch" });
+      { mutation: "restore", subject: "facility" });
     return freeze(async () => {
       const facilityArchiveStamp = existing.archiveStamp;
       if (!facilityArchiveStamp) {

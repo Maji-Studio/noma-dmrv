@@ -447,7 +447,7 @@ export async function createCreditBatchInTransaction(
 
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, { runIds }),
-    { mutation: "update", subject: "credit batch" });
+    { mutation: "create", subject: "credit batch" });
   return freeze(async () => {
     // Insert the credit batch
     const [batch] = await tx

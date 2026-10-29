@@ -1,4 +1,4 @@
-import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import { z } from "zod";
@@ -197,6 +197,7 @@ export async function replaceProductionRunFeedstockDraws(
     productionRunId: string;
     facilityId: string;
     draws: readonly ProductionRunFeedstockDrawInput[];
+    transportOwnershipFreeze?: TransportOwnershipFreezeScope;
   },
 ): Promise<number> {
   requireOrgScope(ctx);
@@ -220,8 +221,8 @@ export async function replaceProductionRunFeedstockDraws(
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     await getTransportFreezeFeedstockIds(ctx, tx, {
       runIds: [params.productionRunId], binIds: draws.map(draw => draw.storageLocationId),
-    }), { mutation: "update", subject: "production run" });
-  return freeze(async () => {
+    }), { mutation: "update", subject: "production run" }, params.transportOwnershipFreeze);
+  return freeze(async transportOwnershipFreeze => {
     if (!draws.length) {
       await tx.delete(productionRunFeedstocks).where(
         and(
@@ -248,7 +249,7 @@ export async function replaceProductionRunFeedstockDraws(
       );
     }
 
-    await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId });
+    await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId, transportOwnershipFreeze });
 
     return sumProductionRunFeedstockDraws(draws);
   });

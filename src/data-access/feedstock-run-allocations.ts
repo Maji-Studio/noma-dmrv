@@ -1,4 +1,4 @@
-import { prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
+import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gte, inArray, ne } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -31,7 +31,7 @@ export async function reallocateRunsForBins(
   ctx: OrgContext,
   tx: DbTransaction,
   binIds: readonly (string | null)[],
-  options: { onlyRunId?: string; earliestDeliveryDate?: Date; facilityId?: string } = {},
+  options: { onlyRunId?: string; earliestDeliveryDate?: Date; facilityId?: string; transportOwnershipFreeze?: TransportOwnershipFreezeScope } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
   const { onlyRunId } = options;
@@ -110,7 +110,7 @@ export async function reallocateRunsForBins(
     // submission that could be waiting for those same rows.
     const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
       [...saved, ...proposed].map(row => row.feedstockId),
-      { mutation: "update", subject: "production run" });
+      { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze);
     await freeze(async () => {
       const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
       assertStockLockSnapshot(artifacts !== null);
