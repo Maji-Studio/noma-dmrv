@@ -13,6 +13,20 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Counted transport IDs when an ownership write precedes a claim (#1490)
+
+- `src/fn/certification/submit-removal.ts:submitRemoval` builds tentative inputs
+  before claiming the Removal artifact; its claim resolver can reuse those inputs
+  when document source IDs are unchanged. The ownership freeze now serializes
+  with that claim, including draft Removals. If the ownership write wins first,
+  `src/fn/certification/removal-submission-freshness.ts:assertClaimedRemovalPayloadFresh`
+  rebuilds and compares the semantic hash, but
+  `src/fn/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
+  keeps `transportFeedstockIds` outside the semantic payload. Decide how to
+  revalidate that counted-ID snapshot when ownership changes without changing
+  the semantic hash (for example equal transport totals with unchanged evidence
+  sources). Artifact serialization alone does not prove this snapshot is fresh.
+
 ## Open design picks (`ui/design-picks`)
 
 A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.

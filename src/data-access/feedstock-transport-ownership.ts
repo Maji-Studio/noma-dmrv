@@ -7,7 +7,12 @@ import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
-async function loadEligibleDraws(ctx: OrgContext, ids: string[], executor: Pick<DbTransaction, "select">) {
+async function loadEligibleDraws(
+  ctx: OrgContext,
+  ids: string[],
+  executor: Pick<DbTransaction, "select">,
+  options: { includeArchived?: boolean } = {},
+) {
   return executor.select({
     feedstockId: productionRunFeedstocks.feedstockId,
     runId: productionRuns.id,
@@ -20,7 +25,7 @@ async function loadEligibleDraws(ctx: OrgContext, ids: string[], executor: Pick<
       eq(productionRuns.id, productionRunFeedstocks.productionRunId),
       eq(productionRuns.organizationId, ctx.organizationId),
       eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-      isNull(productionRuns.archivedAt),
+      options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
     ))
     .innerJoin(creditBatchProductionRuns, and(
       eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
@@ -29,7 +34,7 @@ async function loadEligibleDraws(ctx: OrgContext, ids: string[], executor: Pick<
     .innerJoin(creditBatches, and(
       eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
       eq(creditBatches.organizationId, ctx.organizationId),
-      isNull(creditBatches.archivedAt),
+      options.includeArchived ? undefined : isNull(creditBatches.archivedAt),
     ))
     .where(and(
       eq(productionRunFeedstocks.organizationId, ctx.organizationId),
@@ -42,11 +47,12 @@ export async function getFeedstockTransportOwners(
   ctx: OrgContext,
   feedstockIds: string[],
   executor: Pick<DbTransaction, "select"> = db,
+  options: { includeArchived?: boolean } = {},
 ): Promise<Map<string, string>> {
   requireOrgScope(ctx);
   const ids = [...new Set(feedstockIds)];
   if (!ids.length) return new Map();
-  return feedstockTransportOwners(await loadEligibleDraws(ctx, ids, executor));
+  return feedstockTransportOwners(await loadEligibleDraws(ctx, ids, executor, options));
 }
 
 /** The credit batches that count each feedstock record's transport, via the owning run. */

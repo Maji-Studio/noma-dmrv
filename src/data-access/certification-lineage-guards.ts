@@ -202,6 +202,28 @@ function lineageQueryWhere(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), condition));
 }
 
+/** Unlocked pre-write batch targets for all candidate feedstocks in one read. */
+export async function getFeedstockLineageBatchTargets(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  feedstockIds: readonly string[],
+) {
+  requireOrgScope(ctx);
+  const targets = new Map<string, { entityType: "creditBatch"; entityId: string }[]>();
+  if (!feedstockIds.length) return targets;
+  const rows = await lineageQueryWhere(ctx, tx, inArray(feedstocks.id, [...feedstockIds]), "feedstock");
+  for (const row of rows) {
+    // The feedstock predicate excludes nulls from the lineage's left join.
+    if (row.targetId === null) continue;
+    const batches = targets.get(row.targetId) ?? [];
+    if (!batches.some(target => target.entityId === row.creditBatchId)) {
+      batches.push({ entityType: "creditBatch", entityId: row.creditBatchId });
+    }
+    targets.set(row.targetId, batches);
+  }
+  return targets;
+}
+
 /** Advisory UI read; mutations must use getLockedCertifiedLineage instead. */
 export async function getCertifiedLineage(
   ctx: OrgContext,

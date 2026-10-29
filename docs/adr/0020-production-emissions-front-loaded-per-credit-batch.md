@@ -17,8 +17,26 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > evidence, vehicle and distance) follows that list, so a Removal that did not
 > count them leaves them editable for the owner batch; snapshots without the
 > list, and records with no owner, keep the full lock. The record's other
-> fields stay locked through every linked run. Ownership can still move after
-> a Removal is sent (#1490).
+> fields stay locked through every linked run.
+>
+> Once any linked Removal holds the feedstock record's full lineage at Sent,
+> ownership is frozen (#1490), including when that Removal sent its transport
+> as zero because another batch owned it. Run dates, status, draws, batch
+> membership, deletion, feedstock intake edits and facility timezone edits refuse
+> any owner change, including to or from no owner. Freeze comparisons count
+> archived runs and batches, so facility archive/restore does not move an owner,
+> while deleting or emptying an archived owning batch does.
+> Standalone scopes take transaction-scoped blocking advisory locks for candidate
+> feedstocks in sorted ID order, keyed by
+> `feedstock-transport-owner:{organizationId}:{feedstockId}`. Joined scopes reuse
+> the outer scope. Writers capture owners and lineage targets before the write, compare owners
+> afterwards in the same transaction, then try-lock all full-lineage artifacts
+> of changed records and read Sent facts under those locks. They roll back with
+> `certification_locked` when a Sent record moves. Edits that keep the owner,
+> and ownership changes without Sent lineage, remain allowed subject to the
+> existing validation and dependency guards. Transport-leg locks and Removal
+> submission are unchanged; counted-ID snapshot freshness when a write wins
+> before the claim remains an [open question](../open-questions.md#counted-transport-ids-when-an-ownership-write-precedes-a-claim-1490).
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per

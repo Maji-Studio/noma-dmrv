@@ -446,6 +446,7 @@ export async function archiveFacility(
       throw new SafeError("Facility is already archived");
     }
 
+    // No freeze: owners count archived runs and batches; archive/restore stamps and clears the same rows.
     const archiveStampResult = await tx.execute<{ archive_stamp: string }>(sql`
       select (
         date_trunc('milliseconds', clock_timestamp()::timestamp)
@@ -541,6 +542,7 @@ export async function restoreFacility(
       throw new SafeError("Facility is not archived");
     }
 
+    // No freeze: owners count archived runs and batches; archive/restore stamps and clears the same rows.
     const facilityArchiveStamp = existing.archiveStamp;
     if (!facilityArchiveStamp) {
       throw new Error("Archived facility is missing its archive stamp");
