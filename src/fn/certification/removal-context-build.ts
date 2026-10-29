@@ -1,3 +1,4 @@
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import {
@@ -323,7 +324,17 @@ export async function buildRemovalContext(
     ...recordedTransportLegs,
     biochar: requiredTransportCategories.includes("biochar") ? recordedTransportLegs.biochar : [],
   };
-  const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
+  // Presence includes linked stock owned by another batch; figures and evidence
+  // aggregation continue to use only this production scope's owned legs.
+  const ownedFeedstockIds = new Set(entityIds.feedstockIds);
+  const extraFeedstockIds = entityIds.linkedFeedstockIds.filter((id) => !ownedFeedstockIds.has(id));
+  const extraFeedstockLegs = extraFeedstockIds.length > 0
+    ? await getTransportLegsForEntities(orgCtx, "feedstock", extraFeedstockIds)
+    : [];
+  const transportCoverage = buildTransportCoverage(transportLegs, entityIds, [
+    ...transportLegs.feedstock,
+    ...extraFeedstockLegs,
+  ]);
   const submissionLineageBlockers = buildSubmissionLineageBlockers(
     lineages,
     transportCoverage.feedstock.missingEntityIds ?? [],

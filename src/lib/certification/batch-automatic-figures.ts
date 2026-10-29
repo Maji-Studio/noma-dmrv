@@ -2,7 +2,7 @@ import type { AutomaticSourceId } from "@/lib/isometric/template-observations/ca
 import { sumFigures, type BatchEmissionLineFacts, type EmissionFigure } from "./emission-lines";
 import { multiplyEntryDecimals } from "./emission-entry-rules";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
-import { aggregateTransportMassDistance, transportMassDistanceAvailable, type ProductionRunForCertification, type TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
+import { transportMassDistanceAvailable, type ProductionRunForCertification, type TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
 
 function sourceForCategory(category: "feedstock" | "biochar") {
   return category === "biochar" ? "delivery-transport" : (`${category}-transport` as const);
@@ -40,9 +40,8 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
   }
   for (const category of ["feedstock", "biochar"] as const) {
     const categoryLegs = legs[category];
-    const valid = category === "feedstock"
-      ? aggregateTransportMassDistance(categoryLegs, "Feedstock", legs.feedstockTransportOwnedElsewhere).massDistanceTonneKm !== null
-      : transportMassDistanceAvailable(categoryLegs, true);
+    const ownedElsewhereZero = category === "feedstock" && categoryLegs.length === 0 && legs.feedstockTransportOwnedElsewhere === true;
+    const valid = ownedElsewhereZero || transportMassDistanceAvailable(categoryLegs, category === "biochar");
     if (!valid) {
       figures[sourceForCategory(category)] = null;
       continue;
@@ -56,7 +55,7 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
         unit: SOURCE_UNITS[source],
       };
     });
-    figures[source] = sumFigures(values) ?? { magnitude: "0", unit: SOURCE_UNITS[source] };
+    figures[source] = ownedElsewhereZero ? { magnitude: "0", unit: SOURCE_UNITS[source] } : sumFigures(values);
   }
   return figures;
 }

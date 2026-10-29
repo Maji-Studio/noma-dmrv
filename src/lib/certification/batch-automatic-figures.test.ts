@@ -78,3 +78,11 @@ it("distinguishes trips owned elsewhere from absent transport without changing o
   expect(figures["sample-transport"]).toBeNull();
   expect(batchAutomaticFigures([], { ...emptyLegs, feedstockTransportOwnedElsewhere: false })["feedstock-transport"]).toBeNull();
 });
+
+
+it("does not let owned-elsewhere evidence override invalid recorded legs", () => {
+  const leg = { id: "leg", distanceKm: 10, loadMassKg: null, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["feedstock"][number];
+  const figures = batchAutomaticFigures([], { feedstock: [leg], biochar: [], sample: [], feedstockTransportOwnedElsewhere: true });
+  expect(figures["feedstock-transport"]).toBeNull();
+  expect(figures["delivery-transport"]).toBeNull();
+});

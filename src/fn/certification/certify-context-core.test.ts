@@ -5,7 +5,7 @@ import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
-import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
+import { getTransportLegsForEntities, getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import type { RemovalScope } from "./removal-scope";
@@ -18,7 +18,7 @@ import { buildRemovalContext, loadRemovalSubmissionContext } from "./certify-con
 vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn() }));
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
-vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsWithEvidenceForEntities: vi.fn() }));
+vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsForEntities: vi.fn(), getTransportLegsWithEvidenceForEntities: vi.fn() }));
 vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: vi.fn(async () => null), hasFinalizedSubmission: vi.fn(async () => false) }));
 vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertification: vi.fn(async () => []) }));
 vi.mock("./linked-ghg-statement-status", () => ({ loadLinkedGhgStatementStatus: vi.fn(async () => null) }));
@@ -32,7 +32,7 @@ vi.mock("@/lib/certification/mass-accounting", () => ({ buildMassAccounting: vi.
 vi.mock("./member-credit-batch", () => ({ toMemberCreditBatchView: vi.fn((batch) => batch) }));
 vi.mock("./production-claim-transport-scope", () => ({
   collectProductionClaimAwareRequiredTransportCategories: vi.fn((input) => input.requiredTransportCategories),
-  collectProductionClaimAwareTransportEntityIds: vi.fn(() => ({ feedstockIds: ["feedstock-1"], biocharProductIds: ["product-1"], sampleIds: [] })),
+  collectProductionClaimAwareTransportEntityIds: vi.fn(() => ({ feedstockIds: ["feedstock-1"], linkedFeedstockIds: ["feedstock-1"], biocharProductIds: ["product-1"], sampleIds: [] })),
 }));
 
 const ctx = makeTestOrgContext();
@@ -158,4 +158,23 @@ it("suppresses correction projections while compiling the shared comparison", as
   const facilityFacts = facts(fixture as GhgEntryTemplate);
   await buildRemovalContext(ctx, scope, facilityFacts, { correctionRead: true });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, expect.objectContaining({ loadCorrection: undefined, ownedRemovalId: scope.removalId ?? undefined }));
+});
+
+
+it.each([false, true])("loads other owners' legs only for linked feedstock coverage: %s", async (hasLeg) => {
+  const { collectProductionClaimAwareTransportEntityIds } = await import("./production-claim-transport-scope");
+  vi.mocked(collectProductionClaimAwareTransportEntityIds).mockReturnValueOnce({
+    feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], biocharProductIds: ["product-1"], sampleIds: [],
+    feedstockTransportOwnedElsewhere: true,
+  });
+  vi.mocked(getTransportLegsWithEvidenceForEntities).mockResolvedValueOnce([]);
+  vi.mocked(getTransportLegsForEntities).mockResolvedValueOnce(hasLeg ? [
+    { id: "earlier-leg", entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000 } as never,
+  ] : []);
+  const result = await buildRemovalContext(ctx, scope, facts(fixture as GhgEntryTemplate));
+  expect(getTransportLegsForEntities).toHaveBeenCalledWith(ctx, "feedstock", ["earlier-stock"]);
+  expect(result.transportCoverage.feedstock).toMatchObject({
+    count: 0, legIds: [], missingEntityIds: hasLeg ? [] : ["earlier-stock"],
+  });
+  expect(result.transportLegs.feedstock).toEqual([]);
 });

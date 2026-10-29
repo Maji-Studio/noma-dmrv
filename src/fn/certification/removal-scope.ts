@@ -27,6 +27,7 @@ export interface RemovalScope {
     // "completed" claim.
     completedProductionRunIds: string[];
     productionFeedstockIds: string[];
+    productionLinkedFeedstockIds?: string[];
     productionHasLinkedFeedstock?: boolean;
     applicationIds: string[];
     applicationSlices: {
@@ -98,6 +99,7 @@ export function resolveSingleBatchScope(
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
         productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
+        productionLinkedFeedstockIds: [...new Set(lineageFacts.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))],
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: batch.durabilityOption,
@@ -139,6 +141,7 @@ export async function resolveScopeForRemoval(
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
         productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
+        productionLinkedFeedstockIds: [...new Set(lineageFacts.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))],
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: accountingBatch.durabilityOption,

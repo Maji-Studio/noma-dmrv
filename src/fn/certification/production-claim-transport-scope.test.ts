@@ -82,7 +82,7 @@ describe("production-claim-aware transport requirements", () => {
       removalId: CURRENT_REMOVAL_ID,
       memberBatches: [{ ...batch("later-batch", null, "later"), productionFeedstockIds: [] }],
       lineages: [later],
-    })).toEqual({ feedstockIds: [], feedstockTransportOwnedElsewhere: true, biocharProductIds: ["product"], sampleIds: [] });
+    })).toEqual({ feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], feedstockTransportOwnedElsewhere: true, biocharProductIds: ["product"], sampleIds: [] });
   });
 
   it("keeps production transport IDs from unclaimed batches and biochar IDs from every lineage", () => {
@@ -108,6 +108,7 @@ describe("production-claim-aware transport requirements", () => {
       }),
     ).toEqual({
       feedstockIds: ["feedstock-unclaimed", "batch-unclaimed-feedstock"],
+      linkedFeedstockIds: ["feedstock-unclaimed", "batch-unclaimed-feedstock"],
       biocharProductIds: ["product-prior", "product-unclaimed"],
       sampleIds: [],
     });
@@ -118,10 +119,11 @@ describe("production-claim-aware transport requirements", () => {
 it.each([null, CURRENT_REMOVAL_ID, PRIOR_REMOVAL_ID])("carries linked feedstock from unapplied runs only when production is claimed here: %s", (claimedBy) => {
   const ids = collectProductionClaimAwareTransportEntityIds({
     removalId: CURRENT_REMOVAL_ID,
-    memberBatches: [{ ...batch("later", claimedBy), productionFeedstockIds: [], productionHasLinkedFeedstock: true }],
+    memberBatches: [{ ...batch("later", claimedBy), productionFeedstockIds: [], productionLinkedFeedstockIds: ["earlier-stock"], productionHasLinkedFeedstock: true }],
     lineages: [],
   });
   expect(ids.feedstockIds).toEqual([]);
+  expect(ids.linkedFeedstockIds).toEqual(claimedBy === PRIOR_REMOVAL_ID ? [] : ["earlier-stock"]);
   expect(ids.feedstockTransportOwnedElsewhere === true).toBe(claimedBy !== PRIOR_REMOVAL_ID);
 });
 

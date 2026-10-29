@@ -8,6 +8,7 @@ type ProductionClaimScopeBatch = {
   id: string;
   productionRunIds: string[];
   productionFeedstockIds: string[];
+  productionLinkedFeedstockIds?: string[];
   productionHasLinkedFeedstock?: boolean;
   productionEmissionsClaimedByRemovalId: string | null;
 };
@@ -45,7 +46,7 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
   removalId: string | null;
   memberBatches: ProductionClaimScopeBatch[];
   lineages: ChainOfCustodyData[];
-}): ReturnType<typeof collectTransportEntityIds> {
+}): ReturnType<typeof collectTransportEntityIds> & { linkedFeedstockIds: string[] } {
   const productionBatches = args.memberBatches.filter((batch) =>
     batchIncludesProductionInputs(batch, args.removalId),
   );
@@ -65,10 +66,16 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
       ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
     ]),
   );
+  const linkedFeedstockIds = Array.from(new Set([
+    ...feedstockIds,
+    ...productionLineages.flatMap((lineage) => lineage.feedstocks.map((feedstock) => feedstock.id)),
+    ...productionBatches.flatMap((batch) => batch.productionLinkedFeedstockIds ?? []),
+  ]));
   const hasLinkedFeedstock = productionBatches.some((batch) => batch.productionHasLinkedFeedstock) ||
     productionLineages.some((lineage) => lineage.feedstocks.length > 0);
   return {
     feedstockIds,
+    linkedFeedstockIds,
     ...(hasLinkedFeedstock && feedstockIds.length === 0 ? { feedstockTransportOwnedElsewhere: true } : {}),
     biocharProductIds: all.biocharProductIds,
     sampleIds: production.sampleIds,

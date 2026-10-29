@@ -64,12 +64,13 @@ export function deriveRequiredTransportCategories(
 
 export function buildTransportCoverage(
   legs: TransportLegsByCategory,
-  entityIds: ReturnType<typeof collectTransportEntityIds>,
+  entityIds: ReturnType<typeof collectTransportEntityIds> & { linkedFeedstockIds?: string[] },
+  feedstockPresenceLegs: Parameters<typeof missingFeedstockTransportIds>[1] = legs.feedstock,
 ): TransportCoverage {
   return {
     feedstock: {
       ownedElsewhere: entityIds.feedstockTransportOwnedElsewhere,
-      missingEntityIds: missingFeedstockTransportIds(entityIds.feedstockIds, legs.feedstock),
+      missingEntityIds: missingFeedstockTransportIds(entityIds.linkedFeedstockIds ?? entityIds.feedstockIds, feedstockPresenceLegs),
       vehicleAdvisories: transportVehicleAdvisories(legs.feedstock, "Feedstock"),
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
