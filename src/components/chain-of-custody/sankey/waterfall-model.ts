@@ -337,8 +337,8 @@ export function buildWaterfall(
     stage: null, recordKind: "application", records: [...facts.applications].sort(byCode), note: NOTES.applied,
   });
 
-  // Hidden residuals still leave the flow; their sum can exceed one tolerance.
-  const omittedWaterKg = startsWet && !hasWater ? Math.max(0, waterKg ?? 0) : 0;
+  // Hidden residuals keep their signs; their sum can exceed one tolerance.
+  const omittedWaterKg = startsWet && !hasWater ? (waterKg ?? 0) : 0;
   const closingLevel = level - sankey.omittedResidualKg - omittedWaterKg;
   // A floating step would invent a level when the records cannot close.
   const balanced = closingLevel >= -EPSILON_KG && Math.abs(closingLevel - endKg) <= EPSILON_KG;

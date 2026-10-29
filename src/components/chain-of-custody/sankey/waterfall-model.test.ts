@@ -9,6 +9,8 @@ const RUN_DRY_IN_KG = 4_000;
 const RUN_DRY_OUT_KG = 1_500;
 const APPLIED_DRY_T = 1;
 const APPLIED_WET_T = 1.2;
+const ROUNDING_CONVERSION_KG = 0.4;
+const ROUNDING_DOWNSTREAM_KG = -0.3;
 
 function lineage(
   wetKg: (number | null)[],
@@ -197,6 +199,23 @@ describe("buildWaterfall", () => {
       expect(model.balanced).toBe(true);
     },
   );
+
+  it.each([0, -EXIT_EPSILON_KG])("balances mixed-sign omitted residuals with %s kg of hidden water", (waterKg) => {
+    const runOutputKg = RUN_DRY_IN_KG - ROUNDING_CONVERSION_KG;
+    const lotKg = runOutputKg - ROUNDING_DOWNSTREAM_KG;
+    const entry = lineage([RUN_DRY_IN_KG + waterKg], {
+      id: "app-1", code: "AP-26-001", dryT: kgToTonnes(lotKg - ROUNDING_DOWNSTREAM_KG), wetT: APPLIED_WET_T,
+    });
+    entry.productionRun = { ...entry.productionRun!, biocharDryMassKg: runOutputKg };
+    entry.biocharProduct = { ...entry.biocharProduct!, massKg: lotKg };
+    const lineages = [entry];
+    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+
+    expect(model.startBasis).toBe("wet");
+    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "applied"]);
+    expect(model.warnings).toEqual([]);
+    expect(model.balanced).toBe(true);
+  });
 
   it("does not hide a genuine imbalance alongside omitted residuals", () => {
     const residualKg = EXIT_EPSILON_KG / 2;

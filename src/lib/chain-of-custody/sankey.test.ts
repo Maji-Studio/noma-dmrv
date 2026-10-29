@@ -3,6 +3,8 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "./sankey";
 
 const RESIDUAL_TEST_INPUT_KG = 1_000;
+const ROUNDING_CONVERSION_KG = 0.4;
+const ROUNDING_DOWNSTREAM_KG = -0.3;
 
 function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
   return {
@@ -78,6 +80,22 @@ describe("buildBatchSankey", () => {
       expect(result.warnings).toEqual([]);
     },
   );
+
+  it("keeps mixed-sign omitted residuals in the closing balance", () => {
+    const runOutputKg = RESIDUAL_TEST_INPUT_KG - ROUNDING_CONVERSION_KG;
+    const lotKg = runOutputKg - ROUNDING_DOWNSTREAM_KG;
+    const appliedKg = lotKg - ROUNDING_DOWNSTREAM_KG;
+    const result = buildBatchSankey([lineage({
+      productionRun: { id: "run-1", feedstockMassDryKg: RESIDUAL_TEST_INPUT_KG, biocharDryMassKg: runOutputKg },
+      biocharProduct: { id: "lot-1", massKg: lotKg, moistureContentPercent: null },
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(appliedKg) },
+    })]);
+
+    expect(result.exits).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.omittedResidualKg).toBeCloseTo(ROUNDING_CONVERSION_KG + ROUNDING_DOWNSTREAM_KG + ROUNDING_DOWNSTREAM_KG);
+    expect(result.columns[0].massKg - result.omittedResidualKg).toBeCloseTo(result.columns[3].massKg);
+  });
 
   it("dedupes runs, lots, and feedstocks shared across member applications", () => {
     const shared = {

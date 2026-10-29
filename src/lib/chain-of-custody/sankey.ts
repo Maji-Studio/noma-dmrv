@@ -3,13 +3,15 @@
  * view's Sankey reading (plan: 2026-06-11-chain-of-custody-views, decision 3).
  *
  * One unit (dry kg) end to end: Feedstock → Production runs → Biochar lots →
- * Applied. Every loss is an explicit labeled exit, never hidden by
- * normalizing column widths:
+ * Applied. Losses above the rounding tolerance have explicit labeled exits
+ * rather than normalized column widths:
  *
  *   - conversion loss (pyrolysis syngas/vapour/ash — expected physics, not an
  *     error) exits at the production runs;
  *   - output never bagged into a lot exits between runs and lots;
  *   - in-storage / undelivered lot mass exits before "Applied".
+ * Residuals with magnitude at or below EXIT_EPSILON_KG get no exit but are
+ * summed, signed, in omittedResidualKg so consumers can close the balance.
  *
  * The terminal node is the batch's applied mass. No net-tCO₂e figure is
  * carried at all — the registry owns project emissions/counterfactual
@@ -62,7 +64,7 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
-  /** Hidden residuals still count toward the closing balance. */
+  /** Signed sum of residuals with magnitude at or below EXIT_EPSILON_KG. */
   omittedResidualKg: number;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
@@ -95,11 +97,13 @@ export interface SankeyLineage {
   }[];
 }
 
-/** Residuals smaller than this are rounding noise, not a labeled exit. */
+/** Residuals at or below this are rounding noise, not a labeled exit. */
 export const EXIT_EPSILON_KG = 0.5;
 
 interface ResidualResult {
+  raw: number;
   value: number;
+  shown: boolean;
   warning: string | null;
 }
 
@@ -110,11 +114,13 @@ function residual(
   downstreamKg: number,
   inconsistencyWarning: string,
 ): ResidualResult {
-  const value = upstreamKg - downstreamKg;
-  if (value < -EXIT_EPSILON_KG) {
-    return { value: 0, warning: inconsistencyWarning };
-  }
-  return { value: Math.max(0, value), warning: null };
+  const raw = upstreamKg - downstreamKg;
+  return {
+    raw,
+    value: Math.max(0, raw),
+    shown: raw > EXIT_EPSILON_KG,
+    warning: raw < -EXIT_EPSILON_KG ? inconsistencyWarning : null,
+  };
 }
 
 export function buildBatchSankey(
@@ -202,7 +208,7 @@ export function buildBatchSankey(
   if (inStorage.warning) warnings.push(inStorage.warning);
 
   const exits: SankeyExit[] = [];
-  if (conversionLoss.value > EXIT_EPSILON_KG) {
+  if (conversionLoss.shown) {
     exits.push({
       key: "conversion_loss",
       label: "Conversion loss",
@@ -211,7 +217,7 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
-  if (unallocated.value > EXIT_EPSILON_KG) {
+  if (unallocated.shown) {
     exits.push({
       key: "unallocated_output",
       label: allocatedByProductId.size ? "Outside these applications" : "Not bagged into lots",
@@ -220,7 +226,7 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
-  if (inStorage.value > EXIT_EPSILON_KG) {
+  if (inStorage.shown) {
     exits.push({
       key: "in_storage",
       label: "In storage / undelivered",
@@ -230,7 +236,7 @@ export function buildBatchSankey(
     });
   }
   const omittedResidualKg = [conversionLoss, unallocated, inStorage]
-    .reduce((sum, { value }) => sum + (value <= EXIT_EPSILON_KG ? value : 0), 0);
+    .reduce((sum, { raw, shown, warning }) => sum + (!shown && !warning ? raw : 0), 0);
 
   return {
     columns: [
