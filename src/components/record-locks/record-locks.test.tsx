@@ -317,7 +317,7 @@ describe("RecordLockNotice on a Sent feedstock with open transport", () => {
   it("names the editable sections and the Removal", () => {
     render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), transport: { level: "open", heldBy: [] } }} />);
     expect(screen.getByRole("status").textContent)
-      .toMatch(/^Only Transport details and Transport evidence can be changed\. .+ was sent to Isometric without this feedstock's transport legs\.$/);
+      .toMatch(/^Only Transport details and Transport evidence can be changed\. This feedstock's transport legs are not part of .+\.$/);
   });
 
   it("keeps the transport-only wording when the Removal's sending was interrupted", () => {

@@ -72,26 +72,28 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
+/** Snapshot key written by removal-submission-build.ts (materializeRemovalSubmissionSnapshot). */
+const TRANSPORT_FEEDSTOCK_IDS_KEY = "transportFeedstockIds";
+
 function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
   // No eligible transport owner must retain the lock through every linked run.
   if (!owner) return targetCondition(target);
-  // Read the latest frozen Removal snapshot in the lineage statement. Inserts
-  // can already be sent without the UPDATE trigger having set the frozen flag.
-  // A missing field on an old snapshot fails closed; an unfrozen reservation
-  // is covered by the current owner instead. Artifact/row lock order is unchanged.
-  const countedTransport = sql<boolean>`coalesce((
-    select coalesce(not (${certificationSubmissions.payloadSnapshot} ? 'transportFeedstockIds'), true)
-      or (${certificationSubmissions.payloadSnapshot}->'transportFeedstockIds') ? ${target.entityId}
-    from ${certificationSubmissions}
+  // Any snapshot of the Removal that counted this record, or predates the
+  // counted list (fails closed), keeps the lock. Drafts count too: an
+  // interrupted attempt may already have reached the registry, and the lineage
+  // guard still decides whether a draft holds a lock at all. A Removal without a
+  // snapshot is covered by the current owner. Artifact/row lock order is unchanged.
+  const countedTransport = sql<boolean>`exists (
+    select 1 from ${certificationSubmissions}
     where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
       and ${certificationSubmissions.provider} = 'isometric'
       and ${certificationSubmissions.localEntityType} = 'removal'
       and ${certificationSubmissions.submissionType} = 'removal'
       and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
-      and (${certificationSubmissions.payloadSnapshotFrozen} or ${certificationSubmissions.status} <> 'draft')
-    order by ${certificationSubmissions.version} desc
-    limit 1
-  ), false)`;
+      and ${certificationSubmissions.payloadSnapshot} is not null
+      and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
+        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})
+  )`;
   return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
 }
 

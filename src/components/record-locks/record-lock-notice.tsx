@@ -120,7 +120,7 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
   if (isTransportOnlyEditable(lock)) {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">
-        Only Transport details and Transport evidence can be changed. <HolderList holders={lock.heldBy} /> was sent to Isometric without this feedstock&apos;s transport legs.
+        Only Transport details and Transport evidence can be changed. This feedstock&apos;s transport legs are not part of <HolderList holders={lock.heldBy} />.
       </Notice>
     );
   }

@@ -4,17 +4,21 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
-> **Amended 2026-10-29: feedstock transport belongs to the earliest complete linked run that belongs to a credit batch.** A
-> feedstock record's full transport legs belong to its earliest complete linked run that belongs to a credit batch,
-> ordered by start time then run ID across the organization.
-> Only credit batches containing that run include those legs in production inputs.
-> Later pro-rata stock allocations retain the feedstock record for traceability and dry
-> mass but do not repeat its transport. A sent Removal locks a feedstock record's transport legs only when it counted them; the record's other fields stay locked through every linked run.
-> Running, failed and cancelled runs, archived runs and archived credit batches cannot own transport legs. A feedstock record
-> linked only to those runs has no owner. Backdated runs or run status changes can
-> change live ownership;
-> already submitted snapshots remain immutable.
-> The sent Removal records which feedstock records’ transport it counted, and that record decides the transport lock; Removals sent before this change keep the full lock.
+> **Amended 2026-10-29: feedstock transport counts once.** A feedstock
+> record's transport legs belong to its earliest complete, non-archived linked
+> run in a non-archived credit batch (start time, then run ID, across the
+> organization). Only credit batches containing that run count those legs; a
+> production-claiming batch whose linked records are all owned elsewhere
+> reports 0 t·km. Pro-rata stock allocations still link the record to later
+> runs for traceability and dry mass. Running, failed and cancelled runs cannot
+> own legs, and a record linked only to such runs has no owner.
+> Each Removal's submission snapshot lists the feedstock records whose
+> transport it counted. Its lock on a record's transport (legs, transport
+> evidence, vehicle and distance) follows that list, so a Removal that did not
+> count them leaves them editable for the owner batch; snapshots without the
+> list, and records with no owner, keep the full lock. The record's other
+> fields stay locked through every linked run. Ownership can still move after
+> a Removal is sent (#1490).
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per

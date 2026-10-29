@@ -76,7 +76,8 @@ async function insertSubmission(removalId: string, payloadSnapshot: Record<strin
   }
 }
 
-it.each(["counted", "legacy"] as const)("keeps %s sent transport locked after an earlier run becomes batched", async snapshotKind => {
+// "reserved" stands for an interrupted attempt: its draft snapshot may already have reached the registry.
+it.each([["counted", "sent"], ["legacy", "sent"], ["counted", "reserved"]] as const)("keeps %s %s transport locked after an earlier run becomes batched", async (snapshotKind, state) => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
     await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-02-12T08:00:00Z"), endTime: new Date("2026-02-12T12:00:00Z") })
@@ -90,15 +91,17 @@ it.each(["counted", "legacy"] as const)("keeps %s sent transport locked after an
       const [leg] = await db.insert(transportLegs).values({ organizationId: TEST_ORG_ID,
         entityType: "feedstock", entityId: earlier.feedstockId, distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" }).returning();
       expect((await getFeedstockTransportOwners(ctx, [earlier.feedstockId])).get(earlier.feedstockId)).toBe(march.productionRunId);
-      await insertSubmission(march.removalId, snapshotKind === "counted" ? { transportFeedstockIds: [earlier.feedstockId] } : {});
+      await insertSubmission(march.removalId, snapshotKind === "counted" ? { transportFeedstockIds: [earlier.feedstockId] } : {}, state);
       await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
         creditBatchId: earlier.batchId, productionRunId: earlier.productionRunId });
       expect((await getFeedstockTransportOwners(ctx, [earlier.feedstockId])).get(earlier.feedstockId)).toBe(earlier.productionRunId);
       const locked = { code: "certification_locked" };
       await expect(updateTransportLeg(ctx, leg.id, { expectedVersion: leg.version, distanceKm: 20 })).rejects.toMatchObject(locked);
       await expect(deleteTransportLeg(ctx, leg.id, leg.version)).rejects.toMatchObject(locked);
-      expect((await getRecordLocks(ctx, db, [{ entityType: "feedstock", entityId: earlier.feedstockId, transportOnly: true }], { sentOnly: true }))[0].level).toBe("sent");
-      expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id, scope: "transport" })).toBe(true);
+      if (state === "sent") {
+        expect((await getRecordLocks(ctx, db, [{ entityType: "feedstock", entityId: earlier.feedstockId, transportOnly: true }], { sentOnly: true }))[0].level).toBe("sent");
+        expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id, scope: "transport" })).toBe(true);
+      }
     }, "none");
   }, "none");
 });
