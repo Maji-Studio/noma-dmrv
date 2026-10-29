@@ -122,6 +122,22 @@ describe("registry response body deadline", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it.each([429, 503])("does not retry a regular PATCH after HTTP %i", async status => {
+    fetchMock.mockImplementation(async () => new Response("busy", { status }));
+    await expect(client.patch("/test", {})).rejects.toMatchObject({ status });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("retries an opted-in PATCH when its accepted response body fails", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("response stream failed")); },
+    }))).mockResolvedValueOnce(Response.json({ ok: true }));
+    const outcome = client.patch("/test", {}, { idempotent: true });
+    await vi.runAllTimersAsync();
+    await expect(outcome).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("retains bounded retries for idempotent reads with stalled bodies", async () => {
     stalledResponse(503);
     const outcome = client.get("/test").catch((error: unknown) => error);

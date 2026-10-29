@@ -39,7 +39,7 @@ Status terms:
 | `GET /datapoints` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findDatapointBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /datapoints` | Create ordinary and direct durability Datapoints | `src/lib/isometric/submissions.ts` → `createDatapoint`; consumer in `src/fn/certification/submit-removal.ts` |
 | `GET /datapoints/{id}` | Verify an exact Source-to-input binding | `src/lib/isometric/submissions.ts` → `getDatapoint`; consumer in `src/lib/isometric/source-binding-verification.ts` |
-| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
+| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs (read first; skip when present; send the union; retried as idempotent) | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
 | `GET /components/{id}` | Resolve attributed component inputs for Source verification | `src/lib/isometric/submissions.ts` → `getComponent`; consumer in `src/lib/isometric/source-binding-verification.ts` |
 | `GET /ghg_entries` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findGhgEntryBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /ghg_entries` | Create the compiled Removal/GHG Entry | `src/lib/isometric/submissions.ts` → `createGhgEntry`; consumer in `src/fn/certification/submit-removal.ts` |

@@ -174,9 +174,22 @@ function threeSubmissions() {
   });
 }
 
+// Datapoint GETs check existing Sources; a measurement sample is never read by ID.
+function expectNoSampleGet() {
+  expect(mocks.client.get).not.toHaveBeenCalledWith(
+    expect.stringContaining("/measurement_samples"),
+    expect.anything(),
+  );
+  expect(mocks.client.get).not.toHaveBeenCalledWith(
+    expect.stringContaining("/measurement_samples"),
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.client.get.mockResolvedValue(registrySample());
+  mocks.client.get.mockImplementation(async (path: string) =>
+    path.startsWith("/datapoints/") ? { source_ids: [] } : registrySample(),
+  );
   mocks.client.post.mockResolvedValue(registrySample());
   mocks.client.patch.mockImplementation(
     async (_path: string, request: { source_ids?: string[] }) => ({
@@ -194,6 +207,7 @@ describe("measurement-sample journal recovery", () => {
     expect(mocks.client.patch).toHaveBeenCalledWith(
       `/datapoints/dtp-${SAMPLE_ID}-0`,
       expect.objectContaining({ source_ids: ["source-1"] }),
+      { idempotent: true },
     );
     expect(mocks.appendSubmissionJournal).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org-1" }),
@@ -228,7 +242,7 @@ describe("measurement-sample journal recovery", () => {
       true,
     );
 
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expectNoSampleGet();
     expect(mocks.client.paginate).toHaveBeenCalledWith(
       "/measurement_samples",
       undefined,
@@ -260,7 +274,7 @@ describe("measurement-sample journal recovery", () => {
       "Registry measurement mts-sampled-1000 does not match submission nm-mts-removal-pb-batch-v1. Ask support to check the registry record.",
     );
 
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expectNoSampleGet();
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
   });
@@ -284,7 +298,7 @@ describe("measurement-sample journal recovery", () => {
       "Registry measurement mts-sampled-1000 cannot be found. Ask support to check the registry record before submitting again.",
     );
 
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expectNoSampleGet();
     expect(mocks.client.paginate).toHaveBeenCalledWith(
       "/measurement_samples",
       undefined,
@@ -309,7 +323,7 @@ describe("measurement-sample journal recovery", () => {
     await submission({ journaled: {} }, true);
 
     expect(yielded).toBe(2);
-    expect(mocks.client.get).not.toHaveBeenCalled();
+    expectNoSampleGet();
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).toHaveBeenCalledWith(
       expect.anything(),

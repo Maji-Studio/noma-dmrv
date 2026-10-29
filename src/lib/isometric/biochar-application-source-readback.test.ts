@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createIsometricClient, createIsometricClientFromTransport, IsometricApiError } from "./client";
-import { classifySourceReadback, readBiocharApplicationSources } from "./biochar-application-source-readback";
+import { classifySourceReadback, failClosedOnEmptySources, readBiocharApplicationSources } from "./biochar-application-source-readback";
 
 const log = vi.hoisted(() => ({ debug: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { child: () => log } }));
@@ -29,11 +29,23 @@ describe("Source set classification", () => {
   it.each([
     [["src-a"], "missing", ["src-b"], []],
     [["src-a", "src-b", "src-c"], "unexpected", [], ["src-c"]],
-    [[], "empty", ["src-a", "src-b"], []],
     [null, "garbled", [], []],
     [[17], "garbled", [], []],
   ])("classifies %j as %s", (sourceIds, reason, missing, unexpected) => {
     expect(classifySourceReadback(["src-a", "src-b"], { kind: "found", sourceIds })).toEqual({ outcome: "mismatch", missing, unexpected, reason });
+  });
+  it("leaves expected Sources unconfirmed while the remote list is empty", () => {
+    expect(classifySourceReadback(["src-a"], { kind: "found", sourceIds: [] })).toEqual({
+      outcome: "unconfirmed", reason: "sources_not_attached",
+    });
+    expect(classifySourceReadback([], { kind: "found", sourceIds: [] })).toEqual({ outcome: "confirmed" });
+  });
+  it("turns a not-attached answer into an empty mismatch and leaves others alone", () => {
+    expect(failClosedOnEmptySources(["src-b", "src-a"], { outcome: "unconfirmed", reason: "sources_not_attached" })).toEqual({
+      outcome: "mismatch", missing: ["src-a", "src-b"], unexpected: [], reason: "empty",
+    });
+    expect(failClosedOnEmptySources(["src-a"], { outcome: "unconfirmed", reason: "timeout" })).toEqual({ outcome: "unconfirmed", reason: "timeout" });
+    expect(failClosedOnEmptySources(["src-a"], { outcome: "confirmed" })).toEqual({ outcome: "confirmed" });
   });
   it("classifies ambiguous nodes as garbled", () => {
     expect(classifySourceReadback(["src-a"], { kind: "garbled", detail: "multiple_events" })).toEqual({ outcome: "mismatch", missing: [], unexpected: [], reason: "garbled" });

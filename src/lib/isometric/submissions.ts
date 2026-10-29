@@ -26,8 +26,9 @@ export function patchDatapoint(
   client: IsometricClient,
   id: string,
   body: PatchDatapointRequest,
+  options?: IsometricRequestOptions,
 ): Promise<Datapoint> {
-  return client.patch<Datapoint>(`/datapoints/${id}`, body);
+  return client.patch<Datapoint>(`/datapoints/${id}`, body, options);
 }
 
 export function createGhgEntry(client: IsometricClient, body: CreateGhgEntryRequest): Promise<GhgEntry> {
