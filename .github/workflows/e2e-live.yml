@@ -31,7 +31,8 @@ env:
 jobs:
   playwright-live:
     if: ${{ !inputs.force_failure }}
-    runs-on: ubuntu-latest
+    # Playwright cannot install Chromium on ubuntu-latest (26.04) yet; unpin once it can.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     services:
