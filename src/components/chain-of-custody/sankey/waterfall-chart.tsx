@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PROTOTYPE (Sankey variants A and B): the waterfall in kg, drawn 1:1 at the
+ * The waterfall in kg, drawn 1:1 at the
  * measured width so every label stays at its real size. Anatomy from the
  * product page's Emissions section: a full first column, each step a small
  * hatched box stepping down (water dashed), dotted connectors carrying the
@@ -25,7 +25,7 @@ import {
   START_STROKE,
   STEP_STROKE,
   WATER_DASH,
-} from "./waterfall-shared";
+} from "./waterfall-parts";
 import { levelAfter, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
 
 const AXIS_W = 56;

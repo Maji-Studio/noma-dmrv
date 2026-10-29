@@ -1,36 +1,23 @@
 "use client";
 
 /**
- * PROTOTYPE variant B, "Waterfall + records" (?variant=b). The same waterfall,
- * compact at the top, is the index of the batch: selecting a column lists the
- * records behind it below the chart, one line each, the whole row a link to
- * the record. The lit last column is selected by default.
+ * The records behind a waterfall column: one line each, the whole row a link
+ * to the record, under a header that names the column and links to its list.
  */
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { ArrowRightIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { formatMassKg } from "@/lib/format-utils";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
-import { LINEAGE_NODE_STYLES } from "../../chain-constants";
-import { recordHref, recordListHref } from "./record-href";
-import type { SankeyVariantProps } from "./variant-a-mass-waterfall";
-import { WaterfallChart } from "./waterfall-chart";
-import { buildWaterfall, type WaterfallItem, type WaterfallRecord } from "./waterfall-model";
-import { WaterfallRows } from "./waterfall-rows";
-import {
-  HeadlineFigure,
-  ItemIcon,
-  LIT_INK,
-  MassWarnings,
-  MINUS,
-  recordCountLabel,
-  ROWS_BELOW_PX,
-  signedKg,
-  useColumnFocus,
-  useMeasuredWidth,
-} from "./waterfall-shared";
+import { LINEAGE_NODE_STYLES, type LineageNodeKind } from "../chain-constants";
+import type { WaterfallItem, WaterfallRecord } from "./waterfall-model";
+import { ItemIcon, LIT_INK, MINUS, recordCountLabel, signedKg } from "./waterfall-parts";
 
-const PLOT_HEIGHT_PX = 168;
+/** The list page behind a column ("See details"), kept on the working facility. */
+function listHref(kind: LineageNodeKind, facilityId: string | null): string {
+  const { path } = RECORD_LINKS[kind];
+  return facilityId ? `${path}?facility=${encodeURIComponent(facilityId)}` : path;
+}
 
 function RecordFigure({ item, record }: { item: WaterfallItem; record: WaterfallRecord }) {
   if (record.massKg == null && record.wetKg == null) {
@@ -59,7 +46,7 @@ function RecordFigure({ item, record }: { item: WaterfallItem; record: Waterfall
   );
 }
 
-function RecordRows({ item, facilityId, compact = false }: { item: WaterfallItem; facilityId: string | null; compact?: boolean }) {
+export function RecordRows({ item, facilityId, compact = false }: { item: WaterfallItem; facilityId: string | null; compact?: boolean }) {
   const style = LINEAGE_NODE_STYLES[item.recordKind];
   const KindIcon = style.icon;
   if (item.records.length === 0) {
@@ -70,7 +57,7 @@ function RecordRows({ item, facilityId, compact = false }: { item: WaterfallItem
       {item.records.map((record) => (
         <li key={record.id} className="border-t border-[var(--clr-dark-purple-10)] first:border-t-0">
           <Link
-            href={recordHref(record.kind, record.id, facilityId)}
+            href={recordHref(record.kind, record.id, { facilityId })}
             className={cn(
               "body-small grid min-h-44 items-center gap-x-12 py-8 hover:bg-[var(--clr-dark-purple-1)]",
               compact ? "grid-cols-[auto_minmax(0,1fr)_auto_auto] px-12" : "grid-cols-[auto_minmax(0,auto)_minmax(0,1fr)_auto_auto] px-16",
@@ -93,7 +80,7 @@ function RecordRows({ item, facilityId, compact = false }: { item: WaterfallItem
   );
 }
 
-function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facilityId: string | null }) {
+export function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facilityId: string | null }) {
   const lit = item.kind === "end";
   return (
     <section
@@ -109,7 +96,7 @@ function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facilityId: s
         <span className="body-small tabular-nums text-[var(--color-text-secondary)]">{signedKg(item)} kg</span>
         <span className="body-small text-[var(--color-text-tertiary)]">{recordCountLabel(item)}</span>
         <Link
-          href={recordListHref(item.recordKind, facilityId)}
+          href={listHref(item.recordKind, facilityId)}
           className="body-small ml-auto inline-flex min-h-44 items-center gap-6 font-medium text-[var(--clr-dark-purple)] underline-offset-4 hover:underline"
         >
           See details
@@ -124,56 +111,3 @@ function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facilityId: s
   );
 }
 
-export function VariantBWaterfallRecords({ sankey, lineages, batchCode }: SankeyVariantProps) {
-  const facilityId = useSearchParams().get("facility");
-  const model = buildWaterfall(sankey, lineages);
-  const focus = useColumnFocus("applied");
-  const [width, measure] = useMeasuredWidth();
-  const [chartWidth, measureChart] = useMeasuredWidth();
-  const rows = width < ROWS_BELOW_PX;
-  const selected = model.items.find((item) => item.key === focus.pinned) ?? model.items[model.items.length - 1];
-
-  return (
-    <div className="h-full overflow-auto bg-[var(--color-background-white)]" data-testid="batch-sankey" aria-label={`Mass balance for credit batch ${batchCode}`}>
-      <div ref={measure} className="container-max flex flex-col gap-24 pb-96 pt-24">
-        {rows ? (
-          <>
-            <HeadlineFigure model={model} compact />
-            <WaterfallRows
-              model={model}
-              activeKey={focus.pinned}
-              onSelect={focus.toggle}
-              renderDetail={(item) => (
-                <div className="border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]">
-                  <RecordRows item={item} facilityId={facilityId} compact />
-                </div>
-              )}
-            />
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,9fr)] items-end gap-48">
-              <div className="pb-72">
-                <HeadlineFigure model={model} compact />
-              </div>
-              <div ref={measureChart} className="min-w-0">
-                <WaterfallChart
-                  model={model}
-                  width={chartWidth}
-                  plotHeight={PLOT_HEIGHT_PX}
-                  // The lit column is the default pick; it dims nothing.
-                  activeKey={focus.active === "applied" ? null : focus.active}
-                  pinnedKey={focus.pinned}
-                  onHover={focus.hover}
-                  onSelect={focus.pin}
-                />
-              </div>
-            </div>
-            <RecordsPanel item={selected} facilityId={facilityId} />
-          </>
-        )}
-        <MassWarnings warnings={model.warnings} />
-      </div>
-    </div>
-  );
-}

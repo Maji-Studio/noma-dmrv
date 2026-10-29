@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PROTOTYPE (Sankey variants A and B, phone): the waterfall as readable HTML
+ * Phone: the waterfall as readable HTML
  * rows, the product page's phone layout. Each row is one 44px button with the
  * column's icon, name and value over a track that draws its part of the
  * feedstock in: the first bar full, each step a hatched piece stepping back,
@@ -20,7 +20,7 @@ import {
   START_FILL,
   START_STROKE,
   STEP_STROKE,
-} from "./waterfall-shared";
+} from "./waterfall-parts";
 import type { WaterfallItem, WaterfallItemKey, WaterfallModel } from "./waterfall-model";
 
 const MIN_BAR_PCT = 0.6;

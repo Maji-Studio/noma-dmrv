@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE (Sankey waterfall variants, ?variant=a|b|c). Pure: turns the
+ * Pure: turns the
  * batch's mass balance (`buildBatchSankey`) and the loaded lineages into a
  * waterfall in kg. Every figure is the lib's own column or exit, or a sum of
  * masses already on the lineages; nothing is estimated.
@@ -16,7 +16,7 @@ import type {
   SankeyColumnKey,
   SankeyExitKey,
 } from "@/lib/chain-of-custody/sankey";
-import type { LineageNodeKind } from "../../chain-constants";
+import type { LineageNodeKind } from "../chain-constants";
 
 /** Below this a residual is rounding noise (matches the lib's epsilon). */
 const EPSILON_KG = 0.5;
@@ -25,10 +25,9 @@ export type WaterfallItemKey =
   | "feedstock"
   | "water_driven_off"
   | SankeyExitKey
-  | "applied"
-  /** Subtotal columns, drawn only by the ribbon (variant C). */
-  | "productionRuns"
-  | "biocharLots";
+  | "applied";
+/** The lit last column, selected until another is picked. */
+export const DEFAULT_COLUMN: WaterfallItemKey = "applied";
 export type WaterfallStage = "productionRuns" | "biocharLots";
 
 export interface WaterfallRecord {
@@ -45,7 +44,7 @@ export interface WaterfallRecord {
 
 export interface WaterfallItem {
   key: WaterfallItemKey;
-  kind: "start" | "step" | "subtotal" | "end";
+  kind: "start" | "step" | "end";
   label: string;
   massKg: number;
   /** Level before and after this column, in kg (a step floats between them). */
@@ -57,8 +56,6 @@ export interface WaterfallItem {
   /** The record list behind the column and its "See details" target. */
   recordKind: LineageNodeKind;
   records: WaterfallRecord[];
-  /** Records counted without a list (subtotal columns). */
-  count?: number;
   note: string;
 }
 
@@ -99,8 +96,6 @@ const NOTES: Record<WaterfallItemKey, string> = {
   unallocated_output: "Run output not allocated to any biochar lot in this batch.",
   in_storage: "Biochar produced for this batch but not yet applied.",
   applied: "Dry biochar in the product applied on the fields.",
-  productionRuns: "Biochar the production runs made, dry.",
-  biocharLots: "Run biochar in the biochar products these applications drew from, dry.",
 };
 
 export type WaterfallLineage = Pick<
@@ -277,26 +272,6 @@ export function buildWaterfall(
     stepCount: steps.length,
     warnings: sankey.warnings,
   };
-}
-
-/** The lib's two middle columns as subtotal items, for the ribbon. */
-export function subtotalItems(sankey: CreditBatchSankeyData): WaterfallItem[] {
-  return sankey.columns
-    .filter((column) => column.key === "productionRuns" || column.key === "biocharLots")
-    .map((column) => ({
-      key: column.key as "productionRuns" | "biocharLots",
-      kind: "subtotal" as const,
-      label: column.label,
-      massKg: column.massKg,
-      top: column.massKg,
-      bottom: 0,
-      basis: "dry" as const,
-      stage: null,
-      recordKind: column.key === "productionRuns" ? ("productionRun" as const) : ("biocharProduct" as const),
-      records: [],
-      count: column.count,
-      note: NOTES[column.key as "productionRuns" | "biocharLots"],
-    }));
 }
 
 /** Level carried from a column to the next one: a step's bottom, else its top. */

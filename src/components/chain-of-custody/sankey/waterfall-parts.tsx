@@ -1,15 +1,13 @@
 "use client";
 
 /**
- * PROTOTYPE (Sankey waterfall variants): the pieces variants A, B and C share.
+ * The pieces the Sankey waterfall view is built from.
  * Icons and accents come from the Flow chart's node styles so Flow, Map and
  * Sankey read as siblings.
  */
 import { createElement, useState, type CSSProperties } from "react";
-import Link from "next/link";
 import type { Icon } from "@phosphor-icons/react";
 import {
-  ArrowRightIcon,
   ArrowSquareOutIcon,
   CubeIcon,
   DropIcon,
@@ -24,8 +22,7 @@ import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Notice } from "@/components/ui/notice";
 import { formatMassKg } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import { LINEAGE_NODE_STYLES } from "../../chain-constants";
-import { recordListHref } from "./record-href";
+import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import {
   countWord,
   levelAfter,
@@ -48,8 +45,6 @@ export const ITEM_ICONS: Record<WaterfallItemKey, Icon> = {
   unallocated_output: ArrowSquareOutIcon,
   in_storage: WarehouseIcon,
   applied: MapPinIcon,
-  productionRuns: FactoryIcon,
-  biocharLots: CubeIcon,
 };
 
 /** "Not bagged into lots" reads better as a package than as an exit arrow. */
@@ -103,7 +98,7 @@ export function signedKg(item: WaterfallItem): string {
 }
 
 export function recordCountLabel(item: WaterfallItem): string {
-  const count = item.count ?? item.records.length;
+  const count = item.records.length;
   const style = LINEAGE_NODE_STYLES[item.recordKind];
   return `${count} ${count === 1 ? style.label.toLowerCase() : style.plural}`;
 }
@@ -200,75 +195,6 @@ export function HeadlineFigure({ model, compact = false }: { model: WaterfallMod
       </div>
       <p className="body-small mt-16 border-t border-[var(--clr-dark-purple-10)] pt-12 text-[var(--color-text-secondary)]">
         {summarySentence(model)} <LedgerExplanation model={model} />
-      </p>
-    </div>
-  );
-}
-
-/** One caption line under the chart. */
-export function DefaultCaption({ rows = false, ribbon = false }: { rows?: boolean; ribbon?: boolean }) {
-  const target = rows ? "row" : "column";
-  const lead = ribbon
-    ? "The ribbon is the mass moving from stage to stage. Each hatched drop is mass that left the chain. The lit column is what was applied."
-    : rows
-      ? "The first bar is the feedstock that went in. Each step back is mass that left the chain. The lit bar is what was applied."
-      : "The first column is the feedstock that went in. Each step down is mass that left the chain. The lit column is what was applied.";
-  return (
-    <p className="body-small text-[var(--color-text-secondary)]">
-      {lead} <span className="text-[var(--color-text-tertiary)]">Hover or tap a {ribbon && rows ? "label" : target} for details.</span>
-    </p>
-  );
-}
-
-/** What a column is, its records and the link to them. */
-export function ItemDetail({
-  item,
-  facilityId,
-  layout = "row",
-}: {
-  item: WaterfallItem;
-  facilityId: string | null;
-  /** "row": the caption row under a desktop chart. "stack": under a phone row, which already names the column. */
-  layout?: "row" | "stack";
-}) {
-  const lit = item.kind === "end";
-  const records = (
-    <span className="body-small inline-flex flex-wrap items-center gap-x-12 text-[var(--color-text-tertiary)]">
-      {recordCountLabel(item)}
-      <Link
-        href={recordListHref(item.recordKind, facilityId)}
-        className="inline-flex min-h-44 items-center gap-6 font-medium text-[var(--clr-dark-purple)] underline-offset-4 hover:underline"
-        data-testid="sankey-detail-link"
-      >
-        See details
-        <ArrowRightIcon size={14} weight="bold" aria-hidden />
-      </Link>
-    </span>
-  );
-  if (layout === "stack") {
-    return (
-      <div className="flex flex-col" data-testid="sankey-detail">
-        <p className="body-small text-[var(--color-text-secondary)]">{item.note}</p>
-        {records}
-      </div>
-    );
-  }
-  return (
-    <div
-      className="grid w-full grid-cols-[minmax(0,3fr)_minmax(0,5fr)_auto_auto] items-center gap-x-24"
-      data-testid="sankey-detail"
-    >
-      <p className="body-medium flex items-center gap-8 font-medium text-[var(--color-text-primary)]">
-        <ItemIcon item={item} size={18} className="shrink-0" />
-        {item.label}
-      </p>
-      <p className="body-small text-[var(--color-text-secondary)]">{item.note}</p>
-      {records}
-      <p
-        className="body-medium whitespace-nowrap text-right tabular-nums"
-        style={{ color: lit ? LIT_INK : "var(--color-text-primary)" }}
-      >
-        {signedKg(item)} kg{item.kind === "start" ? ` ${item.basis}` : ""}
       </p>
     </div>
   );

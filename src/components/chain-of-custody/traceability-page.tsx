@@ -35,14 +35,7 @@ import type { ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
 import { type RunPickerOption } from "./run-picker";
-import { BatchSankey } from "./sankey";
-// PROTOTYPE: Sankey waterfall variants (?variant=a|b|c). Delete with the losers.
-import {
-  parseSankeyVariant,
-  SankeyVariantEmpty,
-  SankeyVariantSwitcher,
-  SankeyVariantView,
-} from "./sankey/variants";
+import { BatchSankey, SankeyEmpty } from "./sankey";
 import { TraceabilityHeader } from "./traceability-header";
 import { ApplicationTrail } from "./trail";
 import {
@@ -52,7 +45,6 @@ import {
 } from "./use-chain-graph";
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 import {
-  NO_APPLICATION_SANKEY_MESSAGE,
   NO_LINEAGE_FOR_SELECTED_RUN,
   NO_RUN_APPLICATION_YET_WARNING,
 } from "@/lib/chain-of-custody/copy";
@@ -179,7 +171,6 @@ export function TraceabilityPage() {
       : "none";
   const applicationView = parseApplicationView(searchParams.get("view"));
   const batchView = parseBatchView(searchParams.get("view"));
-  const sankeyVariant = parseSankeyVariant(searchParams.get("variant"));
 
   // Cross-link selection (Flow record ⇄ map marker / rails). The nonce lets a
   // repeat click on the same node re-trigger the map's ease-to.
@@ -674,30 +665,17 @@ export function TraceabilityPage() {
       );
     }
     if ((filteredBatchLineages?.length ?? 0) === 0) {
-      if (sankeyVariant) {
-        return (
-          <SankeyVariantEmpty
-            onOpenFlow={() => handleViewChange(DEFAULT_BATCH_VIEW, DEFAULT_BATCH_VIEW)}
-          />
-        );
-      }
       return (
-        <CenteredMessage>{NO_APPLICATION_SANKEY_MESSAGE}</CenteredMessage>
-      );
-    }
-    if (sankeyVariant) {
-      return (
-        <SankeyVariantView
-          variant={sankeyVariant}
-          sankey={filteredSankey ?? batchData.sankey}
-          lineages={batchLineages ?? []}
-          batchCode={batchData.batch.code}
+        <SankeyEmpty
+          runFiltered={Boolean(selectedRunId)}
+          onOpenFlow={() => handleViewChange(DEFAULT_BATCH_VIEW, DEFAULT_BATCH_VIEW)}
         />
       );
     }
     return (
       <BatchSankey
         sankey={filteredSankey ?? batchData.sankey}
+        lineages={batchLineages ?? []}
         batchCode={batchData.batch.code}
       />
     );
@@ -786,8 +764,6 @@ export function TraceabilityPage() {
           )}
         </div>
       </div>
-
-      {anchor === "batch" && batchView === "sankey" ? <SankeyVariantSwitcher /> : null}
 
       <ChainNodeSheet
         node={sheetNode}
