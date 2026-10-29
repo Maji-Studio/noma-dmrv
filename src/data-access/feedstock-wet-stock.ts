@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { feedstocks } from "@/db/schema";
+import { feedstocks, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
@@ -15,7 +15,7 @@ type FeedstockStockReader = Pick<typeof db, "select">;
 
 const MASS_PRECISION_FACTOR = 1_000;
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
+  "has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -76,6 +76,19 @@ function toMassUnits(value: number): number {
   return units;
 }
 
+async function readFeedstockBinCode(
+  ctx: OrgContext,
+  executor: FeedstockStockReader,
+  storageLocationId: string,
+): Promise<string | undefined> {
+  requireOrgScope(ctx);
+  const [bin] = await executor.select({ code: storageLocations.code }).from(storageLocations).where(and(
+    eq(storageLocations.id, storageLocationId),
+    eq(storageLocations.organizationId, ctx.organizationId),
+  ));
+  return bin?.code;
+}
+
 /**
  * Allocate a run's wet withdrawal across complete intake batches in proportion
  * to their recorded wet mass. Integer gram arithmetic keeps the persisted
@@ -107,21 +120,21 @@ export async function allocateFeedstockWetMass(
     )
     .orderBy(asc(feedstocks.id));
 
-  if (batches.length === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
-  }
-
-  const totalUnits = toMassUnits(totalWetMassKg);
   const weights = batches.map((batch) => toMassUnits(batch.massWetKg ?? 0));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+    const binCode = await readFeedstockBinCode(ctx, executor, storageLocationId);
+    const label = binCode === undefined ? "This bin" : `Bin ${binCode}`;
+    throw new StockOverdrawError(`${label} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   }
 
+  const totalUnits = toMassUnits(totalWetMassKg);
   const availableWetKg = totalWeight / MASS_PRECISION_FACTOR;
   if (totalUnits > totalWeight) {
+    const binCode = await readFeedstockBinCode(ctx, executor, storageLocationId);
+    const label = binCode === undefined ? "this bin" : `bin ${binCode}`;
     throw new StockOverdrawError(
-      `By the run's start day this bin had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run's start.`,
+      `By the run’s start day ${label} had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run’s start.`,
       { storageLocationId, availableWetKg, requestedWetKg: totalWetMassKg },
     );
   }
