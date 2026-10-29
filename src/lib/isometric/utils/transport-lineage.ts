@@ -6,6 +6,7 @@ type TransportLineageInput = {
 
 export interface TransportEntityIdsByCategory {
   feedstockIds: string[];
+  feedstockTransportOwnedElsewhere?: boolean;
   biocharProductIds: string[];
   sampleIds: string[];
 }

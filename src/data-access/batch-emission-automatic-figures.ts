@@ -53,6 +53,7 @@ export async function loadBatchesEmissionAutomaticFacts(
     const memberDeliveries = new Set(deliveries.map((delivery) => delivery.id));
     const batchRuns = runs.filter((run) => memberRuns.has(run.id));
     const legs = {
+      feedstockTransportOwnedElsewhere: memberFeedstocks.size === 0 && lineage.runs.some((run) => run.feedstocks.length > 0),
       feedstock: feedstock.filter((leg) => memberFeedstocks.has(leg.entityId)),
       biochar: biochar.filter((leg) => memberDeliveries.has(leg.id)),
       sample: [],

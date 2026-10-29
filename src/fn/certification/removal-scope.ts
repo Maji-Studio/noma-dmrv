@@ -26,6 +26,7 @@ export interface RemovalScope {
     // "completed" claim.
     completedProductionRunIds: string[];
     productionFeedstockIds: string[];
+    productionHasLinkedFeedstock?: boolean;
     applicationIds: string[];
     applicationSlices: {
       applicationId: string;
@@ -94,6 +95,7 @@ export function resolveSingleBatchScope(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
+        productionHasLinkedFeedstock: lineageFacts.runs.some((run) => run.feedstocks.length > 0),
         productionFeedstockIds: Array.from(
           new Set(
             lineageFacts.runs.flatMap((run) =>
@@ -140,6 +142,7 @@ export async function resolveScopeForRemoval(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
+        productionHasLinkedFeedstock: lineageFacts.runs.some((run) => run.feedstocks.length > 0),
         productionFeedstockIds: Array.from(
           new Set(
             lineageFacts.runs.flatMap((run) =>

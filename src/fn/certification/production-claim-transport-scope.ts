@@ -8,6 +8,7 @@ type ProductionClaimScopeBatch = {
   id: string;
   productionRunIds: string[];
   productionFeedstockIds: string[];
+  productionHasLinkedFeedstock?: boolean;
   productionEmissionsClaimedByRemovalId: string | null;
 };
 
@@ -36,7 +37,7 @@ export function collectProductionClaimAwareRequiredTransportCategories(args: {
   );
   return args.requiredTransportCategories.filter((category) => {
     if (category === "biochar") return true;
-    if (category === "feedstock") return productionBatches.some((batch) => batch.productionFeedstockIds.length > 0);
+    if (category === "feedstock") return productionBatches.some((batch) => batch.productionFeedstockIds.length > 0 || batch.productionHasLinkedFeedstock);
     return productionBatches.length > 0;
   });
 }
@@ -53,20 +54,23 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
     productionBatches.flatMap((batch) => batch.productionRunIds),
   );
   const all = collectTransportEntityIds(args.lineages);
-  const production = collectTransportEntityIds(
-    args.lineages.filter((lineage) =>
-      lineage.productionRun
-        ? productionRunIds.has(lineage.productionRun.id)
-        : false,
-    ),
+  const productionLineages = args.lineages.filter((lineage) =>
+    lineage.productionRun
+      ? productionRunIds.has(lineage.productionRun.id)
+      : false,
   );
+  const production = collectTransportEntityIds(productionLineages);
+  const feedstockIds = Array.from(
+    new Set([
+      ...production.feedstockIds,
+      ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
+    ]),
+  );
+  const hasLinkedFeedstock = productionBatches.some((batch) => batch.productionHasLinkedFeedstock) ||
+    productionLineages.some((lineage) => lineage.feedstocks.length > 0);
   return {
-    feedstockIds: Array.from(
-      new Set([
-        ...production.feedstockIds,
-        ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
-      ]),
-    ),
+    feedstockIds,
+    ...(hasLinkedFeedstock && feedstockIds.length === 0 ? { feedstockTransportOwnedElsewhere: true } : {}),
     biocharProductIds: all.biocharProductIds,
     sampleIds: production.sampleIds,
   };

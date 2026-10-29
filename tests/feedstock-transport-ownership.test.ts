@@ -69,7 +69,9 @@ describe("feedstock transport ownership data access", () => {
         if (expected === 0) expect(missingFeedstockTransportIds(ids.feedstockIds, [])).toEqual([]);
         const automatic = (await loadBatchesEmissionAutomaticFacts(ctx, [batch.id], {}, tx))[batch.id];
         expect(automatic.automaticRecordCounts?.["feedstock-transport"]).toBe(expected);
-        if (expected > 0) expect(Number(automatic.automaticFigures["feedstock-transport"]?.magnitude)).toBe(expected * ROUND_TRIP_TONNE_KM);
+        expect(automatic.automaticFigures["feedstock-transport"]).toEqual({
+          magnitude: String(expected * ROUND_TRIP_TONNE_KM), unit: "km * tonne",
+        });
         expect(Number(automatic.automaticFigures["feedstock-dry-mass"]?.magnitude)).toBe(LEG_MASS_KG);
       }
       expect(await loadCreditBatchRollups({ ...ctx, organizationId: `foreign-${tag}` }, batches.map((batch) => batch.id), undefined, tx)).toEqual({});

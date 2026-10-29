@@ -97,7 +97,7 @@ export async function loadTransportLegsByCategory(
   orgCtx: OrgContext,
   entityIds: TransportEntityIdsByCategory,
   lineages: ChainOfCustodyData[],
-  requiredTransportCategories: readonly (keyof TransportLegsByCategory)[],
+  requiredTransportCategories: readonly ("feedstock" | "biochar" | "sample")[],
 ): Promise<TransportLegsByCategory> {
   const [feedstock, biochar] = await Promise.all([
     getTransportLegsWithEvidenceForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
@@ -110,5 +110,5 @@ export async function loadTransportLegsByCategory(
         })))
       : [],
   ]);
-  return { feedstock, biochar, sample: [] };
+  return { feedstock, biochar, sample: [], feedstockTransportOwnedElsewhere: entityIds.feedstockTransportOwnedElsewhere };
 }

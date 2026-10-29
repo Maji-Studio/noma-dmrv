@@ -585,7 +585,7 @@ describe("buildRemovalSourceBindingPlan", () => {
       id: `sample-${index}`, blueprint_key: "mass_distance_based_ci_emissions",
       inputs: [{ input_key: "mass_distance" }],
     }));
-    const manual = { scope: "operating", entryPolicy: "sum", origin: "reviewed" } as const;
+    const manual = { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as const;
     const plan = buildRemovalSourceBindingPlan({
       candidates: [{ documentId: "ledger", sourceId: "ledger", binding }],
       template: { groups: [...template.groups, { key: "sampling-required-for-mrv", components }] } as never,
@@ -614,8 +614,8 @@ describe("buildRemovalSourceBindingPlan", () => {
         ...biomass.components, { ...biomass.components[0], id: "other-biomass" },
       ] }] } as never,
       lineSources: {
-        "component-feedstock-transport": { scope: "operating", entryPolicy: "sum", origin: "reviewed" },
-        "other-biomass": { scope: "operating", entryPolicy: "sum", origin: "reviewed",
+        "component-feedstock-transport": { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
+        "other-biomass": { scope: "operating", entryPolicy: "additive", origin: "reviewed",
           ...(ownsSource ? { automaticSource: "feedstock-transport" as const } : {}) },
       },
       applicationIdsByCreditBatchId,
@@ -628,7 +628,7 @@ describe("buildRemovalSourceBindingPlan", () => {
     const binding = classifyRemovalSourceCandidate({ documentType: "bill_of_lading", metadata: {}, lineage: delivery })!;
     const plan = buildRemovalSourceBindingPlan({
       candidates: [{ documentId: "bill", sourceId: "bill", binding }], template: template as never,
-      lineSources: { "component-biochar-transport": { scope: "operating", entryPolicy: "sum", origin: "reviewed" } },
+      lineSources: { "component-biochar-transport": { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
       applicationIdsByCreditBatchId,
     });
     expect(plan.map((entry) => entry.intendedTarget.componentId)).toEqual(["component-biochar-transport"]);
