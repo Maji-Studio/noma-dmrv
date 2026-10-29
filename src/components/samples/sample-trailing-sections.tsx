@@ -52,7 +52,7 @@ export function SampleEvidenceSection({
   return (
     <FormSection
       title="Evidence & documents"
-      certifyRequired={isCertifyEntityField("sample", "labReport", certifyContext ?? { sampling: sample?.sampling, durabilityOption: sample?.durabilityOption })}
+      certifyRequired={isCertifyEntityField("sample", "labReport", { sampling: certifyContext?.sampling ?? sample?.sampling, durabilityOption: certifyContext?.durabilityOption ?? sample?.durabilityOption })}
       certifyStatus={labReportStatus}
       certifyDescription={certFieldStatusDescription(labReportStatus, "A lab report")}
       icon={<PaperclipIcon size={14} weight="bold" />}

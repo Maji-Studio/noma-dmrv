@@ -104,6 +104,11 @@ describe("edit mode evidence sections", () => {
     expect(screen.getByLabelText("Evidence & documents").dataset.description).toBe(text);
   });
 
+  it("editing a Sample falls back to the saved sampling while the batch query is pending", () => {
+    render(<SampleEvidenceSection isEditMode certifyContext={{ sampling: undefined }} sample={{ id: "s1", sampling: "sampled" } as SampleWithRelations} />);
+    expect(screen.getByLabelText("Evidence & documents").dataset.cert).toBe("on");
+  });
+
   it("other chips keep the default tooltip text", () => {
     const html = renderToStaticMarkup(<CertificationFieldTag status="missing" />);
     expect(html).toContain("Required for certification. Not provided.");
