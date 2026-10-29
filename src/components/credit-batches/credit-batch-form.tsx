@@ -39,7 +39,7 @@ import {
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
-import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { useCreditBatchProductionRunOptions, useNextCreditBatchCode } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
@@ -171,6 +171,10 @@ export function CreditBatchForm({
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
+  // A blank name shows the code, so the grey text is the batch's code: its own
+  // when editing, the next one when creating.
+  const nextCode = useNextCreditBatchCode(!isEditMode).data;
+  const codeShownWhenBlank = creditBatch?.code ?? nextCode;
   const certifier = certifierSummary.data === undefined
     ? "isometric"
     : certifierSummary.data.mapping?.provider ?? null;
@@ -395,7 +399,9 @@ export function CreditBatchForm({
         <FormField
           id="name"
           label="Name"
-          hint="Lists and pages show the batch code when this is blank."
+          hint={codeShownWhenBlank
+            ? `Leave blank to use ${codeShownWhenBlank}.`
+            : "Lists and pages show the batch code when this is blank."}
           error={errors.name?.message}
         >
           <FormInput
@@ -403,7 +409,7 @@ export function CreditBatchForm({
             type="text"
             autoComplete="off"
             maxLength={CREDIT_BATCH_NAME_MAX_LENGTH}
-            placeholder={creditBatch?.code}
+            placeholder={codeShownWhenBlank}
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name", {

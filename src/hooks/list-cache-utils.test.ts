@@ -89,6 +89,23 @@ it("patches every matching array list while preserving enrichment and unrelated 
   expect(queryClient.getQueryData(["measurements", "list", "uncached"])).toBeUndefined();
 });
 
+it("preserves the next code alongside credit batch array lists", () => {
+  const queryClient = new QueryClient();
+  const listsKey = ["creditBatches", "list"];
+  const listKey = [...listsKey, { facilityId: "facility-a" }];
+  const suggestionKey = [...listsKey, "nextCode"];
+  const suggestion = "CB-26-002";
+  queryClient.setQueryData(listKey, [row]);
+  queryClient.setQueryData(suggestionKey, suggestion);
+
+  patchArrayListCachesByPrefixWithSavedRow<Row>(queryClient, listsKey, {
+    id: row.id, updatedAt: SAVED_AT,
+  });
+
+  expect(queryClient.getQueryData(listKey)).toEqual([{ ...row, updatedAt: SAVED_AT }]);
+  expect(queryClient.getQueryData(suggestionKey)).toEqual(suggestion);
+});
+
 
 it("patches only the exact array key, leaving its descendants alone", () => {
   const queryClient = new QueryClient();

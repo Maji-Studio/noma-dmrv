@@ -91,6 +91,17 @@ async function generateNextCode(
   return `${prefix}-${year}-${paddedNumber}`;
 }
 
+/** Reserves nothing; a concurrent create can take the peeked code. */
+export async function peekNextCode(
+  ctx: OrgContext,
+  prefix: string,
+  table: OrgScopedCodeTable,
+  codeColumn: PgColumn,
+): Promise<string> {
+  requireOrgScope(ctx);
+  return generateNextCode(ctx, prefix, table, codeColumn);
+}
+
 /**
  * Generate multiple sequential codes in one call.
  * Avoids the duplicate code bug when generating codes before a batch insert.

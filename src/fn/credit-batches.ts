@@ -13,6 +13,7 @@ import {
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
+  getNextCreditBatchCode,
   getCreditBatchCertifierForFacility,
   describeSavedCreditBatch,
   updateCreditBatch as updateCreditBatchData,
@@ -107,6 +108,13 @@ export async function getCreditBatchProductionRunOptionsFn(
   }, {
     fallbackMessage: "Failed to get credit batch production run options",
     log: { message: "Failed to get credit batch production run options", context: { op: "credit-batch:production-run-options" } },
+  });
+}
+
+export async function getNextCreditBatchCodeFn(): Promise<ActionResult<string>> {
+  return withAction((ctx) => getNextCreditBatchCode(ctx), {
+    fallbackMessage: "Failed to get the next credit batch code",
+    log: { message: "Failed to get the next credit batch code", context: { op: "credit-batch:next-code" } },
   });
 }
 
