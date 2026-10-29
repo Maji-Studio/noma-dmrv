@@ -7,7 +7,7 @@ export interface FeedstockTransportDraw {
   status: string | null;
 }
 
-/** Transport belongs to the earliest complete linked run, regardless of batch membership. */
+/** Pick the earliest complete linked run from the caller's eligible candidates. */
 export function feedstockTransportOwners(draws: readonly FeedstockTransportDraw[]): Map<string, string> {
   const firstDraws = new Map<string, FeedstockTransportDraw>();
   for (const draw of draws) {

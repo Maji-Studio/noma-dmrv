@@ -1,4 +1,4 @@
-import { SOURCE_IDS, sourceFactAvailable, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
+import { automaticSourceAvailable, catalogSourceForRole } from "@/lib/isometric/template-observations/catalog-sources";
 import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
@@ -10,8 +10,6 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import {
   normalizeComponentDisplayName,
-  ownValue,
-  SEMANTIC_BINDING_CATALOG,
   type NomaEvidenceRole,
 } from "@/lib/isometric/semantic-binding-catalog";
 import {
@@ -323,19 +321,12 @@ export interface RemovalSourceBindingPlanEntry {
 // Lookup only: projected targets are hashed and persisted unchanged.
 function targetAutomaticSource(target: EvidenceIntendedTarget) {
   if (target.kind !== "ordinary") return undefined;
-  const inputs = ownValue(SEMANTIC_BINDING_CATALOG, target.componentBlueprintKey);
-  const binding = inputs && ownValue(inputs, target.inputKey);
-  const role = binding && ownValue(binding.roles, target.groupKey);
-  if (role?.strategy !== "aggregated-datapoint") return undefined;
-  const fact = target.componentDisplayName && role.disambiguation
-    ? ownValue(role.disambiguation.sources, target.componentDisplayName) ?? role.source
-    : role.source;
-  return { fact, id: target.componentDisplayName ? "safety-margin" : ownValue<AutomaticSourceId>(SOURCE_IDS, fact) };
+  return catalogSourceForRole(target.componentBlueprintKey, target.inputKey, target.groupKey, target.componentDisplayName);
 }
 
 function targetSourceAvailable(target: EvidenceIntendedTarget): boolean {
   const source = targetAutomaticSource(target);
-  return !source || sourceFactAvailable(source.fact);
+  return !source || automaticSourceAvailable(source);
 }
 
 function matchesIntendedComponent(
@@ -344,11 +335,12 @@ function matchesIntendedComponent(
   target: EvidenceIntendedTarget,
 ): boolean {
   if (!targetSourceAvailable(target)) return false;
+  const source = targetAutomaticSource(target);
   return target.kind === "sequestration"
     ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
         (target.componentDisplayName === undefined ||
-          (contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === "safety-margin"));
+          (source !== undefined && contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === source));
 }
 
 /**
@@ -511,10 +503,10 @@ export function buildRemovalSourceBindingPlan(args: {
               ),
           );
         const source = targetAutomaticSource(target);
-        if (matchingComponents.length > 1 && source?.id) {
+        if (matchingComponents.length > 1 && source) {
           matchingComponents = matchingComponents.filter((component) => {
             const contract = args.lineSources?.[component.id];
-            return contract && effectiveContract(contract).automaticSource === source.id;
+            return contract && effectiveContract(contract).automaticSource === source;
           });
         }
         if (matchingComponents.length === 0 && target.optionalInTemplate) {

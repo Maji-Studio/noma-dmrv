@@ -53,6 +53,12 @@ export interface TransportCoverageFact {
   aggregationWarning: string | null;
 }
 
+export function transportCategoryCovered(
+  bucket: Pick<TransportCoverageFact, "count" | "ownedElsewhere" | "missingEntityIds">,
+): boolean {
+  return (bucket.count > 0 || bucket.ownedElsewhere === true) && !bucket.missingEntityIds?.length;
+}
+
 export interface RemovalReadinessFacts {
   /** Latest ledger status, or null when no submission row exists yet. */
   local: LocalSubmissionStatus | null;
@@ -213,7 +219,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
 
 // Transport-coverage gaps, phrased exactly as the classifier's blocker reasons.
 function transportGapReasons(required: TransportCoverageFact[]): string[] {
-  const missing = required.filter((t) => (t.count === 0 && !t.ownedElsewhere) || (t.missingEntityIds?.length ?? 0) > 0).map((t) => t.category);
+  const missing = required.filter((t) => !transportCategoryCovered(t)).map((t) => t.category);
   const incomplete = required
     .filter((t) => t.count > 0 && t.aggregationWarning !== null)
     .map((t) => t.category);
@@ -664,7 +670,7 @@ export function buildRemovalRequirementsChecklist(
       }];
     }
     const missing = facts.requiredTransport
-      .filter((category) => (category.count === 0 && !category.ownedElsewhere) || (category.missingEntityIds?.length ?? 0) > 0)
+      .filter((category) => !transportCategoryCovered(category))
       .map((category) => category.category);
     return missing.length === 0
       ? [{

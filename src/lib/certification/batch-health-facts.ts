@@ -18,6 +18,7 @@ import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibi
 import { sampleDocumentWarningKeys, sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
+import { transportCategoryCovered } from "./readiness";
 
 // Preview keys owned by other UI checks. Credit-batch detail may still explain
 // local preview gaps, but Removal readiness is derived from the independent
@@ -102,9 +103,7 @@ export function toBatchHealthFacts(
     facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
-      present: (ctx.transportCoverage[category].count > 0 ||
-        (ctx.transportCoverage[category].count === 0 && ctx.transportCoverage[category].ownedElsewhere === true)) &&
-        (ctx.transportCoverage[category].missingEntityIds?.length ?? 0) === 0,
+      present: transportCategoryCovered(ctx.transportCoverage[category]),
     })),
   };
 }
