@@ -1,16 +1,11 @@
 vi.mock("./removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
-import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
-import { assertSubmissionLineageResolved } from "./removal-submission-build";
-import { batchAutomaticFigures } from "@/lib/certification/batch-automatic-figures";
-import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
-import { getTransportLegsForEntities, getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
+import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import type { RemovalScope } from "./removal-scope";
@@ -23,7 +18,7 @@ import { buildRemovalContext, loadRemovalSubmissionContext } from "./certify-con
 vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn() }));
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
-vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsForEntities: vi.fn(), getTransportLegsWithEvidenceForEntities: vi.fn() }));
+vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsWithEvidenceForEntities: vi.fn() }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: vi.fn(async () => null), hasFinalizedSubmission: vi.fn(async () => false) }));
 vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertification: vi.fn(async () => []) }));
@@ -38,7 +33,7 @@ vi.mock("@/lib/certification/mass-accounting", () => ({ buildMassAccounting: vi.
 vi.mock("./member-credit-batch", () => ({ toMemberCreditBatchView: vi.fn((batch) => batch) }));
 vi.mock("./production-claim-transport-scope", () => ({
   collectProductionClaimAwareRequiredTransportCategories: vi.fn((input) => input.requiredTransportCategories),
-  collectProductionClaimAwareTransportEntityIds: vi.fn(() => ({ feedstockIds: ["feedstock-1"], linkedFeedstockIds: ["feedstock-1"], biocharProductIds: ["product-1"], sampleIds: [] })),
+  collectProductionClaimAwareTransportEntityIds: vi.fn(() => ({ feedstockIds: ["feedstock-1"], biocharProductIds: ["product-1"], sampleIds: [] })),
 }));
 
 const ctx = makeTestOrgContext();
@@ -164,69 +159,4 @@ it("suppresses correction projections while compiling the shared comparison", as
   const facilityFacts = facts(fixture as GhgEntryTemplate);
   await buildRemovalContext(ctx, scope, facilityFacts, { correctionRead: true });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, expect.objectContaining({ loadCorrection: undefined, ownedRemovalId: scope.removalId ?? undefined }));
-});
-
-
-it.each([false, true])("loads other owners' legs only for linked feedstock coverage: %s", async (hasLeg) => {
-  const { collectProductionClaimAwareTransportEntityIds } = await import("./production-claim-transport-scope");
-  vi.mocked(collectProductionClaimAwareTransportEntityIds).mockReturnValueOnce({
-    feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], biocharProductIds: ["product-1"], sampleIds: [],
-    feedstockTransportOwnedElsewhere: true,
-  });
-  vi.mocked(getTransportLegsWithEvidenceForEntities).mockResolvedValueOnce([]);
-  vi.mocked(getTransportLegsForEntities).mockResolvedValueOnce(hasLeg ? [
-    { id: "earlier-leg", entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000 } as never,
-  ] : []);
-  const result = await buildRemovalContext(ctx, scope, facts(fixture as GhgEntryTemplate));
-  expect(getTransportLegsForEntities).toHaveBeenCalledWith(ctx, "feedstock", ["earlier-stock"]);
-  expect(result.transportCoverage.feedstock).toMatchObject({
-    count: 0, legIds: [], missingEntityIds: hasLeg ? [] : ["earlier-stock"],
-  });
-  expect(result.transportLegs.feedstock).toEqual([]);
-});
-
-it.each([
-  { problem: "mixed modes", overrides: { transportMethodType: "rail" }, warning: "different transport modes" },
-  { problem: "mixed calculation methods", overrides: { calculationMethodType: "fuel_based" }, warning: "different calculation methods" },
-  { problem: "missing load mass", overrides: { loadMassKg: null }, warning: "without a load mass" },
-  { problem: "valid legs", overrides: {}, warning: null },
-])("checks linked transport owned elsewhere before locking it: $problem", async ({ overrides, warning }) => {
-  vi.mocked(getLatestSubmission).mockResolvedValueOnce(null);
-  const { collectProductionClaimAwareTransportEntityIds } = await import("./production-claim-transport-scope");
-  const realBlockers = await vi.importActual<typeof import("./certify-lineage-blockers")>("./certify-lineage-blockers");
-  vi.mocked(buildSubmissionLineageBlockers).mockImplementationOnce(realBlockers.buildSubmissionLineageBlockers);
-  vi.mocked(collectProductionClaimAwareTransportEntityIds).mockReturnValueOnce({
-    feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], biocharProductIds: ["product-1"], sampleIds: [],
-    feedstockTransportOwnedElsewhere: true,
-  });
-  vi.mocked(getTransportLegsWithEvidenceForEntities).mockResolvedValueOnce([]);
-  const validLeg = { id: "valid-leg", entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000,
-    calculationMethodType: "distance_based", transportMethodType: "road" };
-  vi.mocked(getTransportLegsForEntities).mockResolvedValueOnce([
-    validLeg, { ...validLeg, id: "other-leg", ...overrides },
-  ] as never);
-  const currentScope = {
-    ...scope, feedstockCodes: { "earlier-stock": "FS-1" },
-    lineages: [{ application: { id: "application-1", code: "AP-1", applicationDate: new Date("2026-10-01") },
-      delivery: { id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 1,
-        customerLocationId: "location-1", recordedDistanceKm: 20 } }],
-  } as unknown as RemovalScope;
-  const result = await buildRemovalContext(ctx, currentScope, facts(fixture as GhgEntryTemplate));
-  expect(result.transportCoverage.feedstock).toMatchObject({ count: 0, missingEntityIds: [], ownedElsewhere: true });
-  expect(result.transportLegs.feedstock).toEqual([]);
-  expect(batchAutomaticFigures([], result.transportLegs)["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
-  const readinessFacts = toRemovalReadinessFacts(result);
-  if (warning) {
-    expect(result.submissionLineageBlockers).toContainEqual(expect.objectContaining({
-      detail: expect.stringContaining(warning), fixTarget: "feedstocks", record: expect.objectContaining({ id: "earlier-stock", code: "FS-1" }),
-    }));
-    expect(assertSubmissionLineageResolved.bind(null, result.submissionLineageBlockers)).toThrow(warning);
-    expect(readinessFacts.submissionLineageIssues).toEqual(result.submissionLineageBlockers);
-    expect(deriveRemovalReadiness(readinessFacts).state).toBe("blocked");
-    expect(buildRemovalRequirementsChecklist(readinessFacts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: expect.stringContaining(warning) }));
-  } else {
-    expect(result.submissionLineageBlockers).toEqual([]);
-    expect(() => assertSubmissionLineageResolved(result.submissionLineageBlockers)).not.toThrow();
-    expect(readinessFacts.submissionLineageIssues).toEqual([]);
-  }
 });

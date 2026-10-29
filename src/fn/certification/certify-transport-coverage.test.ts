@@ -1,5 +1,7 @@
 import { transportCategoryCovered } from "@/lib/certification/readiness";
 import { batchAutomaticFigures } from "@/lib/certification/batch-automatic-figures";
+import { collectProductionClaimAwareTransportEntityIds } from "./production-claim-transport-scope";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import { describe, expect, it } from "vitest";
 import { buildTransportCoverage } from "./certify-transport-coverage";
 import type { TransportLegsByCategory } from "./shared";
@@ -29,17 +31,17 @@ it("carries owned-elsewhere evidence from the entity scope into feedstock covera
   expect(coverage.sample.ownedElsewhere).toBeUndefined();
 });
 
-
-it.each([false, true])("requires linked feedstock presence without counting another batch's legs: %s", (hasLeg) => {
-  const legs = { feedstock: [], biochar: [], sample: [], feedstockTransportOwnedElsewhere: true };
-  const coverage = buildTransportCoverage(legs, {
-    feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], biocharProductIds: [], sampleIds: [],
-    feedstockTransportOwnedElsewhere: true,
-  }, hasLeg ? [{ entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000 }] : []);
-  expect(coverage.feedstock).toMatchObject({
-    count: 0, legIds: [], entityIds: [], ownedElsewhere: true,
-    missingEntityIds: hasLeg ? [] : ["earlier-stock"],
+it("does not block a later batch whose linked-but-not-owned feedstock has no legs", () => {
+  const ids = collectProductionClaimAwareTransportEntityIds({
+    removalId: null,
+    memberBatches: [{ id: "later", productionRunIds: ["later-run"], productionFeedstockIds: [],
+      productionHasLinkedFeedstock: true, productionEmissionsClaimedByRemovalId: null }],
+    lineages: [],
   });
-  expect(transportCategoryCovered(coverage.feedstock)).toBe(hasLeg);
+  const legs = { feedstock: [], biochar: [], sample: [], feedstockTransportOwnedElsewhere: ids.feedstockTransportOwnedElsewhere };
+  const coverage = buildTransportCoverage(legs, ids);
+  expect(coverage.feedstock).toMatchObject({ count: 0, missingEntityIds: [], ownedElsewhere: true });
+  expect(transportCategoryCovered(coverage.feedstock)).toBe(true);
+  expect(buildSubmissionLineageBlockers([], coverage.feedstock.missingEntityIds ?? [], {}, ["feedstock"])).toEqual([]);
   expect(batchAutomaticFigures([], legs)["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
 });

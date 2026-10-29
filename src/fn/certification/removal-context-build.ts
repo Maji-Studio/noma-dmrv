@@ -1,4 +1,3 @@
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
 import {
@@ -24,7 +23,6 @@ import { removalMayHaveExternalMutation } from "@/lib/certification/removal-exte
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { durabilityConfigurationBlockers, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
-import { aggregateTransportMassDistance } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
@@ -325,24 +323,12 @@ export async function buildRemovalContext(
     ...recordedTransportLegs,
     biochar: requiredTransportCategories.includes("biochar") ? recordedTransportLegs.biochar : [],
   };
-  // Linked stock owned by another batch must pass its owner's transport gates
-  // before this Removal locks it. Figures and evidence still use only owned legs.
-  const ownedFeedstockIds = new Set(entityIds.feedstockIds);
-  const extraFeedstockIds = entityIds.linkedFeedstockIds.filter((id) => !ownedFeedstockIds.has(id));
-  const extraFeedstockLegs = extraFeedstockIds.length > 0
-    ? await getTransportLegsForEntities(orgCtx, "feedstock", extraFeedstockIds)
-    : [];
-  const extraFeedstockWarning = aggregateTransportMassDistance(extraFeedstockLegs, "Feedstock").warning;
-  const transportCoverage = buildTransportCoverage(transportLegs, entityIds, [
-    ...transportLegs.feedstock,
-    ...extraFeedstockLegs,
-  ]);
+  const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
   const submissionLineageBlockers = buildSubmissionLineageBlockers(
     lineages,
     transportCoverage.feedstock.missingEntityIds ?? [],
     scope.feedstockCodes,
     requiredTransportCategories,
-    extraFeedstockWarning ? { feedstockIds: extraFeedstockIds, warning: extraFeedstockWarning } : undefined,
   );
   const distanceFixLinks = await getTransportDistanceFixLinks(orgCtx,
     submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks").map(blocker => blocker.record.id),

@@ -12,7 +12,7 @@ import { requireOrgScope } from "./utils";
 /** Include shared products because refreshing a delivery also rewrites their aggregate legs. */
 export async function distanceRefreshLineageTargets(ctx: OrgContext, tx: DbTransaction, target: TransportDistanceTarget) {
   requireOrgScope(ctx);
-  if (target.entityType === "feedstock") return [target];
+  if (target.entityType === "feedstock") return [{ ...target, transportOnly: true }];
   const allocated = deliveryProductAllocations(ctx, tx);
   const products = await tx.select({ id: allocated.biocharProductId }).from(allocated)
     // org-scope-ok: deliveryProductAllocations scopes all sources to ctx.organizationId.

@@ -5,8 +5,8 @@
 A feedstock record's transport is counted only by the earliest complete linked run that belongs to a credit batch
 (start time, then run ID), across all runs in the organization. Batch figures,
 Removal previews, coverage and submission share that ownership; stock allocation
-and dry mass are unchanged. Archived runs and archived credit batches cannot own legs;
-a later batch still needs legs recorded on every linked feedstock record before it can be sent, even when it does not count them. See [ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).
+and dry mass are unchanged. Archived runs and archived credit batches cannot own legs.
+A sent Removal locks a feedstock record's transport legs only when it counted them; the record's other fields stay locked through every linked run. See [ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).
 Retired sample transport no longer receives generated ledger evidence. Ambiguous
 live evidence targets resolve through their effective automatic-source contract.
 Catalog, mapping revisions, persisted target shapes and schema remain unchanged.

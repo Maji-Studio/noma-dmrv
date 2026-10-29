@@ -160,16 +160,14 @@ it.each([
   { ownedElsewhere: true, feedstockIds: [], satisfied: true },
   { ownedElsewhere: undefined, feedstockIds: [], satisfied: false },
   { ownedElsewhere: true, feedstockIds: ["missing"], satisfied: false },
-  { ownedElsewhere: true, feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], hasLeg: false, satisfied: false },
-  { ownedElsewhere: true, feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], hasLeg: true, satisfied: true },
-])("gates zero feedstock transport on ownership evidence: %j", async ({ ownedElsewhere, feedstockIds, linkedFeedstockIds, hasLeg, satisfied }) => {
+])("gates zero feedstock transport on ownership evidence: %j", async ({ ownedElsewhere, feedstockIds, satisfied }) => {
   vi.clearAllMocks();
   mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
   mocks.loadFacilityCertifierFacts.mockResolvedValue(CONNECTED);
   const context = { ...batchContext(), requiredTransportCategories: ["feedstock"],
     transportCoverage: buildTransportCoverage({ feedstock: [], biochar: [], sample: [] }, {
-      feedstockIds, linkedFeedstockIds, biocharProductIds: [], sampleIds: [], feedstockTransportOwnedElsewhere: ownedElsewhere,
-    }, hasLeg ? [{ entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000 }] : []),
+      feedstockIds, biocharProductIds: [], sampleIds: [], feedstockTransportOwnedElsewhere: ownedElsewhere,
+    }),
   };
   mocks.buildCreditBatchContexts.mockResolvedValue({ contextsByBatch: { [CREDIT_BATCH_ID]: context }, accountingByBatch: {} });
   mocks.createRemovalWithCreditBatches.mockResolvedValue("removal-1");

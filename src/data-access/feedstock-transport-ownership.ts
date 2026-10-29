@@ -10,7 +10,7 @@ import { requireOrgScope } from "./utils";
 export async function getFeedstockTransportOwners(
   ctx: OrgContext,
   feedstockIds: string[],
-  executor: typeof db | DbTransaction = db,
+  executor: Pick<DbTransaction, "select"> = db,
 ): Promise<Map<string, string>> {
   requireOrgScope(ctx);
   const ids = [...new Set(feedstockIds)];

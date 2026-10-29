@@ -9,7 +9,7 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > ordered by start time then run ID across the organization.
 > Only credit batches containing that run include those legs in production inputs.
 > Later pro-rata stock allocations retain the feedstock record for traceability and dry
-> mass but do not repeat its transport. A later batch still needs legs recorded on every linked feedstock record before it can be sent, even when it does not count them.
+> mass but do not repeat its transport. A sent Removal locks a feedstock record's transport legs only when it counted them; the record's other fields stay locked through every linked run.
 > Running, failed and cancelled runs, archived runs and archived credit batches cannot own transport legs. A feedstock record
 > linked only to those runs has no owner. Backdated runs or run status changes can
 > change live ownership;

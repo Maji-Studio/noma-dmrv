@@ -22,11 +22,9 @@ export function toRemovalReadinessFacts(
     ? isLockedInFlight(ctx.latestSubmission) &&
       !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
-  // Presence issues already have a transport-readiness row (#1024). Keep other
-  // feedstock failures, including owner-side gates on linked transport legs.
+  // Feedstock presence issues already have a transport-readiness row (#1024).
   const submissionLineageIssues = ctx.submissionLineageBlockers.filter(
-    (blocker) => blocker.fixTarget !== "feedstocks" ||
-      !ctx.transportCoverage.feedstock.missingEntityIds?.includes(blocker.record.id),
+    (blocker) => blocker.fixTarget !== "feedstocks",
   );
   return {
     local: ctx.latestSubmission?.status ?? null,
