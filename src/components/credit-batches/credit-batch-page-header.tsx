@@ -82,8 +82,9 @@ const STEP_BAR: Record<CreditBatchMilestone["state"], string> = {
  * opens the same four in a popover.
  */
 function ProgressSteps() {
-  const { batch, pageModel, blockingCount, openItems } = useCreditBatchPage();
-  const { timeZone } = useFacilityClock(batch.facilityId);
+  const { batch, pageModel, blockingCount, openItems, facilityTimeZone } = useCreditBatchPage();
+  const clock = useFacilityClock(batch.facilityId);
+  const timeZone = facilityTimeZone ?? clock.timeZone;
   const steps = creditBatchMilestones({ timeZone, blockingCount, openCount: overviewBadgeCount(openItems), pageModel });
   return (
     <>

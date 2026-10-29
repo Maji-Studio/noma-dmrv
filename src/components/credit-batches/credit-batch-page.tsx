@@ -39,8 +39,7 @@ import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { certificationRemovalsHref, traceabilityBatchHref } from "@/lib/certification/links";
 import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
 import { Button } from "@/components/ui/button";
-import { Notice } from "@/components/ui/notice";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -48,6 +47,7 @@ import {
   CREDIT_BATCH_PAGE_TAB_LABELS,
   CREDIT_BATCH_PAGE_TABS,
   creditBatchPrimaryAction,
+  readOnlyOpenItems,
   todosLabel,
   tabBadge,
   type CreditBatchPageTab,
@@ -60,7 +60,7 @@ import {
 } from "@/lib/credit-batches/open-items";
 import { ENTITY_DEEP_LINK_FOCUS_PARAM } from "@/lib/entity-deep-link";
 import { formatDateRange } from "@/lib/format-utils";
-import { isRecordEditable, RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
+import { isRecordEditable } from "@/lib/record-lock-view";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
@@ -203,10 +203,13 @@ export function CreditBatchPage({
   const todos = useCreditBatchTodos(batch
     ? { facilityId: batch.facilityId, creditBatchId: batch.id }
     : null);
-  const linkedRecord = useLinkedRecordFacility(batch, batchQuery.isLoading);
+  // The page never moves the working facility: a batch in another active facility stays "not found" here.
+  const linkedRecord = useLinkedRecordFacility(batch, batchQuery.isLoading, { switchFacility: false });
   // A link into an archived facility (or one that could not be checked) opens
   // the batch read only instead of "not found".
   const readOnly = linkedRecordReadOnly(linkedRecord, batch, "credit batch");
+  // Until the facility lookup settles, neither the batch nor "not found" is true yet.
+  if (batch && !linkedRecord.ready) return null;
   if (!batch || (contextFacilityId && !isResolving && contextFacilityId !== batch.facilityId && !readOnly)) {
     if (batchQuery.isPending) return null;
     return (
@@ -220,9 +223,11 @@ export function CreditBatchPage({
   // A failed to-do read shows no list at all, not a partial one.
   // React Query keeps old data on a failed refetch, so ignore it on error.
   const current = todos.isError ? undefined : todos.data;
-  const openItems = current
+  const todoItems = current
     ? { blocking: current.blocking, check: current.check, waiting: buildCreditBatchWaitingItems(pageModel.data) }
     : { blocking: [], check: [], waiting: [] as ReturnType<typeof buildCreditBatchWaitingItems> };
+  // Read only, to-dos are plain text: no Edit, no repair link. Tabs stay reachable.
+  const openItems = readOnly ? readOnlyOpenItems(todoItems) : todoItems;
   const blocking = current ? openItems.blocking : undefined;
   const editable = isRecordEditable(lock);
   const membershipLocked = isCreditBatchMembershipLocked(lock);
@@ -248,7 +253,7 @@ export function CreditBatchPage({
     }
     go(item.target.tab, item.target.rowId);
     // Batch details are fixed in the edit form, so the form opens with them.
-    if (item.target.rowId === CREDIT_BATCH_DETAILS_ROW && editable) startEdit();
+    if (item.target.rowId === CREDIT_BATCH_DETAILS_ROW && editable && !readOnly) startEdit();
   };
 
   // Removals are made in the certification workspace, behind its registry guard.
@@ -304,6 +309,7 @@ export function CreditBatchPage({
     lockStatus,
     canManage: canManage && !readOnly,
     readOnly,
+    facilityTimeZone: linkedRecord.readOnly?.reason === "archived" && readOnly ? linkedRecord.readOnly.timezone : undefined,
     tab,
     focus,
     go,
@@ -318,20 +324,7 @@ export function CreditBatchPage({
   return (
     <CreditBatchPageProvider value={value}>
       <div className="container-max page-shell min-w-0">
-        {readOnly && (
-          <Notice
-            tone={readOnly.tone}
-            boxed
-            data-read-only-notice={readOnly.tone}
-            action={readOnly.retry ? (
-              <Button variant="default" size="small" className={CENTRED_HIT_AREA} busy={readOnly.retry.running} onClick={readOnly.retry.run}>
-                {RECORD_LOCK_RETRY_LABEL}
-              </Button>
-            ) : undefined}
-          >
-            {readOnly.message}
-          </Notice>
-        )}
+        {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
         <CreditBatchPageHeader primary={primary} onPrimary={onPrimary} onDelete={() => setDeleting({ id: batch.id, version: batch.version })} />
         <CreditBatchKeyNumbers />
         <div className="flex min-w-0 flex-col gap-24">
@@ -343,13 +336,13 @@ export function CreditBatchPage({
       </div>
 
       <EntitySideSheet
-        open={editSnapshot !== null}
+        open={!readOnly && editSnapshot !== null}
         onOpenChange={(open) => !open && closeEdit()}
         mode="edit"
         onModeChange={(mode) => mode === "view" && closeEdit()}
         title={creditBatchLabel(batch)}
         subtitle={formatDateRange(batch.startDate, batch.endDate)}
-        canEdit={editable}
+        canEdit={editable && !readOnly}
         {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, inUseLocksNothing: !membershipLocked })}
         size="wide"
       >

@@ -193,7 +193,7 @@ function TodosUnavailable() {
 }
 
 function RemovalsPanel() {
-  const { batch, pageModel, go, canManage } = useCreditBatchPage();
+  const { batch, pageModel, go, canManage, facilityTimeZone } = useCreditBatchPage();
   if (!pageModel) return null;
   const groups = removalBarGroups(pageModel);
   return (
@@ -217,7 +217,7 @@ function RemovalsPanel() {
       {pageModel.removals.length === 0 && (
         <p className={cn("body-small", MUTED_TEXT)}>Nothing blocks this credit batch. Start a Removal to submit its applied biochar.</p>
       )}
-      <CompactRemovalBar groups={groups} facilityId={batch.facilityId} />
+      <CompactRemovalBar groups={groups} facilityId={batch.facilityId} timeZone={facilityTimeZone} />
       <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} canManage={canManage} />
     </PagePanel>
   );

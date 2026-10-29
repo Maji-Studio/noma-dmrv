@@ -12,6 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { useLinkedApplicationDelivery } from "@/hooks/use-linked-application-delivery";
 import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
@@ -343,12 +344,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     contextFacilityId ?? undefined,
     { enabled: !!contextFacilityId },
   );
-  // An archived facility's delivery is not among the working facility's options.
-  const archivedLink = linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly : null;
-  const { data: archivedDeliveries } = useApplicationDeliveryOptions(
-    archivedLink?.facilityId,
-    { enabled: !!archivedLink },
-  );
   const { data: creditBatches } = useCreditBatches(
     contextFacilityId ?? undefined,
   );
@@ -584,8 +579,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       : sideSheetEntity
         ? formatCalendarDate(sideSheetEntity.applicationDate)
         : undefined;
+  // An archived facility's delivery is not among the working facility's options:
+  // its linked read serves the read-only view and never feeds the form.
+  const archivedLink = linkedRecord.readOnly?.reason === "archived" && sideSheetEntity?.facilityId === linkedRecord.readOnly.facilityId;
+  const { data: archivedDelivery } = useLinkedApplicationDelivery(sideSheetEntity?.id ?? "", archivedLink);
   const sideSheetDelivery = sideSheetEntity
-    ? [...deliveryOptions, ...(archivedDeliveries ?? [])].find((delivery) => delivery.id === sideSheetEntity.deliveryId)
+    ? archivedLink
+      ? archivedDelivery ?? undefined
+      : deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
     : undefined;
 
   // A link into an archived facility opens its record read only, over the

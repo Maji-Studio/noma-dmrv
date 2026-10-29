@@ -49,7 +49,7 @@ function Section({
   action,
 }: {
   children: React.ReactNode;
-  action: React.ReactNode;
+  action: React.ReactNode | null;
 }) {
   return (
     <section
@@ -264,15 +264,18 @@ export function CreditBatchDurabilityPanel({
   creditBatchId,
   facilityId,
   focusedSampleId,
+  canRecord = true,
 }: {
   creditBatchId: string;
   facilityId: string;
   /** A Sample a deep link points at (`?focus=`): its row scrolls into view, highlighted. */
   focusedSampleId?: string | null;
+  /** False on a read-only batch: no Record a Sample action. */
+  canRecord?: boolean;
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
-  const action = (
+  const action = !canRecord ? null : (
     <SampleCreateAction
       facilityId={facilityId}
       creditBatchId={creditBatchId}

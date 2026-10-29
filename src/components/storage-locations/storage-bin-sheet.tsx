@@ -38,6 +38,8 @@ export type StorageBinSheetState =
 interface StorageBinSheetProps {
   /** A link into an archived facility: view only, no edit or stock adjustment. */
   readOnly?: SheetReadOnly;
+  /** The linked bin's own facility zone, when that facility is archived. */
+  timeZone?: string;
   state: StorageBinSheetState | null;
   onStateChange: (state: StorageBinSheetState | null) => void;
   onReconcile: (
@@ -47,6 +49,7 @@ interface StorageBinSheetProps {
 
 export function StorageBinSheet({
   readOnly,
+  timeZone,
   state,
   onStateChange,
   onReconcile,
@@ -128,7 +131,7 @@ export function StorageBinSheet({
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={
         state?.mode === "view" && state.entity
-          ? storageLocationSheetSections(state.entity, readOnly ? undefined : onReconcile)
+          ? storageLocationSheetSections(state.entity, readOnly ? undefined : onReconcile, { readOnly: !!readOnly, timeZone })
           : undefined
       }
     >

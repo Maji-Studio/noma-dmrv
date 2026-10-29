@@ -3,6 +3,7 @@
 import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { recordHref, CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { useLinkedCreditBatchMembers } from "@/hooks/use-linked-credit-batch-members";
 import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
@@ -490,12 +491,20 @@ export function CreditBatchList({
     : null);
   const missingRuns = sheetTodos.isError ? [] : missingRunsFromTodos(sheetTodos.data?.check);
   const lateRuns = sheetTodos.isError ? [] : lateRunsFromTodos(sheetTodos.data?.check);
-  const runOptionsQuery = useCreditBatchProductionRunOptions({
-    facilityId: viewEntity?.facilityId,
+  // A link into an archived facility opens the batch read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, viewEntity, "credit batch");
+  // An archived facility's members come from the linked read; the form-option
+  // read skips it, so it stays idle there.
+  const archivedBatch = !!sheetReadOnly && linkedRecord.readOnly?.reason === "archived";
+  const formRunOptions = useCreditBatchProductionRunOptions({
+    facilityId: archivedBatch ? undefined : viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
     endDate: viewEntity?.endDate,
     includeCreditBatchId: viewEntity?.id,
   });
+  const linkedMembers = useLinkedCreditBatchMembers(viewEntity?.id ?? "", archivedBatch);
+  const runOptionsQuery = archivedBatch ? linkedMembers : formRunOptions;
   const memberRunIds = new Set(viewEntity?.productionRunIds ?? []);
   const displayedRuns = (runOptionsQuery.data ?? []).filter((run) => {
     if (memberRunIds.has(run.id)) return true;
@@ -570,9 +579,6 @@ export function CreditBatchList({
   // Record lock (#1119): the sheet reads Sent from its own lock read alone;
   // the lock line states the reason and Edit waits for the read.
   const sideSheetLocked = sheetLock?.level === "sent";
-  // A link into an archived facility opens the batch read only, over the
-  // "Select a facility" empty state too when no facility is active.
-  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "credit batch");
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
       <EntitySideSheet

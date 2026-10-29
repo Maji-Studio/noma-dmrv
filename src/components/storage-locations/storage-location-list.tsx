@@ -73,6 +73,8 @@ export function StorageLocationList() {
   // A link into an archived facility opens the bin read only, over the
   // "Select a facility" empty state too.
   const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "storage bin");
+  // An archived facility is outside the facility list, so the sheet carries its zone.
+  const sheetTimeZone = sheetReadOnly && linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined;
   const changeSideSheet = (state: StorageBinSheetState | null) => {
     setSideSheet(state);
     if (!state) void setLinkedBinId(null);
@@ -211,7 +213,7 @@ export function StorageLocationList() {
         <PageHeader area="setup" title="Storage bins" />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its storage bins." />
         {linkedRecord.readOnly && (
-          <StorageBinSheet readOnly={sheetReadOnly} state={displaySideSheet} onStateChange={changeSideSheet} onReconcile={openReconcile} />
+          <StorageBinSheet readOnly={sheetReadOnly} timeZone={sheetTimeZone} state={displaySideSheet} onStateChange={changeSideSheet} onReconcile={openReconcile} />
         )}
       </div>
     );
@@ -296,6 +298,7 @@ export function StorageLocationList() {
 
       <StorageBinSheet
         readOnly={sheetReadOnly}
+        timeZone={sheetTimeZone}
         state={displaySideSheet}
         onStateChange={changeSideSheet}
         onReconcile={openReconcile}

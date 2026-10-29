@@ -23,10 +23,15 @@ export type LinkedRecordFacility = {
   readOnly: LinkedRecordReadOnly | null;
 };
 
-/** Synchronize the external facility stores before exposing a linked sheet. */
+/**
+ * Synchronize the external facility stores before exposing a linked sheet.
+ * `switchFacility: false` only resolves read-only status: the routed credit
+ * batch page keeps the working facility where it is.
+ */
 export function useLinkedRecordFacility(
   record: { facilityId?: string | null } | null | undefined,
   isLoading = false,
+  { switchFacility = true }: { switchFacility?: boolean } = {},
 ): LinkedRecordFacility {
   const {
     activeOrganizationId,
@@ -52,11 +57,11 @@ export function useLinkedRecordFacility(
       return;
     }
     const request = `${facilityId}:${recordFacilityId}`;
-    if (canSwitch && requestedSwitch.current !== request) {
+    if (switchFacility && canSwitch && requestedSwitch.current !== request) {
       requestedSwitch.current = request;
       setFacilityId(recordFacilityId);
     }
-  }, [canSwitch, facilityId, recordFacilityId, setFacilityId]);
+  }, [canSwitch, facilityId, recordFacilityId, setFacilityId, switchFacility]);
 
   const facilityRead = needsLookup && lookup.data?.id === recordFacilityId ? lookup.data : undefined;
   const unchecked: LinkedRecordReadOnly | null = recordFacilityId
@@ -79,6 +84,6 @@ export function useLinkedRecordFacility(
   // shows the record where it is, once its read settles. An archived facility,
   // or one whose read failed, opens the record read only.
   const ready = !!record && !isLoading && !facilitiesLoading &&
-    (!recordFacilityId || recordFacilityId === facilityId || (!selectable && lookupSettled));
+    (!recordFacilityId || recordFacilityId === facilityId || (!switchFacility && selectable) || (!selectable && lookupSettled));
   return { ready, readOnly: ready ? readOnly : null };
 }

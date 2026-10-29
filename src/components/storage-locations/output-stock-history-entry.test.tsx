@@ -83,6 +83,23 @@ describe("HistoryEntry when saved", () => {
   });
 });
 
+describe("HistoryEntry on a read-only bin", () => {
+  it("keeps the Lost mass entry and hides Edit and Delete without handlers", async () => {
+    const lost = entry({ id: "l1", kind: "loss", eventKind: "loss", wetMassKg: 50, dryMassKg: 25, solidsDeltaKg: -25, wetDeltaKg: -50, editLockedReason: null });
+    const row = buildHistoryDays([lost], "UTC").flatMap((day) => day.rows)[0];
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<HistoryEntry row={row} defaultOpen linked timeZone="UTC" facilityId={FACILITY_ID} />);
+    });
+    expect(renderer.root.findAllByType("button").map(text)).toEqual([]);
+    expect(text(renderer.root)).toContain("Lost 50 kg wet mass");
+    await act(async () => {
+      renderer = create(<HistoryEntry row={row} defaultOpen linked timeZone="UTC" facilityId={FACILITY_ID} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    });
+    expect(renderer.root.findAllByType("button").map(text)).toEqual(["Edit", "Delete"]);
+  });
+});
+
 describe("history hint", () => {
   it("says a later entry changes wet estimates, not what an earlier one measured", () => {
     expect(STOCK_HISTORY_HINT).toContain("A later entry never changes what an earlier one measured; wet estimates update.");

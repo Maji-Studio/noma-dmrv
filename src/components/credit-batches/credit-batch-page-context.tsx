@@ -30,6 +30,11 @@ export interface CreditBatchPageContextValue {
   canManage: boolean;
   /** Set when the batch opens read only (its facility is archived or unchecked). */
   readOnly?: SheetReadOnly;
+  /**
+   * The batch's own facility zone, set when that facility is archived. The
+   * facility list leaves it out, so surfaces that format times read this first.
+   */
+  facilityTimeZone?: string;
   tab: CreditBatchPageTab;
   /** The row the URL asks to highlight (`?focus=`). */
   focus: string | null;

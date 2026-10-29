@@ -148,4 +148,17 @@ describe("useLinkedRecordFacility", () => {
     expect(result.current).toEqual({ ready: false, readOnly: null });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
+
+  it("with switchFacility off, never moves the working facility and settles for a selectable facility", () => {
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "facility-b" }, false, { switchFacility: false }));
+    expect(context.setFacilityId).not.toHaveBeenCalled();
+    expect(result.current).toEqual({ ready: true, readOnly: null });
+  });
+
+  it("with switchFacility off, still opens an archived facility's record read only", () => {
+    lookup.result = { data: { id: "archived-facility", name: "Mafinga", timezone: "Africa/Dar_es_Salaam", archivedAt: new Date("2026-10-29") }, isError: false };
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }, false, { switchFacility: false }));
+    expect(result.current.readOnly).toMatchObject({ reason: "archived", facilityId: "archived-facility" });
+    expect(context.setFacilityId).not.toHaveBeenCalled();
+  });
 });
