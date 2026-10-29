@@ -25,6 +25,8 @@ interface InUseDeleteDialogProps {
   reason?: string;
   /** The records that still use the row, linked between the two default paragraphs. */
   references?: ReadonlyArray<InUseRecordLink>;
+  /** Blockers beyond the linked ones, shown as "and N more" after the links. */
+  moreReferences?: number;
   errorMessage?: string | null;
   /** Replaces the default explanation. */
   children?: ReactNode;
@@ -36,13 +38,16 @@ export function InUseReference(reference: InUseRecordLink) {
 }
 
 /** Several records that still use the row, one link each, in the order given. */
-export function InUseReferences({ references }: { references: ReadonlyArray<InUseRecordLink> }) {
+export function InUseReferences({ references, more = 0 }: { references: ReadonlyArray<InUseRecordLink>; more?: number }) {
   return (
-    <SheetLinkRows>
-      {references.map(({ href, code, kind }) => (
-        <SheetLinkRow key={`${kind}:${code}`} href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
-      ))}
-    </SheetLinkRows>
+    <>
+      <SheetLinkRows>
+        {references.map(({ href, code, kind }) => (
+          <SheetLinkRow key={`${kind}:${code}`} href={href} primary={code} ariaLabel={`Open ${kind} ${code}`} />
+        ))}
+      </SheetLinkRows>
+      {more > 0 && <p>{`and ${more} more`}</p>}
+    </>
   );
 }
 
@@ -53,6 +58,7 @@ export function InUseDeleteDialog({
   isPending = false,
   reason = "other records still use it",
   references = [],
+  moreReferences = 0,
   errorMessage,
   children,
 }: InUseDeleteDialogProps) {
@@ -70,7 +76,7 @@ export function InUseDeleteDialog({
             {children ?? (
               <>
                 <p>{`${label} cannot be deleted because ${reason}.`}</p>
-                {references.length > 0 && <InUseReferences references={references} />}
+                {references.length > 0 && <InUseReferences references={references} more={moreReferences} />}
                 {onArchive && <p>Archive it instead. Existing records keep it, while pickers hide it.</p>}
               </>
             )}

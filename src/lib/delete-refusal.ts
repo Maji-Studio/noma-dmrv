@@ -9,6 +9,14 @@ export const IN_USE_DELETE_MARKER = "was not deleted because";
 /** Additive discriminator: the domain and issue codes stay as they were (`conflict`, or `certification_locked` where that was already the contract). */
 export const IN_USE_REASON = "in_use";
 
+/** Codes are already capped; the total includes unnamed blockers. */
+export function deleteRefusalList(codes: readonly string[], totalCount = codes.length): string {
+  const names = [...codes];
+  const remaining = Math.max(totalCount, codes.length) - names.length;
+  if (remaining > 0) names.push(`${remaining} more`);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0] ?? "";
+}
+
 export function inUseDeleteRefusal(
   message: string,
   path: DomainIssue["path"],

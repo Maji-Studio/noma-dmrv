@@ -22,7 +22,7 @@ import { lockBiocharTransportRouteTopology } from "./transport-legs";
 import { tryLockStorageSiteRegistration } from "./customer-location-registration-guards";
 import { deleteOrderInTransaction } from "./orders";
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { and, asc, isNull, isNotNull, sql, eq, inArray } from "drizzle-orm";
+import { and, asc, count, isNull, isNotNull, sql, eq, inArray } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
 import { orders, deliveries, facilities, customers, customerLocations, type Customer, type CustomerLocation } from "@/db/schema";
@@ -132,7 +132,11 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   const uses = await tx.select({ id: deliveries.id, code: deliveries.code, facilityId: deliveries.facilityId }).from(deliveries)
     .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.orderId, orderIds)))
     .orderBy(asc(deliveries.code)).limit(BLOCKER_LIMIT);
-  if (uses.length) throw customerHasDeliveries(uses);
+  if (uses.length) {
+    const [{ total }] = await tx.select({ total: count() }).from(deliveries)
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.orderId, orderIds)));
+    throw customerHasDeliveries(uses, total);
+  }
   const children = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, customerId)))
     .orderBy(asc(customerLocations.id)).for("update");
   for (const child of children) {
