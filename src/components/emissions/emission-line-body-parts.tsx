@@ -266,14 +266,15 @@ function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; u
 }
 
 /** A decided line noma cannot fill: nothing to decide, so no "Answer in Settings". */
-export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
-  return <Notice tone="info" action={<TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
+export function SetupNotice({ scope, readOnly = false }: { scope: EmissionBatchScope; readOnly?: boolean }) {
+  return <Notice tone="info" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
 }
 
-export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: EmissionBatchScope }) {
+/** `readOnly` keeps the notice text and drops its Settings link. */
+export function ReviewNotice({ line, scope, readOnly = false }: { line: EmissionLine; scope: EmissionBatchScope; readOnly?: boolean }) {
   const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
-    <Notice tone="warning" action={<TemplateReviewLink scope={scope} undecided={undecided} />}>
+    <Notice tone="warning" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={undecided} />}>
       {line.blocker?.message ?? "This component has no decision yet. An Admin answers it in Settings, Removal templates."}
     </Notice>
   );

@@ -286,9 +286,11 @@ Samples, applications (read by id with `includeArchived`), reactors, production
 runs, credit batches (sheet and routed page) and storage bins pass the state. The
 routed credit batch page keeps the working facility where it is and still opens for
 a reload of an archived facility's batch. Production runs, batch members and
-application deliveries read through linked reads (`getLinkedCreditBatchMembers`,
-`getLinkedApplicationDelivery`) that return only rows archived with their facility
-and never authorize a write. Gaps:
+application deliveries read through linked reads (`getLinkedProductionRunById`,
+`getLinkedCreditBatchMembers`, `getLinkedApplicationDelivery`) that return only rows
+archived with their facility and never authorize a write. Output bins in an archived
+facility read their stock through `getLinkedOutputBinInventory` (read-only sheet
+only); feedstock bin reads already include archived rows. Gaps:
 [open-questions.md](./open-questions.md#records-in-archived-facilities-1502).
 
 ### Quick-Add and cascading selects

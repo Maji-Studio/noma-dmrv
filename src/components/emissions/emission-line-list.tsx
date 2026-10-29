@@ -211,7 +211,7 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
           </div>
           {/* Phones: never narrower than its widest source, so it wraps instead of running under the Total. */}
           <div className={cn(META_CELL, "max-md:flex-1 md:col-start-3 md:row-start-1 md:min-w-0")}>
-            {line.state === "needsSetup" ? (
+            {line.state === "needsSetup" ? (actions.readOnly ? null : (
               <Link
                 href={removalTemplatesSettingsHref(scope.facilityId)}
                 onClick={(event) => event.stopPropagation()}
@@ -219,7 +219,7 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
               >
                 {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
               </Link>
-            ) : (
+            )) : (
               <SourceChips
                 line={line}
                 ids={scope}
@@ -270,7 +270,7 @@ function RowMenu({ line, scope, actions }: { line: EmissionLine; scope: Emission
       {openSourceLabel(records.source)}
     </DropdownMenu.Item>
   ) : null;
-  const setup = line.state === "needsSetup" ? (
+  const setup = line.state === "needsSetup" && !actions.readOnly ? (
     <DropdownMenu.Item key="setup" render={<Link href={removalTemplatesSettingsHref(scope.facilityId)} />}>
       {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </DropdownMenu.Item>

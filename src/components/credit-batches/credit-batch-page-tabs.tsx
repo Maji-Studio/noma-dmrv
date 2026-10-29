@@ -30,10 +30,9 @@ function tonnesOrMissing(kg: number | null): string {
 
 /** One run table: feedstock dry mass and dry biochar per member run, with a total row. */
 export function CreditBatchProductionTab() {
-  const { batch, facilityTimeZone } = useCreditBatchPage();
+  const { batch, archived } = useCreditBatchPage();
   // An archived facility's members come from the linked read; the form-option
   // read skips it, so it stays idle there.
-  const archived = facilityTimeZone !== undefined;
   const optionsQuery = useCreditBatchProductionRunOptions({
     facilityId: archived ? undefined : batch.facilityId,
     startDate: batch.startDate,
@@ -134,6 +133,6 @@ export function CreditBatchSamplesTab() {
 }
 
 export function CreditBatchActivitiesTab() {
-  const { batch } = useCreditBatchPage();
-  return <CreditBatchActivityView facilityId={batch.facilityId} creditBatchId={batch.id} batchCode={batch.code} inline />;
+  const { batch, facilityTimeZone } = useCreditBatchPage();
+  return <CreditBatchActivityView facilityId={batch.facilityId} timeZone={facilityTimeZone} creditBatchId={batch.id} batchCode={batch.code} inline />;
 }

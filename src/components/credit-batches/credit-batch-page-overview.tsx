@@ -193,7 +193,7 @@ function TodosUnavailable() {
 }
 
 function RemovalsPanel() {
-  const { batch, pageModel, go, canManage, facilityTimeZone } = useCreditBatchPage();
+  const { batch, pageModel, go, canManage, facilityTimeZone, readOnly } = useCreditBatchPage();
   if (!pageModel) return null;
   const groups = removalBarGroups(pageModel);
   return (
@@ -215,7 +215,7 @@ function RemovalsPanel() {
       }
     >
       {pageModel.removals.length === 0 && (
-        <p className={cn("body-small", MUTED_TEXT)}>Nothing blocks this credit batch. Start a Removal to submit its applied biochar.</p>
+        <p className={cn("body-small", MUTED_TEXT)}>{readOnly ? "Nothing blocks this credit batch." : "Nothing blocks this credit batch. Start a Removal to submit its applied biochar."}</p>
       )}
       <CompactRemovalBar groups={groups} facilityId={batch.facilityId} timeZone={facilityTimeZone} />
       <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} canManage={canManage} />
@@ -260,7 +260,7 @@ function LockMark({ text }: { text: string }) {
 
 /** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
 function DetailsPanel() {
-  const { batch, lock, canManage, focus, linesToDecide } = useCreditBatchPage();
+  const { batch, lock, canManage, focus, linesToDecide, readOnly } = useCreditBatchPage();
   const sent = lock?.level === "sent";
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   // When everything is locked the panel says so once and the rows stay quiet.
@@ -278,7 +278,7 @@ function DetailsPanel() {
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
         </dl>
         <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} />
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} />
         </div>
       </PagePanel>
     </FocusRow>

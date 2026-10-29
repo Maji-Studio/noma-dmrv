@@ -22,6 +22,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
 }));
 vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
+  useLinkedOutputBinInventory: () => ({ data: undefined, isLoading: false, error: null }),
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "Mix bin", beforeDryKg: 1440, beforeEstimatedWetKg: 1800, moistureEstimate: { moisturePercent: 20 } }, isLoading: false, error: null }),
   useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800, solidsKg: 800, ingredients: [] }, { code: "B-002", dryMassKg: 640, solidsKg: 640, ingredients: [] }] }, isLoading: false, error: null }),

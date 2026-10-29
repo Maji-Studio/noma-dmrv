@@ -8,6 +8,7 @@ import {
   creditBatchPrimaryAction,
   isCreditBatchSent,
   overviewBadgeCount,
+  readOnlyOpenItems,
   tabBadge,
 } from "./batch-page";
 import type { CreditBatchOpenItem } from "./open-items";
@@ -243,5 +244,27 @@ describe("tabBadge", () => {
 
   it("never gives Activities a badge", () => {
     expect(tabBadge("activities", groups)).toBeNull();
+  });
+});
+
+describe("readOnlyOpenItems", () => {
+  const item = (id: string, target: CreditBatchOpenItem["target"], detail?: string): CreditBatchOpenItem => ({ id, title: id, target, detail });
+  it("turns Emissions, repair and batch-details rows into plain facts and keeps other tabs", () => {
+    const groups = readOnlyOpenItems({
+      blocking: [],
+      check: [
+        item("late", { tab: "emissions" }, "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Oct 1, 2026."),
+        item("fix", { href: "/settings" }, "Open the Removal to see why."),
+        item("samples", { tab: "samples" }, "Upload a lab report to one of its Samples. You can still submit the Removal."),
+      ],
+      waiting: [],
+    });
+    const [late, fix, samples] = groups.check;
+    expect(late.target).toBeNull();
+    expect(late.detail).toBe("It is not in this credit batch.");
+    expect(fix.target).toBeNull();
+    expect(fix.detail).toBeUndefined();
+    expect(samples.target).toEqual({ tab: "samples" });
+    expect(samples.detail).toBeUndefined();
   });
 });

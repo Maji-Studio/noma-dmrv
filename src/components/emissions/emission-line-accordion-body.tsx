@@ -43,7 +43,7 @@ export function EmissionLineAccordionBody({ id, line, scope, editingComment, rea
     <div id={id} role="region" aria-label={`${line.displayName} details`} className="flex flex-col pb-10">
       {(setup || model.reviewWithoutEntries) && (
         <div className={cn(TABLE_ROW, "pb-12")}>
-          <div className={TEXT_CELL}>{setup ? <SetupNotice scope={scope} /> : <ReviewNotice line={line} scope={scope} />}</div>
+          <div className={TEXT_CELL}>{setup ? <SetupNotice scope={scope} readOnly={readOnly} /> : <ReviewNotice line={line} scope={scope} readOnly={readOnly} />}</div>
         </div>
       )}
       {!setup && (model.nothingYet ? (

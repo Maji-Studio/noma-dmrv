@@ -2,7 +2,7 @@
 import { EmptyState, Notice } from "@/components/ui";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
+import { useLinkedOutputBinInventory, useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
@@ -77,9 +77,14 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   /** The record's own zone when its facility is archived and outside the facility list. */
   timeZone?: string;
 }) {
-  const preview = useOutputStockBalance({ storageLocationId, facilityId });
+  const bin = { storageLocationId, facilityId };
+  // A read-only bin (archived facility) reads its stock through the linked read; the live reads need an active bin.
+  const linked = useLinkedOutputBinInventory(readOnly ? bin : null);
+  const liveBalance = useOutputStockBalance(readOnly ? null : bin);
   // As of each fetch, like the balance above, so a new entry shows on refetch.
-  const subBins = useOutputSubBins({ storageLocationId, facilityId });
+  const liveSubBins = useOutputSubBins(readOnly ? null : bin);
+  const preview = readOnly ? { data: linked.data?.balance, isLoading: linked.isLoading, error: linked.error } : liveBalance;
+  const subBins = readOnly ? { data: linked.data?.contents, isLoading: linked.isLoading, error: linked.error } : liveSubBins;
   const clock = useFacilityClock(facilityId);
   const zone = timeZone ?? clock.timeZone;
   const mode = subBins.data?.stockMode;

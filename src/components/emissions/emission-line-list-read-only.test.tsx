@@ -60,4 +60,25 @@ describe("emission lines on a read-only batch", () => {
     expect(screen.getByRole("button", { name: "Actions for the comment" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Actions for the manual entry/ }).length).toBeGreaterThan(0);
   });
+
+  it("keeps a setup notice's text but drops its Settings link", () => {
+    const setup = makeLine({ componentId: "line-3", displayName: "Needs setup line", state: "needsSetup", entries: [] });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EmissionLineList
+          lines={[setup]}
+          grouped
+          scope={SCOPE}
+          actions={{ readOnly: true, toggle: vi.fn(), form: vi.fn(), comment: vi.fn(), editingComment: vi.fn(), deleteEntry: vi.fn() }}
+          expanded={new Set(["line-3"])}
+          editingCommentId={null}
+          undo={null}
+          filterLabel={null}
+          onClearFilter={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryAllByRole("link", { name: /Removal templates|Answer in Settings|Decide/i })).toEqual([]);
+    expect(screen.getByRole("region", { name: "Needs setup line details" }).textContent).not.toBe("");
+  });
 });

@@ -48,7 +48,7 @@ const LIST_SKELETON = "h-320 w-full";
 type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry; version: number };
 type EntryTarget = { line: EmissionLine; entry: EmissionEntry };
 
-function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
+export function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
   const entries = lines.flatMap(valueEntries);
   const month = today.slice(0, MONTH_PREFIX_LENGTH);
   return {
@@ -68,12 +68,15 @@ interface BatchEmissionsProps {
   batch: EmissionBatch;
   /** The credit batch page is read only: entries and comments show, nothing can be added, edited or deleted. */
   readOnly?: boolean;
+  /** The batch's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
-export function BatchEmissions({ facilityId, batch, readOnly = false }: BatchEmissionsProps) {
+export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: zone }: BatchEmissionsProps) {
   const scope: EmissionBatchScope = { facilityId, creditBatchId: batch.creditBatchId };
   const toast = useToast();
-  const { timeZone } = useFacilityClock(scope.facilityId);
+  const clock = useFacilityClock(scope.facilityId);
+  const timeZone = zone ?? clock.timeZone;
   const today = formatFacilityDate(new Date(), timeZone);
   const fromEmissionsList = useOpenedFromEmissionsList();
   const linesQuery = useBatchEmissionLines(scope);

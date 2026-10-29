@@ -46,6 +46,8 @@ export interface CreditBatchRemovalTemplateProps {
   linesToDecide: number;
   /** A Removal already holds biochar from this batch, so a further one is what waits. */
   inRemoval?: boolean;
+  /** A read-only batch states the fact alone, with no instruction to fix it. */
+  readOnly?: boolean;
 }
 
 /** Why a credit batch with components to decide can't go into a Removal, and who decides them. */
@@ -64,6 +66,7 @@ export function CreditBatchRemovalTemplate({
   activeFocusTarget,
   linesToDecide: undecidedLines,
   inRemoval = false,
+  readOnly = false,
 }: CreditBatchRemovalTemplateProps) {
   // The sheet holds a snapshot; the template comes from the live record
   // so a change made in Settings shows without reopening the sheet.
@@ -127,16 +130,20 @@ export function CreditBatchRemovalTemplate({
 
       {pinnedMissing && (
         <Notice tone="warning">
-          {canManage
-            ? "Template no longer exists in Isometric. Choose another Removal template in Settings."
-            : "Template no longer exists in Isometric. Ask an Admin to change it."}
+          {readOnly
+            ? "Template no longer exists in Isometric."
+            : canManage
+              ? "Template no longer exists in Isometric. Choose another Removal template in Settings."
+              : "Template no longer exists in Isometric. Ask an Admin to change it."}
         </Notice>
       )}
       {!pinnedId && (
         <Notice tone="warning">
-          {canManage
-            ? "Set a Removal template in Settings before adding this credit batch to a Removal."
-            : "This credit batch has no Removal template. Ask an Admin to set one."}
+          {readOnly
+            ? "This credit batch has no Removal template."
+            : canManage
+              ? "Set a Removal template in Settings before adding this credit batch to a Removal."
+              : "This credit batch has no Removal template. Ask an Admin to set one."}
         </Notice>
       )}
       {linesToDecide > 0 && pinnedId && (

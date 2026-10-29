@@ -30,6 +30,8 @@ export interface CreditBatchPageContextValue {
   canManage: boolean;
   /** Set when the batch opens read only (its facility is archived or unchecked). */
   readOnly?: SheetReadOnly;
+  /** The batch's facility is archived: members read through the linked read. */
+  archived: boolean;
   /**
    * The batch's own facility zone, set when that facility is archived. The
    * facility list leaves it out, so surfaces that format times read this first.

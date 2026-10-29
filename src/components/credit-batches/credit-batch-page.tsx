@@ -309,6 +309,7 @@ export function CreditBatchPage({
     lockStatus,
     canManage: canManage && !readOnly,
     readOnly,
+    archived: !!readOnly && linkedRecord.readOnly?.reason === "archived",
     facilityTimeZone: linkedRecord.readOnly?.reason === "archived" && readOnly ? linkedRecord.readOnly.timezone : undefined,
     tab,
     focus,

@@ -49,14 +49,14 @@ afterEach(() => {
 
 describe("credit batch Production tab", () => {
   it("lists the members of a batch in an archived facility from the linked read", () => {
-    mount({ facilityTimeZone: "Africa/Dar_es_Salaam" });
+    mount({ archived: true, facilityTimeZone: "Africa/Dar_es_Salaam" });
     expect(screen.getByText("PR-26-001")).toBeTruthy();
     expect(harness.linkedEnabled.every(Boolean)).toBe(true);
     expect(harness.optionParams.every((params) => params.facilityId === undefined)).toBe(true);
   });
 
   it("keeps the linked read idle for a batch that is not archived", () => {
-    mount({});
+    mount({ archived: false, facilityTimeZone: "Africa/Dar_es_Salaam" });
     expect(screen.queryByText("PR-26-001")).toBeNull();
     expect(harness.linkedEnabled.every((enabled) => !enabled)).toBe(true);
     expect(harness.optionParams.every((params) => params.facilityId === "facility-1")).toBe(true);
