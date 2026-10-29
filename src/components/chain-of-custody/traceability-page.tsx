@@ -467,10 +467,10 @@ export function TraceabilityPage() {
    */
   const openMapNodeDetails = (nodeId: string) => {
     const graphNode = nodes.find((candidate) => candidate.id === nodeId);
-    // A row can point at a record the active graph doesn't carry (a lineage the
-    // run filter excluded, a leg whose outer record never resolved). Focusing
-    // an unknown id would dim every surface with no panel to explain it, so the
-    // click is a no-op instead.
+    // A row can point at a record the application's graph doesn't carry (a leg
+    // whose outer record never resolved). Focusing an unknown id would dim
+    // every surface with no panel to explain it, so the click is a no-op
+    // instead.
     if (!graphNode) return;
     setSelection((current) => ({
       nodeId,
@@ -483,7 +483,7 @@ export function TraceabilityPage() {
     setMapDetailNode(null);
     clearSelection();
   };
-  /** Panel "Trace rollback" — drill the batch into the member's lineage. */
+  /** Panel "Trace rollback" for the application's own lineage. */
   const traceFromMapDetail = (nodeId: string) => {
     setMapDetailNode(null);
     traceFromSheet(nodeId);

@@ -434,6 +434,14 @@ export default function TraceMapCanvas({
         className={`h-full w-full ${MAPTILER_KEY ? "bg-[var(--color-background-white)]" : "cvm-field"}`}
         data-testid="carbon-viewer-map"
       />
+      {!MAPTILER_KEY && !satOn ? (
+        <div
+          className="absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
+          data-testid="carbon-viewer-no-basemap-note"
+        >
+          Basemap unavailable. Ask an Admin to configure the map service, or switch to SAT.
+        </div>
+      ) : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
