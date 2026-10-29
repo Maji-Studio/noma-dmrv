@@ -33,7 +33,7 @@ import { useEffect, useState } from "react";
 import { ChainFlowGraph } from "./chain-flow-graph";
 import type { ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
-import { CarbonTransitPanel } from "./map";
+import { CarbonTransitPanel, TraceMap } from "./map";
 import { type RunPickerOption } from "./run-picker";
 import { BatchSankey } from "./sankey";
 import { TraceabilityHeader } from "./traceability-header";
@@ -466,9 +466,7 @@ export function TraceabilityPage() {
    * (the rail carries no "Clear focus" affordance).
    */
   const openMapNodeDetails = (nodeId: string) => {
-    const graphNode = (anchor === "batch" ? batchNodes : nodes).find(
-      (candidate) => candidate.id === nodeId
-    );
+    const graphNode = nodes.find((candidate) => candidate.id === nodeId);
     // A row can point at a record the active graph doesn't carry (a lineage the
     // run filter excluded, a leg whose outer record never resolved). Focusing
     // an unknown id would dim every surface with no panel to explain it, so the
@@ -535,7 +533,7 @@ export function TraceabilityPage() {
     if (applicationView === "map") {
       return (
         <CarbonTransitPanel
-          source={{ kind: "application", id: selectedApplicationId }}
+          applicationId={selectedApplicationId}
           lineages={chainData ? [chainData] : undefined}
           view="map"
           highlight={selection}
@@ -573,7 +571,7 @@ export function TraceabilityPage() {
         </div>
         <div className="min-h-0">
           <CarbonTransitPanel
-            source={{ kind: "application", id: selectedApplicationId }}
+            applicationId={selectedApplicationId}
             lineages={chainData ? [chainData] : undefined}
             view="split"
             highlight={selection}
@@ -644,24 +642,13 @@ export function TraceabilityPage() {
     }
     if (batchView === "map") {
       return (
-        <CarbonTransitPanel
-          source={{
-            kind: "creditBatch",
-            id: selectedBatchId,
-            runId: selectedRunId,
-          }}
-          lineages={batchLineages}
-          rollForwards={batchRollForwards}
-          facility={batchData.facility}
-          view="map"
-          highlight={selection}
-          focusNodeIds={focusNodeIds}
-          onNodeSelect={selectNode}
-          onClearSelection={clearSelection}
-          onNodeDetails={openMapNodeDetails}
-          detailNode={mapDetailNode}
-          onDetailClose={closeMapDetail}
-          onDetailTrace={traceFromMapDetail}
+        <TraceMap
+          key={detailSourceKey}
+          batchId={selectedBatchId}
+          runId={selectedRunId}
+          nodes={batchNodes}
+          edges={batchEdges}
+          onTrace={drillDownToApplication}
         />
       );
     }
