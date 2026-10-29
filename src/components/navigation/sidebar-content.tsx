@@ -110,8 +110,8 @@ const SIDEBAR_BACKGROUND_GRADIENT =
   "linear-gradient(180deg, rgba(15, 2, 26, 1) 0%, rgba(10, 1, 18, 1) 100%)";
 
 // Groups follow how often a page is used (2026-10-28): Records are the daily
-// entries, Verification the checks on them, Partners the parties they name,
-// Certification the registry artifacts, Setup the things configured once.
+// entries, Verification the checks on them, Certification the registry artifacts,
+// Partners the parties they name, Setup the things configured once.
 const navSections: NavSection[] = [
   {
     items: [
@@ -130,6 +130,7 @@ const navSections: NavSection[] = [
       { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
       { href: "/deliveries", label: "Deliveries", icon: TruckIcon },
       { href: "/applications", label: "Applications", icon: MapPinIcon },
+      { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
   },
   {
@@ -138,15 +139,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/credit-batches", label: "Credit batches", icon: CertificateIcon },
       { href: "/lab-samples", label: "Lab Samples", icon: TestTubeIcon },
-      { href: "/emissions", label: "Emissions", icon: CloudIcon },
-    ],
-  },
-  {
-    title: "Partners",
-    accent: SECTION_ACCENTS.partners,
-    items: [
-      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
-      { href: "/customers", label: "Customers", icon: UsersIcon },
     ],
   },
   {
@@ -157,6 +149,14 @@ const navSections: NavSection[] = [
     items: [
       { href: "/removals", label: "Removals", icon: StackIcon },
       { href: "/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
+    ],
+  },
+  {
+    title: "Partners",
+    accent: SECTION_ACCENTS.partners,
+    items: [
+      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
+      { href: "/customers", label: "Customers", icon: UsersIcon },
     ],
   },
   {
@@ -328,7 +328,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // Append the Platform section only for Platform Admins. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
   // mounts after hydration). Server-side `requireAdmin()` in
-  // src/app/admin/layout.tsx remains the actual access boundary.
+  // src/app/(app)/platform/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
 
   // Gate the Certification routes on the current facility having a registry

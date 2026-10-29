@@ -40,7 +40,7 @@ it("refuses a Removal outside the authenticated organization's visible records",
 });
 it("uses the entry-only draft selector", async () => {
   vi.mocked(loadDraftRemovalCarriedEntries).mockResolvedValue([]);
-  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ carriedEntries: [], lateEntries: [] });
+  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [] });
   expect(loadDraftRemovalCarriedEntries).toHaveBeenCalledExactlyOnceWith(ctx, "removal", "facility");
   expect(getCreditBatchesByRemovalId).not.toHaveBeenCalled();
   expect(loadFacilityEmissionEntryCarry).not.toHaveBeenCalled();
@@ -53,7 +53,7 @@ it("reads exactly the frozen carried list independently of present membership", 
     entryContributions: [{ componentId: "line", componentDisplayName: "Electricity", inputKey: "energy",
       entries: [entry, { ...entry, entryId: "own", creditBatchId: "member" }] }],
   } } } as never);
-  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ lateEntries: [], carriedEntries: [expect.objectContaining({ entryId: "carried",
+  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", lateEntries: [], carriedEntries: [expect.objectContaining({ entryId: "carried",
     creditBatchId: "origin", creditBatchCode: "CB-origin", occurredOn: "2026-10-01", value: entry.value, evidenceDocumentIds: ["file"] })] });
   expect(loadDraftRemovalCarriedEntries).not.toHaveBeenCalled();
 });
@@ -65,7 +65,7 @@ it("does not silently substitute live entries for a corrupt sent snapshot", asyn
 
 it("returns empty for older snapshots without the optional carried list", async () => {
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: {} } } as never);
-  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ carriedEntries: [], lateEntries: [] });
+  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [] });
 });
 it("keeps frozen values when display records or optional labels are missing", async () => {
   mocks.select.mockReturnValue(query([]));
@@ -73,7 +73,7 @@ it("keeps frozen values when display records or optional labels are missing", as
     entryId: "entry", creditBatchId: "gone", componentId: "line", occurredOn: "2026-10-01",
     value: { magnitude: "12", unit: "kWh" }, evidenceDocumentIds: ["frozen-file"],
   }] } } } as never);
-  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ lateEntries: [], carriedEntries: [expect.objectContaining({
+  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", lateEntries: [], carriedEntries: [expect.objectContaining({
     creditBatchCode: "gone", value: { magnitude: "12", unit: "kWh" }, evidenceDocumentIds: ["frozen-file"],
   })] });
 });
@@ -90,7 +90,7 @@ it("reads only member entries assigned to this revision even when the sent carri
     { ...entry, id: "other-revision", revisionOf: { removalId: "other", removalCode: "RM-other" } },
     { ...entry, id: "foreign-member", creditBatchId: "other" }, { ...entry, id: "waiting", revisionOf: null },
   ], contenders: [], ownContenders: [], batches: [] } as never);
-  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ carriedEntries: [], lateEntries: [{
+  expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [{
     entryId: "late", creditBatchId: "member", creditBatchCode: "CB-009", componentId: "line",
     componentName: "Diesel from saved template", occurredOn: "2026-09-14", value: { magnitude: "120", unit: "L" },
     evidenceDocumentIds: ["a", "b"], earlierRemovalId: "removal", earlierRemovalCode: "RM-009",
@@ -118,7 +118,7 @@ it("skips facility discovery for a sent Removal whose statement is not returned"
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { semantic: {} } } as never);
   for (const lineage of [[], [returnedLineage("SUBMITTED")], [returnedLineage("DRAFT")], [returnedLineage(null)]]) {
     vi.mocked(readRecordLockLineage).mockResolvedValueOnce(lineage as never);
-    expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ carriedEntries: [], lateEntries: [] });
+    expect(await loadRemovalCarriedEntries(ctx, "removal")).toEqual({ facilityId: "facility", carriedEntries: [], lateEntries: [] });
   }
   expect(loadFacilityEmissionEntryCarry).not.toHaveBeenCalled();
   expect(getCreditBatchesByRemovalId).not.toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
+import { recordHref } from "@/lib/record-links";
 import { certificationRemovalsHref } from "@/lib/certification/links";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
@@ -51,12 +51,7 @@ export function joinWithAnd(items: readonly string[]): string {
 }
 
 export function correctionStatementHref(correction: RemovalCorrection, facilityId: string): string {
-  return ghgStatementDeepLinkHref(correction.statement.id, facilityId);
-}
-
-/** The Removal's own sheet on the Removals list. */
-export function removalSheetHref(removalId: string, facilityId: string): string {
-  return certificationRemovalsHref({ facility: facilityId, removal: removalId });
+  return recordHref("ghgStatement", correction.statement.id, { facilityId });
 }
 
 /** The New Removal wizard reopened on this Removal, which resubmits it. */

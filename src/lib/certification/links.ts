@@ -4,6 +4,7 @@
  * connection-settings deep link, previously hard-coded in three components).
  */
 
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import {
   SETTINGS_FACILITIES_HREF,
   SETTINGS_REGISTRY_HREF,
@@ -79,7 +80,14 @@ export type CertificationSearchParams = Record<
 export function certificationRemovalsHref(
   searchParams: CertificationSearchParams = {},
 ): string {
-  const params = new URLSearchParams();
+  const removalId = searchParams[RECORD_LINKS.removal.param];
+  const href = typeof removalId === "string" && removalId
+    ? recordHref("removal", removalId, {
+        facilityId: typeof searchParams.facility === "string" ? searchParams.facility : undefined,
+      })
+    : RECORD_LINKS.removal.path;
+  const [path, queryString] = href.split("?");
+  const params = new URLSearchParams(queryString);
 
   for (const [key, value] of Object.entries(searchParams)) {
     if (Array.isArray(value)) {
@@ -92,18 +100,7 @@ export function certificationRemovalsHref(
   }
 
   const query = params.toString();
-  return `/removals${query ? `?${query}` : ""}`;
-}
-
-export function productionRunDeepLinkHref(
-  productionRunId: string,
-  facilityId: string,
-): string {
-  const params = new URLSearchParams({
-    facility: facilityId,
-    run: productionRunId,
-  });
-  return `/production-runs?${params.toString()}`;
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
 export function traceabilityApplicationHref(

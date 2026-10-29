@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MissingRunLinks } from "@/components/credit-batches/credit-batch-missing-runs-notice";
 import { Notice } from "@/components/ui/notice";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { recordHref } from "@/lib/record-links";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
 
@@ -31,7 +31,7 @@ export function RemovalMissingRunsNotice({
             data-removal-missing-runs={batch.creditBatchId}
             title={`${one ? "1 completed run is" : `${batch.runs.length} completed runs are`} not in ${batch.creditBatchCode} yet`}
             action={
-              <Link href={creditBatchDeepLinkHref(batch.creditBatchId, facilityId)} className={NOTICE_ACTION_LINK_CLASS}>
+              <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} className={NOTICE_ACTION_LINK_CLASS}>
                 Open credit batch
               </Link>
             }

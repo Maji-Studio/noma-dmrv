@@ -14,9 +14,17 @@ import { useQueryStates } from "nuqs";
 // parsers at module scope breaks server components that import these helpers.
 import { parseAsString, parseAsStringLiteral } from "nuqs/server";
 import type { FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
+import { recordHref } from "@/lib/record-links";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 
 export const EMISSIONS_PATH = "/emissions";
+
+/**
+ * Set on a credit batch's Emissions tab link that starts in the Emissions list.
+ * Only then does the tab offer the list's previous / next pager.
+ */
+export const EMISSIONS_LIST_ORIGIN_PARAM = "via";
+export const EMISSIONS_LIST_ORIGIN = "emissions";
 
 export const BATCH_STATUS_FILTERS = ["open", "done", "files", "review"] as const;
 export type BatchStatusFilter = (typeof BATCH_STATUS_FILTERS)[number];
@@ -119,9 +127,17 @@ export function emissionsOverviewHref(query: EmissionsHrefQuery = {}): string {
   return withQuery(EMISSIONS_PATH, queryParams(query));
 }
 
-/** A credit batch's emissions page, carrying the overview's filter and sort. */
+/**
+ * A credit batch's Emissions tab, opened from the Emissions list: it carries the
+ * list's filter and sort and the list origin, which switches the tab's pager on.
+ * Links from anywhere else use `recordHref("creditBatch", id, { tab: "emissions" })`.
+ */
 export function emissionsBatchHref(creditBatchId: string, query: EmissionsHrefQuery = {}): string {
-  return withQuery(`${EMISSIONS_PATH}/${creditBatchId}`, queryParams(query));
+  const { facility, ...list } = query;
+  const base = recordHref("creditBatch", creditBatchId, { facilityId: facility, tab: "emissions" });
+  const params = queryParams(list);
+  params.set(EMISSIONS_LIST_ORIGIN_PARAM, EMISSIONS_LIST_ORIGIN);
+  return `${base}&${params.toString()}`;
 }
 
 /* ---------- pure filtering and sorting ---------- */

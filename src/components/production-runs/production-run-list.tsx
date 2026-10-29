@@ -4,6 +4,8 @@
  */
 "use client";
 
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useState, useEffect, useRef } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -37,8 +39,6 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
 import { ActionError } from "@/lib/action-error";
-import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -72,14 +72,6 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
-function productionRunDetailHref(run: ProductionRunWithRelations) {
-  const params = new URLSearchParams({
-    facility: run.facilityId,
-    run: run.id,
-  });
-  return `/production-runs?${params.toString()}`;
-}
-
 // ============================================
 // Status Badge
 // ============================================
@@ -97,7 +89,6 @@ const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
   dieselOperationLiters: false,
   dieselGensetLiters: false,
 };
-
 
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
@@ -221,7 +212,7 @@ function createColumns(
               actions={[
                 {
                   label: "Open details",
-                  href: productionRunDetailHref(row.original),
+                  href: recordHref("productionRun", row.original.id, { facilityId: row.original.facilityId }),
                 },
                 ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
                 ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
@@ -243,7 +234,7 @@ export function ProductionRunList() {
   // Global facility context
   const { facilityId, facilities } = useFacilityContext();
   const [focusedRunId, setFocusedRunId] = useQueryState(
-    "run",
+    RECORD_LINKS.productionRun.param,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [affectedRunIdsParam, setAffectedRunIdsParam] = useQueryState(
@@ -309,6 +300,7 @@ export function ProductionRunList() {
     enabled: !!facilityId,
   });
   const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
+  const linkedFacilityReady = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
     facilityId || undefined,
     !!facilityId,
@@ -415,9 +407,9 @@ export function ProductionRunList() {
       if (isInUseDeleteRefusal(error)) {
         const blocker = error instanceof ActionError ? error.conflict : undefined;
         const reference = blocker?.entity === "biocharProduct"
-          ? { href: biocharProductDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "biochar product" }
+          ? { href: recordHref("biocharProduct", blocker.id, { facilityId: deleting.facilityId }), code: blocker.code, kind: "biochar product" }
           : blocker?.entity === "creditBatch"
-            ? { href: creditBatchDeepLinkHref(blocker.id, deleting.facilityId), code: blocker.code, kind: "credit batch" }
+            ? { href: recordHref("creditBatch", blocker.id, { facilityId: deleting.facilityId }), code: blocker.code, kind: "credit batch" }
             : undefined;
         setInUseRefusal({ code: deleting.code, message, reference });
         setDeletingRunId(null);
@@ -470,13 +462,6 @@ export function ProductionRunList() {
     if (focusedRun.isLoading || focusedRun.isFetching || focusedRun.isPending) return;
     if (handledInvalidRunIdRef.current === focusedRunId) return;
 
-    if (focusedRun.data && facilityId && focusedRun.data.facilityId !== facilityId) {
-      handledInvalidRunIdRef.current = focusedRunId;
-      toast.error("Linked production run is not in the selected facility");
-      setFocusedRunId(null);
-      return;
-    }
-
     if (focusedRun.isError || (focusedRun.isSuccess && !focusedRun.data)) {
       handledInvalidRunIdRef.current = focusedRunId;
       toast.error("Linked production run could not be opened");
@@ -498,10 +483,12 @@ export function ProductionRunList() {
   const deepLinkedSideSheet =
     focusedRunId &&
     focusedRun.data &&
-    (!facilityId || focusedRun.data.facilityId === facilityId)
+    linkedFacilityReady
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedRunId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
@@ -606,7 +593,7 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={productionRunDetailHref}
+        getRowHref={(row) => recordHref("productionRun", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

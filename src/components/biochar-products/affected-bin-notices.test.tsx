@@ -41,7 +41,7 @@ describe("AffectedBinNotices", () => {
       />,
     );
     expect(html).toContain("Count exceeds tracked solids by 12 kg. This discrepancy adds no stock.");
-    expect(html).toContain('href="/applications?ids=app-1"');
+    expect(html).toContain('href="/applications?application=app-1"');
     expect(html).toContain("MOV-1");
     expect(html).not.toContain("Blocked<");
   });

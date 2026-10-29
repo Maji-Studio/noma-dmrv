@@ -13,7 +13,7 @@ import { Notice } from "@/components/ui/notice";
 import { InfoHint } from "@/components/ui/tooltip";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
+import { recordHref } from "@/lib/record-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
@@ -66,7 +66,7 @@ function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: strin
             {rest === null ? item.title : (
               <>
                 <Link
-                  href={productionRunDeepLinkHref(run.id, batch.facilityId)}
+                  href={recordHref("productionRun", run.id, { facilityId: batch.facilityId })}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(INLINE_HIT_AREA, RECORD_CODE_LINK)}

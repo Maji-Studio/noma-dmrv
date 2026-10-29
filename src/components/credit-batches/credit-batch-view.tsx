@@ -6,6 +6,7 @@
  * then the batch's identity (mirroring the edit form's section titles), the
  * member production runs closed by the carbon estimate they produce, and notes.
  */
+import { recordHref } from "@/lib/record-links";
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -29,10 +30,6 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
 import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
-import {
-  certificationRemovalsHref,
-  productionRunDeepLinkHref,
-} from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
 import { CreditBatchEmissionsPanel } from "./credit-batch-emissions-panel";
 import { CreditBatchLateRunsNotice, CreditBatchMissingRunsNotice, type LateRunRef, type MissingRunRef } from "./credit-batch-missing-runs-notice";
@@ -162,7 +159,7 @@ function ProductionRunLink({
 }) {
   return (
     <SheetLinkRow
-      href={productionRunDeepLinkHref(run.id, facilityId)}
+      href={recordHref("productionRun", run.id, { facilityId })}
       ariaLabel={`Open production run from ${formatDate(run.date)}${
         run.biocharStorageName ? ` in ${run.biocharStorageName}` : ""
       }`}
@@ -329,7 +326,7 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
-          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
+          {removalId && <Link href={recordHref("removal", removalId, { facilityId: creditBatch.facilityId })} className="body-small underline">{removalCode ? `Production emissions included in Removal ${removalCode}` : "Production emissions included in a Removal"}</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}

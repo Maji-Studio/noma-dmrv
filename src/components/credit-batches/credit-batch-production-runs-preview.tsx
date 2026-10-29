@@ -1,3 +1,4 @@
+import { recordHref } from "@/lib/record-links";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -15,7 +16,6 @@ import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 
 export interface RetainedProductionRunPreview {
@@ -61,7 +61,7 @@ function ProductionRunCaption({
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
       <Link
-        href={productionRunDeepLinkHref(run.id, facilityId)}
+        href={recordHref("productionRun", run.id, { facilityId })}
         target="_blank"
         rel="noopener noreferrer"
         className={cn(INLINE_HIT_AREA, RECORD_CODE_LINK)}

@@ -1,6 +1,7 @@
 "use client";
 
-import { entityViewHref } from "@/lib/entity-deep-link";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { StaleVersionError, staleDeleteMessage, toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
@@ -267,7 +268,7 @@ export function SampleList({
     initialContext: initialCreditBatchId,
   });
   const [focusedSampleId, setFocusedSampleId] = useQueryState(
-    "sample",
+    RECORD_LINKS.sample.param,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(
@@ -320,8 +321,9 @@ export function SampleList({
     error: creditBatchesError,
   } = useCreditBatches(contextFacilityId || undefined);
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
+  const linkedFacilityReady = useLinkedRecordFacility(focusedSample.data, focusedSample.isLoading);
 
-  if (!sideSheet && deepLinkMode === "edit" && focusedSample.data && focusedSampleId === focusedSample.data.id) {
+  if (linkedFacilityReady && !sideSheet && deepLinkMode === "edit" && focusedSample.data && focusedSampleId === focusedSample.data.id) {
     setSideSheet({ mode: "edit", entity: focusedSample.data });
   }
 
@@ -353,7 +355,7 @@ export function SampleList({
   ]);
 
   const deepLinkedSideSheet =
-    focusedSampleId && focusedSample.data
+    linkedFacilityReady && focusedSampleId && focusedSample.data
       ? ({
           mode: deepLinkMode === "edit" ? "edit" : "view",
           entity: focusedSample.data,
@@ -362,8 +364,10 @@ export function SampleList({
   const createIntentSideSheet = createIntent.isOpen
     ? ({ mode: "create", entity: null } as const)
     : null;
-  const displaySideSheet =
-    sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedSampleId && !linkedFacilityReady && !localSideSheet ? null :
+    localSideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
   const labReportStatus = useDocumentsCertStatus("sample", displaySideSheet?.entity?.id, isLabReportDocument);
   const sampleLocks = useRecordLocks("sample", samples.map((sample) => sample.id));
   // A lock that arrives as Sent keeps an open draft, read-only, with the way
@@ -624,7 +628,7 @@ export function SampleList({
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => entityViewHref("/lab-samples", "sample", row.id, contextFacilityId)}
+        getRowHref={(row) => recordHref("sample", row.id, { facilityId: contextFacilityId })}
         emptyMessage={
           <EmptyState
             padding="md"

@@ -292,7 +292,7 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
 // ============================================
 
 test.describe("Order deep link", () => {
-  test("opens an archived order by id and refuses one from another facility", async ({
+  test("opens an archived order by id and follows its facility", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -318,9 +318,10 @@ test.describe("Order deep link", () => {
       await expect(adminPage.getByRole("dialog").getByRole("heading", { name: order.code })).toBeVisible({ timeout: 15000 });
 
       await adminPage.goto(`${ORDERS_URL}?facility=${otherFacilityId}&order=${order.id}`);
-      await expect(adminPage.getByText("Linked order is not in the selected facility")).toBeVisible({ timeout: 15000 });
-      await expect(adminPage).not.toHaveURL(/order=/);
-      await expect(adminPage.getByRole("dialog")).toHaveCount(0);
+      await expect(adminPage).toHaveURL(new RegExp(`facility=${seededData.facility.id}.*order=${order.id}`), { timeout: 15000 });
+      await expect(adminPage.getByRole("dialog").getByRole("heading", { name: order.code })).toBeVisible({ timeout: 15000 });
+      await expect(adminPage.getByText("Linked order is not in the selected facility")).toHaveCount(0);
+      await expect.poll(() => adminPage.evaluate(() => window.localStorage.getItem("noma:selected-facility-id"))).toBe(seededData.facility.id);
     } finally {
       if (otherFacilityId) await db.delete(schema.facilities).where(eq(schema.facilities.id, otherFacilityId));
       await pool.end();

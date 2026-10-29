@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
+import { recordHref } from "@/lib/record-links";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 import { ManualEntryForm } from "./manual-entry-form";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 
 const mutations = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -97,11 +97,11 @@ describe("ManualEntryForm credit batch line", () => {
   it("names the batch as a link in add mode", () => {
     renderForm({ kind: "add" });
     const link = screen.getByRole("link", { name: /CB-1/ });
-    expect(link.getAttribute("href")).toBe(creditBatchDeepLinkHref("cb", "fac"));
+    expect(link.getAttribute("href")).toBe(recordHref("creditBatch", "cb", { facilityId: "fac" }));
   });
 
   it("names the same batch in edit mode", () => {
     renderForm({ kind: "edit", entry: makeEntry({}) });
-    expect(screen.getByRole("link", { name: /CB-1/ }).getAttribute("href")).toBe(creditBatchDeepLinkHref("cb", "fac"));
+    expect(screen.getByRole("link", { name: /CB-1/ }).getAttribute("href")).toBe(recordHref("creditBatch", "cb", { facilityId: "fac" }));
   });
 });

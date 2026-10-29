@@ -4,9 +4,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
-import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { LATE_PRODUCTION_RUN_ITEM_PREFIX, MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 
 export interface MissingRunRef {
@@ -31,7 +30,7 @@ export function MissingRunLinks({ runs, facilityId }: { runs: readonly MissingRu
         <span key={run.id}>
           {index > 0 && ", "}
           <Link
-            href={productionRunDeepLinkHref(run.id, facilityId)}
+            href={recordHref("productionRun", run.id, { facilityId })}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(INLINE_HIT_AREA, RECORD_CODE_LINK)}
@@ -126,7 +125,7 @@ export function CreditBatchLateRunsNotice({
             )}
             action={
               <Link
-                href={creditBatchDeepLinkHref(creditBatchId, facilityId, { tab: "emissions" })}
+                href={recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" })}
                 className={cn(buttonVariants({ variant: "weak", size: "small" }), CENTRED_HIT_AREA)}
               >
                 Open Emissions

@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -16,7 +17,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { certCheckLabel } from "@/lib/certification/requirement-labels";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import type { BatchHealth } from "@/lib/certification/batch-health";
 import type { SelectableBatch } from "@/fn/certification";
@@ -27,7 +27,6 @@ import { INLINE_HIT_AREA, INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-
 
 const STATUS_ICON = 14;
 const LINK_ICON = 12;
-
 
 /**
  * The one status line of a not-ready batch: the count of open checks and the
@@ -74,7 +73,7 @@ function StatusLine({
 function BatchCodeLink({ batch, facilityId }: { batch: SelectableBatch; facilityId: string }) {
   return (
     <Link
-      href={creditBatchDeepLinkHref(batch.id, facilityId)}
+      href={recordHref("creditBatch", batch.id, { facilityId })}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(INLINE_HIT_AREA, "inline-flex items-center gap-4 body-small font-medium font-mono text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline")}
@@ -179,7 +178,7 @@ export function NotReadyBatchBox({
         <StatusLine>{batchIssueLine(batch.health)}</StatusLine>
       </span>
       <Link
-        href={creditBatchDeepLinkHref(batch.id, facilityId)}
+        href={recordHref("creditBatch", batch.id, { facilityId })}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`${OPEN_TODOS_LABEL} for ${batch.code}`}

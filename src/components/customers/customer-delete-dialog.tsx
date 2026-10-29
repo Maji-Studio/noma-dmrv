@@ -5,10 +5,10 @@
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Notice } from "@/components/ui/notice";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
-import { orderDeepLinkHref } from "@/lib/order-links";
 import type { CascadePreview } from "@/lib/domain-errors";
 
 /** Order codes named in the dialog; the rest are counted. */
@@ -39,7 +39,7 @@ function OrdersWithoutDeliveries({ orders }: { orders: CascadePreview["orders"] 
       <div aria-label="Orders deleted with this customer" role="group">
         <SheetLinkRows>
           {shown.map((order) => (
-            <SheetLinkRow key={order.id} href={orderDeepLinkHref(order.id, order.facilityId)} primary={order.code} ariaLabel={`Open order ${order.code}`} />
+            <SheetLinkRow key={order.id} href={recordHref("order", order.id, { facilityId: order.facilityId })} primary={order.code} ariaLabel={`Open order ${order.code}`} />
           ))}
         </SheetLinkRows>
       </div>

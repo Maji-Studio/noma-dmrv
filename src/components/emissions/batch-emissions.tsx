@@ -1,15 +1,14 @@
 /**
- * The Emissions page of one credit batch (epic #1058, design C3c "Source
- * chips"): breadcrumb and pager, KPI strip, state chips and sort, then the
- * lines grouped by template group. A row expands as an accordion (From records
- * + Manual entries = Total, then the line comment).
+ * The Emissions tab of a credit batch (epic #1058, design C3c "Source chips"):
+ * KPI strip, state chips and sort, then the lines grouped by template group. A
+ * row expands as an accordion (From records + Manual entries = Total, then the
+ * line comment). The batch page owns the title, dates and breadcrumb; the
+ * previous / next pager shows only when the tab was opened from the Emissions list.
  */
 "use client";
 
 import { useState } from "react";
-import { FileDashedIcon } from "@phosphor-icons/react/dist/ssr";
-import { SelectFacilityEmptyState } from "@/components/navigation";
-import { Button, EmptyState, Notice, PageHeader } from "@/components/ui";
+import { Button, Notice } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -19,13 +18,11 @@ import {
   useRestoreEmissionEntry,
   type EmissionBatchScope,
 } from "@/hooks/use-emission-entries";
-import { useEmissionsOverview, type FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
-import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { formatFacilityDate } from "@/lib/date-utils";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
-import { useBatchLineQuery } from "./batch-emissions-query";
-import { BatchEmissionsTopBar } from "./batch-emissions-pager";
+import { useBatchLineQuery, useOpenedFromEmissionsList } from "./batch-emissions-query";
+import { BatchEmissionsPager } from "./batch-emissions-pager";
 import { BatchKpiStrip, LineToolbar, lineChipLabel, type BatchKpis } from "./batch-emissions-toolbar";
 import { EmissionEntryFormPanel } from "./emission-entry-form-panel";
 import type { EntryFormMode } from "./manual-entry-form";
@@ -43,40 +40,13 @@ import {
 import { EmissionsUndoBar } from "./emissions-undo-bar";
 import { TemplateSetupNotice } from "./template-setup-notice";
 import { isEmissionLinesBlocked } from "@/lib/certification/emission-lines-blocked-error";
-import { MONTH_PREFIX_LENGTH, useEmissionsOverviewQuery } from "./emissions-overview-query";
+import { MONTH_PREFIX_LENGTH } from "./emissions-overview-query";
 
-const SUBTITLE = "Manual entries add on top of what records already hold.";
 const LIST_SKELETON = "h-320 w-full";
 
 /** `version` is the deleted entry's version, which the restore expects. */
 type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry; version: number };
 type EntryTarget = { line: EmissionLine; entry: EmissionEntry };
-
-interface BatchEmissionsPageProps {
-  creditBatchId: string;
-}
-
-export function BatchEmissionsPage({ creditBatchId }: BatchEmissionsPageProps) {
-  const { facilityId } = useFacilityContext();
-  if (!facilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader area="verification" title="Emissions" subtitle={SUBTITLE} />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to see this credit batch's emissions." />
-      </div>
-    );
-  }
-  return <BatchEmissions key={`${facilityId}-${creditBatchId}`} scope={{ facilityId, creditBatchId }} />;
-}
-
-function batchFacts(batch: FacilityEmissionsOverviewBatch): EmissionBatch {
-  return { creditBatchId: batch.creditBatchId, code: batch.code, startDate: batch.startDate, endDate: batch.endDate };
-}
-
-function batchSubtitle(batch: FacilityEmissionsOverviewBatch): string {
-  const period = batch.endDate ? formatDateRange(batch.startDate, batch.endDate) : `From ${formatDate(batch.startDate)}`;
-  return batch.templateName ? `${period}. ${batch.templateName}.` : `${period}.`;
-}
 
 function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
   const entries = lines.flatMap(valueEntries);
@@ -93,12 +63,17 @@ function batchKpis(lines: EmissionLine[], timeZone: string, today: string): Batc
   };
 }
 
-function BatchEmissions({ scope }: { scope: EmissionBatchScope }) {
+interface BatchEmissionsProps {
+  facilityId: string;
+  batch: EmissionBatch;
+}
+
+export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
+  const scope: EmissionBatchScope = { facilityId, creditBatchId: batch.creditBatchId };
   const toast = useToast();
   const { timeZone } = useFacilityClock(scope.facilityId);
   const today = formatFacilityDate(new Date(), timeZone);
-  const overview = useEmissionsOverview(scope.facilityId);
-  const { query: overviewQuery } = useEmissionsOverviewQuery();
+  const fromEmissionsList = useOpenedFromEmissionsList();
   const linesQuery = useBatchEmissionLines(scope);
   const { filter, sort, setFilter, setSort } = useBatchLineQuery();
   const [form, setForm] = useState<{ componentId: string; mode: EntryFormMode } | null>(null);
@@ -110,24 +85,9 @@ function BatchEmissions({ scope }: { scope: EmissionBatchScope }) {
   const [stoppedDeleteError, setStoppedDeleteError] = useState<string | null>(null);
   const deleteEntry = useDeleteEmissionEntry(scope);
   const restoreEntry = useRestoreEmissionEntry(scope);
-  const overviewBatch = overview.data?.batches.find((batch) => batch.creditBatchId === scope.creditBatchId) ?? null;
   const lines = linesQuery.data ?? [];
   const formLine = form ? (lines.find((line) => line.componentId === form.componentId) ?? null) : null;
   const visible = sortLines(lines.filter((line) => lineMatches(line, filter)), sort);
-  if (overview.isSuccess && !overviewBatch) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader area="verification" title="Emissions" subtitle={SUBTITLE} />
-        <EmptyState
-          icon={<FileDashedIcon size={48} />}
-          title="Credit batch not found"
-          description="This credit batch is not at the selected facility. Choose another facility or go back to Emissions."
-        />
-      </div>
-    );
-  }
-
-  const batch: EmissionBatch | null = overviewBatch ? batchFacts(overviewBatch) : null;
   const setExpandedLine = (line: EmissionLine, open: boolean) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -188,38 +148,17 @@ function BatchEmissions({ scope }: { scope: EmissionBatchScope }) {
   ) : null;
   const counts = lineCounts(lines);
   return (
-    <div className="container-max page-shell">
-      <div className="flex flex-col gap-4">
-        {overviewBatch ? (
-          <BatchEmissionsTopBar
-            code={overviewBatch.code}
-            creditBatchId={scope.creditBatchId}
-            facilityId={scope.facilityId}
-            batches={overview.data?.batches ?? []}
-            query={overviewQuery}
-            today={today}
-            lineFilter={filter}
-            lineSort={sort}
-          />
-        ) : (
-          <Skeleton className="h-44 w-[240px]" />
-        )}
-        <PageHeader
-          title={overviewBatch?.code ?? "Emissions"}
-          subtitle={overviewBatch ? batchSubtitle(overviewBatch) : SUBTITLE}
-        />
-      </div>
+    <div className="flex min-w-0 flex-col gap-24">
+      {fromEmissionsList && (
+        <BatchEmissionsPager creditBatchId={scope.creditBatchId} facilityId={scope.facilityId} lineFilter={filter} lineSort={sort} />
+      )}
       {isEmissionLinesBlocked(linesQuery.error) ? (
         <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
       ) : linesQuery.error && !linesQuery.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
           {linesQuery.error.message || "The components could not be loaded."}
         </Notice>
-      ) : overview.error && !overview.data ? (
-        <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void overview.refetch()}>Try again</Button>}>
-          {overview.error.message || "The credit batch could not be loaded."}
-        </Notice>
-      ) : linesQuery.isLoading || !batch ? (
+      ) : linesQuery.isLoading ? (
         <Skeleton className={LIST_SKELETON} />
       ) : (
         <>

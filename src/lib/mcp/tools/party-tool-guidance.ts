@@ -1,4 +1,4 @@
-import { PARTY_MAX_LOCATIONS } from "@/config/party-input";
+import { BLOCKER_LIMIT, PARTY_MAX_LOCATIONS } from "@/config/party-input";
 import { REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 type Party = "supplier" | "customer";
@@ -10,8 +10,8 @@ export function partyToolDescription(kind: Party, command: Command): string {
     create: `Create one ${kind} with a generated code and 1 to ${PARTY_MAX_LOCATIONS} locations. Coordinates are required for each location; ask for missing coordinates.`,
     update: `Update a ${kind} by UUID. Send only what changes; omitted fields stay unchanged and null clears optional fields. Locations stay unchanged.`,
     delete: kind === "supplier"
-      ? "Delete a supplier by UUID and its locations. Feedstock intakes prevent deletion. An unused archived supplier can be deleted. Returns deleted id and code, or data on a dry run."
-      : "Delete a customer by UUID and its locations. Orders without deliveries, archived orders included, are deleted with it and cannot be restored. Deliveries on its orders or registered storage sites prevent deletion. Run a dry run first, show the user the listed orders, then pass its cascadeFingerprint. Returns customer data, cascade details and any warnings on success and dry run.",
+      ? `Delete a supplier by UUID and its locations. Feedstock intakes prevent deletion with conflict at /supplierId and issue metadata reason in_use, feedstockCodes and feedstocks (id, code and facilityId of each referenced intake, up to ${BLOCKER_LIMIT} in code order, matching feedstockCodes). An unused archived supplier can be deleted. Returns deleted id and code, or data on a dry run.`
+      : `Delete a customer by UUID and its locations. Orders without deliveries, archived orders included, are deleted with it and cannot be restored. Deliveries on its orders or registered storage sites prevent deletion. Delivery blockers return conflict at /customerId and issue metadata reason in_use, deliveryCodes and deliveries (id, code and facilityId of each referenced delivery, up to ${BLOCKER_LIMIT} in code order, matching deliveryCodes). Run a dry run first, show the user the listed orders, then pass its cascadeFingerprint. Returns customer data, cascade details and any warnings on success and dry run.`,
     archive: `Archive a ${kind} by UUID. Existing records keep it; new references cannot use it.`,
     restore: `Restore an archived ${kind} by UUID so it can be selected and edited again.`,
   };
@@ -29,7 +29,7 @@ export function locationToolDescription(kind: Party, command: LocationCommand): 
   const descriptions = {
     add: `Add one location to a ${kind}. Coordinates and country are required; ask for missing coordinates.`,
     update: `Update a ${kind} location. Send only what changes; omitted fields stay unchanged and null clears optional fields.`,
-    delete: `Delete a ${kind} location. ${kind === "customer" ? "Deletion is refused when orders or a storage site use it; archive it instead." : "Existing intakes keep their recorded source facts."} Returns the pre-delete data on success and dry run.`,
+    delete: `Delete a ${kind} location. ${kind === "customer" ? `Deletion is refused when orders or a storage site use it; archive it instead. Order blockers return conflict at /locationId and issue metadata reason in_use, orderCodes and orders (id, code and facilityId of each referenced order, up to ${BLOCKER_LIMIT} in code order, matching orderCodes).` : "Existing intakes keep their recorded source facts."} Returns the pre-delete data on success and dry run.`,
     archive: "Archive a customer location. It stays on existing orders, deliveries and storage-site registration, but is hidden from new order destinations. The customer must keep an active location.",
     restore: "Restore an archived customer location so it can be selected and edited again.",
   };

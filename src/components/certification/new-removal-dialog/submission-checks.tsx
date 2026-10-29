@@ -7,6 +7,7 @@
  * not shown. Warning-status checks describe automatic submit-time work, not
  * operator work, so they never appear here (see `actionableSubmissionChecks`).
  */
+import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -19,7 +20,6 @@ import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
 import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
 import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
 import {
-  buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { actionableSubmissionChecks } from "./submission-facts";
@@ -150,10 +150,7 @@ function fixLinksFor(
       return [
         {
           label: FEEDSTOCK_TYPE_EDIT_LABEL,
-          href: buildFeedstockTypeEditDeepLink(
-            facilityId,
-            check.fixTargetId,
-          ),
+          href: check.fixTargetId ? recordHref("feedstockType", check.fixTargetId, { facilityId, mode: "edit" }) : `/feedstock-types?${new URLSearchParams({ facility: facilityId })}`,
         },
       ];
     }
