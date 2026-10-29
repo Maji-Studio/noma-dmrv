@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-10-29: Resubmit reuses registry Sources
+
+An interrupted Removal resubmits by reusing what Isometric holds. Measurement-sample
+Datapoints are read before the Source PATCH; the PATCH is skipped when every wanted
+Source is present, otherwise it sends the union with the registry's Sources and is
+retried on 429/5xx as an idempotent write. A non-retryable refusal stops with an
+operator message. Application Source readback rereads an empty list for a few
+seconds before calling it a mismatch, and summary reloads heal a stored mismatch
+once Isometric matches. No binding, `MAPPING_REVISION` or schema change.
+
 ## 2026-10-29: Feedstock transport ownership and retired sample evidence
 
 A feedstock record's transport is counted only by the earliest complete linked run that belongs to a credit batch

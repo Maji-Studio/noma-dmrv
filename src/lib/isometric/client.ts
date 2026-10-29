@@ -47,6 +47,8 @@ export interface IsometricRequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
   signal?: AbortSignal;
+  /** Opt in only when replaying this particular write is safe. */
+  idempotent?: boolean;
 }
 
 const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
@@ -131,6 +133,7 @@ async function isometricRequest<T = unknown>(
   }
   const { clientSecret, accessToken, baseUrl } = credentials;
   const url = buildUrl(baseUrl, path, options.query);
+  const canRetryMethod = options.idempotent === true || isIdempotentMethod(method);
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -187,7 +190,7 @@ async function isometricRequest<T = unknown>(
       }
     } catch (err) {
       if (options.signal?.aborted) throw options.signal.reason ?? err;
-      if (response?.ok && !timeoutController.signal.aborted) {
+      if (response?.ok && !timeoutController.signal.aborted && !options.idempotent) {
         // Headers confirmed acceptance: do not replay because its body failed.
         // Keep network classification so write reconciliation remains cautious.
         throw new IsometricApiError(
@@ -197,8 +200,7 @@ async function isometricRequest<T = unknown>(
           "network"
         );
       }
-      const canRetry = isIdempotentMethod(method);
-      if (!canRetry || attempt === MAX_ATTEMPTS) {
+      if (!canRetryMethod || attempt === MAX_ATTEMPTS) {
         log.error(
           { method, path, attempt, code: "network", duration_ms: Date.now() - startedAt },
           "isometric request failed (network)"
@@ -244,7 +246,6 @@ async function isometricRequest<T = unknown>(
       }
     }
 
-    const canRetryMethod = isIdempotentMethod(method);
     const shouldRetry =
       canRetryMethod &&
       RETRYABLE_STATUS.has(response.status) &&

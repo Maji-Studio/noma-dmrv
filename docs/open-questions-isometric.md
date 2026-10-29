@@ -52,11 +52,14 @@ retired questions do not belong in this file.
   GraphQL errors use `{"errors":[...],"data":null}` or partial data with HTTP 200.
 - **Implemented (#737, decision 737-q2):** after Application confirmation,
   GraphQL compares the expected Source set, ignoring order and duplicates.
-  Missing, unexpected, empty or malformed sets stop submission with
-  `source_set_mismatch` drift. No answer continues with persisted `unconfirmed`
-  status and an ID-only warning. Summary reloads retry only unconfirmed,
-  lifecycle-confirmed registrations; success clears the note, and a new mismatch
-  is recorded without changing submission drift or failing the summary.
+  Missing, unexpected or malformed sets stop submission with
+  `source_set_mismatch` drift. An empty set is reread after 1, 2 and 4 seconds
+  (Isometric can answer before it attaches the Sources) and stops submission if
+  it stays empty. No answer continues with persisted `unconfirmed` status and an
+  ID-only warning. Summary reloads retry unconfirmed and mismatch,
+  lifecycle-confirmed registrations; success clears the note (a stored mismatch
+  heals once Isometric matches), and a new mismatch is recorded without changing
+  submission drift or failing the summary.
   Empty expected sets stay `not_checked`; confirmed checks are reused.
   REST still skips omitted/null `source_ids` and rejects malformed or wrong sets.
 - **Verified on a live record (2026-10-19):** a sandbox Biochar Application

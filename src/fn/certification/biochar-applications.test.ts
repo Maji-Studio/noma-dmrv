@@ -837,7 +837,7 @@ describe("Biochar Application evidence links", () => {
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
   });
   it("stops submission and records Source drift on mismatch", async () => {
-    mocks.client.graphql.mockResolvedValue(answer([]));
+    mocks.client.graphql.mockResolvedValue(answer(["src-other"]));
     await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError", message: expect.stringContaining("APP-001") });
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "mismatch");
     expect(mocks.markDrift).toHaveBeenCalledWith(orgCtx, "journal-1", "source_set_mismatch");
@@ -849,7 +849,7 @@ describe("Biochar Application evidence links", () => {
     expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ registrationId: "journal-1", reason: "event_not_found" }), expect.any(String));
   });
   it("keeps a mismatched submission stopped when retry readback has no answer", async () => {
-    mocks.client.graphql.mockResolvedValue(answer([]));
+    mocks.client.graphql.mockResolvedValue(answer(["src-other"]));
     await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
     expect(mocks.registration?.sourceReadbackStatus).toBe("mismatch");
 
@@ -871,7 +871,7 @@ describe("Biochar Application evidence links", () => {
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
   it("clears a mismatch and continues only after retry readback confirms the exact Source set", async () => {
-    mocks.client.graphql.mockResolvedValue(answer([]));
+    mocks.client.graphql.mockResolvedValue(answer(["src-other"]));
     await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError" });
 
     mocks.markDrift.mockClear();

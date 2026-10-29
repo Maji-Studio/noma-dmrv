@@ -14,7 +14,7 @@ const BIOCHAR_APPLICATION_SOURCES_QUERY = `query BiocharApplicationSources($proj
 
 export type SourceReadbackNoAnswerReason =
   | "unreachable" | "timeout" | "http_status" | "graphql_errors"
-  | "project_not_found" | "event_not_found" | "unreadable_response";
+  | "project_not_found" | "event_not_found" | "unreadable_response" | "sources_not_attached";
 export type SourceReadbackResult =
   | { kind: "found"; sourceIds: unknown }
   | { kind: "garbled"; detail: string }
@@ -80,9 +80,24 @@ export function classifySourceReadback(
   }
   const expected = new Set(expectedSourceIds);
   const remote = new Set<string>(result.sourceIds);
+  if (remote.size === 0 && expected.size > 0) {
+    return { outcome: "unconfirmed", reason: "sources_not_attached" };
+  }
   const missing = [...expected].filter(id => !remote.has(id)).sort();
   const unexpected = [...remote].filter(id => !expected.has(id)).sort();
   if (!missing.length && !unexpected.length) return { outcome: "confirmed" };
   return { outcome: "mismatch", missing, unexpected,
-    reason: remote.size === 0 ? "empty" : missing.length ? "missing" : "unexpected" };
+    reason: missing.length ? "missing" : "unexpected" };
+}
+
+/**
+ * A found Application with none of its expected Sources, once any attach wait
+ * is over, is a mismatch: Isometric answered and lists no evidence.
+ */
+export function failClosedOnEmptySources(
+  expectedSourceIds: readonly string[],
+  outcome: SourceReadbackOutcome,
+): SourceReadbackOutcome {
+  if (outcome.outcome !== "unconfirmed" || outcome.reason !== "sources_not_attached") return outcome;
+  return { outcome: "mismatch", missing: [...new Set(expectedSourceIds)].sort(), unexpected: [], reason: "empty" };
 }
