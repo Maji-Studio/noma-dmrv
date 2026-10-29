@@ -174,14 +174,14 @@ export function CreditBatchListRow({
               title={named ? creditBatch.code : undefined}
               className={cn(
                 "cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1",
-                named ? "min-w-0 truncate max-xl:max-w-[60%] max-xl:shrink-0" : "shrink-0",
+                named ? "min-w-0 truncate" : "shrink-0",
               )}
             >
               {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code. */}
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
               {named ? creditBatchLabel(creditBatch) : creditBatch.code.slice(codePrefix.length)}
             </Link>
-            <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED)}>
+            <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED, named && "max-xl:hidden")}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
             </span>
           </div>
