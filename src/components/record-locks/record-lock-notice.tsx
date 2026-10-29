@@ -117,6 +117,13 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
       </Notice>
     );
   }
+  if (isTransportOnlyEditable(lock)) {
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Only Transport details and Transport evidence can be changed. <HolderList holders={lock.heldBy} /> was sent to Isometric without this feedstock&apos;s transport legs.
+      </Notice>
+    );
+  }
   const interrupted = lock.level === "sent" ? lock.interruptedHolders ?? [] : [];
   if (interrupted.length && interrupted.length >= lock.heldBy.length) {
     return (
@@ -131,13 +138,6 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">
         Nothing can be changed, because this was sent to Isometric with <HolderList holders={sent} />, and sending <HolderList holders={interrupted} /> was started and not finished. {lock.howToFree}
-      </Notice>
-    );
-  }
-  if (isTransportOnlyEditable(lock)) {
-    return (
-      <Notice tone="info" boxed data-record-lock-notice="sent">
-        Only the transport can be changed, because this was sent to Isometric with <HolderList holders={lock.heldBy} />, which did not count its trips.
       </Notice>
     );
   }

@@ -78,7 +78,7 @@ export function TransportEvidenceDocuments({
   readOnly: readOnlyProp = false,
 }: TransportEvidenceDocumentsProps) {
   const toast = useToast();
-  const locked = useIsRecordCertificationLocked(entityType, entityId, entityType === "feedstock" ? "transport" : undefined);
+  const locked = useIsRecordCertificationLocked(entityType, entityId, entityType === "feedstock" || entityType === "transport_leg" ? "transport" : undefined);
   const readOnly = readOnlyProp || locked;
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     entityType,

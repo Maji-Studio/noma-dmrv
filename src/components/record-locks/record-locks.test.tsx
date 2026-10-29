@@ -314,9 +314,16 @@ describe("RecordLockFormFrame refusal slot", () => {
 });
 
 describe("RecordLockNotice on a Sent feedstock with open transport", () => {
-  it("says only the transport can change and names the Removal", () => {
+  it("names the editable sections and the Removal", () => {
     render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), transport: { level: "open", heldBy: [] } }} />);
-    expect(screen.getByText(/Only the transport can be changed, because this was sent to Isometric with/).textContent)
-      .toContain("which did not count its trips.");
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/^Only Transport details and Transport evidence can be changed\. .+ was sent to Isometric without this feedstock's transport legs\.$/);
+  });
+
+  it("keeps the transport-only wording when the Removal's sending was interrupted", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], transport: { level: "open", heldBy: [] } }} />);
+    const text = screen.getByRole("status").textContent ?? "";
+    expect(text).toContain("Only Transport details and Transport evidence can be changed.");
+    expect(text).not.toContain("Nothing can be changed");
   });
 });

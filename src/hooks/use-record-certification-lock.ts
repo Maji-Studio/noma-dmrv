@@ -16,7 +16,7 @@ export function useRecordCertificationLock(
   scope?: "transport",
 ) {
   return useQuery({
-    queryKey: scope ? [...certificationKeys.recordLock(entityType, entityId ?? undefined), scope] : certificationKeys.recordLock(entityType, entityId ?? undefined),
+    queryKey: certificationKeys.recordLock(entityType, entityId ?? undefined, scope),
     enabled: !!entityId,
     queryFn: async () =>
       unwrap(await loadRecordCertificationLock(entityType, entityId!, scope)),

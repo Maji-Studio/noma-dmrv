@@ -123,8 +123,11 @@ export const certificationKeys = {
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
   recordLocks: () => [...certificationKeys.all, "record-lock"] as const,
-  recordLock: (entityType: string, entityId?: string) =>
-    [...certificationKeys.all, "record-lock", entityType, entityId] as const,
+  /** A scoped read appends its scope, so invalidating the unscoped key (a prefix) reaches both. */
+  recordLock: (entityType: string, entityId?: string, scope?: "transport") =>
+    (scope
+      ? [...certificationKeys.all, "record-lock", entityType, entityId, scope]
+      : [...certificationKeys.all, "record-lock", entityType, entityId]) as readonly unknown[],
   facilityMapping: (facilityId: string) =>
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
   facilitySummary: (facilityId: string) =>
