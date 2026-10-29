@@ -95,7 +95,8 @@ inside batch context, with a "Batch roll-up" button back.
     whatever they lack; nodes/edges dedupe by id so a shared production run
     appears once. An application record's sheet offers "Trace rollback" into
     the drill-down.
-  - **Map** — the merged geo payload (nodes/legs deduped the same way).
+  - **Map** — the merged geo payload (nodes/legs deduped the same way), read as
+    a stage list and one chain at a time ([Carbon Viewer](#carbon-viewer--geography-carbon-in-transit)).
   - **Sankey** — honest dry-mass balance, dry kg end to end, every loss an explicit
     labeled exit; no net-tCO₂e, since project emissions/counterfactual are
     registry-owned ([ADR 0018](adr/0018-isometric-owns-project-emissions.md)). Exit
@@ -217,16 +218,33 @@ theme.
 
 ## Carbon Viewer — "Geography: carbon in transit"
 
-The map view (both anchors) renders the Carbon Transit panel. The Flow chart is the
-*logical lineage* tool; the MapLibre map is the *geography* tool.
+The Flow chart is the *logical lineage* tool; the MapLibre map is the *geography*
+tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
 
-- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
-  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
-  application out — on a dashed thread, transport legs as sub-rows, a "Not on
-  the map" cluster for anything unplottable) with the map, and docks a clicked
-  record's details over the map's left edge (`record-detail-panel.tsx`, closed
-  by its own X or a basemap click, never by re-clicking the rail row — the row
-  is a selection, not a toggle). `view="split"` is the compact half beside the
+- **Batch Map** (`TraceMap`, `trace-map*.tsx`): the map takes the full width and
+  one panel on the right (below the map on a phone) holds two states. At rest it
+  is the **stage list**: stages in chain order (feedstock intake, production run,
+  biochar product, order, delivery, application) with the kind's Flow accent,
+  icon and count; a stage opens in place with its records one line each, the map
+  frames it and lights its legs. Picking a record or a marker starts a **chain
+  walk**: one chain from the supplier to one end (a field, or the delivery or
+  product nothing is applied from yet), the current record open in place with
+  its values (wet first, "Not recorded yet" for gaps, "Trace rollback", "View full
+  record" through `recordHref`), Back / Next record by record, the camera
+  following, only that chain's legs lit. "Whole batch" returns to the stage
+  list. A record in several chains starts the first one through it (fields first).
+  Only lit legs carry a km label (one per road, even when several product layers
+  share it); each road is drawn once. FIT, + / − and SAT stay. A batch with no
+  location at all shows an empty state instead of the map and keeps the list.
+  The model is pure and tested: `trace-model.ts` (stages, lighting, one drawn
+  leg per road), `trace-chains.ts` (chains, walk lighting).
+- **Application Map and Split** (`CarbonTransitPanel`): `view="map"` pairs the
+  custody stages rail (`custody-stages-rail.tsx`: three milestones — feedstock in
+  / pyrolysis / application out — on a dashed thread, transport legs as sub-rows,
+  a "Not on the map" cluster for anything unplottable) with the map, and docks a
+  clicked record's details over the map's left edge (`record-detail-panel.tsx`,
+  closed by its own X or a basemap click, never by re-clicking the rail row — the
+  row is a selection, not a toggle). `view="split"` is the compact half beside the
   Flow chart and keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
@@ -262,7 +280,8 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
-- `src/components/chain-of-custody/map/viewer-utils.test.ts`
+- `src/components/chain-of-custody/map/viewer-utils.test.ts`,
+  `trace-model.test.ts`, `trace-chains.test.ts`
 
 ## Saved delivery and application provenance
 
