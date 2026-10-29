@@ -102,8 +102,10 @@ interface EntitySideSheetProps {
   viewModeNotice?: React.ReactNode;
   /**
    * Why the record cannot change here at all (its facility is archived). The
-   * sheet then stays in view mode, even for an edit link, hides Edit and the
-   * title chip, and shows this reason first as a boxed info line.
+   * sheet then stays in view mode, even for an edit link, hides Edit, the
+   * title chip and `viewModeNotice` (lock lines say how to change the record),
+   * and shows this reason first as a boxed info line. `viewModeChildren`
+   * ("Used by") stays, since it is a plain fact.
    */
   readOnlyReason?: string;
   /** Label for the Edit button shown in view-mode footer */
@@ -280,10 +282,11 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
-              {readOnly && (
+              {/* Read only, the reason is the one status: lock lines say how to
+                  change or free the record, which does not apply here. */}
+              {readOnly ? (
                 <Notice tone="info" boxed data-read-only-notice>{readOnlyReason}</Notice>
-              )}
-              {viewModeNotice}
+              ) : viewModeNotice}
               {sections && (
                 <EntitySideSheetSections
                   sections={sections}

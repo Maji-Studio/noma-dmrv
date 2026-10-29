@@ -12,7 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -326,7 +326,7 @@ export function DeliveryList() {
   const linkedRecord = useLinkedRecordFacility(focusedDelivery.data, focusedDelivery.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   // A link into an archived facility opens the record read only, even an edit link.
-  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.readOnly;
 
   // Freeze the opening draft and version; detail refetches must not advance it.
   if (linkedFacilityReady && !sideSheet && linkOpensEdit && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
@@ -535,10 +535,13 @@ export function DeliveryList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={sideSheetOpen}
+      open={sideSheetAllowed && sideSheetOpen}
       onOpenChange={(open) => !open && closeSideSheet()}
       onCloseAttempt={confirmCreateClose}
       mode={sideSheetMode}
@@ -555,7 +558,7 @@ export function DeliveryList() {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit delivery"
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "delivery")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "delivery")}
       sections={
         sideSheetEntity
           ? deliverySheetSections(sideSheetEntity, facilities, proofStatus)
@@ -591,7 +594,7 @@ export function DeliveryList() {
           title="Deliveries"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }

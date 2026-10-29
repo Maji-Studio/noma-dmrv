@@ -31,7 +31,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -325,7 +325,7 @@ export function SampleList({
   const linkedRecord = useLinkedRecordFacility(focusedSample.data, focusedSample.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   // A link into an archived facility opens the record read only, even an edit link.
-  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.readOnly;
 
   if (linkedFacilityReady && !sideSheet && linkOpensEdit && focusedSample.data && focusedSampleId === focusedSample.data.id) {
     setSideSheet({ mode: "edit", entity: focusedSample.data });
@@ -576,10 +576,13 @@ export function SampleList({
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={!!displaySideSheet}
+      open={sideSheetAllowed && !!displaySideSheet}
       onOpenChange={(open) => { if (!open) closeSideSheet(); }}
       onCloseAttempt={confirmCreateClose}
       mode={displaySideSheet?.mode ?? "create"}
@@ -589,7 +592,7 @@ export function SampleList({
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit Sample"
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, displaySideSheet?.entity, "Sample")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, displaySideSheet?.entity, "Sample")}
       sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
     >
       {isResolvingCreateContext ? (
@@ -629,7 +632,7 @@ export function SampleList({
           title="Lab Samples"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }

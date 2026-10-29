@@ -4,15 +4,23 @@ import { useEffect, useRef } from "react";
 import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
+/**
+ * Why a linked record opens read only: its facility is archived, or the
+ * facility read failed and nothing can show it is active (fail closed).
+ */
+export type LinkedRecordReadOnly =
+  | { reason: "archived"; facilityId: string; facilityName: string }
+  | { reason: "unchecked"; facilityId: string };
+
 /** What a list page needs to open a linked record's sheet. */
 export type LinkedRecordFacility = {
   /** The record loaded and the facility selection settled, so the sheet may open. */
   ready: boolean;
   /**
-   * The record's facility when it is archived. The sheet then opens read only
-   * over the current page and the working facility stays where it is.
+   * Set when the record's facility cannot be worked in. The sheet then opens
+   * read only over the current page and the working facility stays where it is.
    */
-  archivedFacility: { id: string; name: string } | null;
+  readOnly: LinkedRecordReadOnly | null;
 };
 
 /** Synchronize the external facility stores before exposing a linked sheet. */
@@ -50,12 +58,20 @@ export function useLinkedRecordFacility(
     }
   }, [canSwitch, facilityId, recordFacilityId, setFacilityId]);
 
-  const archived = needsLookup && lookup.data?.id === recordFacilityId && lookup.data.archivedAt != null
-    ? { id: lookup.data.id, name: lookup.data.name }
-    : null;
+  const facilityRead = needsLookup && lookup.data?.id === recordFacilityId ? lookup.data : undefined;
+  const readOnly: LinkedRecordReadOnly | null = !needsLookup || !recordFacilityId
+    ? null
+    : facilityRead
+      ? facilityRead.archivedAt != null
+        ? { reason: "archived", facilityId: facilityRead.id, facilityName: facilityRead.name }
+        : null
+      : lookup.isError
+        ? { reason: "unchecked", facilityId: recordFacilityId }
+        : null;
   // A facility that cannot be selected (archived, or beyond the loaded list)
-  // shows the record where it is; an archived one only once that is known.
+  // shows the record where it is, once its read settles. An archived facility,
+  // or one whose read failed, opens the record read only.
   const ready = !!record && !isLoading && !facilitiesLoading &&
     (!recordFacilityId || recordFacilityId === facilityId || (!selectable && lookupSettled));
-  return { ready, archivedFacility: ready ? archived : null };
+  return { ready, readOnly: ready ? readOnly : null };
 }

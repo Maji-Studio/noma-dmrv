@@ -80,14 +80,14 @@ describe("useLinkedRecordFacility", () => {
   it("never selects a facility outside the user's list, and shows the record where it is", () => {
     lookup.result = { data: { id: "far-facility", name: "Far", archivedAt: null }, isError: false };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "far-facility" }));
-    expect(result.current).toEqual({ ready: true, archivedFacility: null });
+    expect(result.current).toEqual({ ready: true, readOnly: null });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 
   it("opens a record in an archived facility read only, without selecting the facility", () => {
     lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
-    expect(result.current).toEqual({ ready: true, archivedFacility: { id: "archived-facility", name: "Mafinga" } });
+    expect(result.current).toEqual({ ready: true, readOnly: { reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" } });
     expect(context.setFacilityId).not.toHaveBeenCalled();
     expect(lookup.calls.at(-1)).toEqual({ id: "archived-facility", enabled: true, organizationId: "org-a" });
   });
@@ -98,16 +98,23 @@ describe("useLinkedRecordFacility", () => {
     lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
     expect(result.current.ready).toBe(true);
-    expect(result.current.archivedFacility?.id).toBe("archived-facility");
+    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 
   it("withholds the sheet until the facility read says whether it is archived", () => {
     const { result, rerender } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
-    expect(result.current).toEqual({ ready: false, archivedFacility: null });
+    expect(result.current).toEqual({ ready: false, readOnly: null });
     lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
     rerender();
-    expect(result.current.archivedFacility?.name).toBe("Mafinga");
+    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" });
+  });
+
+  it("fails closed: a facility read that errors opens the record read only", () => {
+    lookup.result = { data: undefined, isError: true };
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "unknown-facility" }));
+    expect(result.current).toEqual({ ready: true, readOnly: { reason: "unchecked", facilityId: "unknown-facility" } });
+    expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 
   it("never reads a selectable facility by id", () => {
@@ -117,7 +124,7 @@ describe("useLinkedRecordFacility", () => {
 
   it.each([null, undefined])("does nothing for an unloaded or missing record (%s)", (record) => {
     const { result } = renderHook(() => useLinkedRecordFacility(record));
-    expect(result.current).toEqual({ ready: false, archivedFacility: null });
+    expect(result.current).toEqual({ ready: false, readOnly: null });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 });

@@ -273,12 +273,16 @@ by-id read use `useLinkedRecordFacility` so the active facility follows the link
 record. The hook selects only a facility available in context, through the context
 setter, and holds the linked sheet closed until the selection matches. A record in
 a facility outside that list is shown where it is: the hook reads the facility by
-id (org-scoped), and when it is archived returns `archivedFacility`. The page then
-passes `archivedFacilityReadOnlyReason` (`src/lib/linked-record-read-only.ts`) as
-the sheet's `readOnlyReason`, so `EntitySideSheet` stays in view mode with no Edit,
-and an edit link opens view. The sheet is rendered over the "Select a facility"
-empty state too. The archived facility never becomes the working facility, and
-server writes stay refused (#1499).
+id (org-scoped) and returns `readOnly` when it is archived, or when that read fails
+(fail closed). The page passes `linkedRecordReadOnlyReason`
+(`src/lib/linked-record-read-only.ts`) as the sheet's `readOnlyReason`, so
+`EntitySideSheet` stays in view mode with no Edit, no lock chip and no lock line,
+and an edit link opens view. The sheet stays mounted over the "Select a facility"
+empty state too, opening only for such a link. The archived facility never becomes
+the working facility, and server writes stay refused (#1499). Covered: orders,
+feedstock intakes, deliveries, biochar products, lab Samples, applications (read by
+id with `includeArchived`) and reactors. Not covered yet (#1502): production runs
+(the by-id read refuses archived runs), credit batches and storage bins.
 
 ### Quick-Add and cascading selects
 

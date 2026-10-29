@@ -10,7 +10,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -385,10 +385,13 @@ export function OrderList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!facilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={sideSheetOpen}
+      open={sideSheetAllowed && sideSheetOpen}
       onOpenChange={(open) => !open && closeSideSheet()}
       mode={sideSheetMode}
       onModeChange={(mode) => {
@@ -403,7 +406,7 @@ export function OrderList() {
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit order"
       sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "order")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "order")}
     >
       <OrderForm
         key={sideSheetEntity?.id ?? "create"}
@@ -426,7 +429,7 @@ export function OrderList() {
           title="Orders"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }

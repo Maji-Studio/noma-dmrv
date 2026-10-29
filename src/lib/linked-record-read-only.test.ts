@@ -1,20 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { archivedFacilityReadOnlyReason } from "./linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "./linked-record-read-only";
 
-const ARCHIVED = { ready: true, archivedFacility: { id: "facility-x", name: "Mafinga" } };
+const ARCHIVED = { ready: true, readOnly: { reason: "archived" as const, facilityId: "facility-x", facilityName: "Mafinga" } };
+const UNCHECKED = { ready: true, readOnly: { reason: "unchecked" as const, facilityId: "facility-x" } };
 
-describe("archivedFacilityReadOnlyReason", () => {
+describe("linkedRecordReadOnlyReason", () => {
   it("names the archived facility and says the record is read-only", () => {
-    expect(archivedFacilityReadOnlyReason(ARCHIVED, { facilityId: "facility-x" }, "order"))
+    expect(linkedRecordReadOnlyReason(ARCHIVED, { facilityId: "facility-x" }, "order"))
       .toBe("Mafinga is archived, so this order is read-only.");
   });
 
-  it("gives a record in another facility nothing", () => {
-    expect(archivedFacilityReadOnlyReason(ARCHIVED, { facilityId: "facility-a" }, "order")).toBeUndefined();
-    expect(archivedFacilityReadOnlyReason(ARCHIVED, null, "order")).toBeUndefined();
+  it("fails closed when the facility could not be checked, with the next step", () => {
+    expect(linkedRecordReadOnlyReason(UNCHECKED, { facilityId: "facility-x" }, "order"))
+      .toBe("This order's facility could not be checked, so it is read-only. Refresh the page to try again.");
   });
 
-  it("gives nothing while no linked facility is archived", () => {
-    expect(archivedFacilityReadOnlyReason({ ready: true, archivedFacility: null }, { facilityId: "facility-x" }, "order")).toBeUndefined();
+  it("gives a record in another facility nothing", () => {
+    expect(linkedRecordReadOnlyReason(ARCHIVED, { facilityId: "facility-a" }, "order")).toBeUndefined();
+    expect(linkedRecordReadOnlyReason(UNCHECKED, { facilityId: "facility-a" }, "order")).toBeUndefined();
+    expect(linkedRecordReadOnlyReason(ARCHIVED, null, "order")).toBeUndefined();
+  });
+
+  it("gives nothing while the linked facility is workable", () => {
+    expect(linkedRecordReadOnlyReason({ ready: true, readOnly: null }, { facilityId: "facility-x" }, "order")).toBeUndefined();
   });
 });

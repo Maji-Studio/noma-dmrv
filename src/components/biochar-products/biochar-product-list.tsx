@@ -10,7 +10,7 @@ import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -304,7 +304,7 @@ export function BiocharProductList() {
   const linkedRecord = useLinkedRecordFacility(focusedProduct.data, focusedProduct.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   // A link into an archived facility opens the record read only, even an edit link.
-  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.readOnly;
   const { data: creditBatches } = useCreditBatches(
     contextFacilityId || undefined,
   );
@@ -471,10 +471,13 @@ export function BiocharProductList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={!!displaySideSheet}
+      open={sideSheetAllowed && !!displaySideSheet}
       onOpenChange={(open) => { if (!open) closeSideSheet(); }}
       mode={displaySideSheet?.mode ?? "create"}
       onModeChange={handleModeChange}
@@ -483,7 +486,7 @@ export function BiocharProductList() {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit product"
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, displaySideSheet?.entity, "biochar product")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, displaySideSheet?.entity, "biochar product")}
       sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
     >
       <BiocharProductForm
@@ -510,7 +513,7 @@ export function BiocharProductList() {
           title="Biochar products"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }

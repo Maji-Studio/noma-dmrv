@@ -34,7 +34,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -522,10 +522,13 @@ export function ProductionRunList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!facilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={sideSheetOpen}
+      open={sideSheetAllowed && sideSheetOpen}
       onOpenChange={(open) => !open && closeSideSheet()}
       onCloseAttempt={confirmCreateClose}
       mode={sideSheetMode}
@@ -535,7 +538,7 @@ export function ProductionRunList() {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit production run"
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "production run")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "production run")}
       size="wide"
       sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
     >
@@ -573,7 +576,7 @@ export function ProductionRunList() {
           title="Production runs"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }

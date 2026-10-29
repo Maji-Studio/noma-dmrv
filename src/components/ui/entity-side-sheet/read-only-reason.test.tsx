@@ -36,7 +36,8 @@ function renderSheet(mode: "view" | "edit" | "create", readOnlyReason?: string) 
       <EntitySideSheet open mode={mode} onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
         editLabel="Edit order" sections={SECTIONS} readOnlyReason={readOnlyReason}
         titleBadge={<span data-testid="lock-chip">Open</span>}
-        viewModeNotice={<p data-testid="lock-line">Lock line</p>}>
+        viewModeNotice={<p data-testid="lock-line">Lock line</p>}
+        viewModeChildren={<p data-testid="used-by">Used by</p>}>
         <form data-testid="order-form" />
       </EntitySideSheet>,
     );
@@ -59,7 +60,15 @@ describe("EntitySideSheet readOnlyReason", () => {
     expect(buttons).toEqual(["Close"]);
     const main = renderer.root.findByType("main");
     const order = main.findAll((node) => typeof node.props["data-testid"] === "string").map((node) => node.props["data-testid"]);
-    expect(order.indexOf("archived")).toBeLessThan(order.indexOf("lock-line"));
+    expect(order[0]).toBe("archived");
+  });
+
+  it("drops the lock line, which says how to change the record, and keeps Used by", () => {
+    renderSheet("view", NOTICE);
+    expect(renderer.root.findAll((node) => node.props["data-testid"] === "lock-line")).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.props["data-testid"] === "used-by")).toHaveLength(1);
+    renderSheet("view");
+    expect(renderer.root.findAll((node) => node.props["data-testid"] === "lock-line")).toHaveLength(1);
   });
 
   it("keeps an edit link in view mode, so the form never mounts", () => {

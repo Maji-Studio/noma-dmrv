@@ -27,7 +27,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -310,7 +310,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const linkedRecord = useLinkedRecordFacility(focusedFeedstock.data, focusedFeedstock.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   // A link into an archived facility opens the record read only, even an edit link.
-  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.readOnly;
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const fetchFeedstock = useFetchFeedstock();
@@ -555,10 +555,13 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
     <EntitySideSheet
       numberedSections
-      open={sideSheetOpen}
+      open={sideSheetAllowed && sideSheetOpen}
       onOpenChange={(open) => !open && closeSideSheet()}
       onCloseAttempt={confirmCreateClose}
       mode={sideSheetMode}
@@ -572,7 +575,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit feedstock"
-      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "feedstock intake")}
+      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "feedstock intake")}
       sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
         distanceKm: recordedDistance.data?.recordedDistanceKm,
         source: recordedDistance.data?.recordedDistanceSource,
@@ -619,7 +622,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           title="Feedstock intake"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
-        {linkedRecord.archivedFacility && sideSheetElement}
+        {sideSheetElement}
       </div>
     );
   }
