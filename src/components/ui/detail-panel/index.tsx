@@ -113,6 +113,8 @@ interface DetailSectionProps {
   /** CERT chip beside the title, for a section that is one certification requirement. */
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
+  /** Tooltip text naming the missing item; defaults to the generic status wording. */
+  certifyDescription?: string;
 }
 
 function DetailSection({
@@ -125,8 +127,9 @@ function DetailSection({
   explanation,
   certifyRequired,
   certifyStatus,
+  certifyDescription,
 }: DetailSectionProps) {
-  const label = title != null ? <SectionLabel hint={hint} explanation={explanation} explanationTitle={title} certifyRequired={certifyRequired} certifyStatus={certifyStatus}>{title}</SectionLabel> : null;
+  const label = title != null ? <SectionLabel hint={hint} explanation={explanation} explanationTitle={title} certifyRequired={certifyRequired} certifyStatus={certifyStatus} certifyDescription={certifyDescription}>{title}</SectionLabel> : null;
 
   if (spine) {
     return (
@@ -399,6 +402,8 @@ export type DetailPanelSection = {
   /** CERT chip beside the title, mirroring the form section's. */
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
+  /** Tooltip text naming the missing item; defaults to the generic status wording. */
+  certifyDescription?: string;
 } & (
   | { id: string; title?: string; explanation?: never }
   | {
@@ -432,6 +437,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
           explanation={section.explanation}
           certifyRequired={section.certifyRequired}
           certifyStatus={section.certifyStatus}
+          certifyDescription={section.certifyDescription}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered

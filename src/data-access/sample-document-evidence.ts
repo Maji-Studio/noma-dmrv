@@ -2,14 +2,14 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { documents, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { LAB_REPORT_DOCUMENT_CRITERIA } from "@/lib/certification/lab-report";
+import { LAB_REPORT_DOCUMENT_CRITERIA, UPLOADED_DOCUMENT_STATUS } from "@/lib/certification/lab-report";
 import { requireOrgScope } from "./utils";
 
 type LoadedSamples = ReadonlyArray<{ id: string; creditBatchId: string | null }>;
 
 function uploadedDocumentConditions(documentType: "lab_report" | "reflectance_histogram") {
   return and(
-    eq(documents.uploadStatus, LAB_REPORT_DOCUMENT_CRITERIA.uploadStatus),
+    eq(documents.uploadStatus, UPLOADED_DOCUMENT_STATUS),
     eq(documents.documentType, documentType),
   );
 }

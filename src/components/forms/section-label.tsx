@@ -28,6 +28,7 @@ export function SectionLabel({
   explanationTitle,
   certifyRequired,
   certifyStatus,
+  certifyDescription,
   icon,
 }: {
   children: React.ReactNode;
@@ -40,6 +41,8 @@ export function SectionLabel({
   certifyRequired?: boolean;
   /** Saved-state colour for the CERT chip; only meaningful with `certifyRequired`. */
   certifyStatus?: CertFieldStatus;
+  /** Tooltip text naming the missing item; defaults to the generic status wording. */
+  certifyDescription?: string;
   /** Optional leading glyph (e.g. a Phosphor icon) rendered before the label text. */
   icon?: React.ReactNode;
 }) {
@@ -51,7 +54,7 @@ export function SectionLabel({
         </span>
       )}
       {children}
-      {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
+      {certifyRequired && <CertificationFieldTag status={certifyStatus} description={certifyDescription} />}
       {explanation != null && explanation !== false
         ? <ExplanationInfo title={explanationTitle ?? (typeof children === "string" ? children : "Details")} hint={hint}>{explanation}</ExplanationInfo>
         : hint != null && <InfoHint side="top">{hint}</InfoHint>}
