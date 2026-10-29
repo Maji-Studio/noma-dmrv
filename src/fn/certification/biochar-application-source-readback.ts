@@ -7,7 +7,12 @@ import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { IsometricClient } from "@/lib/isometric/client";
-import { classifySourceReadback, readBiocharApplicationSources } from "@/lib/isometric/biochar-application-source-readback";
+import {
+  classifySourceReadback,
+  failClosedOnEmptySources,
+  readBiocharApplicationSources,
+  type SourceReadbackOutcome,
+} from "@/lib/isometric/biochar-application-source-readback";
 import type { Logger } from "@/lib/log";
 
 const MAX_EVIDENCE_LINK_RECHECKS_PER_LOAD = 3;
@@ -34,17 +39,22 @@ export async function checkBiocharApplicationSourceReadback(args: {
   log: Logger;
 }): Promise<void> {
   if (args.expectedSourceIds.length === 0 || args.sourceReadbackStatus === "confirmed") return;
+  const notAttached = (outcome: SourceReadbackOutcome) =>
+    outcome.outcome === "unconfirmed" && outcome.reason === "sources_not_attached";
   let result = classifySourceReadback(args.expectedSourceIds,
     await readBiocharApplicationSources(args.client, args));
+  const sawEmpty = notAttached(result);
   for (const delayMs of SOURCE_ATTACH_RETRY_DELAYS_MS) {
-    if (result.outcome !== "unconfirmed" || result.reason !== "sources_not_attached") break;
+    if (!notAttached(result)) break;
     await new Promise(resolve => setTimeout(resolve, delayMs));
     result = classifySourceReadback(args.expectedSourceIds,
       await readBiocharApplicationSources(args.client, args));
   }
-  if (result.outcome === "unconfirmed" && result.reason === "sources_not_attached") {
-    // The registry answered with no Sources at all: fail closed.
-    result = { outcome: "mismatch", missing: [...args.expectedSourceIds].sort(), unexpected: [], reason: "missing" };
+  // Isometric answered with no Sources at all. A later read that gives no
+  // answer cannot erase that, so only a real match lets submission continue.
+  if (sawEmpty && result.outcome === "unconfirmed") {
+    result = failClosedOnEmptySources(args.expectedSourceIds,
+      { outcome: "unconfirmed", reason: "sources_not_attached" });
   }
   if (args.sourceReadbackStatus === "mismatch" && result.outcome === "unconfirmed") {
     // Registration confirmation clears drift, but no answer cannot clear the
@@ -93,9 +103,11 @@ export async function refreshRemovalEvidenceLinks(
     const clientPromise = resolveIsometricClient(ctx);
     const results = await Promise.allSettled(rechecks.map(async row => {
       const client = await clientPromise;
-      const result = classifySourceReadback(row.expectedSourceIds, await readBiocharApplicationSources(client, {
-        externalProjectId: row.externalProjectId, externalApplicationId: row.externalApplicationId!,
-      }));
+      // A reload runs after the attach wait, so an empty list is a mismatch here.
+      const result = failClosedOnEmptySources(row.expectedSourceIds,
+        classifySourceReadback(row.expectedSourceIds, await readBiocharApplicationSources(client, {
+          externalProjectId: row.externalProjectId, externalApplicationId: row.externalApplicationId!,
+        })));
       const status = row.sourceReadbackStatus === "mismatch" && result.outcome === "unconfirmed"
         ? "mismatch" : result.outcome;
       const saved = await recordBiocharApplicationSourceReadback(ctx, row.id, status);
