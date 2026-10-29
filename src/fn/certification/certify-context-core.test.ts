@@ -186,8 +186,9 @@ it("projects all held missing runs with Add run eligibility into the Removal sum
     { creditBatchId: "held", creditBatchCode: "CB-held", runs: [
       { id: run.id, code: run.code, canAdd: true }, { id: "blocked", code: "PR-2", canAdd: false },
     ] },
+    // A same-day entry keeps the addable run and clears the refused one.
     { creditBatchId: "covered", creditBatchCode: "CB-covered", runs: [
-      { id: run.id, code: run.code, canAdd: true }, { id: "blocked", code: "PR-2", canAdd: false },
+      { id: run.id, code: run.code, canAdd: true },
     ] },
   ]);
   expect(loadCreditBatchesMissingProductionRuns).toHaveBeenCalledExactlyOnceWith(ctx, memberBatches.map(batch => batch.id));
