@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
-import { customers, customerLocations, facilities, orders, productionRuns } from "@/db/schema";
+import { applications, deliveries, creditBatches, creditBatchProductionRuns, productionProcesses, feedstocks, customers, customerLocations, facilities, orders, productionRuns } from "@/db/schema";
 import { archiveFacility } from "@/data-access/facilities";
 import { getProductionRunById } from "@/data-access/production-runs";
 import { getLinkedProductionRunById } from "@/data-access/production-runs";
@@ -12,6 +12,11 @@ import { runOperation } from "@/lib/operations/runner";
 import { cleanupOrderFixture, createOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
 import { createTestPool } from "./helpers/operation-fixture";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
+
+import { getLinkedCreditBatchMembers } from "@/data-access/linked-credit-batch-members";
+import { getLinkedApplicationDelivery } from "@/data-access/linked-application-delivery";
+import { getCreditBatchProductionRunOptions } from "@/data-access/credit-batch-production-run-options";
+import { getApplicationDeliveryOptions } from "@/data-access/applications";
 
 const TIMEOUT_MS = 60_000;
 const CONNECTIONS = 4;
@@ -28,7 +33,12 @@ async function fixture() {
   return value;
 }
 afterEach(async () => {
-  for (const value of fixtures.splice(0)) await cleanupOrderFixture(value);
+  for (const value of fixtures.splice(0)) {
+    for (const table of [creditBatchProductionRuns, creditBatches, productionProcesses]) {
+      await db.delete(table).where(eq(table.organizationId, value.ctx.organizationId));
+    }
+    await cleanupOrderFixture(value);
+  }
 });
 
 const archivedFacilityRefusal = {
@@ -127,5 +137,77 @@ describe("archived facility order deletion", { timeout: TIMEOUT_MS }, () => {
       await barrier.rollback();
       await Promise.allSettled(pending);
     }
+  });
+});
+
+async function linkedFixture() {
+  const f = await fixture();
+  const organizationId = f.ctx.organizationId;
+  const [intake] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, organizationId));
+  const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId }).returning();
+  const [batch] = await db.insert(creditBatches).values({ organizationId, facilityId: f.facility.id,
+    code: `E2E-CB-${f.tag}`, feedstockTypeId: intake.feedstockTypeId, productionProcessId: process.id,
+    startDate: "2026-09-01", endDate: "2026-09-30" }).returning();
+  await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: f.runs[0].id });
+  const order = (await runOperation(recordOrder, f.ctx, orderInput(f))).data;
+  const [delivery] = await db.insert(deliveries).values({ organizationId, facilityId: f.facility.id,
+    code: `E2E-DL-${f.tag}`, orderId: order.id, storageLocationId: f.bin.id,
+    deliveryDate: new Date("2026-09-12T12:00:00Z"), deliveredWetMassKg: 100, massDryKg: 80 }).returning();
+  const [application] = await db.insert(applications).values({ organizationId, deliveryId: delivery.id,
+    code: `E2E-AP-${f.tag}`, applicationDate: new Date("2026-09-13T00:00:00Z"),
+    biocharAppliedTons: 0.05, biocharAppliedDryTons: 0.04, fieldSizeHa: 1 }).returning();
+  return { ...f, batch, delivery, application };
+}
+
+describe("archived facility linked members and application source", () => {
+  it("preserves member and delivery shapes after the cascade without broadening form options", async () => {
+    const f = await linkedFixture();
+    const members = await getLinkedCreditBatchMembers(f.ctx, f.batch.id);
+    expect(members).toHaveLength(1);
+    expect(members[0]).toMatchObject({ id: f.runs[0].id, biocharStorageName: f.source.name,
+      feedstockMassDryKg: f.runs[0].feedstockMassDryKg, assignedCreditBatchId: f.batch.id });
+    expect(members[0].feedstockTypeIds).toHaveLength(1);
+    const source = await getLinkedApplicationDelivery(f.ctx, f.application.id);
+    expect(source).toMatchObject({ id: f.delivery.id, productBinName: f.bin.name,
+      alreadyAppliedWetKg: 50, alreadyAppliedDryKg: 40 });
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    expect(await getLinkedCreditBatchMembers(f.ctx, f.batch.id)).toEqual(members);
+    expect(await getLinkedApplicationDelivery(f.ctx, f.application.id)).toEqual(source);
+    expect(await getCreditBatchProductionRunOptions(f.ctx, { facilityId: f.facility.id })).toEqual([]);
+    expect(await getApplicationDeliveryOptions(f.ctx, f.facility.id)).toEqual([]);
+  });
+
+  it("hides independently archived member runs and deliveries before and after the cascade", async () => {
+    const f = await linkedFixture();
+    await db.update(productionRuns).set({ archivedAt: INDEPENDENT_ARCHIVE_DATE }).where(eq(productionRuns.id, f.runs[0].id));
+    await db.update(deliveries).set({ archivedAt: INDEPENDENT_ARCHIVE_DATE }).where(eq(deliveries.id, f.delivery.id));
+    expect(await getLinkedCreditBatchMembers(f.ctx, f.batch.id)).toEqual([]);
+    expect(await getLinkedApplicationDelivery(f.ctx, f.application.id)).toBeNull();
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    expect(await getLinkedCreditBatchMembers(f.ctx, f.batch.id)).toEqual([]);
+    expect(await getLinkedApplicationDelivery(f.ctx, f.application.id)).toBeNull();
+  });
+
+  it("hides members of an independently archived batch", async () => {
+    const f = await linkedFixture();
+    await db.update(creditBatches).set({ archivedAt: INDEPENDENT_ARCHIVE_DATE }).where(eq(creditBatches.id, f.batch.id));
+    expect(await getLinkedCreditBatchMembers(f.ctx, f.batch.id)).toEqual([]);
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    expect(await getLinkedCreditBatchMembers(f.ctx, f.batch.id)).toEqual([]);
+  });
+
+  it("refuses foreign organizations and missing IDs, and rejects unscoped reads", async () => {
+    const f = await linkedFixture();
+    const foreign = await fixture();
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    for (const ctx of [foreign.ctx, f.ctx]) {
+      const batchId = ctx === foreign.ctx ? f.batch.id : crypto.randomUUID();
+      const applicationId = ctx === foreign.ctx ? f.application.id : crypto.randomUUID();
+      expect(await getLinkedCreditBatchMembers(ctx, batchId)).toEqual([]);
+      expect(await getLinkedApplicationDelivery(ctx, applicationId)).toBeNull();
+    }
+    const unscoped = { ...f.ctx, organizationId: "" };
+    await expect(getLinkedCreditBatchMembers(unscoped, f.batch.id)).rejects.toThrow();
+    await expect(getLinkedApplicationDelivery(unscoped, f.application.id)).rejects.toThrow();
   });
 });
