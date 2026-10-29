@@ -4,7 +4,7 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { IN_USE_REASON, deleteRefusalList, inUseDeleteRefusal, isInUseDeleteRefusal } from "./delete-refusal";
 import { customerHasDeliveries, customerHasStorageSites, customerLocationHasOrders, customerLocationHasStorageSite, supplierHasIntakes } from "./party-domain-errors";
-import { formulationInUse } from "./formulation-domain-errors";
+import { formulationInUse, formulationInUseReason } from "./formulation-domain-errors";
 
 describe("inUseDeleteRefusal", () => {
   it("keeps the conflict contract and merges metadata without mutating it", () => {
@@ -91,5 +91,22 @@ describe("deleteRefusalList", () => {
     const before = [...codes];
     expect(deleteRefusalList(codes, total)).toBe(expected);
     expect(codes).toEqual(before);
+  });
+});
+
+describe("formulationInUseReason", () => {
+  it.each([
+    { kind: "biochar products", phrase: "biochar products use it" },
+    { kind: "product bins", phrase: "product bins use it" },
+    { kind: "orders", phrase: "orders use it" },
+  ] as const)("names $kind from the refusal meta", ({ kind, phrase }) => {
+    const error = formulationInUse(kind, ["X-001"]);
+    expect(error.message).toContain(phrase);
+    expect(formulationInUseReason(new ActionError({ error: error.message, ...error }))).toBe(phrase);
+  });
+
+  it("returns undefined for a refusal that names no kind or a non-refusal", () => {
+    expect(formulationInUseReason(new Error("boom"))).toBeUndefined();
+    expect(formulationInUseReason(new ActionError({ error: "x", ...inUseDeleteRefusal("x", ["formulationId"]) }))).toBeUndefined();
   });
 });

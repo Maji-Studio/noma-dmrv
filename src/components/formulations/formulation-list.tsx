@@ -36,6 +36,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
 import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { formulationInUseReason } from "@/lib/formulation-domain-errors";
 import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -158,6 +159,7 @@ export function FormulationList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FormulationWithIngredients | null>(null);
+  const [conflictReason, setConflictReason] = useState<string | undefined>();
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -250,6 +252,7 @@ export function FormulationList() {
       if (isInUseDeleteRefusal(error)) {
         // In use: the dialog gives way to the in-use dialog (Archive instead for an active formulation, Close only for an archived one).
         setDeleteConflict(deletingFormulation);
+        setConflictReason(formulationInUseReason(error));
         setDeletingFormulation(null);
         return;
       }
@@ -425,6 +428,7 @@ export function FormulationList() {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
+          reason={conflictReason}
           onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
           onClose={() => {
             setDeleteConflict(null);
