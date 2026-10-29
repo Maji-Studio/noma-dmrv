@@ -1,6 +1,6 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
-import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { certFieldStatusDescription, type CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { certificationDetailField, isCertifyEntityField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
@@ -110,6 +110,7 @@ export function sampleSheetSections(
       title: "Evidence & documents",
       certifyRequired: isCertifyEntityField("sample", "labReport", certificationContext),
       certifyStatus: labReportStatus,
+      certifyDescription: certFieldStatusDescription(labReportStatus, "A lab report"),
       fields: [],
       content: <SampleDocumentsPanel sampleId={sample.id} readOnly />,
     },

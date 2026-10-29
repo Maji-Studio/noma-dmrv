@@ -21,8 +21,8 @@ import { SampleDocumentsPanel } from "./sample-documents-panel";
 interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
   isEditMode: boolean;
-  /** Sampling of the credit batch chosen on the form; covers create, where there is no saved sample. */
-  creditBatchSampling?: string | null;
+  /** Certification context from the form (chosen batch's sampling and durability); covers create, where there is no saved sample. */
+  certifyContext?: { sampling?: string | null; durabilityOption?: string | null };
   deferredAttachments?: UseDeferredAttachmentsResult;
   /**
    * Retry/remove routed through the parent so it can reconcile its post-create
@@ -39,7 +39,7 @@ interface SampleTrailingSectionProps {
 export function SampleEvidenceSection({
   sample,
   isEditMode,
-  creditBatchSampling,
+  certifyContext,
   deferredAttachments,
   onRetryAttachments,
   onRemoveAttachment,
@@ -49,11 +49,10 @@ export function SampleEvidenceSection({
   const [documentType, setDocumentType] = useState<SampleDocumentType>("lab_report");
   const locked = useIsRecordCertificationLocked("sample", isEditMode ? sample?.id : undefined);
   const labReportStatus = useDocumentsCertStatus("sample", isEditMode ? sample?.id : undefined, isLabReportDocument);
-  const sampling = creditBatchSampling ?? sample?.sampling;
   return (
     <FormSection
       title="Evidence & documents"
-      certifyRequired={isCertifyEntityField("sample", "labReport", { sampling, durabilityOption: sample?.durabilityOption })}
+      certifyRequired={isCertifyEntityField("sample", "labReport", certifyContext ?? { sampling: sample?.sampling, durabilityOption: sample?.durabilityOption })}
       certifyStatus={labReportStatus}
       certifyDescription={certFieldStatusDescription(labReportStatus, "A lab report")}
       icon={<PaperclipIcon size={14} weight="bold" />}

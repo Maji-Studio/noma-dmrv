@@ -82,7 +82,7 @@ describe("edit mode evidence sections", () => {
   });
 
   it("creating a Sample shows the neutral lab report chip once the chosen batch is sampled", () => {
-    render(<SampleEvidenceSection isEditMode={false} creditBatchSampling="sampled" />);
+    render(<SampleEvidenceSection isEditMode={false} certifyContext={{ sampling: "sampled" }} />);
     const section = screen.getByLabelText("Evidence & documents");
     expect(section.dataset.cert).toBe("on");
     expect(section.dataset.status).toBe("neutral");
@@ -90,7 +90,7 @@ describe("edit mode evidence sections", () => {
   });
 
   it.each(["unsampled", undefined])("creating a Sample shows no chip for an %s batch", (sampling) => {
-    render(<SampleEvidenceSection isEditMode={false} creditBatchSampling={sampling} />);
+    render(<SampleEvidenceSection isEditMode={false} certifyContext={{ sampling }} />);
     expect(screen.getByLabelText("Evidence & documents").dataset.cert).toBe("off");
   });
 
@@ -161,6 +161,11 @@ describe("Feedstock read view", () => {
 
 describe("Sample read view", () => {
   const sample = { id: "s1", sampling: "sampled", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC" } as unknown as SampleWithRelations;
+
+  it("the read sheet chip tooltip names the lab report", () => {
+    const evidence = sampleSheetSections(sample, "missing").find((s) => s.title === "Evidence & documents")!;
+    expect(evidence.certifyDescription).toBe("A lab report is required for certification. Not provided.");
+  });
 
   it.each(["neutral", "missing", "satisfied"] as const)("Evidence & documents carries CERT with the %s status", (status) => {
     const evidence = sampleSheetSections(sample, status).find((s) => s.title === "Evidence & documents")!;
