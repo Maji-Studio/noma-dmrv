@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getLinkedApplicationDelivery } from "@/data-access/linked-application-delivery";
+import { getLinkedApplicationDelivery } from "@/data-access/applications";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 

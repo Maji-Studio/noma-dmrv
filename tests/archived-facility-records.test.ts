@@ -1,8 +1,12 @@
+import { getLinkedOutputBinInventory, getOutputSubBins } from "@/data-access/output-sub-bins";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
+import { postProduct } from "./helpers/posted-output-stock-fixture";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
-import { applications, deliveries, creditBatches, creditBatchProductionRuns, productionProcesses, feedstocks, customers, customerLocations, facilities, orders, productionRuns } from "@/db/schema";
+import { applications, deliveries, creditBatches, creditBatchProductionRuns, productionProcesses, feedstocks, customers, customerLocations, facilities, orders, productionRuns, storageLocations } from "@/db/schema";
 import { archiveFacility } from "@/data-access/facilities";
 import { getProductionRunById } from "@/data-access/production-runs";
 import { getLinkedProductionRunById } from "@/data-access/production-runs";
@@ -13,8 +17,8 @@ import { cleanupOrderFixture, createOrderFixture, orderInput, type OrderFixture 
 import { createTestPool } from "./helpers/operation-fixture";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 
-import { getLinkedCreditBatchMembers } from "@/data-access/linked-credit-batch-members";
-import { getLinkedApplicationDelivery } from "@/data-access/linked-application-delivery";
+import { getLinkedCreditBatchMembers } from "@/data-access/credit-batch-production-run-options";
+import { getLinkedApplicationDelivery } from "@/data-access/applications";
 import { getCreditBatchProductionRunOptions } from "@/data-access/credit-batch-production-run-options";
 import { getApplicationDeliveryOptions } from "@/data-access/applications";
 
@@ -209,5 +213,57 @@ describe("archived facility linked members and application source", () => {
     const unscoped = { ...f.ctx, organizationId: "" };
     await expect(getLinkedCreditBatchMembers(unscoped, f.batch.id)).rejects.toThrow();
     await expect(getLinkedApplicationDelivery(unscoped, f.application.id)).rejects.toThrow();
+  });
+});
+
+
+describe("archived facility output inventory", () => {
+  it.each(["biochar", "product"] as const)("preserves %s stock and sub-bins through facility archive", async (lane) => {
+    const f = await fixture();
+    await db.update(storageLocations).set({ formulationId: f.pure.id }).where(eq(storageLocations.id, f.bin.id));
+    await postProduct(f);
+    const bin = lane === "biochar" ? f.source : f.bin;
+    const input = { storageLocationId: bin.id, facilityId: f.facility.id };
+    const before = await getLinkedOutputBinInventory(f.ctx, input);
+    expect(before.contents).toEqual(await getOutputSubBins(f.ctx, input));
+    expect(before.contents.subBins.length).toBeGreaterThan(0);
+    expect(before.balance.beforeDryKg).toBeGreaterThan(0);
+    expect(before.balance.beforeEstimatedWetKg).toBeGreaterThan(0);
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    expect(await getLinkedOutputBinInventory(f.ctx, input)).toEqual(before);
+    await expect(getOutputSubBins(f.ctx, input)).rejects.toThrow("Output bin was not found or is archived.");
+    await expect(previewOutputStock(f.ctx, { ...input, occurredAt: new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null })).rejects.toThrow("Output bin was not found or is archived.");
+  });
+
+  it.each(["biochar", "product"] as const)("hides independently archived %s bins before and after facility archive", async (lane) => {
+    const f = await fixture();
+    const bin = lane === "biochar" ? f.source : f.bin;
+    const input = { storageLocationId: bin.id, facilityId: f.facility.id };
+    await db.update(storageLocations).set({ archivedAt: INDEPENDENT_ARCHIVE_DATE }).where(eq(storageLocations.id, bin.id));
+    await expect(getLinkedOutputBinInventory(f.ctx, input)).rejects.toThrow("Output bin was not found or is archived.");
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    await expect(getLinkedOutputBinInventory(f.ctx, input)).rejects.toThrow("Output bin was not found or is archived.");
+  });
+
+  it("refuses foreign organizations, wrong facilities, missing bins and unscoped reads", async () => {
+    const f = await fixture();
+    const foreign = await fixture();
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    for (const bin of [f.source, f.bin]) {
+      const input = { storageLocationId: bin.id, facilityId: f.facility.id };
+      await expect(getLinkedOutputBinInventory(foreign.ctx, input)).rejects.toThrow();
+      await expect(getLinkedOutputBinInventory(f.ctx, { ...input, facilityId: f.otherFacility.id })).rejects.toThrow();
+      await expect(getLinkedOutputBinInventory(f.ctx, { ...input, storageLocationId: crypto.randomUUID() })).rejects.toThrow();
+      await expect(getLinkedOutputBinInventory({ ...f.ctx, organizationId: "" }, input)).rejects.toThrow();
+    }
+  });
+
+  it("preserves feedstock balance and history with the existing read", async () => {
+    const f = await fixture();
+    const [intake] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
+    const before = await getFeedstockBinStock(f.ctx, intake.storageLocationId!);
+    expect(before.entries.length).toBeGreaterThan(0);
+    await archiveFacility(f.ctx, f.facility.id, f.facility.version);
+    expect(await getFeedstockBinStock(f.ctx, intake.storageLocationId!)).toEqual(before);
   });
 });

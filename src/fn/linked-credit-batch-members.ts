@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getLinkedCreditBatchMembers } from "@/data-access/linked-credit-batch-members";
+import { getLinkedCreditBatchMembers } from "@/data-access/credit-batch-production-run-options";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 
