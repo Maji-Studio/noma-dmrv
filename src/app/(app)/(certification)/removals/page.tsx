@@ -5,6 +5,7 @@
  * grouping. Protected by the requireAuth guard in the (app) layout.
  */
 import { RemovalsList } from "@/components/certification/removals-list";
+import { getOrgContext } from "@/lib/auth/server";
 import { CREATE_INTENT_PARAM, isCreateIntentValue } from "@/lib/create-intent";
 
 export default async function CertificationRemovalsPage({
@@ -13,5 +14,7 @@ export default async function CertificationRemovalsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
-  return <RemovalsList initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])} />;
+  const ctx = await getOrgContext();
+  const canManage = !!ctx && (ctx.isPlatformAdmin || ctx.orgRole === "admin");
+  return <RemovalsList initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])} canManage={canManage} />;
 }

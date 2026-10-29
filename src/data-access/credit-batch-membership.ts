@@ -65,6 +65,7 @@ import {
   productionRuns,
   productionRunFeedstocks,
 } from "@/db/schema/production";
+import { creditBatchRunFitConditions, filterSingleFeedstockTypeRuns } from "./credit-batch-run-fit";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
 import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
@@ -612,67 +613,22 @@ export async function findMatchingUnassignedProductionRunIds(
     params.endDate,
     params.certifier,
   );
+  const fit = creditBatchRunFitConditions(ctx.organizationId, {
+    facilityId: params.facilityId, startDate: startStr, endDate: endStr,
+  });
   const rows = await tx
     .selectDistinct({
       productionRunId: productionRuns.id,
       feedstockTypeId: feedstocks.feedstockTypeId,
     })
     .from(productionRuns)
-    .innerJoin(
-      productionRunFeedstocks,
-      and(
-        eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-        eq(
-          productionRunFeedstocks.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .innerJoin(
-      feedstocks,
-      and(
-        eq(feedstocks.id, productionRunFeedstocks.feedstockId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      creditBatchProductionRuns,
-      and(
-        eq(
-          creditBatchProductionRuns.productionRunId,
-          productionRuns.id,
-        ),
-        eq(
-          creditBatchProductionRuns.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .where(
-      and(
-        eq(productionRuns.organizationId, ctx.organizationId),
-        eq(productionRuns.facilityId, params.facilityId),
-        eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-        gte(productionRunMembershipDateExpr(ctx.organizationId), startStr),
-        lte(productionRunMembershipDateExpr(ctx.organizationId), endStr),
-        isNull(productionRuns.archivedAt),
-        isNull(creditBatchProductionRuns.creditBatchId),
-      ),
-    );
+    .innerJoin(productionRunFeedstocks, fit.feedstockLink)
+    .innerJoin(feedstocks, fit.feedstock)
+    .leftJoin(creditBatchProductionRuns, fit.membership)
+    .where(and(fit.productionRun, fit.unassigned));
 
-  const typesByRun = new Map<string, Set<string>>();
-  for (const row of rows) {
-    const types = typesByRun.get(row.productionRunId) ?? new Set<string>();
-    types.add(row.feedstockTypeId);
-    typesByRun.set(row.productionRunId, types);
-  }
-
-  return Array.from(typesByRun.entries())
-    .filter(
-      ([, typeIds]) =>
-        typeIds.size === 1 && typeIds.has(params.feedstockTypeId),
-    )
-    .map(([productionRunId]) => productionRunId)
+  return filterSingleFeedstockTypeRuns(rows, () => params.feedstockTypeId)
+    .map(row => row.productionRunId)
     .sort();
 }
 

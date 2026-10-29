@@ -58,9 +58,12 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
 import { correctionStatus } from "@/lib/removal-correction-copy";
+import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
+  /** Admin: may add a missed run to a credit batch. */
+  canManage?: boolean;
   summary: RemovalListRow;
   isProduction: boolean;
   facilityId: string;
@@ -201,6 +204,7 @@ export function RemovalDetailSheet({
   open,
   onClose,
   lock,
+  canManage = false,
 }: RemovalDetailSheetProps) {
   const { timeZone } = useFacilityClock(facilityId);
   const { data: certifierSummary } = useFacilityCertifierSummary(
@@ -284,6 +288,7 @@ export function RemovalDetailSheet({
             ) : (
               <RemovalCorrectionNotice lock={lock} />
             )}
+            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage} />
             <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
