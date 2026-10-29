@@ -44,7 +44,7 @@ A plan-file target has no issue: skip board moves and `Closes #`.
 
 Non-UI: run the **codex-implementation** skill yourself with the worktree as `-C`; its prompt carries the brief's goal and acceptance criteria. UI: spawn a Claude subagent (Sonnet for a picked design, Opus for variants) with this prompt:
 
-> Implement the change in `<brief path>` in the worktree `<path>` (branch `<branch>`). Load the `noma-design` skill and follow `.claude/CLAUDE.md`. Commit on this branch with conventional commits whose body says why. Kill only the PID on your own port (`lsof -nP -iTCP:<port> -sTCP:LISTEN -t`); Confirm `git branch --show-current` is `<branch>` before every commit. set work aside with a WIP commit, never `git stash`. Return under ~200 words: files changed, decisions and deviations, what you ran and its result. No diffs or file contents.
+> Implement the change in `<brief path>` in the worktree `<path>` (branch `<branch>`). Load the `noma-design` skill and follow `.claude/CLAUDE.md`. Commit on this branch with conventional commits whose body says why. Confirm `git branch --show-current` is `<branch>` before every commit. Kill only the PID on your own port (`lsof -nP -iTCP:<port> -sTCP:LISTEN -t`); set work aside with a WIP commit, never `git stash`. Return under ~200 words: files changed, decisions and deviations, what you ran and its result. No diffs or file contents.
 
 The conductor reads the diff before step 3.
 
