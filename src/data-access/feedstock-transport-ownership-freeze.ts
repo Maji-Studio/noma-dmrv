@@ -3,10 +3,18 @@ import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, product
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
-import { and, eq, inArray, or } from "drizzle-orm";
-import { getLineageUnderLockedArtifacts, getSavedCertifiedLineage, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { getLineageUnderLockedArtifacts, getFeedstockLineageBatchTargets, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
+
+const TRANSPORT_OWNER_LOCK_SCOPE = "feedstock-transport-owner";
+const ADVISORY_LOCK_HASH_SEED = 0;
+
+export type TransportOwnershipChange = {
+  mutation: "create" | "update" | "delete" | "archive" | "restore";
+  subject: "production run" | "credit batch" | "facility" | "feedstock";
+};
 
 /** Include existing provenance and every intake a replacement bin draw can select. */
 export async function getTransportFreezeFeedstockIds(
@@ -26,7 +34,7 @@ export async function getTransportFreezeFeedstockIds(
     .leftJoin(creditBatchProductionRuns, and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
     .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), or(...conditions))) : [];
   const intakes = candidates.binIds?.length ? await tx.select({ id: feedstocks.id }).from(feedstocks)
-    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, [...candidates.binIds]))) : [];
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, [...candidates.binIds]), isNull(feedstocks.archivedAt))) : [];
   return [...new Set([...draws, ...intakes].map(row => row.id))].sort();
 }
 
@@ -35,7 +43,7 @@ export type TransportOwnershipFreezeScope = typeof ENCLOSING_FREEZE;
 
 /**
  * Compare owners at the outermost write boundary. Lock the full lineage of
- * every move between defined owners before reading Sent facts.
+ * every owner change (including to or from no owner) before reading Sent facts.
  * Try-lock because the write may already hold rows that submission needs.
  * Full feedstock lineage intentionally includes Removals that counted zero.
  */
@@ -43,32 +51,35 @@ export async function prepareFeedstockTransportOwnershipFreeze(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockIds: readonly string[],
-  change: { mutation: "create" | "update" | "delete" | "archive" | "restore"; subject: "production run" | "credit batch" | "facility" },
+  change: TransportOwnershipChange,
   enclosingScope?: TransportOwnershipFreezeScope,
 ) {
   requireOrgScope(ctx);
   if (enclosingScope) return async <T>(write: (scope: TransportOwnershipFreezeScope) => Promise<T>): Promise<T> => write(enclosingScope);
   const ids = [...new Set(feedstockIds)].sort();
-  const before = await getFeedstockTransportOwners(ctx, ids, tx);
-  // Preserve batch targets before a standalone draw replacement can sever the
-  // feedstock link. Batch membership/deletion have their own pre-write guards.
-  const previousTargets = new Map<string, { entityType: "creditBatch"; entityId: string }[]>();
-  for (const entityId of ids) {
-    const lineage = await getSavedCertifiedLineage(ctx, tx, { entityType: "feedstock", entityId });
-    previousTargets.set(entityId, [...new Set(lineage.map(row => row.creditBatchId))]
-      .map(entityId => ({ entityType: "creditBatch", entityId })));
+  // Serialize ownership writers before their snapshot. Joined scopes reuse the
+  // outer locks; certification artifact locks remain post-write and non-blocking.
+  for (const id of ids) {
+    const key = `${TRANSPORT_OWNER_LOCK_SCOPE}:${ctx.organizationId}:${id}`;
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, ${ADVISORY_LOCK_HASH_SEED}))`);
   }
+  const before = await getFeedstockTransportOwners(ctx, ids, tx, { ignoreArchived: true });
+  // Preserve targets before draw replacement can sever the feedstock link.
+  const previousTargets = await getFeedstockLineageBatchTargets(ctx, tx, ids);
   return async function freeze<T>(write: (scope: TransportOwnershipFreezeScope) => Promise<T>): Promise<T> {
     const result = await write(ENCLOSING_FREEZE);
-    const after = await getFeedstockTransportOwners(ctx, ids, tx);
-    const changed = ids.filter(id => before.get(id) !== undefined && after.get(id) !== undefined && before.get(id) !== after.get(id));
+    const after = await getFeedstockTransportOwners(ctx, ids, tx, { ignoreArchived: true });
+    const changed = ids.filter(id => before.get(id) !== after.get(id));
     if (!changed.length) return result;
 
     const targets = changed.map(entityId => ({ entityType: "feedstock" as const, entityId }));
     const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx,
       [...targets, ...changed.flatMap(id => previousTargets.get(id) ?? [])]);
     if (artifacts === null) {
-      throw new DomainError("conflict", "Feedstock transport ownership is being updated. Refresh and retry.", { retryable: true });
+      const [feedstock] = await tx.select({ code: feedstocks.code }).from(feedstocks)
+        .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, changed[0])));
+      const subject = feedstock?.code ? `feedstock ${feedstock.code}` : "this feedstock";
+      throw new DomainError("conflict", `Certification records for ${subject} are being changed. Save again in a moment.`, { retryable: true });
     }
     for (const target of targets) {
       const lineage = await getLineageUnderLockedArtifacts(ctx, tx, artifacts, target);

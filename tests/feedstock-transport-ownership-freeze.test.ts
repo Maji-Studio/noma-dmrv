@@ -16,6 +16,7 @@ import { prepareFeedstockTransportOwnershipFreeze } from "@/data-access/feedstoc
 import { reallocateRunsForBins } from "@/data-access/feedstock-run-allocations";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { lockBinStocks } from "@/data-access/lock-bin-stocks";
+import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 import { withLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputOrderFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -24,6 +25,7 @@ const EARLY = new Date("2026-06-12T08:00:00Z");
 const EARLY_END = new Date("2026-06-12T12:00:00Z");
 const LATE = new Date("2026-06-14T08:00:00Z");
 const LATE_END = new Date("2026-06-14T12:00:00Z");
+const RACE_LATE = new Date("2026-06-15T08:00:00Z");
 const ARCHIVE_STAMP = new Date("2026-06-18T00:00:00Z");
 const ctx = makeTestOrgContext();
 const MODES = ["sent-moves", "unsent-moves", "sent-stays"] as const;
@@ -227,6 +229,7 @@ it.each(MODES)("single-facility archive and restore retain transport ownership: 
     expect(await owner(a)).toBe(expectedOwner);
     await archiveFacility(ctx, a.facilityId, await facilityVersion(a));
     expect(await owner(a)).toBeUndefined();
+    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { ignoreArchived: true })).get(a.feedstockId)).toBe(expectedOwner);
     await restoreFacility(ctx, a.facilityId, await facilityVersion(a));
     expect(await owner(a)).toBe(expectedOwner);
   });
@@ -243,7 +246,8 @@ it.each(MODES)("backdating an existing run before the sent counting run: %s", as
   }, true);
 });
 
-it.each(MODES)("new backdated completed run and automatic attachment: %s", async mode => {
+it.each(MODES.flatMap(mode => [false, true].map(counting => ({ mode, counting }))))(
+  "new backdated completed run and automatic attachment: $mode, counting=$counting", async ({ mode, counting }) => {
   await withPair(mode, async (a, b) => {
     await removeMembership(a);
     await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "E2E replacement", endTime: null })
@@ -277,7 +281,7 @@ it.each(MODES)("new backdated completed run and automatic attachment: %s", async
         await db.delete(productionRuns).where(eq(productionRuns.id, row.id));
       }
     }
-  });
+  }, counting);
 });
 
 it.each(MODES)("new credit batch membership: %s", async mode => {
@@ -332,12 +336,12 @@ it.each(ELIGIBILITY_WRITES.flatMap(path => MODES.map(mode => ({ path, mode }))))
         ? tx.update(creditBatches).set({ archivedAt: ARCHIVE_STAMP }).where(eq(creditBatches.id, a.batchId)).then(() => undefined)
         : tx.update(productionRuns).set(path === "run-archive" ? { archivedAt: ARCHIVE_STAMP } : { status: "running", endTime: null })
           .where(eq(productionRuns.id, a.productionRunId)).then(() => undefined);
-      await expectFreeze(mode, db.transaction(async tx => {
+      await expectFreeze(path === "run-status" ? mode : "sent-stays", db.transaction(async tx => {
         const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId], {
           subject: path === "batch-archive" ? "credit batch" : "production run", mutation: path === "run-status" ? "update" : "archive",
         });
         return freeze(() => write(tx));
-      }), a, mode === "sent-moves" ? a.productionRunId : b.productionRunId);
+      }), a, path === "run-status" && mode === "sent-moves" ? a.productionRunId : b.productionRunId);
     });
   },
 );
@@ -486,6 +490,59 @@ it.each([false, true])("serializes with a draft Removal artifact only when owner
     } finally {
       release();
       await holder;
+    }
+  });
+});
+
+it.each(["delete", "empty"] as const)("refuses %s of an archived owning batch before facility restore", async mutation => {
+  await withPair("sent-moves", async a => {
+    await archiveFacility(ctx, a.facilityId, await facilityVersion(a));
+    const write = mutation === "delete"
+      ? deleteCreditBatch(ctx, a.batchId, await batchVersion(a))
+      : updateCreditBatch(ctx, a.batchId, { expectedVersion: await batchVersion(a),
+        productionRunIds: [], startDate: new Date("2026-06-15T00:00:00Z") });
+    await expect(write).rejects.toMatchObject({ code: "certification_locked",
+      message: expect.stringContaining("transport legs of feedstock") });
+    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { ignoreArchived: true })).get(a.feedstockId)).toBe(a.productionRunId);
+    await restoreFacility(ctx, a.facilityId, await facilityVersion(a));
+    expect(await owner(a)).toBe(a.productionRunId);
+  });
+});
+
+it("serializes a run-date edit with membership creation for a shared Sent feedstock", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await makeNonOwner(a);
+    await removeMembership(a);
+    await db.update(creditBatches).set({ certifier: null }).where(eq(creditBatches.id, a.batchId));
+    expect(await owner(a)).toBe(b.productionRunId);
+    const barrier = await openOperationBarrier(db.$client);
+    let membership: Promise<unknown> | undefined;
+    try {
+      const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, barrier.tx, [a.feedstockId], {
+        mutation: "update", subject: "production run",
+      });
+      // A is unbatched. Moving B after A still leaves B as owner. Attaching
+      // A while B retains its old date also leaves B as owner. Together they
+      // move ownership to A. The writers change different run rows, so a row
+      // lock cannot accidentally serialize this ownership comparison.
+      await freeze(async () => {
+        await barrier.tx.update(productionRuns).set({ startTime: RACE_LATE })
+          .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, b.productionRunId)));
+      });
+      membership = db.transaction(tx => attachProductionRunToMatchingCreditBatch(ctx, tx, a.productionRunId));
+      void membership.catch(() => undefined);
+      await waitForBlockedOperations(db.$client, barrier.pid, 1);
+      await barrier.commit();
+      await expect(membership).rejects.toMatchObject({ code: "certification_locked" });
+      expect(await owner(a)).toBe(b.productionRunId);
+      const [run] = await db.select().from(productionRuns).where(eq(productionRuns.id, b.productionRunId));
+      expect(run.startTime).toEqual(RACE_LATE);
+      const memberships = await db.select().from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.productionRunId, a.productionRunId));
+      expect(memberships).toEqual([]);
+    } finally {
+      await barrier.rollback();
+      await membership?.catch(() => undefined);
     }
   });
 });

@@ -22,9 +22,14 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > Once any linked Removal holds the feedstock record's full lineage at Sent,
 > ownership is frozen (#1490), including when that Removal sent its transport
 > as zero because another batch owned it. Run dates, status, draws, batch
-> membership, deletion and facility archive/restore refuse if they change the
-> owner from one defined run to another. Moves to or from no owner are allowed.
-> Writers capture owners and lineage targets before the write, compare owners
+> membership, deletion, feedstock intake edits and facility timezone edits refuse
+> any owner change, including to or from no owner. Freeze comparisons count
+> archived runs and batches, so facility archive/restore does not move an owner,
+> while deleting or emptying an archived owning batch does.
+> Standalone scopes take transaction-scoped blocking advisory locks for candidate
+> feedstocks in sorted ID order, keyed by
+> `feedstock-transport-owner:{organizationId}:{feedstockId}`. Joined scopes reuse
+> the outer scope. Writers capture owners and lineage targets before the write, compare owners
 > afterwards in the same transaction, then try-lock all full-lineage artifacts
 > of changed records and read Sent facts under those locks. They roll back with
 > `certification_locked` when a Sent record moves. Edits that keep the owner,
