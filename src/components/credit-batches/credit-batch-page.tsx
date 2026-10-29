@@ -39,6 +39,10 @@ import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { certificationRemovalsHref, traceabilityBatchHref } from "@/lib/certification/links";
 import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import {
   CREDIT_BATCH_PAGE_TAB_LABELS,
@@ -56,7 +60,7 @@ import {
 } from "@/lib/credit-batches/open-items";
 import { ENTITY_DEEP_LINK_FOCUS_PARAM } from "@/lib/entity-deep-link";
 import { formatDateRange } from "@/lib/format-utils";
-import { isRecordEditable } from "@/lib/record-lock-view";
+import { isRecordEditable, RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
@@ -199,7 +203,11 @@ export function CreditBatchPage({
   const todos = useCreditBatchTodos(batch
     ? { facilityId: batch.facilityId, creditBatchId: batch.id }
     : null);
-  if (!batch || (contextFacilityId && !isResolving && contextFacilityId !== batch.facilityId)) {
+  const linkedRecord = useLinkedRecordFacility(batch, batchQuery.isLoading);
+  // A link into an archived facility (or one that could not be checked) opens
+  // the batch read only instead of "not found".
+  const readOnly = linkedRecordReadOnly(linkedRecord, batch, "credit batch");
+  if (!batch || (contextFacilityId && !isResolving && contextFacilityId !== batch.facilityId && !readOnly)) {
     if (batchQuery.isPending) return null;
     return (
       <EntityNotFound
@@ -218,7 +226,7 @@ export function CreditBatchPage({
   const blocking = current ? openItems.blocking : undefined;
   const editable = isRecordEditable(lock);
   const membershipLocked = isCreditBatchMembershipLocked(lock);
-  const primary = creditBatchPrimaryAction({ blocking, pageModel: pageModel.data, lock });
+  const primary = readOnly ? null : creditBatchPrimaryAction({ blocking, pageModel: pageModel.data, lock });
 
   const startEdit = () => {
     setUpdateError(null);
@@ -294,12 +302,13 @@ export function CreditBatchPage({
     retryingTodos: todos.isFetching,
     lock,
     lockStatus,
-    canManage,
+    canManage: canManage && !readOnly,
+    readOnly,
     tab,
     focus,
     go,
     openItem,
-    startEdit: editable ? startEdit : null,
+    startEdit: editable && !readOnly ? startEdit : null,
   };
 
   const conflictHref = deleteConflict?.conflict.entity === "sample"
@@ -309,6 +318,20 @@ export function CreditBatchPage({
   return (
     <CreditBatchPageProvider value={value}>
       <div className="container-max page-shell min-w-0">
+        {readOnly && (
+          <Notice
+            tone={readOnly.tone}
+            boxed
+            data-read-only-notice={readOnly.tone}
+            action={readOnly.retry ? (
+              <Button variant="default" size="small" className={CENTRED_HIT_AREA} busy={readOnly.retry.running} onClick={readOnly.retry.run}>
+                {RECORD_LOCK_RETRY_LABEL}
+              </Button>
+            ) : undefined}
+          >
+            {readOnly.message}
+          </Notice>
+        )}
         <CreditBatchPageHeader primary={primary} onPrimary={onPrimary} onDelete={() => setDeleting({ id: batch.id, version: batch.version })} />
         <CreditBatchKeyNumbers />
         <div className="flex min-w-0 flex-col gap-24">

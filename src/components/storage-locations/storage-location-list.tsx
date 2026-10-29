@@ -11,6 +11,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { RECORD_LINKS } from "@/lib/record-links";
 import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
@@ -64,10 +65,14 @@ export function StorageLocationList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const linkedBin = useEntityEditRecord("storageLocation", linkedBinId ?? "");
-  const linkedFacilityReady = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading).ready;
+  const linkedRecord = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
   const displaySideSheet = localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
     ? { mode: "view" as const, entity: linkedBin.data } : null);
+  // A link into an archived facility opens the bin read only, over the
+  // "Select a facility" empty state too.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "storage bin");
   const changeSideSheet = (state: StorageBinSheetState | null) => {
     setSideSheet(state);
     if (!state) void setLinkedBinId(null);
@@ -205,6 +210,9 @@ export function StorageLocationList() {
       <div className="container-max page-shell">
         <PageHeader area="setup" title="Storage bins" />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its storage bins." />
+        {linkedRecord.readOnly && (
+          <StorageBinSheet readOnly={sheetReadOnly} state={displaySideSheet} onStateChange={changeSideSheet} onReconcile={openReconcile} />
+        )}
       </div>
     );
   }
@@ -287,6 +295,7 @@ export function StorageLocationList() {
       />
 
       <StorageBinSheet
+        readOnly={sheetReadOnly}
         state={displaySideSheet}
         onStateChange={changeSideSheet}
         onReconcile={openReconcile}

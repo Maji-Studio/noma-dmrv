@@ -6,6 +6,7 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import type { CreditBatchOpenItemGroups, CreditBatchPageTab } from "@/lib/credit-batches/batch-page";
 import type { CreditBatchOpenItem } from "@/lib/credit-batches/open-items";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockStatus, RecordLockView } from "@/lib/record-lock-view";
 
 export interface CreditBatchPageContextValue {
@@ -27,6 +28,8 @@ export interface CreditBatchPageContextValue {
   lock: RecordLockView | undefined;
   lockStatus: RecordLockStatus;
   canManage: boolean;
+  /** Set when the batch opens read only (its facility is archived or unchecked). */
+  readOnly?: SheetReadOnly;
   tab: CreditBatchPageTab;
   /** The row the URL asks to highlight (`?focus=`). */
   focus: string | null;

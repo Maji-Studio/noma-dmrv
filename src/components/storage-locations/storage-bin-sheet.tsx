@@ -27,6 +27,7 @@ import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
 import { recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock } from "@/hooks/use-record-locks";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { isRecordEditable } from "@/lib/record-lock-view";
 
 export type StorageBinSheetState =
@@ -35,6 +36,8 @@ export type StorageBinSheetState =
   | { mode: "edit"; entity: StorageLocationWithFacility };
 
 interface StorageBinSheetProps {
+  /** A link into an archived facility: view only, no edit or stock adjustment. */
+  readOnly?: SheetReadOnly;
   state: StorageBinSheetState | null;
   onStateChange: (state: StorageBinSheetState | null) => void;
   onReconcile: (
@@ -43,6 +46,7 @@ interface StorageBinSheetProps {
 }
 
 export function StorageBinSheet({
+  readOnly,
   state,
   onStateChange,
   onReconcile,
@@ -120,10 +124,11 @@ export function StorageBinSheet({
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
       {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" })}
       editLabel="Edit storage bin"
+      readOnly={readOnly}
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={
         state?.mode === "view" && state.entity
-          ? storageLocationSheetSections(state.entity, onReconcile)
+          ? storageLocationSheetSections(state.entity, readOnly ? undefined : onReconcile)
           : undefined
       }
     >

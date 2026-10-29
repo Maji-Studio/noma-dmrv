@@ -16,6 +16,8 @@ import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
@@ -293,7 +295,7 @@ function EntitySideSheet({
                   boxed
                   data-read-only-notice={readOnlyState.tone}
                   action={readOnlyState.retry ? (
-                    <Button variant="default" size="small" busy={readOnlyState.retry.running} onClick={readOnlyState.retry.run}>
+                    <Button variant="default" size="small" className={cn(CENTRED_HIT_AREA)} busy={readOnlyState.retry.running} onClick={readOnlyState.retry.run}>
                       {RECORD_LOCK_RETRY_LABEL}
                     </Button>
                   ) : undefined}

@@ -110,8 +110,10 @@ function ProgressSteps() {
 }
 
 function HeaderButtons({ primary, onPrimary, onDelete }: CreditBatchHeaderActions) {
-  const { startEdit, pageModel, lock } = useCreditBatchPage();
+  const { startEdit, pageModel, lock, readOnly } = useCreditBatchPage();
   const sent = isCreditBatchSent({ pageModel, lock });
+  // Read only: no primary step, Edit or overflow (Delete).
+  if (readOnly) return null;
   return (
     <>
       {primary && (

@@ -10,7 +10,7 @@ import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -488,7 +488,7 @@ export function BiocharProductList() {
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit product"
       readOnly={sheetReadOnly}
-      sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
+      sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilitiesWithLinked(facilities, linkedRecord), viewedEntity.facilityId)) : undefined}
     >
       <BiocharProductForm
         key={editingEntity?.id ?? "create"}

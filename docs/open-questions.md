@@ -95,17 +95,15 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 
 ## Records in archived facilities (#1502)
 
-Links into an archived facility open the record read only through
-`src/hooks/use-linked-record-facility.ts:useLinkedRecordFacility` and
-`src/lib/linked-record-read-only.ts:linkedRecordReadOnly` (#1499). Still open:
+Production runs, credit batches (sheet and routed page) and storage bins now open
+read only like the other kinds (`src/lib/linked-record-read-only.ts`). Still open:
 
-- Wire the production-run sheet to `useLinkedProductionRun`; its separate
-  org-scoped read includes facility-cascade archives while keeping independently
-  archived runs hidden. The normal by-id read remains unchanged.
-- `src/components/credit-batches/credit-batch-list.tsx:CreditBatchList` (preview
-  sheet and routed page) and
-  `src/components/storage-locations/storage-location-list.tsx:StorageLocationList`
-  (its own bin sheet) only wait for the facility; they do not open read only.
+- The read-only line names the archived facility without a link: the Facilities
+  page has no archived-view URL; `?facility=` is also the working-facility param,
+  which the provider rewrites for an archived facility.
+- The read-only gating is still written out in each list page; a shared helper
+  would not remove the copies cleanly because each page builds its sheet state
+  differently.
 
 ## Account suspension across organizations (#1391 section 4) - **deferred**
 

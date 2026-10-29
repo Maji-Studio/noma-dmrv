@@ -343,6 +343,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     contextFacilityId ?? undefined,
     { enabled: !!contextFacilityId },
   );
+  // An archived facility's delivery is not among the working facility's options.
+  const archivedLink = linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly : null;
+  const { data: archivedDeliveries } = useApplicationDeliveryOptions(
+    archivedLink?.facilityId,
+    { enabled: !!archivedLink },
+  );
   const { data: creditBatches } = useCreditBatches(
     contextFacilityId ?? undefined,
   );
@@ -579,7 +585,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         ? formatCalendarDate(sideSheetEntity.applicationDate)
         : undefined;
   const sideSheetDelivery = sideSheetEntity
-    ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
+    ? [...deliveryOptions, ...(archivedDeliveries ?? [])].find((delivery) => delivery.id === sideSheetEntity.deliveryId)
     : undefined;
 
   // A link into an archived facility opens its record read only, over the

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { linkedRecordReadOnly } from "./linked-record-read-only";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "./linked-record-read-only";
 
-const ARCHIVED = { ready: true, readOnly: { reason: "archived" as const, facilityId: "facility-x", facilityName: "Mafinga" } };
+const ARCHIVED = { ready: true, readOnly: { reason: "archived" as const, facilityId: "facility-x", facilityName: "Mafinga", timezone: "Africa/Dar_es_Salaam" } };
 const retry = vi.fn();
 const UNCHECKED = { ready: true, readOnly: { reason: "unchecked" as const, facilityId: "facility-x", retry, retrying: false } };
 
@@ -27,5 +27,16 @@ describe("linkedRecordReadOnly", () => {
 
   it("gives nothing while the linked facility is workable", () => {
     expect(linkedRecordReadOnly({ ready: true, readOnly: null }, { facilityId: "facility-x" }, "order")).toBeUndefined();
+  });
+});
+
+describe("facilitiesWithLinked", () => {
+  const active = [{ id: "facility-a", timezone: "Europe/Zurich" }];
+  it("adds the archived facility with its own timezone", () => {
+    expect(facilitiesWithLinked(active, ARCHIVED)).toEqual([...active, { id: "facility-x", timezone: "Africa/Dar_es_Salaam" }]);
+  });
+  it("leaves the list alone otherwise", () => {
+    expect(facilitiesWithLinked(active, UNCHECKED)).toBe(active);
+    expect(facilitiesWithLinked(active, { ready: true, readOnly: null })).toBe(active);
   });
 });
