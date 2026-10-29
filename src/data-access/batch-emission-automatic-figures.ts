@@ -10,9 +10,10 @@ import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import { getFeedstockTransportOwnerBatches } from "@/data-access/feedstock-transport-ownership";
 import { SafeError } from "@/lib/errors";
 
-type AutomaticFacts = Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">;
+type AutomaticFacts = Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn">;
 type AutomaticOptions = { requireDeliveryMass?: boolean };
 const unique = (ids: string[]) => [...new Set(ids)];
 
@@ -47,6 +48,10 @@ export async function loadBatchesEmissionAutomaticFacts(
       deliveryId: delivery.id, loadMassKg: Number(delivery.exactWetMassKg!),
     })), executor),
   ]);
+  const linkedFeedstockIds = unique(batches.flatMap(({ lineage }) =>
+    lineage.runs.some((run) => run.feedstocks.some((f) => f.ownsTransport)) ? [] : lineage.runs.flatMap((run) => run.feedstocks.map((f) => f.id)),
+  ));
+  const ownerBatches = await getFeedstockTransportOwnerBatches(ctx, linkedFeedstockIds, executor);
   const exact = await getEmissionAutomaticMasses(ctx, runIds, feedstock.map((leg) => leg.id), executor);
   return Object.fromEntries(batches.map(({ id, lineage, deliveries, missing }) => {
     const memberRuns = new Set(lineage.runs.map((run) => run.id));
@@ -62,6 +67,11 @@ export async function loadBatchesEmissionAutomaticFacts(
     // A delivery can contain several batches. Retain each batch's exact load share.
     const masses = { runs: exact.runs, legs: { ...exact.legs } };
     for (const delivery of deliveries) masses.legs[delivery.id] = delivery.exactWetMassKg;
+    const countedOn = legs.feedstockTransportOwnedElsewhere
+      ? [...new Map(lineage.runs.flatMap((run) => run.feedstocks.flatMap((f) => ownerBatches.get(f.id) ?? []))
+        .filter((owner) => owner.creditBatchId !== id).map((owner) => [owner.creditBatchId, owner] as const)).values()]
+        .sort((a, b) => a.code.localeCompare(b.code))
+      : [];
     const automaticFigures = batchAutomaticFigures(batchRuns, legs, masses);
     // Unknown load mass makes the whole delivery figure unknown, never a partial sum.
     if (missing) automaticFigures["delivery-transport"] = null;
@@ -69,6 +79,7 @@ export async function loadBatchesEmissionAutomaticFacts(
     const applicationCount = new Set(lineage.applications?.map((application) => application.id) ?? []).size;
     return [id, {
       automaticFigures,
+      ...(countedOn.length ? { feedstockTransportCountedOn: countedOn } : {}),
       automaticRecordCounts: {
         "run-electricity": count, "run-genset-diesel": count, "run-startup-diesel": count,
         "feedstock-dry-mass": count, "biochar-dry-mass": memberDeliveries.size, "safety-margin": applicationCount,

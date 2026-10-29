@@ -60,6 +60,19 @@ afterEach(() => {
 });
 
 describe("EmissionLineList", () => {
+  it("names and links the batch that counts the transport legs", () => {
+    renderList([
+      makeLine({
+        state: "filled",
+        records: { source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" }, countedOn: [{ creditBatchId: "cb-1", code: "CB-26-001" }] },
+      }),
+    ]);
+    expect(screen.getByText(/Counted on/)).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Open credit batch CB-26-001" });
+    expect(link.getAttribute("href")).toBe(`/credit-batches/cb-1?facility=${SCOPE.facilityId}&tab=emissions`);
+    expect(screen.queryByText(/0 legs/)).toBeNull();
+  });
+
   it("shows records and manual entries as chips, with the records chip linking upstream", () => {
     renderList([
       makeLine({

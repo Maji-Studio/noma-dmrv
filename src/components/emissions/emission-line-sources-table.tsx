@@ -61,8 +61,8 @@ export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: Sour
             <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
-          <span role="cell" className={cn(AMOUNT_CELL, !hasRecordsFigure(records) && "text-[var(--color-text-tertiary)]")}>
-            {hasRecordsFigure(records) ? formatFigure(records.figure) : MISSING_VALUE.notRecorded}
+          <span role="cell" className={cn(AMOUNT_CELL, !hasRecordsFigure(records) && !records.countedOn?.length && "text-[var(--color-text-tertiary)]")}>
+            {hasRecordsFigure(records) ? formatFigure(records.figure) : records.countedOn?.length && records.figure ? formatFigure(records.figure) : MISSING_VALUE.notRecorded}
           </span>
         </div>
       )}

@@ -1,11 +1,11 @@
 import { beforeAll, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { certificationSubmissions, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns, transportLegs } from "@/db/schema";
+import { certificationSubmissions, creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstocks, productionRuns, transportLegs } from "@/db/schema";
 import { createTransportLeg, deleteTransportLeg, updateTransportLeg } from "@/data-access/transport-legs";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { getRecordCertificationLock } from "@/data-access/record-certification-lock";
-import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
+import { getFeedstockTransportOwnerBatches, getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { getRecordLocks } from "@/data-access/certification-lineage-guards";
 import { getTransportDistanceDrift } from "@/data-access/transport-distance-drift";
 import { SUBMISSION_EXTERNAL_MUTATIONS, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
@@ -149,6 +149,25 @@ it.each([["counted", "sent"], ["legacy", "sent"], ["counted", "reserved"]] as co
         expect((await getRecordLocks(ctx, db, [{ entityType: "feedstock", entityId: earlier.feedstockId, transportOnly: true }], { sentOnly: true }))[0].level).toBe("sent");
         expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id, scope: "transport" })).toBe(true);
       }
+    }, "none");
+  }, "none");
+});
+
+it("names the credit batch that counts a feedstock record's transport, scoped to the organization", async () => {
+  const ctx = makeTestOrgContext();
+  await withLineageFixture(async earlier => {
+    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+      .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
+    await withLineageFixture(async later => {
+      await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+        productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
+      await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-13T08:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
+      const owners = await getFeedstockTransportOwnerBatches(ctx, [earlier.feedstockId, later.feedstockId]);
+      const [batch] = await db.select({ code: creditBatches.code }).from(creditBatches)
+        .where(and(eq(creditBatches.organizationId, TEST_ORG_ID), eq(creditBatches.id, earlier.batchId)));
+      expect(owners.get(earlier.feedstockId)).toEqual([{ creditBatchId: earlier.batchId, code: batch.code }]);
+      expect(owners.get(later.feedstockId)).toEqual([{ creditBatchId: later.batchId, code: expect.any(String) }]);
     }, "none");
   }, "none");
 });
