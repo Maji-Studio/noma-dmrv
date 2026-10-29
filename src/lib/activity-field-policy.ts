@@ -318,6 +318,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     id: "ignore",
     organizationId: "ignore",
     code: "value",
+    name: "value",
     facilityId: { link: "facility" },
     feedstockTypeId: { link: "feedstock_type" },
     productionProcessId: { link: "production_process" },
