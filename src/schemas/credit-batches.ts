@@ -22,6 +22,17 @@ export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
+/** Longest operator-chosen credit batch name. */
+export const CREDIT_BATCH_NAME_MAX_LENGTH = 100;
+
+/** Optional free-text name: trimmed, and blank saves as null. */
+const creditBatchNameSchema = z
+  .string()
+  .trim()
+  .max(CREDIT_BATCH_NAME_MAX_LENGTH, `Name must be at most ${CREDIT_BATCH_NAME_MAX_LENGTH} characters`)
+  .transform((value) => (value === "" ? null : value))
+  .nullish();
+
 export type CertifierProvider = (typeof certifierProvider.enumValues)[number];
 
 /**
@@ -46,13 +57,14 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 /**
  * Schema for credit batch form (client-side validation)
  * Form sections:
- * 1. Overview — code, facilityId, startDate, endDate, status
+ * 1. Overview — name, facilityId, startDate, endDate, status
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Site management — siteManagementNotes
  */
 export const creditBatchFormSchemaForCertifier = (certifier: CertifierProvider | null) => z
   .object({
     // === Section 1: Overview ===
+    name: creditBatchNameSchema,
     facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
     // Declared up front (ADR 0016 amendment): resolves the production process +
     // Method A/B and scopes the run cohort to a single feedstock.
@@ -111,6 +123,7 @@ export const updateCreditBatchSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
+  name: creditBatchNameSchema,
   facilityId: z.string().uuid().optional(),
   feedstockTypeId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
