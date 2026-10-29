@@ -14,6 +14,7 @@ export function buildSubmissionLineageBlockers(
   missingFeedstockIds: readonly string[],
   feedstockCodes: Readonly<Record<string, string>>,
   requiredTransportCategories: readonly TransportCategory[],
+  feedstockTransportFailure?: { feedstockIds: readonly string[]; warning: string },
 ): SubmissionLineageBlocker[] {
   const blockers: SubmissionLineageBlocker[] = [];
   for (const id of requiredTransportCategories.includes("feedstock") ? missingFeedstockIds : []) {
@@ -24,6 +25,16 @@ export function buildSubmissionLineageBlockers(
       fixTarget: "feedstocks",
       record: { id, code: code ?? "Feedstock" },
     });
+  }
+  if (requiredTransportCategories.includes("feedstock") && feedstockTransportFailure) {
+    for (const id of feedstockTransportFailure.feedstockIds) {
+      const code = feedstockCodes[id];
+      blockers.push({
+        detail: `${code ? `Feedstock ${code}` : "A linked feedstock"}: ${feedstockTransportFailure.warning}`,
+        fixTarget: "feedstocks",
+        record: { id, code: code ?? "Feedstock" },
+      });
+    }
   }
   for (const { application, delivery, order } of lineages) {
     const proof = deliveryProofBlocker({

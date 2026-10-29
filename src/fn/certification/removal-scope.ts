@@ -1,4 +1,4 @@
-import { hasLinkedFeedstock, ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
+import { ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCertifierRemovalById, getCreditBatchesByRemovalId, type CertifierRemovalRow } from "@/data-access/certifier-removals";
 import { projectChainOfCustodyFromBatchFacts, type ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -28,7 +28,6 @@ export interface RemovalScope {
     completedProductionRunIds: string[];
     productionFeedstockIds: string[];
     productionLinkedFeedstockIds?: string[];
-    productionHasLinkedFeedstock?: boolean;
     applicationIds: string[];
     applicationSlices: {
       applicationId: string;
@@ -97,7 +96,6 @@ export function resolveSingleBatchScope(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
         productionLinkedFeedstockIds: [...new Set(lineageFacts.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))],
         applicationIds: lineageFacts.applicationIds,
@@ -139,7 +137,6 @@ export async function resolveScopeForRemoval(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
         productionLinkedFeedstockIds: [...new Set(lineageFacts.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)))],
         applicationIds: lineageFacts.applicationIds,
@@ -179,4 +176,3 @@ export async function resolveScopeForRemoval(
     ],
   };
 }
-

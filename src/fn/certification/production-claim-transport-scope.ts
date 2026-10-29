@@ -9,7 +9,6 @@ type ProductionClaimScopeBatch = {
   productionRunIds: string[];
   productionFeedstockIds: string[];
   productionLinkedFeedstockIds?: string[];
-  productionHasLinkedFeedstock?: boolean;
   productionEmissionsClaimedByRemovalId: string | null;
 };
 
@@ -71,8 +70,7 @@ export function collectProductionClaimAwareTransportEntityIds(args: {
     ...productionLineages.flatMap((lineage) => lineage.feedstocks.map((feedstock) => feedstock.id)),
     ...productionBatches.flatMap((batch) => batch.productionLinkedFeedstockIds ?? []),
   ]));
-  const hasLinkedFeedstock = productionBatches.some((batch) => batch.productionHasLinkedFeedstock) ||
-    productionLineages.some((lineage) => lineage.feedstocks.length > 0);
+  const hasLinkedFeedstock = linkedFeedstockIds.length > 0;
   return {
     feedstockIds,
     linkedFeedstockIds,

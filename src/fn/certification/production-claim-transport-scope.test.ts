@@ -119,7 +119,7 @@ describe("production-claim-aware transport requirements", () => {
 it.each([null, CURRENT_REMOVAL_ID, PRIOR_REMOVAL_ID])("carries linked feedstock from unapplied runs only when production is claimed here: %s", (claimedBy) => {
   const ids = collectProductionClaimAwareTransportEntityIds({
     removalId: CURRENT_REMOVAL_ID,
-    memberBatches: [{ ...batch("later", claimedBy), productionFeedstockIds: [], productionLinkedFeedstockIds: ["earlier-stock"], productionHasLinkedFeedstock: true }],
+    memberBatches: [{ ...batch("later", claimedBy), productionFeedstockIds: [], productionLinkedFeedstockIds: ["earlier-stock"] }],
     lineages: [],
   });
   expect(ids.feedstockIds).toEqual([]);
@@ -128,7 +128,7 @@ it.each([null, CURRENT_REMOVAL_ID, PRIOR_REMOVAL_ID])("carries linked feedstock 
 });
 
 it("does not turn missing owned legs or wholly absent feedstock into zero", () => {
-  for (const member of [batch("owned", null), { ...batch("absent", null), productionFeedstockIds: [] }]) {
+  for (const member of [batch("owned", null), { ...batch("absent", null), productionFeedstockIds: [], productionLinkedFeedstockIds: [] }]) {
     expect(collectProductionClaimAwareTransportEntityIds({
       removalId: CURRENT_REMOVAL_ID, memberBatches: [member], lineages: [],
     }).feedstockTransportOwnedElsewhere).toBeUndefined();
@@ -139,7 +139,7 @@ it("does not turn missing owned legs or wholly absent feedstock into zero", () =
 it("keeps the zero feedstock figure in the claiming Removal's ledger preview categories", () => {
   expect(collectProductionClaimAwareRequiredTransportCategories({
     removalId: CURRENT_REMOVAL_ID,
-    memberBatches: [{ ...batch("later", null), productionFeedstockIds: [], productionHasLinkedFeedstock: true }],
+    memberBatches: [{ ...batch("later", null), productionFeedstockIds: [], productionLinkedFeedstockIds: ["earlier-stock"] }],
     requiredTransportCategories: ["feedstock", "biochar"],
   })).toEqual(["feedstock", "biochar"]);
 });

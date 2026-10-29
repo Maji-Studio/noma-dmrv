@@ -22,11 +22,11 @@ export function toRemovalReadinessFacts(
     ? isLockedInFlight(ctx.latestSubmission) &&
       !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
-  // Feedstock issues are built from the same missingEntityIds used below.
-  // Transport readiness blocks them and carries their fix targets; including
-  // them here too would duplicate the entity-readiness row (#1024).
+  // Presence issues already have a transport-readiness row (#1024). Keep other
+  // feedstock failures, including owner-side gates on linked transport legs.
   const submissionLineageIssues = ctx.submissionLineageBlockers.filter(
-    (blocker) => blocker.fixTarget !== "feedstocks",
+    (blocker) => blocker.fixTarget !== "feedstocks" ||
+      !ctx.transportCoverage.feedstock.missingEntityIds?.includes(blocker.record.id),
   );
   return {
     local: ctx.latestSubmission?.status ?? null,

@@ -1,6 +1,11 @@
 vi.mock("./removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { assertSubmissionLineageResolved } from "./removal-submission-build";
+import { batchAutomaticFigures } from "@/lib/certification/batch-automatic-figures";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
@@ -19,6 +24,7 @@ vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
 vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsForEntities: vi.fn(), getTransportLegsWithEvidenceForEntities: vi.fn() }));
+vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: vi.fn(async () => null), hasFinalizedSubmission: vi.fn(async () => false) }));
 vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertification: vi.fn(async () => []) }));
 vi.mock("./linked-ghg-statement-status", () => ({ loadLinkedGhgStatementStatus: vi.fn(async () => null) }));
@@ -177,4 +183,50 @@ it.each([false, true])("loads other owners' legs only for linked feedstock cover
     count: 0, legIds: [], missingEntityIds: hasLeg ? [] : ["earlier-stock"],
   });
   expect(result.transportLegs.feedstock).toEqual([]);
+});
+
+it.each([
+  { problem: "mixed modes", overrides: { transportMethodType: "rail" }, warning: "different transport modes" },
+  { problem: "mixed calculation methods", overrides: { calculationMethodType: "fuel_based" }, warning: "different calculation methods" },
+  { problem: "missing load mass", overrides: { loadMassKg: null }, warning: "without a load mass" },
+  { problem: "valid legs", overrides: {}, warning: null },
+])("checks linked transport owned elsewhere before locking it: $problem", async ({ overrides, warning }) => {
+  vi.mocked(getLatestSubmission).mockResolvedValueOnce(null);
+  const { collectProductionClaimAwareTransportEntityIds } = await import("./production-claim-transport-scope");
+  const realBlockers = await vi.importActual<typeof import("./certify-lineage-blockers")>("./certify-lineage-blockers");
+  vi.mocked(buildSubmissionLineageBlockers).mockImplementationOnce(realBlockers.buildSubmissionLineageBlockers);
+  vi.mocked(collectProductionClaimAwareTransportEntityIds).mockReturnValueOnce({
+    feedstockIds: [], linkedFeedstockIds: ["earlier-stock"], biocharProductIds: ["product-1"], sampleIds: [],
+    feedstockTransportOwnedElsewhere: true,
+  });
+  vi.mocked(getTransportLegsWithEvidenceForEntities).mockResolvedValueOnce([]);
+  const validLeg = { id: "valid-leg", entityId: "earlier-stock", distanceKm: 10, loadMassKg: 1000,
+    calculationMethodType: "distance_based", transportMethodType: "road" };
+  vi.mocked(getTransportLegsForEntities).mockResolvedValueOnce([
+    validLeg, { ...validLeg, id: "other-leg", ...overrides },
+  ] as never);
+  const currentScope = {
+    ...scope, feedstockCodes: { "earlier-stock": "FS-1" },
+    lineages: [{ application: { id: "application-1", code: "AP-1", applicationDate: new Date("2026-10-01") },
+      delivery: { id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 1,
+        customerLocationId: "location-1", recordedDistanceKm: 20 } }],
+  } as unknown as RemovalScope;
+  const result = await buildRemovalContext(ctx, currentScope, facts(fixture as GhgEntryTemplate));
+  expect(result.transportCoverage.feedstock).toMatchObject({ count: 0, missingEntityIds: [], ownedElsewhere: true });
+  expect(result.transportLegs.feedstock).toEqual([]);
+  expect(batchAutomaticFigures([], result.transportLegs)["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
+  const readinessFacts = toRemovalReadinessFacts(result);
+  if (warning) {
+    expect(result.submissionLineageBlockers).toContainEqual(expect.objectContaining({
+      detail: expect.stringContaining(warning), fixTarget: "feedstocks", record: expect.objectContaining({ id: "earlier-stock", code: "FS-1" }),
+    }));
+    expect(assertSubmissionLineageResolved.bind(null, result.submissionLineageBlockers)).toThrow(warning);
+    expect(readinessFacts.submissionLineageIssues).toEqual(result.submissionLineageBlockers);
+    expect(deriveRemovalReadiness(readinessFacts).state).toBe("blocked");
+    expect(buildRemovalRequirementsChecklist(readinessFacts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: expect.stringContaining(warning) }));
+  } else {
+    expect(result.submissionLineageBlockers).toEqual([]);
+    expect(() => assertSubmissionLineageResolved(result.submissionLineageBlockers)).not.toThrow();
+    expect(readinessFacts.submissionLineageIssues).toEqual([]);
+  }
 });

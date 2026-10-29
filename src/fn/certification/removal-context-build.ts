@@ -24,6 +24,7 @@ import { removalMayHaveExternalMutation } from "@/lib/certification/removal-exte
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { durabilityConfigurationBlockers, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
+import { aggregateTransportMassDistance } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
@@ -324,13 +325,14 @@ export async function buildRemovalContext(
     ...recordedTransportLegs,
     biochar: requiredTransportCategories.includes("biochar") ? recordedTransportLegs.biochar : [],
   };
-  // Presence includes linked stock owned by another batch; figures and evidence
-  // aggregation continue to use only this production scope's owned legs.
+  // Linked stock owned by another batch must pass its owner's transport gates
+  // before this Removal locks it. Figures and evidence still use only owned legs.
   const ownedFeedstockIds = new Set(entityIds.feedstockIds);
   const extraFeedstockIds = entityIds.linkedFeedstockIds.filter((id) => !ownedFeedstockIds.has(id));
   const extraFeedstockLegs = extraFeedstockIds.length > 0
     ? await getTransportLegsForEntities(orgCtx, "feedstock", extraFeedstockIds)
     : [];
+  const extraFeedstockWarning = aggregateTransportMassDistance(extraFeedstockLegs, "Feedstock").warning;
   const transportCoverage = buildTransportCoverage(transportLegs, entityIds, [
     ...transportLegs.feedstock,
     ...extraFeedstockLegs,
@@ -340,6 +342,7 @@ export async function buildRemovalContext(
     transportCoverage.feedstock.missingEntityIds ?? [],
     scope.feedstockCodes,
     requiredTransportCategories,
+    extraFeedstockWarning ? { feedstockIds: extraFeedstockIds, warning: extraFeedstockWarning } : undefined,
   );
   const distanceFixLinks = await getTransportDistanceFixLinks(orgCtx,
     submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks").map(blocker => blocker.record.id),
@@ -431,4 +434,3 @@ export async function buildRemovalContext(
     facilityReferenceSoilTemperature,
   };
 }
-

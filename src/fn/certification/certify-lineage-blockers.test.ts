@@ -9,6 +9,15 @@ const lineage = {
 } as unknown as ChainOfCustodyData;
 
 describe("submission lineage blockers", () => {
+  it("names linked feedstock transport failures only when feedstock transport is required", () => {
+    const failure = { feedstockIds: ["fs-1", "fs-2"], warning: "Feedstock transport legs use different transport modes. Check the recorded modes against the removal template." };
+    expect(buildSubmissionLineageBlockers([], [], { "fs-1": "FS-1" }, ["feedstock"], failure)).toEqual([
+      { detail: `Feedstock FS-1: ${failure.warning}`, fixTarget: "feedstocks", record: { id: "fs-1", code: "FS-1" } },
+      { detail: `A linked feedstock: ${failure.warning}`, fixTarget: "feedstocks", record: { id: "fs-2", code: "Feedstock" } },
+    ]);
+    expect(buildSubmissionLineageBlockers([], [], {}, ["biochar"], failure)).toEqual([]);
+  });
+
   it("reads destination and delivery distance from the existing lineage facts", () => {
     expect(buildSubmissionLineageBlockers([lineage, lineage], [], {}, ["biochar"]).map((blocker) => blocker.detail)).toEqual([
       "Application AP-1 has no customer location. Select a customer location on the order before submitting.",
