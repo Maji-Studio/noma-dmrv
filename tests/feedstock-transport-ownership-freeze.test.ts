@@ -10,6 +10,7 @@ import { updateProductionRun, createProductionRunInTransaction, deleteProduction
 import { replaceProductionRunFeedstockDraws } from "@/data-access/production-runs/feedstock-draws";
 import { attachProductionRunToMatchingCreditBatch } from "@/data-access/credit-batch-membership";
 import { createCreditBatchInTransaction, deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { prepareFeedstockTransportOwnershipFreeze } from "@/data-access/feedstock-transport-ownership-freeze";
@@ -185,6 +186,32 @@ it.each(MODES)("provenance reallocation removes the old feedstock id: %s", async
   });
 });
 
+it("refuses a shared intake delivery-date edit that would move a Sent transport owner", async () => {
+  await withPair("sent-moves", async a => {
+    const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
+    const replacementId = crypto.randomUUID();
+    // The replacement covers A's draw when the shared intake moves to B's day.
+    await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
+    try {
+      expect(await owner(a)).toBe(a.productionRunId);
+      await expect(db.transaction(tx => updateFeedstockInTransaction(ctx, tx, a.feedstockId, {
+        expectedVersion: stock.version, deliveryDate: new Date("2026-06-13T00:00:00Z"),
+      }))).rejects.toMatchObject({
+        code: "certification_locked",
+        message: expect.stringContaining("feedstock"),
+        issues: expect.arrayContaining([expect.objectContaining({ path: ["deliveryDate"], code: "certification_locked" })]),
+      });
+      expect(await owner(a)).toBe(a.productionRunId);
+      const [saved] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
+      expect(saved.deliveryDate).toEqual(stock.deliveryDate);
+      expect(saved.version).toBe(stock.version);
+    } finally {
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, replacementId));
+      await db.delete(feedstocks).where(eq(feedstocks.id, replacementId));
+    }
+  });
+});
+
 it.each(MODES)("explicit membership removal: %s", async mode => {
   await withPair(mode, async (a, b) => {
     if (mode === "sent-stays") await makeNonOwner(a);
@@ -229,9 +256,10 @@ it.each(MODES)("single-facility archive and restore retain transport ownership: 
     expect(await owner(a)).toBe(expectedOwner);
     await archiveFacility(ctx, a.facilityId, await facilityVersion(a));
     expect(await owner(a)).toBeUndefined();
-    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { ignoreArchived: true })).get(a.feedstockId)).toBe(expectedOwner);
+    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { includeArchived: true })).get(a.feedstockId)).toBe(expectedOwner);
     await restoreFacility(ctx, a.facilityId, await facilityVersion(a));
     expect(await owner(a)).toBe(expectedOwner);
+    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { includeArchived: true })).get(a.feedstockId)).toBe(expectedOwner);
   });
 });
 
@@ -503,7 +531,7 @@ it.each(["delete", "empty"] as const)("refuses %s of an archived owning batch be
         productionRunIds: [], startDate: new Date("2026-06-15T00:00:00Z") });
     await expect(write).rejects.toMatchObject({ code: "certification_locked",
       message: expect.stringContaining("transport legs of feedstock") });
-    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { ignoreArchived: true })).get(a.feedstockId)).toBe(a.productionRunId);
+    expect((await getFeedstockTransportOwners(ctx, [a.feedstockId], db, { includeArchived: true })).get(a.feedstockId)).toBe(a.productionRunId);
     await restoreFacility(ctx, a.facilityId, await facilityVersion(a));
     expect(await owner(a)).toBe(a.productionRunId);
   });

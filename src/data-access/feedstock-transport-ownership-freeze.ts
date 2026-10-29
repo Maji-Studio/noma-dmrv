@@ -11,6 +11,10 @@ import { requireOrgScope } from "./utils";
 const TRANSPORT_OWNER_LOCK_SCOPE = "feedstock-transport-owner";
 const ADVISORY_LOCK_HASH_SEED = 0;
 
+function feedstockLabel(code: string | undefined): string {
+  return code ? `feedstock ${code}` : "this feedstock";
+}
+
 export type TransportOwnershipChange = {
   mutation: "create" | "update" | "delete" | "archive" | "restore";
   subject: "production run" | "credit batch" | "facility" | "feedstock";
@@ -63,12 +67,12 @@ export async function prepareFeedstockTransportOwnershipFreeze(
     const key = `${TRANSPORT_OWNER_LOCK_SCOPE}:${ctx.organizationId}:${id}`;
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, ${ADVISORY_LOCK_HASH_SEED}))`);
   }
-  const before = await getFeedstockTransportOwners(ctx, ids, tx, { ignoreArchived: true });
+  const before = await getFeedstockTransportOwners(ctx, ids, tx, { includeArchived: true });
   // Preserve targets before draw replacement can sever the feedstock link.
   const previousTargets = await getFeedstockLineageBatchTargets(ctx, tx, ids);
   return async function freeze<T>(write: (scope: TransportOwnershipFreezeScope) => Promise<T>): Promise<T> {
     const result = await write(ENCLOSING_FREEZE);
-    const after = await getFeedstockTransportOwners(ctx, ids, tx, { ignoreArchived: true });
+    const after = await getFeedstockTransportOwners(ctx, ids, tx, { includeArchived: true });
     const changed = ids.filter(id => before.get(id) !== after.get(id));
     if (!changed.length) return result;
 
@@ -78,8 +82,7 @@ export async function prepareFeedstockTransportOwnershipFreeze(
     if (artifacts === null) {
       const [feedstock] = await tx.select({ code: feedstocks.code }).from(feedstocks)
         .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, changed[0])));
-      const subject = feedstock?.code ? `feedstock ${feedstock.code}` : "this feedstock";
-      throw new DomainError("conflict", `Certification records for ${subject} are being changed. Save again in a moment.`, { retryable: true });
+      throw new DomainError("conflict", `Certification records for ${feedstockLabel(feedstock?.code)} are being changed. Save again in a moment.`, { retryable: true });
     }
     for (const target of targets) {
       const lineage = await getLineageUnderLockedArtifacts(ctx, tx, artifacts, target);
@@ -91,7 +94,7 @@ export async function prepareFeedstockTransportOwnershipFreeze(
       const [feedstock] = await tx.select({ code: feedstocks.code }).from(feedstocks)
         .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, target.entityId)));
       throw new DomainError("certification_locked", withRecordLockGuidance(
-        `Cannot ${change.mutation} this ${change.subject} because it would change which credit batch counts the transport legs of feedstock ${feedstock?.code ?? target.entityId}, and a Removal that uses this feedstock is already sent.`,
+        `Cannot ${change.mutation} this ${change.subject} because it would change which credit batch counts the transport legs of ${feedstockLabel(feedstock?.code)}, and a Removal that uses this feedstock is already sent.`,
         lock,
       ));
     }

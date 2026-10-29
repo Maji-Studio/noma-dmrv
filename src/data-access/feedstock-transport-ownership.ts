@@ -11,7 +11,7 @@ export async function getFeedstockTransportOwners(
   ctx: OrgContext,
   feedstockIds: string[],
   executor: Pick<DbTransaction, "select"> = db,
-  options: { ignoreArchived?: boolean } = {},
+  options: { includeArchived?: boolean } = {},
 ): Promise<Map<string, string>> {
   requireOrgScope(ctx);
   const ids = [...new Set(feedstockIds)];
@@ -26,7 +26,7 @@ export async function getFeedstockTransportOwners(
       eq(productionRuns.id, productionRunFeedstocks.productionRunId),
       eq(productionRuns.organizationId, ctx.organizationId),
       eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-      options.ignoreArchived ? undefined : isNull(productionRuns.archivedAt),
+      options.includeArchived ? undefined : isNull(productionRuns.archivedAt),
     ))
     .innerJoin(creditBatchProductionRuns, and(
       eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
@@ -35,7 +35,7 @@ export async function getFeedstockTransportOwners(
     .innerJoin(creditBatches, and(
       eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
       eq(creditBatches.organizationId, ctx.organizationId),
-      options.ignoreArchived ? undefined : isNull(creditBatches.archivedAt),
+      options.includeArchived ? undefined : isNull(creditBatches.archivedAt),
     ))
     .where(and(
       eq(productionRunFeedstocks.organizationId, ctx.organizationId),
