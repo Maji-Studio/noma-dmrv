@@ -78,6 +78,8 @@ import {
 } from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
+import { CREDIT_BATCH_CODE_PREFIX } from "@/config/credit-batches";
+import { peekNextCode } from "./code-generator";
 
 export {
   getCo2eStoredPreviews,
@@ -170,6 +172,12 @@ async function resolveCreditBatchCertifier(
 export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facilityId: string) {
   requireOrgScope(ctx);
   return getFacilityCertifierWithExecutor(ctx, db, facilityId);
+}
+
+/** The code the next credit batch in the organization gets: the grey Name on Create. */
+export async function getNextCreditBatchCode(ctx: OrgContext): Promise<string> {
+  requireOrgScope(ctx);
+  return peekNextCode(ctx, CREDIT_BATCH_CODE_PREFIX, creditBatches, creditBatches.code);
 }
 
 /**
