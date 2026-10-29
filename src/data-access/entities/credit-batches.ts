@@ -37,6 +37,7 @@ export async function getCreditBatchesEntity(ctx: OrgContext, params: {
     conditions.push(
       or(
         ilike(creditBatches.code, searchPattern),
+        ilike(creditBatches.name, searchPattern),
         sql`${creditBatches.startDate}::text ILIKE ${searchPattern}`,
         sql`${creditBatches.endDate}::text ILIKE ${searchPattern}`,
         sql`to_char(${creditBatches.startDate}, 'Mon FMDD') ILIKE ${searchPattern}`,
@@ -51,6 +52,7 @@ export async function getCreditBatchesEntity(ctx: OrgContext, params: {
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
+      name: creditBatches.name,
       status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
@@ -68,6 +70,7 @@ export async function getCreditBatchEntityById(ctx: OrgContext, id: string): Pro
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
+      name: creditBatches.name,
       status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
