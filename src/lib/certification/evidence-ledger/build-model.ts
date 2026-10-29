@@ -108,6 +108,7 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
 function buildCategory(
   key: LedgerCategoryKey,
   legs: TransportLeg[],
+  transportOwnedElsewhere = false,
 ): LedgerCategory {
   const meta = CATEGORY_META[key];
   const builtLegs = legs.map((leg, i) =>
@@ -115,7 +116,7 @@ function buildCategory(
   );
   const canonical = key === "biochar"
     ? aggregateBiocharTransportMassDistance(legs)
-    : aggregateTransportMassDistance(legs, meta.name);
+    : aggregateTransportMassDistance(legs, meta.name, transportOwnedElsewhere);
   if (key === "biochar" && canonical.warning) throw new SafeError(canonical.warning);
   const rawTkm = canonical.massDistanceTonneKm ?? 0;
   const canonicalRawSubtotalTkm = round2(rawTkm);
@@ -141,7 +142,7 @@ function buildCategory(
 export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
   const { legsByCategory } = args;
   const categories: LedgerCategory[] = [
-    buildCategory("feedstock", legsByCategory.feedstock),
+    buildCategory("feedstock", legsByCategory.feedstock, legsByCategory.feedstockTransportOwnedElsewhere),
     buildCategory("biochar", legsByCategory.biochar),
     buildCategory("sample", legsByCategory.sample),
   ];

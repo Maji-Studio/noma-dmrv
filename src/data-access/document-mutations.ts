@@ -18,11 +18,11 @@ import { requireOrgScope } from "./utils";
 async function lockDocument(ctx: OrgContext, tx: DbTransaction, id: string, deleting = false): Promise<DocumentRow> {
   const initial = await readDocumentForWrite(ctx, tx, id);
   if (!initial) throw documentNotFound();
-  const scope = await lockDocumentOwner(ctx, tx, initial.entityType, initial.entityId);
+  const scope = await lockDocumentOwner(ctx, tx, initial.entityType, initial.entityId, initial.documentType);
   if (deleting) await acquireMirrorLock(tx, id);
   const row = await readDocumentForWrite(ctx, tx, id, true);
   if (!row) throw documentNotFound();
-  if (row.entityType !== initial.entityType || row.entityId !== initial.entityId) throw changedOwner();
+  if (row.entityType !== initial.entityType || row.entityId !== initial.entityId || row.documentType !== initial.documentType) throw changedOwner();
   await assertDocumentOwnerWritable(ctx, tx, scope, deleting);
   return row;
 }

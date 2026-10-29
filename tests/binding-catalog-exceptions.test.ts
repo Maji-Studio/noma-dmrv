@@ -183,13 +183,8 @@ const PRE_638_OPTIONAL_TARGETS = [
     "componentDisplayName": "Safety margin",
     "inputKey": "mass",
     "nomaRoleLabel": "Inventory"
-  },
-  {
-    "groupKey": "sampling-required-for-mrv",
-    "componentBlueprintKey": "mass_distance_based_ci_emissions",
-    "inputKey": "mass_distance",
-    "nomaRoleLabel": "Transport evidence ledger"
   }
+  // Sample transport's retired automatic source has no evidence target (#1237).
 ];
 
 const PRE_638_ROLE_LABELS: Record<string, string[]> = {
@@ -268,9 +263,8 @@ const PRE_638_ROLE_LABELS: Record<string, string[]> = {
     "Delivery bill of lading",
     "Transport evidence ledger"
   ],
-  "sampling-required-for-mrv/mass_distance_based_ci_emissions//mass_distance": [
-    "Transport evidence ledger"
-  ],
+  // Sample transport's retired automatic source has no evidence target (#1237).
+  "sampling-required-for-mrv/mass_distance_based_ci_emissions//mass_distance": [],
   "miscellaneous/mass_based_ci_emissions/ SAFETY margin /mass": [
     "Inventory"
   ],

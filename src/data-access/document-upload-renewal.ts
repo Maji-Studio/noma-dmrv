@@ -19,14 +19,14 @@ export async function renewDocumentUploadInTransaction(ctx: OrgContext, tx: DbTr
   const discovered = await readDocumentForWrite(ctx, tx, documentId);
   if (!discovered) return { kind: "unavailable", reason: "deleted" };
   let scope;
-  try { scope = await lockDocumentOwner(ctx, tx, discovered.entityType, discovered.entityId); }
+  try { scope = await lockDocumentOwner(ctx, tx, discovered.entityType, discovered.entityId, discovered.documentType); }
   catch (error) {
     if (!(error instanceof DomainError) || error.code !== "not_found") throw error;
     return { kind: "unavailable", reason: "owner_archived" };
   }
   // Renewal and the pending-upload sweep serialize on this row.
   const row = await readDocumentForWrite(ctx, tx, documentId, true);
-  if (!row || row.entityType !== discovered.entityType || row.entityId !== discovered.entityId) return { kind: "unavailable", reason: "deleted" };
+  if (!row || row.entityType !== discovered.entityType || row.entityId !== discovered.entityId || row.documentType !== discovered.documentType) return { kind: "unavailable", reason: "deleted" };
   if (row.uploadStatus === "uploaded") return { kind: "unavailable", reason: "uploaded" };
   const declaration = metadataRecord(metadataRecord(row.metadata).uploadDeclaration);
   const failure = metadataRecord(metadataRecord(row.metadata).uploadFailure);

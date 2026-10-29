@@ -19,6 +19,7 @@ vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn
 vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
 vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsWithEvidenceForEntities: vi.fn() }));
+vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: vi.fn(async () => null), hasFinalizedSubmission: vi.fn(async () => false) }));
 vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertification: vi.fn(async () => []) }));
 vi.mock("./linked-ghg-statement-status", () => ({ loadLinkedGhgStatementStatus: vi.fn(async () => null) }));

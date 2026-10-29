@@ -21,7 +21,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
     lineageFacts: {
-      runs: [{ id, feedstocks: [{ id: "feedstock" }, { id: "feedstock" }] }],
+      runs: [{ id, feedstocks: [{ id: "feedstock", ownsTransport: true }, { id: "feedstock", ownsTransport: true }] }],
       applications: [{ id: "application" }, { id: "application" }, { id: "second-application" }],
       runForwards: { [id]: [{ id: "product", deliveries: [{ id: "delivery", code: "DL-1", wetMassKg: id === "a" ? "100.1" : "200.2" }] }] },
     },
@@ -73,4 +73,14 @@ it("threads the supplied transaction to every automatic-facts reader", async () 
     getTransportLegsForEntities, loadBiocharDeliveryTransportLegs, getEmissionAutomaticMasses]) {
     for (const call of vi.mocked(reader).mock.calls) expect(call.at(-1)).toBe(tx);
   }
+});
+
+it("does not count or request earlier-run transport in a later batch", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { lineageFacts: {
+    runs: [{ id: "b", feedstocks: [{ id: "earlier", ownsTransport: false }] }],
+    applications: [], runForwards: {},
+  } } } as never);
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["b"]);
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", [], expect.anything());
+  expect(facts.b.automaticRecordCounts?.["feedstock-transport"]).toBe(0);
 });

@@ -45,15 +45,25 @@ export async function getRecordLockViews(ctx: OrgContext, entityType: CertifiedL
   const targets: CertifiedLineageTarget[] = owned.map(entityId => ({ entityType, entityId }));
   // Sent first, from every ledger row of the lineage; dependents separately so
   // "Used by" stays complete even when a Removal holds the record.
-  const sent = await getRecordLocks(ctx, db, targets, { sentOnly: true });
+  const transportTargets = entityType === "feedstock" ? targets.map(target => ({ ...target, transportOnly: true })) : [];
+  const allSent = await getRecordLocks(ctx, db, [...targets, ...transportTargets], { sentOnly: true });
+  const sent = allSent.slice(0, targets.length);
+  const transport = allSent.slice(targets.length);
   const dependentsById = await readRecordDependentsBatch(ctx, db, entityType, owned);
   const dependents = owned.map(id => dependentsById.get(id) ?? []);
   // The Sent pass also names any returned Removal; keep it on the dependency lock.
   const locks: RecordLock[] = targets.map((target, index) => sent[index].level === "sent"
     ? sent[index]
     : { ...recordLocks[target.entityType]({ dependents: dependents[index], removals: [] }), returnedBy: sent[index].returnedBy });
-  const links = await resolveRecordLockLinks(ctx, [...locks.flatMap(lock => [...lock.heldBy, ...returnHolders(lock)]), ...dependents.flat()]);
-  return Object.fromEntries(owned.map((id, index) => [id, toView(locks[index], dependents[index], links)]));
+  const links = await resolveRecordLockLinks(ctx, [...locks.flatMap(lock => [...lock.heldBy, ...returnHolders(lock)]), ...dependents.flat(), ...transport.flatMap(lock => lock.heldBy)]);
+  return Object.fromEntries(owned.map((id, index) => {
+    const view = toView(locks[index], dependents[index], links);
+    if (transport[index]) {
+      const transportView = toView(transport[index], [], links);
+      view.transport = { level: transportView.level, heldBy: transportView.heldBy };
+    }
+    return [id, view];
+  }));
 }
 
 /**

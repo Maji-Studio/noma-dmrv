@@ -68,7 +68,8 @@ describe("evidence sections on a locked record", () => {
     mocks.locked = true;
     render(renderSection());
 
-    expect(mocks.lockArgs).toContainEqual([entityType, "record-1"]);
+    // A feedstock's evidence section reads its transport lock (decision A, #1487).
+    expect(mocks.lockArgs).toContainEqual(entityType === "feedstock" ? [entityType, "record-1", "transport"] : [entityType, "record-1"]);
     expect(screen.getByText("1 attachment was not uploaded")).toBeTruthy();
     expect(screen.getByText("receipt.pdf")).toBeTruthy();
     expect(screen.getByText("Upload failed.")).toBeTruthy();

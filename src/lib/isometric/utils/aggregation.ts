@@ -45,8 +45,8 @@ export interface AggregatedProductionData {
   // (see `aggregateTransportMassDistance`). Caller populates via
   // `enrichWithTransportLegs`.
   //
-  // feedstock/biochar are null when no legs are recorded — transport is
-  // required for those categories, so a missing value fails closed at submit.
+  // Empty transport is null unless linked feedstock trips all belong to
+  // earlier runs; that production scope contributes a real zero.
   feedstockTransportMassDistanceTonneKm: number | null;
   biocharTransportMassDistanceTonneKm: number | null;
   // Legacy sample shipment is optional: 0 when no legs exist.
@@ -182,9 +182,10 @@ export function transportMassDistanceAvailable(legs: TransportLeg[], requirePosi
 export function aggregateTransportMassDistance(
   legs: TransportLeg[],
   categoryLabel: string,
+  transportOwnedElsewhere = false,
 ): TransportAggregationResult {
   if (legs.length === 0) {
-    return { massDistanceTonneKm: null, warning: null };
+    return { massDistanceTonneKm: transportOwnedElsewhere ? 0 : null, warning: null };
   }
 
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
@@ -344,6 +345,8 @@ export function aggregateProductionRuns(
 
 export interface TransportLegsByCategory {
   feedstock: TransportLeg[];
+  /** Linked feedstock exists, but none of its trips belong to this production scope. */
+  feedstockTransportOwnedElsewhere?: boolean;
   /** Removal-scoped delivery rows carrying immutable applied wet loads. */
   biochar: TransportLeg[];
   sample: TransportLeg[];
@@ -359,7 +362,7 @@ export function enrichWithTransportLegs<T extends AggregatedProductionRunData>(
   agg: T,
   legs: TransportLegsByCategory,
 ): Omit<T, keyof AggregatedProductionRunData> & AggregatedProductionRunData {
-  const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
+  const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock", legs.feedstockTransportOwnedElsewhere);
   const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
   const newWarnings = [
     feedstock.warning,

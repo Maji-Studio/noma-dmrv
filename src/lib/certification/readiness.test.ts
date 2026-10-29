@@ -802,3 +802,13 @@ describe("readiness matches submission refusals", () => {
     expect(buildRemovalRequirementsChecklist(facts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: reason }));
   });
 });
+
+it.each([
+  { ownedElsewhere: true, missingEntityIds: [], satisfied: true },
+  { ownedElsewhere: undefined, missingEntityIds: [], satisfied: false },
+  { ownedElsewhere: true, missingEntityIds: ["missing"], satisfied: false },
+])("judges zero feedstock transport with ownership evidence: %j", ({ ownedElsewhere, missingEntityIds, satisfied }) => {
+  const facts = ready({ requiredTransport: [{ category: "feedstock", count: 0, ownedElsewhere, missingEntityIds, aggregationWarning: null }] });
+  expect(deriveRemovalReadiness(facts).state).toBe(satisfied ? "ready" : "blocked");
+  expect(checkFor(buildRemovalRequirementsChecklist(facts), "transport").status).toBe(satisfied ? "met" : "unmet");
+});

@@ -275,6 +275,7 @@ export async function createTransportLegInTransaction(
       {
         entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
         entityId: input.entityId,
+        transportOnly: input.entityType === "feedstock",
       },
       "create",
       "transportLeg",
@@ -334,6 +335,7 @@ export async function updateTransportLeg(
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
         entityId: existing.entityId,
+        transportOnly: existing.entityType === "feedstock",
       },
       "update",
       "transportLeg",
@@ -386,6 +388,7 @@ export async function deleteTransportLeg(
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
         entityId: existing.entityId,
+        transportOnly: existing.entityType === "feedstock",
       },
       "delete",
       "transportLeg",
