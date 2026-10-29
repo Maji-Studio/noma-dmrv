@@ -71,7 +71,7 @@ export function RemovalsList({ initialCreate = false, canManage = false }: { ini
   );
 
   const resumedRemoval = useRemovalCarriedEntries(resume);
-  const resumeFacilityReady = useLinkedRecordFacility(resumedRemoval.data, resumedRemoval.isLoading);
+  const resumeFacilityReady = useLinkedRecordFacility(resumedRemoval.data, resumedRemoval.isLoading).ready;
   const toast = useToast();
   const invalidResumeId = useRef<string | null>(null);
   useEffect(() => {
@@ -391,7 +391,7 @@ function ListBody({
   const linkedInList = !!removalId && identityRows.some((entry) => entry.removal.id === removalId);
   const lookupEnabled = linkedSheetEnabled && !linkedInList && !identities.isLoading;
   const linkedRemoval = useRemovalCarriedEntries(removalId, { enabled: lookupEnabled });
-  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading);
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading).ready;
   const toast = useToast();
   const invalidRemovalId = useRef<string | null>(null);
   useEffect(() => {
