@@ -727,9 +727,12 @@ export async function updateFeedstockInTransaction(
   const effectiveFacilityId =
     feedstockData.facilityId ?? locked.facilityId;
   const storageReferenceNeedsValidation =
-    feedstockData.storageLocationId !== undefined ||
-    feedstockData.feedstockTypeId !== undefined ||
-    feedstockData.facilityId !== undefined;
+    (feedstockData.storageLocationId !== undefined &&
+      feedstockData.storageLocationId !== locked.storageLocationId) ||
+    (feedstockData.feedstockTypeId !== undefined &&
+      feedstockData.feedstockTypeId !== locked.feedstockTypeId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
   const stockDerivationChanged =
     status !== locked.status ||
     (effectiveChanges.massDryKg !== undefined &&
@@ -741,12 +744,14 @@ export async function updateFeedstockInTransaction(
 
   const allocationChanged = stockDerivationChanged ||
     (feedstockData.deliveryDate !== undefined && feedstockData.deliveryDate.getTime() !== locked.deliveryDate.getTime());
+  const dateOnlyAllocationChange = allocationChanged &&
+    !stockDerivationChanged && !storageReferenceNeedsValidation;
 
   if (allocationChanged || storageReferenceNeedsValidation) {
     await lockBinStocks(ctx, tx, [
       locked.storageLocationId,
       effectiveStorageLocationId,
-    ]);
+    ], { allowArchived: dateOnlyAllocationChange });
   }
   if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
     await validateFeedstockStorageLocations(
