@@ -1,3 +1,4 @@
+import { BLOCKER_LIMIT } from "@/config/party-input";
 import { recordOrder } from "@/lib/operations/orders";
 import { orderInput } from "./helpers/order-operation-fixture";
 import { orders } from "@/db/schema";
@@ -24,6 +25,7 @@ import { createCustomerLocationInTransaction } from "@/data-access/customer-crea
 import { updateCustomerLocationInTransaction, deleteCustomerLocationInTransaction } from "@/data-access/customer-location-writes";
 import { createSupplierLocationInTransaction, updateSupplierLocationInTransaction } from "@/data-access/supplier-location-writes";
 
+const OVERFLOW_COUNT = 2;
 const fixtures: PartyArchiveFixture[] = [];
 const deliveryOrganizations: string[] = [];
 const site = { country: "TZ", gpsLatitude: -8, gpsLongitude: 34 };
@@ -399,17 +401,16 @@ describe("customer location delete blockers", () => {
     const archived = await runOperationInProcess(archiveCustomerLocation, f.ctx, customerVersion(f.location));
     const before = await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id));
     await expect(db.transaction(tx => deleteCustomerLocationInTransaction(f.ctx, tx, customerVersion(archived)))).rejects.toMatchObject({
-      code: "conflict", message: "Customer location was not deleted because orders use it.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" } }],
+      code: "conflict", message: `Customer location was not deleted because orders use it: ${order.code}.`,
+      issues: [{ path: ["locationId"], meta: { orderCount: 1, orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" } }],
     });
     expect(await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id))).toEqual(before);
   });
 
-  it("includes archived orders and returns the first five codes without deleting anything", async () => {
+  it("includes archived orders and returns capped references with the total without deleting anything", async () => {
     const f = await fixture();
     const references: { id: string; code: string; facilityId: string }[] = [];
-    const ORDER_COUNT = 6;
-    const BLOCKER_COUNT = 5;
+    const ORDER_COUNT = BLOCKER_LIMIT + OVERFLOW_COUNT;
     for (let index = 0; index < ORDER_COUNT; index++) {
       const order = await runOperationInProcess(recordOrder, f.ctx, orderInput(f));
       const code = `E2E-OR-${ORDER_COUNT - index}`;
@@ -417,9 +418,9 @@ describe("customer location delete blockers", () => {
       await db.update(orders).set({ code, archivedAt: new Date() }).where(eq(orders.id, order.id));
     }
     await expect(runOperationInProcess(deleteCustomerLocation, f.ctx, customerVersion(f.location))).rejects.toMatchObject({
-      code: "conflict", message: "Customer location was not deleted because orders use it. Archive it instead.",
-      issues: [{ path: ["locationId"], meta: { orderCodes: references.map(row => row.code).sort().slice(0, BLOCKER_COUNT),
-        orders: references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_COUNT), reason: "in_use" } }],
+      code: "conflict", message: `Customer location was not deleted because orders use it: ${references.map(row => row.code).sort().slice(0, BLOCKER_LIMIT).join(", ")} and ${OVERFLOW_COUNT} more. Archive it instead.`,
+      issues: [{ path: ["locationId"], meta: { orderCount: ORDER_COUNT, orderCodes: references.map(row => row.code).sort().slice(0, BLOCKER_LIMIT),
+        orders: references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_LIMIT), reason: "in_use" } }],
     });
     expect(await getCustomerLocations(f.ctx, f.customer.id)).toMatchObject([{ id: f.location.id, version: f.location.version }]);
   });
