@@ -11,6 +11,9 @@ import { classifySourceReadback, readBiocharApplicationSources } from "@/lib/iso
 import type { Logger } from "@/lib/log";
 
 const MAX_EVIDENCE_LINK_RECHECKS_PER_LOAD = 3;
+// Isometric can return an Application before its Sources are attached. Give
+// the registry a few seconds, then treat a still-empty list as a mismatch.
+const SOURCE_ATTACH_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
 /** Persisted Application evidence-link counts and the latest attempted check time. */
 export interface RemovalEvidenceLinks {
@@ -31,8 +34,18 @@ export async function checkBiocharApplicationSourceReadback(args: {
   log: Logger;
 }): Promise<void> {
   if (args.expectedSourceIds.length === 0 || args.sourceReadbackStatus === "confirmed") return;
-  const result = classifySourceReadback(args.expectedSourceIds,
+  let result = classifySourceReadback(args.expectedSourceIds,
     await readBiocharApplicationSources(args.client, args));
+  for (const delayMs of SOURCE_ATTACH_RETRY_DELAYS_MS) {
+    if (result.outcome !== "unconfirmed" || result.reason !== "sources_not_attached") break;
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    result = classifySourceReadback(args.expectedSourceIds,
+      await readBiocharApplicationSources(args.client, args));
+  }
+  if (result.outcome === "unconfirmed" && result.reason === "sources_not_attached") {
+    // The registry answered with no Sources at all: fail closed.
+    result = { outcome: "mismatch", missing: [...args.expectedSourceIds].sort(), unexpected: [], reason: "missing" };
+  }
   if (args.sourceReadbackStatus === "mismatch" && result.outcome === "unconfirmed") {
     // Registration confirmation clears drift, but no answer cannot clear the
     // last authoritative mismatch. Restore the submission blocker on retry.

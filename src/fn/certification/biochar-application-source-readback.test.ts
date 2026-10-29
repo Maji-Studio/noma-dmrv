@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 import type { Logger } from "@/lib/log";
 
@@ -155,22 +155,44 @@ describe("Removal summary evidence re-check", () => {
 
 
 describe("submission evidence recheck", () => {
-  const check = () => checkBiocharApplicationSourceReadback({
+  const check = (sourceReadbackStatus = "mismatch") => checkBiocharApplicationSourceReadback({
     orgCtx: ctx, client: { graphql: mocks.graphql } as never,
     registrationId: "journal-1", applicationCode: "APP-001",
     externalProjectId: "prj-test", externalApplicationId: "bca-test",
-    expectedSourceIds: ["src-a"], sourceReadbackStatus: "mismatch", log,
+    expectedSourceIds: ["src-a"], sourceReadbackStatus, log,
   });
+  const settle = async <T>(promise: Promise<T>) => {
+    const outcome = promise.then(value => ({ value }), (error: unknown) => ({ error }));
+    await vi.runAllTimersAsync();
+    return outcome;
+  };
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it("records confirmed without throwing when a stored mismatch now matches", async () => {
     await expect(check()).resolves.toBeUndefined();
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");
     expect(mocks.drift).not.toHaveBeenCalled();
   });
-  it.each([answer([]), { errors: [{ message: "unavailable" }] }])("restores drift on no answer after a mismatch: %j", async response => {
-    mocks.graphql.mockResolvedValue(response);
+  it("restores drift on no answer after a mismatch", async () => {
+    mocks.graphql.mockResolvedValue({ errors: [{ message: "unavailable" }] });
     await expect(check()).rejects.toMatchObject({ name: "SafeError", message: expect.stringContaining("could not confirm a corrected evidence set") });
     expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.drift).toHaveBeenCalledWith(ctx, "journal-1", "source_set_mismatch");
+  });
+  it("waits for Sources Isometric has not attached yet right after create", async () => {
+    mocks.graphql.mockResolvedValueOnce(answer([])).mockResolvedValueOnce(answer(["src-a"]));
+    expect(await settle(check("not_checked"))).toEqual({ value: undefined });
+    expect(mocks.graphql).toHaveBeenCalledTimes(2);
+    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");
+    expect(mocks.drift).not.toHaveBeenCalled();
+  });
+  it.each(["not_checked", "mismatch"])("fails closed when the Source list stays empty (stored %s)", async status => {
+    mocks.graphql.mockResolvedValue(answer([]));
+    const outcome = await settle(check(status));
+    expect(outcome).toMatchObject({ error: { name: "SafeError", message: expect.stringContaining("do not match its reviewed Sources") } });
+    expect(mocks.graphql).toHaveBeenCalledTimes(4);
+    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "mismatch");
     expect(mocks.drift).toHaveBeenCalledWith(ctx, "journal-1", "source_set_mismatch");
   });
 });
