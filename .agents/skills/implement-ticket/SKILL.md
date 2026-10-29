@@ -77,7 +77,9 @@ A plan target adds the same `--spec <plan path>` as its local rounds.
 
 Verify each finding against the code. Fix valid P0 and P1 only, through the Fixer (playbook: Fixer), committing once the step 3 gates are green. Decline valid P2s with a reason in a PR comment, or file them as follow-up issues; decline invalid findings with a one-line reason. A fix commit that touches auth, tenancy or data code (schema, migrations, data-access) gets a **codex-review** of that delta before landing, with that skill's escalation for auth and data diffs and never the model that wrote the fix; no second suite pass. Push the fixes from the main checkout and confirm the PR head is the fixed SHA.
 
-Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, and CI is green on the head.
+CodeRabbit and Greptile comments on the ready PR get the same triage: verify against the code, fix valid P0/P1 through the Fixer, decline the rest with a one-line reply on the comment.
+
+Done when: the light-pass comment is on the PR, every P0/P1 is fixed or declined with a reason, every P2 is declined or filed, every bot comment is triaged, and CI is green on the head.
 
 ## 7. Merge
 
