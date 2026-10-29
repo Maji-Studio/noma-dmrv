@@ -15,6 +15,39 @@ export async function loadCreditBatchRunHoldingAllocations(
 ) {
   requireOrgScope(ctx);
   if (!productionRunIds.length) return [];
+  return queryProductionRunHoldingAllocations(ctx, executor, productionRunIds,
+    splitsApplicationsByBatch ? creditBatchId : undefined)
+    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)));
+}
+
+/** All held Application slices for a set of runs, independent of the target batch. */
+export async function loadProductionRunHoldingAllocations(
+  ctx: OrgContext,
+  executor: Executor,
+  productionRunIds: readonly string[],
+) {
+  requireOrgScope(ctx);
+  if (!productionRunIds.length) return [];
+  return queryProductionRunHoldingAllocations(ctx, executor, productionRunIds);
+}
+
+export function pickCreditBatchRunHoldingAllocation(
+  allocations: readonly Awaited<ReturnType<typeof loadProductionRunHoldingAllocations>>[number][],
+  productionRunId: string,
+  creditBatchId: string,
+  splitsApplicationsByBatch: boolean,
+) {
+  const own = allocations.find(row => row.productionRunId === productionRunId && row.creditBatchId === creditBatchId);
+  return own ?? (splitsApplicationsByBatch ? undefined : allocations.find(row => row.productionRunId === productionRunId));
+}
+
+function queryProductionRunHoldingAllocations(
+  ctx: OrgContext,
+  executor: Executor,
+  productionRunIds: readonly string[],
+  creditBatchId?: string,
+) {
+  requireOrgScope(ctx);
   return executor.select({
     productionRunId: applicationOutputAllocations.productionRunId,
     removalId: certifierRemovals.id,
@@ -33,9 +66,8 @@ export async function loadCreditBatchRunHoldingAllocations(
       inArray(applicationOutputAllocations.productionRunId, [...productionRunIds]),
       eq(applicationOutputAllocations.organizationId, ctx.organizationId),
       isNotNull(creditBatchApplications.removalId),
-      splitsApplicationsByBatch ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
-    ))
-    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)));
+      creditBatchId !== undefined ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
+    ));
 }
 
 /** Shared fit predicates for one cohort or a set-based join against stored batches. */

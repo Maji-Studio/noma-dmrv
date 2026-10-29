@@ -18,6 +18,7 @@ import {
   missingRunsCountedSentence,
   missingRunsMemberSentence,
   missingRunsAdminSentence,
+  refusedRunsSentence,
   sameDayEntrySentence,
 } from "./open-items";
 
@@ -450,8 +451,7 @@ describe("missing production runs", () => {
   });
 
   it.each([true, false])("opens Emissions for a held allocation for any role (canManage %s)", canManage => {
-    const missing = { ...missingProductionRuns, runs: [{ ...run, heldByRemovalCode: "RM-010" }],
-      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }] };
+    const missing = { ...missingProductionRuns, runs: [{ ...run, heldByRemovalCode: "RM-010" }] };
     const items = buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: missing });
     expect(items).toEqual({ blocking: [], check: [{
       id: "late-production-run:run", productionRun: { id: run.id, code: run.code },
@@ -460,8 +460,26 @@ describe("missing production runs", () => {
       target: { tab: "emissions" },
     }] });
     expect(heldMissingRuns(missing)).toEqual([{
-      id: run.id, code: run.code, entryDate: run.startDate, heldByRemovalCode: "RM-010", sameDayEntry: true,
+      id: run.id, code: run.code, entryDate: run.startDate, heldByRemovalCode: "RM-010", sameDayEntry: false,
     }]);
+  });
+
+  it.each([true, false])("clears only refused runs after a later same-day entry (canManage %s)", canManage => {
+    const missing = { ...missingProductionRuns,
+      runs: [{ ...run, heldByRemovalCode: "RM-010" }, { ...run, id: "addable", code: "RUN-113" }],
+      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
+    };
+    const refusedOnly = { ...missing, runs: [missing.runs[0]] };
+    expect(heldMissingRuns(refusedOnly)).toEqual([]);
+    expect(buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: refusedOnly }))
+      .toEqual({ blocking: [], check: [] });
+    expect(heldMissingRuns(missing)).toEqual([{
+      id: "addable", code: "RUN-113", entryDate: run.startDate, heldByRemovalCode: null, sameDayEntry: true,
+    }]);
+    const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: missing });
+    expect(blocking).toEqual([]);
+    expect(check.map(item => item.id)).toEqual(["missing-production-run:addable"]);
+    expect(check[0].sameDayEntry).toBe(true);
   });
 
   it("keeps the member's add guidance even when a same-day entry exists", () => {
@@ -578,6 +596,13 @@ it("points an unavailable returned-Removal comparison to the Removal without cla
 });
 
 describe("missing run copy", () => {
+  it.each([
+    { codes: ["RUN-112"], sentence: "RUN-112 cannot be added. Record its diesel and power on the credit batch's Emissions tab." },
+    { codes: ["RUN-112", "RUN-113"], sentence: "RUN-112 and RUN-113 cannot be added. Record their diesel and power on the credit batch's Emissions tab." },
+  ])("names refused runs: $codes", ({ codes, sentence }) => {
+    expect(refusedRunsSentence(codes)).toBe(sentence);
+  });
+
   it.each([
     { count: 1, counted: "Its emissions are not counted.", member: "An admin can add it in Edit.", admin: "Add it in Edit.",
       sameDay: "If an Emissions entry already records its emissions, delete it when you add the run." },

@@ -10,7 +10,10 @@ import { removalSplitsApplicationsByBatch } from "@/lib/certification/removal-ap
 import { listCreditBatchCertificationLinks } from "./credit-batch-certification-links";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { readRecordLockLineage } from "./record-lock-lineage";
-import { creditBatchRunFitConditions, filterSingleFeedstockTypeRuns, loadCreditBatchRunHoldingAllocations } from "./credit-batch-run-fit";
+import {
+  creditBatchRunFitConditions, filterSingleFeedstockTypeRuns,
+  loadProductionRunHoldingAllocations, pickCreditBatchRunHoldingAllocation,
+} from "./credit-batch-run-fit";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchMissingProductionRuns {
@@ -103,16 +106,15 @@ export async function loadCreditBatchesMissingProductionRuns(
     result.get(row.creditBatchId)!.runs.push({ id: row.productionRunId, code: row.code, startDate: row.startDate,
       createdAt: row.createdAt, heldByRemovalCode: null });
   }
-  await Promise.all(heldBatches.map(async batch => {
+  const heldRunIds = [...new Set(heldBatches.flatMap(batch => result.get(batch.creditBatchId)!.runs.map(run => run.id)))];
+  const allocations = await loadProductionRunHoldingAllocations(ctx, db, heldRunIds);
+  for (const batch of heldBatches) {
     const missing = result.get(batch.creditBatchId)!;
-    const allocations = await loadCreditBatchRunHoldingAllocations(ctx, db, missing.runs.map(run => run.id),
-      batch.creditBatchId, removalSplitsApplicationsByBatch(batch.durabilityOption));
-    const holdingCodes = new Map<string, string>();
-    for (const allocation of allocations) {
-      if (!holdingCodes.has(allocation.productionRunId)) holdingCodes.set(allocation.productionRunId, allocation.removalCode);
+    const splits = removalSplitsApplicationsByBatch(batch.durabilityOption);
+    for (const run of missing.runs) {
+      run.heldByRemovalCode = pickCreditBatchRunHoldingAllocation(allocations, run.id, batch.creditBatchId, splits)?.removalCode ?? null;
     }
-    for (const run of missing.runs) run.heldByRemovalCode = holdingCodes.get(run.id) ?? null;
-  }));
+  }
   for (const entry of entries) {
     result.get(entry.creditBatchId)!.manualEntries.push({ occurredOn: entry.occurredOn, createdAt: entry.createdAt });
   }

@@ -39,6 +39,7 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
 export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
+/** Emissions Checks for Sent batches' late runs and held runs that Add run refuses. */
 export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 
 export interface CreditBatchOpenItem {
@@ -147,12 +148,14 @@ function removalCorrectionItem(
   };
 }
 
+function hasSameDayEntry(missing: CreditBatchMissingProductionRuns, entryDate: string, runCreatedAt: Date): boolean {
+  return missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > runCreatedAt);
+}
+
 /** Runs whose emissions have not already been reported by a later manual entry. */
 export function uncoveredProductionRuns(missing: CreditBatchMissingProductionRuns) {
-  return missing.runs.filter(run => {
-    const entryDate = lateRunEntryDate(run.startDate, missing.batchStartDate);
-    return !missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt);
-  });
+  return missing.runs.filter(run => !hasSameDayEntry(missing,
+    lateRunEntryDate(run.startDate, missing.batchStartDate), run.createdAt));
 }
 
 export interface HeldMissingRun {
@@ -163,16 +166,16 @@ export interface HeldMissingRun {
   sameDayEntry: boolean;
 }
 
-/** A held batch's missing runs: every fitting run, with what Add run and same-day entries mean for it. */
+/** A held batch's fitting runs: addable runs stay; refused runs clear after a later same-day entry. */
 export function heldMissingRuns(missing: CreditBatchMissingProductionRuns): HeldMissingRun[] {
   if (!missing.heldRemovalCodes.length || missing.sentRemovalCodes.length) return [];
   return missing.runs.map(run => {
     const entryDate = lateRunEntryDate(run.startDate, missing.batchStartDate);
     return {
       id: run.id, code: run.code, entryDate, heldByRemovalCode: run.heldByRemovalCode,
-      sameDayEntry: missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt),
+      sameDayEntry: hasSameDayEntry(missing, entryDate, run.createdAt),
     };
-  });
+  }).filter(run => run.heldByRemovalCode === null || !run.sameDayEntry);
 }
 
 export function missingRunsCountedSentence(count: number): string {
@@ -185,6 +188,12 @@ export function missingRunsMemberSentence(count: number): string {
 
 export function missingRunsAdminSentence(count: number): string {
   return count === 1 ? "Add it in Edit." : "Add them in Edit.";
+}
+
+export function refusedRunsSentence(codes: readonly string[]): string {
+  return codes.length === 1
+    ? `${codes[0]} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
+    : `${joinWithAnd(codes)} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
 }
 
 export function sameDayEntrySentence(count: number): string {

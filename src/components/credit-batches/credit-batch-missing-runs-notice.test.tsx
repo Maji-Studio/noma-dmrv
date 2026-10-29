@@ -51,6 +51,13 @@ describe("CreditBatchMissingRunsNotice", () => {
     );
   });
 
+  it("counts only the runs with a same-day entry in the same-day sentence", () => {
+    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntry: true }, RUNS[1]]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
+    const text = screen.getByRole("status").textContent!;
+    expect(text).toContain("If an Emissions entry already records its emissions, delete it when you add the run.");
+    expect(text).not.toContain("add the runs");
+  });
+
   it("carries the same-day flag from the to-dos", () => {
     expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true }]))
       .toEqual([{ ...RUNS[0], sameDayEntry: true }]);

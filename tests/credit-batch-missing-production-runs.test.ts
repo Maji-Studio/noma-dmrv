@@ -231,6 +231,8 @@ describe("missing production run detection (real DB)", () => {
     ));
     const fitting = await run("HELD-ALLOCATION");
     const ordinary = await run("ORDINARY", { startTime: new Date("2026-06-10T08:00:00Z"), endTime: new Date("2026-06-10T12:00:00Z") });
+    const otherFitting = await run("OTHER-HELD", { facilityId: otherFacility.facilityId,
+      reactorId: otherFacility.reactorId, biocharStorageLocationId: otherFacility.biocharBinId }, [otherFacility.feedstockId]);
     const [originalShare] = await db.select().from(applicationOutputAllocations)
       .where(eq(applicationOutputAllocations.applicationId, otherFacility.applicationId));
     // Half the Application stays in its held slice; the missed run supplies the rest.
@@ -247,7 +249,13 @@ describe("missing production run detection (real DB)", () => {
     try {
       const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
         .where(eq(certifierRemovals.id, otherFacility.removalId));
-      const missing = await read();
+      const missingByBatch = await loadCreditBatchesMissingProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
+      const missing = missingByBatch.get(main.batchId)!;
+      expect(missingByBatch.get(otherFacility.batchId)).toEqual({
+        sentRemovalCodes: [], heldRemovalCodes: [holder.code], batchStartDate: "2026-06-01", manualEntries: [],
+        runs: [{ id: otherFitting.id, code: otherFitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT,
+          heldByRemovalCode: null }],
+      });
       expect(missing.runs).toEqual([
         { id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT,
           heldByRemovalCode: durabilityOption === "200_year" ? holder.code : null },
@@ -261,6 +269,12 @@ describe("missing production run detection (real DB)", () => {
         removalId: main.removalId });
       expect((await read()).runs).toEqual(missing.runs.map(run => ({ ...run,
         heldByRemovalCode: run.id === fitting.id ? ownHolder.code : null })));
+      expect((await todos()).check.map(item => item.id)).toEqual([
+        `late-production-run:${fitting.id}`, `missing-production-run:${ordinary.id}`,
+      ]);
+      const values = await entryValues();
+      await db.insert(emissionEntries).values({ ...values, kind: "value" });
+      expect((await todos()).check.map(item => item.id)).toEqual([`missing-production-run:${ordinary.id}`]);
       // A Sent batch uses its existing entry guidance without the held-allocation read.
       await sendOtherRemoval();
       await db.update(creditBatchApplications).set({ removalId: otherFacility.removalId }).where(and(

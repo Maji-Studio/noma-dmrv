@@ -71,7 +71,8 @@ interface CreditBatchMissingRunsNoticeProps {
 export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit }: CreditBatchMissingRunsNoticeProps) {
   if (runs.length === 0) return null;
   const one = runs.length === 1;
-  const sameDay = runs.some((run) => run.sameDayEntry);
+  const sameDayCount = runs.filter((run) => run.sameDayEntry).length;
+  const sameDay = sameDayCount > 0;
   // With the Edit button the action is already there; without it say who adds the run.
   const nextStep = canManage
     ? (onEdit ? null : missingRunsAdminSentence(runs.length))
@@ -90,12 +91,12 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       <MissingRunLinks runs={runs} facilityId={facilityId} />
       {`. ${missingRunsCountedSentence(runs.length)}`}
       {nextStep && ` ${nextStep}`}
-      {canManage && sameDay && ` ${sameDayEntrySentence(runs.length)}`}
+      {canManage && sameDay && ` ${sameDayEntrySentence(sameDayCount)}`}
     </Notice>
   );
 }
 
-/** A Sent batch's late-run Check, as the sheet reads it: the Check's own words. */
+/** A late-run Check (Sent batch, or a held run Add run refuses), as the sheet reads it: the Check's own words. */
 export interface LateRunRef extends MissingRunRef {
   title: string;
   titleAfterCode?: string;
@@ -113,10 +114,11 @@ export function lateRunsFromTodos(
 }
 
 /**
- * View mode of a Sent batch: a completed run that fits it was recorded after
- * its Removal was sent. Sent stays locked, so the next step is the Emissions
- * tab (open to everyone, as the Check's own target is), not Edit. One notice
- * per run, because each Check dates its own entry.
+ * View mode of a late run: one recorded after its Removal was sent, or one a
+ * held batch cannot take because its biochar is in another Removal's
+ * Application. Neither can be added in Edit, so the next step is the Emissions
+ * tab (open to everyone, as the Check's own target is). One notice per run,
+ * because each Check dates its own entry.
  */
 export function CreditBatchLateRunsNotice({
   runs,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MissingRunLinks } from "@/components/credit-batches/credit-batch-missing-runs-notice";
 import { Notice } from "@/components/ui/notice";
-import { missingRunsCountedSentence, missingRunsMemberSentence } from "@/lib/credit-batches/open-items";
+import { missingRunsCountedSentence, missingRunsMemberSentence, refusedRunsSentence } from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
@@ -25,6 +25,7 @@ export function RemovalMissingRunsNotice({
     <>
       {batches.map((batch) => {
         const one = batch.runs.length === 1;
+        const refused = batch.runs.filter((run) => !run.canAdd).map((run) => run.code);
         return (
           <Notice
             key={batch.creditBatchId}
@@ -39,7 +40,8 @@ export function RemovalMissingRunsNotice({
           >
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
             {`. ${missingRunsCountedSentence(batch.runs.length)}`}
-            {!canManage && batch.runs.every((run) => run.canAdd) && ` ${missingRunsMemberSentence(batch.runs.length)}`}
+            {!canManage && refused.length === 0 && ` ${missingRunsMemberSentence(batch.runs.length)}`}
+            {refused.length > 0 && ` ${refusedRunsSentence(refused)}`}
           </Notice>
         );
       })}

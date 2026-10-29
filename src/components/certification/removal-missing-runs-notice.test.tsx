@@ -36,6 +36,23 @@ describe("RemovalMissingRunsNotice", () => {
     expect(document.body.textContent).not.toContain("An admin can add");
   });
 
+  it.each([true, false])("sends a refused run to the Emissions tab (canManage %s)", (canManage) => {
+    render(<RemovalMissingRunsNotice facilityId="facility-1" canManage={canManage} batches={[
+      { creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: false }] },
+    ]} />);
+    expect(document.body.textContent).toContain(
+      "RUN-1. Its emissions are not counted. RUN-1 cannot be added. Record its diesel and power on the credit batch's Emissions tab.",
+    );
+  });
+
+  it("names only the refused code in a mixed batch", () => {
+    render(<RemovalMissingRunsNotice facilityId="facility-1" canManage batches={[
+      { creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: true }, { id: "run-2", code: "RUN-2", canAdd: false }] },
+    ]} />);
+    expect(document.body.textContent).toContain("RUN-2 cannot be added.");
+    expect(document.body.textContent).not.toContain("RUN-1 cannot be added");
+  });
+
   it("shows nothing when no batch is missing a run", () => {
     const { container } = render(<RemovalMissingRunsNotice facilityId="facility-1" canManage batches={[]} />);
     expect(container.textContent).toBe("");
