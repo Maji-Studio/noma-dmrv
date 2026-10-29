@@ -1,3 +1,4 @@
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
 /**
@@ -643,6 +644,7 @@ export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,
   tx: DbTransaction,
   productionRunId: string,
+  options: { mutation?: "create" | "update"; transportOwnershipFreeze?: TransportOwnershipFreezeScope } = {},
 ): Promise<string | null> {
   requireOrgScope(ctx);
   const [run] = await tx
@@ -756,19 +758,24 @@ export async function attachProductionRunToMatchingCreditBatch(
     throw error;
   }
 
-  await tx.insert(creditBatchProductionRuns).values({
-    organizationId: ctx.organizationId,
-    creditBatchId: batch.id,
-    productionRunId,
-  });
-  // The edit form includes membership, so auto-attachment also invalidates an
-  // already-open batch form even though no scalar batch field was edited.
-  await tx.update(creditBatches)
-    .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
-    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
+  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+    await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], batchIds: [batch.id] }),
+    { mutation: options.mutation ?? "update", subject: "production run" }, options.transportOwnershipFreeze);
+  return freeze(async () => {
+    await tx.insert(creditBatchProductionRuns).values({
+      organizationId: ctx.organizationId,
+      creditBatchId: batch.id,
+      productionRunId,
+    });
+    // The edit form includes membership, so auto-attachment also invalidates an
+    // already-open batch form even though no scalar batch field was edited.
+    await tx.update(creditBatches)
+      .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
+      .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
 
-  await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
-  return batch.id;
+    await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
+    return batch.id;
+  });
 }
 
 /** The shared, inclusive cohort predicate for preview and automatic attachment. */
