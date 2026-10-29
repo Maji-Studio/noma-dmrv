@@ -18,7 +18,7 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
 import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
@@ -175,10 +175,11 @@ export function CreditBatchForm({
   // edit shows its code, a create continues the facility's last name or the
   // next code.
   const nameSuggestion = useCreditBatchNameSuggestion(effectiveFacilityId || undefined, !isEditMode).data;
-  const suggestedName = creditBatch?.code ?? nameSuggestion?.name ?? nameSuggestion?.nextCode;
   // A retry reuses the create's intent key, and the server refuses that key
   // for a different request, so a blank create keeps the name it first sent.
-  const blankCreateName = useRef<{ name: string | null | undefined } | null>(null);
+  const [blankCreateName, setBlankCreateName] = useState<{ name: string | null | undefined } | null>(null);
+  const continuedName = blankCreateName ? blankCreateName.name : nameSuggestion?.name;
+  const suggestedName = creditBatch?.code ?? continuedName ?? nameSuggestion?.nextCode;
   const certifier = certifierSummary.data === undefined
     ? "isometric"
     : certifierSummary.data.mapping?.provider ?? null;
@@ -392,9 +393,11 @@ export function CreditBatchForm({
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    const name = isEditMode || data.name
-      ? data.name
-      : (blankCreateName.current ??= { name: nameSuggestion?.name }).name;
+    let name = data.name;
+    if (!isEditMode && !name) {
+      name = continuedName;
+      if (!blankCreateName) setBlankCreateName({ name });
+    }
     return onSubmit({ ...data, name, sampling }, refuseSave);
   }));
 

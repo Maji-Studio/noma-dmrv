@@ -560,6 +560,8 @@ describe("CreditBatchForm name suggestion", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
     expect(onSubmit.mock.calls[0][0].name ?? null).toBeNull();
     expect(onSubmit.mock.calls[1][0].name ?? null).toBeNull();
+    // The grey text matches what the retry saves: no name, so the code.
+    expect(nameInput().placeholder).toBe("CB-26-004");
   });
 
   it("keeps the batch's own code in grey when editing", () => {
