@@ -247,8 +247,8 @@ export function FormulationList() {
       toast.success("Formulation deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
-      if (isInUseDeleteRefusal(error) && !deletingFormulation.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      if (isInUseDeleteRefusal(error)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active formulation, Close only for an archived one).
         setDeleteConflict(deletingFormulation);
         setDeletingFormulation(null);
         return;
@@ -425,7 +425,7 @@ export function FormulationList() {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => handleArchive(deleteConflict)}
+          onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);

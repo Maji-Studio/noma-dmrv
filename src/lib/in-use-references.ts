@@ -5,6 +5,17 @@ import { recordHref } from "@/lib/record-links";
 /** A record that still uses the row, as a link the operator can open. */
 export interface InUseRecordLink { href: string; code: string; kind: string }
 
+const COUNT_KEY = { feedstocks: "feedstockCount", deliveries: "deliveryCount", orders: "orderCount" } as const;
+
+/** How many blockers the refusal names beyond the links it carries (0 when it names no total). */
+export function inUseMoreCount(error: unknown, key: keyof typeof COUNT_KEY): number {
+  if (!(error instanceof ActionError)) return 0;
+  const meta = error.issues.find((issue) => issue.meta?.reason === IN_USE_REASON)?.meta;
+  const total = meta?.[COUNT_KEY[key]];
+  const shown = namedRecords(error, key).length;
+  return typeof total === "number" && Number.isFinite(total) ? Math.max(0, Math.floor(total) - shown) : 0;
+}
+
 type NamedRecord = { id: string; code: string; facilityId?: string };
 
 /** The records a refusal names under `key`, skipping any entry without a string id and code. */

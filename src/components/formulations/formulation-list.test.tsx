@@ -132,6 +132,19 @@ describe("FormulationList archive view", () => {
     expect(state.remove).toHaveBeenCalledWith({ formulationId: "id-BCF-0001", expectedVersion: 1 });
   });
 
+  it("gives an archived formulation the Close-only in-use dialog", async () => {
+    const message = "This formulation is still used.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["formulationId"]) }));
+    render(<FormulationList />);
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(await screen.findByRole("dialog", { name: "BCF-0002 is in use" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("keeps an unmarked conflict in the delete dialog", async () => {
     const message = "Formulation was not deleted because its name clashes.";
     state.remove.mockRejectedValue(new ActionError({ error: message, code: "conflict" }));
