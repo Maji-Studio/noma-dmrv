@@ -99,7 +99,13 @@ export function kgNumber(kg: number): string {
 }
 
 export function signedKg(item: WaterfallItem): string {
+  if (item.figureMissing) return formatMassKg(null);
   return item.kind === "step" ? `${MINUS}${kgNumber(item.massKg)}` : kgNumber(item.massKg);
+}
+
+/** The figure with its unit; the shared missing token stands alone. */
+export function valueLabel(item: WaterfallItem): string {
+  return item.figureMissing ? formatMassKg(null) : `${signedKg(item)} kg`;
 }
 
 export function recordCountLabel(item: WaterfallItem): string {
@@ -139,7 +145,12 @@ export function useColumnFocus(initial: WaterfallItemKey | null = null) {
 /** Plain sentence of how the figure is made, like "620 kg stored, less 137 kg ...". */
 export function summarySentence(model: WaterfallModel): string {
   const start = formatMassKg(model.startKg);
-  const went = model.startBasis === "wet" ? `${start} of wet feedstock went in.` : `${start} of dry feedstock went in.`;
+  const went =
+    model.dryStartReason === "dry-input-missing"
+      ? "Dry feedstock is not recorded on every run."
+      : model.startBasis === "wet"
+        ? `${start} of wet feedstock went in.`
+        : `${start} of dry feedstock went in.`;
   if (!model.balanced) return went;
   const steps = model.stepCount === 1 ? "One step took out" : `${capitalise(countWord(model.stepCount))} steps took out`;
   return model.stepCount === 0 ? went : `${went} ${steps} ${formatMassKg(model.removedKg)}.`;
@@ -171,7 +182,7 @@ export function LedgerExplanation({ model }: { model: WaterfallModel }) {
           {model.items.map((item) => (
             <tr key={item.key} className="border-t border-[var(--clr-dark-purple-10)]">
               <td className="py-4 pr-8 text-[var(--color-text-secondary)]">{item.label}</td>
-              <td className="py-4 pr-8 text-right tabular-nums whitespace-nowrap">{signedKg(item)} kg</td>
+              <td className="py-4 pr-8 text-right tabular-nums whitespace-nowrap">{valueLabel(item)}</td>
               <td className="py-4 text-right tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">
                 {item.kind === "step" && model.balanced ? `${kgNumber(levelAfter(item))} kg left` : ""}
               </td>

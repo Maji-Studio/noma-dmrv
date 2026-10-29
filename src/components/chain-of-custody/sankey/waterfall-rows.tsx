@@ -15,7 +15,7 @@ import {
   ItemIcon,
   LIT_FILL,
   LIT_INK,
-  signedKg,
+  valueLabel,
   STAGE_ICONS,
   START_FILL,
   START_STROKE,
@@ -77,7 +77,7 @@ export function WaterfallRows({ model, activeKey, onSelect, renderDetail }: Wate
             !active && "hover:bg-[var(--clr-dark-purple-1)]",
           )}
           aria-pressed={active}
-          aria-label={`${item.label}: ${signedKg(item)} kg`}
+          aria-label={`${item.label}: ${valueLabel(item)}`}
           data-testid={`sankey-row-${item.key}`}
           onClick={() => onSelect(item.key)}
         >
@@ -89,7 +89,7 @@ export function WaterfallRows({ model, activeKey, onSelect, renderDetail }: Wate
             className="body-small whitespace-nowrap tabular-nums"
             style={{ color: lit ? LIT_INK : item.kind === "step" ? "var(--color-text-secondary)" : "var(--color-text-primary)" }}
           >
-            {signedKg(item)} kg
+            {valueLabel(item)}
           </span>
           <span className="relative col-span-2 h-8" aria-hidden>
             <span className="absolute inset-y-0 box-border" style={barStyle(item, maxKg)} />

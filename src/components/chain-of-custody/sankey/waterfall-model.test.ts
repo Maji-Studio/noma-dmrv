@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { formatMassKg } from "@/lib/format-utils";
 import { buildBatchSankey, type SankeyLineage } from "@/lib/chain-of-custody/sankey";
+import { signedKg, summarySentence, valueLabel } from "./waterfall-parts";
 import { buildWaterfall, chartMaxKg, DEFAULT_COLUMN, levelAfter, type WaterfallLineage } from "./waterfall-model";
 
 const RUN_DRY_IN_KG = 4_000;
@@ -131,6 +133,10 @@ describe("buildWaterfall", () => {
 
     expect(model.startBasis).toBe("dry");
     expect(model.dryStartReason).toBe("dry-input-missing");
+    // No partial figure stated as fact: the sentence and the start column name the gap.
+    expect(summarySentence(model)).toBe("Dry feedstock is not recorded on every run.");
+    expect(valueLabel(model.items[0])).toBe(formatMassKg(null));
+    expect(signedKg(model.items[0])).toBe(formatMassKg(null));
     expect(model.items.map((item) => item.key)).not.toContain("water_driven_off");
   });
 

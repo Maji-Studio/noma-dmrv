@@ -21,6 +21,7 @@ import {
   LIT_FILL,
   LIT_INK,
   signedKg,
+  valueLabel,
   STAGE_ICONS,
   START_FILL,
   START_STROKE,
@@ -245,7 +246,7 @@ export function WaterfallChart({
           type="button"
           className="absolute top-0 cursor-pointer bg-transparent outline-none focus-visible:outline-[1.5px] focus-visible:outline-[var(--color-interaction)]"
           style={{ left: centerX(index) - pitch / 2, width: pitch, height: bracketY }}
-          aria-label={`${item.label}: ${signedKg(item)} kg`}
+          aria-label={`${item.label}: ${valueLabel(item)}`}
           aria-pressed={pinnedKey === item.key}
           data-testid={`sankey-column-${item.key}`}
           onPointerEnter={(event) => {

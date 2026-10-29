@@ -60,6 +60,8 @@ export interface WaterfallItem {
   recordKind: LineageNodeKind;
   records: WaterfallRecord[];
   note: string;
+  /** Start column only: some run has no dry input, so the figure is a partial sum, not a measurement. */
+  figureMissing?: boolean;
 }
 
 export type DryStartReason = "wet-missing" | "dry-input-missing" | "wet-below-dry";
@@ -304,6 +306,7 @@ export function buildWaterfall(
     basis: startBasis, stage: null, recordKind: "feedstock",
     records: [...facts.feedstocks].sort(byCode),
     note: NOTES.feedstock,
+    figureMissing: dryStartReason === "dry-input-missing",
   });
   const pushStep = (key: WaterfallItemKey, label: string, massKg: number, stage: WaterfallStage, recordKind: LineageNodeKind, records: WaterfallRecord[]) => {
     items.push({ key, kind: "step", label, massKg, top: level, bottom: level - massKg, basis: "dry", stage, recordKind, records, note: NOTES[key] });

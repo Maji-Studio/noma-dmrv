@@ -75,19 +75,25 @@ export function RecordRows({ item, facilityId, compact = false }: { item: Waterf
             href={recordHref(record.kind, record.id, { facilityId })}
             className={cn(
               "body-small grid min-h-44 items-center gap-x-12 py-8 hover:bg-[var(--clr-dark-purple-1)]",
-              compact ? "grid-cols-[auto_minmax(0,1fr)_auto_auto] px-12" : "grid-cols-[auto_minmax(0,auto)_minmax(0,1fr)_auto_auto] px-16",
+              compact ? "grid-cols-[auto_minmax(0,1fr)_auto] gap-y-2 px-12" : "grid-cols-[auto_minmax(0,auto)_minmax(0,1fr)_auto_auto] px-16",
             )}
             data-testid="sankey-record-row"
           >
-            <span className="flex size-24 items-center justify-center" style={{ background: style.accent }} aria-hidden>
+            <span className={cn("flex size-24 items-center justify-center", compact && "row-span-2")} style={{ background: style.accent }} aria-hidden>
               <KindIcon size={14} className="text-[var(--paper)]" />
             </span>
             <span className="truncate font-medium text-[var(--color-text-primary)]">{record.code}</span>
             {compact ? null : <span className="truncate text-[var(--color-text-secondary)]">{record.name ?? ""}</span>}
-            <span className="whitespace-nowrap text-right tabular-nums text-[var(--color-text-primary)]">
+            {/* Phone: the figures go under the code so a long pair never squeezes it. */}
+            <span
+              className={cn(
+                "tabular-nums text-[var(--color-text-primary)]",
+                compact ? "col-start-2 row-start-2" : "whitespace-nowrap text-right",
+              )}
+            >
               <RecordFigure item={item} record={record} />
             </span>
-            <CaretRightIcon size={14} className="text-[var(--color-text-tertiary)]" aria-hidden />
+            <CaretRightIcon size={14} className={cn("text-[var(--color-text-tertiary)]", compact && "col-start-3 row-span-2 row-start-1")} aria-hidden />
           </Link>
         </li>
       ))}
