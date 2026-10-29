@@ -6,7 +6,7 @@ import {
   missingRunsMemberNamedSentence,
   missingRunsMemberSentence,
   refusedRunsSentence,
-  sameDayEntrySentence,
+  sameDayEntryWarning,
 } from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
@@ -33,7 +33,7 @@ export function RemovalMissingRunsNotice({
         const one = batch.runs.length === 1;
         const refused = batch.runs.filter((run) => !run.canAdd).map((run) => run.code);
         const addable = batch.runs.filter((run) => run.canAdd);
-        const sameDayCount = addable.filter((run) => run.sameDayEntry).length;
+        const sameDay = sameDayEntryWarning(addable, batch.runs.length);
         const batchHref = recordHref("creditBatch", batch.creditBatchId, { facilityId });
         const emissionsHref = recordHref("creditBatch", batch.creditBatchId, { facilityId, tab: "emissions" });
         return (
@@ -63,7 +63,7 @@ export function RemovalMissingRunsNotice({
             {!canManage && addable.length > 0 && ` ${refused.length === 0
               ? missingRunsMemberSentence(addable.length)
               : missingRunsMemberNamedSentence(addable.map((run) => run.code))}`}
-            {canManage && sameDayCount > 0 && ` ${sameDayEntrySentence(sameDayCount)}`}
+            {canManage && sameDay && ` ${sameDay}`}
           </Notice>
         );
       })}

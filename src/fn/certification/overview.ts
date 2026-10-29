@@ -111,7 +111,7 @@ export interface CreditBatchHealthSummary {
 export interface RemovalMissingProductionRuns {
   creditBatchId: string;
   creditBatchCode: string;
-  runs: { id: string; code: string; canAdd: boolean; sameDayEntry?: boolean }[];
+  runs: { id: string; code: string; canAdd: boolean; sameDayEntryDate?: string }[];
 }
 
 // One removal's place in the Removals hub: its identity, member batches, latest
@@ -199,7 +199,8 @@ async function buildRemovalPreflightSummary(
       creditBatchId: batch.id,
       creditBatchCode: batch.code,
       runs: runs.map((run) => ({
-        id: run.id, code: run.code, canAdd: run.heldByRemovalCode === null, sameDayEntry: run.sameDayEntry,
+        id: run.id, code: run.code, canAdd: run.heldByRemovalCode === null,
+        ...(run.sameDayEntry ? { sameDayEntryDate: run.entryDate } : {}),
       })),
     }];
   });

@@ -45,37 +45,32 @@ describe("CreditBatchMissingRunsNotice", () => {
   });
 
   it("warns an admin about a same-day Emissions entry", () => {
-    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntry: true }]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
+    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntryDate: "2026-09-09" }]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
     expect(screen.getByRole("status").textContent).toContain(
       "Its emissions are not counted. If an Emissions entry already records its emissions, delete it when you add the run.",
     );
   });
 
-  it("counts only the runs with a same-day entry in the same-day sentence", () => {
-    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntry: true }, RUNS[1]]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
+  it("names only the runs with a same-day entry, in one sentence, when several runs are missing", () => {
+    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntryDate: "2026-09-09" }, RUNS[1]]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
     const text = screen.getByRole("status").textContent!;
-    expect(text).toContain("If an Emissions entry already records its emissions, delete it when you add the run.");
-    expect(text).not.toContain("add the runs");
+    expect(text).toContain("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
+    expect(text).not.toContain("RUN-2 (");
   });
 
-  it("names the run and day when several runs are missing", () => {
+  it("lists every same-day run once with its day", () => {
     render(<CreditBatchMissingRunsNotice
-      runs={[{ ...RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }, { ...RUNS[1], sameDayEntry: true, sameDayEntryDate: "2026-09-12" }]}
+      runs={[{ ...RUNS[0], sameDayEntryDate: "2026-09-09" }, { ...RUNS[1], sameDayEntryDate: "2026-09-12" }]}
       facilityId="facility-1" canManage onEdit={vi.fn()}
     />);
     const text = screen.getByRole("status").textContent!;
-    expect(text).toContain(`If the Emissions entry dated Sep 9, 2026 already records the emissions of ${RUNS[0].code}, delete it when you add the run.`);
-    expect(text).toContain(`If the Emissions entry dated Sep 12, 2026 already records the emissions of ${RUNS[1].code}, delete it when you add the run.`);
+    expect(text).toContain("records the emissions of RUN-1 (Sep 9, 2026) or RUN-2 (Sep 12, 2026), delete it when you add the run.");
+    expect(text.match(/If an Emissions entry/g)).toHaveLength(1);
   });
 
   it("carries the same-day date from the to-dos", () => {
-    expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }]))
-      .toEqual([{ ...RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }]);
-  });
-
-  it("carries the same-day flag from the to-dos", () => {
-    expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true }]))
-      .toEqual([{ ...RUNS[0], sameDayEntry: true }]);
+    expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntryDate: "2026-09-09" }]))
+      .toEqual([{ ...RUNS[0], sameDayEntryDate: "2026-09-09" }]);
   });
 
   it("shows nothing without missing runs", () => {

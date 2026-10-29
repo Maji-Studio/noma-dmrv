@@ -18,7 +18,7 @@ import {
   missingRunsCountedSentence,
   missingRunsMemberNamedSentence,
   missingRunsMemberSentence,
-  sameDayEntryRunSentence,
+  sameDayEntryWarning,
   missingRunsAdminSentence,
   refusedRunsSentence,
   sameDayEntrySentence,
@@ -429,9 +429,9 @@ describe("missing production runs", () => {
       ...missingProductionRuns, runs: [run],
       manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
     } });
-    expect(check[0].sameDayEntry).toBe(true);
+    expect(check[0].sameDayEntryDate).toBe(run.startDate);
     const none = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns }).check;
-    expect(none[0].sameDayEntry).toBeUndefined();
+    expect(none[0].sameDayEntryDate).toBeUndefined();
   });
 
   it("uses the batch start day for the same-day warning on an early held run", () => {
@@ -441,7 +441,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, runs: [early], manualEntries: [entry],
     } }).check).toEqual([{
       id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
-      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-01",
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntryDate: "2026-09-01",
       detail: "Its emissions are not counted in RM-009. If the Emissions entry dated Sep 1, 2026 already records them, delete it when you add the run.",
       target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
     }]);
@@ -481,7 +481,7 @@ describe("missing production runs", () => {
     const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: missing });
     expect(blocking).toEqual([]);
     expect(check.map(item => item.id)).toEqual(["missing-production-run:addable"]);
-    expect(check[0].sameDayEntry).toBe(true);
+    expect(check[0].sameDayEntryDate).toBe(run.startDate);
   });
 
   it("keeps the member's add guidance even when a same-day entry exists", () => {
@@ -489,7 +489,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
     } }).check[0]).toEqual({
       id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
-      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-09",
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntryDate: "2026-09-09",
       detail: "Its emissions are not counted in RM-009. An admin can add it in Edit.", target: null,
     });
   });
@@ -609,7 +609,10 @@ describe("missing run copy", () => {
     expect(refusedRunsSentence(["RUN-112"], true)).toBe("It cannot be added. Record its diesel and power on the credit batch's Emissions tab.");
     expect(refusedRunsSentence(["RUN-112", "RUN-113"], true)).toBe("They cannot be added. Record their diesel and power on the credit batch's Emissions tab.");
     expect(missingRunsMemberNamedSentence(["RUN-1", "RUN-2"])).toBe("An admin can add RUN-1 and RUN-2 in Edit.");
-    expect(sameDayEntryRunSentence("RUN-1", "2026-09-09")).toBe("If the Emissions entry dated Sep 9, 2026 already records the emissions of RUN-1, delete it when you add the run.");
+    expect(sameDayEntryWarning([{ code: "RUN-1" }])).toBeNull();
+    expect(sameDayEntryWarning([{ code: "RUN-1", sameDayEntryDate: "2026-09-09" }])).toBe(sameDayEntrySentence(1));
+    expect(sameDayEntryWarning([{ code: "RUN-1", sameDayEntryDate: "2026-09-09" }], 2))
+      .toBe("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
   });
 
   it.each([

@@ -70,13 +70,26 @@ describe("RemovalMissingRunsNotice", () => {
 
   it("warns an admin about a same-day Emissions entry on a held run", () => {
     render(<RemovalMissingRunsNotice facilityId="facility-1" canManage batches={[
-      { creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: true, sameDayEntry: true }] },
+      { creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: true, sameDayEntryDate: "2026-09-09" }] },
     ]} />);
     expect(document.body.textContent).toContain("If an Emissions entry already records its emissions, delete it when you add the run.");
   });
 
+  it("names the addable run and its day when a refused run is in the batch", () => {
+    render(<RemovalMissingRunsNotice facilityId="facility-1" canManage batches={[
+      { creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [
+        { id: "run-1", code: "RUN-1", canAdd: true, sameDayEntryDate: "2026-09-09" },
+        { id: "run-2", code: "RUN-2", canAdd: false },
+      ] },
+    ]} />);
+    const text = document.body.textContent!;
+    expect(text).toContain("RUN-2 cannot be added.");
+    expect(text).toContain("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
+    expect(text).not.toContain("records its emissions");
+  });
+
   it("keeps the same-day warning from a member and from runs without an entry", () => {
-    const batches = [{ creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: true, sameDayEntry: true }] }];
+    const batches = [{ creditBatchId: "batch-1", creditBatchCode: "CB-1", runs: [{ id: "run-1", code: "RUN-1", canAdd: true, sameDayEntryDate: "2026-09-09" }] }];
     const { unmount } = render(<RemovalMissingRunsNotice facilityId="facility-1" canManage={false} batches={batches} />);
     expect(document.body.textContent).not.toContain("delete it");
     unmount();

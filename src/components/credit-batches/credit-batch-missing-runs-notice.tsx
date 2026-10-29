@@ -10,8 +10,7 @@ import {
   missingRunsAdminSentence,
   missingRunsCountedSentence,
   missingRunsMemberSentence,
-  sameDayEntryRunSentence,
-  sameDayEntrySentence,
+  sameDayEntryWarning,
 } from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
@@ -20,18 +19,16 @@ export interface MissingRunRef {
   id: string;
   code: string;
   /** A later Emissions entry dated the run's day may already record its emissions. */
-  sameDayEntry?: boolean;
-  /** With `sameDayEntry`: the entry's day (YYYY-MM-DD), so a sentence about several runs can name it. */
   sameDayEntryDate?: string;
 }
 
 /** The runs the batch's missing-run Check names, from the batch's to-dos. */
 export function missingRunsFromTodos(
-  check: readonly { productionRun?: MissingRunRef; id: string; sameDayEntry?: boolean; sameDayEntryDate?: string }[] | undefined,
+  check: readonly { productionRun?: MissingRunRef; id: string; sameDayEntryDate?: string }[] | undefined,
 ): MissingRunRef[] {
   return (check ?? []).flatMap((item) =>
     item.id.startsWith(MISSING_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun
-      ? [item.sameDayEntry ? { ...item.productionRun, sameDayEntry: true, ...(item.sameDayEntryDate ? { sameDayEntryDate: item.sameDayEntryDate } : {}) } : item.productionRun]
+      ? [item.sameDayEntryDate ? { ...item.productionRun, sameDayEntryDate: item.sameDayEntryDate } : item.productionRun]
       : [],
   );
 }
@@ -74,11 +71,7 @@ interface CreditBatchMissingRunsNoticeProps {
 export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit }: CreditBatchMissingRunsNoticeProps) {
   if (runs.length === 0) return null;
   const one = runs.length === 1;
-  const sameDayCount = runs.filter((run) => run.sameDayEntry).length;
-  const sameDay = sameDayCount > 0;
-  const sameDayRuns = runs.filter((run) => run.sameDayEntry && run.sameDayEntryDate);
-  // Several runs: say which run and day the warning means, as the batch page Check does.
-  const namedSameDay = !one && sameDayRuns.length === sameDayCount;
+  const sameDay = sameDayEntryWarning(runs);
   // With the Edit button the action is already there; without it say who adds the run.
   const nextStep = canManage
     ? (onEdit ? null : missingRunsAdminSentence(runs.length))
@@ -97,9 +90,7 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       <MissingRunLinks runs={runs} facilityId={facilityId} />
       {`. ${missingRunsCountedSentence(runs.length)}`}
       {nextStep && ` ${nextStep}`}
-      {canManage && sameDay && (namedSameDay
-        ? sameDayRuns.map((run) => ` ${sameDayEntryRunSentence(run.code, run.sameDayEntryDate!)}`).join("")
-        : ` ${sameDayEntrySentence(sameDayCount)}`)}
+      {canManage && sameDay && ` ${sameDay}`}
     </Notice>
   );
 }
