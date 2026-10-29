@@ -12,6 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -322,10 +323,13 @@ export function DeliveryList() {
     focusedDeliveryId ?? "",
     !!focusedDeliveryId,
   );
-  const linkedFacilityReady = useLinkedRecordFacility(focusedDelivery.data, focusedDelivery.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedDelivery.data, focusedDelivery.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
+  // A link into an archived facility opens the record read only, even an edit link.
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
 
   // Freeze the opening draft and version; detail refetches must not advance it.
-  if (linkedFacilityReady && !sideSheet && deepLinkMode === "edit" && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
+  if (linkedFacilityReady && !sideSheet && linkOpensEdit && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
     setSideSheet({ mode: "edit", entity: deliveryDetailToRelations(focusedDelivery.data) });
   }
 
@@ -383,7 +387,7 @@ export function DeliveryList() {
     linkedFacilityReady && focusedDeliveryId && focusedDelivery.data
       ? {
           entity: deliveryDetailToRelations(focusedDelivery.data),
-          mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
+          mode: linkOpensEdit ? "edit" as const : "view" as const,
         }
       : null;
   // View mode reads the live record, so a deliberate distance refresh shows
@@ -513,26 +517,6 @@ export function DeliveryList() {
     setCurrentPage(1);
   };
 
-  if (!contextFacilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="records"
-          title="Deliveries"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="container-max py-32">
-        <ServerError message={fetchError.message || "The deliveries could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
@@ -548,6 +532,77 @@ export function DeliveryList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity?.customerName || sideSheetEntity?.orderCode || undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={(mode) => {
+        // Mode changes are navigation; a submit error from the previous
+        // visit must not resurface on the next edit entry.
+        setFormError(null);
+        setSideSheet(
+          displaySideSheet ? { ...displaySideSheet, mode } : null,
+        );
+      }}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit delivery"
+      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "delivery")}
+      sections={
+        sideSheetEntity
+          ? deliverySheetSections(sideSheetEntity, facilities, proofStatus)
+          : undefined
+      }
+    >
+      <DeliveryForm
+        // The version keys the form too, so a refresh from location reopens
+        // it on the record it saved instead of a stale draft.
+        key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
+        delivery={sideSheetEntity as Delivery | undefined}
+        onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
+        errorMessage={formError ?? undefined}
+        submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
+        deferredAttachments={deferredAttachments}
+        focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+        onDistanceRefreshed={async () => {
+          if (!sideSheetEntity) return;
+          const fresh = await fetchDelivery(sideSheetEntity.id);
+          setSideSheet({ entity: deliveryDetailToRelations(fresh), mode: "edit" });
+        }}
+      />
+    </EntitySideSheet>
+  );
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Deliveries"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
+        {linkedRecord.archivedFacility && sideSheetElement}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="container-max py-32">
+        <ServerError message={fetchError.message || "The deliveries could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
 
   return (
     <div className="container-max page-shell">
@@ -685,51 +740,7 @@ export function DeliveryList() {
         errorMessage={deleting ? deleteError ?? undefined : undefined}
       />
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={(mode) => {
-          // Mode changes are navigation; a submit error from the previous
-          // visit must not resurface on the next edit entry.
-          setFormError(null);
-          setSideSheet(
-            displaySideSheet ? { ...displaySideSheet, mode } : null,
-          );
-        }}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit delivery"
-        sections={
-          sideSheetEntity
-            ? deliverySheetSections(sideSheetEntity, facilities, proofStatus)
-            : undefined
-        }
-      >
-        <DeliveryForm
-          // The version keys the form too, so a refresh from location reopens
-          // it on the record it saved instead of a stale draft.
-          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
-          delivery={sideSheetEntity as Delivery | undefined}
-          onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
-          errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
-          deferredAttachments={deferredAttachments}
-          focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
-          onDistanceRefreshed={async () => {
-            if (!sideSheetEntity) return;
-            const fresh = await fetchDelivery(sideSheetEntity.id);
-            setSideSheet({ entity: deliveryDetailToRelations(fresh), mode: "edit" });
-          }}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
 
     </div>
   );

@@ -9,7 +9,7 @@ const harness = vi.hoisted(() => ({ toastError: vi.fn(), linkedReady: true }));
 
 vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).nuqsModule);
 vi.mock("@/hooks/use-entity-edit-record", async () => (await import("../../../tests/helpers/linked-sheet-mocks")).entityEditRecordModule);
-vi.mock("@/hooks/use-linked-record-facility", () => ({ useLinkedRecordFacility: (record: unknown) => !!record && harness.linkedReady }));
+vi.mock("@/hooks/use-linked-record-facility", () => ({ useLinkedRecordFacility: (record: unknown) => ({ ready: !!record && harness.linkedReady, archivedFacility: null }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: FACILITY }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));

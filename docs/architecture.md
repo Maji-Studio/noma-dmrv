@@ -271,7 +271,14 @@ Record hrefs are owned by `src/lib/record-links.ts`: its table supplies both
 the list path and the sheet query parameter. List pages with an organization-scoped
 by-id read use `useLinkedRecordFacility` so the active facility follows the linked
 record. The hook selects only a facility available in context, through the context
-setter, and holds the linked sheet closed until the selection matches.
+setter, and holds the linked sheet closed until the selection matches. A record in
+a facility outside that list is shown where it is: the hook reads the facility by
+id (org-scoped), and when it is archived returns `archivedFacility`. The page then
+passes `archivedFacilityReadOnlyReason` (`src/lib/linked-record-read-only.ts`) as
+the sheet's `readOnlyReason`, so `EntitySideSheet` stays in view mode with no Edit,
+and an edit link opens view. The sheet is rendered over the "Select a facility"
+empty state too. The archived facility never becomes the working facility, and
+server writes stay refused (#1499).
 
 ### Quick-Add and cascading selects
 

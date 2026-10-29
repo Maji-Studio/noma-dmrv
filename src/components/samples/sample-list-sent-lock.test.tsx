@@ -30,6 +30,7 @@ const harness = vi.hoisted(() => ({
   rowActions: null as Array<{ label: string }> | null,
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },

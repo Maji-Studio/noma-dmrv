@@ -189,7 +189,7 @@ export function CreditBatchList({
     contextFacilityId ?? undefined
   );
   const focusedBatch = useCreditBatch(focusedBatchId ?? "");
-  const linkedFacilityReady = useLinkedRecordFacility(focusedBatch.data, focusedBatch.isLoading);
+  const linkedFacilityReady = useLinkedRecordFacility(focusedBatch.data, focusedBatch.isLoading).ready;
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();

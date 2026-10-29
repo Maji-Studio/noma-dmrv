@@ -12,6 +12,7 @@ const ORDER = { id: "order-1", code: "OR-001", version: 3, facilityId: "f1" };
 const IN_USE_MESSAGE = "Order OR-001 was not deleted because delivery DL-001 still uses it. Delete that delivery first, or keep this order.";
 const harness = vi.hoisted(() => ({ remove: vi.fn() }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "f1", facilities: [] }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));

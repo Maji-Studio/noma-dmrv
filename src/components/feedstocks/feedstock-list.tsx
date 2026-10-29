@@ -27,6 +27,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -306,7 +307,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     focusedFeedstockId ?? "",
     !!focusedFeedstockId,
   );
-  const linkedFacilityReady = useLinkedRecordFacility(focusedFeedstock.data, focusedFeedstock.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedFeedstock.data, focusedFeedstock.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
+  // A link into an archived facility opens the record read only, even an edit link.
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const fetchFeedstock = useFetchFeedstock();
@@ -480,7 +484,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     entity: FeedstockWithRelations;
   } | null>(null);
   const wantsDeepLinkEdit =
-    !sideSheet && deepLinkMode === "edit" && !!focusedFeedstockId;
+    !sideSheet && linkOpensEdit && !!focusedFeedstockId;
   if (!wantsDeepLinkEdit) {
     // Dropped as soon as the sheet closes or switches away, so reopening the
     // same record deep-links onto a freshly read version.
@@ -528,26 +532,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
 
-  if (!contextFacilityId) {
-    return (
-      <div className="flex flex-col gap-32">
-        <PageHeader
-          area="records"
-          title="Feedstock intake"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="flex flex-col gap-32">
-        <ServerError message={fetchError.message || "The feedstocks could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
@@ -568,6 +552,84 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             sideSheetEntity.storageLocationCode,
           ].filter(Boolean).join(" · ") || "Feedstock"
         : undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={(mode) =>
+        sideSheetEntity
+          ? setSideSheet({ entity: sideSheetEntity, mode })
+          : setSideSheet((prev) => (prev ? { ...prev, mode } : null))
+      }
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit feedstock"
+      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "feedstock intake")}
+      sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
+        distanceKm: recordedDistance.data?.recordedDistanceKm,
+        source: recordedDistance.data?.recordedDistanceSource,
+        locationDefaultKm: recordedDistance.data?.currentDistanceKm,
+        pending: recordedDistance.isPending,
+      }) : undefined}
+    >
+      <FeedstockForm
+        // The version keys the form too, so a refresh from location reopens
+        // it on the record it saved instead of a stale draft.
+        key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
+        feedstock={sideSheetEntity ?? undefined}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
+        submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
+        serverError={createError || updateError || undefined}
+        serverErrorAction={
+          updateBlockers.length > 0 ? (
+            <span>
+              {BLOCKERS_LEAD}{" "}
+              {updateBlockers.map((blocker) => blocker.code).join(", ")}
+            </span>
+          ) : undefined
+        }
+        deferredAttachments={deferredAttachments}
+        retryEntityIds={createdFeedstockIds}
+        focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+        onDistanceRefreshed={async () => {
+          if (!sideSheetEntity) return;
+          const fresh = await fetchFeedstock(sideSheetEntity.id);
+          setSideSheet({ entity: fresh, mode: "edit" });
+        }}
+      />
+    </EntitySideSheet>
+  );
+
+  if (!contextFacilityId) {
+    return (
+      <div className="flex flex-col gap-32">
+        <PageHeader
+          area="records"
+          title="Feedstock intake"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
+        {linkedRecord.archivedFacility && sideSheetElement}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col gap-32">
+        <ServerError message={fetchError.message || "The feedstocks could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-32">
@@ -682,58 +744,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         errorMessage={deleteError ?? undefined}
       />
 
-      {/* Side Sheet */}
-      <EntitySideSheet
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={(mode) =>
-          sideSheetEntity
-            ? setSideSheet({ entity: sideSheetEntity, mode })
-            : setSideSheet((prev) => (prev ? { ...prev, mode } : null))
-        }
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit feedstock"
-        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
-          distanceKm: recordedDistance.data?.recordedDistanceKm,
-          source: recordedDistance.data?.recordedDistanceSource,
-          locationDefaultKm: recordedDistance.data?.currentDistanceKm,
-          pending: recordedDistance.isPending,
-        }) : undefined}
-      >
-        <FeedstockForm
-          // The version keys the form too, so a refresh from location reopens
-          // it on the record it saved instead of a stale draft.
-          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
-          feedstock={sideSheetEntity ?? undefined}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
-          serverError={createError || updateError || undefined}
-          serverErrorAction={
-            updateBlockers.length > 0 ? (
-              <span>
-                {BLOCKERS_LEAD}{" "}
-                {updateBlockers.map((blocker) => blocker.code).join(", ")}
-              </span>
-            ) : undefined
-          }
-          deferredAttachments={deferredAttachments}
-          retryEntityIds={createdFeedstockIds}
-          focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
-          onDistanceRefreshed={async () => {
-            if (!sideSheetEntity) return;
-            const fresh = await fetchFeedstock(sideSheetEntity.id);
-            setSideSheet({ entity: fresh, mode: "edit" });
-          }}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

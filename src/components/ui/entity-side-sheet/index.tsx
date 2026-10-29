@@ -15,6 +15,7 @@
 import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
@@ -99,6 +100,12 @@ interface EntitySideSheetProps {
    * the whole record reads (for example "archived") is seen first.
    */
   viewModeNotice?: React.ReactNode;
+  /**
+   * Why the record cannot change here at all (its facility is archived). The
+   * sheet then stays in view mode, even for an edit link, hides Edit and the
+   * title chip, and shows this reason first as a boxed info line.
+   */
+  readOnlyReason?: string;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
@@ -122,7 +129,7 @@ function EntitySideSheet({
   open,
   onOpenChange,
   onCloseAttempt,
-  mode,
+  mode: requestedMode,
   onModeChange,
   title,
   subtitle,
@@ -133,12 +140,15 @@ function EntitySideSheet({
   numberedSections = false,
   viewModeChildren,
   viewModeNotice,
+  readOnlyReason,
   editLabel = "Edit",
   canEdit = true,
   viewPrimaryAction,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
+  const readOnly = !!readOnlyReason && requestedMode !== "create";
+  const mode = readOnly ? "view" : requestedMode;
   const isViewMode = mode === "view";
   const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
@@ -247,7 +257,8 @@ function EntitySideSheet({
             <div className="flex flex-col gap-4 min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-8">
                 <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
-                {mode !== "create" && titleBadge}
+                {/* A read-only record's notice is its one status; an Open chip would contradict it. */}
+                {mode !== "create" && !readOnly && titleBadge}
               </div>
               {subtitle && (
                 <SlideOverPanel.Description>
@@ -269,6 +280,9 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
+              {readOnly && (
+                <Notice tone="info" boxed data-read-only-notice>{readOnlyReason}</Notice>
+              )}
               {viewModeNotice}
               {sections && (
                 <EntitySideSheetSections
@@ -309,7 +323,7 @@ function EntitySideSheet({
         {isViewMode && (
           <SlideOverPanel.Footer>
             {viewPrimaryAction}
-            {canEdit && (
+            {canEdit && !readOnly && (
               <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
                 {editLabel}
               </Button>

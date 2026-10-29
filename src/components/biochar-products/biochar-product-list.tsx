@@ -10,6 +10,7 @@ import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -300,7 +301,10 @@ export function BiocharProductList() {
     focusedProductId ?? "",
     !!focusedProductId,
   );
-  const linkedFacilityReady = useLinkedRecordFacility(focusedProduct.data, focusedProduct.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedProduct.data, focusedProduct.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
+  // A link into an archived facility opens the record read only, even an edit link.
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.archivedFacility;
   const { data: creditBatches } = useCreditBatches(
     contextFacilityId || undefined,
   );
@@ -323,8 +327,8 @@ export function BiocharProductList() {
   const deepLinkedSideSheet =
     linkedFacilityReady && focusedProductId && focusedProduct.data
       ? ({
-          mode: deepLinkMode === "edit" ? "edit" : "view",
-          entity: deepLinkMode === "edit" ? deepLinkSnapshot ?? focusedProduct.data : focusedProduct.data,
+          mode: linkOpensEdit ? "edit" : "view",
+          entity: linkOpensEdit ? deepLinkSnapshot ?? focusedProduct.data : focusedProduct.data,
         } as const)
       : null;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
@@ -465,6 +469,39 @@ export function BiocharProductList() {
 
   const columns = createColumns(openEdit, setDeletingProductId, productLocks.locks);
 
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={!!displaySideSheet}
+      onOpenChange={(open) => { if (!open) closeSideSheet(); }}
+      mode={displaySideSheet?.mode ?? "create"}
+      onModeChange={handleModeChange}
+      title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
+      subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit product"
+      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, displaySideSheet?.entity, "biochar product")}
+      sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
+    >
+      <BiocharProductForm
+        key={editingEntity?.id ?? "create"}
+        product={editingEntity ?? undefined}
+        lock={sheetLock}
+        onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+        onCancel={closeSideSheet}
+        isSubmitting={isSubmitting}
+        errorMessage={formError ?? undefined}
+        submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
+        focusTarget={
+          displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+        }
+      />
+    </EntitySideSheet>
+  );
+
   if (!contextFacilityId) {
     return (
       <div className="container-max page-shell">
@@ -473,6 +510,7 @@ export function BiocharProductList() {
           title="Biochar products"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
+        {linkedRecord.archivedFacility && sideSheetElement}
       </div>
     );
   }
@@ -610,33 +648,7 @@ export function BiocharProductList() {
         errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        numberedSections
-        open={!!displaySideSheet}
-        onOpenChange={(open) => { if (!open) closeSideSheet(); }}
-        mode={displaySideSheet?.mode ?? "create"}
-        onModeChange={handleModeChange}
-        title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit product"
-        sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
-      >
-        <BiocharProductForm
-          key={editingEntity?.id ?? "create"}
-          product={editingEntity ?? undefined}
-          lock={sheetLock}
-          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={isSubmitting}
-          errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
-          focusTarget={
-            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-          }
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

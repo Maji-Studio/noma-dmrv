@@ -97,6 +97,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: (name: string) => [

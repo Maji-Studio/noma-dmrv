@@ -10,6 +10,7 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { archivedFacilityReadOnlyReason } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -225,7 +226,8 @@ export function OrderList() {
   // The list row shape (customer, fulfillment) for the deep-linked order, read
   // by id so an order on another page, behind a filter or archived still opens.
   const focusedOrder = useOrderWithRelations(focusedOrderId ?? "", !!focusedOrderId);
-  const linkedFacilityReady = useLinkedRecordFacility(focusedOrder.data, focusedOrder.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedOrder.data, focusedOrder.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const deepLinkedSideSheet =
     focusedOrderId &&
     focusedOrder.data?.id === focusedOrderId &&
@@ -368,22 +370,6 @@ export function OrderList() {
 
   const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
 
-  if (!facilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="records"
-          title="Orders"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return <div className="container-max py-32"><ServerError message={fetchError.message || "The orders could not be loaded. Refresh the page and try again."} /></div>;
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
@@ -396,6 +382,58 @@ export function OrderList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity?.customerName || undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      mode={sideSheetMode}
+      onModeChange={(mode) => {
+        // Mode changes are navigation; a submit error from the previous
+        // visit must not resurface on the next edit entry.
+        setFormError(null);
+        setSideSheet(displaySideSheet ? { entity: displaySideSheet.entity, mode } : null);
+      }}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit order"
+      sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
+      readOnlyReason={archivedFacilityReadOnlyReason(linkedRecord, sideSheetEntity, "order")}
+    >
+      <OrderForm
+        key={sideSheetEntity?.id ?? "create"}
+        order={displaySideSheet?.entity as Order | undefined}
+        lock={sheetLock}
+        onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
+        onCancel={closeSideSheet}
+        isSubmitting={createOrder.isPending || updateOrder.isPending}
+        errorMessage={formError ?? undefined}
+        submitLabel={sideSheetMode === "create" ? "Create order" : "Save changes"}
+      />
+    </EntitySideSheet>
+  );
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Orders"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
+        {linkedRecord.archivedFacility && sideSheetElement}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "The orders could not be loaded. Refresh the page and try again."} /></div>;
+  }
 
   return (
     <div className="container-max page-shell">
@@ -486,36 +524,7 @@ export function OrderList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        mode={sideSheetMode}
-        onModeChange={(mode) => {
-          // Mode changes are navigation; a submit error from the previous
-          // visit must not resurface on the next edit entry.
-          setFormError(null);
-          setSideSheet(displaySideSheet ? { entity: displaySideSheet.entity, mode } : null);
-        }}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit order"
-        sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
-      >
-        <OrderForm
-          key={sideSheetEntity?.id ?? "create"}
-          order={displaySideSheet?.entity as Order | undefined}
-          lock={sheetLock}
-          onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
-          onCancel={closeSideSheet}
-          isSubmitting={createOrder.isPending || updateOrder.isPending}
-          errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create order" : "Save changes"}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
 
       {inUseRefusal && (
         <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
