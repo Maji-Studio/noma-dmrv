@@ -304,7 +304,7 @@ describe("missing production run detection (real DB)", () => {
       id: `missing-production-run:${fitting.id}`, productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`, titleAfterCode: " is not in this credit batch yet",
       detail: `Its emissions are not counted in ${holder.code}. If the Emissions entry dated Jun 9, 2026 already records them, delete it when you add the run.`,
-      sameDayEntry: true,
+      sameDayEntryDate: values.occurredOn,
       target: { tab: "overview", rowId: "batch-details" },
     }]);
   });
