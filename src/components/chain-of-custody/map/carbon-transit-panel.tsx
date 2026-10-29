@@ -229,7 +229,7 @@ export function CarbonTransitPanel({
 
   // A leg belongs to the focus when its chain-side anchor node sits in the
   // reachable sub-chain. Single-app view dims the sibling inbound legs (they
-  // share one downstream); a batch roll-up isolates the focused sub-chain.
+  // share one downstream).
   const focusLegIds = focusNodeIds
     ? new Set(
         geo.legs
@@ -311,7 +311,7 @@ export function CarbonTransitPanel({
           className="cv-stack relative flex h-full"
           style={MAP_VIEW_STACK_VARS}
         >
-          {/* Keyed on the plotted source: a batch/application change remounts
+          {/* Keyed on the plotted application: a change remounts
               the rail, collapsing both sides and returning the scroll to the
               top, which matches the map refitting to the new chain. */}
           <CustodyStagesRail

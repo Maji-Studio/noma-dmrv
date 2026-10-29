@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui";
 import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+import { MapWarningBanner } from "./viewer-rails";
 import { LazyTraceMapCanvas } from "./lazy-trace-map-canvas";
 import { buildChains, chainFor, chainStepLighting, chainTo } from "./trace-chains";
 import { TraceChainWalk } from "./trace-chain-walk";
@@ -31,10 +32,18 @@ import {
 } from "./trace-model";
 
 const PANEL_WIDTH_PX = 400;
-/** Map controls sit just left of the desktop panel. */
+/**
+ * The desktop panel plus a 16px gutter: where the map controls and the empty
+ * state stop. Tailwind needs the literal, so the classes below spell it
+ * `416px`; keep them equal to PANEL_WIDTH_PX + 16.
+ */
+const PANEL_CLEARANCE_PX = PANEL_WIDTH_PX + 16;
 const CONTROLS_RIGHT_CLASS = "md:right-[416px]";
+/** Phone: every map control is a 44px target (the shared stack is 36px). */
+const PHONE_CONTROL_SIZE_CLASS = "max-md:[&_button]:h-44 max-md:[&_button]:w-44";
+const EMPTY_STATE_RIGHT_PADDING_CLASS = "md:pr-[416px]";
 /** The map frames inside the room the panel leaves: top bar, panel, controls, gutter. */
-const DESKTOP_PADDING = { top: 72, right: PANEL_WIDTH_PX + 160, bottom: 56, left: 64 };
+const DESKTOP_PADDING = { top: 72, right: PANEL_CLEARANCE_PX + 144, bottom: 56, left: 64 };
 const PHONE_PADDING = { top: 48, right: 56, bottom: 32, left: 32 };
 /**
  * Phone: the app bar (56px) sits above a page sized to the full viewport
@@ -115,20 +124,22 @@ export function TraceMapView({
             padding={isMobile ? PHONE_PADDING : DESKTOP_PADDING}
             onMarkerClick={onMarker}
             onBackgroundClick={chain ? undefined : () => selectStage(null)}
-            controlsClassName={cn("left-auto top-auto bottom-32 right-16", CONTROLS_RIGHT_CLASS)}
+            controlsClassName={cn("left-auto top-auto bottom-32 right-16", CONTROLS_RIGHT_CLASS, PHONE_CONTROL_SIZE_CLASS)}
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-[var(--color-background-light)] px-16 md:pr-[416px]">
+          <div className={cn("flex h-full items-center justify-center bg-[var(--color-background-light)] px-16", EMPTY_STATE_RIGHT_PADDING_CLASS)}>
             <div className="w-full max-w-[520px]">
               <EmptyState
                 icon={<MapPinLineIcon size={40} weight="thin" />}
                 title="Nothing to place on the map yet"
-                description="No record in this batch has a location. Set a position on the facility, a supplier location or a field to see it here. The stages are still listed."
+                description="Set a position on the facility, a supplier location or a field to see it here."
                 padding="md"
               />
             </div>
           </div>
         )}
+        {/* Left edge, clear of the panel and the controls on the right. */}
+        <MapWarningBanner warnings={model.geo.warnings} className="left-16 top-16 max-w-[calc(100%-96px)] md:max-w-[320px]" />
       </div>
 
       <aside

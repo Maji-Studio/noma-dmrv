@@ -229,7 +229,7 @@ tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
   frames it and lights its legs. Picking a record or a marker starts a **chain
   walk**: one chain from the supplier to one end (a field, or the delivery or
   product nothing is applied from yet), the current record open in place with
-  its values (wet first, "Not recorded yet" for gaps, "Trace rollback", "View full
+  its values (wet first, a Dry figure of "Not recorded" when the kind carries one and it is missing, a "Not recorded: a, b" Notice collecting the other plain gaps, "Trace rollback", "View full
   record" through `recordHref`), Back / Next record by record, the camera
   following, only that chain's legs lit. "Whole batch" returns to the stage
   list. A record in several chains starts the first one through it (fields first).
@@ -281,7 +281,7 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`,
-  `trace-model.test.ts`, `trace-chains.test.ts`
+  `trace-model.test.ts`, `trace-chains.test.ts`, `trace-map-view.test.tsx`
 
 ## Saved delivery and application provenance
 

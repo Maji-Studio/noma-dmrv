@@ -67,6 +67,8 @@ export interface TraceRecord {
 export interface TraceStage {
   kind: LineageNodeKind;
   title: string;
+  /** Lower-case singular noun for counts ("production run"). */
+  singular: string;
   plural: string;
   icon: Icon;
   accent: string;
@@ -158,6 +160,7 @@ export function buildTraceModel(
     return [{
       kind,
       title: STAGE_TITLES[kind] ?? style.label,
+      singular: style.label.toLowerCase(),
       plural: style.plural,
       icon: style.icon,
       accent: style.accent,
@@ -187,6 +190,8 @@ export function drawnPathKey(entry: PlottableLeg): string {
 export interface DrawnLeg {
   entry: PlottableLeg;
   legIds: string[];
+  /** Stored one-way km of each grouped leg, by leg id. */
+  kmById: Record<string, number>;
 }
 
 /** Collapse legs on the same road (one per product layer) into one drawn leg. */
@@ -195,10 +200,24 @@ export function groupDrawnLegs(plottable: Iterable<PlottableLeg>): DrawnLeg[] {
   for (const entry of plottable) {
     const key = drawnPathKey(entry);
     const drawn = byPath.get(key);
-    if (drawn) drawn.legIds.push(entry.leg.id);
-    else byPath.set(key, { entry, legIds: [entry.leg.id] });
+    if (drawn) {
+      drawn.legIds.push(entry.leg.id);
+      drawn.kmById[entry.leg.id] = entry.leg.distanceKm;
+    } else {
+      byPath.set(key, { entry, legIds: [entry.leg.id], kmById: { [entry.leg.id]: entry.leg.distanceKm } });
+    }
   }
   return [...byPath.values()];
+}
+
+/**
+ * The km a drawn road carries while lit: the stored distance of the grouped
+ * legs that are lit, each distinct value once (product layers repeat it), so a
+ * selection that lights only one of several legs on a road shows only its km.
+ */
+export function litKm(drawn: DrawnLeg, litLegIds: ReadonlySet<string>): number {
+  const distinct = new Set(drawn.legIds.filter((id) => litLegIds.has(id)).map((id) => drawn.kmById[id]!));
+  return Math.round([...distinct].reduce((sum, km) => sum + km, 0) * KM_ROUNDING) / KM_ROUNDING;
 }
 
 /** Key of a stored distance: the same road with the same km counts once. */
@@ -310,4 +329,12 @@ export function recordLegs(model: TraceModel, recordId: string): ChainGeoLeg[] {
     seen.add(key);
     return true;
   });
+}
+
+/** Kinds whose records happen at the facility: no position of their own is expected. */
+const FACILITY_KINDS: readonly LineageNodeKind[] = ["productionRun", "biocharProduct", "order"];
+
+/** Where a record with no position of its own is: at the facility, or nowhere recorded. */
+export function placeWithoutPosition(model: TraceModel, kind: LineageNodeKind): string {
+  return FACILITY_KINDS.includes(kind) ? `At the facility, ${model.facilityName}` : "No location recorded";
 }

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import type { TraceChain } from "./trace-chains";
 import type { TraceModel } from "./trace-model";
 import { RecordValues, recordSummary } from "./trace-record-values";
-import { ScrollTarget, TILE_TEXT_INSET_PX, TraceThread, TraceTile } from "./trace-tile";
+import { ROW_FOCUS_CLASS, ScrollTarget, TILE_TEXT_INSET_PX, TraceThread, TraceTile } from "./trace-tile";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -45,31 +45,23 @@ export function TraceChainWalk({
             Whole batch
           </Button>
           <div className="flex shrink-0 gap-8">
-            <Button
-              variant="weak"
-              size="small"
-              className="min-h-44 md:min-h-0"
-              aria-disabled={stepIndex === 0}
-              onClick={() => onStep(Math.max(0, stepIndex - 1))}
-            >
-              <CaretLeftIcon size={12} weight="bold" />
-              Back
-            </Button>
-            <Button
-              variant="weak"
-              size="small"
-              className="min-h-44 md:min-h-0"
-              aria-disabled={stepIndex >= last}
-              onClick={() => onStep(Math.min(last, stepIndex + 1))}
-            >
-              Next
-              <CaretRightIcon size={12} weight="bold" />
-            </Button>
+            {stepIndex > 0 ? (
+              <Button variant="weak" size="small" className="min-h-44 md:min-h-0" onClick={() => onStep(stepIndex - 1)}>
+                <CaretLeftIcon size={12} weight="bold" />
+                Back
+              </Button>
+            ) : null}
+            {stepIndex < last ? (
+              <Button variant="weak" size="small" className="min-h-44 md:min-h-0" onClick={() => onStep(stepIndex + 1)}>
+                Next
+                <CaretRightIcon size={12} weight="bold" />
+              </Button>
+            ) : null}
           </div>
         </div>
         <p className="body-caption font-mono uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
           {pad(stepIndex + 1)} / {pad(chain.steps.length)} · to {chain.end.shortCode}
-          {chain.distanceKm > 0 ? ` · ${formatDistanceKm(chain.distanceKm)} one way` : ""}
+          {chain.distanceKm > 0 ? ` · ${formatDistanceKm(chain.distanceKm)} of transport` : ""}
         </p>
       </div>
       <ol className="min-h-0 flex-1 overflow-y-auto px-16 py-12">
@@ -83,7 +75,7 @@ export function TraceChainWalk({
                 type="button"
                 onClick={() => onStep(index)}
                 aria-current={isCurrent ? "step" : undefined}
-                className={cn("flex min-h-44 w-full items-start gap-12 py-8 text-left", !isCurrent && "opacity-70 hover:opacity-100")}
+                className={cn("flex min-h-44 w-full items-start gap-12 py-8 text-left", ROW_FOCUS_CLASS, !isCurrent && "opacity-70 hover:opacity-100")}
               >
                 <TraceTile icon={record.icon} accent={record.accent} accentInk={record.accentInk} ghost={index > stepIndex} />
                 <span className="flex min-w-0 flex-1 flex-col">
@@ -93,7 +85,9 @@ export function TraceChainWalk({
                   </span>
                   <span className="flex min-w-0 items-baseline gap-8">
                     <span className="shrink-0 font-mono text-[14px] font-medium text-[var(--color-text-primary)]">{record.shortCode}</span>
-                    <span className="body-caption truncate text-[var(--color-text-tertiary)]">{recordSummary(model, record)}</span>
+                    {isCurrent ? null : (
+                      <span className="body-caption truncate text-[var(--color-text-tertiary)]">{recordSummary(model, record)}</span>
+                    )}
                   </span>
                 </span>
               </button>

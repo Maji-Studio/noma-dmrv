@@ -13,6 +13,7 @@ import {
 import {
   buildTraceModel,
   groupDrawnLegs,
+  litKm,
   recordLegs,
   restingLighting,
   splitWetDry,
@@ -79,6 +80,30 @@ describe("groupDrawnLegs", () => {
       ]),
     });
     expect(groupDrawnLegs(model.plottable.values())).toHaveLength(2);
+  });
+});
+
+describe("litKm", () => {
+  it("carries only the km of the grouped legs that are lit", () => {
+    const base = batchGeo();
+    const model = batchModel({
+      legs: [
+        base.legs[2]!,
+        { ...base.legs[3]!, distanceKm: 430 },
+      ],
+    });
+    const [drawn] = groupDrawnLegs(model.plottable.values());
+    expect(drawn!.legIds).toEqual(["out-1", "out-1-layer-2"]);
+    expect(litKm(drawn!, new Set(["out-1-layer-2"]))).toBe(430);
+    expect(litKm(drawn!, new Set(["out-1"]))).toBe(420);
+    expect(litKm(drawn!, new Set(["out-1", "out-1-layer-2"]))).toBe(850);
+  });
+
+  it("counts a repeated stored distance once", () => {
+    const [drawn] = groupDrawnLegs(batchModel().plottable.values());
+    const outbound = groupDrawnLegs(batchModel().plottable.values()).find((leg) => leg.legIds.length === 2)!;
+    expect(drawn).toBeTruthy();
+    expect(litKm(outbound, new Set(outbound.legIds))).toBe(420);
   });
 });
 

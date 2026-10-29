@@ -2,22 +2,25 @@
 
 /**
  * A record's values opened in place on the Traceability Map: up to three key
- * figures (wet first), the rest of its record values, a "Not recorded yet"
- * note for gaps, and its actions. Same facts the Flow record sheet shows, from
+ * figures (wet first), the rest of its record values, a "Not recorded" note for
+ * gaps, and its actions. Same facts the Flow record sheet shows, from
  * the same graph data.
  */
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui/button";
-import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
+import { isMissingValueCopy, MISSING_VALUE, missingValueSituation } from "@/lib/copy-utils";
 import { formatDistanceKm } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { ChainStatusBadge } from "../chain-status-badge";
-import { recordLegs, splitWetDry, type TraceModel, type TraceRecord } from "./trace-model";
+import { placeWithoutPosition, recordLegs, splitWetDry, type TraceModel, type TraceRecord } from "./trace-model";
 
 const STAT_LIMIT = 3;
+/** Kinds whose mass is a quantity with no dry mass to record (an order). */
+const KINDS_WITHOUT_DRY_MASS: ReadonlyArray<TraceRecord["kind"]> = ["order"];
 
 interface Stat {
   label: string;
@@ -36,8 +39,11 @@ function figures(model: TraceModel, record: TraceRecord) {
     const pair = splitWetDry(row.value)!;
     statsTitle = row.label;
     stats.push({ label: "Wet", value: pair.wet });
-    // A dry figure some records never carry (an order's quantity) is left out, not flagged.
-    if (!isMissingValueCopy(pair.dry)) stats.push({ label: "Dry", value: pair.dry });
+    // Judged by kind, not by value: a record that carries a dry mass shows it as
+    // "Not recorded" when it is missing; only an order's quantity never has one.
+    if (!KINDS_WITHOUT_DRY_MASS.includes(record.kind)) {
+      stats.push({ label: "Dry", value: isMissingValueCopy(pair.dry) ? MISSING_VALUE.notRecorded : pair.dry });
+    }
   }
   const legs = recordLegs(model, record.id);
   if (legs.length === 1) {
@@ -45,11 +51,13 @@ function figures(model: TraceModel, record: TraceRecord) {
   } else if (legs.length > 1) {
     stats.push({ label: "Routes", value: String(legs.length) });
   }
-  for (const row of rows) if (isMissingValueCopy(row.value)) missing.push(row.label);
+  // Only plain "Not recorded" gaps collect into the note; other tokens
+  // ("Not set", "Not yet computed", ...) keep their own meaning as rows.
+  for (const row of rows) if (missingValueSituation(row.value) === "notRecorded") missing.push(row.label);
   return {
     statsTitle,
     stats: stats.slice(0, STAT_LIMIT),
-    rows: rows.filter((row) => !isMissingValueCopy(row.value)),
+    rows: rows.filter((row) => missingValueSituation(row.value) !== "notRecorded"),
     missing,
   };
 }
@@ -60,7 +68,7 @@ export function positionLine(model: TraceModel, record: TraceRecord): string {
     if (record.sub && record.sub !== record.shortCode) return record.sub;
     return record.geoCode && record.geoCode !== record.shortCode ? record.geoCode : "On the map";
   }
-  return `At the facility, ${model.facilityName}`;
+  return placeWithoutPosition(model, record.kind);
 }
 
 /**
@@ -94,11 +102,10 @@ export function RecordValues({
   className?: string;
   style?: CSSProperties;
 }) {
-  const router = useRouter();
   const { statsTitle, stats, rows, missing } = figures(model, record);
   const extra = [
     ...(record.geoCode && record.geoCode !== record.shortCode ? [{ label: "Record", value: record.geoCode }] : []),
-    { label: "Place", value: record.position ? record.sub ?? "" : `At the facility, ${model.facilityName}` },
+    { label: "Place", value: record.position ? record.sub ?? "" : placeWithoutPosition(model, record.kind) },
   ].filter((row) => row.value && !rows.some((other) => other.value === row.value) && row.value !== record.shortCode);
   const href = record.href;
   return (
@@ -146,10 +153,7 @@ export function RecordValues({
 
       </dl>
       {missing.length > 0 ? (
-        <p className="body-small border-l-[3px] border-[var(--st-wait)] bg-[var(--clr-dark-purple-1)] px-12 py-8 text-[var(--color-text-secondary)]">
-          <span className="font-medium text-[var(--color-text-primary)]">{MISSING_VALUE.notRecorded} yet: </span>
-          {missing.join(", ")}
-        </p>
+        <Notice tone="warning">{`${MISSING_VALUE.notRecorded}: ${missing.join(", ")}`}</Notice>
       ) : null}
       {(record.drillable && onTrace) || href ? (
         <div className="flex flex-wrap gap-8">
@@ -160,10 +164,10 @@ export function RecordValues({
             </Button>
           ) : null}
           {href ? (
-            <Button variant="default" size="small" className="min-h-44 sm:min-h-0" onClick={() => router.push(href)}>
+            <Link href={href} className={cn(buttonVariants({ variant: "default", size: "small" }), "min-h-44 sm:min-h-0")}>
               <ArrowUpRightIcon size={14} weight="bold" />
               View full record
-            </Button>
+            </Link>
           ) : null}
         </div>
       ) : null}

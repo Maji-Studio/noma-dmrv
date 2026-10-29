@@ -46,6 +46,10 @@ export function TraceThread({ dark }: { dark?: boolean }) {
   );
 }
 
+/** The Button's focus ring, for the raw row buttons of the stage list and the chain walk. */
+export const ROW_FOCUS_CLASS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)]";
+
 const SCROLL_MARGIN_PX = 8;
 
 /**

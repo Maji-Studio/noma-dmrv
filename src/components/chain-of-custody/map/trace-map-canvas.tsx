@@ -37,7 +37,7 @@ import {
 } from "./viewer-constants";
 import { createSiteMarkerElement } from "./viewer-elements";
 import { chipAnchor, legLineCoordinates } from "./viewer-utils";
-import type { DrawnLeg, MapLighting } from "./trace-model";
+import { litKm, type DrawnLeg, type MapLighting } from "./trace-model";
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const SAT_TILE_SIZE = 256;
@@ -80,6 +80,9 @@ export interface TraceMapCanvasProps {
   onBackgroundClick?: () => void;
   controlsClassName?: string;
 }
+
+/** The camera's flight to a selection: slower than the shared FIT. */
+const FLY_DURATION_MS = FIT_DURATION_MS * 1.4;
 
 /** A km label and the two ends of its leg, to hide it when the leg is too short to carry it. */
 interface ChipEntry {
@@ -209,7 +212,7 @@ function frame(map: maplibregl.Map, points: { lat: number; lng: number }[], padd
   for (const point of points) bounds.extend([point.lng, point.lat]);
   const camera = map.cameraForBounds(bounds, { padding, maxZoom: bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < POINT_SPAN_M ? POINT_ZOOM : FIT_MAX_ZOOM });
   if (!camera) return;
-  map.flyTo({ ...camera, duration: animate ? FIT_DURATION_MS * 1.4 : 0 });
+  map.flyTo({ ...camera, duration: animate ? FLY_DURATION_MS : 0 });
 }
 
 export default function TraceMapCanvas({
@@ -295,7 +298,7 @@ export default function TraceMapCanvas({
     };
   }, []);
 
-  // Legs, markers and km labels follow the data and the lighting.
+  // Legs and km labels follow the data and the lighting.
   useEffect(() => {
     const map = mapRef.current;
     if (!readyMap || readyMap !== map) return;
@@ -303,8 +306,9 @@ export default function TraceMapCanvas({
     chipsRef.current = [];
     // One label per pair of endpoints: legs on the same road (product layers,
     // two intakes from one supplier) share it, so labels never pile up.
-    const labels = new Map<string, { anchor: [number, number]; km: Set<number>; ends: ChipEntry["ends"] }>();
-    const features = legs.map(({ entry, legIds }, index) => {
+    const labels = new Map<string, { anchor: [number, number]; km: number; ends: ChipEntry["ends"] }>();
+    const features = legs.map((drawn, index) => {
+      const { entry, legIds } = drawn;
       const geometryId = legIds.find((id) => routeGeometries?.[id]) ?? entry.leg.id;
       const { coordinates, routed } = legLineCoordinates(entry, routeGeometries?.[geometryId]);
       const state = legState(lighting, legIds);
@@ -312,10 +316,11 @@ export default function TraceMapCanvas({
         const key = endpointKey(entry.origin, entry.destination);
         const label = labels.get(key) ?? {
           anchor: chipAnchor(coordinates, index),
-          km: new Set<number>(),
+          km: 0,
           ends: [[entry.origin.lng, entry.origin.lat], [entry.destination.lng, entry.destination.lat]] as ChipEntry["ends"],
         };
-        label.km.add(entry.leg.distanceKm);
+        // Only the grouped legs that are lit count: one product layer selected, one layer's km.
+        label.km += litKm(drawn, lighting.legIds);
         labels.set(key, label);
       }
       return {
@@ -327,22 +332,22 @@ export default function TraceMapCanvas({
     for (const { anchor, km, ends } of labels.values()) {
       const chip = document.createElement("div");
       chip.className = "tm-km";
-      chip.textContent = [...km].sort((a, b) => a - b).map((value) => formatDistanceKm(value)).join(", ");
+      chip.textContent = formatDistanceKm(km);
       chipsRef.current.push({ marker: new maplibregl.Marker({ element: chip }).setLngLat(anchor).addTo(map), ends });
     }
     syncChipVisibility(map, chipsRef.current);
     (map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features });
+  }, [legs, routeGeometries, lighting, readyMap]);
 
+  // Markers are built when the data changes, so a focused marker keeps its
+  // keyboard focus while the selection moves; lighting only toggles classes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!readyMap || readyMap !== map) return;
     for (const marker of markersRef.current) marker.remove();
     markersRef.current = [];
     for (const node of plotted(geo)) {
       const element = createSiteMarkerElement(node);
-      const isFacility = node.kind === "facility";
-      const lit = isFacility ? lighting.facilityLit : lighting.nodeIds?.has(node.nodeId) ?? true;
-      if (lighting.nodeIds && !lit && !isFacility) element.classList.add(DIM_CLASS, "tm-quiet");
-      if (node.nodeId === lighting.currentNodeId || (isFacility && lighting.facilityLit && lighting.nodeIds)) {
-        element.classList.add(CURRENT_CLASS);
-      }
       element.addEventListener("click", (event) => {
         event.stopPropagation();
         latest.current.onMarkerClick?.(node.nodeId);
@@ -355,8 +360,26 @@ export default function TraceMapCanvas({
       });
       markersRef.current.push(new maplibregl.Marker({ element }).setLngLat([node.lng, node.lat]).addTo(map));
     }
+  }, [geo, readyMap]);
+
+  // The selection dims, rings and re-spaces the existing markers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!readyMap || readyMap !== map) return;
+    for (const marker of markersRef.current) {
+      const element = marker.getElement();
+      const nodeId = element.dataset.nodeId ?? "";
+      const isFacility = element.classList.contains("cvm-mk--facility");
+      const lit = isFacility ? lighting.facilityLit : lighting.nodeIds?.has(nodeId) ?? true;
+      element.classList.toggle(DIM_CLASS, Boolean(lighting.nodeIds) && !lit && !isFacility);
+      element.classList.toggle("tm-quiet", Boolean(lighting.nodeIds) && !lit && !isFacility);
+      element.classList.toggle(
+        CURRENT_CLASS,
+        nodeId === lighting.currentNodeId || (isFacility && lighting.facilityLit && Boolean(lighting.nodeIds)),
+      );
+    }
     declutterLabels(map, markersRef.current);
-  }, [geo, legs, routeGeometries, lighting, readyMap]);
+  }, [geo, lighting, readyMap]);
 
   // The camera follows the selection.
   useEffect(() => {

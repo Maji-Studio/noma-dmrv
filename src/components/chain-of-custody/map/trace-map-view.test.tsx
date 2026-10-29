@@ -26,7 +26,7 @@ const panel = () => screen.getByRole("complementary");
 
 it("rests on the stage list and opens a stage with its records", () => {
   render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
-  expect(within(panel()).getByText("5 stages")).toBeTruthy();
+  expect(within(panel()).queryByRole("button", { name: /Back/ })).toBeNull();
   fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
   expect(within(panel()).getByText("Field A")).toBeTruthy();
   expect(within(panel()).getByText("Field B")).toBeTruthy();
@@ -61,7 +61,28 @@ it("shows an empty state instead of the map when nothing has a location, and kee
   render(<TraceMapView model={model} routeGeometries={undefined} onTrace={vi.fn()} />);
   expect(screen.getByText("Nothing to place on the map yet")).toBeTruthy();
   expect(screen.queryByTestId("canvas")).toBeNull();
-  expect(within(panel()).getByText("5 stages")).toBeTruthy();
+  expect(within(panel()).getByText("Feedstock intake")).toBeTruthy();
+});
+
+it("shows the payload's warnings over the map", () => {
+  const model = batchModel({ warnings: ["One leg has no distance."] });
+  render(<TraceMapView model={model} routeGeometries={undefined} onTrace={vi.fn()} />);
+  expect(screen.getByText("One leg has no distance.")).toBeTruthy();
+});
+
+it("offers Back only after the first step and Next only before the last", () => {
+  render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /Field A/ }));
+  expect(within(panel()).queryByRole("button", { name: /^Back/ })).toBeNull();
+  for (let step = 0; step < 5; step++) fireEvent.click(within(panel()).getByRole("button", { name: /^Next/ }));
+  expect(within(panel()).queryByRole("button", { name: /^Next/ })).toBeNull();
+  expect(within(panel()).getByRole("button", { name: /^Back/ })).toBeTruthy();
+});
+
+it("says a delivery has no location rather than placing it at the facility", () => {
+  render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  expect(within(panel()).getByText("1 delivery · no location recorded")).toBeTruthy();
 });
 
 it("says so when the batch has no records", () => {
