@@ -4,12 +4,14 @@
  * is applied from it yet). The walk steps through one chain record by record;
  * these helpers build the chain and say what each step lights and frames.
  */
-import type { ChainGeoLeg } from "@/data-access/chain-of-custody-geo";
+import type { LineageNodeKind } from "../chain-constants";
 import { legAnchorNodeId } from "./viewer-utils";
 import {
   legPoints,
   legsAnchoredIn,
   numericCompare,
+  recordPoints,
+  stageNoun,
   STAGE_KINDS,
   uniqueLegKm,
   type MapLighting,
@@ -85,32 +87,58 @@ export function chainFor(model: TraceModel, chains: TraceChain[], recordId: stri
   return chains.find((chain) => chain.steps.some((step) => step.id === recordId)) ?? chainTo(model, recordId);
 }
 
-/** The chain step a leg belongs to: its anchor record. */
-function legStepOwner(model: TraceModel, chain: TraceChain, leg: ChainGeoLeg): string | null {
-  const anchor = legAnchorNodeId(model.geo, leg);
-  return chain.steps.some((record) => record.id === anchor) ? anchor : null;
+/**
+ * One step of the walk: every record of one stage on this chain. A stage with
+ * one record is a plain step; with several (converging intakes, runs or
+ * products) the step is titled with the count and lists its records.
+ */
+export interface ChainStep {
+  kind: LineageNodeKind;
+  /** The record's kind label for a plain step, "2 production runs" for a group. */
+  title: string;
+  records: TraceRecord[];
 }
 
-/** A step of a chain: the chain stays lit, the camera follows the step. */
+/** The chain's records grouped one step per stage kind, in chain order. */
+export function chainSteps(chain: TraceChain): ChainStep[] {
+  const steps: ChainStep[] = [];
+  for (const record of chain.steps) {
+    const last = steps[steps.length - 1];
+    if (last && last.kind === record.kind) last.records.push(record);
+    else steps.push({ kind: record.kind, title: record.label, records: [record] });
+  }
+  for (const step of steps) {
+    if (step.records.length > 1) step.title = `${step.records.length} ${stageNoun(step.kind).plural}`;
+  }
+  return steps;
+}
+
+/** The index of the step that holds a record, or -1. */
+export function stepIndexOf(steps: ChainStep[], recordId: string): number {
+  return steps.findIndex((step) => step.records.some((record) => record.id === recordId));
+}
+
+/** A step of a chain: the chain stays lit, the camera frames every record of the step. */
 export function chainStepLighting(
   model: TraceModel,
   chain: TraceChain,
-  step: TraceRecord,
+  step: ChainStep,
 ): MapLighting {
   const chainIds = new Set(chain.steps.map((record) => record.id));
+  const stepIds = new Set(step.records.map((record) => record.id));
   const chainLegs = model.geo.legs.filter((leg) => chain.legIds.has(leg.id));
-  const stepLegs = chainLegs.filter((leg) => legStepOwner(model, chain, leg) === step.id);
-  let points = [...legPoints(model, stepLegs), ...(step.position ? [step.position] : [])];
-  if (step.kind === "delivery") {
-    // A delivery spans the outbound legs to the fields it supplied.
-    points = legPoints(model, chainLegs.filter((leg) => leg.kind === "outbound"));
-  }
+  const stepLegs =
+    step.kind === "delivery"
+      ? // A delivery spans the outbound legs to the fields it supplied.
+        chainLegs.filter((leg) => leg.kind === "outbound")
+      : chainLegs.filter((leg) => stepIds.has(legAnchorNodeId(model.geo, leg)));
+  let points = [...legPoints(model, stepLegs), ...recordPoints(model, stepIds)];
   if (points.length === 0 && model.facility) points = [model.facility];
   return {
     nodeIds: chainIds,
     legIds: chain.legIds,
     points,
     facilityLit: true,
-    currentNodeId: step.id,
+    currentNodeIds: stepIds,
   };
 }

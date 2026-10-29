@@ -28,11 +28,20 @@ export const STAGE_KINDS: readonly LineageNodeKind[] = [
   "application",
 ];
 
-/** Stage titles in operator words. */
-const STAGE_TITLES: Partial<Record<LineageNodeKind, string>> = {
-  feedstock: "Feedstock intake",
-  biocharProduct: "Biochar product",
+/** One noun per stage, in operator words: the title, the counts and a grouped walk step all use it. */
+const STAGE_NOUNS: Partial<Record<LineageNodeKind, { singular: string; plural: string }>> = {
+  feedstock: { singular: "feedstock intake", plural: "feedstock intakes" },
+  productionRun: { singular: "production run", plural: "production runs" },
+  biocharProduct: { singular: "biochar product", plural: "biochar products" },
+  order: { singular: "order", plural: "orders" },
+  delivery: { singular: "delivery", plural: "deliveries" },
+  application: { singular: "application", plural: "applications" },
 };
+
+/** The stage's noun for a kind, singular and plural ("production run", "production runs"). */
+export function stageNoun(kind: LineageNodeKind): { singular: string; plural: string } {
+  return STAGE_NOUNS[kind] ?? { singular: LINEAGE_NODE_STYLES[kind].label.toLowerCase(), plural: LINEAGE_NODE_STYLES[kind].plural };
+}
 
 /** Km are stored to one decimal; sums are rounded back to it. */
 const KM_ROUNDING = 10;
@@ -86,8 +95,8 @@ export interface MapLighting {
   points: GeoPoint[];
   /** The facility stays the pivot of this selection (ring it). */
   facilityLit: boolean;
-  /** A ring on the one current record. */
-  currentNodeId: string | null;
+  /** A ring on the current record, or on every record of the current step. */
+  currentNodeIds: Set<string>;
 }
 
 export interface TraceModel {
@@ -159,9 +168,9 @@ export function buildTraceModel(
     const style = LINEAGE_NODE_STYLES[kind];
     return [{
       kind,
-      title: STAGE_TITLES[kind] ?? style.label,
-      singular: style.label.toLowerCase(),
-      plural: style.plural,
+      title: stageNoun(kind).singular.charAt(0).toUpperCase() + stageNoun(kind).singular.slice(1),
+      singular: stageNoun(kind).singular,
+      plural: stageNoun(kind).plural,
       icon: style.icon,
       accent: style.accent,
       accentInk: style.accentInk,
@@ -283,7 +292,7 @@ export function restingLighting(model: TraceModel): MapLighting {
     ...recordPoints(model, model.records.keys()),
     ...(model.facility ? [model.facility] : []),
   ];
-  return { nodeIds: null, legIds: new Set(), points, facilityLit: false, currentNodeId: null };
+  return { nodeIds: null, legIds: new Set(), points, facilityLit: false, currentNodeIds: new Set() };
 }
 
 /**
@@ -303,7 +312,7 @@ export function stageLighting(model: TraceModel, stage: TraceStage): MapLighting
     legIds: new Set(legs.map((leg) => leg.id)),
     points: atFacility && model.facility ? [model.facility] : points,
     facilityLit: atFacility || stage.kind === "feedstock" || stage.kind === "delivery",
-    currentNodeId: null,
+    currentNodeIds: new Set(),
   };
 }
 

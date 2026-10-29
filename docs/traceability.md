@@ -228,11 +228,19 @@ tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
   icon and count; a stage opens in place with its records one line each, the map
   frames it and lights its legs. Picking a record or a marker starts a **chain
   walk**: one chain from the supplier to one end (a field, or the delivery or
-  product nothing is applied from yet), the current record open in place with
-  its values (wet first, a Dry figure of "Not recorded" when the kind carries one and it is missing, a "Not recorded: a, b" Notice collecting the other plain gaps, "Trace rollback", "View full
-  record" through `recordHref`), Back / Next record by record, the camera
-  following, only that chain's legs lit. "Whole batch" returns to the stage
-  list. A record in several chains starts the first one through it (fields first). The walk steps through every record upstream of its end, so several intakes and runs appear where they converge; whether to group them is open ([#1485](https://github.com/Maji-Studio/noma-dmrv/issues/1485)).
+  product nothing is applied from yet), walked one step per stage ("01 / 06 · To
+  Coffee block A"). The chain holds every record upstream of its end; a stage with
+  one record is a plain step with its values open in place, and a stage where
+  several converge (intakes, runs, products) is one step titled with the count
+  ("2 production runs") that lists its records, each opening in place, one at a
+  time ([#1485](https://github.com/Maji-Studio/noma-dmrv/issues/1485), decided
+  2026-10-29). Values: wet first, a Dry figure of "Not recorded" when the kind
+  carries one and it is missing, a "Not recorded: a, b" Notice for the other plain
+  gaps, "Trace rollback", "View full record" through `recordHref`. Back / Next
+  step stage to stage, the camera frames every record of the step, only that
+  chain's legs are lit. A record picked from the list or a marker starts the first
+  chain through it (fields first) on its stage's step with the record open.
+  "Whole batch" returns to the stage list.
   Only lit legs carry a km label (one per road, even when several product layers
   share it); each road is drawn once. FIT, + / − and SAT stay. A batch with no
   location at all shows an empty state instead of the map and keeps the list.

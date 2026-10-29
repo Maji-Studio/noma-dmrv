@@ -21,7 +21,7 @@ import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import { MapWarningBanner } from "./viewer-rails";
 import { LazyTraceMapCanvas } from "./lazy-trace-map-canvas";
-import { buildChains, chainFor, chainStepLighting, chainTo } from "./trace-chains";
+import { buildChains, chainFor, chainStepLighting, chainSteps, chainTo, stepIndexOf } from "./trace-chains";
 import { TraceChainWalk } from "./trace-chain-walk";
 import { TraceStageList } from "./trace-stage-list";
 import {
@@ -60,7 +60,10 @@ const ROOT_HEIGHT_CLASS = "h-[calc(100%-56px)] md:h-full";
 
 interface Walk {
   endId: string;
+  /** Index into the chain's steps (one per stage). */
   stepIndex: number;
+  /** The record opened in place inside a grouped step. */
+  openRecordId: string | null;
 }
 
 export function TraceMapView({
@@ -78,7 +81,9 @@ export function TraceMapView({
   const [walk, setWalk] = useState<Walk | null>(null);
   const chains = buildChains(model);
   const chain = walk ? chains.find((candidate) => candidate.end.id === walk.endId) ?? chainTo(model, walk.endId) : null;
-  const step = chain && walk ? chain.steps[Math.min(walk.stepIndex, chain.steps.length - 1)] ?? null : null;
+  const steps = chain ? chainSteps(chain) : [];
+  const stepIndex = walk ? Math.min(walk.stepIndex, steps.length - 1) : 0;
+  const step = steps[stepIndex] ?? null;
   const stage = stageIndex === null ? null : model.stages[stageIndex] ?? null;
   const lighting =
     chain && step
@@ -86,7 +91,7 @@ export function TraceMapView({
       : stage
         ? stageLighting(model, stage)
         : restingLighting(model);
-  const frameKey = chain && step ? `chain|${chain.end.id}|${step.id}` : `stage|${stageIndex ?? "rest"}`;
+  const frameKey = chain && step ? `chain|${chain.end.id}|${stepIndex}` : `stage|${stageIndex ?? "rest"}`;
   const hasPlaces =
     model.facility !== null ||
     model.plottable.size > 0 ||
@@ -99,9 +104,11 @@ export function TraceMapView({
   const startWalk = (recordId: string) => {
     const next = chainFor(model, chains, recordId);
     if (!next) return;
-    // A chain end starts at the supplier and walks toward the field; any other record starts at itself.
-    const at = next.end.id === recordId ? 0 : next.steps.findIndex((record) => record.id === recordId);
-    setWalk({ endId: next.end.id, stepIndex: Math.max(0, at) });
+    // A chain end starts at the supplier and walks toward the field; any other
+    // record starts on its own stage's step with that record open.
+    const nextSteps = chainSteps(next);
+    if (next.end.id === recordId) setWalk({ endId: next.end.id, stepIndex: 0, openRecordId: null });
+    else setWalk({ endId: next.end.id, stepIndex: Math.max(0, stepIndexOf(nextSteps, recordId)), openRecordId: recordId });
   };
   const onMarker = (nodeId: string) => {
     if (nodeId.startsWith("facility:")) {
@@ -110,8 +117,8 @@ export function TraceMapView({
       if (first >= 0) selectStage(first);
       return;
     }
-    const inChain = chain?.steps.findIndex((record) => record.id === nodeId) ?? -1;
-    if (chain && inChain >= 0) setWalk({ endId: chain.end.id, stepIndex: inChain });
+    const inChain = stepIndexOf(steps, nodeId);
+    if (chain && inChain >= 0) setWalk({ endId: chain.end.id, stepIndex: inChain, openRecordId: nodeId });
     else startWalk(nodeId);
   };
   const onTraceRecord = (recordId: string) => {
@@ -158,8 +165,11 @@ export function TraceMapView({
           <TraceChainWalk
             model={model}
             chain={chain}
-            stepIndex={chain.steps.indexOf(step)}
-            onStep={(index) => setWalk({ endId: chain.end.id, stepIndex: index })}
+            steps={steps}
+            stepIndex={stepIndex}
+            openRecordId={walk.openRecordId}
+            onStep={(index) => setWalk({ endId: chain.end.id, stepIndex: index, openRecordId: null })}
+            onOpenRecord={(recordId) => setWalk({ ...walk, openRecordId: recordId })}
             onLeave={() => setWalk(null)}
             onTrace={onTraceRecord}
           />

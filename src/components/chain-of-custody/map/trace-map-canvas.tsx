@@ -392,7 +392,7 @@ export default function TraceMapCanvas({
       element.classList.toggle("tm-quiet", Boolean(lighting.nodeIds) && !lit && !isFacility);
       element.classList.toggle(
         CURRENT_CLASS,
-        nodeId === lighting.currentNodeId || (isFacility && lighting.facilityLit && Boolean(lighting.nodeIds)),
+        lighting.currentNodeIds.has(nodeId) || (isFacility && lighting.facilityLit && Boolean(lighting.nodeIds)),
       );
     }
     declutterLabels(map, markersRef.current);

@@ -36,9 +36,9 @@ it("starts a chain walk at the supplier from a field and leaves with Whole batch
   render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
   fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
   fireEvent.click(within(panel()).getByRole("button", { name: /Field A/ }));
-  expect(within(panel()).getByText(/01 \/ 06 · To Field A/)).toBeTruthy();
+  expect(within(panel()).getByText(/01 \/ 05 · To Field A/)).toBeTruthy();
   fireEvent.click(within(panel()).getByRole("button", { name: /Next/ }));
-  expect(within(panel()).getByText(/02 \/ 06/)).toBeTruthy();
+  expect(within(panel()).getByText(/02 \/ 05/)).toBeTruthy();
   fireEvent.click(within(panel()).getByRole("button", { name: /Whole batch/ }));
   // Back on the list, with the stage the walk began from still open.
   expect(within(panel()).getByText("05 / 05 · Application")).toBeTruthy();
@@ -49,7 +49,21 @@ it("starts a mid-chain record at itself", () => {
   render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
   fireEvent.click(within(panel()).getByRole("button", { name: /Production run/ }));
   fireEvent.click(within(panel()).getByRole("button", { name: /PR-26-001/ }));
-  expect(within(panel()).getByText(/03 \/ 06/)).toBeTruthy();
+  expect(within(panel()).getByText(/02 \/ 05/)).toBeTruthy();
+});
+
+it("walks converging intakes as one step and opens a picked record inside it", () => {
+  render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  fireEvent.click(within(panel()).getByRole("button", { name: /Feedstock intake/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /FS-26-002/ }));
+  expect(within(panel()).getByText("2 feedstock intakes")).toBeTruthy();
+  expect(within(panel()).getByText(/01 \/ 05/)).toBeTruthy();
+  expect(within(panel()).getByRole("button", { name: /FS-26-001/ }).getAttribute("aria-expanded")).toBe("false");
+  expect(within(panel()).getByRole("button", { name: /FS-26-002/ }).getAttribute("aria-expanded")).toBe("true");
+  expect(within(panel()).getByRole("link", { name: /View full record/ })).toBeTruthy();
+  // One open at a time.
+  fireEvent.click(within(panel()).getByRole("button", { name: /FS-26-001/ }));
+  expect(within(panel()).getByRole("button", { name: /FS-26-002/ }).getAttribute("aria-expanded")).toBe("false");
 });
 
 it("shows an empty state instead of the map when nothing has a location, and keeps the list", () => {
@@ -75,7 +89,7 @@ it("offers Back only after the first step and Next only before the last", () => 
   fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
   fireEvent.click(within(panel()).getByRole("button", { name: /Field A/ }));
   expect(within(panel()).queryByRole("button", { name: /^Back/ })).toBeNull();
-  for (let step = 0; step < 5; step++) fireEvent.click(within(panel()).getByRole("button", { name: /^Next/ }));
+  for (let step = 0; step < 4; step++) fireEvent.click(within(panel()).getByRole("button", { name: /^Next/ }));
   expect(within(panel()).queryByRole("button", { name: /^Next/ })).toBeNull();
   expect(within(panel()).getByRole("button", { name: /^Back/ })).toBeTruthy();
 });
