@@ -510,7 +510,6 @@ export function buildRemovalSourceBindingPlan(args: {
                 (input) => input.input_key === target.inputKey,
               ),
           );
-        const ambiguous = matchingComponents.length > 1;
         const source = targetAutomaticSource(target);
         if (matchingComponents.length > 1 && source?.id) {
           matchingComponents = matchingComponents.filter((component) => {
@@ -518,7 +517,7 @@ export function buildRemovalSourceBindingPlan(args: {
             return contract && effectiveContract(contract).automaticSource === source.id;
           });
         }
-        if (matchingComponents.length === 0 && target.optionalInTemplate && !ambiguous) {
+        if (matchingComponents.length === 0 && target.optionalInTemplate) {
           return [];
         }
         if (matchingComponents.length !== 1) {

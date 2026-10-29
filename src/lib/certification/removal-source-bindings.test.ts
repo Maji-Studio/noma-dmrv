@@ -624,6 +624,27 @@ describe("buildRemovalSourceBindingPlan", () => {
     else expect(build).toThrow(/expected exactly one/);
   });
 
+  it("skips the optional transport ledger biomass target when neither duplicate line owns the source", () => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "pdf", removalId: "removal-1",
+      metadata: { kind: "transport_evidence_ledger", removalId: "removal-1" },
+      lineage: { entityType: "credit_batch", entityId: "credit-batch-1", entityLabel: "Credit batch" },
+    })!;
+    const manual = { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as const;
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [{ documentId: "ledger", sourceId: "ledger", binding }],
+      template: { groups: template.groups.map((group) => group.key === "biomass-feedstock-transport"
+        ? { ...group, components: [...group.components, { ...group.components[0], id: "other-biomass" }] }
+        : group) } as never,
+      lineSources: {
+        "component-feedstock-transport": manual,
+        "other-biomass": manual,
+      },
+      applicationIdsByCreditBatchId,
+    });
+    expect(plan.map((entry) => entry.intendedTarget.groupKey)).toEqual(["biochar-transport"]);
+  });
+
   it("keeps a single live transport target even with a manual contract", () => {
     const binding = classifyRemovalSourceCandidate({ documentType: "bill_of_lading", metadata: {}, lineage: delivery })!;
     const plan = buildRemovalSourceBindingPlan({
