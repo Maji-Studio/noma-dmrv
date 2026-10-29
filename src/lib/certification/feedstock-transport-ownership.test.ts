@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedstockTransportOwners, hasLinkedFeedstock, ownedTransportFeedstockIds, type FeedstockTransportDraw } from "./feedstock-transport-ownership";
+import { feedstockTransportOwners, hasLinkedFeedstock, linkedFeedstockIdsOwnedElsewhere, ownedTransportFeedstockIds, type FeedstockTransportDraw } from "./feedstock-transport-ownership";
 
 const draw = (runId: string, day: string, status = "complete", feedstockId = "early"): FeedstockTransportDraw => ({
   runId, feedstockId, status, startTime: new Date(`${day}T00:00:00Z`),
@@ -49,4 +49,18 @@ it("collects unique owned feedstock IDs while preserving whether any feedstock i
   expect(hasLinkedFeedstock([{ feedstocks: [] }])).toBe(false);
   expect(ownedTransportFeedstockIds([])).toEqual([]);
   expect(hasLinkedFeedstock([])).toBe(false);
+});
+
+it("lists linked feedstock ids owned elsewhere only when no run owns any of them", () => {
+  const mixed = [
+    { feedstocks: [{ id: "owned", ownsTransport: true }] },
+    { feedstocks: [{ id: "elsewhere", ownsTransport: false }] },
+  ];
+  expect(linkedFeedstockIdsOwnedElsewhere(mixed)).toEqual([]);
+  const allElsewhere = [
+    { feedstocks: [{ id: "a", ownsTransport: false }, { id: "b", ownsTransport: false }] },
+    { feedstocks: [{ id: "a", ownsTransport: false }] },
+  ];
+  expect(linkedFeedstockIdsOwnedElsewhere(allElsewhere)).toEqual(["a", "b"]);
+  expect(linkedFeedstockIdsOwnedElsewhere([{ feedstocks: [] }])).toEqual([]);
 });
