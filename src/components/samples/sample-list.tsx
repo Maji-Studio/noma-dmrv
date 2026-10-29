@@ -31,6 +31,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -321,9 +322,12 @@ export function SampleList({
     error: creditBatchesError,
   } = useCreditBatches(contextFacilityId || undefined);
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
-  const linkedFacilityReady = useLinkedRecordFacility(focusedSample.data, focusedSample.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedSample.data, focusedSample.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
+  // A link into an archived facility opens the record read only, even an edit link.
+  const linkOpensEdit = deepLinkMode === "edit" && !linkedRecord.readOnly;
 
-  if (linkedFacilityReady && !sideSheet && deepLinkMode === "edit" && focusedSample.data && focusedSampleId === focusedSample.data.id) {
+  if (linkedFacilityReady && !sideSheet && linkOpensEdit && focusedSample.data && focusedSampleId === focusedSample.data.id) {
     setSideSheet({ mode: "edit", entity: focusedSample.data });
   }
 
@@ -357,7 +361,7 @@ export function SampleList({
   const deepLinkedSideSheet =
     linkedFacilityReady && focusedSampleId && focusedSample.data
       ? ({
-          mode: deepLinkMode === "edit" ? "edit" : "view",
+          mode: linkOpensEdit ? "edit" : "view",
           entity: focusedSample.data,
         } as const)
       : null;
@@ -564,6 +568,63 @@ export function SampleList({
 
   const columns = createColumns(openEdit, handleDelete, sampleLocks.locks);
 
+  const viewingEntity =
+    displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
+  const viewSubtitle = viewingEntity
+    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" · ") || undefined
+    : undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "Sample");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetAllowed && !!displaySideSheet}
+      onOpenChange={(open) => { if (!open) closeSideSheet(); }}
+      onCloseAttempt={confirmCreateClose}
+      mode={displaySideSheet?.mode ?? "create"}
+      onModeChange={handleModeChange}
+      title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
+      subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit Sample"
+      readOnly={sheetReadOnly}
+      sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
+    >
+      {isResolvingCreateContext ? (
+        <div
+          className="flex flex-col gap-16 py-8"
+          aria-label="Loading selected credit batch"
+        >
+          <Skeleton className="h-24 w-2/3" />
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : createContextError ? (
+        <ServerError message={createContextError} />
+      ) : (
+        <SampleForm
+          key={editingEntity?.id ?? "create"}
+          sample={editingEntity ?? undefined}
+          creditBatchId={preselectedCreditBatchId}
+          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={isSubmitting}
+          errorMessage={formError ?? undefined}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create Sample"}
+          deferredAttachments={deferredAttachments}
+          onRetryDeferredAttachments={handleRetryDeferredAttachments}
+          onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
+        />
+      )}
+    </EntitySideSheet>
+  );
+
   if (!contextFacilityId) {
     return (
       <div className="container-max page-shell">
@@ -572,6 +633,7 @@ export function SampleList({
           title="Lab Samples"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab Samples." />
+        {sideSheetElement}
       </div>
     );
   }
@@ -579,12 +641,6 @@ export function SampleList({
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "The Samples could not be loaded. Refresh the page and try again."} /></div>;
   }
-
-  const viewingEntity =
-    displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
-  const viewSubtitle = viewingEntity
-    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" · ") || undefined
-    : undefined;
 
   return (
     <div className="container-max page-shell">
@@ -691,47 +747,7 @@ export function SampleList({
         errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        numberedSections
-        open={!!displaySideSheet}
-        onOpenChange={(open) => { if (!open) closeSideSheet(); }}
-        onCloseAttempt={confirmCreateClose}
-        mode={displaySideSheet?.mode ?? "create"}
-        onModeChange={handleModeChange}
-        title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
-      >
-        {isResolvingCreateContext ? (
-          <div
-            className="flex flex-col gap-16 py-8"
-            aria-label="Loading selected credit batch"
-          >
-            <Skeleton className="h-24 w-2/3" />
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-40 w-full" />
-          </div>
-        ) : createContextError ? (
-          <ServerError message={createContextError} />
-        ) : (
-          <SampleForm
-            key={editingEntity?.id ?? "create"}
-            sample={editingEntity ?? undefined}
-            creditBatchId={preselectedCreditBatchId}
-            onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={attemptCloseSideSheet}
-            isSubmitting={isSubmitting}
-            errorMessage={formError ?? undefined}
-            submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create Sample"}
-            deferredAttachments={deferredAttachments}
-            onRetryDeferredAttachments={handleRetryDeferredAttachments}
-            onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
-          />
-        )}
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

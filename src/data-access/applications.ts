@@ -77,6 +77,11 @@ export interface ApplicationListOptions {
   search?: string;
   status?: ApplicationStatus;
   evidenceMethod?: ApplicationEvidenceMethod;
+  /**
+   * With `ids` only: also return applications whose delivery was archived with
+   * its facility, so a link opens the record read only (#1499). Lists never set it.
+   */
+  includeArchived?: boolean;
 }
 
 export async function getApplications(
@@ -88,11 +93,12 @@ export async function getApplications(
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
-  // Applications carry no archived_at — hide them via their archived delivery
-  const conditions: SQL[] = [
-    eq(applications.organizationId, ctx.organizationId),
-    isNull(deliveries.archivedAt),
-  ];
+  // Applications carry no archived_at — hide them via their archived delivery,
+  // except for an exact-id read that asks for archived rows.
+  const conditions: SQL[] = [eq(applications.organizationId, ctx.organizationId)];
+  if (!(options?.includeArchived && options.ids?.length)) {
+    conditions.push(isNull(deliveries.archivedAt));
+  }
 
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));

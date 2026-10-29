@@ -12,6 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -280,15 +281,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const focusedQueryEnabled = !!focusedApplicationId;
+  // An application whose facility was archived is read too, and opens read only.
   const focusedApplication = useApplications(
     focusedApplicationId
-      ? { ids: [focusedApplicationId] }
+      ? { ids: [focusedApplicationId], includeArchived: true }
       : undefined,
     { enabled: focusedQueryEnabled },
   );
   const focusedApplicationItem =
     focusedApplication.data?.items.find((item) => item.id === focusedApplicationId) ?? null;
-  const linkedFacilityReady = useLinkedRecordFacility(focusedApplicationItem, focusedApplication.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedApplicationItem, focusedApplication.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const focusedApplicationMissing =
     focusedQueryEnabled &&
     !focusedApplication.isLoading &&
@@ -553,26 +556,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setCurrentPage(1);
   };
 
-  if (!contextFacilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="records"
-          title="Applications"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container-max py-32">
-        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const fieldsEditable = !displaySideSheet?.entity || applicationLock.data === false;
@@ -598,6 +581,67 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const sideSheetDelivery = sideSheetEntity
     ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
     : undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "application");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={(mode) =>
+        setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
+      }
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      canEdit={fieldsEditable && isRecordEditable(sheetLock)}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      editLabel="Edit application"
+      readOnly={sheetReadOnly}
+      size="wide"
+      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption, readOnly: !!sheetReadOnly }) : undefined}
+    >
+      <ApplicationForm
+        key={sideSheetEntity?.id ?? "create"}
+        application={sideSheetEntity ?? undefined}
+        lock={sheetLock}
+        deliveries={deliveryOptions}
+        durabilityOption={durabilityOption}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
+        errorMessage={createError || updateError || undefined}
+        deferredAttachments={deferredAttachments}
+      />
+    </EntitySideSheet>
+  );
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Applications"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
+        {sideSheetElement}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-max py-32">
+        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
 
   return (
     <div className="container-max page-shell">
@@ -772,37 +816,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         errorMessage={deleteError ?? undefined}
       />
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={(mode) =>
-          setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
-        }
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        canEdit={fieldsEditable && isRecordEditable(sheetLock)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
-        editLabel="Edit application"
-        size="wide"
-        sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
-      >
-        <ApplicationForm
-          key={sideSheetEntity?.id ?? "create"}
-          application={sideSheetEntity ?? undefined}
-          lock={sheetLock}
-          deliveries={deliveryOptions}
-          durabilityOption={durabilityOption}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
-          errorMessage={createError || updateError || undefined}
-          deferredAttachments={deferredAttachments}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

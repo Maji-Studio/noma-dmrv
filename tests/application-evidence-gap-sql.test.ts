@@ -393,3 +393,29 @@ describe("applicationEvidenceGapCountSql (via getApplications)", () => {
     }
   });
 });
+
+describe("getApplications exact-id read of an archived application (#1499)", () => {
+  it("returns it only for an ids read that asks for archived rows", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const target = fixture.applications[0];
+    // The facility archive cascade stamps the delivery; applications have no archived_at.
+    await db.update(deliveries).set({ archivedAt: new Date() }).where(eq(deliveries.id, fixture.deliveryId));
+    try {
+      const plain = await getApplications(orgCtx, { ids: [target.id] });
+      const archived = await getApplications(orgCtx, { ids: [target.id], includeArchived: true });
+      const listed = await getApplications(orgCtx, { facilityId: fixture.facilityId, includeArchived: true, pageSize: LIST_PAGE_SIZE });
+      const otherOrg = await getApplications({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [target.id], includeArchived: true });
+      expect(plain.items).toHaveLength(0);
+      expect(archived.items.map((item) => item.code)).toEqual([target.code]);
+      // Lists never show archived rows, even when the flag is sent.
+      expect(listed.items).toHaveLength(0);
+      expect(otherOrg.items).toHaveLength(0);
+    } finally {
+      await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, fixture.deliveryId));
+    }
+  });
+});

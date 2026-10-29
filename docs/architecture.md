@@ -271,7 +271,21 @@ Record hrefs are owned by `src/lib/record-links.ts`: its table supplies both
 the list path and the sheet query parameter. List pages with an organization-scoped
 by-id read use `useLinkedRecordFacility` so the active facility follows the linked
 record. The hook selects only a facility available in context, through the context
-setter, and holds the linked sheet closed until the selection matches.
+setter, and holds the linked sheet closed until the selection matches. A record in
+a facility outside that list is shown where it is: the hook reads the facility by
+id (org-scoped) and returns `readOnly` when it is archived, or when that read fails
+or cannot run (fail closed, with a retry on the read). The page passes
+`linkedRecordReadOnly` (`src/lib/linked-record-read-only.ts`) as the sheet's
+`readOnly` and to its section builders, so `EntitySideSheet` stays in view mode
+with no Edit, no lock chip and no lock line, an edit link opens view, and the
+sections drop their write actions (distance refresh, uploads, sync). The sheet stays
+mounted over the "Select a facility" empty state too, opening only for such a link.
+The archived facility never becomes the working facility, and server writes stay
+refused (#1499). Orders, feedstock intakes, deliveries, biochar products, lab
+Samples, applications (read by id with `includeArchived`), reactors and production
+runs pass the state. A production run still does not open, because
+`getProductionRunById` filters archived runs. Gaps:
+[open-questions.md](./open-questions.md#records-in-archived-facilities-1502).
 
 ### Quick-Add and cascading selects
 

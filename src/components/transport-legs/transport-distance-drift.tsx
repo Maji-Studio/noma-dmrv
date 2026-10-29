@@ -171,8 +171,11 @@ interface TransportDistanceDriftNoticeProps {
   recordCode: string;
 }
 
-/** Read view: a warning notice with the drift and its refresh action. */
-export function TransportDistanceDriftNotice({ target, recordCode }: TransportDistanceDriftNoticeProps) {
+/**
+ * Read view: a warning notice with the drift and its refresh action. A
+ * read-only sheet keeps the fact and drops the action.
+ */
+export function TransportDistanceDriftNotice({ target, recordCode, readOnly = false }: TransportDistanceDriftNoticeProps & { readOnly?: boolean }) {
   const drift = useTransportDistanceDrift(target);
   const [confirming, setConfirming] = useState(false);
   const data = drift.data;
@@ -184,18 +187,18 @@ export function TransportDistanceDriftNotice({ target, recordCode }: TransportDi
         tone="warning"
         title={DRIFT_TITLE}
         data-testid="transport-distance-drift"
-        action={<RefreshLinkButton onClick={() => setConfirming(true)} />}
+        action={readOnly ? undefined : <RefreshLinkButton onClick={() => setConfirming(true)} />}
       >
         {driftSummary(data)}
       </Notice>
-      <DistanceRefreshDialog
+      {!readOnly && <DistanceRefreshDialog
         open={confirming}
         onClose={() => setConfirming(false)}
         target={target}
         drift={data}
         recordCode={recordCode}
         onRefused={async () => visibleDrift((await drift.refetch()).data)}
-      />
+      />}
     </>
   );
 }

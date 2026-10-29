@@ -31,6 +31,7 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -132,7 +133,8 @@ export function ReactorList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const linkedReactor = useEntityEditRecord("reactor", linkedReactorId ?? "");
-  const linkedFacilityReady = useLinkedRecordFacility(linkedReactor.data, linkedReactor.isLoading);
+  const linkedRecord = useLinkedRecordFacility(linkedReactor.data, linkedReactor.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const [deletingReactor, setDeletingReactor] = useState<ReactorWithRelations | null>(null);
 
   // Error state
@@ -271,6 +273,47 @@ export function ReactorList() {
   );
   const hasActiveSearch = searchInput.trim().length > 0;
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "reactor");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      mode={sideSheetMode}
+      onModeChange={(mode) => displaySideSheet && setSideSheet({ ...displaySideSheet, mode })}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      editLabel="Edit reactor"
+      readOnly={sheetReadOnly}
+      sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
+    >
+      <ReactorForm
+        key={sideSheetEntity?.id ?? "create"}
+        reactor={sideSheetEntity as Reactor | undefined}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={closeSideSheet}
+        isSubmitting={createReactor.isPending || updateReactor.isPending}
+        errorMessage={createError || updateError || undefined}
+        submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
+      />
+    </EntitySideSheet>
+  );
+
   if (!contextFacilityId) {
     return (
       <div className="container-max page-shell">
@@ -279,6 +322,7 @@ export function ReactorList() {
           title="Reactors"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
+        {sideSheetElement}
       </div>
     );
   }
@@ -290,17 +334,6 @@ export function ReactorList() {
       </div>
     );
   }
-
-  // Derived values for the side sheet
-  const sideSheetOpen = !!displaySideSheet;
-  const sideSheetMode = displaySideSheet?.mode ?? "create";
-  const sideSheetEntity = displaySideSheet?.entity ?? null;
-
-  const sideSheetTitle =
-    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
-
-  const sideSheetSubtitle =
-    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
 
   return (
     <div className="container-max page-shell">
@@ -409,27 +442,7 @@ export function ReactorList() {
         errorMessage={deleteError ?? undefined}
       />
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        mode={sideSheetMode}
-        onModeChange={(mode) => displaySideSheet && setSideSheet({ ...displaySideSheet, mode })}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        editLabel="Edit reactor"
-        sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
-      >
-        <ReactorForm
-          key={sideSheetEntity?.id ?? "create"}
-          reactor={sideSheetEntity as Reactor | undefined}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createReactor.isPending || updateReactor.isPending}
-          errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

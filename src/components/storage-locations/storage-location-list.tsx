@@ -64,7 +64,7 @@ export function StorageLocationList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const linkedBin = useEntityEditRecord("storageLocation", linkedBinId ?? "");
-  const linkedFacilityReady = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading);
+  const linkedFacilityReady = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading).ready;
   const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
   const displaySideSheet = localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
     ? { mode: "view" as const, entity: linkedBin.data } : null);

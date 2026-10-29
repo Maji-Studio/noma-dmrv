@@ -35,6 +35,7 @@ const getApplicationsOptionsSchema = z.object({
   search: z.string().max(255).optional(),
   status: z.enum(applicationStatuses).optional(),
   evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
+  includeArchived: z.boolean().optional(),
 }).optional();
 
 /**

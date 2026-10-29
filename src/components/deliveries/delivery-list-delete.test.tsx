@@ -38,6 +38,7 @@ function lockView(): RecordLockView {
   return { level: harness.level, heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [] };
 }
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },

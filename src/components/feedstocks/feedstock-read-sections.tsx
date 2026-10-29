@@ -23,6 +23,8 @@ export interface FeedstockRecordedDistance {
 export function feedstockSheetSections(
   feedstock: FeedstockWithRelations,
   recordedDistance: FeedstockRecordedDistance = { distanceKm: null, pending: false },
+  /** Read only (a link into an archived facility): no write actions. */
+  options: { readOnly?: boolean } = {},
 ): DetailPanelSection[] {
   const overrideKm = feedstock.distanceKmOverride;
   const overridden = isOverrideDistance(overrideKm);
@@ -52,7 +54,7 @@ export function feedstockSheetSections(
       // The saved leg reads in the step that records it, as on the form.
       content: (
         <div className="flex flex-col gap-16">
-          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} />
+          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} readOnly={options.readOnly} />
           <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />
         </div>
       ),

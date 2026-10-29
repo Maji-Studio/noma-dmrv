@@ -15,6 +15,9 @@
 import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
+import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
@@ -99,6 +102,15 @@ interface EntitySideSheetProps {
    * the whole record reads (for example "archived") is seen first.
    */
   viewModeNotice?: React.ReactNode;
+  /**
+   * The record cannot change here at all (its facility is archived, or could
+   * not be checked). The sheet then stays in view mode, even for an edit link,
+   * hides Edit, the title chip and `viewModeNotice` (lock lines say how to
+   * change the record), and shows this line first. `viewModeChildren`
+   * ("Used by") stays, since it is a plain fact. Section builders hide their
+   * own write actions from the same state.
+   */
+  readOnly?: SheetReadOnly;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
@@ -122,7 +134,7 @@ function EntitySideSheet({
   open,
   onOpenChange,
   onCloseAttempt,
-  mode,
+  mode: requestedMode,
   onModeChange,
   title,
   subtitle,
@@ -133,12 +145,15 @@ function EntitySideSheet({
   numberedSections = false,
   viewModeChildren,
   viewModeNotice,
+  readOnly: readOnlyState,
   editLabel = "Edit",
   canEdit = true,
   viewPrimaryAction,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
+  const readOnly = !!readOnlyState && requestedMode !== "create";
+  const mode = readOnly ? "view" : requestedMode;
   const isViewMode = mode === "view";
   const editBlock = mode === "edit" ? submitBlock ?? null : null;
 
@@ -247,7 +262,8 @@ function EntitySideSheet({
             <div className="flex flex-col gap-4 min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-8">
                 <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
-                {mode !== "create" && titleBadge}
+                {/* A read-only record's notice is its one status; an Open chip would contradict it. */}
+                {mode !== "create" && !readOnly && titleBadge}
               </div>
               {subtitle && (
                 <SlideOverPanel.Description>
@@ -269,7 +285,22 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
-              {viewModeNotice}
+              {/* Read only, the reason is the one status: lock lines say how to
+                  change or free the record, which does not apply here. */}
+              {readOnly && readOnlyState ? (
+                <Notice
+                  tone={readOnlyState.tone}
+                  boxed
+                  data-read-only-notice={readOnlyState.tone}
+                  action={readOnlyState.retry ? (
+                    <Button variant="default" size="small" busy={readOnlyState.retry.running} onClick={readOnlyState.retry.run}>
+                      {RECORD_LOCK_RETRY_LABEL}
+                    </Button>
+                  ) : undefined}
+                >
+                  {readOnlyState.message}
+                </Notice>
+              ) : viewModeNotice}
               {sections && (
                 <EntitySideSheetSections
                   sections={sections}
@@ -309,7 +340,7 @@ function EntitySideSheet({
         {isViewMode && (
           <SlideOverPanel.Footer>
             {viewPrimaryAction}
-            {canEdit && (
+            {canEdit && !readOnly && (
               <Button variant={viewPrimaryAction ? "default" : "primary"} onClick={() => onModeChange("edit")}>
                 {editLabel}
               </Button>
