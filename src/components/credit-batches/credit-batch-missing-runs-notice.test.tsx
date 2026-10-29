@@ -58,6 +58,21 @@ describe("CreditBatchMissingRunsNotice", () => {
     expect(text).not.toContain("add the runs");
   });
 
+  it("names the run and day when several runs are missing", () => {
+    render(<CreditBatchMissingRunsNotice
+      runs={[{ ...RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }, { ...RUNS[1], sameDayEntry: true, sameDayEntryDate: "2026-09-12" }]}
+      facilityId="facility-1" canManage onEdit={vi.fn()}
+    />);
+    const text = screen.getByRole("status").textContent!;
+    expect(text).toContain(`If the Emissions entry dated Sep 9, 2026 already records the emissions of ${RUNS[0].code}, delete it when you add the run.`);
+    expect(text).toContain(`If the Emissions entry dated Sep 12, 2026 already records the emissions of ${RUNS[1].code}, delete it when you add the run.`);
+  });
+
+  it("carries the same-day date from the to-dos", () => {
+    expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }]))
+      .toEqual([{ ...RUNS[0], sameDayEntry: true, sameDayEntryDate: "2026-09-09" }]);
+  });
+
   it("carries the same-day flag from the to-dos", () => {
     expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true }]))
       .toEqual([{ ...RUNS[0], sameDayEntry: true }]);

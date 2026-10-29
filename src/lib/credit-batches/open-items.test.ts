@@ -16,7 +16,9 @@ import {
   CREDIT_BATCH_DETAILS_ROW,
   heldMissingRuns,
   missingRunsCountedSentence,
+  missingRunsMemberNamedSentence,
   missingRunsMemberSentence,
+  sameDayEntryRunSentence,
   missingRunsAdminSentence,
   refusedRunsSentence,
   sameDayEntrySentence,
@@ -439,7 +441,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, runs: [early], manualEntries: [entry],
     } }).check).toEqual([{
       id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
-      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true,
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-01",
       detail: "Its emissions are not counted in RM-009. If the Emissions entry dated Sep 1, 2026 already records them, delete it when you add the run.",
       target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
     }]);
@@ -487,7 +489,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
     } }).check[0]).toEqual({
       id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
-      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true,
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-01",
       detail: "Its emissions are not counted in RM-009. An admin can add it in Edit.", target: null,
     });
   });
@@ -601,6 +603,13 @@ describe("missing run copy", () => {
     { codes: ["RUN-112", "RUN-113"], sentence: "RUN-112 and RUN-113 cannot be added. Record their diesel and power on the credit batch's Emissions tab." },
   ])("names refused runs: $codes", ({ codes, sentence }) => {
     expect(refusedRunsSentence(codes)).toBe(sentence);
+  });
+
+  it("says It or They when every run is refused, and names the addable runs for a member", () => {
+    expect(refusedRunsSentence(["RUN-112"], true)).toBe("It cannot be added. Record its diesel and power on the credit batch's Emissions tab.");
+    expect(refusedRunsSentence(["RUN-112", "RUN-113"], true)).toBe("They cannot be added. Record their diesel and power on the credit batch's Emissions tab.");
+    expect(missingRunsMemberNamedSentence(["RUN-1", "RUN-2"])).toBe("An admin can add RUN-1 and RUN-2 in Edit.");
+    expect(sameDayEntryRunSentence("RUN-1", "2026-09-09")).toBe("If the Emissions entry dated Sep 9, 2026 already records the emissions of RUN-1, delete it when you add the run.");
   });
 
   it.each([

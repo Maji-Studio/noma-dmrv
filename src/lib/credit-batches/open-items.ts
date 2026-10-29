@@ -54,6 +54,8 @@ export interface CreditBatchOpenItem {
   productionRun?: { id: string; code: string };
   /** Missing-run Check only: a later Emissions entry dated the run's day may already record its emissions. */
   sameDayEntry?: boolean;
+  /** With `sameDayEntry`: the day of that entry, YYYY-MM-DD, so other surfaces can name it. */
+  sameDayEntryDate?: string;
   /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
@@ -190,10 +192,25 @@ export function missingRunsAdminSentence(count: number): string {
   return count === 1 ? "Add it in Edit." : "Add them in Edit.";
 }
 
-export function refusedRunsSentence(codes: readonly string[]): string {
+/**
+ * `all` when every run in the notice is refused: the notice already named them,
+ * so the sentence says "It" or "They" instead of repeating the codes.
+ */
+export function refusedRunsSentence(codes: readonly string[], all = false): string {
+  const subject = all ? (codes.length === 1 ? "It" : "They") : joinWithAnd(codes);
   return codes.length === 1
-    ? `${codes[0]} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
-    : `${joinWithAnd(codes)} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
+    ? `${subject} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
+    : `${subject} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
+}
+
+/** Mixed batch: the member is told which of the named runs an admin can add. */
+export function missingRunsMemberNamedSentence(codes: readonly string[]): string {
+  return `An admin can add ${joinWithAnd(codes)} in Edit.`;
+}
+
+/** Several missing runs: names the run and the day of the entry it may duplicate. */
+export function sameDayEntryRunSentence(code: string, entryDate: string): string {
+  return `If the Emissions entry dated ${formatCalendarDate(entryDate)} already records the emissions of ${code}, delete it when you add the run.`;
 }
 
 export function sameDayEntrySentence(count: number): string {
@@ -246,7 +263,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         productionRun: { id: run.id, code: run.code },
         title: `${run.code}${titleAfterCode}`,
         titleAfterCode,
-        ...(run.sameDayEntry ? { sameDayEntry: true } : {}),
+        ...(run.sameDayEntry ? { sameDayEntry: true, sameDayEntryDate: run.entryDate } : {}),
         detail: canManage
           ? `Its emissions are not counted in ${codes}.${sameDayDetail}`
           : `Its emissions are not counted in ${codes}. ${missingRunsMemberSentence(1)}`,

@@ -60,7 +60,7 @@ function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: strin
   const rest = item.titleAfterCode ?? null;
   return (
     <li className={ROW_RULE}>
-      <div className="flex min-h-44 items-center justify-between gap-16 py-12">
+      <div className="flex min-h-44 flex-col items-start gap-8 py-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16">
         <span className="flex min-w-0 flex-col gap-2">
           <span className="body-medium font-medium">
             {rest === null ? item.title : (
