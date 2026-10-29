@@ -9,10 +9,12 @@ import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { SafeError } from "@/lib/errors";
 import { requireOrgFacility } from "@/data-access/utils";
+import { uuidSchema } from "@/schemas/helpers";
 import {
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
+  getCreditBatchNameSuggestion,
   getCreditBatchCertifierForFacility,
   describeSavedCreditBatch,
   updateCreditBatch as updateCreditBatchData,
@@ -107,6 +109,19 @@ export async function getCreditBatchProductionRunOptionsFn(
   }, {
     fallbackMessage: "Failed to get credit batch production run options",
     log: { message: "Failed to get credit batch production run options", context: { op: "credit-batch:production-run-options" } },
+  });
+}
+
+export async function getCreditBatchNameSuggestionFn(
+  facilityId: string,
+): Promise<ActionResult<{ nextCode: string; name: string | null }>> {
+  return withAction(async (ctx) => {
+    const validated = uuidSchema().parse(facilityId);
+    await requireOrgFacility(ctx, validated);
+    return getCreditBatchNameSuggestion(ctx, validated);
+  }, {
+    fallbackMessage: "Failed to get credit batch name suggestion",
+    log: { message: "Failed to get credit batch name suggestion", context: { op: "credit-batch:name-suggestion" } },
   });
 }
 

@@ -77,6 +77,9 @@ import {
 } from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
+import { CREDIT_BATCH_CODE_PREFIX } from "@/config/credit-batches";
+import { nextCreditBatchName } from "@/lib/credit-batch-name-suggestion";
+import { peekNextCode } from "./code-generator";
 
 export {
   getCo2eStoredPreviews,
@@ -169,6 +172,26 @@ async function resolveCreditBatchCertifier(
 export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facilityId: string) {
   requireOrgScope(ctx);
   return getFacilityCertifierWithExecutor(ctx, db, facilityId);
+}
+
+export async function getCreditBatchNameSuggestion(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<{ nextCode: string; name: string | null }> {
+  requireOrgScope(ctx);
+  const [latest] = await db
+    .select({ name: creditBatches.name })
+    .from(creditBatches)
+    .where(and(
+      eq(creditBatches.organizationId, ctx.organizationId),
+      eq(creditBatches.facilityId, facilityId),
+    ))
+    .orderBy(desc(creditBatches.createdAt), desc(creditBatches.id))
+    .limit(1);
+  const nextCode = await peekNextCode(
+    ctx, CREDIT_BATCH_CODE_PREFIX, creditBatches, creditBatches.code,
+  );
+  return { nextCode, name: latest?.name != null ? nextCreditBatchName(latest.name) : null };
 }
 
 /**

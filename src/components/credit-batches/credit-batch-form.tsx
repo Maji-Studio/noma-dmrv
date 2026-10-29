@@ -39,7 +39,7 @@ import {
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
-import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { useCreditBatchNameSuggestion, useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
@@ -171,6 +171,11 @@ export function CreditBatchForm({
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
+  // The grey name is what the batch is called when the field stays blank: an
+  // edit shows its code, a create continues the facility's last name or the
+  // next code.
+  const nameSuggestion = useCreditBatchNameSuggestion(effectiveFacilityId || undefined, !isEditMode).data;
+  const suggestedName = creditBatch?.code ?? nameSuggestion?.name ?? nameSuggestion?.nextCode;
   const certifier = certifierSummary.data === undefined
     ? "isometric"
     : certifierSummary.data.mapping?.provider ?? null;
@@ -384,7 +389,8 @@ export function CreditBatchForm({
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    return onSubmit({ ...data, sampling }, refuseSave);
+    const name = isEditMode ? data.name : data.name ?? nameSuggestion?.name;
+    return onSubmit({ ...data, name, sampling }, refuseSave);
   }));
 
   return (
@@ -395,7 +401,9 @@ export function CreditBatchForm({
         <FormField
           id="name"
           label="Name"
-          hint="Lists and pages show the batch code when this is blank."
+          hint={suggestedName
+            ? `Leave blank to use ${suggestedName}.`
+            : "Lists and pages show the batch code when this is blank."}
           error={errors.name?.message}
         >
           <FormInput
@@ -403,7 +411,7 @@ export function CreditBatchForm({
             type="text"
             autoComplete="off"
             maxLength={CREDIT_BATCH_NAME_MAX_LENGTH}
-            placeholder={creditBatch?.code}
+            placeholder={suggestedName}
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name", {

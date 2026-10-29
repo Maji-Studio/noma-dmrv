@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   claimedRun: null as null | { endsOn: string; run: Record<string, unknown> },
   extraRuns: [] as Record<string, unknown>[],
   showFacilitySelect: false, showFeedstockSelect: false, realPicker: false, autoPick: false, timeZone: "UTC",
+  contextFacilityId: "facility",
+  nameSuggestion: undefined as undefined | { nextCode: string; name: string | null },
 }));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -49,7 +51,7 @@ function FeedstockSelect({ control }: { control: Control<SelectFields> }) {
 }
 
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: mocks.timeZone, hint: "" }),
-  useFacilityContext: () => ({ facilityId: "facility" }) }));
+  useFacilityContext: () => ({ facilityId: mocks.contextFacilityId }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
   useFacilityCertifierSummary: mocks.certifierSummary,
@@ -65,6 +67,9 @@ vi.mock("@/hooks/use-production-processes", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
+  useCreditBatchNameSuggestion: (_facilityId: string | undefined, enabled: boolean) => ({
+    data: enabled ? mocks.nameSuggestion : undefined,
+  }),
   useCreditBatchProductionRunOptions: (params: { endDate?: string }) => ({
     // A claimed run is in the window once the batch ends on or after the run's own end.
     data: mocks.claimedRun && params.endDate && params.endDate >= mocks.claimedRun.endsOn ? [mocks.claimedRun.run, ...mocks.extraRuns] : [],
@@ -117,6 +122,8 @@ beforeEach(() => {
   mocks.showFeedstockSelect = false;
   mocks.realPicker = false;
   mocks.autoPick = false;
+  mocks.contextFacilityId = "facility";
+  mocks.nameSuggestion = undefined;
   mocks.recordPrerequisites.mockReset();
   mocks.recordPrerequisites.mockResolvedValue(undefined);
   mocks.certifierSummary.mockReturnValue({ data: undefined });
@@ -495,5 +502,54 @@ describe("CreditBatchForm held batch: add a missed run", () => {
   it("leaves a free batch as it was", async () => {
     await renderHeld("open");
     expect(screen.queryByRole("button", { name: /Add run/ })).toBeNull();
+  });
+});
+
+describe("CreditBatchForm name suggestion", () => {
+  const nameInput = () => screen.getByRole<HTMLInputElement>("textbox", { name: "Name" });
+
+  async function submitBlankCreate() {
+    mocks.contextFacilityId = ISOMETRIC_FACILITY_ID;
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    mocks.realPicker = true;
+    mocks.autoPick = true;
+    const onSubmit = vi.fn();
+    const { container } = render(<CreditBatchForm onSubmit={onSubmit} />);
+    await waitFor(() => expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Feedstock type" }).value).toBe(FEEDSTOCK_TYPE_ID));
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    return onSubmit.mock.calls[0][0];
+  }
+
+  it("shows the continued name in grey when creating", () => {
+    mocks.nameSuggestion = { nextCode: "CB-26-004", name: "Lot 08" };
+    render(<CreditBatchForm onSubmit={vi.fn()} />);
+    expect(nameInput().placeholder).toBe("Lot 08");
+    expect(nameInput().value).toBe("");
+  });
+
+  it("shows the next code in grey when the last batch has no name to continue", () => {
+    mocks.nameSuggestion = { nextCode: "CB-26-002", name: null };
+    render(<CreditBatchForm onSubmit={vi.fn()} />);
+    expect(nameInput().placeholder).toBe("CB-26-002");
+  });
+
+  it("saves the grey name when the field stays blank", async () => {
+    mocks.nameSuggestion = { nextCode: "CB-26-004", name: "Lot 08" };
+    expect((await submitBlankCreate()).name).toBe("Lot 08");
+  });
+
+  it("saves no name when the grey text is the next code, so the batch shows its code", async () => {
+    mocks.nameSuggestion = { nextCode: "CB-26-002", name: null };
+    expect((await submitBlankCreate()).name ?? null).toBeNull();
+  });
+
+  it("keeps the batch's own code in grey when editing", () => {
+    mocks.nameSuggestion = { nextCode: "CB-26-004", name: "Lot 08" };
+    const creditBatch = { id: "00000000-0000-4000-8000-000000000001", code: "CB-26-001", facilityId: ISOMETRIC_FACILITY_ID,
+      feedstockTypeId: FEEDSTOCK_TYPE_ID, startDate: "2026-01-01", endDate: "2026-01-31", sampling: "sampled",
+      certifier: null, productionRunIds: [] } as unknown as CreditBatch;
+    render(<CreditBatchForm creditBatch={creditBatch} onSubmit={vi.fn()} />);
+    expect(nameInput().placeholder).toBe("CB-26-001");
   });
 });
