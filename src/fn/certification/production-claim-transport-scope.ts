@@ -31,14 +31,14 @@ export function collectProductionClaimAwareRequiredTransportCategories(args: {
   memberBatches: ProductionClaimScopeBatch[];
   requiredTransportCategories: readonly TransportCategory[];
 }): TransportCategory[] {
-  const includesProductionInputs = args.memberBatches.some((batch) =>
+  const productionBatches = args.memberBatches.filter((batch) =>
     batchIncludesProductionInputs(batch, args.removalId),
   );
-  return includesProductionInputs
-    ? [...args.requiredTransportCategories]
-    : args.requiredTransportCategories.filter(
-        (category) => category === "biochar",
-      );
+  return args.requiredTransportCategories.filter((category) => {
+    if (category === "biochar") return true;
+    if (category === "feedstock") return productionBatches.some((batch) => batch.productionFeedstockIds.length > 0);
+    return productionBatches.length > 0;
+  });
 }
 
 export function collectProductionClaimAwareTransportEntityIds(args: {

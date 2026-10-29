@@ -2,6 +2,7 @@
  * Chain of custody data access
  * Resolves the upstream lineage for a single application back to its feedstocks.
  */
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { db } from "@/db";
 import {
   applicationOutputAllocations,
@@ -130,6 +131,7 @@ export interface ChainReactorLineage {
 }
 
 export interface ChainFeedstockLineage {
+  ownsTransport: boolean;
   id: string;
   code: string;
   status: string | null;
@@ -318,11 +320,14 @@ export async function getChainOfCustodyData(
       );
     }
   }
+  const transportOwners = new Set(sources.flatMap((source) =>
+    source.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
+  ));
   const feedstocksForSources = Array.from(
     new Map(
       sources
         .flatMap((source) => source.feedstocks)
-        .map((feedstock) => [feedstock.id, feedstock]),
+        .map((feedstock) => [feedstock.id, { ...feedstock, ownsTransport: transportOwners.has(feedstock.id) }]),
     ).values(),
   );
 
@@ -516,11 +521,13 @@ async function getFeedstocksForRuns(
       ),
     );
 
+  const transportOwners = await getFeedstockTransportOwners(ctx, rows.map((row) => row.id));
   const byRun = new Map<string, ChainFeedstockLineage[]>();
   for (const { productionRunId, ...row } of rows) {
     const feedstocksForRun = byRun.get(productionRunId) ?? [];
     feedstocksForRun.push({
       ...row,
+      ownsTransport: transportOwners.get(row.id) === productionRunId,
       href: CHAIN_HREFS.feedstock,
     });
     byRun.set(productionRunId, feedstocksForRun);

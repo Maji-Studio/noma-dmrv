@@ -1,5 +1,5 @@
 type TransportLineageInput = {
-  feedstocks: Array<{ id: string }>;
+  feedstocks: Array<{ id: string; ownsTransport: boolean }>;
   biocharProduct: { id: string } | null;
   products?: Array<{ product: { id: string } }>;
 };
@@ -21,7 +21,7 @@ export function collectTransportEntityIds(
       biocharProductIds.add(product.id);
     }
     for (const feedstock of lineage.feedstocks) {
-      feedstockIds.add(feedstock.id);
+      if (feedstock.ownsTransport) feedstockIds.add(feedstock.id);
     }
   }
 

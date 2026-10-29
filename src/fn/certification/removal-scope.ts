@@ -97,7 +97,7 @@ export function resolveSingleBatchScope(
         productionFeedstockIds: Array.from(
           new Set(
             lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
+              run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
             ),
           ),
         ),
@@ -143,7 +143,7 @@ export async function resolveScopeForRemoval(
         productionFeedstockIds: Array.from(
           new Set(
             lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
+              run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
             ),
           ),
         ),

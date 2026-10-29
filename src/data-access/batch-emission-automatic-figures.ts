@@ -34,7 +34,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   });
   const runIds = unique(batches.flatMap(({ lineage }) => lineage.runs.map((run) => run.id)));
   const feedstockIds = unique(batches.flatMap(({ lineage }) =>
-    lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)),
+    lineage.runs.flatMap((run) => run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id)),
   ));
   const deliveryById = new Map(batches.flatMap(({ deliveries }) =>
     deliveries.filter((delivery) => delivery.exactWetMassKg != null).map((delivery) => [delivery.id, delivery] as const),
@@ -49,7 +49,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   const exact = await getEmissionAutomaticMasses(ctx, runIds, feedstock.map((leg) => leg.id), executor);
   return Object.fromEntries(batches.map(({ id, lineage, deliveries, missing }) => {
     const memberRuns = new Set(lineage.runs.map((run) => run.id));
-    const memberFeedstocks = new Set(lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)));
+    const memberFeedstocks = new Set(lineage.runs.flatMap((run) => run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id)));
     const memberDeliveries = new Set(deliveries.map((delivery) => delivery.id));
     const batchRuns = runs.filter((run) => memberRuns.has(run.id));
     const legs = {

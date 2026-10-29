@@ -26,7 +26,7 @@ function lineage(args: {
   return {
     productionRun: { id: args.productionRunId },
     biocharProduct: { id: args.biocharProductId },
-    feedstocks: [{ id: args.feedstockId }],
+    feedstocks: [{ id: args.feedstockId, ownsTransport: true }],
   } as ChainOfCustodyData;
 }
 
@@ -65,6 +65,24 @@ describe("production-claim-aware transport requirements", () => {
         requiredTransportCategories: REQUIRED,
       }),
     ).toEqual(REQUIRED);
+  });
+
+  it("does not require feedstock coverage when all deliveries belong to earlier runs", () => {
+    expect(collectProductionClaimAwareRequiredTransportCategories({
+      removalId: CURRENT_REMOVAL_ID,
+      memberBatches: [{ ...batch("later", null), productionFeedstockIds: [] }],
+      requiredTransportCategories: ["feedstock", "biochar"],
+    })).toEqual(["biochar"]);
+  });
+
+  it("does not reintroduce transport owned by an earlier run through lineage", () => {
+    const later = lineage({ productionRunId: "later", biocharProductId: "product", feedstockId: "earlier-stock" });
+    later.feedstocks[0].ownsTransport = false;
+    expect(collectProductionClaimAwareTransportEntityIds({
+      removalId: CURRENT_REMOVAL_ID,
+      memberBatches: [{ ...batch("later-batch", null, "later"), productionFeedstockIds: [] }],
+      lineages: [later],
+    })).toEqual({ feedstockIds: [], biocharProductIds: ["product"], sampleIds: [] });
   });
 
   it("keeps production transport IDs from unclaimed batches and biochar IDs from every lineage", () => {

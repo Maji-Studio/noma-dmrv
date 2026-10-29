@@ -1,3 +1,4 @@
+import { SOURCE_IDS, sourceFactAvailable, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
@@ -9,6 +10,8 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import {
   normalizeComponentDisplayName,
+  ownValue,
+  SEMANTIC_BINDING_CATALOG,
   type NomaEvidenceRole,
 } from "@/lib/isometric/semantic-binding-catalog";
 import {
@@ -317,11 +320,30 @@ export interface RemovalSourceBindingPlanEntry {
   mappingRevision: string;
 }
 
+// Lookup only: projected targets are hashed and persisted unchanged.
+function targetAutomaticSource(target: EvidenceIntendedTarget) {
+  if (target.kind !== "ordinary") return undefined;
+  const inputs = ownValue(SEMANTIC_BINDING_CATALOG, target.componentBlueprintKey);
+  const binding = inputs && ownValue(inputs, target.inputKey);
+  const role = binding && ownValue(binding.roles, target.groupKey);
+  if (role?.strategy !== "aggregated-datapoint") return undefined;
+  const fact = target.componentDisplayName && role.disambiguation
+    ? ownValue(role.disambiguation.sources, target.componentDisplayName) ?? role.source
+    : role.source;
+  return { fact, id: target.componentDisplayName ? "safety-margin" : ownValue<AutomaticSourceId>(SOURCE_IDS, fact) };
+}
+
+function targetSourceAvailable(target: EvidenceIntendedTarget): boolean {
+  const source = targetAutomaticSource(target);
+  return !source || sourceFactAvailable(source.fact);
+}
+
 function matchesIntendedComponent(
   blueprintKey: string,
   contract: LineContract | undefined,
   target: EvidenceIntendedTarget,
 ): boolean {
+  if (!targetSourceAvailable(target)) return false;
   return target.kind === "sequestration"
     ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
@@ -390,7 +412,7 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
       rule.intendedTarget,
       ...(rule.additionalIntendedTargets ?? []),
     ]) {
-      if (target.kind !== "ordinary") continue;
+      if (target.kind !== "ordinary" || !targetSourceAvailable(target)) continue;
       const key = [
         target.groupKey,
         target.componentBlueprintKey,
@@ -474,7 +496,7 @@ export function buildRemovalSourceBindingPlan(args: {
             inputKey: target.inputKey, entryId: binding.lineage.entityId, documentId,
           });
         }
-        const matchingComponents = args.template.groups
+        let matchingComponents = args.template.groups
           .filter((group) => group.key === target.groupKey)
           .flatMap((group) => group.components)
           .filter(
@@ -488,7 +510,15 @@ export function buildRemovalSourceBindingPlan(args: {
                 (input) => input.input_key === target.inputKey,
               ),
           );
-        if (matchingComponents.length === 0 && target.optionalInTemplate) {
+        const ambiguous = matchingComponents.length > 1;
+        const source = targetAutomaticSource(target);
+        if (matchingComponents.length > 1 && source?.id) {
+          matchingComponents = matchingComponents.filter((component) => {
+            const contract = args.lineSources?.[component.id];
+            return contract && effectiveContract(contract).automaticSource === source.id;
+          });
+        }
+        if (matchingComponents.length === 0 && target.optionalInTemplate && !ambiguous) {
           return [];
         }
         if (matchingComponents.length !== 1) {

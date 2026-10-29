@@ -644,7 +644,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,
       reactor: null,
-      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2", code: "FS-MISSING" } as never],
+      feedstocks: [{ id: "fs-1", ownsTransport: true } as never, { id: "fs-2", code: "FS-MISSING", ownsTransport: true } as never],
       warnings: [],
     } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
     mockedGetRuns.mockResolvedValue([
@@ -828,7 +828,7 @@ describe("requiredTransportCategories", () => {
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,
       reactor: null,
-      feedstocks: [{ id: "fs-1" } as never],
+      feedstocks: [{ id: "fs-1", ownsTransport: true } as never],
       warnings: [],
     } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
     mockedGetRuns.mockResolvedValue([

@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-10-29: Feedstock transport ownership and retired sample evidence
+
+Feedstock transport is counted only by the earliest non-cancelled linked run
+(start time, then run ID), across all runs in the organization. Batch figures,
+Removal previews, coverage and submission share that ownership; stock allocation
+and dry mass are unchanged. See [ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).
+Retired sample transport no longer receives generated ledger evidence. Ambiguous
+live evidence targets resolve through their effective automatic-source contract.
+Catalog, mapping revisions, persisted target shapes and schema remain unchanged.
+
 ## 2026-10-21: Held emission replacements and Removal correction read data (#1335)
 
 Re-entered sent entries stay unsent and held for their original Removal through
