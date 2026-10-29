@@ -6,7 +6,7 @@ const context = { facilityId: "facility", creditBatchId: "batch", canManage: tru
 const BEFORE_RUN = new Date("2026-10-01T08:00:00Z");
 const RUN_CREATED_AT = new Date("2026-10-01T09:00:00Z");
 const AFTER_RUN = new Date("2026-10-01T10:00:00Z");
-const run = { id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: RUN_CREATED_AT };
+const run = { id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: RUN_CREATED_AT, heldByRemovalCode: null };
 const missingProductionRuns = { sentRemovalCodes: ["RM-009"], heldRemovalCodes: [], batchStartDate: "2026-09-01", runs: [run], manualEntries: [] as { occurredOn: string; createdAt: Date }[] };
 
 describe("late production run Check to-dos", () => {
@@ -16,6 +16,7 @@ describe("late production run Check to-dos", () => {
       id: "late-production-run:run",
       productionRun: { id: "run", code: "PR-112" },
       title: "PR-112 was recorded after RM-009 was sent",
+      titleAfterCode: " was recorded after RM-009 was sent",
       detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
       target: { tab: "emissions" },
     }] });
@@ -33,6 +34,10 @@ describe("late production run Check to-dos", () => {
       "PR-113 was recorded after RM-009, RM-010 and RM-011 were sent",
     ]);
     expect(check.map(item => item.id)).toEqual(["late-production-run:run", "late-production-run:second"]);
+    expect(check.map(item => item.titleAfterCode)).toEqual([
+      " was recorded after RM-009, RM-010 and RM-011 were sent",
+      " was recorded after RM-009, RM-010 and RM-011 were sent",
+    ]);
     expect(check[1].detail).toContain("Sep 10, 2026");
   });
 

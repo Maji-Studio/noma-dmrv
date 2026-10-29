@@ -656,11 +656,13 @@ later; Isometric-specific HTTP, transformers, and typings live under
 
 Credit batch to-dos are built in one server read by the directive-free
 `credit-batch-todos-core.ts`: facility certifier facts load once, followed by
-bounded batch contexts and set-based sample, emission-line and missing production run reads. Unsent
-batches held by a Removal get a Check to add each fitting unassigned run in Edit;
-unheld batches attach matching runs automatically and get no such Check. Sent batches
-keep the Check to record late runs' diesel and power as emissions entries. The list
-projects only Blocking and Check counts, health state and lines to decide from
+bounded batch contexts and set-based sample, emission-line and missing production run reads.
+Unsent batches held by a Removal list every fitting unassigned run. Addable runs get
+an Add-in-Edit Check and stay listed with a same-day entry sentence. Runs whose biochar
+is in an Application another Removal holds get a late-run style Check pointing to
+the Emissions tab, cleared by a later same-day entry. Sent batches keep the same
+hide rule for late runs. Unheld batches attach matching runs automatically and get
+no such Check. The list projects only Blocking and Check counts, health state and lines to decide from
 this core; its Removal, GHG Statement and lock fields remain in the list action.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
 reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched

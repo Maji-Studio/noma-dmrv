@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applicationOutputAllocations, creditBatchApplications, facilities } from "@/db/schema";
+import { facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { removalSplitsApplicationsByBatch } from "@/lib/certification/removal-application-policy";
 import { DomainError } from "@/lib/domain-errors";
@@ -12,6 +12,7 @@ import {
   type LockedCreditBatchProductionRun,
 } from "./credit-batch-membership";
 import { requireOrgScope } from "./utils";
+import { loadCreditBatchRunHoldingAllocations } from "./credit-batch-run-fit";
 
 /** Reuse automatic membership eligibility, including archive and per-run type checks. */
 export async function assertAddedCreditBatchRunsFit(
@@ -45,24 +46,10 @@ export async function assertAddedCreditBatchRunsFit(
   // Application writers serialize on those locks before changing allocations.
   // Reconciliation cannot enlarge an assigned slice. Unless Applications split
   // by batch, it also cannot create an unassigned sibling of a held slice.
-  const [assignedSlice] = await tx.select({
-    removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId,
-  })
-    .from(applicationOutputAllocations)
-    .innerJoin(creditBatchApplications, and(
-      eq(creditBatchApplications.applicationId, applicationOutputAllocations.applicationId),
-      eq(creditBatchApplications.organizationId, ctx.organizationId),
-    ))
-    .where(and(
-      inArray(applicationOutputAllocations.productionRunId, addedIds),
-      eq(applicationOutputAllocations.organizationId, ctx.organizationId),
-      isNotNull(creditBatchApplications.removalId),
-      splitsApplicationsByBatch ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
-    ))
-    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)))
-    .limit(1);
+  const [assignedSlice] = await loadCreditBatchRunHoldingAllocations(ctx, tx, addedIds,
+    creditBatchId, splitsApplicationsByBatch);
   if (!assignedSlice) return;
-  const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId! }] });
+  const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId }] });
   throw new DomainError("certification_locked", withRecordLockGuidance(
     assignedSlice.creditBatchId === creditBatchId
       ? "Cannot change this credit batch's production membership because its applied mass belongs to a Removal."

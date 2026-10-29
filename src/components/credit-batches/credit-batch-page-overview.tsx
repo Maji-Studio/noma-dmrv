@@ -53,11 +53,11 @@ function itemRowClass(besideHint: boolean) {
 /**
  * A Check that names a run: the code is a link to the run, so the row cannot be
  * one button. Its action sits beside the text, named as on the sheet: a held
- * batch's missing run is added in Edit, a Sent batch's late run is recorded on Emissions.
+ * batch's missing run is added in Edit, a late run (Sent batch, or one Add run refuses) is recorded on Emissions.
  */
 function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: string; code: string } }) {
   const { openItem, batch } = useCreditBatchPage();
-  const rest = item.title.startsWith(run.code) ? item.title.slice(run.code.length) : null;
+  const rest = item.titleAfterCode ?? null;
   return (
     <li className={ROW_RULE}>
       <div className="flex min-h-44 items-center justify-between gap-16 py-12">

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches,
+  applicationOutputAllocations, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches,
   emissionEntries, emissionEntryValues, facilities, feedstocks, feedstockTypes, organizations,
   productionRunFeedstocks, productionRuns, reactors, removalTemplateObservations, storageLocations,
 } from "@/db/schema";
@@ -18,6 +18,8 @@ const WET_MASS_KG = 100;
 const BIOCHAR_OUTPUT_KG = 30;
 const MOISTURE_PERCENT = 10;
 const ENTRY_MAGNITUDE = "2";
+const SHARED_APPLICATION_WET_MASS_KG = "100";
+const SHARED_APPLICATION_DRY_MASS_KG = "95";
 const TEMPLATE_ID = "late-runs-template";
 const START = "2026-06-09T08:00:00Z";
 const END = "2026-06-09T12:00:00Z";
@@ -150,7 +152,7 @@ describe("missing production run detection (real DB)", () => {
     await run("ORG", { organizationId: foreignOrgId, facilityId: foreignFacilityId,
       reactorId: foreignReactorId, biocharStorageLocationId: foreignBinId }, [foreignFeedstock.id]);
 
-    expect((await read()).runs).toEqual([{ id: expected.id, code: expected.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT }]);
+    expect((await read()).runs).toEqual([{ id: expected.id, code: expected.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT, heldByRemovalCode: null }]);
     expect(await loadCreditBatchesMissingProductionRuns({ ...ctx, organizationId: foreignOrgId }, [main.batchId]))
       .toEqual(new Map());
     await expect(loadCreditBatchesMissingProductionRuns({ ...ctx, organizationId: "" }, [main.batchId])).rejects.toThrow();
@@ -164,9 +166,9 @@ describe("missing production run detection (real DB)", () => {
     await run("AFTER", { startTime: new Date("2026-06-30T20:30:00Z"), endTime: new Date("2026-06-30T21:00:00Z") });
     const localStart = await run("LOCAL", { startTime: new Date("2026-06-08T22:00:00Z"), endTime: new Date("2026-06-09T01:00:00Z") });
     expect((await read()).runs).toEqual([
-      { id: first.id, code: first.code, startDate: "2026-05-31", createdAt: RUN_CREATED_AT },
-      { id: last.id, code: last.code, startDate: "2026-06-30", createdAt: RUN_CREATED_AT },
-      { id: localStart.id, code: localStart.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT },
+      { id: first.id, code: first.code, startDate: "2026-05-31", createdAt: RUN_CREATED_AT, heldByRemovalCode: null },
+      { id: last.id, code: last.code, startDate: "2026-06-30", createdAt: RUN_CREATED_AT, heldByRemovalCode: null },
+      { id: localStart.id, code: localStart.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT, heldByRemovalCode: null },
     ]);
   });
 
@@ -201,12 +203,13 @@ describe("missing production run detection (real DB)", () => {
       .where(eq(certifierRemovals.id, main.removalId));
     expect(await read()).toEqual({ sentRemovalCodes: [], heldRemovalCodes: [holder.code],
       batchStartDate: "2026-06-01", manualEntries: [],
-      runs: [{ id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT }] });
+      runs: [{ id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT, heldByRemovalCode: null }] });
     expect((await todos()).check).toEqual([{
       id: `missing-production-run:${fitting.id}`,
       productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`,
-      detail: `Its emissions are not counted. Add it in Edit before ${holder.code} is sent.`,
+      titleAfterCode: " is not in this credit batch yet",
+      detail: `Its emissions are not counted in ${holder.code}.`,
       target: { tab: "overview", rowId: "batch-details" },
     }]);
     await db.insert(creditBatchApplications).values({ organizationId: ctx.organizationId,
@@ -220,16 +223,90 @@ describe("missing production run detection (real DB)", () => {
       .toEqual(new Map());
   });
 
-  it("keeps a manually covered run cleared when the batch becomes unsent and held", async () => {
+  it.each(["200_year", "1000_year"] as const)("reports held allocations through another batch according to %s Add run policy", async durabilityOption => {
+    await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.removalId)));
+    await db.update(facilities).set({ durabilityOption }).where(and(
+      eq(facilities.id, main.facilityId), eq(facilities.organizationId, ctx.organizationId),
+    ));
+    const fitting = await run("HELD-ALLOCATION");
+    const ordinary = await run("ORDINARY", { startTime: new Date("2026-06-10T08:00:00Z"), endTime: new Date("2026-06-10T12:00:00Z") });
+    const otherFitting = await run("OTHER-HELD", { facilityId: otherFacility.facilityId,
+      reactorId: otherFacility.reactorId, biocharStorageLocationId: otherFacility.biocharBinId }, [otherFacility.feedstockId]);
+    const [originalShare] = await db.select().from(applicationOutputAllocations)
+      .where(eq(applicationOutputAllocations.applicationId, otherFacility.applicationId));
+    // Half the Application stays in its held slice; the missed run supplies the rest.
+    await db.update(applicationOutputAllocations).set({
+      wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+    }).where(eq(applicationOutputAllocations.id, originalShare.id));
+    await db.update(creditBatchApplications).set({
+      allocatedWetMassKg: Number(SHARED_APPLICATION_WET_MASS_KG), allocatedDryMassKg: Number(SHARED_APPLICATION_DRY_MASS_KG),
+    }).where(eq(creditBatchApplications.creditBatchId, otherFacility.batchId));
+    const [addedShare] = await db.insert(applicationOutputAllocations).values({
+      ...originalShare, id: crypto.randomUUID(), productionRunId: fitting.id,
+      wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+    }).returning();
+    try {
+      const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+        .where(eq(certifierRemovals.id, otherFacility.removalId));
+      const missingByBatch = await loadCreditBatchesMissingProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
+      const missing = missingByBatch.get(main.batchId)!;
+      expect(missingByBatch.get(otherFacility.batchId)).toEqual({
+        sentRemovalCodes: [], heldRemovalCodes: [holder.code], batchStartDate: "2026-06-01", manualEntries: [],
+        runs: [{ id: otherFitting.id, code: otherFitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT,
+          heldByRemovalCode: null }],
+      });
+      expect(missing.runs).toEqual([
+        { id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT,
+          heldByRemovalCode: durabilityOption === "200_year" ? holder.code : null },
+        { id: ordinary.id, code: ordinary.code, startDate: "2026-06-10", createdAt: RUN_CREATED_AT, heldByRemovalCode: null },
+      ]);
+      const [ownHolder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+        .where(eq(certifierRemovals.id, main.removalId));
+      await db.insert(creditBatchApplications).values({ organizationId: ctx.organizationId,
+        creditBatchId: main.batchId, applicationId: otherFacility.applicationId,
+        allocatedWetMassKg: WET_MASS_KG, allocatedDryMassKg: BIOCHAR_OUTPUT_KG,
+        removalId: main.removalId });
+      expect((await read()).runs).toEqual(missing.runs.map(run => ({ ...run,
+        heldByRemovalCode: run.id === fitting.id ? ownHolder.code : null })));
+      expect((await todos()).check.map(item => item.id)).toEqual([
+        `late-production-run:${fitting.id}`, `missing-production-run:${ordinary.id}`,
+      ]);
+      const values = await entryValues();
+      await db.insert(emissionEntries).values({ ...values, kind: "value" });
+      expect((await todos()).check.map(item => item.id)).toEqual([`missing-production-run:${ordinary.id}`]);
+      // A Sent batch uses its existing entry guidance without the held-allocation read.
+      await sendOtherRemoval();
+      await db.update(creditBatchApplications).set({ removalId: otherFacility.removalId }).where(and(
+        eq(creditBatchApplications.creditBatchId, main.batchId),
+        eq(creditBatchApplications.applicationId, otherFacility.applicationId),
+      ));
+      expect((await read()).runs).toEqual(missing.runs.map(run => ({ ...run, heldByRemovalCode: null })));
+    } finally {
+      await db.delete(applicationOutputAllocations).where(eq(applicationOutputAllocations.id, addedShare.id));
+    }
+  });
+
+  it("shows a held run with a later diesel-only same-day entry after clearing it while Sent", async () => {
     const fitting = await run("HELD-COVERED");
     const values = await entryValues();
-    await db.insert(emissionEntries).values({ ...values, kind: "value" });
+    const [entry] = await db.insert(emissionEntries).values({ ...values, kind: "value" }).returning();
+    await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId, entryId: entry.id,
+      inputKey: "diesel", magnitude: ENTRY_MAGNITUDE, unit: "L" });
     expect((await todos()).check).toEqual([]);
     await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
       eq(certificationSubmissions.localEntityId, main.removalId)));
     expect(await read()).toMatchObject({ sentRemovalCodes: [], heldRemovalCodes: [expect.any(String)],
-      runs: [{ id: fitting.id }], manualEntries: [{ occurredOn: values.occurredOn, createdAt: AFTER_RUN }] });
-    expect((await todos()).check).toEqual([]);
+      runs: [{ id: fitting.id, heldByRemovalCode: null }], manualEntries: [{ occurredOn: values.occurredOn, createdAt: AFTER_RUN }] });
+    const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+      .where(eq(certifierRemovals.id, main.removalId));
+    expect((await todos()).check).toEqual([{
+      id: `missing-production-run:${fitting.id}`, productionRun: { id: fitting.id, code: fitting.code },
+      title: `${fitting.code} is not in this credit batch yet`, titleAfterCode: " is not in this credit batch yet",
+      detail: `Its emissions are not counted in ${holder.code}. If the Emissions entry dated Jun 9, 2026 already records them, delete it when you add the run.`,
+      sameDayEntry: true,
+      target: { tab: "overview", rowId: "batch-details" },
+    }]);
   });
 
   it.each(["FAILED_VERIFICATION", "DRAFT"])("shows missing runs for a returned %s holder without authorizing a write", async remoteStatus => {
