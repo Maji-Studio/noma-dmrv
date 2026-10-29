@@ -50,6 +50,12 @@ export function joinWithAnd(items: readonly string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
+/** "A", "A or B", "A, B or C". */
+export function joinWithOr(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
 export function correctionStatementHref(correction: RemovalCorrection, facilityId: string): string {
   return recordHref("ghgStatement", correction.statement.id, { facilityId });
 }

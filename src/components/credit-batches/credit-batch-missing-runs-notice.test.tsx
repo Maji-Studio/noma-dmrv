@@ -54,7 +54,7 @@ describe("CreditBatchMissingRunsNotice", () => {
   it("names only the runs with a same-day entry, in one sentence, when several runs are missing", () => {
     render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntryDate: "2026-09-09" }, RUNS[1]]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
     const text = screen.getByRole("status").textContent!;
-    expect(text).toContain("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
+    expect(text).toContain("If the Emissions entry dated Sep 9, 2026 already records the emissions of RUN-1, delete it when you add the run.");
     expect(text).not.toContain("RUN-2 (");
   });
 
@@ -64,7 +64,7 @@ describe("CreditBatchMissingRunsNotice", () => {
       facilityId="facility-1" canManage onEdit={vi.fn()}
     />);
     const text = screen.getByRole("status").textContent!;
-    expect(text).toContain("records the emissions of RUN-1 (Sep 9, 2026) or RUN-2 (Sep 12, 2026), delete it when you add the run.");
+    expect(text).toContain("records the emissions of RUN-1 (entry dated Sep 9, 2026) or RUN-2 (entry dated Sep 12, 2026), delete it when you add the run.");
     expect(text.match(/If an Emissions entry/g)).toHaveLength(1);
   });
 

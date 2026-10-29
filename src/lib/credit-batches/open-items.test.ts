@@ -610,20 +610,17 @@ describe("missing run copy", () => {
     expect(refusedRunsSentence(["RUN-112", "RUN-113"], true)).toBe("They cannot be added. Record their diesel and power on the credit batch's Emissions tab.");
     expect(missingRunsMemberNamedSentence(["RUN-1", "RUN-2"])).toBe("An admin can add RUN-1 and RUN-2 in Edit.");
     expect(sameDayEntryWarning([{ code: "RUN-1" }])).toBeNull();
-    expect(sameDayEntryWarning([{ code: "RUN-1", sameDayEntryDate: "2026-09-09" }])).toBe(sameDayEntrySentence(1));
+    expect(sameDayEntryWarning([{ code: "RUN-1", sameDayEntryDate: "2026-09-09" }])).toBe(sameDayEntrySentence());
     expect(sameDayEntryWarning([{ code: "RUN-1", sameDayEntryDate: "2026-09-09" }], 2))
-      .toBe("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
+      .toBe("If the Emissions entry dated Sep 9, 2026 already records the emissions of RUN-1, delete it when you add the run.");
   });
 
   it.each([
-    { count: 1, counted: "Its emissions are not counted.", member: "An admin can add it in Edit.", admin: "Add it in Edit.",
-      sameDay: "If an Emissions entry already records its emissions, delete it when you add the run." },
-    { count: 2, counted: "Their emissions are not counted.", member: "An admin can add them in Edit.", admin: "Add them in Edit.",
-      sameDay: "If an Emissions entry already records their emissions, delete it when you add the runs." },
-  ])("uses singular or plural guidance for $count runs", ({ count, counted, member, admin, sameDay }) => {
+    { count: 1, counted: "Its emissions are not counted.", member: "An admin can add it in Edit.", admin: "Add it in Edit." },
+    { count: 2, counted: "Their emissions are not counted.", member: "An admin can add them in Edit.", admin: "Add them in Edit." },
+  ])("uses singular or plural guidance for $count runs", ({ count, counted, member, admin }) => {
     expect(missingRunsCountedSentence(count)).toBe(counted);
     expect(missingRunsMemberSentence(count)).toBe(member);
     expect(missingRunsAdminSentence(count)).toBe(admin);
-    expect(sameDayEntrySentence(count)).toBe(sameDay);
   });
 });

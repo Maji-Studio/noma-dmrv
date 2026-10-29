@@ -84,7 +84,7 @@ describe("RemovalMissingRunsNotice", () => {
     ]} />);
     const text = document.body.textContent!;
     expect(text).toContain("RUN-2 cannot be added.");
-    expect(text).toContain("If an Emissions entry already records the emissions of RUN-1 (Sep 9, 2026), delete it when you add the run.");
+    expect(text).toContain("If the Emissions entry dated Sep 9, 2026 already records the emissions of RUN-1, delete it when you add the run.");
     expect(text).not.toContain("records its emissions");
   });
 
