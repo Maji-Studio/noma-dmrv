@@ -15,7 +15,7 @@ import {
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
   getCreditBatchProductionRunOptionsFn,
-  getCreditBatchNameSuggestionFn,
+  getNextCreditBatchCodeFn,
   createCreditBatchFn,
   updateCreditBatchFn,
   deleteCreditBatchFn,
@@ -68,11 +68,11 @@ export function useCreditBatches(facilityId?: string) {
   });
 }
 
-export function useCreditBatchNameSuggestion(facilityId: string | undefined, enabled: boolean) {
+export function useNextCreditBatchCode(enabled: boolean) {
   return useQuery({
-    queryKey: creditBatchKeys.nameSuggestion(facilityId),
-    queryFn: async () => unwrap(await getCreditBatchNameSuggestionFn(facilityId ?? "")),
-    enabled: !!facilityId && enabled,
+    queryKey: creditBatchKeys.nextCode(),
+    queryFn: async () => unwrap(await getNextCreditBatchCodeFn()),
+    enabled,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

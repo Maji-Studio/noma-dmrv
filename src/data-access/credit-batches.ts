@@ -78,7 +78,6 @@ import {
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
 import { CREDIT_BATCH_CODE_PREFIX } from "@/config/credit-batches";
-import { nextCreditBatchName } from "@/lib/credit-batch-name-suggestion";
 import { peekNextCode } from "./code-generator";
 
 export {
@@ -174,27 +173,10 @@ export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facili
   return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
-/** The grey Name on Create: the next code, and the latest name continued when it ends in a number. */
-export type CreditBatchNameSuggestion = { nextCode: string; name: string | null };
-
-export async function getCreditBatchNameSuggestion(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<CreditBatchNameSuggestion> {
+/** The code the next credit batch in the organization gets: the grey Name on Create. */
+export async function getNextCreditBatchCode(ctx: OrgContext): Promise<string> {
   requireOrgScope(ctx);
-  const [latest] = await db
-    .select({ name: creditBatches.name })
-    .from(creditBatches)
-    .where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      eq(creditBatches.facilityId, facilityId),
-    ))
-    .orderBy(desc(creditBatches.createdAt), desc(creditBatches.id))
-    .limit(1);
-  const nextCode = await peekNextCode(
-    ctx, CREDIT_BATCH_CODE_PREFIX, creditBatches, creditBatches.code,
-  );
-  return { nextCode, name: latest?.name != null ? nextCreditBatchName(latest.name) : null };
+  return peekNextCode(ctx, CREDIT_BATCH_CODE_PREFIX, creditBatches, creditBatches.code);
 }
 
 /**

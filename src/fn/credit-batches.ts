@@ -9,12 +9,11 @@ import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { SafeError } from "@/lib/errors";
 import { requireOrgFacility } from "@/data-access/utils";
-import { uuidSchema } from "@/schemas/helpers";
 import {
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
-  getCreditBatchNameSuggestion,
+  getNextCreditBatchCode,
   getCreditBatchCertifierForFacility,
   describeSavedCreditBatch,
   updateCreditBatch as updateCreditBatchData,
@@ -24,7 +23,6 @@ import {
   type SavedCreditBatch,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
-  type CreditBatchNameSuggestion,
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
@@ -113,16 +111,10 @@ export async function getCreditBatchProductionRunOptionsFn(
   });
 }
 
-export async function getCreditBatchNameSuggestionFn(
-  facilityId: string,
-): Promise<ActionResult<CreditBatchNameSuggestion>> {
-  return withAction(async (ctx) => {
-    const validated = uuidSchema().parse(facilityId);
-    await requireOrgFacility(ctx, validated);
-    return getCreditBatchNameSuggestion(ctx, validated);
-  }, {
-    fallbackMessage: "Failed to get credit batch name suggestion",
-    log: { message: "Failed to get credit batch name suggestion", context: { op: "credit-batch:name-suggestion" } },
+export async function getNextCreditBatchCodeFn(): Promise<ActionResult<string>> {
+  return withAction((ctx) => getNextCreditBatchCode(ctx), {
+    fallbackMessage: "Failed to get the next credit batch code",
+    log: { message: "Failed to get the next credit batch code", context: { op: "credit-batch:next-code" } },
   });
 }
 

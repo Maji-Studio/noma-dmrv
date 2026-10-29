@@ -89,12 +89,12 @@ it("patches every matching array list while preserving enrichment and unrelated 
   expect(queryClient.getQueryData(["measurements", "list", "uncached"])).toBeUndefined();
 });
 
-it("preserves the name suggestion alongside credit batch array lists", () => {
+it("preserves the next code alongside credit batch array lists", () => {
   const queryClient = new QueryClient();
   const listsKey = ["creditBatches", "list"];
   const listKey = [...listsKey, { facilityId: "facility-a" }];
-  const suggestionKey = [...listsKey, "nameSuggestion", "facility-a"];
-  const suggestion = { nextCode: "CB-26-002", name: "Lot 08" };
+  const suggestionKey = [...listsKey, "nextCode"];
+  const suggestion = "CB-26-002";
   queryClient.setQueryData(listKey, [row]);
   queryClient.setQueryData(suggestionKey, suggestion);
 

@@ -17,9 +17,8 @@ export const creditBatchKeys = {
   lists: () => [...creditBatchKeys.all, "list"] as const,
   list: (filters?: Record<string, unknown>) =>
     [...creditBatchKeys.lists(), filters] as const,
-  // List invalidations after create, update and delete also refresh suggestions.
-  nameSuggestion: (facilityId?: string) =>
-    [...creditBatchKeys.lists(), "nameSuggestion", facilityId] as const,
+  // List invalidations after create and delete also refresh the next code.
+  nextCode: () => [...creditBatchKeys.lists(), "nextCode"] as const,
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   pageModel: (id: string) => [...creditBatchKeys.detail(id), "pageModel"] as const,

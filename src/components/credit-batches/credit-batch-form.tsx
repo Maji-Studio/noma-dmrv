@@ -18,7 +18,7 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId } from "react";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { LOCKED_ERROR_TYPE } from "@/components/forms/form-error-summary";
 import { SERVER_ERROR_TYPE, useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
@@ -39,7 +39,7 @@ import {
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
-import { useCreditBatchNameSuggestion, useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { useCreditBatchProductionRunOptions, useNextCreditBatchCode } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
@@ -171,15 +171,10 @@ export function CreditBatchForm({
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const certifierSummary = useFacilityCertifierSummary(effectiveFacilityId, !!effectiveFacilityId);
-  // The grey name is what the batch is called when the field stays blank: an
-  // edit shows its code, a create continues the facility's last name or the
-  // next code.
-  const nameSuggestion = useCreditBatchNameSuggestion(effectiveFacilityId || undefined, !isEditMode).data;
-  // A retry reuses the create's intent key, and the server refuses that key
-  // for a different request, so a blank create keeps the name it first sent.
-  const [blankCreateName, setBlankCreateName] = useState<{ name: string | null | undefined } | null>(null);
-  const continuedName = blankCreateName ? blankCreateName.name : nameSuggestion?.name;
-  const suggestedName = creditBatch?.code ?? continuedName ?? nameSuggestion?.nextCode;
+  // A blank name shows the code, so the grey text is the batch's code: its own
+  // when editing, the next one when creating.
+  const nextCode = useNextCreditBatchCode(!isEditMode).data;
+  const codeShownWhenBlank = creditBatch?.code ?? nextCode;
   const certifier = certifierSummary.data === undefined
     ? "isometric"
     : certifierSummary.data.mapping?.provider ?? null;
@@ -393,12 +388,7 @@ export function CreditBatchForm({
       (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
         ? data.sampling
         : "sampled";
-    let name = data.name;
-    if (!isEditMode && !name) {
-      name = continuedName;
-      if (!blankCreateName) setBlankCreateName({ name });
-    }
-    return onSubmit({ ...data, name, sampling }, refuseSave);
+    return onSubmit({ ...data, sampling }, refuseSave);
   }));
 
   return (
@@ -409,8 +399,8 @@ export function CreditBatchForm({
         <FormField
           id="name"
           label="Name"
-          hint={suggestedName
-            ? `Leave blank to use ${suggestedName}.`
+          hint={codeShownWhenBlank
+            ? `Leave blank to use ${codeShownWhenBlank}.`
             : "Lists and pages show the batch code when this is blank."}
           error={errors.name?.message}
         >
@@ -419,7 +409,7 @@ export function CreditBatchForm({
             type="text"
             autoComplete="off"
             maxLength={CREDIT_BATCH_NAME_MAX_LENGTH}
-            placeholder={suggestedName}
+            placeholder={codeShownWhenBlank}
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name", {
