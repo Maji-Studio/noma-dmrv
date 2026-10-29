@@ -1,3 +1,4 @@
+import { hasLinkedFeedstock, ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 import { db, type DbTransaction } from "@/db";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
 import { requireOrgScope } from "@/data-access/utils";
@@ -34,7 +35,7 @@ export async function loadBatchesEmissionAutomaticFacts(
   });
   const runIds = unique(batches.flatMap(({ lineage }) => lineage.runs.map((run) => run.id)));
   const feedstockIds = unique(batches.flatMap(({ lineage }) =>
-    lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)),
+    ownedTransportFeedstockIds(lineage.runs),
   ));
   const deliveryById = new Map(batches.flatMap(({ deliveries }) =>
     deliveries.filter((delivery) => delivery.exactWetMassKg != null).map((delivery) => [delivery.id, delivery] as const),
@@ -49,10 +50,11 @@ export async function loadBatchesEmissionAutomaticFacts(
   const exact = await getEmissionAutomaticMasses(ctx, runIds, feedstock.map((leg) => leg.id), executor);
   return Object.fromEntries(batches.map(({ id, lineage, deliveries, missing }) => {
     const memberRuns = new Set(lineage.runs.map((run) => run.id));
-    const memberFeedstocks = new Set(lineage.runs.flatMap((run) => run.feedstocks.map((feedstock) => feedstock.id)));
+    const memberFeedstocks = new Set(ownedTransportFeedstockIds(lineage.runs));
     const memberDeliveries = new Set(deliveries.map((delivery) => delivery.id));
     const batchRuns = runs.filter((run) => memberRuns.has(run.id));
     const legs = {
+      feedstockTransportOwnedElsewhere: memberFeedstocks.size === 0 && hasLinkedFeedstock(lineage.runs),
       feedstock: feedstock.filter((leg) => memberFeedstocks.has(leg.entityId)),
       biochar: biochar.filter((leg) => memberDeliveries.has(leg.id)),
       sample: [],

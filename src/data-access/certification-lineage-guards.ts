@@ -3,6 +3,7 @@ import {
   applications,
   biocharProducts,
   certifierRemovals,
+  certificationSubmissions,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
@@ -29,7 +30,8 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
 import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
 import { readRecordDependents } from "./record-lock-dependents";
@@ -42,6 +44,8 @@ export type CertifiedLineageEntityType = Exclude<
 export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
   entityId: string;
+  /** Feedstock transport follows frozen counted inputs and the current owner. */
+  transportOnly?: boolean;
 }
 
 function targetCondition(target: CertifiedLineageTarget): SQL {
@@ -68,6 +72,38 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
+/** Snapshot key written by removal-submission-build.ts (materializeRemovalSubmissionSnapshot). */
+const TRANSPORT_FEEDSTOCK_IDS_KEY = "transportFeedstockIds";
+
+function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
+  // No eligible transport owner must retain the lock through every linked run.
+  if (!owner) return targetCondition(target);
+  // Any snapshot of the Removal that counted this record, or predates the
+  // counted list (fails closed), keeps the lock. Drafts count too: an
+  // interrupted attempt may already have reached the registry, and the lineage
+  // guard still decides whether a draft holds a lock at all. A Removal without a
+  // snapshot is covered by the current owner. Artifact/row lock order is unchanged.
+  const countedTransport = sql<boolean>`exists (
+    select 1 from ${certificationSubmissions}
+    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.provider} = 'isometric'
+      and ${certificationSubmissions.localEntityType} = 'removal'
+      and ${certificationSubmissions.submissionType} = 'removal'
+      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
+      and ${certificationSubmissions.payloadSnapshot} is not null
+      and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
+        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})
+  )`;
+  return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
+}
+
+/** Recomputed on each lineage read, including the read under artifact locks. */
+async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select">, target: CertifiedLineageTarget): Promise<SQL> {
+  if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
+  const owner = (await getFeedstockTransportOwners(ctx, [target.entityId], tx)).get(target.entityId);
+  return transportTargetCondition(ctx, target, owner);
+}
+
 /** Records that share one master-data reference, such as a vehicle. */
 export interface CertifiedLineageTargetSet {
   feedstockIds: readonly string[];
@@ -85,13 +121,13 @@ function targetSetCondition(targets: CertifiedLineageTargetSet): SQL | undefined
   return conditions.length > 0 ? or(...conditions) : undefined;
 }
 
-function lineageQuery(
+async function lineageQuery(
   ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
   fresh = false,
 ) {
-  return resolveLineage(ctx, tx, targetCondition(target), fresh);
+  return resolveLineage(ctx, tx, await lineageTargetCondition(ctx, tx, target), fresh);
 }
 
 function lineageQueryWhere(
@@ -424,11 +460,24 @@ export async function getRecordLock(ctx: OrgContext, tx: DbTransaction, target: 
 export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, targets: readonly CertifiedLineageTarget[], options: { sentOnly?: boolean } = {}) {
   requireOrgScope(ctx);
   if (!targets.length) return [];
-  const rowsByKind = new Map(await Promise.all([...new Set(targets.map(target => target.entityType))].map(async kind => {
-    const rows = await lineageQueryWhere(ctx, tx, or(...targets.filter(target => target.entityType === kind).map(targetCondition))!, kind);
-    return [kind, rows] as const;
+  const transportTargets = targets.filter(target => target.entityType === "feedstock" && target.transportOnly);
+  const owners = transportTargets.length
+    ? await getFeedstockTransportOwners(ctx, transportTargets.map(target => target.entityId), tx)
+    : new Map<string, string>();
+  const groupKey = (target: CertifiedLineageTarget) => `${target.entityType}:${target.entityType === "feedstock" && !!target.transportOnly}`;
+  const queryGroups = new Map<string, CertifiedLineageTarget[]>();
+  for (const target of targets) {
+    const key = groupKey(target);
+    queryGroups.set(key, [...(queryGroups.get(key) ?? []), target]);
+  }
+  const rowsByGroup = new Map(await Promise.all([...queryGroups].map(async ([key, group]) => {
+    const conditions = group.map(target => {
+      if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
+      return transportTargetCondition(ctx, target, owners.get(target.entityId));
+    });
+    return [key, await lineageQueryWhere(ctx, tx, or(...conditions)!, group[0].entityType)] as const;
   })));
-  const groups = targets.map(target => rowsByKind.get(target.entityType)!.filter(row => row.targetId === target.entityId));
+  const groups = targets.map(target => rowsByGroup.get(groupKey(target))!.filter(row => row.targetId === target.entityId));
   const facts = await readRecordLockLineage(ctx, tx, groups.flat(), true);
   return Promise.all(targets.map(async (target, index) => recordLocks[target.entityType]({
     removals: facts.filter(fact => groups[index].some(row => row.removalId === fact.id)),

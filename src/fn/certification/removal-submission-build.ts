@@ -78,6 +78,8 @@ export interface RemovalSubmissionBuild {
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
   generatedEvidenceFacts?: GeneratedEvidenceFacts;
+  /** Absent when transport coverage was not built: the transport lock then fails closed. */
+  transportFeedstockIds?: string[];
   templateObservationId?: string;
   frozenEntrySet?: { entryId: string; contentRevision: number }[];
   monitored: ResolvedMonitoredInput[];
@@ -176,6 +178,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     frozenEntrySet?: { entryId: string; contentRevision: number }[];
     semantic: Record<string, unknown>;
     generatedEvidenceFacts?: GeneratedEvidenceFacts;
+    transportFeedstockIds?: string[];
     memberCreditBatchIds: string[];
     sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
@@ -588,6 +591,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
       generatedEvidenceFacts: compiled.generatedEvidenceFacts,
+      ...(compiled.transportFeedstockIds ? { transportFeedstockIds: [...compiled.transportFeedstockIds].sort() } : {}),
       ...(compiled.templateObservationId ? { templateObservationId: compiled.templateObservationId,
         frozenEntrySet: compiled.frozenEntrySet ?? [] } : {}),
       memberCreditBatchIds: compiled.memberCreditBatchIds,
@@ -878,6 +882,7 @@ export async function buildRemovalSubmissionBuild(args: {
     sourceBindingPlan,
     semanticPayload,
     generatedEvidenceFacts: generatedEvidenceFacts(ctx),
+    ...(ctx.transportCoverage ? { transportFeedstockIds: [...ctx.transportCoverage.feedstock.entityIds].sort() } : {}),
     templateObservationId: ctx.removalEntryContext?.observationId,
     frozenEntrySet: ctx.removalEntryContext?.contributions.entrySet,
     monitored,

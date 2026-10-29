@@ -111,6 +111,7 @@ export interface RemovalCertifyContext {
 // Extends the UI context with the raw chain data the submit pipeline needs.
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
+  feedstockCodes?: Readonly<Record<string, string>>;
   facilityTimezone: string;
   /** Datapoints fixed in the template, for the compiled review's value column. */
   fixedInputValues?: readonly FixedInputValue[];

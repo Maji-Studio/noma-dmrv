@@ -1,3 +1,4 @@
+import { automaticSourceAvailable, catalogSourceForRole } from "@/lib/isometric/template-observations/catalog-sources";
 import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
 import { isInFrozenEntrySet } from "./removal-entry-snapshot";
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
@@ -317,16 +318,29 @@ export interface RemovalSourceBindingPlanEntry {
   mappingRevision: string;
 }
 
+// Lookup only: projected targets are hashed and persisted unchanged.
+function targetAutomaticSource(target: EvidenceIntendedTarget) {
+  if (target.kind !== "ordinary") return undefined;
+  return catalogSourceForRole(target.componentBlueprintKey, target.inputKey, target.groupKey, target.componentDisplayName);
+}
+
+function targetSourceAvailable(target: EvidenceIntendedTarget): boolean {
+  const source = targetAutomaticSource(target);
+  return !source || automaticSourceAvailable(source);
+}
+
 function matchesIntendedComponent(
   blueprintKey: string,
   contract: LineContract | undefined,
   target: EvidenceIntendedTarget,
 ): boolean {
+  if (!targetSourceAvailable(target)) return false;
+  const source = targetAutomaticSource(target);
   return target.kind === "sequestration"
     ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
         (target.componentDisplayName === undefined ||
-          (contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === "safety-margin"));
+          (source !== undefined && contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === source));
 }
 
 /**
@@ -390,7 +404,7 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
       rule.intendedTarget,
       ...(rule.additionalIntendedTargets ?? []),
     ]) {
-      if (target.kind !== "ordinary") continue;
+      if (target.kind !== "ordinary" || !targetSourceAvailable(target)) continue;
       const key = [
         target.groupKey,
         target.componentBlueprintKey,
@@ -474,7 +488,7 @@ export function buildRemovalSourceBindingPlan(args: {
             inputKey: target.inputKey, entryId: binding.lineage.entityId, documentId,
           });
         }
-        const matchingComponents = args.template.groups
+        let matchingComponents = args.template.groups
           .filter((group) => group.key === target.groupKey)
           .flatMap((group) => group.components)
           .filter(
@@ -488,6 +502,13 @@ export function buildRemovalSourceBindingPlan(args: {
                 (input) => input.input_key === target.inputKey,
               ),
           );
+        const source = targetAutomaticSource(target);
+        if (matchingComponents.length > 1 && source) {
+          matchingComponents = matchingComponents.filter((component) => {
+            const contract = args.lineSources?.[component.id];
+            return contract && effectiveContract(contract).automaticSource === source;
+          });
+        }
         if (matchingComponents.length === 0 && target.optionalInTemplate) {
           return [];
         }

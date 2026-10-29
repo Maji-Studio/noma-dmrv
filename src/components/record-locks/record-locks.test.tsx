@@ -312,3 +312,18 @@ describe("RecordLockFormFrame refusal slot", () => {
     expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe("RecordLockNotice on a Sent feedstock with open transport", () => {
+  it("names the editable sections and the Removal", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), transport: { level: "open", heldBy: [] } }} />);
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/^Only Transport details and Transport evidence can be changed\. This feedstock's transport legs are not part of .+\.$/);
+  });
+
+  it("keeps the transport-only wording when the Removal's sending was interrupted", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], transport: { level: "open", heldBy: [] } }} />);
+    const text = screen.getByRole("status").textContent ?? "";
+    expect(text).toContain("Only Transport details and Transport evidence can be changed.");
+    expect(text).not.toContain("Nothing can be changed");
+  });
+});

@@ -11,6 +11,7 @@ import {
   type RecordLockLink,
   type RecordLockStatus,
   type RecordLockView,
+  isTransportOnlyEditable,
 } from "@/lib/record-lock-view";
 import { IN_USE_HOW_TO_FREE, inUseHowToFree } from "@/lib/record-lock";
 import { recordLockLinkHref, recordLockLinkText } from "./record-lock-labels";
@@ -113,6 +114,13 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
       <Notice tone="info" boxed data-record-lock-notice={lock.level}>
         {STORAGE_BIN_LOCKED}
         {lock.heldBy[0] && <> Latest: <HolderLink link={lock.heldBy[0]} />.</>}
+      </Notice>
+    );
+  }
+  if (isTransportOnlyEditable(lock)) {
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Only Transport details and Transport evidence can be changed. This feedstock&apos;s transport legs are not part of <HolderList holders={lock.heldBy} />.
       </Notice>
     );
   }

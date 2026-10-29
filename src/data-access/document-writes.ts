@@ -49,7 +49,7 @@ export async function requestDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   if (!isAllowedMime(data.documentType, data.contentType)) throw new DomainError("validation_failed", "This file type is not allowed for this document. Choose another file.");
   if (data.sizeBytes > maxBytesFor(data.documentType)) throw new DomainError("validation_failed", "The document upload could not be completed. Upload the file again.");
   if (data.entityType === "production_run" && data.documentType === "sensor_data" && !isProductionReadingsCsvFormat(data)) throw new DomainError("validation_failed", "Readings files must use CSV format.");
-  const scope = await lockDocumentOwner(ctx, tx, data.entityType, data.entityId);
+  const scope = await lockDocumentOwner(ctx, tx, data.entityType, data.entityId, data.documentType);
   await assertDocumentOwnerWritable(ctx, tx, scope);
   const id = randomUUID();
   const key = buildUploadKey({ organizationId: ctx.organizationId, documentId: id });
@@ -92,13 +92,13 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   const discovered = await readDocumentForWrite(ctx, tx, facts.documentId);
   if (!discovered) { await cleanupFinal(ctx, tx, facts); return { kind: "gone" }; }
   let scope;
-  try { scope = await lockDocumentOwner(ctx, tx, discovered.entityType, discovered.entityId); }
+  try { scope = await lockDocumentOwner(ctx, tx, discovered.entityType, discovered.entityId, discovered.documentType); }
   catch (error) {
     if (!(error instanceof DomainError) || error.code !== "not_found") throw error;
     await cleanupFinal(ctx, tx, facts, discovered, discovered.uploadStatus === "uploaded" ? discovered.storageKey : null); return { kind: "gone" };
   }
   const row = await readDocumentForWrite(ctx, tx, facts.documentId, true);
-  if (!row || row.entityType !== discovered.entityType || row.entityId !== discovered.entityId || !bindingsMatch(row, facts)) { await cleanupFinal(ctx, tx, facts, row, row?.uploadStatus === "uploaded" ? row.storageKey : null); return { kind: "gone" }; }
+  if (!row || row.entityType !== discovered.entityType || row.entityId !== discovered.entityId || row.documentType !== discovered.documentType || !bindingsMatch(row, facts)) { await cleanupFinal(ctx, tx, facts, row, row?.uploadStatus === "uploaded" ? row.storageKey : null); return { kind: "gone" }; }
   if (row.uploadStatus === "uploaded") {
     await cleanupFinal(ctx, tx, facts, row, row.storageKey);
     return facts.finalKey && facts.finalKey !== row.storageKey ? { kind: "gone" } : { kind: "uploaded", document: row, transitioned: false };

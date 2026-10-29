@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { batchAutomaticFigures } from "./batch-automatic-figures";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { deriveBatchEmissionLines, EMISSION_LINE_STATE_LABELS, type BatchEmissionLineFacts, type EmissionLineEntryFact } from "./emission-lines";
@@ -181,4 +182,21 @@ it("discards stale sample automatic facts while retaining additive entries", () 
   expect(line.records === null).toBe(true);
   f.entries = [];
   expect(deriveBatchEmissionLines(f)[0].state).toBe("empty");
+});
+
+
+it("records a biomass transport zero with no records when every linked trip is owned elsewhere", () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const automaticFigures = batchAutomaticFigures([], {
+    feedstock: [], biochar: [], sample: [], feedstockTransportOwnedElsewhere: true,
+  });
+  const lines = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),
+    problems: [], enrichmentComplete: true, entriesCanSubmit: true, automaticFigures, entries: [],
+    automaticRecordCounts: { "feedstock-transport": 0 },
+  });
+  const line = lines.find((line) => line.contract?.automaticSource === "feedstock-transport")!;
+  expect(EMISSION_LINE_STATE_LABELS[line.state]).toBe("Recorded");
+  expect(line.blocker).toBeUndefined();
+  expect(line.records).toEqual({ source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" } });
+  expect(line.total).toEqual({ magnitude: "0", unit: "km * tonne" });
 });

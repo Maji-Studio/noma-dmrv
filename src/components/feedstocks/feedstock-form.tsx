@@ -42,6 +42,7 @@ import {
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
+import { isRecordFieldLocked, isTransportOnlyEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FeedstockAllocationSummary } from "./feedstock-allocation-summary";
@@ -90,6 +91,8 @@ interface FeedstockFormProps {
   focusTarget?: EntityFocusTarget | null;
   /** A refresh from location saved a new version: reopen the form on it; resolves once the sheet holds it. */
   onDistanceRefreshed?: () => Promise<void>;
+  /** The saved record's lock: a Sent record whose transport is open locks every other field. */
+  lock?: RecordLockView;
 }
 
 export function FeedstockForm({
@@ -104,9 +107,13 @@ export function FeedstockForm({
   retryEntityIds,
   focusTarget,
   onDistanceRefreshed,
+  lock,
 }: FeedstockFormProps) {
   const latched = useLatchedSubmit();
   const isEditMode = !!feedstock;
+  // Update-input names, as the server's record lock knows them.
+  const transportOnly = isEditMode && isTransportOnlyEditable(lock);
+  const locked = (field: string) => transportOnly && isRecordFieldLocked(lock, field);
   // Returning to the saved mass clears RHF dirtiness, but is still an override.
   const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
   const formId = useId();
@@ -397,7 +404,7 @@ export function FeedstockForm({
                 label="Facility"
                 entityType="facility"
                 placeholder="Select facility..."
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("facilityId")}
                 required
               />
             </div>
@@ -413,7 +420,7 @@ export function FeedstockForm({
               <FormInput
                 id="deliveryDate"
                 type="date"
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("deliveryDate")}
                 error={!!errors.deliveryDate}
                 {...register("deliveryDate", { onChange: () => markDateEdited("deliveryDate") })}
               />
@@ -427,7 +434,7 @@ export function FeedstockForm({
               entityType="supplier"
               allowEdit
               placeholder="Select supplier..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("supplierId")}
               required
               allowCreate
               onCreateNew={supplierDialog.open}
@@ -539,7 +546,7 @@ export function FeedstockForm({
               entityType="feedstockType"
               allowEdit
               placeholder="Select feedstock type..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("feedstockTypeId")}
               required
               allowCreate
               createLabel="Add new feedstock type"
@@ -558,7 +565,7 @@ export function FeedstockForm({
               error: errors.totalWetMassKg?.message,
               hint: "As-received weight of the entire delivery, water included.",
               required: true,
-              disabled: isSubmitting,
+              disabled: isSubmitting || locked("massWetKg"),
               placeholder: "e.g. 1500",
               certifyRequired: isFeedstockCertifyField("totalWetMassKg"),
               certifyStatus: certStatus("totalWetMassKg"),
@@ -569,7 +576,7 @@ export function FeedstockForm({
               rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER,
               error: errors.moisturePercent?.message,
               required: true,
-              disabled: isSubmitting,
+              disabled: isSubmitting || locked("moistureContentPercent"),
               placeholder: "e.g. 35",
               registration: register("moisturePercent", { setValueAs: numericValue }),
             }}
@@ -618,7 +625,7 @@ export function FeedstockForm({
                   massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
                   canRemove={fields.length > 1}
                   onRemove={() => remove(index)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || locked("storageLocationId")}
                   binTypeFilter={FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
@@ -650,7 +657,7 @@ export function FeedstockForm({
                 deliveredKg={deliveredWetMassKg}
                 justificationRegister={register("overrideJustification")}
                 justificationError={errors.overrideJustification?.message}
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("overrideJustification")}
               />
             )}
           </FormSection>
@@ -672,7 +679,7 @@ export function FeedstockForm({
               <FormTextarea
                 id="notes"
                 placeholder="Enter delivery note IDs, weighbridge tickets, supplier batch references..."
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("notes")}
                 error={!!errors.notes}
                 rows={3}
                 {...register("notes")}

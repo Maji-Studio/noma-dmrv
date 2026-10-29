@@ -2,6 +2,7 @@ import type { GisBoundary } from "@/lib/geojson/types";
 import type { ProductSourceAllocationFact } from "./biochar-product-application-allocation";
 
 export interface BatchLineageFeedstockFact {
+  ownsTransport: boolean;
   id: string;
   code: string;
   status: string | null;

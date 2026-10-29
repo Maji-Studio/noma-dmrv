@@ -1,3 +1,4 @@
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { getDeliveryProofCounts } from "./delivery-proof";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -310,10 +311,12 @@ async function loadLineageWithExecutor(
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
 
+  const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), executor);
+
   const feedstocksByRun = new Map<string, BatchLineageFeedstockFact[]>();
   for (const row of feedstockRows) {
     const facts = feedstocksByRun.get(row.runId) ?? [];
-    facts.push({ ...row });
+    facts.push({ ...row, ownsTransport: transportOwners.get(row.id) === row.runId });
     feedstocksByRun.set(row.runId, facts);
   }
   const runById = new Map<string, BatchLineageRunFact>();

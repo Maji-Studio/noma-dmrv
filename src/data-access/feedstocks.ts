@@ -1,7 +1,8 @@
+import { FEEDSTOCK_TRANSPORT_FIELDS } from "@/lib/record-lock-view";
 import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
 import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
-import { assertRecordLockFields, withLockedFieldIssues } from "@/lib/record-lock-fields";
+import { assertRecordLockFields, recordFieldEqual, withLockedFieldIssues } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
 import { partyArchived } from "@/lib/party-domain-errors";
 import { lockSupplierReference } from "./party-reference-guards";
@@ -703,8 +704,12 @@ export async function updateFeedstockInTransaction(
     transportDistanceSource: distanceColumns.distanceSource,
     distanceNote: distanceColumns.distanceNote,
   };
+  // A form may resubmit unchanged mass and supplier values with a transport correction.
+  const before = new Map(Object.entries(previousFields));
+  const changes = Object.entries(changedFields).filter(([field, value]) => field !== "expectedVersion" && value !== undefined && !recordFieldEqual(field, before.get(field), value));
+  const transportOnly = changes.length > 0 && changes.every(([field]) => FEEDSTOCK_TRANSPORT_FIELDS.includes(field));
   await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx, tx, { entityType: "feedstock", entityId: feedstockId }, "update",
+    ctx, tx, { entityType: "feedstock", entityId: feedstockId, transportOnly }, "update",
   ), "certification_locked"), previousFields, changedFields);
 
   assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);

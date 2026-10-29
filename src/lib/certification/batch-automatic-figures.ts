@@ -40,7 +40,8 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
   }
   for (const category of ["feedstock", "biochar"] as const) {
     const categoryLegs = legs[category];
-    const valid = transportMassDistanceAvailable(categoryLegs, category === "biochar");
+    const ownedElsewhereZero = category === "feedstock" && categoryLegs.length === 0 && legs.feedstockTransportOwnedElsewhere === true;
+    const valid = ownedElsewhereZero || transportMassDistanceAvailable(categoryLegs, category === "biochar");
     if (!valid) {
       figures[sourceForCategory(category)] = null;
       continue;
@@ -54,7 +55,7 @@ export function batchAutomaticFigures(runs: ProductionRunForCertification[], leg
         unit: SOURCE_UNITS[source],
       };
     });
-    figures[source] = sumFigures(values);
+    figures[source] = ownedElsewhereZero ? { magnitude: "0", unit: SOURCE_UNITS[source] } : sumFigures(values);
   }
   return figures;
 }

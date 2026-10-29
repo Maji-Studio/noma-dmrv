@@ -44,16 +44,24 @@ describe("collectTransportEntityIds", () => {
       [
         lineage({
           feedstocks: [
-            { id: "fs-a" } as never,
-            { id: "fs-b" } as never,
+            { id: "fs-a", ownsTransport: true } as never,
+            { id: "fs-b", ownsTransport: true } as never,
           ],
         }),
         lineage({
-          feedstocks: [{ id: "fs-b" } as never, { id: "fs-c" } as never],
+          feedstocks: [{ id: "fs-b", ownsTransport: true } as never, { id: "fs-c", ownsTransport: true } as never],
         }),
       ],
     );
     expect(result.feedstockIds.sort()).toEqual(["fs-a", "fs-b", "fs-c"]);
+  });
+
+  it("excludes earlier-run feedstocks without changing delivery scope", () => {
+    const result = collectTransportEntityIds([lineage({
+      feedstocks: [{ id: "earlier", ownsTransport: false } as never, { id: "owned", ownsTransport: true } as never],
+      biocharProduct: { id: "product" } as never,
+    })]);
+    expect(result).toEqual({ feedstockIds: ["owned"], biocharProductIds: ["product"], sampleIds: [] });
   });
 
   it("handles lineages with missing biocharProduct without throwing", () => {

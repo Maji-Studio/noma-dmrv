@@ -13,6 +13,7 @@ export function orderedLegs(legs: TransportLeg[]) {
 
 export function orderedTransportLedgerLegs(legs: TransportLegsByCategory): TransportLegsByCategory {
   return {
+    ...legs,
     feedstock: orderedLegs(legs.feedstock),
     biochar: [...legs.biochar].sort((a, b) => a.id.localeCompare(b.id)),
     sample: orderedLegs(legs.sample),

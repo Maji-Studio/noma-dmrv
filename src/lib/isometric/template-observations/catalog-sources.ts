@@ -39,6 +39,25 @@ function roleSources(role: BindingRole, groupKey: string): AutomaticSourceId[] {
   });
 }
 
+/** Resolve one catalog role, using declared display names only to disambiguate it. */
+export function catalogSourceForRole(
+  blueprintKey: string,
+  inputKey: string,
+  groupKey: string,
+  componentDisplayName?: string,
+): AutomaticSourceId | undefined {
+  const inputs = ownValue(SEMANTIC_BINDING_CATALOG, blueprintKey);
+  const binding = inputs && ownValue(inputs, inputKey);
+  const role = binding && ownValue(binding.roles, groupKey);
+  if (!role) return undefined;
+  const sources = roleSources(role, groupKey);
+  if (role.strategy === "aggregated-datapoint" && role.disambiguation) {
+    const fact = componentDisplayName && ownValue(role.disambiguation.sources, componentDisplayName);
+    return sources.find((source) => automaticSourceFact(source) === fact);
+  }
+  return sources.length === 1 ? sources[0] : undefined;
+}
+
 /** Only IDs with an operative catalog role are offered. */
 export const AUTOMATIC_SOURCE_IDS: readonly AutomaticSourceId[] = [...new Set(
   Object.values(SEMANTIC_BINDING_CATALOG).flatMap((inputs) => Object.values(inputs).flatMap((binding) =>

@@ -1,6 +1,6 @@
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
-import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
+import { deriveRequiredTransportCategories, EMPTY_TRANSPORT_COVERAGE } from "./certify-transport-coverage";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
@@ -535,6 +535,7 @@ describe("buildRemovalSubmissionBuild", () => {
       binding: inventoryBinding!,
     };
 
+    ctx.transportCoverage = { ...EMPTY_TRANSPORT_COVERAGE, feedstock: { ...EMPTY_TRANSPORT_COVERAGE.feedstock, entityIds: ["feedstock-b", "feedstock-a"] } };
     const buildPromise = buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "removal-1",
@@ -563,6 +564,8 @@ describe("buildRemovalSubmissionBuild", () => {
       return;
     }
     const build = await buildPromise;
+    expect(build.transportFeedstockIds).toEqual(["feedstock-a", "feedstock-b"]);
+    expect(build.semanticPayload).not.toHaveProperty("transportFeedstockIds");
 
     expect(build.monitored).toContainEqual(
       expect.objectContaining({
@@ -606,6 +609,7 @@ describe("buildRemovalSubmissionBuild", () => {
     const snapshot = materializeRemovalSubmissionSnapshot({
       compiled: {
         generatedEvidenceFacts: evidenceFacts,
+        transportFeedstockIds: ["feedstock-b", "feedstock-a"],
         semanticPayload,
         templateObservationId: "observation",
         frozenEntrySet: [{ entryId: "entry", contentRevision: 7 }],
@@ -631,6 +635,8 @@ describe("buildRemovalSubmissionBuild", () => {
       supersedePreviousId: null,
     });
 
+    expect(snapshot.payloadSnapshot.transportFeedstockIds).toEqual(["feedstock-a", "feedstock-b"]);
+    expect(snapshot.payloadSnapshot.semantic).not.toHaveProperty("transportFeedstockIds");
     expect(snapshot.payloadSnapshot.generatedEvidenceFacts).toEqual(evidenceFacts);
     expect(snapshot.payloadSnapshot.semantic).toBe(semanticPayload);
     expect(snapshot.payloadSnapshot.semantic).not.toHaveProperty("generatedEvidenceFacts");
@@ -680,6 +686,7 @@ describe("buildRemovalSubmissionBuild", () => {
         memberCreditBatchIds: ["batch-1"],
         biocharApplicationIntents: [],
         semanticPayload: {},
+        transportFeedstockIds: [],
         durabilityMeasurementSampleArgs: {
           removalId: "removal-1",
           externalProjectId: "project-1",
