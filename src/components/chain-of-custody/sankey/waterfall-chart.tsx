@@ -37,8 +37,12 @@ const MIN_COL_W = 20;
 const COL_SHARE = 0.5;
 const TOP_PAD = 32;
 const LABEL_TOP = 10;
-/** Icon, gap and three label lines: "Outside these applications" wraps to three in a narrow chart. */
-const LABEL_BLOCK_H = 78;
+/** Icon, gap and two label lines. */
+const LABEL_BLOCK_H = 60;
+/** Icon, gap and three label lines, for columns too narrow for two. */
+const LABEL_BLOCK_H_NARROW = 78;
+/** Measured: "Outside these applications" wraps to three lines at a pitch of 85px and to two from 86px; 88 leaves a margin for font rendering. */
+const NARROW_PITCH_PX = 88;
 const BRACKET_DROP = 6;
 const BRACKET_LABEL_H = 28;
 const MIN_STEP_H = 2;
@@ -103,7 +107,8 @@ export function WaterfallChart({
   const base = TOP_PAD + plotHeight;
   const scale = plotHeight / axisMax;
   const y = (kg: number) => base - kg * scale;
-  const bracketY = base + LABEL_TOP + LABEL_BLOCK_H;
+  const labelBlockH = pitch < NARROW_PITCH_PX ? LABEL_BLOCK_H_NARROW : LABEL_BLOCK_H;
+  const bracketY = base + LABEL_TOP + labelBlockH;
   const height = bracketY + (groups.length > 0 ? BRACKET_DROP + BRACKET_LABEL_H : 0);
   const indexOf = (key: WaterfallItemKey) => items.findIndex((item) => item.key === key);
 
