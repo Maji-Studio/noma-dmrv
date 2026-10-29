@@ -1,24 +1,9 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
 import { applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope, type Executor } from "./utils";
-
-/** Allocations that prevent Add run, preferring this batch's held slice. */
-export async function loadCreditBatchRunHoldingAllocations(
-  ctx: OrgContext,
-  executor: Executor,
-  productionRunIds: readonly string[],
-  creditBatchId: string,
-  splitsApplicationsByBatch: boolean,
-) {
-  requireOrgScope(ctx);
-  if (!productionRunIds.length) return [];
-  return queryProductionRunHoldingAllocations(ctx, executor, productionRunIds,
-    splitsApplicationsByBatch ? creditBatchId : undefined)
-    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)));
-}
 
 /** All held Application slices for a set of runs, independent of the target batch. */
 export async function loadProductionRunHoldingAllocations(
@@ -28,26 +13,6 @@ export async function loadProductionRunHoldingAllocations(
 ) {
   requireOrgScope(ctx);
   if (!productionRunIds.length) return [];
-  return queryProductionRunHoldingAllocations(ctx, executor, productionRunIds);
-}
-
-export function pickCreditBatchRunHoldingAllocation(
-  allocations: readonly Awaited<ReturnType<typeof loadProductionRunHoldingAllocations>>[number][],
-  productionRunId: string,
-  creditBatchId: string,
-  splitsApplicationsByBatch: boolean,
-) {
-  const own = allocations.find(row => row.productionRunId === productionRunId && row.creditBatchId === creditBatchId);
-  return own ?? (splitsApplicationsByBatch ? undefined : allocations.find(row => row.productionRunId === productionRunId));
-}
-
-function queryProductionRunHoldingAllocations(
-  ctx: OrgContext,
-  executor: Executor,
-  productionRunIds: readonly string[],
-  creditBatchId?: string,
-) {
-  requireOrgScope(ctx);
   return executor.select({
     productionRunId: applicationOutputAllocations.productionRunId,
     removalId: certifierRemovals.id,
@@ -66,8 +31,20 @@ function queryProductionRunHoldingAllocations(
       inArray(applicationOutputAllocations.productionRunId, [...productionRunIds]),
       eq(applicationOutputAllocations.organizationId, ctx.organizationId),
       isNotNull(creditBatchApplications.removalId),
-      creditBatchId !== undefined ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
     ));
+}
+
+/** Prefer this batch's held slice across all requested runs, including multi-run additions. */
+export function pickCreditBatchRunHoldingAllocation(
+  allocations: readonly Awaited<ReturnType<typeof loadProductionRunHoldingAllocations>>[number][],
+  productionRunIds: readonly string[],
+  creditBatchId: string,
+  splitsApplicationsByBatch: boolean,
+) {
+  const runIds = new Set(productionRunIds);
+  const relevant = allocations.filter(row => runIds.has(row.productionRunId));
+  const own = relevant.find(row => row.creditBatchId === creditBatchId);
+  return own ?? (splitsApplicationsByBatch ? undefined : relevant[0]);
 }
 
 /** Shared fit predicates for one cohort or a set-based join against stored batches. */

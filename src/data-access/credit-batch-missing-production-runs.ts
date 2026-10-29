@@ -112,7 +112,7 @@ export async function loadCreditBatchesMissingProductionRuns(
     const missing = result.get(batch.creditBatchId)!;
     const splits = removalSplitsApplicationsByBatch(batch.durabilityOption);
     for (const run of missing.runs) {
-      run.heldByRemovalCode = pickCreditBatchRunHoldingAllocation(allocations, run.id, batch.creditBatchId, splits)?.removalCode ?? null;
+      run.heldByRemovalCode = pickCreditBatchRunHoldingAllocation(allocations, [run.id], batch.creditBatchId, splits)?.removalCode ?? null;
     }
   }
   for (const entry of entries) {

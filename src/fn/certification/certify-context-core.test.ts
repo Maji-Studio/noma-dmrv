@@ -185,11 +185,12 @@ it("projects all held missing runs with Add run eligibility into the Removal sum
   if (!result.success) throw new Error(result.error);
   expect(result.data.removals[0].missingProductionRuns).toEqual([
     { creditBatchId: "held", creditBatchCode: "CB-held", runs: [
-      { id: run.id, code: run.code, canAdd: true }, { id: "blocked", code: "PR-2", canAdd: false },
+      { id: run.id, code: run.code, canAdd: true, sameDayEntry: false },
+      { id: "blocked", code: "PR-2", canAdd: false, sameDayEntry: false },
     ] },
     // A same-day entry keeps the addable run and clears the refused one.
     { creditBatchId: "covered", creditBatchCode: "CB-covered", runs: [
-      { id: run.id, code: run.code, canAdd: true },
+      { id: run.id, code: run.code, canAdd: true, sameDayEntry: true },
     ] },
   ]);
   expect(loadCreditBatchesMissingProductionRuns).toHaveBeenCalledExactlyOnceWith(ctx, memberBatches.map(batch => batch.id));
