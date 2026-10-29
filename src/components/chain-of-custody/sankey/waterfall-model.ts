@@ -9,6 +9,7 @@
  * runs' dry feedstock), otherwise dry. Steps: the lib's exits in flow order.
  * End column: the dry biochar applied, lit.
  */
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import type {
@@ -38,6 +39,8 @@ export interface WaterfallRecord {
   name: string | null;
   /** This record's part of the column, in kg, on the column's basis. */
   massKg: number | null;
+  /** Said under the figure when it is negative: the record is out of balance. */
+  note?: string;
   /** Applications also carry the wet product mass they were weighed at. */
   wetKg?: number | null;
 }
@@ -124,16 +127,15 @@ function sumOrNull(values: (number | null | undefined)[]): number | null {
   return values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
 }
 
-function positive(value: number | null): number | null {
-  return value == null ? null : Math.max(0, value);
-}
-
 /** Runs, feedstocks, products and applications behind the lineages, deduped. */
 function collect(lineages: readonly WaterfallLineage[]) {
   const runs = new Map<string, RunFacts>();
   const runAllocations = new Map<string, (number | null)[]>();
   const feedstocks = new Map<string, WaterfallRecord>();
-  const products = new Map<string, { record: WaterfallRecord; appliedKg: number }>();
+  const products = new Map<
+    string,
+    { record: WaterfallRecord; appliedKg: number; allocatedKg: number | null; lotKg: number | null }
+  >();
   const applications = new Map<string, WaterfallRecord>();
   for (const lineage of lineages) {
     const app = lineage.application;
@@ -181,8 +183,15 @@ function collect(lineages: readonly WaterfallLineage[]) {
       const entry = products.get(product.id) ?? {
         record: { id: product.id, kind: "biocharProduct" as const, code: product.code, name: product.formulationName, massKg: null },
         appliedKg: 0,
+        allocatedKg: null as number | null,
+        lotKg: computeClampedDryMass(product.massKg, product.moistureContentPercent) ?? product.massKg ?? null,
       };
       entry.appliedKg += dryKg;
+      // Same precedence as the lib: the allocated dry mass, else the lot's dry mass.
+      if (lineage.sources?.every((source) => source.allocatedDryMassKg != null)) {
+        entry.allocatedKg =
+          (entry.allocatedKg ?? 0) + lineage.sources.reduce((sum, source) => sum + (source.allocatedDryMassKg ?? 0), 0);
+      }
       products.set(product.id, entry);
     }
   }
@@ -204,7 +213,10 @@ export function buildWaterfall(
   const column = (key: SankeyColumnKey) => sankey.columns.find((entry) => entry.key === key)?.massKg ?? 0;
   const dryFeedstockKg = column("feedstock");
   const wetFeedstockKg = sumOrNull(facts.runs.map((run) => run.wetInKg));
-  const waterKg = wetFeedstockKg == null ? null : wetFeedstockKg - dryFeedstockKg;
+  // The lib counts a run with no recorded dry input as 0, so wet less dry
+  // would invent water: only start wet when every run's dry input is known.
+  const dryInputKnown = facts.runs.length > 0 && facts.runs.every((run) => run.dryInKg != null);
+  const waterKg = wetFeedstockKg == null || !dryInputKnown ? null : wetFeedstockKg - dryFeedstockKg;
   const hasWater = waterKg != null && waterKg > EPSILON_KG;
   const startBasis = hasWater ? "wet" : "dry";
   const startKg = hasWater ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
@@ -212,10 +224,23 @@ export function buildWaterfall(
   const runRecord = (run: RunFacts, massKg: number | null): WaterfallRecord => ({
     id: run.id, kind: "productionRun", code: run.code, name: null, massKg,
   });
-  const runRecords = (figure: (run: RunFacts) => number | null) =>
-    facts.runs.map((run) => runRecord(run, positive(figure(run)))).sort(byCode);
+  const warnings = [...sankey.warnings];
+  // Each record keeps its own signed figure: the lib clamps only the total,
+  // so a negative one is shown as it is and named in the warnings.
+  const withNote = (record: WaterfallRecord, massKg: number | null, note: string): WaterfallRecord => {
+    if (massKg != null && massKg < -EPSILON_KG) {
+      warnings.push(`${record.code}: ${note}.`);
+      return { ...record, massKg, note };
+    }
+    return { ...record, massKg };
+  };
+  const runRecords = (figure: (run: RunFacts) => number | null, note: string) =>
+    facts.runs.map((run) => withNote(runRecord(run, null), figure(run), note)).sort(byCode);
   const productRecords = facts.products
-    .map(({ record }) => record)
+    .map(({ record, appliedKg, allocatedKg, lotKg }) => {
+      const stored = allocatedKg ?? lotKg;
+      return withNote(record, stored == null ? null : stored - appliedKg, "More applied than the product's recorded mass");
+    })
     .sort(byCode);
 
   const items: WaterfallItem[] = [];
@@ -232,16 +257,19 @@ export function buildWaterfall(
   };
   if (hasWater && waterKg != null) {
     pushStep("water_driven_off", "Water driven off", waterKg, "productionRuns", "productionRun",
-      runRecords((run) => run.wetInKg == null || run.dryInKg == null ? null : run.wetInKg - run.dryInKg));
+      runRecords((run) => run.wetInKg == null || run.dryInKg == null ? null : run.wetInKg - run.dryInKg,
+        "Less wet feedstock than dry feedstock recorded"));
   }
   for (const exit of sankey.exits) {
     const stage = STAGE_OF_COLUMN[exit.fromColumn] ?? "productionRuns";
     if (exit.key === "conversion_loss") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
-        runRecords((run) => run.dryInKg == null || run.dryOutKg == null ? null : run.dryInKg - run.dryOutKg));
+        runRecords((run) => run.dryInKg == null || run.dryOutKg == null ? null : run.dryInKg - run.dryOutKg,
+        "More biochar out than feedstock in"));
     } else if (exit.key === "unallocated_output") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
-        runRecords((run) => run.dryOutKg == null || run.allocatedKg == null ? null : run.dryOutKg - run.allocatedKg));
+        runRecords((run) => run.dryOutKg == null || run.allocatedKg == null ? null : run.dryOutKg - run.allocatedKg,
+        "More biochar in products than the run made"));
     } else {
       pushStep(exit.key, exit.label, exit.massKg, stage, "biocharProduct", productRecords);
     }
@@ -270,8 +298,13 @@ export function buildWaterfall(
     appliedWetKg: sumOrNull(facts.applications.map((record) => record.wetKg)),
     removedKg: steps.reduce((sum, item) => sum + item.massKg, 0),
     stepCount: steps.length,
-    warnings: sankey.warnings,
+    warnings,
   };
+}
+
+/** Top of the plot: the highest level any column reaches, so none draws off the chart. */
+export function chartMaxKg(model: Pick<WaterfallModel, "items" | "startKg">): number {
+  return Math.max(model.startKg, ...model.items.map((item) => Math.max(item.top, item.bottom)), 0);
 }
 
 /** Level carried from a column to the next one: a step's bottom, else its top. */

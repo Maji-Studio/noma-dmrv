@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBatchSankey, type SankeyLineage } from "@/lib/chain-of-custody/sankey";
-import { buildWaterfall, DEFAULT_COLUMN, levelAfter, type WaterfallLineage } from "./waterfall-model";
+import { buildWaterfall, chartMaxKg, DEFAULT_COLUMN, levelAfter, type WaterfallLineage } from "./waterfall-model";
 
 const RUN_DRY_IN_KG = 4_000;
 const RUN_DRY_OUT_KG = 1_500;
@@ -103,7 +103,7 @@ describe("buildWaterfall", () => {
       expect.objectContaining({ kind: "productionRun", code: "PR-26-001", massKg: 1_000 }),
     ]);
     expect(byKey("conversion_loss")?.records[0]).toMatchObject({ code: "PR-26-001", massKg: 2_500 });
-    expect(byKey("in_storage")?.records[0]).toMatchObject({ kind: "biocharProduct", code: "BP-26-001" });
+    expect(byKey("in_storage")?.records[0]).toMatchObject({ kind: "biocharProduct", code: "BP-26-001", massKg: 500 });
     expect(byKey("applied")?.records).toEqual([
       expect.objectContaining({ kind: "application", code: "AP-26-001", massKg: 1_000, wetKg: 1_200 }),
     ]);
@@ -120,5 +120,52 @@ describe("buildWaterfall", () => {
     expect(applied.records).toHaveLength(1);
     expect(applied.records[0].massKg).toBeCloseTo(1_000);
     expect(applied.records[0].wetKg).toBeCloseTo(1_200);
+  });
+
+  it("does not invent water when a run has no recorded dry input", () => {
+    const lineages = [lineage([2_000], { id: "app-1", code: "AP-26-001", dryT: 0.25, wetT: 0.3 })];
+    (lineages[0].productionRun as { feedstockMassDryKg: number | null }).feedstockMassDryKg = null;
+    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+
+    expect(model.startBasis).toBe("dry");
+    expect(model.items.map((item) => item.key)).not.toContain("water_driven_off");
+  });
+
+  it("keeps each run's signed residual and warns about the one that is negative", () => {
+    const run = (id: string, code: string, dryOut: number) => ({
+      productionRun: { id, code, feedstockMassDryKg: 1_000, biocharDryMassKg: dryOut },
+      feedstocks: [{ id: `fs-${id}`, code: `FS-${id}`, feedstockTypeName: "Wood", wetMassUsedKg: 1_000 }],
+      allocatedDryMassKg: null,
+    });
+    const lineages = [
+      {
+        application: { id: "app-1", code: "AP-26-001", fieldIdentifier: null, biocharAppliedDryTons: 0.5, biocharAppliedTons: null },
+        productionRun: null,
+        biocharProduct: { id: "lot-1", code: "BP-26-001", formulationName: null, massKg: 1_400, moistureContentPercent: null },
+        feedstocks: [],
+        sources: [run("run-a", "PR-A", 1_100), run("run-b", "PR-B", 300)],
+      },
+    ] as unknown as (WaterfallLineage & SankeyLineage)[];
+    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const loss = model.items.find((item) => item.key === "conversion_loss");
+
+    expect(loss?.massKg).toBe(600);
+    expect(loss?.records.map((record) => [record.code, record.massKg])).toEqual([
+      ["PR-A", -100],
+      ["PR-B", 700],
+    ]);
+    expect(loss?.records[0].note).toBeTruthy();
+    expect(model.warnings.some((warning) => warning.startsWith("PR-A:"))).toBe(true);
+    expect(model.warnings.some((warning) => warning.startsWith("PR-B:"))).toBe(false);
+  });
+
+  it("sizes the plot to the highest column even when applied exceeds the input", () => {
+    const lineages = [lineage([null], { id: "app-1", code: "AP-26-001", dryT: 0.25, wetT: 0.3 })];
+    (lineages[0].productionRun as { feedstockMassDryKg: number | null }).feedstockMassDryKg = null;
+    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+
+    expect(model.startKg).toBe(0);
+    expect(model.endKg).toBe(250);
+    expect(chartMaxKg(model)).toBeGreaterThanOrEqual(model.endKg);
   });
 });

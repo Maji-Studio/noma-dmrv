@@ -36,6 +36,13 @@ function RecordFigure({ item, record }: { item: WaterfallItem; record: Waterfall
       </>
     );
   }
+  if (item.kind === "step" && record.massKg != null && record.massKg < 0) {
+    return (
+      <>
+        <span className="text-[var(--color-text-tertiary)]">{record.note} · </span>+{formatMassKg(-record.massKg)}
+      </>
+    );
+  }
   const sign = item.kind === "step" ? MINUS : "";
   return (
     <>

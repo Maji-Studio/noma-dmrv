@@ -26,7 +26,7 @@ import {
   STEP_STROKE,
   WATER_DASH,
 } from "./waterfall-parts";
-import { levelAfter, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
+import { chartMaxKg, levelAfter, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
 
 const AXIS_W = 56;
 const GROUP_GAP = 24;
@@ -81,8 +81,9 @@ export function WaterfallChart({
   const colX = (index: number) => AXIS_W + index * pitch + gapsBefore[index] * GROUP_GAP + (pitch - colW) / 2;
   const centerX = (index: number) => colX(index) + colW / 2;
 
-  const step = niceStep(model.startKg);
-  const axisMax = Math.max(step, Math.ceil(model.startKg / step) * step);
+  const maxKg = chartMaxKg(model);
+  const step = niceStep(maxKg);
+  const axisMax = Math.max(step, Math.ceil(maxKg / step) * step);
   const ticks = Array.from({ length: Math.round(axisMax / step) + 1 }, (_, index) => index * step);
   const base = TOP_PAD + plotHeight;
   const scale = plotHeight / axisMax;

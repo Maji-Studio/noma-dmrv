@@ -21,7 +21,7 @@ import {
   START_STROKE,
   STEP_STROKE,
 } from "./waterfall-parts";
-import type { WaterfallItem, WaterfallItemKey, WaterfallModel } from "./waterfall-model";
+import { chartMaxKg, type WaterfallItem, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
 
 const MIN_BAR_PCT = 0.6;
 
@@ -33,8 +33,8 @@ interface WaterfallRowsProps {
   renderDetail?: (item: WaterfallItem) => ReactNode;
 }
 
-function barStyle(item: WaterfallItem, startKg: number) {
-  const pct = (kg: number) => (startKg > 0 ? (kg / startKg) * 100 : 0);
+function barStyle(item: WaterfallItem, maxKg: number) {
+  const pct = (kg: number) => (maxKg > 0 ? (kg / maxKg) * 100 : 0);
   const left = pct(item.bottom);
   const length = Math.max(MIN_BAR_PCT, pct(item.top - item.bottom));
   const common = { left: `${left}%`, width: `${length}%` };
@@ -50,6 +50,7 @@ function barStyle(item: WaterfallItem, startKg: number) {
 }
 
 export function WaterfallRows({ model, activeKey, onSelect, renderDetail }: WaterfallRowsProps) {
+  const maxKg = chartMaxKg(model);
   const rows: ReactNode[] = [];
   let lastStage: string | null = null;
   for (const item of model.items) {
@@ -90,7 +91,7 @@ export function WaterfallRows({ model, activeKey, onSelect, renderDetail }: Wate
             {signedKg(item)} kg
           </span>
           <span className="relative col-span-2 h-8" aria-hidden>
-            <span className="absolute inset-y-0 box-border" style={barStyle(item, model.startKg)} />
+            <span className="absolute inset-y-0 box-border" style={barStyle(item, maxKg)} />
           </span>
         </button>
         {active && renderDetail ? <div className="px-8 pb-12 pt-4">{renderDetail(item)}</div> : null}
