@@ -1,3 +1,8 @@
+import { COMPLETED_PRODUCTION_RUN_STATUS, type ProductionRunStatus } from "@/lib/production-runs/lifecycle";
+
+// Failed and cancelled runs never reach a credit batch, so they cannot hold legs.
+const TRANSPORT_OWNER_STATUSES: readonly ProductionRunStatus[] = ["running", COMPLETED_PRODUCTION_RUN_STATUS];
+
 export interface FeedstockTransportDraw {
   feedstockId: string;
   runId: string;
@@ -5,11 +10,11 @@ export interface FeedstockTransportDraw {
   status: string | null;
 }
 
-/** Transport is front-loaded onto the first real draw, regardless of batch membership. */
+/** Transport belongs to the earliest running or complete linked run, regardless of batch membership. */
 export function feedstockTransportOwners(draws: readonly FeedstockTransportDraw[]): Map<string, string> {
   const firstDraws = new Map<string, FeedstockTransportDraw>();
   for (const draw of draws) {
-    if (draw.status === "cancelled") continue;
+    if (!TRANSPORT_OWNER_STATUSES.some((status) => status === draw.status)) continue;
     const previous = firstDraws.get(draw.feedstockId);
     if (!previous || draw.startTime.getTime() < previous.startTime.getTime() ||
       (draw.startTime.getTime() === previous.startTime.getTime() && draw.runId < previous.runId)) {

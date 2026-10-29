@@ -2,7 +2,7 @@
 
 ## 2026-10-29: Feedstock transport ownership and retired sample evidence
 
-Feedstock transport is counted only by the earliest non-cancelled linked run
+Feedstock transport is counted only by the earliest running or complete linked run
 (start time, then run ID), across all runs in the organization. Batch figures,
 Removal previews, coverage and submission share that ownership; stock allocation
 and dry mass are unchanged. See [ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).

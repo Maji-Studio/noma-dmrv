@@ -17,10 +17,20 @@ describe("feedstock transport ownership", () => {
     expect(feedstockTransportOwners(draws).get("early")).toBe("a");
     expect(feedstockTransportOwners(draws.toReversed()).get("early")).toBe("a");
   });
-  it("skips cancelled runs but retains failed real draws", () => {
+  it.each(["running", "complete"])("passes ownership from an earlier failed run to the next %s run", (status) => {
     expect(feedstockTransportOwners([
-      draw("cancelled", "2026-01-01", "cancelled"), draw("failed", "2026-02-01", "failed"), draw("complete", "2026-03-01"),
-    ]).get("early")).toBe("failed");
+      draw("cancelled", "2026-01-01", "cancelled"), draw("failed", "2026-02-01", "failed"), draw("next", "2026-03-01", status),
+    ]).get("early")).toBe("next");
+  });
+  it("allows a running run to own ahead of a later complete run", () => {
+    expect(feedstockTransportOwners([
+      draw("complete", "2026-03-01"), draw("running", "2026-02-01", "running"),
+    ]).get("early")).toBe("running");
+  });
+  it("leaves deliveries linked only to failed or cancelled runs without an owner", () => {
     expect(feedstockTransportOwners([draw("cancelled", "2026-01-01", "cancelled")]).size).toBe(0);
+    expect(feedstockTransportOwners([
+      draw("cancelled", "2026-01-01", "cancelled"), draw("failed", "2026-02-01", "failed"),
+    ]).size).toBe(0);
   });
 });
