@@ -1,4 +1,4 @@
-import { creditBatchLabel } from "@/lib/credit-batch-label";
+import { creditBatchName } from "@/lib/credit-batch-label";
 import { formatDateRange } from "@/lib/format-utils";
 
 const LABEL_SEPARATOR = " · ";
@@ -7,7 +7,7 @@ const LABEL_SEPARATOR = " · ";
  * How a credit batch reads in a picker: the five list filters (Samples,
  * Deliveries, Applications, Production Runs, Biochar Products) and the rows of
  * the Trail batch picker. The production window alone looks like a date filter
- * on the rows, so the label (the batch's name, else its code) leads and
+ * on the rows, so the batch leads: its code, or "Name (CODE)" when named, since filter rows elsewhere show the code and
  * the window follows.
  */
 export function creditBatchOptionLabel(batch: {
@@ -16,5 +16,7 @@ export function creditBatchOptionLabel(batch: {
   startDate: string | Date | null | undefined;
   endDate: string | Date | null | undefined;
 }): string {
-  return `${creditBatchLabel(batch)}${LABEL_SEPARATOR}${formatDateRange(batch.startDate, batch.endDate)}`;
+  const name = creditBatchName(batch);
+  const label = name ? `${name} (${batch.code})` : batch.code;
+  return `${label}${LABEL_SEPARATOR}${formatDateRange(batch.startDate, batch.endDate)}`;
 }

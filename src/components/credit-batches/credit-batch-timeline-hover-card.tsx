@@ -7,6 +7,7 @@
  * page, so the card carries facts only, no link.
  * Elevated surface per the design system: paper, full-ink border, no shadow.
  */
+import { creditBatchLabel, creditBatchName } from "@/lib/credit-batch-label";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PreviewCard } from "@base-ui/react/preview-card";
@@ -41,6 +42,8 @@ const STATE_BADGE: Record<TimelineState, StatusValue> = {
 
 export interface HoverCardBatch {
   code: string;
+  /** The operator-given name; the heading shows it with the code beneath. */
+  name?: string | null;
   feedstockName: string;
   startDate: string;
   endDate: string;
@@ -79,7 +82,10 @@ export function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
     <div className="flex w-[300px] max-w-[calc(100vw-32px)] flex-col">
       <div className="flex flex-col gap-10 px-16 pt-16 pb-12">
         <div className="flex items-center justify-between gap-12">
-          <span className="body-medium font-medium tabular-nums">{batch.code}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="body-medium font-medium tabular-nums">{creditBatchLabel(batch)}</span>
+            {creditBatchName(batch) && <span className={cn("body-small tabular-nums", MUTED)}>{batch.code}</span>}
+          </span>
           {state && <StatusBadge status={STATE_BADGE[state]} label={STATE_TONE[state].title} size="small" className={STATE_TONE[state].badge} />}
         </div>
         <div className={cn("flex flex-col gap-4 body-small", MUTED)}>

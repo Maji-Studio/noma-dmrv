@@ -395,6 +395,7 @@ export function CreditBatchForm({
         <FormField
           id="name"
           label="Name"
+          hint="Lists and pages show the batch code when this is blank."
           error={errors.name?.message}
         >
           <FormInput
@@ -402,7 +403,7 @@ export function CreditBatchForm({
             type="text"
             autoComplete="off"
             maxLength={CREDIT_BATCH_NAME_MAX_LENGTH}
-            placeholder={creditBatch?.code ?? "Optional. The batch code is used if blank"}
+            placeholder={creditBatch?.code}
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name", {

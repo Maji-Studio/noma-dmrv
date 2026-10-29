@@ -2,7 +2,7 @@
 
 /**
  * The List view of /credit-batches: one compact row per credit batch, read on
- * a phone first. Below `xl` a row is two lines (code, feedstock and state, then
+ * a phone first. Below `xl` a row is two lines (name or code, feedstock and state, then
  * the dates and the applied biochar), plus the menu; from `xl` the
  * same elements line up as table columns under one header. One DOM serves both:
  * the line wrappers turn into `display: contents` at `xl`, so every value is a
@@ -21,7 +21,7 @@ import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-ch
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
-import { creditBatchLabel } from "@/lib/credit-batch-label";
+import { creditBatchName } from "@/lib/credit-batch-label";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
@@ -39,7 +39,7 @@ const CODE_PREFIX = /^CB-/;
 
 /**
  * One grid for the header and every row. Below `xl`: content, then the 44px
- * menu. From `xl`: code, feedstock, dates, production runs, applied (dry),
+ * menu. From `xl`: name or code, feedstock, dates, production runs, applied (dry),
  * status, menu.
  */
 const ROW_GRID =
@@ -153,7 +153,10 @@ export function CreditBatchListRow({
   const applied = appliedDryLabel(facts, factsStatus);
   const dates = formatDateRange(creditBatch.startDate, creditBatch.endDate);
   // A named batch shows its name; an unnamed one its code, without the shared "CB-" prefix on a phone.
-  const named = !!creditBatch.name?.trim();
+  const name = creditBatchName(creditBatch);
+  const named = name !== null;
+  // Screen readers get the code too, so two batches with one name stay apart.
+  const accessibleName = named ? `${name} (${creditBatch.code})` : creditBatch.code;
   const codePrefix = named ? "" : CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
   return (
     // The whole row is a pointer convenience; the code link is the keyboard
@@ -170,16 +173,16 @@ export function CreditBatchListRow({
               href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
               // The link navigates itself; the row's own click must not push a second time.
               onClick={(event) => event.stopPropagation()}
-              aria-label={`Open credit batch ${creditBatchLabel(creditBatch)}`}
+              aria-label={`Open credit batch ${accessibleName}`}
               title={named ? creditBatch.code : undefined}
               className={cn(
                 "cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1",
                 named ? "min-w-0 truncate" : "shrink-0",
               )}
             >
-              {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code. */}
+              {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code, and a named batch shows its name instead. */}
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
-              {named ? creditBatchLabel(creditBatch) : creditBatch.code.slice(codePrefix.length)}
+              {named ? name : creditBatch.code.slice(codePrefix.length)}
             </Link>
             <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED, named && "max-xl:hidden")}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
@@ -214,7 +217,7 @@ export function CreditBatchListRow({
         </div>
       </div>
       <RowActionsMenu
-        label={`Actions for credit batch ${creditBatchLabel(creditBatch)}`}
+        label={`Actions for credit batch ${accessibleName}`}
         className="flex justify-center self-center [&>button]:size-44 xl:col-start-7 xl:row-start-1"
         actions={creditBatchRowActions({ creditBatch, lock, onOpen, onEdit, onDelete })}
       />

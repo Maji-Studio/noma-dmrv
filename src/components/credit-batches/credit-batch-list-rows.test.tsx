@@ -72,7 +72,7 @@ describe("CreditBatchListRow", () => {
 
   it("shows the name in place of the code, and keeps the code out of a second line", () => {
     const { row } = renderRow({ creditBatch: { ...creditBatch, name: "September maize" } });
-    const link = within(row).getByRole("link", { name: "Open credit batch September maize" });
+    const link = within(row).getByRole("link", { name: "Open credit batch September maize (CB-26-009)" });
     expect(link.textContent).toBe("September maize");
     expect(row.textContent).not.toContain("CB-26-009");
   });

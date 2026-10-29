@@ -7,6 +7,7 @@
  * Hover (or focus, or a first tap) on a bar shows its facts; pressing a bar
  * (the second tap on touch) opens the batch page, so each bar is a real link.
  */
+import { creditBatchName } from "@/lib/credit-batch-label";
 import { recordHref } from "@/lib/record-links";
 import { useState } from "react";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
@@ -63,6 +64,7 @@ export interface NewBatchRequest extends DateWindow {
 interface TimelineBatch extends DateWindow {
   id: string;
   code: string;
+  name: string | null;
   feedstockTypeId: string;
   feedstockTypeName: string | null;
   source: CreditBatchWithRelations;
@@ -110,9 +112,9 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
         ) : (
           <>
             {spot.cutStart && <CutMark side="start" />}
-            {/* Every bar is a credit batch, so the shared "CB-" prefix is dropped; the control's label carries the full code. */}
+            {/* An unnamed bar drops the shared "CB-" prefix; a named one shows its name. The control's label carries the full code. */}
             {view.state === "issued" && <StateMark state="issued" size={BAR_MARK_PX} />}
-            <span className="truncate body-caption font-medium tabular-nums">{batch.code.replace(/^CB-/, "")}</span>
+            <span className="truncate body-caption font-medium tabular-nums">{batch.name ?? batch.code.replace(/^CB-/, "")}</span>
             {spot.cutEnd && (
               <span className="ml-auto">
                 <CutMark side="end" />
@@ -178,6 +180,7 @@ export function CreditBatchTimeline({
   const timelineBatches: TimelineBatch[] = batches.map((batch) => ({
     id: batch.id,
     code: batch.code,
+    name: creditBatchName(batch),
     start: batch.startDate,
     end: batch.endDate,
     feedstockTypeId: batch.feedstockTypeId,
@@ -269,6 +272,7 @@ export function CreditBatchTimeline({
                           <BatchHoverCard
                             batch={{
                               code: batch.code,
+                              name: batch.name,
                               feedstockName: row.feedstockName,
                               startDate: batch.start,
                               endDate: batch.end,
@@ -277,7 +281,7 @@ export function CreditBatchTimeline({
                               facts: facts[batch.id],
                               factsStatus: factsFailed ? "failed" : factsQuery.isLoading ? "loading" : "ready",
                             }}
-                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.openTodoCount > 0 ? `, ${todosLabel(view.openTodoCount)}` : ""}`}
+                            label={`${batch.name ? `${batch.name} (${batch.code})` : batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.openTodoCount > 0 ? `, ${todosLabel(view.openTodoCount)}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
                             href={recordHref("creditBatch", batch.id, { facilityId: batch.source.facilityId })}
                           >
