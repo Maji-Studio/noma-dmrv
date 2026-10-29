@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { batchModel } from "./trace-fixtures";
 import { TraceMapView } from "./trace-map-view";
 
-const canvas = vi.hoisted(() => ({ props: [] as Array<{ frameKey: string }> }));
+const canvas = vi.hoisted(() => ({ props: [] as Array<{ frameKey: string; onMarkerClick?: (nodeId: string) => void }> }));
 vi.mock("./lazy-trace-map-canvas", () => ({
-  LazyTraceMapCanvas: (props: { frameKey: string }) => {
+  LazyTraceMapCanvas: (props: { frameKey: string; onMarkerClick?: (nodeId: string) => void }) => {
     canvas.props.push(props);
     return <div data-testid="canvas" />;
   },
@@ -64,6 +64,43 @@ it("walks converging intakes as one step and opens a picked record inside it", (
   // One open at a time.
   fireEvent.click(within(panel()).getByRole("button", { name: /FS-26-001/ }));
   expect(within(panel()).getByRole("button", { name: /FS-26-002/ }).getAttribute("aria-expanded")).toBe("false");
+});
+
+const clickMarker = (nodeId: string) => act(() => canvas.props.at(-1)!.onMarkerClick!(nodeId));
+const startAtFieldA = () => {
+  fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /Field A/ }));
+};
+
+it("scrolls to the opened member of a grouped step, not to the group's header", () => {
+  const { container } = render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  startAtFieldA();
+  expect(container.querySelectorAll("[data-scroll-target]")).toHaveLength(1);
+  clickMarker("feedstock:fs2");
+  const target = container.querySelector("[data-scroll-target]")!;
+  expect(container.querySelectorAll("[data-scroll-target]")).toHaveLength(1);
+  expect(within(target.closest("li")!).getByRole("button", { name: /FS-26-002/ })).toBeTruthy();
+  clickMarker("feedstock:fs1");
+  expect(within(container.querySelector("[data-scroll-target]")!.closest("li")!).getByRole("button", { name: /FS-26-001/ })).toBeTruthy();
+});
+
+it("clears the opened record when stepping away and back", () => {
+  render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  fireEvent.click(within(panel()).getByRole("button", { name: /Feedstock intake/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /FS-26-002/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /^Next/ }));
+  fireEvent.click(within(panel()).getByRole("button", { name: /^Back/ }));
+  expect(within(panel()).getByRole("button", { name: /FS-26-002/ }).getAttribute("aria-expanded")).toBe("false");
+});
+
+it("a marker inside the active chain jumps to its step; one outside starts its own chain", () => {
+  render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
+  startAtFieldA();
+  clickMarker("feedstock:fs2");
+  expect(within(panel()).getByText(/01 \/ 05 · To Field A/)).toBeTruthy();
+  expect(within(panel()).getByRole("button", { name: /FS-26-002/ }).getAttribute("aria-expanded")).toBe("true");
+  clickMarker("application:ap2");
+  expect(within(panel()).getByText(/01 \/ 05 · To Field B/)).toBeTruthy();
 });
 
 it("shows an empty state instead of the map when nothing has a location, and keeps the list", () => {

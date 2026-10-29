@@ -82,7 +82,8 @@ export function TraceChainWalk({
           return (
             <li key={step.kind} className="relative pb-4">
               {index < last ? <TraceThread dark={index < stepIndex} /> : null}
-              {isCurrent ? <ScrollTarget /> : null}
+              {/* The list scrolls to the opened member of a grouped step, else to the step. */}
+              {isCurrent && !(grouped && openRecordId !== null && step.records.some((record) => record.id === openRecordId)) ? <ScrollTarget /> : null}
               <button
                 type="button"
                 onClick={() => onStep(index)}
@@ -121,7 +122,8 @@ export function TraceChainWalk({
                   {step.records.map((record) => {
                     const open = record.id === openRecordId;
                     return (
-                      <li key={record.id} className="border-b border-[var(--clr-dark-purple-10)] last:border-b-0">
+                      <li key={record.id} className="relative border-b border-[var(--clr-dark-purple-10)] last:border-b-0">
+                        {open ? <ScrollTarget /> : null}
                         <button
                           type="button"
                           onClick={() => onOpenRecord(open ? null : record.id)}

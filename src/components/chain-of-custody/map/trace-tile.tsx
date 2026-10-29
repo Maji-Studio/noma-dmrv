@@ -65,5 +65,5 @@ const scrollListToMarker = (element: HTMLElement | null) => {
 
 /** Place inside a list row's `relative` item, rendered only while the row is open or current. */
 export function ScrollTarget() {
-  return <span ref={scrollListToMarker} aria-hidden className="absolute inset-x-0 top-0 h-0" />;
+  return <span ref={scrollListToMarker} data-scroll-target aria-hidden className="absolute inset-x-0 top-0 h-0" />;
 }
