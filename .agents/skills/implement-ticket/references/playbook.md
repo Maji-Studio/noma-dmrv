@@ -44,7 +44,7 @@ A plan-file target has no issue: skip board moves and `Closes #`.
 
 Non-UI: run the **codex-implementation** skill yourself with the worktree as `-C`; its prompt carries the brief's goal and acceptance criteria. UI: spawn a Claude subagent (Sonnet for a picked design, Opus for variants) with this prompt:
 
-> Implement the change in `<brief path>` in the worktree `<path>` (branch `<branch>`). Load the `noma-design` skill and follow `.claude/CLAUDE.md`. Commit on this branch with conventional commits whose body says why. Kill only the PID on your own port (`lsof -nP -iTCP:<port> -sTCP:LISTEN -t`); set work aside with a WIP commit, never `git stash`. Return under ~200 words: files changed, decisions and deviations, what you ran and its result. No diffs or file contents.
+> Implement the change in `<brief path>` in the worktree `<path>` (branch `<branch>`). Load the `noma-design` skill and follow `.claude/CLAUDE.md`. Commit on this branch with conventional commits whose body says why. Confirm `git branch --show-current` is `<branch>` before every commit. Kill only the PID on your own port (`lsof -nP -iTCP:<port> -sTCP:LISTEN -t`); set work aside with a WIP commit, never `git stash`. Return under ~200 words: files changed, decisions and deviations, what you ran and its result. No diffs or file contents.
 
 The conductor reads the diff before step 3.
 
@@ -56,7 +56,7 @@ A backend-only change shows a test that fails on `origin/staging` and passes on 
 
 ## Local review rounds
 
-- One suite at a time across all sessions: two in parallel hit Codex rate limits (429), and a run with a failed reviewer writes no complete report. When only some reviewers failed, rerun the same round command (every `--prior` included) with `--models <m> --practices <list>` added, into a new artifact dir and merge the two `report.json` files by hand before setting dispositions.
+- One suite at a time across all sessions: two in parallel hit Codex rate limits (429), and a run with a failed reviewer writes no complete report. When only some reviewers failed, rerun the same round command (every `--prior` included) with `--models <m> --practices <list>` added, into a new artifact dir and merge the two `report.json` files by hand before setting dispositions: replace the failed reviewers' `reports[]` entries with the rerun's, recompute `counts` from the merged findings, and keep the first run's `models` and `profile` for the PR table.
 - Run it from the worktree root. The suite refuses a dirty worktree, so commit first.
 - `report.json` sits in the `--artifact-dir`. Set each finding's `disposition` to `fixed` or `declined`, and `reason` (required for `declined`), then pass the file as `--prior` to the next round. The P0-P3 counts for the PR table come from its `counts`.
 - A finding that re-raises a declined item without new evidence is declined again with the same reason.
@@ -66,7 +66,7 @@ A backend-only change shows a test that fails on `origin/staging` and passes on 
 
 Give the valid findings to an implementer routed like step 2 (Codex for non-UI). Prompt:
 
-> Fix these review findings in the worktree `<path>` (branch `<branch>`), each with the smallest change that removes the defect: `<id, path:lines, problem, smallest safe fix>` per finding. Leave everything else as it is. Follow `.claude/CLAUDE.md`. Run `pnpm verify:static` and `<tests>`; once they are green, commit one `fix:` commit per finding or one per round, body naming the finding ids. Return under ~200 words: finding id → commit sha, and the gate results.
+> Fix these review findings in the worktree `<path>` (branch `<branch>`), each with the smallest change that removes the defect: `<id, path:lines, problem, smallest safe fix>` per finding. Leave everything else as it is. Follow `.claude/CLAUDE.md`. Confirm `git branch --show-current` is `<branch>` before every commit. Run `pnpm verify:static` and `<tests>`; once they are green, commit one `fix:` commit per finding or one per round, body naming the finding ids. Return under ~200 words: finding id → commit sha, and the gate results.
 
 ## Opening the PR
 
