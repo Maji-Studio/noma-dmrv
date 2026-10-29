@@ -106,3 +106,12 @@ describe("a chain is only what its application was supplied from", () => {
     expect(chains[0]!.steps).toHaveLength(5);
   });
 });
+
+describe("lineageIdsByApplication", () => {
+  it("unions the product slices of one application", () => {
+    const ids = lineageIdsByApplication([lineage("ap1", "bp1", "pr1", "fs1"), lineage("ap1", "bp2", "pr2", "fs2")]).get("application:ap1");
+    expect(ids).toEqual(
+      new Set(["application:ap1", "delivery:dl1", "order:or1", "biochar-product:bp1", "biochar-product:bp2", "production-run:pr1", "production-run:pr2", "feedstock:fs1", "feedstock:fs2"]),
+    );
+  });
+});

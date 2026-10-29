@@ -27,7 +27,18 @@ export function lineageRecordIds(data: ChainOfCustodyData): Set<string> {
   return ids;
 }
 
-/** Each application's lineage record ids, by the application's graph node id. */
+/**
+ * Each application's lineage record ids, by the application's graph node id.
+ * The batch sends one lineage per product slice, so an application that drew
+ * from two products arrives twice: its slices are unioned.
+ */
 export function lineageIdsByApplication(lineages: ChainOfCustodyData[]): Map<string, Set<string>> {
-  return new Map(lineages.map((data) => [applicationNodeId(data.application.id), lineageRecordIds(data)]));
+  const byApplication = new Map<string, Set<string>>();
+  for (const data of lineages) {
+    const key = applicationNodeId(data.application.id);
+    const ids = byApplication.get(key) ?? new Set<string>();
+    for (const id of lineageRecordIds(data)) ids.add(id);
+    byApplication.set(key, ids);
+  }
+  return byApplication;
 }
