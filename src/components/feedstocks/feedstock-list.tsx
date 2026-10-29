@@ -707,6 +707,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }) : undefined}
       >
         <FeedstockForm
+          lock={sheetLock}
           // The version keys the form too, so a refresh from location reopens
           // it on the record it saved instead of a stale draft.
           key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}

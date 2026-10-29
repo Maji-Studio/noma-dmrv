@@ -312,3 +312,11 @@ describe("RecordLockFormFrame refusal slot", () => {
     expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe("RecordLockNotice on a Sent feedstock with open transport", () => {
+  it("says only the transport can change and names the Removal", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), transport: { level: "open", heldBy: [] } }} />);
+    expect(screen.getByText(/Only the transport can be changed, because this was sent to Isometric with/).textContent)
+      .toContain("which did not count its trips.");
+  });
+});

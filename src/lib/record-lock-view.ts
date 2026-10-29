@@ -74,7 +74,19 @@ export type RecordLockViews = Record<string, RecordLockView>;
  */
 export function isRecordFieldLocked(view: RecordLockView | null | undefined, field: string): boolean {
   if (!view || view.level === "open") return false;
+  if (isTransportOnlyEditable(view)) return !FEEDSTOCK_TRANSPORT_FIELDS.includes(field);
   return view.level === "sent" || !view.freeFields.includes(field);
+}
+
+/** The feedstock fields that belong to its transport (the server's transport scope). */
+export const FEEDSTOCK_TRANSPORT_FIELDS: readonly string[] = ["vehicleId", "transportDistanceKm", "transportDistanceSource", "distanceNote"];
+
+/**
+ * A Sent feedstock whose transport no sent Removal counted: every other field
+ * stays locked, but its trips, transport files and transport fields still change.
+ */
+export function isTransportOnlyEditable(view: RecordLockView | null | undefined): boolean {
+  return view?.level === "sent" && !!view.transport && view.transport.level !== "sent";
 }
 
 /** Whether a screen's lock read has answered: until then actions fail closed. */
@@ -82,7 +94,7 @@ export type RecordLockStatus = "pending" | "error" | "ready";
 
 /** Edit is offered once the lock answered and something is still free. */
 export function isRecordEditable(view: RecordLockView | null | undefined): boolean {
-  return !!view && view.level !== "sent";
+  return !!view && (view.level !== "sent" || isTransportOnlyEditable(view));
 }
 
 /** Delete is offered once the lock answered Open: nothing uses it and it was never sent. */
@@ -110,7 +122,7 @@ export interface RecordLockSaveBlock {
  * turns the whole form read-only. The draft always stays.
  */
 export function recordLockSaveBlock(view: RecordLockView | undefined, status: RecordLockStatus): RecordLockSaveBlock | null {
-  if (view?.level === "sent") return { reason: RECORD_LOCK_SENT_SAVE_MESSAGE, tone: "error", readOnly: true };
+  if (view?.level === "sent" && !isTransportOnlyEditable(view)) return { reason: RECORD_LOCK_SENT_SAVE_MESSAGE, tone: "error", readOnly: true };
   if (view) return null;
   if (status === "error") return { reason: RECORD_LOCK_ERROR_MESSAGE, tone: "error", readOnly: false };
   return status === "pending" ? { reason: RECORD_LOCK_PENDING_MESSAGE, tone: "info", readOnly: false } : null;

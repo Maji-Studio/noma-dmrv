@@ -6,6 +6,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { Control, FieldValues } from "react-hook-form";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const mocks = vi.hoisted(() => ({
@@ -39,9 +40,11 @@ vi.mock("@/components/forms", async () => {
       allowCreate,
       onCreateNew,
       onChange,
+      disabled,
     }: {
       control: Control<FieldValues>;
       name: string;
+      disabled?: boolean;
       allowCreate?: boolean;
       onCreateNew?: () => void;
       onChange?: (value: string, change: { asDefault: boolean }) => void;
@@ -54,7 +57,7 @@ vi.mock("@/components/forms", async () => {
       return name === "supplierId" ? (
         <>
           <output data-testid="selected-supplier-id" data-value={String(value ?? "")} />
-          <input aria-label="Supplier" {...field} onChange={(event) => {
+          <input aria-label="Supplier" disabled={disabled} {...field} onChange={(event) => {
             field.onChange(event);
             onChange?.(event.target.value, { asDefault: false });
           }} />
@@ -68,8 +71,8 @@ vi.mock("@/components/forms", async () => {
     FormTextarea: () => null,
     MassMoistureFields: ({ wet, moisture }: ComponentProps<typeof import("@/components/forms/mass-moisture-fields").MassMoistureFields>) => (
       <>
-        <input {...wet.registration} />
-        <input {...moisture.registration} />
+        <input {...wet.registration} disabled={wet.disabled} />
+        <input {...moisture.registration} disabled={moisture.disabled} />
       </>
     ),
     ResolvedErrorRevalidator: () => null,
@@ -218,6 +221,42 @@ describe("FeedstockForm supplier quick-add wiring", () => {
   });
 });
 
+
+describe("FeedstockForm on a Sent record whose transport is open", () => {
+  const feedstock = {
+    id: "11111111-1111-4111-8111-111111111111",
+    facilityId: "22222222-2222-4222-8222-222222222222",
+    supplierId: "33333333-3333-4333-8333-333333333333",
+    feedstockTypeId: "44444444-4444-4444-8444-444444444444",
+    storageLocationId: "55555555-5555-4555-8555-555555555555",
+    deliveryDate: new Date("2026-10-06"),
+    massWetKg: 100,
+    moistureContentPercent: 25,
+  } as FeedstockWithRelations;
+  const sent = (transportLevel: "open" | "sent"): RecordLockView => ({
+    level: "sent", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [],
+    transport: { level: transportLevel, heldBy: [] },
+  });
+
+  it("locks the other fields and leaves the transport override editable", () => {
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={vi.fn()} lock={sent("open")} />);
+    try {
+      const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+      expect(input("deliveryDate").disabled).toBe(true);
+      expect(input("totalWetMassKg").disabled).toBe(true);
+      expect(input("moisturePercent").disabled).toBe(true);
+      expect((view.getByLabelText("Supplier") as HTMLInputElement).disabled).toBe(true);
+      expect((view.getByRole("button", { name: "Override the one-way distance" }) as HTMLButtonElement).disabled).toBe(false);
+    } finally { cleanup(); }
+  });
+
+  it("changes nothing in the form when the transport is sent too (the sheet makes it read-only)", () => {
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={vi.fn()} lock={sent("sent")} />);
+    try {
+      expect(view.container.querySelector<HTMLInputElement>('input[name="deliveryDate"]')!.disabled).toBe(false);
+    } finally { cleanup(); }
+  });
+});
 
 describe("FeedstockForm single-bin mass editing", () => {
   const feedstock = {

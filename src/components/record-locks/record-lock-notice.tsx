@@ -11,6 +11,7 @@ import {
   type RecordLockLink,
   type RecordLockStatus,
   type RecordLockView,
+  isTransportOnlyEditable,
 } from "@/lib/record-lock-view";
 import { IN_USE_HOW_TO_FREE, inUseHowToFree } from "@/lib/record-lock";
 import { recordLockLinkHref, recordLockLinkText } from "./record-lock-labels";
@@ -130,6 +131,13 @@ function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
     return (
       <Notice tone="info" boxed data-record-lock-notice="sent">
         Nothing can be changed, because this was sent to Isometric with <HolderList holders={sent} />, and sending <HolderList holders={interrupted} /> was started and not finished. {lock.howToFree}
+      </Notice>
+    );
+  }
+  if (isTransportOnlyEditable(lock)) {
+    return (
+      <Notice tone="info" boxed data-record-lock-notice="sent">
+        Only the transport can be changed, because this was sent to Isometric with <HolderList holders={lock.heldBy} />, which did not count its trips.
       </Notice>
     );
   }

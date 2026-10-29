@@ -59,7 +59,7 @@ describe("TransportEvidencePanel certification lock", () => {
       mocks.locked = true;
       render(<TransportEvidencePanel entityType={entityType} entityId="owner-1" embedded />);
 
-      expect(mocks.lockArgs).toContainEqual([entityType, "owner-1"]);
+      expect(mocks.lockArgs).toContainEqual([entityType, "owner-1", entityType === "feedstock" ? "transport" : undefined]);
       expect(screen.getByText(RECORD_FILES_LOCKED_MESSAGE)).toBeTruthy();
       expect(screen.getByRole("link", { name: "Open ticket.pdf" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Delete ticket.pdf" })).toBeNull();
