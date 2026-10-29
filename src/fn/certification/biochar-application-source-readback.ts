@@ -69,9 +69,13 @@ export async function refreshRemovalEvidenceLinks(
     log.warn({ submissionId, reason: "readback_state_unavailable" }, "Could not load Application evidence link checks");
     return summary;
   }
-  const rechecks = rows.filter(row => row.sourceReadbackStatus === "unconfirmed" &&
-    row.lifecycleStatus === "confirmed" && row.externalApplicationId && row.expectedSourceIds.length > 0)
-    .slice(0, MAX_EVIDENCE_LINK_RECHECKS_PER_LOAD);
+  const eligible = rows.filter(row =>
+    (row.sourceReadbackStatus === "unconfirmed" || row.sourceReadbackStatus === "mismatch") &&
+    row.lifecycleStatus === "confirmed" && row.externalApplicationId && row.expectedSourceIds.length > 0);
+  const rechecks = [
+    ...eligible.filter(row => row.sourceReadbackStatus === "unconfirmed"),
+    ...eligible.filter(row => row.sourceReadbackStatus === "mismatch"),
+  ].slice(0, MAX_EVIDENCE_LINK_RECHECKS_PER_LOAD);
   if (rechecks.length > 0) {
     const clientPromise = resolveIsometricClient(ctx);
     const results = await Promise.allSettled(rechecks.map(async row => {
@@ -79,7 +83,9 @@ export async function refreshRemovalEvidenceLinks(
       const result = classifySourceReadback(row.expectedSourceIds, await readBiocharApplicationSources(client, {
         externalProjectId: row.externalProjectId, externalApplicationId: row.externalApplicationId!,
       }));
-      const saved = await recordBiocharApplicationSourceReadback(ctx, row.id, result.outcome);
+      const status = row.sourceReadbackStatus === "mismatch" && result.outcome === "unconfirmed"
+        ? "mismatch" : result.outcome;
+      const saved = await recordBiocharApplicationSourceReadback(ctx, row.id, status);
       return { result, saved };
     }));
     results.forEach((settled, index) => {

@@ -14,14 +14,14 @@ const BIOCHAR_APPLICATION_SOURCES_QUERY = `query BiocharApplicationSources($proj
 
 export type SourceReadbackNoAnswerReason =
   | "unreachable" | "timeout" | "http_status" | "graphql_errors"
-  | "project_not_found" | "event_not_found" | "unreadable_response";
+  | "project_not_found" | "event_not_found" | "unreadable_response" | "sources_not_attached";
 export type SourceReadbackResult =
   | { kind: "found"; sourceIds: unknown }
   | { kind: "garbled"; detail: string }
   | { kind: "no_answer"; reason: SourceReadbackNoAnswerReason };
 export type SourceReadbackOutcome =
   | { outcome: "confirmed" }
-  | { outcome: "mismatch"; missing: string[]; unexpected: string[]; reason: "missing" | "unexpected" | "empty" | "garbled" }
+  | { outcome: "mismatch"; missing: string[]; unexpected: string[]; reason: "missing" | "unexpected" | "garbled" }
   | { outcome: "unconfirmed"; reason: SourceReadbackNoAnswerReason };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,9 +80,12 @@ export function classifySourceReadback(
   }
   const expected = new Set(expectedSourceIds);
   const remote = new Set<string>(result.sourceIds);
+  if (remote.size === 0 && expected.size > 0) {
+    return { outcome: "unconfirmed", reason: "sources_not_attached" };
+  }
   const missing = [...expected].filter(id => !remote.has(id)).sort();
   const unexpected = [...remote].filter(id => !expected.has(id)).sort();
   if (!missing.length && !unexpected.length) return { outcome: "confirmed" };
   return { outcome: "mismatch", missing, unexpected,
-    reason: remote.size === 0 ? "empty" : missing.length ? "missing" : "unexpected" };
+    reason: missing.length ? "missing" : "unexpected" };
 }
