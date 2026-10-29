@@ -96,13 +96,21 @@ inside batch context, with a "Batch roll-up" button back.
     appears once. An application record's sheet offers "Trace rollback" into
     the drill-down.
   - **Map** — the merged geo payload (nodes/legs deduped the same way).
-  - **Sankey** — honest dry-mass balance, dry kg end to end, every loss an explicit
-    labeled exit; no net-tCO₂e, since project emissions/counterfactual are
-    registry-owned ([ADR 0018](adr/0018-isometric-owns-project-emissions.md)). Exit
-    taxonomy and residual clamping: the header of
-    `src/lib/chain-of-custody/sankey.ts`. Rendered on a React Flow canvas; clicking
-    a column or exit opens a tooltip with a "See details" link to the backing
-    entity route — the Sankey doubles as navigation.
+  - **Sankey** — the batch's honest mass balance in kg, drawn as a waterfall
+    (`src/components/chain-of-custody/sankey/`): a big figure (dry biochar
+    applied) with one sentence and an (i) for how it is made; the first column is
+    the feedstock that went in (wet when every member run's draws carry a wet
+    mass, then "Water driven off" is the first step, otherwise dry); each step
+    down is an explicit labeled exit the lib computes (conversion loss, outside
+    these applications, in storage); the last lit column is what was applied.
+    Under the chart, the records behind the selected column (the lit one by
+    default), one line each, the whole row a link to the record. The run filter
+    narrows every figure; with nothing applied the view is an `EmptyState`. No
+    net-tCO₂e: project emissions/counterfactual are registry-owned
+    ([ADR 0018](adr/0018-isometric-owns-project-emissions.md)). Exit taxonomy and
+    residual clamping: the header of `src/lib/chain-of-custody/sankey.ts`; the
+    waterfall model is `sankey/waterfall-model.ts`, pure, and adds no figure the
+    lib or the loaded lineages do not already hold.
   - **Activities** (`?view=activity`) — the batch's recorded changes, newest
     first, as a timeline on a panel: one rail per day, each change a circle node
     with its record-type icon, a title line and a who-and-when line, from `useCreditBatchActivity` (membership and cardinality:
