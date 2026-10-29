@@ -241,8 +241,8 @@ describe("sheet form inventory", () => {
     {
       name: "credit batch", file: "components/credit-batches/credit-batch-form.tsx",
       sections: ["section:Batch definition", "section:(untitled)"],
-      createFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
-      editFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      createFields: ["field:Name", "field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      editFields: ["field:Name", "field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
     },
   ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
     for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
