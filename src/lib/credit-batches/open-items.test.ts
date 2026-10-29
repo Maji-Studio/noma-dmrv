@@ -489,7 +489,7 @@ describe("missing production runs", () => {
       ...missingProductionRuns, manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
     } }).check[0]).toEqual({
       id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
-      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-01",
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true, sameDayEntryDate: "2026-09-09",
       detail: "Its emissions are not counted in RM-009. An admin can add it in Edit.", target: null,
     });
   });
