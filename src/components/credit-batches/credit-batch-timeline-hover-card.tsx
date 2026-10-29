@@ -83,7 +83,7 @@ export function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
       <div className="flex flex-col gap-10 px-16 pt-16 pb-12">
         <div className="flex items-center justify-between gap-12">
           <span className="flex min-w-0 flex-col">
-            <span className="body-medium font-medium tabular-nums">{creditBatchLabel(batch)}</span>
+            <span className="min-w-0 break-words body-medium font-medium tabular-nums">{creditBatchLabel(batch)}</span>
             {creditBatchName(batch) && <span className={cn("body-small tabular-nums", MUTED)}>{batch.code}</span>}
           </span>
           {state && <StatusBadge status={STATE_BADGE[state]} label={STATE_TONE[state].title} size="small" className={STATE_TONE[state].badge} />}

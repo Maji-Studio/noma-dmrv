@@ -6,6 +6,7 @@
  * then the batch's identity (mirroring the edit form's section titles), the
  * member production runs closed by the carbon estimate they produce, and notes.
  */
+import { creditBatchName } from "@/lib/credit-batch-label";
 import { recordHref } from "@/lib/record-links";
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -355,7 +356,7 @@ export function creditBatchSheetSections({
       title: "Batch definition",
       fields: [
         // The title is the code for an unnamed batch, so the row only adds the code beside a name.
-        ...(creditBatch.name?.trim() ? [{ label: "Code", value: creditBatch.code }] : []),
+        ...(creditBatchName(creditBatch) ? [{ label: "Code", value: creditBatch.code }] : []),
         { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
         { label: "Start date", value: formatDate(creditBatch.startDate) },

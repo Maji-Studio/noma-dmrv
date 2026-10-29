@@ -174,7 +174,7 @@ export function CreditBatchListRow({
               // The link navigates itself; the row's own click must not push a second time.
               onClick={(event) => event.stopPropagation()}
               aria-label={`Open credit batch ${accessibleName}`}
-              title={named ? creditBatch.code : undefined}
+              title={named ? accessibleName : undefined}
               className={cn(
                 "cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1",
                 named ? "min-w-0 truncate" : "shrink-0",
