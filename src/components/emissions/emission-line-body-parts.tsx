@@ -194,11 +194,12 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
  * caption line that wraps, then the upload panel. Until the file names load
  * the entry's own count stands in, so the slot never shows an empty bar.
  */
-export function EntryEvidence({ entry, scope, actions, className }: {
+export function EntryEvidence({ entry, scope, actions, className, readOnly = false }: {
   entry: EmissionEntry;
   scope: EmissionBatchScope;
   actions: ReturnType<typeof useEntryActions>;
   className?: string;
+  readOnly?: boolean;
 }) {
   const { files, countText } = useEntryFiles(entry);
   const missing = entry.documentCount === 0;
@@ -235,7 +236,7 @@ export function EntryEvidence({ entry, scope, actions, className }: {
             {countText}
           </span>
         )}
-        {missing && !actions.addingFile && (
+        {missing && !readOnly && !actions.addingFile && (
           <QuietAction onClick={actions.startAddFile} className="min-h-24 body-caption">Add file</QuietAction>
         )}
         {entry.note && <span className="min-w-0">{entry.note}</span>}

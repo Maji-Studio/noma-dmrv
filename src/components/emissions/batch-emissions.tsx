@@ -66,9 +66,11 @@ function batchKpis(lines: EmissionLine[], timeZone: string, today: string): Batc
 interface BatchEmissionsProps {
   facilityId: string;
   batch: EmissionBatch;
+  /** The credit batch page is read only: entries and comments show, nothing can be added, edited or deleted. */
+  readOnly?: boolean;
 }
 
-export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
+export function BatchEmissions({ facilityId, batch, readOnly = false }: BatchEmissionsProps) {
   const scope: EmissionBatchScope = { facilityId, creditBatchId: batch.creditBatchId };
   const toast = useToast();
   const { timeZone } = useFacilityClock(scope.facilityId);
@@ -175,6 +177,7 @@ export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
               filterLabel={lineChipLabel(filter)}
               onClearFilter={() => setFilter(null)}
               actions={{
+                readOnly,
                 toggle: toggleLine,
                 form: (line, mode) => setForm({ componentId: line.componentId, mode }),
                 comment: (line) => {

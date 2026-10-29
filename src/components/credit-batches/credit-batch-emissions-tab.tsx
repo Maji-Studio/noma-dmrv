@@ -10,7 +10,7 @@ import { TemplatePermissionProvider } from "@/components/emissions/template-perm
 import { useCreditBatchPage } from "./credit-batch-page-context";
 
 export function CreditBatchEmissionsTab() {
-  const { batch, canManage } = useCreditBatchPage();
+  const { batch, canManage, readOnly } = useCreditBatchPage();
   return (
     // No tab panel frame: the counts and the component table bring their own, as Activities does.
     <div data-testid="credit-batch-emissions-tab" className="min-w-0">
@@ -18,6 +18,7 @@ export function CreditBatchEmissionsTab() {
         <BatchEmissions
           key={batch.id}
           facilityId={batch.facilityId}
+          readOnly={!!readOnly}
           batch={{ creditBatchId: batch.id, code: batch.code, startDate: batch.startDate, endDate: batch.endDate }}
         />
       </TemplatePermissionProvider>
