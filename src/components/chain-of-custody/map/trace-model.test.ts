@@ -13,7 +13,7 @@ import {
 import {
   buildTraceModel,
   groupDrawnLegs,
-  litKm,
+  litKmRange,
   recordLegs,
   restingLighting,
   splitWetDry,
@@ -83,27 +83,27 @@ describe("groupDrawnLegs", () => {
   });
 });
 
-describe("litKm", () => {
-  it("carries only the km of the grouped legs that are lit", () => {
+describe("litKmRange", () => {
+  it("shows the stored distance of only the lit legs on a shared road", () => {
     const base = batchGeo();
-    const model = batchModel({
-      legs: [
-        base.legs[2]!,
-        { ...base.legs[3]!, distanceKm: 430 },
-      ],
-    });
+    const model = batchModel({ legs: [base.legs[2]!, { ...base.legs[3]!, distanceKm: 430 }] });
     const [drawn] = groupDrawnLegs(model.plottable.values());
     expect(drawn!.legIds).toEqual(["out-1", "out-1-layer-2"]);
-    expect(litKm(drawn!, new Set(["out-1-layer-2"]))).toBe(430);
-    expect(litKm(drawn!, new Set(["out-1"]))).toBe(420);
-    expect(litKm(drawn!, new Set(["out-1", "out-1-layer-2"]))).toBe(850);
+    expect(litKmRange(drawn!, new Set(["out-1-layer-2"]))).toEqual({ min: 430, max: 430 });
+    expect(litKmRange(drawn!, new Set(["out-1"]))).toEqual({ min: 420, max: 420 });
   });
 
-  it("counts a repeated stored distance once", () => {
-    const [drawn] = groupDrawnLegs(batchModel().plottable.values());
+  it("gives a range, never a sum, when the lit legs on one road disagree", () => {
+    const base = batchGeo();
+    const model = batchModel({ legs: [base.legs[2]!, { ...base.legs[3]!, distanceKm: 430 }] });
+    const [drawn] = groupDrawnLegs(model.plottable.values());
+    expect(litKmRange(drawn!, new Set(drawn!.legIds))).toEqual({ min: 420, max: 430 });
+  });
+
+  it("is a single value when the lit legs agree, and null when none is lit", () => {
     const outbound = groupDrawnLegs(batchModel().plottable.values()).find((leg) => leg.legIds.length === 2)!;
-    expect(drawn).toBeTruthy();
-    expect(litKm(outbound, new Set(outbound.legIds))).toBe(420);
+    expect(litKmRange(outbound, new Set(outbound.legIds))).toEqual({ min: 420, max: 420 });
+    expect(litKmRange(outbound, new Set())).toBeNull();
   });
 });
 

@@ -647,6 +647,7 @@ export function TraceabilityPage() {
           runId={selectedRunId}
           nodes={batchNodes}
           edges={batchEdges}
+          lineages={batchLineages ?? []}
           onTrace={drillDownToApplication}
         />
       );

@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/ui";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
 import { useCreditBatchChainGeo } from "@/hooks/use-chain-of-custody";
 import { useRouteGeometries } from "@/hooks/use-geo";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { lineageIdsByApplication } from "./trace-lineage";
 import { buildTraceModel } from "./trace-model";
 import { TraceMapView } from "./trace-map-view";
 import { resolveLegEndpoints } from "./viewer-utils";
@@ -21,11 +23,13 @@ export interface TraceMapProps {
   runId: string | null;
   nodes: Node[];
   edges: Edge[];
+  /** The batch's application lineages: each application's own chain. */
+  lineages: ChainOfCustodyData[];
   /** "Trace rollback": drill the batch into one application. */
   onTrace: (applicationId: string) => void;
 }
 
-export function TraceMap({ batchId, runId, nodes, edges, onTrace }: TraceMapProps) {
+export function TraceMap({ batchId, runId, nodes, edges, lineages, onTrace }: TraceMapProps) {
   const { data: geo, isLoading, isError, error } = useCreditBatchChainGeo(batchId, runId);
   const plottable = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
@@ -54,5 +58,5 @@ export function TraceMap({ batchId, runId, nodes, edges, onTrace }: TraceMapProp
       </div>
     );
   }
-  return <TraceMapView model={buildTraceModel(nodes, edges, geo)} routeGeometries={routeGeometries} onTrace={onTrace} />;
+  return <TraceMapView model={buildTraceModel(nodes, edges, geo, lineageIdsByApplication(lineages))} routeGeometries={routeGeometries} onTrace={onTrace} />;
 }

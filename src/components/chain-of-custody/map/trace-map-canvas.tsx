@@ -39,7 +39,7 @@ import {
 } from "./viewer-constants";
 import { createSiteMarkerElement } from "./viewer-elements";
 import { chipAnchor, legLineCoordinates } from "./viewer-utils";
-import { litKm, type DrawnLeg, type MapLighting } from "./trace-model";
+import { litKmRange, type DrawnLeg, type MapLighting } from "./trace-model";
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const SAT_TILE_SIZE = 256;
@@ -323,7 +323,7 @@ export default function TraceMapCanvas({
     chipsRef.current = [];
     // One label per pair of endpoints: legs on the same road (product layers,
     // two intakes from one supplier) share it, so labels never pile up.
-    const labels = new Map<string, { anchor: [number, number]; km: number; ends: ChipEntry["ends"] }>();
+    const labels = new Map<string, { anchor: [number, number]; km: { min: number; max: number }; ends: ChipEntry["ends"] }>();
     const features = legs.map((drawn, index) => {
       const { entry, legIds } = drawn;
       const geometryId = legIds.find((id) => routeGeometries?.[id]) ?? entry.leg.id;
@@ -333,11 +333,12 @@ export default function TraceMapCanvas({
         const key = endpointKey(entry.origin, entry.destination);
         const label = labels.get(key) ?? {
           anchor: chipAnchor(coordinates, index),
-          km: 0,
+          km: { min: Infinity, max: -Infinity },
           ends: [[entry.origin.lng, entry.origin.lat], [entry.destination.lng, entry.destination.lat]] as ChipEntry["ends"],
         };
         // Only the grouped legs that are lit count: one product layer selected, one layer's km.
-        label.km += litKm(drawn, lighting.legIds);
+        const range = litKmRange(drawn, lighting.legIds);
+        if (range) label.km = { min: Math.min(label.km.min, range.min), max: Math.max(label.km.max, range.max) };
         labels.set(key, label);
       }
       return {
@@ -349,7 +350,7 @@ export default function TraceMapCanvas({
     for (const { anchor, km, ends } of labels.values()) {
       const chip = document.createElement("div");
       chip.className = "tm-km";
-      chip.textContent = formatDistanceKm(km);
+      chip.textContent = km.min === km.max ? formatDistanceKm(km.min) : `${formatDistanceKm(km.min)} to ${formatDistanceKm(km.max)}`;
       chipsRef.current.push({ marker: new maplibregl.Marker({ element: chip }).setLngLat(anchor).addTo(map), ends });
     }
     syncChipVisibility(map, chipsRef.current);

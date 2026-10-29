@@ -108,6 +108,12 @@ export interface TraceModel {
   geo: ChainOfCustodyGeoData;
   /** Legs with both ends on the map, by leg id. */
   plottable: Map<string, PlottableLeg>;
+  /**
+   * What each application was supplied from (record ids), by application node
+   * id. An application's chain is exactly this; without it the chain falls
+   * back to every ancestor in the graph.
+   */
+  lineageIds: Map<string, Set<string>>;
 }
 
 export const numericCompare = (left: string, right: string) =>
@@ -126,6 +132,7 @@ export function buildTraceModel(
   nodes: Node[],
   edges: Edge[],
   geo: ChainOfCustodyGeoData,
+  lineageIds: Map<string, Set<string>> = new Map(),
 ): TraceModel {
   const geoById = new Map(geo.nodes.map((node) => [node.id, node]));
   const records = new Map<string, TraceRecord>();
@@ -182,7 +189,7 @@ export function buildTraceModel(
       ? { lat: geo.facility.lat, lng: geo.facility.lng }
       : null;
   const plottable = new Map(resolveLegEndpoints(geo).plottable.map((entry) => [entry.leg.id, entry]));
-  return { stages, records, facility, facilityName: geo.facility.name, edges, geo, plottable };
+  return { stages, records, facility, facilityName: geo.facility.name, edges, geo, plottable, lineageIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -220,13 +227,13 @@ export function groupDrawnLegs(plottable: Iterable<PlottableLeg>): DrawnLeg[] {
 }
 
 /**
- * The km a drawn road carries while lit: the stored distance of the grouped
- * legs that are lit, each distinct value once (product layers repeat it), so a
- * selection that lights only one of several legs on a road shows only its km.
+ * The stored km a drawn road shows while lit: the distances of the grouped legs
+ * that are lit. Legs on one road normally agree (product layers repeat it); if
+ * they differ the label is a range, never a sum, because no record holds the sum.
  */
-export function litKm(drawn: DrawnLeg, litLegIds: ReadonlySet<string>): number {
-  const distinct = new Set(drawn.legIds.filter((id) => litLegIds.has(id)).map((id) => drawn.kmById[id]!));
-  return Math.round([...distinct].reduce((sum, km) => sum + km, 0) * KM_ROUNDING) / KM_ROUNDING;
+export function litKmRange(drawn: DrawnLeg, litLegIds: ReadonlySet<string>): { min: number; max: number } | null {
+  const values = drawn.legIds.filter((id) => litLegIds.has(id)).map((id) => drawn.kmById[id]!);
+  return values.length === 0 ? null : { min: Math.min(...values), max: Math.max(...values) };
 }
 
 /** Key of a stored distance: the same road with the same km counts once. */

@@ -52,7 +52,8 @@ function ancestorsOf(model: TraceModel, nodeId: string): Set<string> {
 export function chainTo(model: TraceModel, endId: string): TraceChain | null {
   const end = model.records.get(endId);
   if (!end) return null;
-  const upstream = ancestorsOf(model, endId);
+  // An application's chain is what it was supplied from; other ends take every ancestor.
+  const upstream = model.lineageIds.get(endId) ?? ancestorsOf(model, endId);
   const steps = [...upstream]
     .map((id) => model.records.get(id))
     .filter((record): record is TraceRecord => record != null)
