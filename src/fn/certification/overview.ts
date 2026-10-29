@@ -62,7 +62,7 @@ import {
   resolveScopeForRemoval,
 } from "./certify-context-core";
 
-import { uncoveredProductionRuns } from "@/lib/credit-batches/open-items";
+import { heldMissingRuns } from "@/lib/credit-batches/open-items";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 
@@ -111,7 +111,7 @@ export interface CreditBatchHealthSummary {
 export interface RemovalMissingProductionRuns {
   creditBatchId: string;
   creditBatchCode: string;
-  runs: { id: string; code: string }[];
+  runs: { id: string; code: string; canAdd: boolean }[];
 }
 
 // One removal's place in the Removals hub: its identity, member batches, latest
@@ -193,13 +193,12 @@ async function buildRemovalPreflightSummary(
   const missingProductionRuns = ctx.memberBatches.flatMap((batch) => {
     const missing = missingByBatch.get(batch.id);
     // A Sent batch keeps its own late-run Check; this notice is for the gap before sending.
-    if (!missing?.heldRemovalCodes.length || missing.sentRemovalCodes.length) return [];
-    const runs = uncoveredProductionRuns(missing);
+    const runs = missing ? heldMissingRuns(missing) : [];
     if (runs.length === 0) return [];
     return [{
       creditBatchId: batch.id,
       creditBatchCode: batch.code,
-      runs: runs.map((run) => ({ id: run.id, code: run.code })),
+      runs: runs.map((run) => ({ id: run.id, code: run.code, canAdd: run.heldByRemovalCode === null })),
     }];
   });
   const facts = toRemovalReadinessFacts(ctx);

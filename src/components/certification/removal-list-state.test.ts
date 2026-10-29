@@ -36,7 +36,7 @@ function enrichment(
     startedOn: "2026-07-01",
     completedOn: "2026-07-31",
     memberBatchCodes: [`${id}-enriched`],
-    missingProductionRuns: [{ creditBatchId: `${id}-batch`, creditBatchCode: `${id}-enriched`, runs: [{ id: "run-1", code: "RUN-1" }] }],
+    missingProductionRuns: [{ creditBatchId: `${id}-batch`, creditBatchCode: `${id}-enriched`, runs: [{ id: "run-1", code: "RUN-1", canAdd: true }] }],
     externalId: null,
     version: null,
     local: null,

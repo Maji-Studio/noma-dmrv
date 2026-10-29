@@ -74,7 +74,7 @@ describe("credit batch page to-dos", () => {
   it("links the run code of a missing-run Check outside its Add in Edit button", async () => {
     harness.loadTodos.mockResolvedValue({ success: true, data: { ...TODOS, blocking: [], check: [{
       id: "missing-production-run:run-1", productionRun: { id: "run-1", code: "RUN-1" },
-      title: "RUN-1 is not in this credit batch yet", detail: "Its emissions are not counted.",
+      title: "RUN-1 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", detail: "Its emissions are not counted.",
       target: { tab: "overview", rowId: "batch-details" },
     }] } });
     renderPage();
@@ -87,7 +87,7 @@ describe("credit batch page to-dos", () => {
   it("offers Open Emissions, not Add in Edit, for a Sent batch's late run", async () => {
     harness.loadTodos.mockResolvedValue({ success: true, data: { ...TODOS, blocking: [], check: [{
       id: "late-production-run:run-1", productionRun: { id: "run-1", code: "RUN-1" },
-      title: "RUN-1 was recorded after RM-9 was sent",
+      title: "RUN-1 was recorded after RM-9 was sent", titleAfterCode: " was recorded after RM-9 was sent",
       detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 10, 2026.",
       target: { tab: "emissions" },
     }] } });

@@ -26,6 +26,7 @@ describe("CreditBatchMissingRunsNotice", () => {
     expect(screen.getByText("1 completed run is not in this credit batch yet")).toBeTruthy();
     expect(screen.getByRole("link", { name: "RUN-1" }).getAttribute("href")).toContain("run-1");
     expect(screen.getByRole("status").textContent).toContain("Its emissions are not counted.");
+    expect(screen.getByRole("status").textContent).not.toContain("Add it in Edit.");
     fireEvent.click(screen.getByRole("button", { name: "Add in Edit" }));
     expect(onEdit).toHaveBeenCalledOnce();
   });
@@ -38,6 +39,30 @@ describe("CreditBatchMissingRunsNotice", () => {
     expect(screen.getByRole("status").textContent).toContain("An admin can add them in Edit.");
   });
 
+  it("tells an admin what to do when Edit is not available yet", () => {
+    render(<CreditBatchMissingRunsNotice runs={RUNS} facilityId="facility-1" canManage />);
+    expect(screen.getByRole("status").textContent).toContain("Their emissions are not counted. Add them in Edit.");
+  });
+
+  it("warns an admin about a same-day Emissions entry", () => {
+    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntry: true }]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
+    expect(screen.getByRole("status").textContent).toContain(
+      "Its emissions are not counted. If an Emissions entry already records its emissions, delete it when you add the run.",
+    );
+  });
+
+  it("counts only the runs with a same-day entry in the same-day sentence", () => {
+    render(<CreditBatchMissingRunsNotice runs={[{ ...RUNS[0], sameDayEntry: true }, RUNS[1]]} facilityId="facility-1" canManage onEdit={vi.fn()} />);
+    const text = screen.getByRole("status").textContent!;
+    expect(text).toContain("If an Emissions entry already records its emissions, delete it when you add the run.");
+    expect(text).not.toContain("add the runs");
+  });
+
+  it("carries the same-day flag from the to-dos", () => {
+    expect(missingRunsFromTodos([{ id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], sameDayEntry: true }]))
+      .toEqual([{ ...RUNS[0], sameDayEntry: true }]);
+  });
+
   it("shows nothing without missing runs", () => {
     const { container } = render(<CreditBatchMissingRunsNotice runs={[]} facilityId="facility-1" canManage />);
     expect(container.textContent).toBe("");
@@ -45,8 +70,8 @@ describe("CreditBatchMissingRunsNotice", () => {
 });
 
 const LATE = [
-  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], title: "RUN-1 was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 10, 2026." },
-  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-2`, productionRun: RUNS[1], title: "RUN-2 was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 11, 2026." },
+  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-1`, productionRun: RUNS[0], title: "RUN-1 was recorded after RM-9 was sent", titleAfterCode: " was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 10, 2026." },
+  { id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}run-2`, productionRun: RUNS[1], title: "RUN-2 was recorded after RM-9 was sent", titleAfterCode: " was recorded after RM-9 was sent", detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 11, 2026." },
   { id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}run-3`, productionRun: { id: "run-3", code: "RUN-3" }, title: "RUN-3 is not in this credit batch yet" },
 ];
 
@@ -69,6 +94,16 @@ describe("CreditBatchLateRunsNotice", () => {
     expect(open).toContain("/credit-batches/batch-1");
     expect(open).toContain("tab=emissions");
     expect(screen.queryByRole("button", { name: "Add in Edit" })).toBeNull();
+  });
+
+  it("links the code and keeps the rest of the title from titleAfterCode", () => {
+    render(<CreditBatchLateRunsNotice
+      runs={[{ ...RUNS[0], title: "RUN-1 cannot be added to this credit batch", titleAfterCode: " cannot be added to this credit batch" }]}
+      creditBatchId="batch-1"
+      facilityId="facility-1"
+    />);
+    expect(screen.getByTestId("credit-batch-late-run").textContent).toContain("RUN-1 cannot be added to this credit batch.");
+    expect(screen.getByRole("link", { name: "RUN-1" })).toBeTruthy();
   });
 
   it("shows nothing without late runs", () => {

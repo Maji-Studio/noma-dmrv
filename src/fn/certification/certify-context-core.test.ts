@@ -162,7 +162,7 @@ it("suppresses correction projections while compiling the shared comparison", as
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, expect.objectContaining({ loadCorrection: undefined, ownedRemovalId: scope.removalId ?? undefined }));
 });
 
-it("projects only held batches with uncovered runs into the Removal summary", async () => {
+it("projects all held missing runs with Add run eligibility into the Removal summary", async () => {
   const removal = { id: scope.removalId, code: "RM-1", metadata: null, updatedAt: new Date() };
   const memberBatches = ["held", "sent", "empty", "covered"].map(id => ({
     ...scope.memberBatches[0], id, code: `CB-${id}`,
@@ -170,9 +170,9 @@ it("projects only held batches with uncovered runs into the Removal summary", as
   vi.mocked(resolveScopeForRemoval).mockResolvedValue({ ...scope, removal, memberBatches } as RemovalScope);
   vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facts(fixture as GhgEntryTemplate));
   vi.mocked(listRemovalsForFacility).mockResolvedValue([removal] as never);
-  const run = { id: "run-1", code: "PR-1", startDate: "2026-09-09", createdAt: new Date("2026-10-01") };
+  const run = { id: "run-1", code: "PR-1", startDate: "2026-09-09", createdAt: new Date("2026-10-01"), heldByRemovalCode: null as string | null };
   const missing = { sentRemovalCodes: [], heldRemovalCodes: [removal.code], batchStartDate: "2026-09-01",
-    runs: [run], manualEntries: [] };
+    runs: [run, { ...run, id: "blocked", code: "PR-2", heldByRemovalCode: "RM-3" }], manualEntries: [] };
   vi.mocked(loadCreditBatchesMissingProductionRuns).mockResolvedValueOnce(new Map([
     ["held", missing],
     ["sent", { ...missing, sentRemovalCodes: ["RM-2"], heldRemovalCodes: [] }],
@@ -183,7 +183,13 @@ it("projects only held batches with uncovered runs into the Removal summary", as
   expect(result.success).toBe(true);
   if (!result.success) throw new Error(result.error);
   expect(result.data.removals[0].missingProductionRuns).toEqual([
-    { creditBatchId: "held", creditBatchCode: "CB-held", runs: [{ id: run.id, code: run.code }] },
+    { creditBatchId: "held", creditBatchCode: "CB-held", runs: [
+      { id: run.id, code: run.code, canAdd: true }, { id: "blocked", code: "PR-2", canAdd: false },
+    ] },
+    // A same-day entry keeps the addable run and clears the refused one.
+    { creditBatchId: "covered", creditBatchCode: "CB-covered", runs: [
+      { id: run.id, code: run.code, canAdd: true },
+    ] },
   ]);
   expect(loadCreditBatchesMissingProductionRuns).toHaveBeenCalledExactlyOnceWith(ctx, memberBatches.map(batch => batch.id));
 });

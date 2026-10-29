@@ -39,16 +39,21 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
 export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
+/** Emissions Checks for Sent batches' late runs and held runs that Add run refuses. */
 export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 
 export interface CreditBatchOpenItem {
   id: string;
   title: string;
+  /** The title text after the linked production run code. */
+  titleAfterCode?: string;
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
   /** The run a missing-run Check names, so other surfaces can link its code. */
   productionRun?: { id: string; code: string };
+  /** Missing-run Check only: a later Emissions entry dated the run's day may already record its emissions. */
+  sameDayEntry?: boolean;
   /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
@@ -143,12 +148,58 @@ function removalCorrectionItem(
   };
 }
 
+function hasSameDayEntry(missing: CreditBatchMissingProductionRuns, entryDate: string, runCreatedAt: Date): boolean {
+  return missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > runCreatedAt);
+}
+
 /** Runs whose emissions have not already been reported by a later manual entry. */
 export function uncoveredProductionRuns(missing: CreditBatchMissingProductionRuns) {
-  return missing.runs.filter(run => {
+  return missing.runs.filter(run => !hasSameDayEntry(missing,
+    lateRunEntryDate(run.startDate, missing.batchStartDate), run.createdAt));
+}
+
+export interface HeldMissingRun {
+  id: string;
+  code: string;
+  entryDate: string;
+  heldByRemovalCode: string | null;
+  sameDayEntry: boolean;
+}
+
+/** A held batch's fitting runs: addable runs stay; refused runs clear after a later same-day entry. */
+export function heldMissingRuns(missing: CreditBatchMissingProductionRuns): HeldMissingRun[] {
+  if (!missing.heldRemovalCodes.length || missing.sentRemovalCodes.length) return [];
+  return missing.runs.map(run => {
     const entryDate = lateRunEntryDate(run.startDate, missing.batchStartDate);
-    return !missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt);
-  });
+    return {
+      id: run.id, code: run.code, entryDate, heldByRemovalCode: run.heldByRemovalCode,
+      sameDayEntry: hasSameDayEntry(missing, entryDate, run.createdAt),
+    };
+  }).filter(run => run.heldByRemovalCode === null || !run.sameDayEntry);
+}
+
+export function missingRunsCountedSentence(count: number): string {
+  return count === 1 ? "Its emissions are not counted." : "Their emissions are not counted.";
+}
+
+export function missingRunsMemberSentence(count: number): string {
+  return count === 1 ? "An admin can add it in Edit." : "An admin can add them in Edit.";
+}
+
+export function missingRunsAdminSentence(count: number): string {
+  return count === 1 ? "Add it in Edit." : "Add them in Edit.";
+}
+
+export function refusedRunsSentence(codes: readonly string[]): string {
+  return codes.length === 1
+    ? `${codes[0]} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
+    : `${joinWithAnd(codes)} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
+}
+
+export function sameDayEntrySentence(count: number): string {
+  return count === 1
+    ? "If an Emissions entry already records its emissions, delete it when you add the run."
+    : "If an Emissions entry already records their emissions, delete it when you add the runs.";
 }
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
@@ -161,24 +212,44 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     const codes = joinWithAnd(late.sentRemovalCodes);
     for (const run of uncoveredProductionRuns(late)) {
       const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
+      const titleAfterCode = ` was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`;
       check.push({
         id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
         productionRun: { id: run.id, code: run.code },
-        title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
+        title: `${run.code}${titleAfterCode}`,
+        titleAfterCode,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { tab: "emissions" },
       });
     }
   } else if (late?.heldRemovalCodes.length) {
     const codes = joinWithAnd(late.heldRemovalCodes);
-    for (const run of uncoveredProductionRuns(late)) {
+    for (const run of heldMissingRuns(late)) {
+      if (run.heldByRemovalCode !== null) {
+        const titleAfterCode = " cannot be added to this credit batch";
+        check.push({
+          id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
+          productionRun: { id: run.id, code: run.code },
+          title: `${run.code}${titleAfterCode}`,
+          titleAfterCode,
+          detail: `Its biochar is in an Application that ${run.heldByRemovalCode} already holds. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(run.entryDate)}.`,
+          target: { tab: "emissions" },
+        });
+        continue;
+      }
+      const titleAfterCode = " is not in this credit batch yet";
+      const sameDayDetail = run.sameDayEntry
+        ? ` If the Emissions entry dated ${formatCalendarDate(run.entryDate)} already records them, delete it when you add the run.`
+        : "";
       check.push({
         id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
         productionRun: { id: run.id, code: run.code },
-        title: `${run.code} is not in this credit batch yet`,
+        title: `${run.code}${titleAfterCode}`,
+        titleAfterCode,
+        ...(run.sameDayEntry ? { sameDayEntry: true } : {}),
         detail: canManage
-          ? `Its emissions are not counted. Add it in Edit before ${codes} ${late.heldRemovalCodes.length === 1 ? "is" : "are"} sent.`
-          : "Its emissions are not counted. An admin can add it in Edit.",
+          ? `Its emissions are not counted in ${codes}.${sameDayDetail}`
+          : `Its emissions are not counted in ${codes}. ${missingRunsMemberSentence(1)}`,
         target: canManage ? { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW } : null,
       });
     }
