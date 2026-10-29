@@ -274,15 +274,18 @@ record. The hook selects only a facility available in context, through the conte
 setter, and holds the linked sheet closed until the selection matches. A record in
 a facility outside that list is shown where it is: the hook reads the facility by
 id (org-scoped) and returns `readOnly` when it is archived, or when that read fails
-(fail closed). The page passes `linkedRecordReadOnlyReason`
-(`src/lib/linked-record-read-only.ts`) as the sheet's `readOnlyReason`, so
-`EntitySideSheet` stays in view mode with no Edit, no lock chip and no lock line,
-and an edit link opens view. The sheet stays mounted over the "Select a facility"
-empty state too, opening only for such a link. The archived facility never becomes
-the working facility, and server writes stay refused (#1499). Covered: orders,
-feedstock intakes, deliveries, biochar products, lab Samples, applications (read by
-id with `includeArchived`) and reactors. Not covered yet (#1502): production runs
-(the by-id read refuses archived runs), credit batches and storage bins.
+or cannot run (fail closed, with a retry on the read). The page passes
+`linkedRecordReadOnly` (`src/lib/linked-record-read-only.ts`) as the sheet's
+`readOnly` and to its section builders, so `EntitySideSheet` stays in view mode
+with no Edit, no lock chip and no lock line, an edit link opens view, and the
+sections drop their write actions (distance refresh, uploads, sync). The sheet stays
+mounted over the "Select a facility" empty state too, opening only for such a link.
+The archived facility never becomes the working facility, and server writes stay
+refused (#1499). Orders, feedstock intakes, deliveries, biochar products, lab
+Samples, applications (read by id with `includeArchived`), reactors and production
+runs pass the state. A production run still does not open, because
+`getProductionRunById` filters archived runs. Gaps:
+[open-questions.md](./open-questions.md#records-in-archived-facilities-1502).
 
 ### Quick-Add and cascading selects
 

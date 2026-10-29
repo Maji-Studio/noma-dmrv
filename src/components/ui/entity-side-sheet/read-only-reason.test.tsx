@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { EntitySideSheet } from "./index";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
@@ -13,11 +14,13 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   } };
 });
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
+  Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => <button onClick={onClick}>{children}</button>,
 }));
 vi.mock("@/components/ui/modal", () => ({ Modal: () => null }));
 vi.mock("@/components/ui/notice", () => ({
-  Notice: ({ children }: { children: ReactNode }) => <p data-testid="archived">{children}</p>,
+  Notice: ({ children, tone, action }: { children: ReactNode; tone: string; action?: ReactNode }) => (
+    <div data-testid="archived" data-tone={tone}>{children}{action}</div>
+  ),
 }));
 
 let renderer: ReactTestRenderer;
@@ -30,11 +33,11 @@ afterEach(() => act(() => renderer?.unmount()));
 
 const SECTIONS = [{ title: "Order information", fields: [{ label: "Order date", value: "29 Oct 2026" }] }];
 
-function renderSheet(mode: "view" | "edit" | "create", readOnlyReason?: string) {
+function renderSheet(mode: "view" | "edit" | "create", readOnly?: SheetReadOnly) {
   act(() => {
     renderer = create(
       <EntitySideSheet open mode={mode} onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
-        editLabel="Edit order" sections={SECTIONS} readOnlyReason={readOnlyReason}
+        editLabel="Edit order" sections={SECTIONS} readOnly={readOnly}
         titleBadge={<span data-testid="lock-chip">Open</span>}
         viewModeNotice={<p data-testid="lock-line">Lock line</p>}
         viewModeChildren={<p data-testid="used-by">Used by</p>}>
@@ -50,12 +53,14 @@ function renderSheet(mode: "view" | "edit" | "create", readOnlyReason?: string) 
   };
 }
 
-const NOTICE = "Mafinga is archived, so this order is read-only.";
+const MESSAGE = "Mafinga is archived, so this order is read-only.";
+const NOTICE: SheetReadOnly = { tone: "info", message: MESSAGE };
 
-describe("EntitySideSheet readOnlyReason", () => {
+describe("EntitySideSheet readOnly", () => {
   it("shows the notice first and drops Edit and the title chip, keeping Close", () => {
     const { buttons, notice, chip } = renderSheet("view", NOTICE);
-    expect(notice.map((node) => node.props.children)).toEqual([NOTICE]);
+    expect(notice.map((node) => node.props["data-tone"])).toEqual(["info"]);
+    expect(notice[0].findByType("div").children).toContain(MESSAGE);
     expect(chip).toHaveLength(0);
     expect(buttons).toEqual(["Close"]);
     const main = renderer.root.findByType("main");
@@ -86,5 +91,14 @@ describe("EntitySideSheet readOnlyReason", () => {
 
   it("does not apply to create", () => {
     expect(renderSheet("create", NOTICE).form).toHaveLength(1);
+  });
+
+  it("shows a failed check as a warning with Try again wired to the retry", () => {
+    const run = vi.fn();
+    const { buttons, notice } = renderSheet("view", { tone: "warning", message: "Could not be checked.", retry: { run, running: false } });
+    expect(notice.map((node) => node.props["data-tone"])).toEqual(["warning"]);
+    expect(buttons).toEqual(["Try again", "Close"]);
+    act(() => renderer.root.findAll((node) => node.type === "button" && node.props.children === "Try again")[0].props.onClick());
+    expect(run).toHaveBeenCalledOnce();
   });
 });

@@ -12,7 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -584,6 +584,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "application");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
@@ -602,9 +603,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       canEdit={fieldsEditable && isRecordEditable(sheetLock)}
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       editLabel="Edit application"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "application")}
+      readOnly={sheetReadOnly}
       size="wide"
-      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
+      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption, readOnly: !!sheetReadOnly }) : undefined}
     >
       <ApplicationForm
         key={sideSheetEntity?.id ?? "create"}

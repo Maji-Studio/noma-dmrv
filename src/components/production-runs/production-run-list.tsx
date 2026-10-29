@@ -34,7 +34,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -522,6 +522,7 @@ export function ProductionRunList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "production run");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!facilityId || !!linkedRecord.readOnly;
@@ -538,7 +539,7 @@ export function ProductionRunList() {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit production run"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "production run")}
+      readOnly={sheetReadOnly}
       size="wide"
       sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
     >

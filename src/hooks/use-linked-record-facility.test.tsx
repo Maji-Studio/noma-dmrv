@@ -14,12 +14,13 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => conte
 // The by-id facility read the hook runs for a facility outside the selectable list.
 const lookup = vi.hoisted(() => ({
   calls: [] as Array<{ id: string; enabled: boolean; organizationId: string | null | undefined }>,
-  result: { data: undefined, isError: false } as { data?: { id: string; name: string; archivedAt: Date | null }; isError: boolean },
+  refetch: vi.fn(),
+  result: { data: undefined, isError: false } as { data?: { id: string; name: string; archivedAt: Date | null }; isError: boolean; isFetching?: boolean; refetch?: () => void },
 }));
 vi.mock("@/hooks/use-facilities", () => ({
   useFacility: (id: string, enabled: boolean, organizationId?: string | null) => {
     lookup.calls.push({ id, enabled, organizationId });
-    return enabled ? lookup.result : { data: undefined, isError: false };
+    return enabled ? { refetch: lookup.refetch, isFetching: false, ...lookup.result } : { data: undefined, isError: false, refetch: lookup.refetch, isFetching: false };
   },
 }));
 
@@ -29,6 +30,8 @@ beforeEach(() => {
   context.isLoading = false;
   context.setFacilityId.mockClear();
   lookup.calls = [];
+  lookup.refetch.mockClear();
+  context.activeOrganizationId = "org-a";
   lookup.result = { data: undefined, isError: false };
 });
 afterEach(cleanup);
@@ -113,7 +116,19 @@ describe("useLinkedRecordFacility", () => {
   it("fails closed: a facility read that errors opens the record read only", () => {
     lookup.result = { data: undefined, isError: true };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "unknown-facility" }));
-    expect(result.current).toEqual({ ready: true, readOnly: { reason: "unchecked", facilityId: "unknown-facility" } });
+    expect(result.current.ready).toBe(true);
+    expect(result.current.readOnly).toMatchObject({ reason: "unchecked", facilityId: "unknown-facility", retrying: false });
+    expect(context.setFacilityId).not.toHaveBeenCalled();
+    if (result.current.readOnly?.reason !== "unchecked") throw new Error("expected unchecked");
+    result.current.readOnly.retry();
+    expect(lookup.refetch).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed without an active organization, since nothing can check the facility", () => {
+    context.activeOrganizationId = null;
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "unknown-facility" }));
+    expect(result.current.ready).toBe(true);
+    expect(result.current.readOnly).toMatchObject({ reason: "unchecked", facilityId: "unknown-facility" });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 

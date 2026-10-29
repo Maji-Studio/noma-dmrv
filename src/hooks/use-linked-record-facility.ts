@@ -10,7 +10,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
  */
 export type LinkedRecordReadOnly =
   | { reason: "archived"; facilityId: string; facilityName: string }
-  | { reason: "unchecked"; facilityId: string };
+  | { reason: "unchecked"; facilityId: string; retry: () => void; retrying: boolean };
 
 /** What a list page needs to open a linked record's sheet. */
 export type LinkedRecordFacility = {
@@ -65,8 +65,8 @@ export function useLinkedRecordFacility(
       ? facilityRead.archivedAt != null
         ? { reason: "archived", facilityId: facilityRead.id, facilityName: facilityRead.name }
         : null
-      : lookup.isError
-        ? { reason: "unchecked", facilityId: recordFacilityId }
+      : lookup.isError || activeOrganizationId === null
+        ? { reason: "unchecked", facilityId: recordFacilityId, retry: () => void lookup.refetch(), retrying: lookup.isFetching }
         : null;
   // A facility that cannot be selected (archived, or beyond the loaded list)
   // shows the record where it is, once its read settles. An archived facility,

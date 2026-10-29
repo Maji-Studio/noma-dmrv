@@ -10,7 +10,7 @@ import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -471,6 +471,7 @@ export function BiocharProductList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "biochar product");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
@@ -486,7 +487,7 @@ export function BiocharProductList() {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit product"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, displaySideSheet?.entity, "biochar product")}
+      readOnly={sheetReadOnly}
       sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
     >
       <BiocharProductForm

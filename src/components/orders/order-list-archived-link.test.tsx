@@ -12,7 +12,7 @@ const ORDER = { id: "order-1", code: "OR-001", version: 3, facilityId: ARCHIVED_
 
 const harness = vi.hoisted(() => ({
   context: { activeOrganizationId: "org-a", facilityId: "f1" as string | null, facilities: [{ id: "f1" }], isLoading: false, setFacilityId: vi.fn() },
-  sheet: null as null | { open: boolean; mode: string; title: string; readOnlyReason?: string; canEdit?: boolean },
+  sheet: null as null | { open: boolean; mode: string; title: string; readOnly?: { tone: string; message: string }; canEdit?: boolean },
 }));
 
 vi.mock("@/hooks/use-facilities", async (importOriginal) => ({
@@ -56,8 +56,8 @@ vi.mock("@/components/ui/data-table", () => ({
   DataTable: Object.assign(() => null, { Toolbar: () => null, Controls: () => null, Search: () => null, FilterSelect: () => null, ColumnVisibility: () => null, Pagination: () => null }),
 }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({
-  EntitySideSheet: (props: { open: boolean; mode: string; title: string; readOnlyReason?: string; canEdit?: boolean }) => {
-    harness.sheet = { open: props.open, mode: props.mode, title: props.title, readOnlyReason: props.readOnlyReason, canEdit: props.canEdit };
+  EntitySideSheet: (props: { open: boolean; mode: string; title: string; readOnly?: { tone: string; message: string }; canEdit?: boolean }) => {
+    harness.sheet = { open: props.open, mode: props.mode, title: props.title, readOnly: props.readOnly, canEdit: props.canEdit };
     return null;
   },
 }));
@@ -72,12 +72,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const REASON = "Mafinga is archived, so this order is read-only.";
+const REASON = { tone: "info", message: "Mafinga is archived, so this order is read-only." };
 
 describe("Order link into an archived facility", () => {
   it("opens the order read only over the working facility's list", () => {
     render(<OrderList />);
-    expect(harness.sheet).toMatchObject({ open: true, mode: "view", title: ORDER.code, readOnlyReason: REASON });
+    expect(harness.sheet).toMatchObject({ open: true, mode: "view", title: ORDER.code, readOnly: REASON });
     expect(harness.context.setFacilityId).not.toHaveBeenCalled();
   });
 
@@ -86,7 +86,7 @@ describe("Order link into an archived facility", () => {
     harness.context.facilities = [];
     const { getByText } = render(<OrderList />);
     expect(getByText("Select a facility")).toBeTruthy();
-    expect(harness.sheet).toMatchObject({ open: true, mode: "view", title: ORDER.code, readOnlyReason: REASON });
+    expect(harness.sheet).toMatchObject({ open: true, mode: "view", title: ORDER.code, readOnly: REASON });
     expect(harness.context.setFacilityId).not.toHaveBeenCalled();
   });
 });

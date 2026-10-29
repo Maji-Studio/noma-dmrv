@@ -28,8 +28,11 @@ const STATE_PRESENTATION: Record<
 
 export function ApplicationStorageLocationSync({
   applicationId,
+  readOnly = false,
 }: {
   applicationId: string;
+  /** A read-only sheet shows the status without the register or sync action. */
+  readOnly?: boolean;
 }) {
   const query = useApplicationStorageLocationSync(applicationId);
   const { facilityId } = useFacilityContext();
@@ -68,7 +71,7 @@ export function ApplicationStorageLocationSync({
           label={presentation.label}
           size="small"
         />
-        {view.viewerCanManage && (
+        {view.viewerCanManage && !readOnly && (
           <Button
             variant="weak"
             size="small"

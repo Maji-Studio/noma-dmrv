@@ -31,7 +31,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -576,6 +576,7 @@ export function SampleList({
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "Sample");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
@@ -592,7 +593,7 @@ export function SampleList({
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit Sample"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, displaySideSheet?.entity, "Sample")}
+      readOnly={sheetReadOnly}
       sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity, labReportStatus) : undefined}
     >
       {isResolvingCreateContext ? (

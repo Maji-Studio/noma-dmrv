@@ -27,7 +27,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -555,6 +555,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "feedstock intake");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
@@ -575,13 +576,13 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: true })}
       canEdit={isRecordEditable(sheetLock)}
       editLabel="Edit feedstock"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "feedstock intake")}
+      readOnly={sheetReadOnly}
       sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
         distanceKm: recordedDistance.data?.recordedDistanceKm,
         source: recordedDistance.data?.recordedDistanceSource,
         locationDefaultKm: recordedDistance.data?.currentDistanceKm,
         pending: recordedDistance.isPending,
-      }) : undefined}
+      }, { readOnly: !!sheetReadOnly }) : undefined}
     >
       <FeedstockForm
         lock={sheetLock}

@@ -31,7 +31,7 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnlyReason } from "@/lib/linked-record-read-only";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -286,6 +286,7 @@ export function ReactorList() {
 
   // A link into an archived facility opens its record read only, over the
   // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "reactor");
   // With no working facility only a read-only link opens the sheet; create
   // needs a facility. The sheet stays mounted so it slides in as elsewhere.
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
@@ -298,7 +299,7 @@ export function ReactorList() {
       title={sideSheetTitle}
       subtitle={sideSheetSubtitle}
       editLabel="Edit reactor"
-      readOnlyReason={linkedRecordReadOnlyReason(linkedRecord, sideSheetEntity, "reactor")}
+      readOnly={sheetReadOnly}
       sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
     >
       <ReactorForm
