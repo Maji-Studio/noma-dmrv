@@ -39,6 +39,8 @@ interface FormSectionProps {
   certifyRequired?: boolean;
   /** Saved-state colour for the CERT chip; only meaningful with `certifyRequired`. */
   certifyStatus?: CertFieldStatus;
+  /** Tooltip text naming the missing item; defaults to the generic status wording. */
+  certifyDescription?: string;
   /** Trailing header chrome (e.g. an "Add" button or badge), right-aligned on the label row. */
   actions?: React.ReactNode;
   className?: string;
@@ -60,6 +62,7 @@ export function FormSection({
   hint,
   certifyRequired,
   certifyStatus,
+  certifyDescription,
   actions,
   className,
   icon,
@@ -73,6 +76,7 @@ export function FormSection({
       hint={hint}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
+      certifyDescription={certifyDescription}
       icon={icon}
     >
       {title}

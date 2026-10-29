@@ -953,6 +953,7 @@ export function SampleForm({
       <SampleEvidenceSection
         sample={sample}
         isEditMode={isEditMode}
+        certifyContext={certifyContext}
         deferredAttachments={deferredAttachments}
         onRetryAttachments={onRetryDeferredAttachments}
         onRemoveAttachment={onRemoveDeferredAttachment}

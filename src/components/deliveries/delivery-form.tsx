@@ -30,7 +30,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
-import { resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
+import { savedDeliveryDistanceKm } from "@/lib/calculations/transport-leg";
 import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
@@ -164,14 +164,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
-  const savedDistanceKm = distanceRecord ? resolveDeliveryTransportRoute({
-    distanceKmOverride: distanceRecord.distanceKmOverride,
-    distanceSource: distanceRecord.distanceSource,
-    location: {
-      distanceKm: distanceRecord.recordedDistanceKm ?? null,
-      distanceSource: distanceRecord.recordedDistanceSource ?? null,
-    },
-  }).distanceKm : null;
+  const savedDistanceKm = distanceRecord ? savedDeliveryDistanceKm(distanceRecord) : null;
 
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
   const watchSources = useWatch({ control, name: "sources" });
