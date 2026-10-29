@@ -12,6 +12,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./carbon-viewer.css";
 import "./trace-map.css";
 import * as maplibregl from "maplibre-gl";
+import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
+import { EmptyState } from "@/components/ui";
 import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_MAP_CENTER,
@@ -201,13 +203,28 @@ function token(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
+/** The overlays may take at most this share of the map's width or height. */
+const MAX_PADDING_SHARE = 0.6;
+
+/** Scale the padding down on an axis where it would leave the map no room. */
+function clampPadding(padding: FramePadding, container: HTMLElement): FramePadding {
+  const fit = (before: number, after: number, size: number) => {
+    const scale = Math.min(1, (size * MAX_PADDING_SHARE) / Math.max(1, before + after));
+    return [before * scale, after * scale] as const;
+  };
+  const [left, right] = fit(padding.left, padding.right, container.clientWidth);
+  const [top, bottom] = fit(padding.top, padding.bottom, container.clientHeight);
+  return { top, right, bottom, left };
+}
+
 /**
  * Fly to the points. The map's own padding stays zero (cameraForBounds adds
  * it to the option padding), and a single point frames as a small box so it
  * lands at POINT_ZOOM with the same overlay padding as any other frame.
  */
-function frame(map: maplibregl.Map, points: { lat: number; lng: number }[], padding: FramePadding, animate: boolean) {
+function frame(map: maplibregl.Map, points: { lat: number; lng: number }[], requested: FramePadding, animate: boolean) {
   if (points.length === 0) return;
+  const padding = clampPadding(requested, map.getContainer());
   const bounds = new maplibregl.LngLatBounds();
   for (const point of points) bounds.extend([point.lng, point.lat]);
   const camera = map.cameraForBounds(bounds, { padding, maxZoom: bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < POINT_SPAN_M ? POINT_ZOOM : FIT_MAX_ZOOM });
@@ -397,10 +414,15 @@ export default function TraceMapCanvas({
 
   if (failed) {
     return (
-      <div className="cvm-field flex h-full items-center justify-center px-16 text-center">
-        <span className="body-small text-[var(--color-text-secondary)]">
-          Map unavailable. The browser could not start the map renderer.
-        </span>
+      <div className="cvm-field flex h-full items-center justify-center px-16">
+        <div className="w-full max-w-[520px]">
+          <EmptyState
+            icon={<MapTrifoldIcon size={40} weight="thin" />}
+            title="The map could not start"
+            description="This browser could not start the map renderer. Reload the page or try another browser. The stages are still listed."
+            padding="md"
+          />
+        </div>
       </div>
     );
   }

@@ -232,7 +232,7 @@ tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
   its values (wet first, a Dry figure of "Not recorded" when the kind carries one and it is missing, a "Not recorded: a, b" Notice collecting the other plain gaps, "Trace rollback", "View full
   record" through `recordHref`), Back / Next record by record, the camera
   following, only that chain's legs lit. "Whole batch" returns to the stage
-  list. A record in several chains starts the first one through it (fields first).
+  list. A record in several chains starts the first one through it (fields first). The walk steps through every record upstream of its end, so several intakes and runs appear where they converge; whether to group them is open ([#1485](https://github.com/Maji-Studio/noma-dmrv/issues/1485)).
   Only lit legs carry a km label (one per road, even when several product layers
   share it); each road is drawn once. FIT, + / − and SAT stay. A batch with no
   location at all shows an empty state instead of the map and keeps the list.
@@ -281,7 +281,8 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`,
-  `trace-model.test.ts`, `trace-chains.test.ts`, `trace-map-view.test.tsx`
+  `trace-model.test.ts`, `trace-chains.test.ts`, `trace-map-view.test.tsx`,
+  `trace-record-values.test.tsx`
 
 ## Saved delivery and application provenance
 

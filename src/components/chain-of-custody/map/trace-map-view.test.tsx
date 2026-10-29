@@ -36,7 +36,7 @@ it("starts a chain walk at the supplier from a field and leaves with Whole batch
   render(<TraceMapView model={batchModel()} routeGeometries={undefined} onTrace={vi.fn()} />);
   fireEvent.click(within(panel()).getByRole("button", { name: /Application/ }));
   fireEvent.click(within(panel()).getByRole("button", { name: /Field A/ }));
-  expect(within(panel()).getByText(/01 \/ 06 · to Field A/)).toBeTruthy();
+  expect(within(panel()).getByText(/01 \/ 06 · To Field A/)).toBeTruthy();
   fireEvent.click(within(panel()).getByRole("button", { name: /Next/ }));
   expect(within(panel()).getByText(/02 \/ 06/)).toBeTruthy();
   fireEvent.click(within(panel()).getByRole("button", { name: /Whole batch/ }));

@@ -27,6 +27,13 @@ interface Stat {
   value: string;
 }
 
+/** A missing value reads as the shared placeholder: small, tertiary, regular weight. */
+function valueClass(value: string, present: string): string {
+  return isMissingValueCopy(value)
+    ? "body-small font-normal text-[var(--color-text-tertiary)]"
+    : `${present} text-[var(--color-text-primary)]`;
+}
+
 /** Key figures and the remaining rows, each fact once. */
 function figures(model: TraceModel, record: TraceRecord) {
   const stats: Stat[] = [];
@@ -128,7 +135,12 @@ export function RecordValues({
               )}
             >
               <dt className="body-caption truncate text-[var(--color-text-tertiary)]">{stat.label}</dt>
-              <dd className="body-medium truncate font-medium text-[var(--color-text-primary)]">{stat.value}</dd>
+              <dd
+                className={cn("truncate", valueClass(stat.value, "body-medium font-medium"))}
+                data-empty={isMissingValueCopy(stat.value) || undefined}
+              >
+                {stat.value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -147,7 +159,12 @@ export function RecordValues({
             className="flex items-baseline justify-between gap-12 border-b border-[var(--clr-dark-purple-10)] py-8"
           >
             <dt className="body-caption shrink-0 text-[var(--color-text-tertiary)]">{row.label}</dt>
-            <dd className="body-small min-w-0 text-right text-[var(--color-text-primary)]">{row.value}</dd>
+            <dd
+              className={cn("min-w-0 text-right", valueClass(row.value, "body-small"))}
+              data-empty={isMissingValueCopy(row.value) || undefined}
+            >
+              {row.value}
+            </dd>
           </div>
         ))}
 

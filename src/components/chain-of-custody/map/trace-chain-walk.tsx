@@ -9,7 +9,6 @@
 
 import { ArrowLeftIcon, CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { formatDistanceKm } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { TraceChain } from "./trace-chains";
 import type { TraceModel } from "./trace-model";
@@ -60,8 +59,7 @@ export function TraceChainWalk({
           </div>
         </div>
         <p className="body-caption font-mono uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
-          {pad(stepIndex + 1)} / {pad(chain.steps.length)} · to {chain.end.shortCode}
-          {chain.distanceKm > 0 ? ` · ${formatDistanceKm(chain.distanceKm)} of transport` : ""}
+          {pad(stepIndex + 1)} / {pad(chain.steps.length)} · To {chain.end.shortCode}
         </p>
       </div>
       <ol className="min-h-0 flex-1 overflow-y-auto px-16 py-12">

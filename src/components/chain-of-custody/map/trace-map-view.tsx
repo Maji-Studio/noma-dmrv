@@ -33,15 +33,21 @@ import {
 
 const PANEL_WIDTH_PX = 400;
 /**
+ * Below this viewport width (the `lg` breakpoint) the panel stacks under the
+ * map: with the 240px sidebar, a 400px side panel would leave the map under
+ * 400px wide, and the camera padding no room at all.
+ */
+const SIDE_PANEL_MIN_VIEWPORT_PX = 1024;
+/**
  * The desktop panel plus a 16px gutter: where the map controls and the empty
  * state stop. Tailwind needs the literal, so the classes below spell it
  * `416px`; keep them equal to PANEL_WIDTH_PX + 16.
  */
 const PANEL_CLEARANCE_PX = PANEL_WIDTH_PX + 16;
-const CONTROLS_RIGHT_CLASS = "md:right-[416px]";
+const CONTROLS_RIGHT_CLASS = "lg:right-[416px]";
 /** Phone: every map control is a 44px target (the shared stack is 36px). */
-const PHONE_CONTROL_SIZE_CLASS = "max-md:[&_button]:h-44 max-md:[&_button]:w-44";
-const EMPTY_STATE_RIGHT_PADDING_CLASS = "md:pr-[416px]";
+const PHONE_CONTROL_SIZE_CLASS = "max-lg:[&_button]:h-44 max-lg:[&_button]:w-44";
+const EMPTY_STATE_RIGHT_PADDING_CLASS = "lg:pr-[416px]";
 /** The map frames inside the room the panel leaves: top bar, panel, controls, gutter. */
 const DESKTOP_PADDING = { top: 72, right: PANEL_CLEARANCE_PX + 144, bottom: 56, left: 64 };
 const PHONE_PADDING = { top: 48, right: 56, bottom: 32, left: 32 };
@@ -49,6 +55,7 @@ const PHONE_PADDING = { top: 48, right: 56, bottom: 32, left: 32 };
  * Phone: the app bar (56px) sits above a page sized to the full viewport
  * height, so the map fills only what is left on screen. Desktop: the canvas.
  */
+/** Phone: the app bar (56px) sits above the page. */
 const ROOT_HEIGHT_CLASS = "h-[calc(100%-56px)] md:h-full";
 
 interface Walk {
@@ -66,7 +73,7 @@ export function TraceMapView({
   /** "Trace rollback": drill the batch into one application. */
   onTrace: (applicationId: string) => void;
 }) {
-  const isMobile = useIsMobile();
+  const stacked = useIsMobile(SIDE_PANEL_MIN_VIEWPORT_PX);
   const [stageIndex, setStageIndex] = useState<number | null>(null);
   const [walk, setWalk] = useState<Walk | null>(null);
   const chains = buildChains(model);
@@ -112,8 +119,8 @@ export function TraceMapView({
   };
 
   return (
-    <div className={cn("flex flex-col md:relative md:block", ROOT_HEIGHT_CLASS)}>
-      <div className="relative h-[42%] shrink-0 md:absolute md:inset-0 md:h-auto">
+    <div className={cn("flex flex-col lg:relative lg:block", ROOT_HEIGHT_CLASS)}>
+      <div className="relative h-[42%] shrink-0 lg:absolute lg:inset-0 lg:h-auto">
         {hasPlaces ? (
           <LazyTraceMapCanvas
             geo={model.geo}
@@ -121,7 +128,7 @@ export function TraceMapView({
             routeGeometries={routeGeometries}
             lighting={lighting}
             frameKey={frameKey}
-            padding={isMobile ? PHONE_PADDING : DESKTOP_PADDING}
+            padding={stacked ? PHONE_PADDING : DESKTOP_PADDING}
             onMarkerClick={onMarker}
             onBackgroundClick={chain ? undefined : () => selectStage(null)}
             controlsClassName={cn("left-auto top-auto bottom-32 right-16", CONTROLS_RIGHT_CLASS, PHONE_CONTROL_SIZE_CLASS)}
@@ -139,12 +146,12 @@ export function TraceMapView({
           </div>
         )}
         {/* Left edge, clear of the panel and the controls on the right. */}
-        <MapWarningBanner warnings={model.geo.warnings} className="left-16 top-16 max-w-[calc(100%-96px)] md:max-w-[320px]" />
+        <MapWarningBanner warnings={model.geo.warnings} className="left-16 top-16 max-w-[calc(100%-96px)] lg:max-w-[320px]" />
       </div>
 
       <aside
-        className="flex min-h-0 flex-1 flex-col border-t-[1.5px] border-[var(--ink)] bg-[var(--paper)] md:absolute md:inset-y-0 md:right-0 md:border-l-[1.5px] md:border-t-0"
-        style={{ width: isMobile ? undefined : PANEL_WIDTH_PX }}
+        className="flex min-h-0 flex-1 flex-col border-t-[1.5px] border-[var(--ink)] bg-[var(--paper)] lg:absolute lg:inset-y-0 lg:right-0 lg:border-l-[1.5px] lg:border-t-0"
+        style={{ width: stacked ? undefined : PANEL_WIDTH_PX }}
         aria-label={chain ? `Chain to ${chain.end.shortCode}` : "Custody stages"}
       >
         {chain && walk && step ? (
