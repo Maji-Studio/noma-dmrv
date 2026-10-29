@@ -4,7 +4,8 @@
  * The waterfall in kg, drawn 1:1 at the
  * measured width so every label stays at its real size. Anatomy from the
  * product page's Emissions section: a full first column, each step a small
- * hatched box stepping down (water dashed), dotted connectors carrying the
+ * box stepping down (water hatched, as in the moisture split; the other
+ * exits plain), dotted connectors carrying the
  * level across, the value above each column, a quiet y axis with gridlines,
  * an icon and a label under every column, brackets grouping the steps by the
  * records they leave from, and the last column lit.
@@ -113,7 +114,7 @@ export function WaterfallChart({
             <line x1="0" y1="0" x2="0" y2={HATCH_CELL} stroke={HATCH_STROKE} strokeWidth={HATCH_WIDTH} />
           </pattern>
         </defs>
-        <text x={0} y={UNIT_LABEL_Y} className="fill-[var(--color-text-tertiary)] font-mono text-[10px] uppercase tracking-[0.08em]">kg</text>
+        <text x={0} y={UNIT_LABEL_Y} className="fill-[var(--color-text-tertiary)] font-mono text-[10px]">kg</text>
         {ticks.map((tick) => (
           <g key={tick}>
             <line

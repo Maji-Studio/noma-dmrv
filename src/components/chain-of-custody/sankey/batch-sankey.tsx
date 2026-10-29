@@ -10,7 +10,7 @@
 import { useSearchParams } from "next/navigation";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
-import { SANKEY_EMPTY_DESCRIPTION, SANKEY_RUN_EMPTY_DESCRIPTION } from "@/lib/chain-of-custody/copy";
+import { SANKEY_EMPTY_DESCRIPTION, SANKEY_NO_DRY_MASS_DESCRIPTION, SANKEY_RUN_EMPTY_DESCRIPTION } from "@/lib/chain-of-custody/copy";
 import type { CreditBatchSankeyData } from "@/lib/chain-of-custody/sankey";
 import { RecordRows, RecordsPanel, RecordsSummaryLine } from "./records-panel";
 import { WaterfallChart } from "./waterfall-chart";
@@ -33,7 +33,10 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
   const [width, measure] = useMeasuredWidth();
   const [chartWidth, measureChart] = useMeasuredWidth();
   const rows = width < ROWS_BELOW_PX;
-  const selected = model.items.find((item) => item.key === focus.pinned) ?? model.items[model.items.length - 1];
+  // A pick that is not a column of this model (after a run filter change) falls back to the lit one.
+  const pinned = model.items.some((item) => item.key === focus.pinned) ? focus.pinned : DEFAULT_COLUMN;
+  const active = model.items.some((item) => item.key === focus.active) ? focus.active : DEFAULT_COLUMN;
+  const selected = model.items.find((item) => item.key === pinned) ?? model.items[model.items.length - 1];
 
   return (
     <div className="h-full overflow-auto bg-[var(--color-background-white)]" data-testid="batch-sankey" aria-label={`Mass balance for credit batch ${batchCode}`}>
@@ -44,7 +47,7 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
             <HeadlineFigure model={model} />
             <WaterfallRows
               model={model}
-              activeKey={focus.pinned}
+              activeKey={pinned}
               onSelect={focus.toggle}
               renderDetail={(item) => (
                 <div className="border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]">
@@ -66,8 +69,8 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
                   width={chartWidth}
                   plotHeight={PLOT_HEIGHT_PX}
                   // The lit column is the default pick; it dims nothing.
-                  activeKey={focus.active === DEFAULT_COLUMN ? null : focus.active}
-                  pinnedKey={focus.pinned}
+                  activeKey={active === DEFAULT_COLUMN ? null : active}
+                  pinnedKey={pinned}
                   onHover={focus.hover}
                   onSelect={focus.pin}
                 />
@@ -83,20 +86,28 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
 }
 
 /** Nothing applied yet, or nothing from the filtered run: the EmptyState, never bare text. */
-export function SankeyEmpty({ runFiltered, onOpenFlow }: { runFiltered: boolean; onOpenFlow: () => void }) {
+export type SankeyEmptyReason = "none-applied" | "run-filtered" | "no-dry-mass";
+
+const EMPTY_COPY: Record<SankeyEmptyReason, { title: string; description: string }> = {
+  "none-applied": { title: "Nothing applied yet", description: SANKEY_EMPTY_DESCRIPTION },
+  "run-filtered": { title: "Nothing applied from this run", description: SANKEY_RUN_EMPTY_DESCRIPTION },
+  "no-dry-mass": { title: "No dry mass recorded", description: SANKEY_NO_DRY_MASS_DESCRIPTION },
+};
+
+export function SankeyEmpty({ reason, onOpenFlow }: { reason: SankeyEmptyReason; onOpenFlow: () => void }) {
   return (
     <div className="container-max flex h-full items-center justify-center py-24">
       <div className="w-full max-w-[640px]">
         <EmptyState
           icon={<ChartBarIcon size={48} weight="thin" />}
-          title={runFiltered ? "Nothing applied from this run" : "Nothing applied yet"}
-          description={runFiltered ? SANKEY_RUN_EMPTY_DESCRIPTION : SANKEY_EMPTY_DESCRIPTION}
+          title={EMPTY_COPY[reason].title}
+          description={EMPTY_COPY[reason].description}
           action={
-            runFiltered ? undefined : (
+            reason === "none-applied" ? (
               <Button variant="weak" onClick={onOpenFlow}>
                 Open Flow
               </Button>
-            )
+            ) : undefined
           }
         />
       </div>

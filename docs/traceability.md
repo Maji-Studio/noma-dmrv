@@ -102,7 +102,8 @@ inside batch context, with a "Batch roll-up" button back.
     the feedstock that went in (wet when every member run's draws carry a wet
     mass, then "Water driven off" is the first step, otherwise dry); each step
     down is an explicit labeled exit the lib computes (conversion loss, outside
-    these applications, in storage); the last lit column is what was applied.
+    these applications, in storage) drawn as a plain stepped box, with only water
+    driven off hatched, as in the moisture split; the last lit column is what was applied.
     Under the chart, the records behind the selected column (the lit one by
     default), one line each, the whole row a link to the record. The run filter
     narrows every figure; with nothing applied the view is an `EmptyState`. No

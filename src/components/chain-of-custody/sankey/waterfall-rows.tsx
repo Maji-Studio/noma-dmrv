@@ -4,7 +4,7 @@
  * Phone: the waterfall as readable HTML
  * rows, the product page's phone layout. Each row is one 44px button with the
  * column's icon, name and value over a track that draws its part of the
- * feedstock in: the first bar full, each step a hatched piece stepping back,
+ * feedstock in: the first bar full, each step a piece stepping back (water hatched, the other exits plain),
  * the applied bar lit. Steps sit under a header naming the records they leave
  * from. The selected row opens its detail right under it.
  */

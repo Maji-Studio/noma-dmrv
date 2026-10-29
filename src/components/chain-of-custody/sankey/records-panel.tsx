@@ -23,18 +23,16 @@ function listHref(kind: LineageNodeKind, facilityId: string | null): string {
 
 const MUTED = "text-[var(--color-text-tertiary)]";
 
-function RecordFigure({ item, record }: { item: WaterfallItem; record: WaterfallRecord }) {
+export function RecordFigure({ item, record }: { item: WaterfallItem; record: WaterfallRecord }) {
   if (item.kind === "end") {
-    if (record.massKg == null && record.wetKg == null) return <span className={MUTED}>{formatMassKg(null)}</span>;
+    // Wet and dry each labelled; the one that is missing says so.
     return (
       <>
-        {record.wetKg != null ? `${formatMassKg(record.wetKg)} wet` : null}
-        {record.massKg != null ? (
-          <span className={MUTED}>
-            {record.wetKg != null ? " · " : ""}
-            {formatMassKg(record.massKg)} dry
-          </span>
-        ) : null}
+        {formatMassKg(record.wetKg)} {record.wetKg == null ? "(wet)" : "wet"}
+        <span className={MUTED}>
+          {" · "}
+          {formatMassKg(record.massKg)} {record.massKg == null ? "(dry)" : "dry"}
+        </span>
       </>
     );
   }
@@ -48,7 +46,7 @@ function RecordFigure({ item, record }: { item: WaterfallItem; record: Waterfall
     );
   }
   if (record.massKg == null) return <span className={MUTED}>{record.note ?? formatMassKg(null)}</span>;
-  if (record.massKg < 0) {
+  if (record.massKg < 0 && record.note) {
     return (
       <>
         <span className={MUTED}>{record.note} · </span>+{formatMassKg(-record.massKg)}
@@ -118,6 +116,7 @@ export function RecordsSummaryLine({ item, facilityId }: { item: WaterfallItem; 
   return (
     <div className="flex items-center gap-12 px-12">
       <span className="body-small text-[var(--color-text-tertiary)]">{recordCountLabel(item)}</span>
+      <ExplanationInfo title={item.label} hint={item.note} />
       <ListLink item={item} facilityId={facilityId} />
     </div>
   );

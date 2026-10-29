@@ -666,13 +666,11 @@ export function TraceabilityPage() {
     }
     const sankeyData = filteredSankey ?? batchData.sankey;
     // No application, or nothing but zeros: there is no balance to draw.
-    if (
-      (filteredBatchLineages?.length ?? 0) === 0 ||
-      sankeyData.columns.every((column) => column.massKg === 0)
-    ) {
+    const noLineages = (filteredBatchLineages?.length ?? 0) === 0;
+    if (noLineages || sankeyData.columns.every((column) => column.massKg === 0)) {
       return (
         <SankeyEmpty
-          runFiltered={Boolean(selectedRunId)}
+          reason={noLineages ? (selectedRunId ? "run-filtered" : "none-applied") : "no-dry-mass"}
           onOpenFlow={() => handleViewChange(DEFAULT_BATCH_VIEW, DEFAULT_BATCH_VIEW)}
         />
       );

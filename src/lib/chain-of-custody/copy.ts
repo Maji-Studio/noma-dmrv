@@ -14,6 +14,10 @@ export const NO_RUN_APPLICATION_YET_WARNING =
 export const SANKEY_EMPTY_DESCRIPTION =
   "The mass balance starts once biochar is applied on a field.";
 
+/** Sankey empty state when applications exist but no mass is recorded on them. */
+export const SANKEY_NO_DRY_MASS_DESCRIPTION =
+  "Enter the dry masses on the production runs and applications to see the mass balance.";
+
 /** Sankey empty state when the Run filter leaves no application. */
 export const SANKEY_RUN_EMPTY_DESCRIPTION =
   "Pick another run or clear the Run filter to see the batch.";

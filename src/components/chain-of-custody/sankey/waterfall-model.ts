@@ -285,7 +285,8 @@ export function buildWaterfall(
       warnings.push(words.warning(record.code));
       return { ...record, massKg, note: words.negative };
     }
-    return { ...record, massKg };
+    // Below the threshold it is rounding noise, not a negative figure.
+    return { ...record, massKg: Math.max(0, massKg) };
   };
   const runRecords = (figure: (run: RunFacts) => number | null, words: RowWords) =>
     facts.runs.map((run) => withNote(runRecord(run, null), figure(run), words)).sort(byCode);
