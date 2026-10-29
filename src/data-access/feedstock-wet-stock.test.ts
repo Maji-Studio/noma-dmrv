@@ -18,21 +18,19 @@ it("reports the available stock from the locked guard", async () => {
 it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("names the bin when the allocation basis is empty", async ({ batches }) => {
   const select = vi.fn()
     .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
-    .mockReturnValueOnce({ from: () => ({ where: async () => [{ name: "North intake" }] }) });
+    .mockReturnValueOnce({ from: () => ({ where: async () => [{ code: "SL-26-001" }] }) });
   const tx = { select } as unknown as DbTransaction;
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 100, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock",
-      message: "Bin North intake has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
+      message: "Bin SL-26-001 has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
       issues: [{ path,
       meta: { storageLocationId: "bin", availableWetKg: 0, requestedWetKg: 100, unit: "kg" } }] });
 });
 
-it.each([
-  { rows: [] }, { rows: [{ name: null }] }, { rows: [{ name: "" }] }, { rows: [{ name: "   " }] },
-])("falls back when the bin name is unavailable: %j", async ({ rows }) => {
+it("falls back when the bin row is unavailable", async () => {
   const select = vi.fn()
     .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) })
-    .mockReturnValueOnce({ from: () => ({ where: async () => rows }) });
+    .mockReturnValueOnce({ from: () => ({ where: async () => [] }) });
   await expect(allocateFeedstockWetMass(ctx, { select } as unknown as DbTransaction, "bin", 100, "2026-03-20"))
     .rejects.toMatchObject({
       message: "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
@@ -43,22 +41,20 @@ it("refuses a draw above the qualifying intake total with stock metadata", async
   const batches = [{ id: "first", massWetKg: 10_000 }, { id: "second", massWetKg: 10_000 }];
   const select = vi.fn()
     .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
-    .mockReturnValueOnce({ from: () => ({ where: async () => [{ name: "North intake" }] }) });
+    .mockReturnValueOnce({ from: () => ({ where: async () => [{ code: "SL-26-001" }] }) });
   const tx = { select } as unknown as DbTransaction;
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 25_000, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock",
-      message: "By the run’s start day bin North intake had received 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run’s start.",
+      message: "By the run’s start day bin SL-26-001 had received 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run’s start.",
       issues: [{ path, meta: { storageLocationId: "bin", availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } }],
     });
 });
 
-it.each([
-  { rows: [] }, { rows: [{ name: null }] }, { rows: [{ name: "" }] }, { rows: [{ name: "   " }] },
-])("falls back when an overdrawn bin name is unavailable: %j", async ({ rows }) => {
+it("falls back when an overdrawn bin row is unavailable", async () => {
   const batches = [{ id: "intake", massWetKg: 50 }];
   const select = vi.fn()
     .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
-    .mockReturnValueOnce({ from: () => ({ where: async () => rows }) });
+    .mockReturnValueOnce({ from: () => ({ where: async () => [] }) });
   await expect(allocateFeedstockWetMass(ctx, { select } as unknown as DbTransaction, "bin", 100, "2026-03-20"))
     .rejects.toMatchObject({
       message: "By the run’s start day this bin had received 50 kg, less than the 100 kg drawn. Lower the draw or move the run’s start.",

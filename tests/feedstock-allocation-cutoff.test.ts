@@ -57,7 +57,7 @@ describe("facility-day feedstock allocations", () => {
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
       expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 25_000 }],
     }))).rejects.toMatchObject({ code: "insufficient_stock",
-      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].name} had received`),
+      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].code} had received`),
       issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "storageLocationId"],
         meta: { storageLocationId: f.bins[0].id, availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } })],
     });
@@ -260,7 +260,7 @@ describe("facility-day feedstock allocations", () => {
   it("refuses a draw before any intake and rolls back an invalid start edit", () => scenario(async (tx, f) => {
     await expect(tx.transaction(savepoint => f.run(new Date("2026-02-20T08:00:00Z"), undefined, savepoint)))
       .rejects.toMatchObject({ code: "insufficient_stock",
-        message: `Bin ${f.bins[0].name} has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.`,
+        message: `Bin ${f.bins[0].code} has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.`,
       });
     const run = await f.run();
     const before = await shares(tx, run.id);
@@ -268,7 +268,7 @@ describe("facility-day feedstock allocations", () => {
       { expectedVersion: run.version, startTime: new Date("2026-02-20T08:00:00Z") }))).rejects.toMatchObject({ code: "insufficient_stock" });
     expect(await shares(tx, run.id)).toEqual(before);
   }));
-  it("does not expose a bin name outside the caller's organization", () => scenario(async (tx, f) => {
+  it("does not expose a bin code outside the caller's organization", () => scenario(async (tx, f) => {
     const otherCtx = { ...ctx, organizationId: crypto.randomUUID() };
     await expect(allocateFeedstockWetMass(otherCtx, tx, f.bins[0].id, DRAW_KG, "2026-02-20"))
       .rejects.toMatchObject({
