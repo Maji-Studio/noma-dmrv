@@ -76,6 +76,19 @@ function toMassUnits(value: number): number {
   return units;
 }
 
+async function readFeedstockBinName(
+  ctx: OrgContext,
+  executor: FeedstockStockReader,
+  storageLocationId: string,
+): Promise<string | undefined> {
+  requireOrgScope(ctx);
+  const [bin] = await executor.select({ name: storageLocations.name }).from(storageLocations).where(and(
+    eq(storageLocations.id, storageLocationId),
+    eq(storageLocations.organizationId, ctx.organizationId),
+  ));
+  return bin?.name?.trim() ? bin.name : undefined;
+}
+
 /**
  * Allocate a run's wet withdrawal across complete intake batches in proportion
  * to their recorded wet mass. Integer gram arithmetic keeps the persisted
@@ -110,19 +123,18 @@ export async function allocateFeedstockWetMass(
   const weights = batches.map((batch) => toMassUnits(batch.massWetKg ?? 0));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight === 0) {
-    const [bin] = await executor.select({ name: storageLocations.name }).from(storageLocations).where(and(
-      eq(storageLocations.id, storageLocationId),
-      eq(storageLocations.organizationId, ctx.organizationId),
-    ));
-    const label = bin?.name?.trim() ? `Bin ${bin.name}` : "This bin";
+    const binName = await readFeedstockBinName(ctx, executor, storageLocationId);
+    const label = binName ? `Bin ${binName}` : "This bin";
     throw new StockOverdrawError(`${label} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   }
 
   const totalUnits = toMassUnits(totalWetMassKg);
   const availableWetKg = totalWeight / MASS_PRECISION_FACTOR;
   if (totalUnits > totalWeight) {
+    const binName = await readFeedstockBinName(ctx, executor, storageLocationId);
+    const label = binName ? `bin ${binName}` : "this bin";
     throw new StockOverdrawError(
-      `By the run's start day this bin had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run's start.`,
+      `By the run’s start day ${label} had received ${formatMassKg(availableWetKg)}, less than the ${formatMassKg(totalWetMassKg)} drawn. Lower the draw or move the run’s start.`,
       { storageLocationId, availableWetKg, requestedWetKg: totalWetMassKg },
     );
   }

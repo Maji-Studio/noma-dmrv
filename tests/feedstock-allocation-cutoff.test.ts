@@ -7,6 +7,7 @@ import { updateFacility } from "@/data-access/facility-mutations";
 import { createFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { allocateFeedstockWetMass, deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { reallocateRunsForBins, reallocateRunsForFacility } from "@/data-access/feedstock-run-allocations";
+import { feedstockUpdatePayload } from "@/components/feedstocks/feedstock-update-payload";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { cleanupLineageFixture, createLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -20,9 +21,9 @@ const date = (day: string) => new Date(`${day}T00:00:00Z`);
 async function fixture(tx: DbTransaction) {
   const tag = crypto.randomUUID();
   const [facility] = await tx.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID,
-    code: `CUT-${tag}`, name: "Cutoff test", timezone: "Africa/Dar_es_Salaam" }).returning();
+    code: `CUT-${tag}`, name: `Cutoff test ${tag}`, timezone: "Africa/Dar_es_Salaam" }).returning();
   const [type] = await tx.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID,
-    code: `CUT-${tag}`, name: "Cutoff test", category: "forestry", usage: "pyrolysis" }).returning();
+    code: `CUT-${tag}`, name: `Cutoff test ${tag}`, category: "forestry", usage: "pyrolysis" }).returning();
   const bins = await tx.insert(storageLocations).values(["a", "b"].map(suffix => ({ organizationId: TEST_ORG_ID,
     code: `CUT-${suffix}-${tag}`, name: `Cutoff test ${suffix}`, facilityId: facility.id, type: "feedstock_bin" as const, feedstockTypeId: type.id }))).returning();
   const intakes = await tx.insert(feedstocks).values(await feedstockFixtureValues(tx,
@@ -56,7 +57,7 @@ describe("facility-day feedstock allocations", () => {
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
       expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 25_000 }],
     }))).rejects.toMatchObject({ code: "insufficient_stock",
-      message: expect.stringMatching(/^By the run's start day/),
+      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].name} had received`),
       issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "storageLocationId"],
         meta: { storageLocationId: f.bins[0].id, availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } })],
     });
@@ -76,6 +77,7 @@ describe("facility-day feedstock allocations", () => {
     }))).rejects.toThrow(/archived/);
   }));
   it("rebuilds a date-only intake correction on an archived bin but refuses stock and reference changes", () => scenario(async (tx, f) => {
+    const other = await fixture(tx);
     const run = await f.run();
     expect(await shares(tx, run.id)).toHaveLength(2);
     await tx.update(storageLocations).set({ archivedAt: new Date() }).where(and(
@@ -92,14 +94,39 @@ describe("facility-day feedstock allocations", () => {
       { massWetKg: 0, deliveryDate: date("2026-03-15") },
       { moistureContentPercent: 10, deliveryDate: date("2026-03-15") },
       { storageLocationId: f.bins[1].id, deliveryDate: date("2026-03-15") },
-      { feedstockTypeId: f.type.id, deliveryDate: date("2026-03-15") },
-      { facilityId: f.facility.id, deliveryDate: date("2026-03-15") },
+      { feedstockTypeId: other.type.id, deliveryDate: date("2026-03-15") },
+      { facilityId: other.facility.id, deliveryDate: date("2026-03-15") },
     ]) {
       await expect(tx.transaction(savepoint => updateFeedstockInTransaction(ctx, savepoint, saved.id, {
         expectedVersion: saved.version, ...patch,
       }))).rejects.toThrow(/archived/);
       expect(await shares(tx, run.id)).toEqual(expectedShares);
     }
+  }));
+  it("rebuilds a date-only intake correction from the full edit form on an archived bin", () => scenario(async (tx, f) => {
+    const run = await f.run();
+    expect(await shares(tx, run.id)).toHaveLength(2);
+    const intake = f.intakes[1];
+    await tx.update(storageLocations).set({ archivedAt: new Date() }).where(and(
+      eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, f.bins[0].id)));
+    const { feedstockId, ...payload } = feedstockUpdatePayload({
+      facilityId: intake.facilityId,
+      deliveryDate: date("2026-04-02"),
+      supplierId: intake.supplierId!,
+      vehicleId: intake.vehicleId,
+      transportDistanceKm: intake.distanceKmOverride,
+      transportDistanceSource: intake.distanceKmOverride == null ? null : intake.distanceSource,
+      distanceNote: intake.distanceNote,
+      feedstockTypeId: intake.feedstockTypeId,
+      totalWetMassKg: intake.massWetKg!,
+      moisturePercent: intake.moistureContentPercent!,
+      allocations: [{ storageLocationId: intake.storageLocationId!, allocatedWetMassKg: intake.massWetKg! }],
+      overrideJustification: intake.overrideJustification ?? "",
+      notes: intake.notes ?? "",
+    }, intake);
+    const saved = await updateFeedstockInTransaction(ctx, tx, feedstockId, payload);
+    expect(saved.deliveryDate).toEqual(date("2026-04-02"));
+    expect(await shares(tx, run.id)).toEqual([{ feedstockId: f.intakes[0].id, wetMassUsedKg: DRAW_KG }]);
   }));
   it("keeps cancelled draws as history without consuming stock or blocking intake and timezone edits", () => scenario(async (tx, f) => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));

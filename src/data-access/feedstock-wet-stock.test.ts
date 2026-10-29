@@ -41,11 +41,27 @@ it.each([
 
 it("refuses a draw above the qualifying intake total with stock metadata", async () => {
   const batches = [{ id: "first", massWetKg: 10_000 }, { id: "second", massWetKg: 10_000 }];
-  const tx = { select: () => ({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) }) } as unknown as DbTransaction;
+  const select = vi.fn()
+    .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
+    .mockReturnValueOnce({ from: () => ({ where: async () => [{ name: "North intake" }] }) });
+  const tx = { select } as unknown as DbTransaction;
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 25_000, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock",
-      message: "By the run's start day this bin had received 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run's start.",
+      message: "By the run’s start day bin North intake had received 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run’s start.",
       issues: [{ path, meta: { storageLocationId: "bin", availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } }],
+    });
+});
+
+it.each([
+  { rows: [] }, { rows: [{ name: null }] }, { rows: [{ name: "" }] }, { rows: [{ name: "   " }] },
+])("falls back when an overdrawn bin name is unavailable: %j", async ({ rows }) => {
+  const batches = [{ id: "intake", massWetKg: 50 }];
+  const select = vi.fn()
+    .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => batches }) }) })
+    .mockReturnValueOnce({ from: () => ({ where: async () => rows }) });
+  await expect(allocateFeedstockWetMass(ctx, { select } as unknown as DbTransaction, "bin", 100, "2026-03-20"))
+    .rejects.toMatchObject({
+      message: "By the run’s start day this bin had received 50 kg, less than the 100 kg drawn. Lower the draw or move the run’s start.",
     });
 });
 

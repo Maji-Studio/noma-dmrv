@@ -727,9 +727,12 @@ export async function updateFeedstockInTransaction(
   const effectiveFacilityId =
     feedstockData.facilityId ?? locked.facilityId;
   const storageReferenceNeedsValidation =
-    feedstockData.storageLocationId !== undefined ||
-    feedstockData.feedstockTypeId !== undefined ||
-    feedstockData.facilityId !== undefined;
+    (feedstockData.storageLocationId !== undefined &&
+      feedstockData.storageLocationId !== locked.storageLocationId) ||
+    (feedstockData.feedstockTypeId !== undefined &&
+      feedstockData.feedstockTypeId !== locked.feedstockTypeId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
   const stockDerivationChanged =
     status !== locked.status ||
     (effectiveChanges.massDryKg !== undefined &&
