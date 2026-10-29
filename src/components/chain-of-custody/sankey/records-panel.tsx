@@ -6,29 +6,31 @@
  */
 import Link from "next/link";
 import { ArrowRightIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { EmptyState } from "@/components/ui";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { formatMassKg } from "@/lib/format-utils";
 import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 import { LINEAGE_NODE_STYLES, type LineageNodeKind } from "../chain-constants";
 import type { WaterfallItem, WaterfallRecord } from "./waterfall-model";
-import { ItemIcon, LIT_INK, MINUS, recordCountLabel, signedKg } from "./waterfall-parts";
+import { ItemIcon, LIT_INK, MINUS, recordCountLabel } from "./waterfall-parts";
 
-/** The list page behind a column ("See details"), kept on the working facility. */
+/** The list page behind a column ("All <plural>"), kept on the working facility. */
 function listHref(kind: LineageNodeKind, facilityId: string | null): string {
   const { path } = RECORD_LINKS[kind];
   return facilityId ? `${path}?facility=${encodeURIComponent(facilityId)}` : path;
 }
 
+const MUTED = "text-[var(--color-text-tertiary)]";
+
 function RecordFigure({ item, record }: { item: WaterfallItem; record: WaterfallRecord }) {
-  if (record.massKg == null && record.wetKg == null) {
-    return <span className="text-[var(--color-text-tertiary)]">Not recorded</span>;
-  }
   if (item.kind === "end") {
+    if (record.massKg == null && record.wetKg == null) return <span className={MUTED}>{formatMassKg(null)}</span>;
     return (
       <>
-        {record.wetKg != null ? formatMassKg(record.wetKg) : null}
+        {record.wetKg != null ? `${formatMassKg(record.wetKg)} wet` : null}
         {record.massKg != null ? (
-          <span className="text-[var(--color-text-tertiary)]">
+          <span className={MUTED}>
             {record.wetKg != null ? " · " : ""}
             {formatMassKg(record.massKg)} dry
           </span>
@@ -36,19 +38,27 @@ function RecordFigure({ item, record }: { item: WaterfallItem; record: Waterfall
       </>
     );
   }
-  if (item.kind === "step" && record.massKg != null && record.massKg < 0) {
+  if (item.kind === "start") {
+    return record.wetKg != null ? (
+      <>
+        {formatMassKg(record.wetKg)} <span className={MUTED}>wet</span>
+      </>
+    ) : (
+      <span className={MUTED}>{formatMassKg(null)}</span>
+    );
+  }
+  if (record.massKg == null) return <span className={MUTED}>{record.note ?? formatMassKg(null)}</span>;
+  if (record.massKg < 0) {
     return (
       <>
-        <span className="text-[var(--color-text-tertiary)]">{record.note} · </span>+{formatMassKg(-record.massKg)}
+        <span className={MUTED}>{record.note} · </span>+{formatMassKg(-record.massKg)}
       </>
     );
   }
-  const sign = item.kind === "step" ? MINUS : "";
   return (
     <>
-      {sign}
+      {MINUS}
       {formatMassKg(record.massKg)}
-      {item.kind === "start" ? <span className="text-[var(--color-text-tertiary)]"> {item.basis}</span> : null}
     </>
   );
 }
@@ -57,7 +67,7 @@ export function RecordRows({ item, facilityId, compact = false }: { item: Waterf
   const style = LINEAGE_NODE_STYLES[item.recordKind];
   const KindIcon = style.icon;
   if (item.records.length === 0) {
-    return <p className="body-small px-16 py-12 text-[var(--color-text-secondary)]">No records behind this column.</p>;
+    return <EmptyState icon={<KindIcon size={32} weight="thin" />} title="No records behind this column" padding="sm" />;
   }
   return (
     <ul className="flex flex-col" data-testid="sankey-records">
@@ -87,6 +97,32 @@ export function RecordRows({ item, facilityId, compact = false }: { item: Waterf
   );
 }
 
+/** "All applications" and the arrow: the list page behind the column. */
+export function ListLink({ item, facilityId }: { item: WaterfallItem; facilityId: string | null }) {
+  return (
+    // The margin sits on the wrapper: the type class on the link would beat it.
+    <div className="ml-auto">
+      <Link
+        href={listHref(item.recordKind, facilityId)}
+        className="body-small inline-flex min-h-44 items-center gap-6 font-medium text-[var(--clr-dark-purple)] underline-offset-4 hover:underline"
+      >
+        All {LINEAGE_NODE_STYLES[item.recordKind].plural}
+        <ArrowRightIcon size={14} weight="bold" aria-hidden />
+      </Link>
+    </div>
+  );
+}
+
+/** The record count and the list link: the first line of a phone detail. */
+export function RecordsSummaryLine({ item, facilityId }: { item: WaterfallItem; facilityId: string | null }) {
+  return (
+    <div className="flex items-center gap-12 px-12">
+      <span className="body-small text-[var(--color-text-tertiary)]">{recordCountLabel(item)}</span>
+      <ListLink item={item} facilityId={facilityId} />
+    </div>
+  );
+}
+
 export function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facilityId: string | null }) {
   const lit = item.kind === "end";
   return (
@@ -99,22 +135,14 @@ export function RecordsPanel({ item, facilityId }: { item: WaterfallItem; facili
         <span className="body-medium flex items-center gap-8 font-medium" style={{ color: lit ? LIT_INK : "var(--color-text-primary)" }}>
           <ItemIcon item={item} size={18} />
           {item.label}
+          <ExplanationInfo title={item.label} hint={item.note} />
         </span>
-        <span className="body-small tabular-nums text-[var(--color-text-secondary)]">{signedKg(item)} kg</span>
         <span className="body-small text-[var(--color-text-tertiary)]">{recordCountLabel(item)}</span>
-        <Link
-          href={listHref(item.recordKind, facilityId)}
-          className="body-small ml-auto inline-flex min-h-44 items-center gap-6 font-medium text-[var(--clr-dark-purple)] underline-offset-4 hover:underline"
-        >
-          See details
-          <ArrowRightIcon size={14} weight="bold" aria-hidden />
-        </Link>
+        <ListLink item={item} facilityId={facilityId} />
       </header>
-      <p className="body-small px-16 pt-12 text-[var(--color-text-secondary)]">{item.note}</p>
       <div className="pt-8">
         <RecordRows item={item} facilityId={facilityId} />
       </div>
     </section>
   );
 }
-

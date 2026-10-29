@@ -20,6 +20,7 @@ import {
   START_FILL,
   START_STROKE,
   STEP_STROKE,
+  stepFill,
 } from "./waterfall-parts";
 import { chartMaxKg, type WaterfallItem, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
 
@@ -41,8 +42,8 @@ function barStyle(item: WaterfallItem, maxKg: number) {
   if (item.kind === "step") {
     return {
       ...common,
-      ...HATCH_BACKGROUND,
-      border: `1px ${item.key === "water_driven_off" ? "dashed" : "solid"} ${STEP_STROKE}`,
+      ...(item.key === "water_driven_off" ? HATCH_BACKGROUND : { background: stepFill(item) }),
+      border: `1px solid ${STEP_STROKE}`,
     };
   }
   if (item.kind === "end") return { ...common, background: LIT_FILL };

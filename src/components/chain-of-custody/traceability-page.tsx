@@ -664,7 +664,12 @@ export function TraceabilityPage() {
         />
       );
     }
-    if ((filteredBatchLineages?.length ?? 0) === 0) {
+    const sankeyData = filteredSankey ?? batchData.sankey;
+    // No application, or nothing but zeros: there is no balance to draw.
+    if (
+      (filteredBatchLineages?.length ?? 0) === 0 ||
+      sankeyData.columns.every((column) => column.massKg === 0)
+    ) {
       return (
         <SankeyEmpty
           runFiltered={Boolean(selectedRunId)}
@@ -674,7 +679,7 @@ export function TraceabilityPage() {
     }
     return (
       <BatchSankey
-        sankey={filteredSankey ?? batchData.sankey}
+        sankey={sankeyData}
         lineages={batchLineages ?? []}
         batchCode={batchData.batch.code}
       />

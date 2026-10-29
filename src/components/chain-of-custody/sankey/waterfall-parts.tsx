@@ -21,10 +21,10 @@ import {
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Notice } from "@/components/ui/notice";
 import { formatMassKg } from "@/lib/format-utils";
-import { cn } from "@/lib/utils";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import {
   countWord,
+  type DryStartReason,
   levelAfter,
   type WaterfallItem,
   type WaterfallItemKey,
@@ -78,11 +78,16 @@ export const LIT_INK = "var(--acc-dist-ink)";
 export const START_FILL = "var(--clr-dark-purple-5)";
 export const START_STROKE = "var(--clr-dark-purple-40)";
 export const STEP_STROKE = "var(--clr-dark-purple-60)";
+/** Every exit but water is a plain box; hatching is reserved for water. */
+export const STEP_FILL = "var(--clr-dark-purple-10)";
 export const HATCH_STROKE = "var(--clr-dark-purple-40)";
-/** Water is dashed, the way the product page dashes transport. */
-export const WATER_DASH = "4 3";
 
-/** The hatch as CSS, for HTML bars. */
+/** The fill of a column: hatched for water, light for exits, the dry fill for biochar left in storage. */
+export function stepFill(item: WaterfallItem): string {
+  return item.key === "in_storage" ? START_FILL : STEP_FILL;
+}
+
+/** The water hatch as CSS, for HTML bars. */
 export const HATCH_BACKGROUND: CSSProperties = {
   backgroundImage:
     "repeating-linear-gradient(135deg, var(--clr-dark-purple-40) 0 1px, transparent 1px 5px)",
@@ -135,6 +140,7 @@ export function useColumnFocus(initial: WaterfallItemKey | null = null) {
 export function summarySentence(model: WaterfallModel): string {
   const start = formatMassKg(model.startKg);
   const went = model.startBasis === "wet" ? `${start} of wet feedstock went in.` : `${start} of dry feedstock went in.`;
+  if (!model.balanced) return went;
   const steps = model.stepCount === 1 ? "One step took out" : `${capitalise(countWord(model.stepCount))} steps took out`;
   return model.stepCount === 0 ? went : `${went} ${steps} ${formatMassKg(model.removedKg)}.`;
 }
@@ -142,6 +148,12 @@ export function summarySentence(model: WaterfallModel): string {
 function capitalise(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+const DRY_START_HINTS: Record<DryStartReason, string> = {
+  "wet-missing": "Some draws have no wet mass, so the chart starts from the dry feedstock the runs recorded.",
+  "dry-input-missing": "Some runs have no dry feedstock recorded, so the chart starts from the dry feedstock that is recorded.",
+  "wet-below-dry": "The wet mass recorded is below the dry mass, so the chart starts from the dry feedstock the runs recorded.",
+};
 
 /** The (i) beside the sentence: the running ledger the chart draws. */
 export function LedgerExplanation({ model }: { model: WaterfallModel }) {
@@ -151,7 +163,7 @@ export function LedgerExplanation({ model }: { model: WaterfallModel }) {
       hint={
         model.startBasis === "wet"
           ? "The feedstock is weighed wet. Water driven off is that wet mass less the dry feedstock the runs recorded, so every figure after it is dry."
-          : "The runs' draws have no wet mass, so the chart starts from the dry feedstock the runs recorded."
+          : DRY_START_HINTS[model.dryStartReason ?? "wet-missing"]
       }
     >
       <table className="w-full body-caption">
@@ -161,7 +173,7 @@ export function LedgerExplanation({ model }: { model: WaterfallModel }) {
               <td className="py-4 pr-8 text-[var(--color-text-secondary)]">{item.label}</td>
               <td className="py-4 pr-8 text-right tabular-nums whitespace-nowrap">{signedKg(item)} kg</td>
               <td className="py-4 text-right tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">
-                {item.kind === "step" ? `${kgNumber(levelAfter(item))} kg left` : ""}
+                {item.kind === "step" && model.balanced ? `${kgNumber(levelAfter(item))} kg left` : ""}
               </td>
             </tr>
           ))}
@@ -177,25 +189,25 @@ export function LedgerExplanation({ model }: { model: WaterfallModel }) {
 }
 
 /** Big figure at the left: the lit column's mass, its unit, and how it is made. */
-export function HeadlineFigure({ model, compact = false }: { model: WaterfallModel; compact?: boolean }) {
+export function HeadlineFigure({ model }: { model: WaterfallModel }) {
   return (
     <div className="flex min-w-0 flex-col" data-testid="sankey-headline">
       {/* Divs, not <p>: the global p rule would beat the size utilities. */}
       <div
-        className={cn(
-          "font-light tabular-nums tracking-[-0.02em] text-[var(--color-text-primary)]",
-          compact ? "text-[48px]" : "text-[72px]",
-        )}
+        className="text-[48px] font-light tabular-nums tracking-[-0.02em] text-[var(--color-text-primary)]"
         style={{ lineHeight: 1.05 }}
       >
         {kgNumber(model.endKg)}
       </div>
-      <div className={cn("mt-8 text-[var(--color-text-primary)]", compact ? "body-medium" : "body-large")}>
-        kg dry biochar applied
+      {/* Margins sit on wrappers: the global type classes beat margin utilities. */}
+      <div className="mt-8">
+        <div className="body-medium text-[var(--color-text-primary)]">kg dry biochar applied</div>
       </div>
-      <p className="body-small mt-16 border-t border-[var(--clr-dark-purple-10)] pt-12 text-[var(--color-text-secondary)]">
-        {summarySentence(model)} <LedgerExplanation model={model} />
-      </p>
+      <div className="mt-16 border-t border-[var(--clr-dark-purple-10)] pt-12">
+        <p className="body-small text-[var(--color-text-secondary)]">
+          {summarySentence(model)} <LedgerExplanation model={model} />
+        </p>
+      </div>
     </div>
   );
 }
@@ -206,6 +218,16 @@ export function MassWarnings({ warnings }: { warnings: readonly string[] }) {
   return (
     <Notice tone="warning" title="Mass balance inconsistencies">
       {warnings.join(" ")}
+    </Notice>
+  );
+}
+
+/** The steps cannot close on the applied column: say so, and name the records to check. */
+export function UnbalancedNotice({ warnings }: { warnings: readonly string[] }) {
+  return (
+    <Notice tone="warning" title="These records do not balance">
+      Each column is drawn from zero, not stepped down from the one before. Check the masses on the records.
+      {warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}
     </Notice>
   );
 }

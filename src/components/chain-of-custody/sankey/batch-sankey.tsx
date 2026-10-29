@@ -10,12 +10,12 @@
 import { useSearchParams } from "next/navigation";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
-import { SANKEY_EMPTY_DESCRIPTION } from "@/lib/chain-of-custody/copy";
+import { SANKEY_EMPTY_DESCRIPTION, SANKEY_RUN_EMPTY_DESCRIPTION } from "@/lib/chain-of-custody/copy";
 import type { CreditBatchSankeyData } from "@/lib/chain-of-custody/sankey";
-import { RecordRows, RecordsPanel } from "./records-panel";
+import { RecordRows, RecordsPanel, RecordsSummaryLine } from "./records-panel";
 import { WaterfallChart } from "./waterfall-chart";
 import { buildWaterfall, DEFAULT_COLUMN, type WaterfallLineage } from "./waterfall-model";
-import { HeadlineFigure, MassWarnings, ROWS_BELOW_PX, useColumnFocus, useMeasuredWidth } from "./waterfall-parts";
+import { HeadlineFigure, MassWarnings, ROWS_BELOW_PX, UnbalancedNotice, useColumnFocus, useMeasuredWidth } from "./waterfall-parts";
 import { WaterfallRows } from "./waterfall-rows";
 
 const PLOT_HEIGHT_PX = 168;
@@ -38,15 +38,17 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
   return (
     <div className="h-full overflow-auto bg-[var(--color-background-white)]" data-testid="batch-sankey" aria-label={`Mass balance for credit batch ${batchCode}`}>
       <div ref={measure} className="container-max flex flex-col gap-24 pb-96 pt-24">
+        {model.balanced ? null : <UnbalancedNotice warnings={model.warnings} />}
         {rows ? (
           <>
-            <HeadlineFigure model={model} compact />
+            <HeadlineFigure model={model} />
             <WaterfallRows
               model={model}
               activeKey={focus.pinned}
               onSelect={focus.toggle}
               renderDetail={(item) => (
                 <div className="border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]">
+                  <RecordsSummaryLine item={item} facilityId={facilityId} />
                   <RecordRows item={item} facilityId={facilityId} compact />
                 </div>
               )}
@@ -56,7 +58,7 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
           <>
             <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,9fr)] items-end gap-48">
               <div className="pb-72">
-                <HeadlineFigure model={model} compact />
+                <HeadlineFigure model={model} />
               </div>
               <div ref={measureChart} className="min-w-0">
                 <WaterfallChart
@@ -74,7 +76,7 @@ export function BatchSankey({ sankey, lineages, batchCode }: BatchSankeyProps) {
             <RecordsPanel item={selected} facilityId={facilityId} />
           </>
         )}
-        <MassWarnings warnings={model.warnings} />
+        {model.balanced ? <MassWarnings warnings={model.warnings} /> : null}
       </div>
     </div>
   );
@@ -88,11 +90,13 @@ export function SankeyEmpty({ runFiltered, onOpenFlow }: { runFiltered: boolean;
         <EmptyState
           icon={<ChartBarIcon size={48} weight="thin" />}
           title={runFiltered ? "Nothing applied from this run" : "Nothing applied yet"}
-          description={SANKEY_EMPTY_DESCRIPTION}
+          description={runFiltered ? SANKEY_RUN_EMPTY_DESCRIPTION : SANKEY_EMPTY_DESCRIPTION}
           action={
-            <Button variant="weak" onClick={onOpenFlow}>
-              Open Flow
-            </Button>
+            runFiltered ? undefined : (
+              <Button variant="weak" onClick={onOpenFlow}>
+                Open Flow
+              </Button>
+            )
           }
         />
       </div>

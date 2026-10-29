@@ -12,15 +12,15 @@
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import type {
-  CreditBatchSankeyData,
-  SankeyColumnKey,
-  SankeyExitKey,
+import {
+  EXIT_EPSILON_KG,
+  type CreditBatchSankeyData,
+  type SankeyColumnKey,
+  type SankeyExitKey,
 } from "@/lib/chain-of-custody/sankey";
 import type { LineageNodeKind } from "../chain-constants";
 
-/** Below this a residual is rounding noise (matches the lib's epsilon). */
-const EPSILON_KG = 0.5;
+const EPSILON_KG = EXIT_EPSILON_KG;
 
 export type WaterfallItemKey =
   | "feedstock"
@@ -39,7 +39,7 @@ export interface WaterfallRecord {
   name: string | null;
   /** This record's part of the column, in kg, on the column's basis. */
   massKg: number | null;
-  /** Said under the figure when it is negative: the record is out of balance. */
+  /** Short line on the row: why there is no figure, or that it is out of balance. */
   note?: string;
   /** Applications also carry the wet product mass they were weighed at. */
   wetKg?: number | null;
@@ -62,6 +62,8 @@ export interface WaterfallItem {
   note: string;
 }
 
+export type DryStartReason = "wet-missing" | "dry-input-missing" | "wet-below-dry";
+
 export interface WaterfallGroup {
   stage: WaterfallStage;
   label: string;
@@ -75,6 +77,10 @@ export interface WaterfallModel {
   endKg: number;
   /** Basis of the start column. Every later figure is dry. */
   startBasis: "wet" | "dry";
+  /** Why the chart starts dry; null when it starts wet. */
+  dryStartReason: DryStartReason | null;
+  /** False when the steps cannot close on the applied column: columns then stand on their own. */
+  balanced: boolean;
   /** Wet product weighed at the applications (with ingredients and water). */
   appliedWetKg: number | null;
   removedKg: number;
@@ -90,6 +96,38 @@ const STAGE_LABELS: Record<WaterfallStage, string> = {
 const STAGE_OF_COLUMN: Partial<Record<SankeyColumnKey, WaterfallStage>> = {
   productionRuns: "productionRuns",
   biocharLots: "biocharLots",
+};
+
+interface RowWords {
+  /** On a row whose figure cannot be derived. */
+  missing: string;
+  /** On a row whose figure is negative. */
+  negative: string;
+  /** In the warnings: the condition, then what to check. */
+  warning: (code: string) => string;
+}
+
+const ROW_WORDS: Record<"water_driven_off" | "conversion_loss" | "unallocated_output" | "in_storage", RowWords> = {
+  water_driven_off: {
+    missing: "Needs wet and dry feedstock",
+    negative: "Less wet than dry",
+    warning: (code) => `${code} records less wet feedstock than dry feedstock. Check its draws and dry input.`,
+  },
+  conversion_loss: {
+    missing: "Needs dry input and output",
+    negative: "More out than in",
+    warning: (code) => `${code} records more biochar out than feedstock in. Check its dry masses.`,
+  },
+  unallocated_output: {
+    missing: "Needs a product allocation",
+    negative: "More in products than made",
+    warning: (code) => `${code} has more biochar in products than the run made. Check its allocations.`,
+  },
+  in_storage: {
+    missing: "Needs the product's mass",
+    negative: "More applied than made",
+    warning: (code) => `${code} has more biochar applied than its recorded mass. Check the product and its applications.`,
+  },
 };
 
 const NOTES: Record<WaterfallItemKey, string> = {
@@ -173,7 +211,8 @@ function collect(lineages: readonly WaterfallLineage[]) {
             kind: "feedstock",
             code: feedstock.code,
             name: feedstock.feedstockTypeName,
-            massKg: sumOrNull([existing ? existing.massKg : 0, feedstock.wetMassUsedKg]),
+            massKg: null,
+            wetKg: sumOrNull([existing ? existing.wetKg : 0, feedstock.wetMassUsedKg]),
           });
         }
       }
@@ -217,29 +256,43 @@ export function buildWaterfall(
   // would invent water: only start wet when every run's dry input is known.
   const dryInputKnown = facts.runs.length > 0 && facts.runs.every((run) => run.dryInKg != null);
   const waterKg = wetFeedstockKg == null || !dryInputKnown ? null : wetFeedstockKg - dryFeedstockKg;
-  const hasWater = waterKg != null && waterKg > EPSILON_KG;
-  const startBasis = hasWater ? "wet" : "dry";
-  const startKg = hasWater ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
+  const wetBelowDry = waterKg != null && waterKg < -EPSILON_KG;
+  const startsWet = waterKg != null && !wetBelowDry;
+  const startBasis = startsWet ? "wet" : "dry";
+  const dryStartReason: DryStartReason | null = startsWet
+    ? null
+    : wetFeedstockKg == null
+      ? "wet-missing"
+      : !dryInputKnown
+        ? "dry-input-missing"
+        : "wet-below-dry";
+  const hasWater = startsWet && waterKg != null && waterKg > EPSILON_KG;
+  const startKg = startsWet ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
 
   const runRecord = (run: RunFacts, massKg: number | null): WaterfallRecord => ({
     id: run.id, kind: "productionRun", code: run.code, name: null, massKg,
   });
   const warnings = [...sankey.warnings];
+  if (wetBelowDry) {
+    warnings.push("The wet feedstock recorded is below the dry feedstock the runs recorded. Check the draws and the runs' dry inputs.");
+  }
   // Each record keeps its own signed figure: the lib clamps only the total,
-  // so a negative one is shown as it is and named in the warnings.
-  const withNote = (record: WaterfallRecord, massKg: number | null, note: string): WaterfallRecord => {
-    if (massKg != null && massKg < -EPSILON_KG) {
-      warnings.push(`${record.code}: ${note}.`);
-      return { ...record, massKg, note };
+  // so a negative one is shown as it is and named in the warnings. A figure
+  // that cannot be derived says what is missing instead of "Not recorded".
+  const withNote = (record: WaterfallRecord, massKg: number | null, words: RowWords): WaterfallRecord => {
+    if (massKg == null) return { ...record, massKg, note: words.missing };
+    if (massKg < -EPSILON_KG) {
+      warnings.push(words.warning(record.code));
+      return { ...record, massKg, note: words.negative };
     }
     return { ...record, massKg };
   };
-  const runRecords = (figure: (run: RunFacts) => number | null, note: string) =>
-    facts.runs.map((run) => withNote(runRecord(run, null), figure(run), note)).sort(byCode);
+  const runRecords = (figure: (run: RunFacts) => number | null, words: RowWords) =>
+    facts.runs.map((run) => withNote(runRecord(run, null), figure(run), words)).sort(byCode);
   const productRecords = facts.products
     .map(({ record, appliedKg, allocatedKg, lotKg }) => {
       const stored = allocatedKg ?? lotKg;
-      return withNote(record, stored == null ? null : stored - appliedKg, "More applied than the product's recorded mass");
+      return withNote(record, stored == null ? null : stored - appliedKg, ROW_WORDS.in_storage);
     })
     .sort(byCode);
 
@@ -248,7 +301,7 @@ export function buildWaterfall(
   items.push({
     key: "feedstock", kind: "start", label: "Feedstock in", massKg: startKg, top: startKg, bottom: 0,
     basis: startBasis, stage: null, recordKind: "feedstock",
-    records: [...facts.feedstocks].map((record) => hasWater ? record : { ...record, massKg: null }).sort(byCode),
+    records: [...facts.feedstocks].sort(byCode),
     note: NOTES.feedstock,
   });
   const pushStep = (key: WaterfallItemKey, label: string, massKg: number, stage: WaterfallStage, recordKind: LineageNodeKind, records: WaterfallRecord[]) => {
@@ -258,18 +311,18 @@ export function buildWaterfall(
   if (hasWater && waterKg != null) {
     pushStep("water_driven_off", "Water driven off", waterKg, "productionRuns", "productionRun",
       runRecords((run) => run.wetInKg == null || run.dryInKg == null ? null : run.wetInKg - run.dryInKg,
-        "Less wet feedstock than dry feedstock recorded"));
+        ROW_WORDS.water_driven_off));
   }
   for (const exit of sankey.exits) {
     const stage = STAGE_OF_COLUMN[exit.fromColumn] ?? "productionRuns";
     if (exit.key === "conversion_loss") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
         runRecords((run) => run.dryInKg == null || run.dryOutKg == null ? null : run.dryInKg - run.dryOutKg,
-        "More biochar out than feedstock in"));
+        ROW_WORDS.conversion_loss));
     } else if (exit.key === "unallocated_output") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
         runRecords((run) => run.dryOutKg == null || run.allocatedKg == null ? null : run.dryOutKg - run.allocatedKg,
-        "More biochar in products than the run made"));
+        ROW_WORDS.unallocated_output));
     } else {
       pushStep(exit.key, exit.label, exit.massKg, stage, "biocharProduct", productRecords);
     }
@@ -279,6 +332,19 @@ export function buildWaterfall(
     key: "applied", kind: "end", label: "Applied", massKg: endKg, top: endKg, bottom: 0, basis: "dry",
     stage: null, recordKind: "application", records: [...facts.applications].sort(byCode), note: NOTES.applied,
   });
+
+  // The steps close on the applied column only when no level goes below zero
+  // and the last level is the applied mass. Otherwise a floating step would
+  // sit on a level nobody recorded: stand every column on the baseline.
+  const balanced = level >= -EPSILON_KG && Math.abs(level - endKg) <= EPSILON_KG;
+  if (!balanced) {
+    for (const item of items) {
+      if (item.kind === "step") {
+        item.top = item.massKg;
+        item.bottom = 0;
+      }
+    }
+  }
 
   const groups: WaterfallGroup[] = [];
   for (const item of items) {
@@ -295,6 +361,8 @@ export function buildWaterfall(
     startKg,
     endKg,
     startBasis,
+    dryStartReason,
+    balanced,
     appliedWetKg: sumOrNull(facts.applications.map((record) => record.wetKg)),
     removedKg: steps.reduce((sum, item) => sum + item.massKg, 0),
     stepCount: steps.length,

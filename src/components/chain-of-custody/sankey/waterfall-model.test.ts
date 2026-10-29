@@ -77,7 +77,9 @@ describe("buildWaterfall", () => {
     expect(model.startBasis).toBe("dry");
     expect(model.items.map((item) => item.key)).toEqual(["feedstock", "conversion_loss", "in_storage", "applied"]);
     expect(model.startKg).toBe(RUN_DRY_IN_KG);
-    expect(model.items[0].records.every((record) => record.massKg == null)).toBe(true);
+    expect(model.dryStartReason).toBe("wet-missing");
+    // The wet draw that is recorded stays on its record; only the null one is missing.
+    expect(model.items[0].records.map((record) => record.wetKg)).toEqual([3_000, null]);
   });
 
   it("groups the steps under the stage they leave from", () => {
@@ -95,7 +97,7 @@ describe("buildWaterfall", () => {
 
     expect(DEFAULT_COLUMN).toBe("applied");
     expect(model.items[model.items.length - 1].key).toBe(DEFAULT_COLUMN);
-    expect(byKey("feedstock")?.records.map((record) => [record.code, record.massKg])).toEqual([
+    expect(byKey("feedstock")?.records.map((record) => [record.code, record.wetKg])).toEqual([
       ["FS-26-001", 3_000],
       ["FS-26-002", 2_000],
     ]);
@@ -128,7 +130,26 @@ describe("buildWaterfall", () => {
     const model = buildWaterfall(buildBatchSankey(lineages), lineages);
 
     expect(model.startBasis).toBe("dry");
+    expect(model.dryStartReason).toBe("dry-input-missing");
     expect(model.items.map((item) => item.key)).not.toContain("water_driven_off");
+  });
+
+  it("starts wet with no water step when the wet and dry feedstock match", () => {
+    const model = build([RUN_DRY_IN_KG]);
+
+    expect(model.startBasis).toBe("wet");
+    expect(model.dryStartReason).toBeNull();
+    expect(model.startKg).toBe(RUN_DRY_IN_KG);
+    expect(model.items.map((item) => item.key)).not.toContain("water_driven_off");
+  });
+
+  it("says a figure cannot be derived instead of calling it unrecorded", () => {
+    const lineages = [lineage([3_000, 2_000], { id: "app-1", code: "AP-26-001", dryT: 1, wetT: 1.2 })];
+    (lineages[0].productionRun as { biocharDryMassKg: number | null }).biocharDryMassKg = null;
+    const model = buildWaterfall(buildBatchSankey(lineages), lineages);
+    const row = model.items.flatMap((item) => item.records).find((record) => record.kind === "productionRun" && record.massKg == null);
+
+    expect(row?.note).toBeTruthy();
   });
 
   it("keeps each run's signed residual and warns about the one that is negative", () => {
@@ -155,8 +176,12 @@ describe("buildWaterfall", () => {
       ["PR-B", 700],
     ]);
     expect(loss?.records[0].note).toBeTruthy();
-    expect(model.warnings.some((warning) => warning.startsWith("PR-A:"))).toBe(true);
-    expect(model.warnings.some((warning) => warning.startsWith("PR-B:"))).toBe(false);
+    expect(model.warnings.some((warning) => warning.startsWith("PR-A "))).toBe(true);
+    expect(model.warnings.some((warning) => warning.startsWith("PR-B "))).toBe(false);
+  });
+
+  it("is balanced when the steps land on the applied column", () => {
+    expect(build([3_000, 2_000]).balanced).toBe(true);
   });
 
   it("sizes the plot to the highest column even when applied exceeds the input", () => {
@@ -166,6 +191,12 @@ describe("buildWaterfall", () => {
 
     expect(model.startKg).toBe(0);
     expect(model.endKg).toBe(250);
+    // The steps cannot close on applied: each stands on the baseline, no floating level.
+    expect(model.balanced).toBe(false);
+    for (const item of model.items.filter((entry) => entry.kind === "step")) {
+      expect(item.bottom).toBe(0);
+      expect(item.top).toBe(item.massKg);
+    }
     expect(chartMaxKg(model)).toBeGreaterThanOrEqual(model.endKg);
   });
 });

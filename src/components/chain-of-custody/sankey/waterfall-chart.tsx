@@ -24,7 +24,7 @@ import {
   START_FILL,
   START_STROKE,
   STEP_STROKE,
-  WATER_DASH,
+  stepFill,
 } from "./waterfall-parts";
 import { chartMaxKg, levelAfter, type WaterfallItemKey, type WaterfallModel } from "./waterfall-model";
 
@@ -42,6 +42,19 @@ const BRACKET_LABEL_H = 28;
 const MIN_STEP_H = 2;
 const DIM_OPACITY = 0.4;
 const TICK_TARGET = 4;
+const UNIT_LABEL_Y = 12;
+const GRID_OVERHANG = 8;
+const TICK_LABEL_GAP = 14;
+const TICK_TEXT_BASELINE = 4;
+const VALUE_LIFT = 10;
+const HATCH_CELL = 6;
+const HATCH_ANGLE_DEG = 45;
+const HATCH_WIDTH = 1.25;
+const STROKE_WIDTH = 1.25;
+const CONNECTOR_DASH = "1 4";
+const BRACKET_LABEL_GAP = 6;
+const STAGE_ICON_SIZE = 12;
+const ITEM_ICON_SIZE = 20;
 
 function niceStep(max: number): number {
   if (max <= 0) return 1;
@@ -96,15 +109,15 @@ export function WaterfallChart({
     <div className="relative" style={{ width, height }} data-testid="sankey-waterfall">
       <svg width={width} height={height} aria-hidden className="absolute inset-0 overflow-visible">
         <defs>
-          <pattern id={hatchId} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="6" stroke={HATCH_STROKE} strokeWidth="1.25" />
+          <pattern id={hatchId} width={HATCH_CELL} height={HATCH_CELL} patternUnits="userSpaceOnUse" patternTransform={`rotate(${HATCH_ANGLE_DEG})`}>
+            <line x1="0" y1="0" x2="0" y2={HATCH_CELL} stroke={HATCH_STROKE} strokeWidth={HATCH_WIDTH} />
           </pattern>
         </defs>
-        <text x={0} y={12} className="fill-[var(--color-text-tertiary)] font-mono text-[10px] uppercase tracking-[0.08em]">kg</text>
+        <text x={0} y={UNIT_LABEL_Y} className="fill-[var(--color-text-tertiary)] font-mono text-[10px] uppercase tracking-[0.08em]">kg</text>
         {ticks.map((tick) => (
           <g key={tick}>
             <line
-              x1={AXIS_W - 8}
+              x1={AXIS_W - GRID_OVERHANG}
               x2={width}
               y1={y(tick)}
               y2={y(tick)}
@@ -112,8 +125,8 @@ export function WaterfallChart({
               strokeWidth={1}
             />
             <text
-              x={AXIS_W - 14}
-              y={y(tick) + 4}
+              x={AXIS_W - TICK_LABEL_GAP}
+              y={y(tick) + TICK_TEXT_BASELINE}
               textAnchor="end"
               className="fill-[var(--color-text-tertiary)] font-mono text-[10px] tabular-nums"
             >
@@ -121,7 +134,7 @@ export function WaterfallChart({
             </text>
           </g>
         ))}
-        {items.slice(0, -1).map((item, index) => (
+        {model.balanced ? items.slice(0, -1).map((item, index) => (
           <line
             key={`link-${item.key}`}
             x1={colX(index) + colW}
@@ -129,16 +142,17 @@ export function WaterfallChart({
             y1={y(levelAfter(item))}
             y2={y(levelAfter(item))}
             stroke="var(--clr-dark-purple-60)"
-            strokeWidth={1.25}
-            strokeDasharray="1 4"
+            strokeWidth={STROKE_WIDTH}
+            strokeDasharray={CONNECTOR_DASH}
             strokeLinecap="round"
           />
-        ))}
+        )) : null}
         {items.map((item, index) => {
           const dim = activeKey != null && activeKey !== item.key && item.kind !== "end";
           const top = y(item.top);
           const h = Math.max(item.kind === "step" ? MIN_STEP_H : 1, (item.top - item.bottom) * scale);
-          const fill = item.kind === "step" ? `url(#${hatchId})` : item.kind === "end" ? LIT_FILL : START_FILL;
+          const fill =
+            item.key === "water_driven_off" ? `url(#${hatchId})` : item.kind === "step" ? stepFill(item) : item.kind === "end" ? LIT_FILL : START_FILL;
           const stroke = item.kind === "step" ? STEP_STROKE : item.kind === "end" ? LIT_FILL : START_STROKE;
           const isActive = activeKey === item.key;
           return (
@@ -150,12 +164,11 @@ export function WaterfallChart({
                 height={h}
                 fill={fill}
                 stroke={isActive && item.kind !== "end" ? "var(--clr-dark-purple-100)" : stroke}
-                strokeWidth={1.25}
-                strokeDasharray={item.key === "water_driven_off" ? WATER_DASH : undefined}
+                strokeWidth={STROKE_WIDTH}
               />
               <text
                 x={centerX(index)}
-                y={top - 10}
+                y={top - VALUE_LIFT}
                 textAnchor="middle"
                 className={cn(
                   "font-light tabular-nums",
@@ -194,9 +207,9 @@ export function WaterfallChart({
             className="pointer-events-none absolute flex flex-col items-center gap-4 text-center"
             style={{ left: centerX(index) - pitch / 2, width: pitch, top: base + LABEL_TOP }}
           >
-            <ItemIcon item={item} size={20} />
+            <ItemIcon item={item} size={ITEM_ICON_SIZE} />
             <span
-              className={cn("body-caption px-4 leading-[16px]", pinnedKey === item.key && "font-medium")}
+              className={cn("body-caption px-4", pinnedKey === item.key && "font-medium")}
               style={{ color: lit ? LIT_INK : activeKey === item.key || pinnedKey === item.key ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}
             >
               {item.label}
@@ -216,9 +229,9 @@ export function WaterfallChart({
           <div
             key={`bracket-${group.stage}`}
             className="pointer-events-none absolute flex items-center justify-center gap-4 text-[var(--color-text-tertiary)]"
-            style={{ left: (x1 + x2) / 2 - labelW / 2, width: labelW, top: bracketY + BRACKET_DROP + 6 }}
+            style={{ left: (x1 + x2) / 2 - labelW / 2, width: labelW, top: bracketY + BRACKET_DROP + BRACKET_LABEL_GAP }}
           >
-            <StageIcon size={12} aria-hidden />
+            <StageIcon size={STAGE_ICON_SIZE} aria-hidden />
             <span className="body-caption whitespace-nowrap">{group.label}</span>
           </div>
         );

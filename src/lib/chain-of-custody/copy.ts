@@ -12,7 +12,11 @@ export const NO_RUN_APPLICATION_YET_WARNING =
 
 /** Sankey empty state, under a title that says nothing is applied. */
 export const SANKEY_EMPTY_DESCRIPTION =
-  "The mass balance runs to the fields. Flow and Map show where the biochar is now.";
+  "The mass balance starts once biochar is applied on a field.";
+
+/** Sankey empty state when the Run filter leaves no application. */
+export const SANKEY_RUN_EMPTY_DESCRIPTION =
+  "Pick another run or clear the Run filter to see the batch.";
 
 /** Shown when the Run filter matches no lineage in the batch. */
 export const NO_LINEAGE_FOR_SELECTED_RUN =
