@@ -71,6 +71,14 @@ describe("measurement sample Source reuse", () => {
     expect(body.quantity).toEqual({ __typename: "Undefined" });
   });
 
+  it("keeps Sources already in the registry when it adds the missing ones", async () => {
+    fetchMock.mockResolvedValueOnce(datapoint(["source-extra", "source-a"]))
+      .mockResolvedValueOnce(datapoint(["source-a", "source-b", "source-extra"]));
+    await expect(bind()).resolves.toBe(1);
+    const body = JSON.parse(fetchMock.mock.calls[1][1]!.body as string);
+    expect(body.source_ids).toEqual(["source-a", "source-b", "source-extra"]);
+  });
+
   it.each([429, 500, 503])("retries the Source PATCH after HTTP %i and respects Retry-After", async status => {
     fetchMock.mockResolvedValueOnce(datapoint([]))
       .mockResolvedValueOnce(new Response("busy", { status, headers: { "retry-after": "1" } }))

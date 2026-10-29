@@ -340,7 +340,8 @@ export async function patchMeasurementSampleSourceBindings(args: {
           description: PATCH_UNDEFINED,
           display_name: PATCH_UNDEFINED,
           quantity: PATCH_UNDEFINED,
-          source_ids: sourceIds,
+          // Add the missing Sources; never drop ones already in the registry.
+          source_ids: Array.from(new Set([...existing.source_ids, ...sourceIds])).sort(),
           type: PATCH_UNDEFINED,
           uncertainty_justification: PATCH_UNDEFINED,
         }, { idempotent: true }).catch((error: unknown) => {
