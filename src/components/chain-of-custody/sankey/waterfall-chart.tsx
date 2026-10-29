@@ -37,8 +37,8 @@ const MIN_COL_W = 20;
 const COL_SHARE = 0.5;
 const TOP_PAD = 32;
 const LABEL_TOP = 10;
-/** Icon, gap and two label lines. */
-const LABEL_BLOCK_H = 60;
+/** Icon, gap and three label lines: "Outside these applications" wraps to three in a narrow chart. */
+const LABEL_BLOCK_H = 78;
 const BRACKET_DROP = 6;
 const BRACKET_LABEL_H = 28;
 const MIN_STEP_H = 2;
