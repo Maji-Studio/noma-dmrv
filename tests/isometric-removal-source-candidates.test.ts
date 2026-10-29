@@ -28,7 +28,7 @@ const lineages = [
     biocharProduct: null,
     productionRun: { id: "run-1", code: "PR-001" },
     reactor: null,
-    feedstocks: [{ id: "feedstock-1", code: "FS-001" }],
+    feedstocks: [{ id: "feedstock-1", code: "FS-001", ownsTransport: true }],
   },
 ];
 
@@ -110,6 +110,27 @@ describe("Removal source candidate discovery", () => {
         return [] as never;
       },
     );
+  });
+
+  it("excludes owned-elsewhere feedstock bills while retaining delivery evidence", async () => {
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+      lineages: lineages.map(lineage => ({ ...lineage, feedstocks: lineage.feedstocks.map(stock => ({ ...stock, ownsTransport: false })) })),
+    });
+    expect(candidates.map(candidate => candidate.documentId)).not.toContain("feedstock-bol");
+    expect(candidates.map(candidate => candidate.documentId)).toContain("delivery-bol");
+    expect(vi.mocked(documentsDA.listDocumentsForEntity).mock.calls.some(([, kind]) => kind === "feedstock")).toBe(false);
+  });
+
+  it("uses the production claim scope even when a lineage owns transport", async () => {
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages, transportFeedstockIds: [] });
+    expect(candidates.map(candidate => candidate.documentId)).not.toContain("feedstock-bol");
+    expect(candidates.map(candidate => candidate.documentId)).toContain("delivery-bol");
+  });
+
+  it("includes an owned feedstock from an unapplied run once", async () => {
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages: [], transportFeedstockIds: ["feedstock-1", "feedstock-1"] });
+    expect(candidates.map(candidate => candidate.documentId)).toEqual(["feedstock-bol"]);
+    expect(documentsDA.listDocumentsForEntity).toHaveBeenCalledExactlyOnceWith(orgCtx, "feedstock", "feedstock-1");
   });
 
   it("includes application evidence without inventing Datapoint targets", async () => {

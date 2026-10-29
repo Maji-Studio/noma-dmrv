@@ -10,6 +10,7 @@ import { requireOrgScope } from "./utils";
 export interface RecordCertificationLockInput {
   entityType: DocumentEntityType;
   entityId: string;
+  scope?: "transport";
 }
 
 /**
@@ -23,7 +24,7 @@ export async function getRecordCertificationLock(ctx: OrgContext, input: RecordC
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const targets = await documentOwnerLineageTargets(ctx, tx, input.entityType, input.entityId);
-    return (await getRecordLocks(ctx, tx, targets)).some(lock => lock.level === "sent");
+    return (await getRecordLocks(ctx, tx, targets.map(target => input.entityType === "feedstock" && input.scope === "transport" ? { ...target, transportOnly: true } : target), { sentOnly: true })).some(lock => lock.level === "sent");
   });
 }
 

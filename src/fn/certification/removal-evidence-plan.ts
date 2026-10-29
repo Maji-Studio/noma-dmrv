@@ -99,6 +99,7 @@ export async function planRemovalEvidence(args: {
             removalId,
             entryContributions: ctx.removalEntryContext?.contributions,
             lineages: ctx.lineages,
+            transportFeedstockIds: ctx.transportCoverage.feedstock.entityIds,
             memberBatches: ctx.memberBatches,
             memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
               batch.samples.map((sample) => ({

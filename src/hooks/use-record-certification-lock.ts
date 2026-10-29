@@ -13,12 +13,13 @@ import { certificationKeys } from "./use-certification";
 export function useRecordCertificationLock(
   entityType: DocumentEntityType,
   entityId?: string | null,
+  scope?: "transport",
 ) {
   return useQuery({
-    queryKey: certificationKeys.recordLock(entityType, entityId ?? undefined),
+    queryKey: scope ? [...certificationKeys.recordLock(entityType, entityId ?? undefined), scope] : certificationKeys.recordLock(entityType, entityId ?? undefined),
     enabled: !!entityId,
     queryFn: async () =>
-      unwrap(await loadRecordCertificationLock(entityType, entityId!)),
+      unwrap(await loadRecordCertificationLock(entityType, entityId!, scope)),
   });
 }
 
@@ -26,7 +27,8 @@ export function useRecordCertificationLock(
 export function useIsRecordCertificationLocked(
   entityType: DocumentEntityType,
   entityId?: string | null,
+  scope?: "transport",
 ): boolean {
-  return useRecordCertificationLock(entityType, entityId).data === true;
+  return useRecordCertificationLock(entityType, entityId, scope).data === true;
 }
 

@@ -43,7 +43,7 @@ export type CertifiedLineageEntityType = Exclude<
 export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
   entityId: string;
-  /** Feedstock transport uses only the owner run; other entity targets are unchanged. */
+  /** Feedstock transport narrows to its owner run only when one exists. */
   transportOnly?: boolean;
 }
 
@@ -71,11 +71,16 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
+function transportTargetCondition(target: CertifiedLineageTarget, owner: string | undefined): SQL {
+  // No eligible transport owner must retain the lock through every linked run.
+  return owner ? and(targetCondition(target), eq(productionRuns.id, owner))! : targetCondition(target);
+}
+
 /** Recomputed on each lineage read, including the read under artifact locks. */
 async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select">, target: CertifiedLineageTarget): Promise<SQL> {
   if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
   const owner = (await getFeedstockTransportOwners(ctx, [target.entityId], tx)).get(target.entityId);
-  return and(targetCondition(target), owner ? eq(productionRuns.id, owner) : inArray(productionRuns.id, []))!;
+  return transportTargetCondition(target, owner);
 }
 
 /** Records that share one master-data reference, such as a vehicle. */
@@ -434,18 +439,24 @@ export async function getRecordLock(ctx: OrgContext, tx: DbTransaction, target: 
 export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, targets: readonly CertifiedLineageTarget[], options: { sentOnly?: boolean } = {}) {
   requireOrgScope(ctx);
   if (!targets.length) return [];
-  if (targets.some(target => target.transportOnly)) {
-    return Promise.all(targets.map(async target => {
-      const lineage = await resolveLineage(ctx, tx, await lineageTargetCondition(ctx, tx, target), true);
-      return recordLocks[target.entityType]({ removals: lineage.map(row => row.recordLockRemoval),
-        dependents: options.sentOnly ? [] : await readRecordDependents(ctx, tx, target) });
-    }));
+  const transportTargets = targets.filter(target => target.entityType === "feedstock" && target.transportOnly);
+  const owners = transportTargets.length
+    ? await getFeedstockTransportOwners(ctx, transportTargets.map(target => target.entityId), tx)
+    : new Map<string, string>();
+  const groupKey = (target: CertifiedLineageTarget) => `${target.entityType}:${target.entityType === "feedstock" && !!target.transportOnly}`;
+  const queryGroups = new Map<string, CertifiedLineageTarget[]>();
+  for (const target of targets) {
+    const key = groupKey(target);
+    queryGroups.set(key, [...(queryGroups.get(key) ?? []), target]);
   }
-  const rowsByKind = new Map(await Promise.all([...new Set(targets.map(target => target.entityType))].map(async kind => {
-    const rows = await lineageQueryWhere(ctx, tx, or(...targets.filter(target => target.entityType === kind).map(targetCondition))!, kind);
-    return [kind, rows] as const;
+  const rowsByGroup = new Map(await Promise.all([...queryGroups].map(async ([key, group]) => {
+    const conditions = group.map(target => {
+      if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
+      return transportTargetCondition(target, owners.get(target.entityId));
+    });
+    return [key, await lineageQueryWhere(ctx, tx, or(...conditions)!, group[0].entityType)] as const;
   })));
-  const groups = targets.map(target => rowsByKind.get(target.entityType)!.filter(row => row.targetId === target.entityId));
+  const groups = targets.map(target => rowsByGroup.get(groupKey(target))!.filter(row => row.targetId === target.entityId));
   const facts = await readRecordLockLineage(ctx, tx, groups.flat(), true);
   return Promise.all(targets.map(async (target, index) => recordLocks[target.entityType]({
     removals: facts.filter(fact => groups[index].some(row => row.removalId === fact.id)),

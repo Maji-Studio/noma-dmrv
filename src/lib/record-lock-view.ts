@@ -36,6 +36,8 @@ export interface RecordLockReturnView {
 
 /** What a screen needs from the predicate: the level, who holds it, who uses it. */
 export interface RecordLockView {
+  /** Feedstock only: owner-run transport lock, without dependency locks. */
+  transport?: { level: RecordLock["level"]; heldBy: RecordLockLink[] };
   level: RecordLock["level"];
   /** Sent: the Removals. In use: the records that use it. */
   heldBy: RecordLockLink[];

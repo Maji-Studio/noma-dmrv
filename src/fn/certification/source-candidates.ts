@@ -1,3 +1,4 @@
+import { includesProductionInputs } from "./production-claim-policy";
 import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import { logger } from "@/lib/log";
@@ -118,6 +119,7 @@ async function collectLineageEntities(
 
     for (const run of lineageFacts.runs) {
       for (const feedstock of run.feedstocks) {
+        if (!feedstock.ownsTransport || !includesProductionInputs(batch.productionEmissionsClaimedByRemovalId, removalId)) continue;
         add({
           entityType: "feedstock",
           entityId: feedstock.id,
@@ -258,7 +260,7 @@ export interface CandidateSourceDocument {
 interface SourceCandidateLineage {
   application: { id: string; code?: string | null };
   delivery: { id: string; code?: string | null };
-  feedstocks: Array<{ id: string; code?: string | null }>;
+  feedstocks: Array<{ id: string; code?: string | null; ownsTransport?: boolean }>;
 }
 
 interface SourceCandidateDocumentFacts {
@@ -329,6 +331,8 @@ export async function collectCandidateSourceDocumentsForRemoval(
     memberBatches?: Array<{ id: string; code?: string | null }>;
     memberSamples?: Array<{ id: string; code?: string | null }>;
     entryContributions?: RemovalEntryContributions;
+    /** The production-claim-aware transport scope, including unapplied owner runs. */
+    transportFeedstockIds?: string[];
   },
 ): Promise<CandidateSourceDocument[]> {
   const entities = new Map<string, CandidateLineageEntity>();
@@ -348,12 +352,16 @@ export async function collectCandidateSourceDocumentsForRemoval(
       entityLabel: `Delivery ${lineage.delivery.code ?? lineage.delivery.id}`,
     });
     for (const feedstock of lineage.feedstocks) {
+      if (args.transportFeedstockIds ? !args.transportFeedstockIds.includes(feedstock.id) : !feedstock.ownsTransport) continue;
       add({
         entityType: "feedstock",
         entityId: feedstock.id,
         entityLabel: `Feedstock ${feedstock.code ?? feedstock.id}`,
       });
     }
+  }
+  for (const id of args.transportFeedstockIds ?? []) {
+    add({ entityType: "feedstock", entityId: id, entityLabel: `Feedstock ${id}` });
   }
   for (const batch of args.memberBatches ?? []) {
     add({
