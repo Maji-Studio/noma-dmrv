@@ -128,9 +128,15 @@ describe("Removal source candidate discovery", () => {
   });
 
   it("includes an owned feedstock from an unapplied run once", async () => {
-    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages: [], transportFeedstockIds: ["feedstock-1", "feedstock-1"] });
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages: [], transportFeedstockIds: ["feedstock-1", "feedstock-1"], feedstockCodes: { "feedstock-1": "FS-001" } });
     expect(candidates.map(candidate => candidate.documentId)).toEqual(["feedstock-bol"]);
+    expect(candidates[0].binding?.lineage.entityLabel).toBe("Feedstock FS-001");
     expect(documentsDA.listDocumentsForEntity).toHaveBeenCalledExactlyOnceWith(orgCtx, "feedstock", "feedstock-1");
+  });
+
+  it("uses a generic feedstock label when an unapplied run has no known code", async () => {
+    const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, { lineages: [], transportFeedstockIds: ["feedstock-1"] });
+    expect(candidates[0].binding?.lineage.entityLabel).toBe("Feedstock");
   });
 
   it("includes application evidence without inventing Datapoint targets", async () => {

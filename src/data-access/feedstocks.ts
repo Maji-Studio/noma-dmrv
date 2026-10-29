@@ -1,3 +1,4 @@
+import { FEEDSTOCK_TRANSPORT_FIELDS } from "@/lib/record-lock-view";
 import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
 import { reallocateRunsForBins } from "./feedstock-run-allocations";
 import { readRecordDependents } from "./record-lock-dependents";
@@ -57,7 +58,6 @@ import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integr
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 import { withAutoCodes } from "./code-generator";
 
-const FEEDSTOCK_TRANSPORT_FIELDS = new Set(["vehicleId", "transportDistanceKm", "transportDistanceSource", "distanceNote"]);
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 /** Entity key on a feedstock's expected-version conflict. */
 const FEEDSTOCK_CONFLICT_ENTITY = "feedstock";
@@ -707,7 +707,7 @@ export async function updateFeedstockInTransaction(
   // A form may resubmit unchanged mass and supplier values with a transport correction.
   const before = new Map(Object.entries(previousFields));
   const changes = Object.entries(changedFields).filter(([field, value]) => field !== "expectedVersion" && value !== undefined && !recordFieldEqual(field, before.get(field), value));
-  const transportOnly = changes.length > 0 && changes.every(([field]) => FEEDSTOCK_TRANSPORT_FIELDS.has(field));
+  const transportOnly = changes.length > 0 && changes.every(([field]) => FEEDSTOCK_TRANSPORT_FIELDS.includes(field));
   await withLockedFieldIssues(() => withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx, tx, { entityType: "feedstock", entityId: feedstockId, transportOnly }, "update",
   ), "certification_locked"), previousFields, changedFields);

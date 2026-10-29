@@ -3,6 +3,7 @@ import {
   applications,
   biocharProducts,
   certifierRemovals,
+  certificationSubmissions,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
@@ -29,7 +30,7 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
 import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
@@ -43,7 +44,7 @@ export type CertifiedLineageEntityType = Exclude<
 export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
   entityId: string;
-  /** Feedstock transport narrows to its owner run only when one exists. */
+  /** Feedstock transport follows frozen counted inputs and the current owner. */
   transportOnly?: boolean;
 }
 
@@ -71,16 +72,34 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
-function transportTargetCondition(target: CertifiedLineageTarget, owner: string | undefined): SQL {
+function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
   // No eligible transport owner must retain the lock through every linked run.
-  return owner ? and(targetCondition(target), eq(productionRuns.id, owner))! : targetCondition(target);
+  if (!owner) return targetCondition(target);
+  // Read the latest frozen Removal snapshot in the lineage statement. Inserts
+  // can already be sent without the UPDATE trigger having set the frozen flag.
+  // A missing field on an old snapshot fails closed; an unfrozen reservation
+  // is covered by the current owner instead. Artifact/row lock order is unchanged.
+  const countedTransport = sql<boolean>`coalesce((
+    select coalesce(not (${certificationSubmissions.payloadSnapshot} ? 'transportFeedstockIds'), true)
+      or (${certificationSubmissions.payloadSnapshot}->'transportFeedstockIds') ? ${target.entityId}
+    from ${certificationSubmissions}
+    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.provider} = 'isometric'
+      and ${certificationSubmissions.localEntityType} = 'removal'
+      and ${certificationSubmissions.submissionType} = 'removal'
+      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
+      and (${certificationSubmissions.payloadSnapshotFrozen} or ${certificationSubmissions.status} <> 'draft')
+    order by ${certificationSubmissions.version} desc
+    limit 1
+  ), false)`;
+  return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
 }
 
 /** Recomputed on each lineage read, including the read under artifact locks. */
 async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select">, target: CertifiedLineageTarget): Promise<SQL> {
   if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
   const owner = (await getFeedstockTransportOwners(ctx, [target.entityId], tx)).get(target.entityId);
-  return transportTargetCondition(target, owner);
+  return transportTargetCondition(ctx, target, owner);
 }
 
 /** Records that share one master-data reference, such as a vehicle. */
@@ -452,7 +471,7 @@ export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "s
   const rowsByGroup = new Map(await Promise.all([...queryGroups].map(async ([key, group]) => {
     const conditions = group.map(target => {
       if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
-      return transportTargetCondition(target, owners.get(target.entityId));
+      return transportTargetCondition(ctx, target, owners.get(target.entityId));
     });
     return [key, await lineageQueryWhere(ctx, tx, or(...conditions)!, group[0].entityType)] as const;
   })));

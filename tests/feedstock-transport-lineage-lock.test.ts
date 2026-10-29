@@ -1,9 +1,11 @@
 import { beforeAll, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { certificationSubmissions, feedstocks, productionRunFeedstocks, productionRuns, transportLegs } from "@/db/schema";
+import { certificationSubmissions, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns, transportLegs } from "@/db/schema";
 import { createTransportLeg, deleteTransportLeg, updateTransportLeg } from "@/data-access/transport-legs";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
+import { getRecordCertificationLock } from "@/data-access/record-certification-lock";
+import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { getRecordLocks } from "@/data-access/certification-lineage-guards";
 import { getTransportDistanceDrift } from "@/data-access/transport-distance-drift";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -19,13 +21,14 @@ it.each(["sent", "reserved"] as const)("locks only owned feedstock transport for
     await withLineageFixture(async later => {
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
-      if (state === "reserved") {
-        await db.update(certificationSubmissions).set({ status: "draft", externalId: null, submittedAt: null, lockedAt: new Date() })
-          .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, later.removalId)));
-      }
+      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
+      await insertSubmission(later.removalId, { transportFeedstockIds: [later.feedstockId] }, state);
       const legInput = { entityType: "feedstock" as const, entityId: earlier.feedstockId,
         distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" as const };
       const leg = await createTransportLeg(ctx, legInput);
+      expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id, scope: "transport" })).toBe(false);
+      expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id })).toBe(true);
       const updated = await updateTransportLeg(ctx, leg.id, { expectedVersion: leg.version, distanceKm: 20 });
       expect(updated.distanceKm).toBe(20);
       await deleteTransportLeg(ctx, updated.id, updated.version);
@@ -33,6 +36,7 @@ it.each(["sent", "reserved"] as const)("locks only owned feedstock transport for
 
       const ownedInput = { ...legInput, entityId: later.feedstockId };
       const [ownedLeg] = await db.insert(transportLegs).values({ ...ownedInput, organizationId: TEST_ORG_ID }).returning();
+      expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: ownedLeg.id, scope: "transport" })).toBe(true);
       const locked = { code: "certification_locked" };
       await expect(createTransportLeg(ctx, ownedInput)).rejects.toMatchObject(locked);
       await expect(updateTransportLeg(ctx, ownedLeg.id, { expectedVersion: ownedLeg.version, distanceKm: 20 })).rejects.toMatchObject(locked);
@@ -56,6 +60,45 @@ it.each(["sent", "reserved"] as const)("locks only owned feedstock transport for
       expect((await getTransportDistanceDrift(ctx, { entityType: "feedstock", entityId: earlier.feedstockId })).hasSubmittedRemoval).toBe(false);
       expect((await getTransportDistanceDrift(ctx, { entityType: "feedstock", entityId: later.feedstockId })).hasSubmittedRemoval).toBe(true);
       expect((await getRecordLocks(ctx, db, [{ ...targets[0], transportOnly: false }], { sentOnly: true }))[0].level).toBe("sent");
-    });
+    }, "none");
+  }, "none");
+});
+
+async function insertSubmission(removalId: string, payloadSnapshot: Record<string, unknown>, state: "sent" | "reserved" = "sent") {
+  const [submission] = await db.insert(certificationSubmissions).values({
+    organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+    localEntityType: "removal", localEntityId: removalId, version: 1,
+    status: "draft", payloadSnapshot, lockedAt: state === "reserved" ? new Date() : null,
+  }).returning();
+  if (state === "sent") {
+    await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date(), externalId: `ext_${submission.id}` })
+      .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
+  }
+}
+
+it.each(["counted", "legacy"] as const)("keeps %s sent transport locked after an earlier run becomes batched", async snapshotKind => {
+  const ctx = makeTestOrgContext();
+  await withLineageFixture(async earlier => {
+    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-02-12T08:00:00Z"), endTime: new Date("2026-02-12T12:00:00Z") })
+      .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
+    await db.delete(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, TEST_ORG_ID), eq(creditBatchProductionRuns.creditBatchId, earlier.batchId)));
+    await withLineageFixture(async march => {
+      await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-03-12T08:00:00Z"), endTime: new Date("2026-03-12T12:00:00Z") })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, march.productionRunId)));
+      await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+        productionRunId: march.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
+      const [leg] = await db.insert(transportLegs).values({ organizationId: TEST_ORG_ID,
+        entityType: "feedstock", entityId: earlier.feedstockId, distanceKm: 10, loadMassKg: 1000, transportMethodType: "road" }).returning();
+      expect((await getFeedstockTransportOwners(ctx, [earlier.feedstockId])).get(earlier.feedstockId)).toBe(march.productionRunId);
+      await insertSubmission(march.removalId, snapshotKind === "counted" ? { transportFeedstockIds: [earlier.feedstockId] } : {});
+      await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
+        creditBatchId: earlier.batchId, productionRunId: earlier.productionRunId });
+      expect((await getFeedstockTransportOwners(ctx, [earlier.feedstockId])).get(earlier.feedstockId)).toBe(earlier.productionRunId);
+      const locked = { code: "certification_locked" };
+      await expect(updateTransportLeg(ctx, leg.id, { expectedVersion: leg.version, distanceKm: 20 })).rejects.toMatchObject(locked);
+      await expect(deleteTransportLeg(ctx, leg.id, leg.version)).rejects.toMatchObject(locked);
+      expect((await getRecordLocks(ctx, db, [{ entityType: "feedstock", entityId: earlier.feedstockId, transportOnly: true }], { sentOnly: true }))[0].level).toBe("sent");
+      expect(await getRecordCertificationLock(ctx, { entityType: "transport_leg", entityId: leg.id, scope: "transport" })).toBe(true);
+    }, "none");
   }, "none");
 });

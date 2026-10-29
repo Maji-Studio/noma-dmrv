@@ -333,6 +333,7 @@ export async function collectCandidateSourceDocumentsForRemoval(
     entryContributions?: RemovalEntryContributions;
     /** The production-claim-aware transport scope, including unapplied owner runs. */
     transportFeedstockIds?: string[];
+    feedstockCodes?: Readonly<Record<string, string>>;
   },
 ): Promise<CandidateSourceDocument[]> {
   const entities = new Map<string, CandidateLineageEntity>();
@@ -353,15 +354,17 @@ export async function collectCandidateSourceDocumentsForRemoval(
     });
     for (const feedstock of lineage.feedstocks) {
       if (args.transportFeedstockIds ? !args.transportFeedstockIds.includes(feedstock.id) : !feedstock.ownsTransport) continue;
+      const code = feedstock.code ?? args.feedstockCodes?.[feedstock.id];
       add({
         entityType: "feedstock",
         entityId: feedstock.id,
-        entityLabel: `Feedstock ${feedstock.code ?? feedstock.id}`,
+        entityLabel: code ? `Feedstock ${code}` : "Feedstock",
       });
     }
   }
   for (const id of args.transportFeedstockIds ?? []) {
-    add({ entityType: "feedstock", entityId: id, entityLabel: `Feedstock ${id}` });
+    const code = args.feedstockCodes?.[id];
+    add({ entityType: "feedstock", entityId: id, entityLabel: code ? `Feedstock ${code}` : "Feedstock" });
   }
   for (const batch of args.memberBatches ?? []) {
     add({

@@ -50,6 +50,11 @@ it("keeps transport views and BoL writes open until the owner Removal is sent, a
     await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, owner.productionRunId)));
     await withLineageFixture(async later => {
+      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+        .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
+      await db.insert(certificationSubmissions).values({ organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: later.removalId, externalId: `ext_${later.removalId}`, version: 1,
+        status: "submitted", submittedAt: new Date(), payloadHash: "test", payloadSnapshot: { transportFeedstockIds: [later.feedstockId] } });
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: owner.feedstockId, wetMassUsedKg: 1 });
       const ids = [owner.feedstockId, later.feedstockId];
@@ -109,6 +114,6 @@ it("keeps transport views and BoL writes open until the owner Removal is sent, a
         if (uploadKeys.length) await db.delete(storageObjectDeletions).where(and(eq(storageObjectDeletions.organizationId, TEST_ORG_ID), inArray(storageObjectDeletions.storageKey, uploadKeys)));
         await db.delete(documents).where(and(eq(documents.organizationId, TEST_ORG_ID), eq(documents.entityType, "feedstock"), inArray(documents.entityId, ids)));
       }
-    });
+    }, "none");
   }, "none");
 });

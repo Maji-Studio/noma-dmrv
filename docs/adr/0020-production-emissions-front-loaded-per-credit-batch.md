@@ -14,6 +14,7 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > linked only to those runs has no owner. Backdated runs or run status changes can
 > change live ownership;
 > already submitted snapshots remain immutable.
+> The sent Removal records which feedstock records’ transport it counted, and that record decides the transport lock; Removals sent before this change keep the full lock.
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per
