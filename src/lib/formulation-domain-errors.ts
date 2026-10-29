@@ -1,6 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
-import { ActionError } from "@/lib/action-error";
-import { IN_USE_DELETE_MARKER, IN_USE_REASON, inUseDeleteRefusal } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { SafeError } from "@/lib/errors";
 import { RATIO_SUM_EXCEEDED_MESSAGE } from "./formulation-ratios";
 
@@ -35,24 +34,17 @@ export function formulationLineInUse(formulationIngredientId: string, feedstockT
   return refusal("conflict", "This line is used by saved biochar products, so it cannot be removed. Keep the line or create a new formulation.", ["lines"], { formulationIngredientId, feedstockTypeId, productCodes });
 }
 /** What uses a formulation, and the refusal meta key that names the codes. */
-const FORMULATION_IN_USE_KINDS = {
+export const FORMULATION_IN_USE_KINDS = {
   "biochar products": "productCodes",
   "product bins": "binCodes",
   orders: "orderCodes",
 } as const;
-type FormulationInUseKind = keyof typeof FORMULATION_IN_USE_KINDS;
+export type FormulationInUseKind = keyof typeof FORMULATION_IN_USE_KINDS;
 
 export function formulationInUse(kind: FormulationInUseKind, codes: string[]): DomainError {
   return inUseDeleteRefusal(`${FORMULATION_IN_USE_PREFIX} ${kind} use it. Keep this formulation.`, ["formulationId"], { meta: { [FORMULATION_IN_USE_KINDS[kind]]: codes } });
 }
 
-/** "biochar products use it" for the dialog, read from the refusal's meta key; undefined when it names none. */
-export function formulationInUseReason(error: unknown): string | undefined {
-  if (!(error instanceof ActionError)) return undefined;
-  const meta = error.issues.find((issue) => issue.meta?.reason === IN_USE_REASON)?.meta;
-  const kind = (Object.keys(FORMULATION_IN_USE_KINDS) as FormulationInUseKind[]).find((name) => meta && FORMULATION_IN_USE_KINDS[name] in meta);
-  return kind ? `${kind} use it` : undefined;
-}
 export function formulationFreezesTypeUsage(name: string): DomainError {
   return refusal("conflict", `This feedstock type is used by formulation ${name}, so its usage cannot change.`, ["usage"]);
 }

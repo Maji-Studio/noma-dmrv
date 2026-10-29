@@ -3,7 +3,7 @@ import { ActionError } from "@/lib/action-error";
 import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { formulationInUse } from "@/lib/formulation-domain-errors";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within as queries } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { FormulationList } from "./formulation-list";
@@ -155,7 +155,7 @@ describe("FormulationList archive view", () => {
     state.remove.mockRejectedValue(new ActionError({ error: error.message, ...error }));
     render(<FormulationList />);
     if (archived) fireEvent.click(screen.getByRole("button", { name: "Archived" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(rowDelete(code));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     expect(await screen.findByText(`${code} cannot be deleted because biochar products use it.`)).toBeTruthy();
   });
@@ -183,6 +183,10 @@ describe("FormulationList archive view", () => {
     expect(screen.getByText("Formulations you archive will appear here and can be restored.")).toBeTruthy();
   });
 });
+
+function rowDelete(code: string): HTMLElement {
+  return queries(screen.getByRole("list", { name: `Actions for ${code}` })).getByRole("button", { name: "Delete" });
+}
 
 function within(label: string): string[] {
   return Array.from(screen.getByRole("list", { name: label }).querySelectorAll("li")).map((item) => item.textContent ?? "");
