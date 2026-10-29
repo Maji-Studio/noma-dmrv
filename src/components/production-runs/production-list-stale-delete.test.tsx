@@ -8,6 +8,7 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, 
 const INITIAL_VERSION = 1;
 const REFRESHED_VERSION = 2;
 const state = vi.hoisted(() => ({ row: { id: "record", code: "RECORD-1", version: 1 }, remove: vi.fn() }));
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility", facilities: [] }) }));
 vi.mock("@/hooks/use-production-runs", () => ({

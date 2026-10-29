@@ -57,6 +57,15 @@ describe("ApplicationStorageLocationSync", () => {
     expect(hookState.mutate).not.toHaveBeenCalled();
   });
 
+  it("shows the status without the sync action on a read-only sheet", () => {
+    const html = renderToStaticMarkup(
+      <ApplicationStorageLocationSync applicationId="app-1" readOnly />,
+    );
+
+    expect(html).toContain("Sync failed");
+    expect(html).not.toContain("Retry sync");
+  });
+
   it("shows the immutable registry identity after synchronization", () => {
     hookState.data = {
       state: "synced",

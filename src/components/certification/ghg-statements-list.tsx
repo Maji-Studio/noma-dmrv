@@ -359,7 +359,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
   const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
   const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
-  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading);
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading).ready;
   useEffect(() => {
     // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
     if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {

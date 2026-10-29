@@ -75,7 +75,7 @@ export function buildBatchEmissionLines(
   observation: EntryObservation,
   entries: readonly (ReturnType<typeof deriveEmissionEntryFacts>[number] & LateEntryFacts)[],
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
-  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
+  automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts" | "feedstockTransportCountedOn">,
   comments: Awaited<ReturnType<typeof listEmissionLineCommentsForBatches>> = [],
 ) {
   const currentComponents = new Set(observation.definition.groups.flatMap((group) => group.components.map((component) => component.id)));

@@ -22,7 +22,10 @@ export interface EmissionLineRecords {
   source: EmissionRecordSource;
   count: number;
   figure: EmissionFigure | null;
+  /** A recorded zero whose legs another credit batch counts: those batches, linked in place of the count. */
+  countedOn?: readonly CountedOnBatch[];
 }
+export interface CountedOnBatch { creditBatchId: string; code: string }
 const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
   "run-genset-diesel": "productionRuns", "run-startup-diesel": "productionRuns",
   "run-electricity": "productionRuns", "feedstock-dry-mass": "productionRuns",
@@ -50,6 +53,8 @@ export interface BatchEmissionLineFacts {
   enrichmentComplete: boolean;
   entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
+  feedstockTransportCountedOn?: readonly CountedOnBatch[];
   omittedAutomaticSources?: readonly AutomaticSourceId[];
   automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
@@ -93,6 +98,8 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       source: RECORD_SOURCES[contract.automaticSource],
       count: facts.automaticRecordCounts?.[contract.automaticSource] ?? 0,
       figure: automaticFigure,
+      ...(contract.automaticSource === "feedstock-transport" && facts.feedstockTransportCountedOn?.length
+        ? { countedOn: facts.feedstockTransportCountedOn } : {}),
     } : null;
     let state: EmissionLineState;
     let blocker: RemovalBlocker | undefined = decision?.blocker;

@@ -21,6 +21,8 @@ export interface ApplicationSheetContext {
   delivery: Pick<ApplicationDeliveryOption, "productBinName" | "formulationName" | "deliveryDate" | "deliveryDay"> | undefined;
   lock: Pick<UseQueryResult<unknown>, "data" | "isPending" | "error" | "isFetching" | "refetch">;
   durabilityOption: string;
+  /** Read only (a link into an archived facility): no upload, delete or sync. */
+  readOnly?: boolean;
 }
 
 /** "-8.1, 35.2", or null when either coordinate is missing. */
@@ -127,7 +129,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
               <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>Retry certification check</Button>
             </div>
           )}
-          <ApplicationSupportingEvidencePanel applicationId={application.id} />
+          <ApplicationSupportingEvidencePanel applicationId={application.id} readOnly={context.readOnly} />
         </>
       ),
     },
@@ -137,6 +139,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       content: (
         <ApplicationStorageLocationSync
           applicationId={application.id}
+          readOnly={context.readOnly}
         />
       ),
     },
