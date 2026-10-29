@@ -1,7 +1,7 @@
 import { recordHref } from "@/lib/record-links";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
-import type { CreditBatchLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
+import type { CreditBatchMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -38,6 +38,8 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 /** Overview rows a health check lands on: the Removal template block and the batch details. */
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
+export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
+export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 
 export interface CreditBatchOpenItem {
   id: string;
@@ -45,6 +47,8 @@ export interface CreditBatchOpenItem {
   detail?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
+  /** The run a missing-run Check names, so other surfaces can link its code. */
+  productionRun?: { id: string; code: string };
   /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
@@ -58,7 +62,7 @@ export interface CreditBatchOpenItemsInput {
   health?: BatchHealth;
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
-  lateProductionRuns?: CreditBatchLateProductionRuns;
+  missingProductionRuns?: CreditBatchMissingProductionRuns;
   /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
 }
@@ -139,22 +143,43 @@ function removalCorrectionItem(
   };
 }
 
+/** Runs whose emissions have not already been reported by a later manual entry. */
+export function uncoveredProductionRuns(missing: CreditBatchMissingProductionRuns) {
+  return missing.runs.filter(run => {
+    const entryDate = lateRunEntryDate(run.startDate, missing.batchStartDate);
+    return !missing.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt);
+  });
+}
+
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   const canManage = input.canManage;
   const blocking: CreditBatchOpenItem[] = [];
   const check: CreditBatchOpenItem[] = [];
 
-  const late = input.lateProductionRuns;
+  const late = input.missingProductionRuns;
   if (late?.sentRemovalCodes.length) {
     const codes = joinWithAnd(late.sentRemovalCodes);
-    for (const run of late.runs) {
+    for (const run of uncoveredProductionRuns(late)) {
       const entryDate = lateRunEntryDate(run.startDate, late.batchStartDate);
-      if (late.manualEntries.some(entry => entry.occurredOn === entryDate && entry.createdAt > run.createdAt)) continue;
       check.push({
-        id: `late-production-run:${run.id}`,
+        id: `${LATE_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
+        productionRun: { id: run.id, code: run.code },
         title: `${run.code} was recorded after ${codes} ${late.sentRemovalCodes.length === 1 ? "was" : "were"} sent`,
         detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { tab: "emissions" },
+      });
+    }
+  } else if (late?.heldRemovalCodes.length) {
+    const codes = joinWithAnd(late.heldRemovalCodes);
+    for (const run of uncoveredProductionRuns(late)) {
+      check.push({
+        id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
+        productionRun: { id: run.id, code: run.code },
+        title: `${run.code} is not in this credit batch yet`,
+        detail: canManage
+          ? `Its emissions are not counted. Add it in Edit before ${codes} ${late.heldRemovalCodes.length === 1 ? "is" : "are"} sent.`
+          : "Its emissions are not counted. An admin can add it in Edit.",
+        target: canManage ? { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW } : null,
       });
     }
   }

@@ -456,6 +456,10 @@ describe("CreditBatchForm held batch: add a missed run", () => {
 
   afterEach(() => { mocks.extraRuns = []; });
 
+  /** Rows of the batch's own list, not the add list below it. */
+  const listedRuns = (container: HTMLElement) => [...container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]')]
+    .filter((row) => !row.closest('[data-testid="credit-batch-add-run"]'));
+
   async function renderHeld(level: "open" | "in_use" | "sent", onSubmit = vi.fn()) {
     setRuns();
     const view = render(<CreditBatchForm creditBatch={creditBatch} lock={lockOf(level)} onSubmit={onSubmit} />);
@@ -466,7 +470,7 @@ describe("CreditBatchForm held batch: add a missed run", () => {
   it("offers Add run on a held batch and keeps existing runs without a remove button", async () => {
     const { container } = await renderHeld("in_use");
     expect(screen.getByRole("button", { name: "Add run PR-0415" })).toBeTruthy();
-    expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(1);
+    expect(listedRuns(container).length).toBe(1);
     expect(screen.queryByRole("button", { name: /^Undo adding/ })).toBeNull();
     expect(container.querySelector('a[href*="run=' + SAVED_ID + '"]')?.textContent).toBe("PR-0412");
   });
@@ -475,7 +479,7 @@ describe("CreditBatchForm held batch: add a missed run", () => {
     const { container, onSubmit } = await renderHeld("in_use");
     fireEvent.click(screen.getByRole("button", { name: "Add run PR-0415" }));
     await act(async () => {});
-    expect(container.querySelectorAll('[data-testid="credit-batch-production-run-preview"]').length).toBe(2);
+    expect(listedRuns(container).length).toBe(2);
     expect(screen.queryByRole("button", { name: "Add run PR-0415" })).toBeNull();
     expect(screen.getAllByRole("button", { name: /^Undo adding/ }).length).toBe(1);
     await act(async () => { fireEvent.submit(container.querySelector("form")!); });

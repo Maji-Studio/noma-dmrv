@@ -94,6 +94,7 @@ it.each([false, true])("threads explicit submission enrichment freshness to faci
 // These entry-enabled regressions run the real context and overview orchestration with DB seams mocked.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof import("@/data-access/utils")>(), requireOrgFacility: vi.fn() }));
+vi.mock("@/data-access/credit-batch-missing-production-runs", () => ({ loadCreditBatchesMissingProductionRuns: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
 vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
@@ -103,6 +104,7 @@ vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches
 vi.mock("@/data-access/emission-zeros", () => ({ isRemovalZeroEditable: vi.fn(async () => true) }));
 vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
 vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
+import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { loadBatchEmissionContext } from "./batch-emission-context";
@@ -158,4 +160,30 @@ it("suppresses correction projections while compiling the shared comparison", as
   const facilityFacts = facts(fixture as GhgEntryTemplate);
   await buildRemovalContext(ctx, scope, facilityFacts, { correctionRead: true });
   expect(loadBatchEmissionContext).toHaveBeenCalledWith(ctx, scope.facilityId, scope.memberBatches, facilityFacts, expect.objectContaining({ loadCorrection: undefined, ownedRemovalId: scope.removalId ?? undefined }));
+});
+
+it("projects only held batches with uncovered runs into the Removal summary", async () => {
+  const removal = { id: scope.removalId, code: "RM-1", metadata: null, updatedAt: new Date() };
+  const memberBatches = ["held", "sent", "empty", "covered"].map(id => ({
+    ...scope.memberBatches[0], id, code: `CB-${id}`,
+  }));
+  vi.mocked(resolveScopeForRemoval).mockResolvedValue({ ...scope, removal, memberBatches } as RemovalScope);
+  vi.mocked(loadFacilityCertifierFacts).mockResolvedValue(facts(fixture as GhgEntryTemplate));
+  vi.mocked(listRemovalsForFacility).mockResolvedValue([removal] as never);
+  const run = { id: "run-1", code: "PR-1", startDate: "2026-09-09", createdAt: new Date("2026-10-01") };
+  const missing = { sentRemovalCodes: [], heldRemovalCodes: [removal.code], batchStartDate: "2026-09-01",
+    runs: [run], manualEntries: [] };
+  vi.mocked(loadCreditBatchesMissingProductionRuns).mockResolvedValueOnce(new Map([
+    ["held", missing],
+    ["sent", { ...missing, sentRemovalCodes: ["RM-2"], heldRemovalCodes: [] }],
+    ["empty", { ...missing, runs: [] }],
+    ["covered", { ...missing, manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }] }],
+  ]));
+  const result = await loadCertificationOverview(scope.facilityId);
+  expect(result.success).toBe(true);
+  if (!result.success) throw new Error(result.error);
+  expect(result.data.removals[0].missingProductionRuns).toEqual([
+    { creditBatchId: "held", creditBatchCode: "CB-held", runs: [{ id: run.id, code: run.code }] },
+  ]);
+  expect(loadCreditBatchesMissingProductionRuns).toHaveBeenCalledExactlyOnceWith(ctx, memberBatches.map(batch => batch.id));
 });

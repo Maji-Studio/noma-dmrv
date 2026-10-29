@@ -25,7 +25,7 @@ import type { IsometricClient } from "@/lib/isometric/client";
 import * as batchSamples from "@/data-access/credit-batch-samples";
 import * as batchEmissionLines from "@/lib/read-models/batches-emission-lines";
 import * as facilityFacts from "@/fn/certification/facility-certifier-facts";
-import * as lateProductionRuns from "@/data-access/credit-batch-late-production-runs";
+import * as missingProductionRuns from "@/data-access/credit-batch-missing-production-runs";
 import templateFixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "./fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -255,7 +255,7 @@ it("loads facility facts once through the real list action for pinned and unpinn
   const spy = vi.spyOn(facilityFacts, "loadFacilityCertifierFacts");
   const linesSpy = vi.spyOn(batchEmissionLines, "loadBatchesEmissionLines");
   const samplesSpy = vi.spyOn(batchSamples, "getCreditBatchesWithSamples");
-  const lateRunsSpy = vi.spyOn(lateProductionRuns, "loadCreditBatchesLateProductionRuns");
+  const lateRunsSpy = vi.spyOn(missingProductionRuns, "loadCreditBatchesMissingProductionRuns");
   const result = await loadCreditBatchHealthSummaries(facilityId, [batch.id, sibling.id]);
   assert(result.success, JSON.stringify(result));
   expect(spy).toHaveBeenCalledExactlyOnceWith(ctx, facilityId);

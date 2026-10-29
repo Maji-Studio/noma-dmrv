@@ -51,6 +51,7 @@ import { RecordUsedBy, recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordEditable } from "@/lib/record-lock-view";
 import { creditBatchSheetSections } from "./credit-batch-view";
+import { lateRunsFromTodos, missingRunsFromTodos } from "./credit-batch-missing-runs-notice";
 import {
   CreditBatchFilters,
   type CreditBatchReadinessFilter,
@@ -84,7 +85,7 @@ import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
+import { useCreditBatchHealthSummaries, useCreditBatchTodos } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
@@ -480,6 +481,12 @@ export function CreditBatchList({
   const membershipLocked = isCreditBatchMembershipLocked(sheetLock);
   // One read for the one batch the sheet shows: its applied biochar is dry, as on the page.
   const sheetPageModel = useCreditBatchPageModel(viewEntity?.id ?? "");
+  // The batch's to-dos name the runs it is missing; a failed read shows none.
+  const sheetTodos = useCreditBatchTodos(viewEntity
+    ? { facilityId: viewEntity.facilityId, creditBatchId: viewEntity.id }
+    : null);
+  const missingRuns = sheetTodos.isError ? [] : missingRunsFromTodos(sheetTodos.data?.check);
+  const lateRuns = sheetTodos.isError ? [] : lateRunsFromTodos(sheetTodos.data?.check);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -826,6 +833,11 @@ export function CreditBatchList({
                 appliedDryKg: sheetPageModel.error
                   ? null
                   : sheetPageModel.data?.mass.appliedDryKg,
+                missingRuns,
+                lateRuns,
+                onEditMissingRuns: canManage && isRecordEditable(sheetLock)
+                  ? () => handleModeChange("edit")
+                  : undefined,
               })
             : undefined
         }
