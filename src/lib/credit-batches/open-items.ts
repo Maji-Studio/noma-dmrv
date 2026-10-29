@@ -47,7 +47,10 @@ export interface CreditBatchOpenItem {
   title: string;
   /** The title text after the linked production run code. */
   titleAfterCode?: string;
+  /** What is the case. A read-only batch shows this alone. */
   detail?: string;
+  /** What to do about it; dropped on a read-only batch. Shown after `detail`. */
+  instruction?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
   why?: string;
   /** The run a missing-run Check names, so other surfaces can link its code. */
@@ -92,13 +95,13 @@ const DOCUMENT_WARNING_ITEMS: Record<SampleDocumentWarningKey, CreditBatchOpenIt
   labReport: {
     id: "document:lab-report",
     title: "No lab report on any Sample",
-    detail: "Upload a lab report to one of its Samples. You can still submit the Removal.",
+    instruction: "Upload a lab report to one of its Samples. You can still submit the Removal.",
     target: { tab: "samples" },
   },
   reflectanceHistogram: {
     id: "document:reflectance-histogram",
     title: "No reflectance histogram on any Sample",
-    detail: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
+    instruction: "Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
     target: { tab: "samples" },
   },
 };
@@ -133,17 +136,23 @@ function removalCorrectionItem(
       id: `correction:${correction.removalId}`,
       title: `${code}: ${RESUBMIT_NEEDED_LABEL}`,
       detail: names.length
-        ? `${joinWithAnd(names)} changed here since ${code} was sent. Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
+        ? `${joinWithAnd(names)} changed here since ${code} was sent.`
         : correction.comparison === "unavailable"
-          ? `${comparisonUnavailableClause(code)}. Open the Removal to see why.`
-          : `Records or files changed since ${code} was sent. Resubmit the Removal to send the changes.`,
+          ? `${comparisonUnavailableClause(code)}.`
+          : `Records or files changed since ${code} was sent.`,
+      instruction: names.length
+        ? `Resubmit the Removal to send ${names.length === 1 ? "it" : "them"}.`
+        : correction.comparison === "unavailable"
+          ? "Open the Removal to see why."
+          : "Resubmit the Removal to send the changes.",
       target: { href: recordHref("removal", correction.removalId, { facilityId }) },
     };
   }
   return {
     id: `correction:${correction.removalId}`,
     title: `${code}: ${RETURNED_BY_ISOMETRIC_LABEL}`,
-    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}. You can correct this batch's records, and its emissions entries on the Emissions tab.`,
+    detail: `${correctionStatementLabel(correction.statement)} ${returnedStatementPhrase(correction.statement.status)}.`,
+    instruction: "You can correct this batch's records, and its emissions entries on the Emissions tab.",
     target: { tab: "emissions" },
   };
 }
@@ -247,7 +256,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         productionRun: { id: run.id, code: run.code },
         title: `${run.code}${titleAfterCode}`,
         titleAfterCode,
-        detail: `It is not in this credit batch. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
+        detail: "It is not in this credit batch.",
+        instruction: `Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(entryDate)}.`,
         target: { tab: "emissions" },
       });
     }
@@ -261,24 +271,24 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
           productionRun: { id: run.id, code: run.code },
           title: `${run.code}${titleAfterCode}`,
           titleAfterCode,
-          detail: `Its biochar is in an Application that ${run.heldByRemovalCode} already holds. Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(run.entryDate)}.`,
+          detail: `Its biochar is in an Application that ${run.heldByRemovalCode} already holds.`,
+          instruction: `Record its diesel and power on the Emissions tab, dated ${formatCalendarDate(run.entryDate)}.`,
           target: { tab: "emissions" },
         });
         continue;
       }
       const titleAfterCode = " is not in this credit batch yet";
-      const sameDayDetail = run.sameDayEntry
-        ? ` If the Emissions entry dated ${formatCalendarDate(run.entryDate)} already records them, delete it when you add the run.`
-        : "";
+      const sameDayInstruction = run.sameDayEntry
+        ? `If the Emissions entry dated ${formatCalendarDate(run.entryDate)} already records them, delete it when you add the run.`
+        : undefined;
       check.push({
         id: `${MISSING_PRODUCTION_RUN_ITEM_PREFIX}${run.id}`,
         productionRun: { id: run.id, code: run.code },
         title: `${run.code}${titleAfterCode}`,
         titleAfterCode,
         ...(run.sameDayEntry ? { sameDayEntryDate: run.entryDate } : {}),
-        detail: canManage
-          ? `Its emissions are not counted in ${codes}.${sameDayDetail}`
-          : `Its emissions are not counted in ${codes}. ${missingRunsMemberSentence(1)}`,
+        detail: `Its emissions are not counted in ${codes}.`,
+        instruction: canManage ? sameDayInstruction : missingRunsMemberSentence(1),
         target: canManage ? { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW } : null,
       });
     }
@@ -403,4 +413,9 @@ export function buildCreditBatchWaitingItems(pageModel: CreditBatchPageModel | u
     });
   }
   return waiting;
+}
+
+/** The row's text as an editable batch reads it: the fact, then what to do about it. */
+export function openItemText(item: Pick<CreditBatchOpenItem, "detail" | "instruction">): string | undefined {
+  return [item.detail, item.instruction].filter(Boolean).join(" ") || undefined;
 }

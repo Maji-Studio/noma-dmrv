@@ -51,9 +51,9 @@ export interface CreditBatchRemovalTemplateProps {
 }
 
 /** Why a credit batch with components to decide can't go into a Removal, and who decides them. */
-export function linesToDecideNoticeText(count: number, canManage: boolean, inRemoval = false): string {
+export function linesToDecideNoticeText(count: number, canManage: boolean, inRemoval = false, readOnly = false): string {
   const lead = `${linesToDecideLabel(count)}, so this credit batch can't go into ${inRemoval ? "another" : "a"} Removal.`;
-  if (canManage) return lead;
+  if (canManage || readOnly) return lead;
   return `${lead} ${linesDecidedByAdmin(count)}`;
 }
 
@@ -158,7 +158,7 @@ export function CreditBatchRemovalTemplate({
             </Link>
           ) : undefined}
         >
-          {linesToDecideNoticeText(linesToDecide, canManage, inRemoval)}
+          {linesToDecideNoticeText(linesToDecide, canManage, inRemoval, readOnly)}
         </Notice>
       )}
       {pinnedId && (

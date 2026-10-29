@@ -123,7 +123,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         : <SubBinBays subBins={layers} timeZone={zone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
       {!subBins.isLoading && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
     </StockCard>
-    <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} readOnly={readOnly} timeZone={zone}
+    <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} readOnly={readOnly} balance={readOnly ? preview.data : undefined} timeZone={zone}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
       {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={zone} now={history.dataUpdatedAt} formatEstimate={estimateKg} /> : undefined}
     </StockChartCard>

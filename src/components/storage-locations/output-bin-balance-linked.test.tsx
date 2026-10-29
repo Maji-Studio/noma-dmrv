@@ -30,7 +30,8 @@ vi.mock("@/hooks/use-output-stock", () => ({
   },
   useOutputStockHistory: () => ({ data: [], isLoading: false, error: null, dataUpdatedAt: 0 }),
 }));
-vi.mock("./output-stock-history", () => ({ OutputStockHistory: () => null }));
+const history = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+vi.mock("./output-stock-history", () => ({ OutputStockHistory: (props: Record<string, unknown>) => { history.props.push(props); return null; } }));
 
 import { OutputBinBalance } from "./output-bin-balance";
 
@@ -49,6 +50,12 @@ describe("OutputBinBalance on a read-only bin", () => {
     expect(calls.linked.every((input) => input !== null)).toBe(true);
     expect(calls.balance.every((input) => input === null)).toBe(true);
     expect(calls.subBins.every((input) => input === null)).toBe(true);
+  });
+
+  it("H4: hands the history the linked balance as its headline", () => {
+    history.props = [];
+    render(<OutputBinBalance storageLocationId="bin-1" facilityId="fac-1" capacityKg={null} readOnly />);
+    expect(history.props.at(-1)).toMatchObject({ readOnly: true, balance: { beforeEstimatedWetKg: 150, beforeDryKg: 120 } });
   });
 
   it("keeps the linked read idle on an editable bin", () => {

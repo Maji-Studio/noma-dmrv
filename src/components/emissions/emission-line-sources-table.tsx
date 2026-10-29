@@ -176,7 +176,7 @@ function StoppedRow({ line, entry, scope, groupLabel, canEnterAgain, readOnly, o
       <EntrySource groupLabel={groupLabel} dateText={dateText} muted />
       <span role="cell" className={cn(DATE_CELL, "text-[var(--color-text-tertiary)]")}>{dateText}</span>
       <span role="cell" className={cn(DETAIL_CELL, "flex flex-col items-start gap-8")}>
-        <span className="body-caption text-[var(--st-wait)]">{stoppedEntryMessage(entry, canEnterAgain)}</span>
+        <span className="body-caption text-[var(--st-wait)]">{stoppedEntryMessage(entry, canEnterAgain, readOnly)}</span>
         {!readOnly && entry.canConfirm && <Button size="small" variant="primary" busy={confirming} onClick={() => void confirmEntry()}>Confirm</Button>}
         {!readOnly && !entry.canConfirm && canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>}
         {error && <ServerError message={error} />}

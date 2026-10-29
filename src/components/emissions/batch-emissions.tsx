@@ -158,7 +158,7 @@ export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: 
         <BatchEmissionsPager creditBatchId={scope.creditBatchId} facilityId={scope.facilityId} lineFilter={filter} lineSort={sort} />
       )}
       {isEmissionLinesBlocked(linesQuery.error) ? (
-        <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
+        <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} readOnly={readOnly} />
       ) : linesQuery.error && !linesQuery.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
           {linesQuery.error.message || "The components could not be loaded."}
@@ -167,7 +167,7 @@ export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: 
         <Skeleton className={LIST_SKELETON} />
       ) : (
         <>
-          <BatchKpiStrip kpis={batchKpis(lines, timeZone, today)} filter={filter} onFilter={setFilter} />
+          <BatchKpiStrip kpis={batchKpis(lines, timeZone, today)} timeZone={timeZone} filter={filter} onFilter={setFilter} />
           <div className="flex flex-col gap-12">
             <LineToolbar counts={counts} filter={filter} sort={sort} onFilter={setFilter} onSort={setSort} />
             <EmissionLineList

@@ -607,6 +607,7 @@ export function CreditBatchList({
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
                 canManage: canManage && !sheetReadOnly,
+                readOnly: !!sheetReadOnly,
                 locked: sideSheetLocked,
                 inRemoval: membershipLocked,
                 activeFocusTarget:

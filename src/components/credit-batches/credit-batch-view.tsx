@@ -281,6 +281,8 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   lateRuns?: readonly LateRunRef[];
   /** Opens Edit, where Add run lives; undefined when the batch cannot be edited. */
   onEditMissingRuns?: () => void;
+  /** A read-only batch (archived facility): notices state facts alone, with no repair action. */
+  readOnly?: boolean;
 }
 
 export function creditBatchSheetSections({
@@ -300,6 +302,7 @@ export function creditBatchSheetSections({
   missingRuns = [],
   lateRuns = [],
   onEditMissingRuns,
+  readOnly = false,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const removalCode = creditBatch.productionEmissionsClaimedByRemovalId
@@ -348,6 +351,7 @@ export function creditBatchSheetSections({
           activeFocusTarget={activeFocusTarget}
           linesToDecide={healthSummary?.linesToDecide ?? 0}
           inRemoval={inRemoval}
+          readOnly={readOnly}
         />
       ),
     },
@@ -410,11 +414,13 @@ export function creditBatchSheetSections({
             facilityId={creditBatch.facilityId}
             canManage={canManage}
             onEdit={onEditMissingRuns}
+            readOnly={readOnly}
           />
           <CreditBatchLateRunsNotice
             runs={lateRuns}
             creditBatchId={creditBatch.id}
             facilityId={creditBatch.facilityId}
+            readOnly={readOnly}
           />
           <CreditBatchCarbonEstimate
             creditBatch={creditBatch}

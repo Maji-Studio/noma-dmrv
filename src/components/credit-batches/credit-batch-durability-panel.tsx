@@ -314,7 +314,9 @@ export function CreditBatchDurabilityPanel({
           padding="md"
           icon={<FlaskIcon size={40} weight="duotone" />}
           title="No lab Samples yet"
-          description="Lab Samples recorded for this credit batch appear here. Record at least three Samples that represent the batch's full range of physical characteristics."
+          description={canRecord
+            ? "Lab Samples recorded for this credit batch appear here. Record at least three Samples that represent the batch's full range of physical characteristics."
+            : "Lab Samples recorded for this credit batch appear here."}
         />
       </Section>
     );

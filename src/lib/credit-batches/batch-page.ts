@@ -31,23 +31,15 @@ export interface CreditBatchOpenItemGroups {
   waiting: readonly CreditBatchOpenItem[];
 }
 
-const INSTRUCTION = /^(Record|Upload|You can|Resubmit|Open|Add|Ask|Decide|Answer)\b|on the Emissions tab/;
-
-/** A detail's facts without its instructions: nothing can be recorded or fixed on a read-only batch. */
-function factsOnly(detail: string | undefined): string | undefined {
-  const facts = detail?.split(/(?<=\.)\s+/).filter((sentence) => !INSTRUCTION.test(sentence)).join(" ");
-  return facts || undefined;
-}
-
 /**
  * On a read-only batch a to-do is a plain fact: the batch-details row (opens
  * Edit), the repair links and the Emissions tab (where records are made) lose
- * their target, and the detail drops its instructions. Other tabs stay reachable.
+ * their target, and the instruction (what to do) is dropped. Other tabs stay reachable.
  */
 export function readOnlyOpenItems(items: CreditBatchOpenItemGroups): CreditBatchOpenItemGroups {
   const plain = (item: CreditBatchOpenItem): CreditBatchOpenItem => {
     const writes = item.target && ("href" in item.target || item.target.rowId === CREDIT_BATCH_DETAILS_ROW || item.target.tab === "emissions");
-    return { ...item, ...(writes ? { target: null } : {}), detail: factsOnly(item.detail) };
+    return { ...item, ...(writes ? { target: null } : {}), instruction: undefined };
   };
   return { blocking: items.blocking.map(plain), check: items.check.map(plain), waiting: items.waiting.map(plain) };
 }

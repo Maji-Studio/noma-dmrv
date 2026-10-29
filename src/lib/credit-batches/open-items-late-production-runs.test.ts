@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildCreditBatchOpenItems } from "./open-items";
+import { renderedOpenItems } from "../../../tests/helpers/rendered-open-items";
+import { buildCreditBatchOpenItems as buildItems } from "./open-items";
+
+const buildCreditBatchOpenItems: typeof buildItems = (input) => renderedOpenItems(buildItems(input));
 import { overviewBadgeCount, tabBadge } from "./batch-page";
 
 const context = { facilityId: "facility", creditBatchId: "batch", canManage: true };
@@ -89,5 +92,11 @@ describe("late production run Check to-dos", () => {
       ...missingProductionRuns, sentRemovalCodes: [],
     } })).toEqual({ blocking: [], check: [] });
     expect(buildCreditBatchOpenItems(context)).toEqual({ blocking: [], check: [] });
+  });
+
+  it("keeps the fact in detail and the next step in instruction", () => {
+    const { check } = buildItems({ ...context, missingProductionRuns });
+    expect(check[0].detail).toBe("It is not in this credit batch.");
+    expect(check[0].instruction).toBe("Record its diesel and power on the Emissions tab, dated Sep 9, 2026.");
   });
 });

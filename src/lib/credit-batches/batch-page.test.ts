@@ -248,23 +248,28 @@ describe("tabBadge", () => {
 });
 
 describe("readOnlyOpenItems", () => {
-  const item = (id: string, target: CreditBatchOpenItem["target"], detail?: string): CreditBatchOpenItem => ({ id, title: id, target, detail });
+  const item = (id: string, target: CreditBatchOpenItem["target"], detail?: string, instruction?: string): CreditBatchOpenItem => ({ id, title: id, target, detail, instruction });
   it("turns Emissions, repair and batch-details rows into plain facts and keeps other tabs", () => {
     const groups = readOnlyOpenItems({
       blocking: [],
       check: [
-        item("late", { tab: "emissions" }, "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Oct 1, 2026."),
-        item("fix", { href: "/settings" }, "Open the Removal to see why."),
-        item("samples", { tab: "samples" }, "Upload a lab report to one of its Samples. You can still submit the Removal."),
+        item("late", { tab: "emissions" }, "It is not in this credit batch.", "Record its diesel and power on the Emissions tab, dated Oct 1, 2026."),
+        item("fix", { href: "/settings" }, "Records changed since RM-1 was sent.", "Resubmit the Removal."),
+        item("samples", { tab: "samples" }, undefined, "Upload a lab report to one of its Samples."),
+        item("if", { tab: "samples" }, "Its emissions are not counted in RM-1.", "If an entry already records them, delete it. An admin can add the run."),
       ],
       waiting: [],
     });
-    const [late, fix, samples] = groups.check;
+    const [late, fix, samples, conditional] = groups.check;
     expect(late.target).toBeNull();
     expect(late.detail).toBe("It is not in this credit batch.");
     expect(fix.target).toBeNull();
-    expect(fix.detail).toBeUndefined();
+    expect(late.instruction).toBeUndefined();
+    expect(fix.detail).toBe("Records changed since RM-1 was sent.");
+    expect(fix.instruction).toBeUndefined();
     expect(samples.target).toEqual({ tab: "samples" });
-    expect(samples.detail).toBeUndefined();
+    expect(samples.instruction).toBeUndefined();
+    expect(conditional.detail).toBe("Its emissions are not counted in RM-1.");
+    expect(conditional.instruction).toBeUndefined();
   });
 });

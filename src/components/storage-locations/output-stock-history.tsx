@@ -50,7 +50,7 @@ function Headline({ wetKg, dryKg }: { wetKg: number | null; dryKg: number }) {
   );
 }
 
-export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger, readOnly = false, timeZone }: {
+export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger, readOnly = false, balance: linkedBalance, timeZone }: {
   storageLocationId: string;
   facilityId: string;
   movementId?: string;
@@ -60,6 +60,8 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   renderTrigger?: (open: () => void, icon: ReactNode) => ReactNode;
   /** Hides Lost mass Edit and Delete on a read-only bin; the history stays visible. */
   readOnly?: boolean;
+  /** The bin now, already read by the card: a read-only bin cannot use the active-only balance read. */
+  balance?: { beforeEstimatedWetKg: number | null; beforeDryKg: number };
   /** The record's own zone when its facility is archived and outside the facility list. */
   timeZone?: string;
 }) {
@@ -72,10 +74,10 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const [deleting, setDeleting] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
   // The bin now, as its stock card reads it; one movement opened on its own needs no headline.
-  const balance = useOutputStockBalance(open && !movementId ? { storageLocationId, facilityId } : null);
+  const liveBalance = useOutputStockBalance(!readOnly && open && !movementId ? { storageLocationId, facilityId } : null);
   const entries = history.data ?? [];
   const days = buildHistoryDays(entries, zone, movementId);
-  const now = balance.data;
+  const now = readOnly ? (movementId ? undefined : linkedBalance) : liveBalance.data;
   const openHistory = () => setOpen(true);
   const icon = <ClockCounterClockwiseIcon size={compact ? 18 : ICON_PX} aria-hidden="true" />;
 

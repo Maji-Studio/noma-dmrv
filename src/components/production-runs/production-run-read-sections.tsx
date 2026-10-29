@@ -1,5 +1,6 @@
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
@@ -116,8 +117,8 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
       fields: [],
       content: (
         <div className="space-y-20">
-          <ProductionSampleTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
-          <ProductionIncidentTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
+          <ProductionSampleTable facilityId={run.facilityId} productionRunId={run.id} readOnly timeZone={resolveFacilityTimezone(facilities, run.facilityId)} />
+          <ProductionIncidentTable facilityId={run.facilityId} productionRunId={run.id} readOnly timeZone={resolveFacilityTimezone(facilities, run.facilityId)} />
         </div>
       ),
     },
