@@ -174,10 +174,13 @@ export async function getCreditBatchCertifierForFacility(ctx: OrgContext, facili
   return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
+/** The grey Name on Create: the next code, and the latest name continued when it ends in a number. */
+export type CreditBatchNameSuggestion = { nextCode: string; name: string | null };
+
 export async function getCreditBatchNameSuggestion(
   ctx: OrgContext,
   facilityId: string,
-): Promise<{ nextCode: string; name: string | null }> {
+): Promise<CreditBatchNameSuggestion> {
   requireOrgScope(ctx);
   const [latest] = await db
     .select({ name: creditBatches.name })

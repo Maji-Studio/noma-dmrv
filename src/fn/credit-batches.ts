@@ -24,6 +24,7 @@ import {
   type SavedCreditBatch,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
+  type CreditBatchNameSuggestion,
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
@@ -114,7 +115,7 @@ export async function getCreditBatchProductionRunOptionsFn(
 
 export async function getCreditBatchNameSuggestionFn(
   facilityId: string,
-): Promise<ActionResult<{ nextCode: string; name: string | null }>> {
+): Promise<ActionResult<CreditBatchNameSuggestion>> {
   return withAction(async (ctx) => {
     const validated = uuidSchema().parse(facilityId);
     await requireOrgFacility(ctx, validated);

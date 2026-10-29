@@ -544,6 +544,24 @@ describe("CreditBatchForm name suggestion", () => {
     expect((await submitBlankCreate()).name ?? null).toBeNull();
   });
 
+  it("retries a blank create with the name it first sent, even once a suggestion loads", async () => {
+    mocks.contextFacilityId = ISOMETRIC_FACILITY_ID;
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    mocks.realPicker = true;
+    mocks.autoPick = true;
+    const onSubmit = vi.fn();
+    const { container, rerender } = render(<CreditBatchForm onSubmit={onSubmit} />);
+    await waitFor(() => expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Feedstock type" }).value).toBe(FEEDSTOCK_TYPE_ID));
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    mocks.nameSuggestion = { nextCode: "CB-26-004", name: "Lot 08" };
+    rerender(<CreditBatchForm onSubmit={onSubmit} />);
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect(onSubmit.mock.calls[0][0].name ?? null).toBeNull();
+    expect(onSubmit.mock.calls[1][0].name ?? null).toBeNull();
+  });
+
   it("keeps the batch's own code in grey when editing", () => {
     mocks.nameSuggestion = { nextCode: "CB-26-004", name: "Lot 08" };
     const creditBatch = { id: "00000000-0000-4000-8000-000000000001", code: "CB-26-001", facilityId: ISOMETRIC_FACILITY_ID,
