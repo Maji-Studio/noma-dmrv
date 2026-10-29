@@ -28,7 +28,7 @@ import type { RemovalCorrection } from "@/lib/certification/removal-entry-correc
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
-import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
+import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -52,8 +52,8 @@ export interface CreditBatchOpenItem {
   why?: string;
   /** The run a missing-run Check names, so other surfaces can link its code. */
   productionRun?: { id: string; code: string };
-  /** Missing-run Check only: a later Emissions entry dated the run's day may already record its emissions. */
-  sameDayEntry?: boolean;
+  /** Missing-run Check only: the day (YYYY-MM-DD) of a later Emissions entry that may already record the run's emissions. */
+  sameDayEntryDate?: string;
   /** Where the row leads; null when the viewer can't act on it (a member and components to decide). */
   target:
     | { tab: "overview" | "production" | "samples" | "emissions" | "removals"; rowId?: string }
@@ -190,16 +190,45 @@ export function missingRunsAdminSentence(count: number): string {
   return count === 1 ? "Add it in Edit." : "Add them in Edit.";
 }
 
-export function refusedRunsSentence(codes: readonly string[]): string {
+/**
+ * `all` when every run in the notice is refused: the notice already named them,
+ * so the sentence says "It" or "They" instead of repeating the codes.
+ */
+export function refusedRunsSentence(codes: readonly string[], all = false): string {
+  const subject = all ? (codes.length === 1 ? "It" : "They") : joinWithAnd(codes);
   return codes.length === 1
-    ? `${codes[0]} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
-    : `${joinWithAnd(codes)} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
+    ? `${subject} cannot be added. Record its diesel and power on the credit batch's Emissions tab.`
+    : `${subject} cannot be added. Record their diesel and power on the credit batch's Emissions tab.`;
 }
 
-export function sameDayEntrySentence(count: number): string {
-  return count === 1
-    ? "If an Emissions entry already records its emissions, delete it when you add the run."
-    : "If an Emissions entry already records their emissions, delete it when you add the runs.";
+/** Mixed batch: the member is told which of the named runs an admin can add. */
+export function missingRunsMemberNamedSentence(codes: readonly string[]): string {
+  return `An admin can add ${joinWithAnd(codes)} in Edit.`;
+}
+
+export function sameDayEntrySentence(): string {
+  return "If an Emissions entry already records its emissions, delete it when you add the run.";
+}
+
+/**
+ * The same-day warning for a notice about `total` missing runs. One run: the
+ * plain sentence. Several: names each affected run and the day of its entry, as
+ * the batch page Check does, so the admin deletes the right entry. Null when no
+ * run has a same-day entry.
+ */
+export function sameDayEntryWarning(
+  runs: readonly { code: string; sameDayEntryDate?: string }[],
+  total: number = runs.length,
+): string | null {
+  const affected = runs.filter((run) => run.sameDayEntryDate);
+  if (affected.length === 0) return null;
+  if (total === 1) return sameDayEntrySentence();
+  if (affected.length === 1) {
+    const [run] = affected;
+    return `If the Emissions entry dated ${formatCalendarDate(run.sameDayEntryDate!)} already records the emissions of ${run.code}, delete it when you add the run.`;
+  }
+  const named = affected.map((run) => `${run.code} (entry dated ${formatCalendarDate(run.sameDayEntryDate!)})`);
+  return `If an Emissions entry already records the emissions of ${joinWithOr(named)}, delete it when you add the run.`;
 }
 
 export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
@@ -246,7 +275,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         productionRun: { id: run.id, code: run.code },
         title: `${run.code}${titleAfterCode}`,
         titleAfterCode,
-        ...(run.sameDayEntry ? { sameDayEntry: true } : {}),
+        ...(run.sameDayEntry ? { sameDayEntryDate: run.entryDate } : {}),
         detail: canManage
           ? `Its emissions are not counted in ${codes}.${sameDayDetail}`
           : `Its emissions are not counted in ${codes}. ${missingRunsMemberSentence(1)}`,

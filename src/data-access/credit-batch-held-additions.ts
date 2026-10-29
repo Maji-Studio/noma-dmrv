@@ -12,7 +12,7 @@ import {
   type LockedCreditBatchProductionRun,
 } from "./credit-batch-membership";
 import { requireOrgScope } from "./utils";
-import { loadCreditBatchRunHoldingAllocations } from "./credit-batch-run-fit";
+import { loadProductionRunHoldingAllocations, pickCreditBatchRunHoldingAllocation } from "./credit-batch-run-fit";
 
 /** Reuse automatic membership eligibility, including archive and per-run type checks. */
 export async function assertAddedCreditBatchRunsFit(
@@ -46,7 +46,8 @@ export async function assertAddedCreditBatchRunsFit(
   // Application writers serialize on those locks before changing allocations.
   // Reconciliation cannot enlarge an assigned slice. Unless Applications split
   // by batch, it also cannot create an unassigned sibling of a held slice.
-  const [assignedSlice] = await loadCreditBatchRunHoldingAllocations(ctx, tx, addedIds,
+  const allocations = await loadProductionRunHoldingAllocations(ctx, tx, addedIds);
+  const assignedSlice = pickCreditBatchRunHoldingAllocation(allocations, addedIds,
     creditBatchId, splitsApplicationsByBatch);
   if (!assignedSlice) return;
   const lock = recordLocks.creditBatch({ removals: [], dependents: [{ kind: "removal", id: assignedSlice.removalId }] });

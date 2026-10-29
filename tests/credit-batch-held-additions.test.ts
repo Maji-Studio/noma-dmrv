@@ -206,6 +206,56 @@ describe("manual additions to held credit batches", () => {
     await withMissedRun(expectAccepted);
   });
 
+  it.each(["200_year", "1000_year"] as const)("prefers this batch's hold over another requested run's hold at %s", async durabilityOption => {
+    await withMissedRun(async (f, runId, batch) => {
+      await db.update(facilities).set({ durabilityOption }).where(and(
+        eq(facilities.id, f.facilityId), eq(facilities.organizationId, TEST_ORG_ID),
+      ));
+      await withUnassignedRun(f, async ownRunId => {
+        await withLineageFixture(async other => {
+          const addedShares: string[] = [];
+          try {
+            // The first requested run is held elsewhere; the second is held
+            // through this batch. Both Applications keep half their old mass.
+            for (const [fixture, missedRunId] of [[other, runId], [f, ownRunId]] as const) {
+              const [originalShare] = await db.select().from(applicationOutputAllocations)
+                .where(eq(applicationOutputAllocations.applicationId, fixture.applicationId));
+              await db.update(applicationOutputAllocations).set({
+                wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+              }).where(eq(applicationOutputAllocations.id, originalShare.id));
+              await db.update(creditBatchApplications).set({
+                allocatedWetMassKg: Number(SHARED_APPLICATION_WET_MASS_KG), allocatedDryMassKg: Number(SHARED_APPLICATION_DRY_MASS_KG),
+              }).where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
+              const [share] = await db.insert(applicationOutputAllocations).values({
+                ...originalShare, id: crypto.randomUUID(), productionRunId: missedRunId,
+                wetMassKg: SHARED_APPLICATION_WET_MASS_KG, dryMassKg: SHARED_APPLICATION_DRY_MASS_KG,
+              }).returning();
+              addedShares.push(share.id);
+            }
+            const readState = () => Promise.all([
+              db.select().from(creditBatches).where(eq(creditBatches.id, batch.id)),
+              db.select().from(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id))
+                .orderBy(creditBatchProductionRuns.productionRunId),
+              db.select().from(creditBatchApplications).where(inArray(creditBatchApplications.creditBatchId, [batch.id, other.batchId]))
+                .orderBy(creditBatchApplications.id),
+              db.select().from(applicationOutputAllocations).where(inArray(applicationOutputAllocations.applicationId, [f.applicationId, other.applicationId]))
+                .orderBy(applicationOutputAllocations.id),
+              db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, batch.id)).orderBy(activityEvents.id),
+            ]);
+            const before = await readState();
+            await expect(updateCreditBatch(ctx, batch.id, {
+              expectedVersion: batch.version, productionRunIds: [f.productionRunId, runId, ownRunId],
+            })).rejects.toMatchObject({ code: "certification_locked",
+              message: expect.stringContaining("Cannot change this credit batch's production membership because its applied mass belongs to a Removal.") });
+            expect(await readState()).toEqual(before);
+          } finally {
+            if (addedShares.length) await db.delete(applicationOutputAllocations).where(inArray(applicationOutputAllocations.id, addedShares));
+          }
+        }, "none");
+      }, SECOND_MISSED_RUN_START);
+    });
+  });
+
   it("adds to a returned Removal under fresh statement facts", async () => {
     await withMissedRun(async (f, runId, batch) => {
       await db.update(certificationSubmissions).set({ metadata: {
