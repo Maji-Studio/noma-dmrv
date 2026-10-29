@@ -79,13 +79,13 @@ export function CountedOnLinks({ records, facilityId, interactive = true }: {
   facilityId: string;
   interactive?: boolean;
 }) {
-  // Several codes can wrap onto lines closer than the 44px hit areas; a 44px row per code keeps them apart.
+  // Several codes can wrap onto lines closer than the 44px hit areas; a 44px row per code below md keeps them apart.
   const stackedRows = interactive && records.countedOn.length > 1;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-6 gap-y-8">
       <span>{COUNTED_ON_PREFIX}</span>
       {records.countedOn.map((batch, index) => (
-        <span key={batch.creditBatchId} className={stackedRows ? "inline-flex min-h-44 items-center" : undefined}>
+        <span key={batch.creditBatchId} className={stackedRows ? "max-md:inline-flex max-md:min-h-44 max-md:items-center" : undefined}>
           {interactive ? (
             <Link
               href={countedOnHref(batch.creditBatchId, facilityId)}
