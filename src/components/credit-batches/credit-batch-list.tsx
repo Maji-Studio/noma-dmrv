@@ -1,5 +1,6 @@
 "use client";
 
+import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { recordHref, CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
@@ -189,7 +190,7 @@ export function CreditBatchList({
     contextFacilityId ?? undefined
   );
   const focusedBatch = useCreditBatch(focusedBatchId ?? "");
-  const linkedFacilityReady = useLinkedRecordFacility(focusedBatch.data, focusedBatch.isLoading);
+  const linkedFacilityReady = useLinkedRecordFacility(focusedBatch.data, focusedBatch.isLoading).ready;
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
@@ -569,7 +570,7 @@ export function CreditBatchList({
     : { startDate: thisMonth.start, endDate: thisMonth.end };
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create credit batch" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create credit batch" : sideSheetEntity ? creditBatchLabel(sideSheetEntity) : "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" || !sideSheetEntity

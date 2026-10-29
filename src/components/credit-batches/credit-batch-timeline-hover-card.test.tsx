@@ -18,6 +18,17 @@ function batch(overrides: Partial<HoverCardBatch>): HoverCardBatch {
 }
 
 describe("HoverCardBody", () => {
+  it("heads a named batch with its name and the code beneath", () => {
+    const html = renderToStaticMarkup(<HoverCardBody batch={batch({ name: "September maize" })} />);
+    expect(html.indexOf("September maize")).toBeGreaterThan(-1);
+    expect(html.indexOf("CB-001")).toBeGreaterThan(html.indexOf("September maize"));
+  });
+
+  it("heads an unnamed batch with its code alone", () => {
+    const html = renderToStaticMarkup(<HoverCardBody batch={batch({ name: null })} />);
+    expect(html.match(/CB-001/g)).toHaveLength(1);
+  });
+
   it("leaves out the figures strip when the facts cover neither figure", () => {
     const html = renderToStaticMarkup(<HoverCardBody batch={batch({ facts: undefined, factsStatus: "ready" })} />);
 

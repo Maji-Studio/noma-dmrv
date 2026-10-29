@@ -455,6 +455,7 @@ export async function createCreditBatchInTransaction(
       .values({
         organizationId: ctx.organizationId,
         code: batchData.code,
+        name: batchData.name ?? null,
         facilityId: batchData.facilityId,
         feedstockTypeId,
         productionProcessId: process.id,
@@ -598,6 +599,7 @@ export async function updateCreditBatch(
 
   // Only include fields that are explicitly provided
   if (updateFields.code !== undefined) updateData.code = updateFields.code;
+  if (updateFields.name !== undefined) updateData.name = updateFields.name || null;
   if (updateFields.facilityId !== undefined)
     updateData.facilityId = updateFields.facilityId;
   if (updateFields.startDate !== undefined)

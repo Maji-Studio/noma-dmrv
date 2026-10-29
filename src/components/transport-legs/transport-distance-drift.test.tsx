@@ -25,11 +25,11 @@ const drift: TransportDistanceDrift = {
 };
 
 let client: QueryClient;
-function renderNotice(value: Partial<TransportDistanceDrift> = {}) {
+function renderNotice(value: Partial<TransportDistanceDrift> = {}, readOnly = false) {
   mocks.drift.mockResolvedValue({ success: true, data: { ...drift, ...value } });
   return render(
     <QueryClientProvider client={client}>
-      <TransportDistanceDriftNotice target={target} recordCode="FS-26-001" />
+      <TransportDistanceDriftNotice target={target} recordCode="FS-26-001" readOnly={readOnly} />
     </QueryClientProvider>,
   );
 }
@@ -47,6 +47,12 @@ describe("TransportDistanceDriftNotice", () => {
     expect(await screen.findByText("Location distance changed")).toBeTruthy();
     expect(screen.getByText("Recorded 42 km. Location now 55 km.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Refresh from location" })).toBeTruthy();
+  });
+
+  it("keeps the fact but offers no refresh on a read-only sheet", async () => {
+    renderNotice({}, true);
+    expect(await screen.findByText("Recorded 42 km. Location now 55 km.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh from location" })).toBeNull();
   });
 
   it.each([

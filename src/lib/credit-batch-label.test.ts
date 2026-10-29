@@ -1,0 +1,30 @@
+import { describe, expect, it } from "vitest";
+import { creditBatchLabel, creditBatchName, creditBatchNameWithCode } from "./credit-batch-label";
+
+describe("creditBatchLabel", () => {
+  it("shows the name when the batch has one", () => {
+    expect(creditBatchLabel({ code: "CB-26-043", name: "September maize" })).toBe("September maize");
+  });
+
+  it("falls back to the code when the name is null, missing or blank", () => {
+    expect(creditBatchLabel({ code: "CB-26-043", name: null })).toBe("CB-26-043");
+    expect(creditBatchLabel({ code: "CB-26-043" })).toBe("CB-26-043");
+    expect(creditBatchLabel({ code: "CB-26-043", name: "   " })).toBe("CB-26-043");
+  });
+});
+
+describe("creditBatchName", () => {
+  it("returns the trimmed name, or null when blank or missing", () => {
+    expect(creditBatchName({ name: "  September maize " })).toBe("September maize");
+    expect(creditBatchName({ name: "  " })).toBeNull();
+    expect(creditBatchName({ name: null })).toBeNull();
+    expect(creditBatchName({})).toBeNull();
+  });
+});
+
+describe("creditBatchNameWithCode", () => {
+  it("ties a name to its code, and leaves an unnamed batch as its code", () => {
+    expect(creditBatchNameWithCode({ code: "CB-26-043", name: " September maize " })).toBe("September maize (CB-26-043)");
+    expect(creditBatchNameWithCode({ code: "CB-26-043", name: null })).toBe("CB-26-043");
+  });
+});

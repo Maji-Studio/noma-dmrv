@@ -34,6 +34,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -300,7 +301,8 @@ export function ProductionRunList() {
     enabled: !!facilityId,
   });
   const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
-  const linkedFacilityReady = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
+  const linkedRecord = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
     facilityId || undefined,
     !!facilityId,
@@ -504,26 +506,6 @@ export function ProductionRunList() {
     setSideSheet({ entity: displaySideSheet.entity, mode });
   };
 
-  if (!facilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="records"
-          title="Production runs"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="container-max py-32">
-        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
@@ -537,6 +519,76 @@ export function ProductionRunList() {
       : sideSheetEntity
         ? formatDate(sideSheetEntity.date)
         : undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "production run");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!facilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={handleModeChange}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit production run"
+      readOnly={sheetReadOnly}
+      size="wide"
+      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
+    >
+      <ProductionRunForm
+        key={sideSheetEntity?.id ?? "create"}
+        productionRun={sideSheetEntity ?? undefined}
+        lock={sheetLock}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
+        errorMessage={createError || updateError || undefined}
+        submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
+        deferredAttachments={deferredAttachments}
+      >
+        {sideSheetEntity && sideSheetMode === "edit" ? (
+          <>
+            <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
+            <ProductionIncidentTable
+              productionRunId={sideSheetEntity.id}
+              facilityId={sideSheetEntity.facilityId}
+              defaultReactorId={sideSheetEntity.reactorId}
+              defaultOperatorId={sideSheetEntity.operatorId}
+            />
+          </>
+        ) : null}
+      </ProductionRunForm>
+    </EntitySideSheet>
+  );
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Production runs"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
+        {sideSheetElement}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="container-max py-32">
+        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
 
   return (
     <div className="container-max page-shell">
@@ -687,45 +739,7 @@ export function ProductionRunList() {
         errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={handleModeChange}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit production run"
-        size="wide"
-        sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
-      >
-        <ProductionRunForm
-          key={sideSheetEntity?.id ?? "create"}
-          productionRun={sideSheetEntity ?? undefined}
-          lock={sheetLock}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
-          errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
-          deferredAttachments={deferredAttachments}
-        >
-          {sideSheetEntity && sideSheetMode === "edit" ? (
-            <>
-              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
-              <ProductionIncidentTable
-                productionRunId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                defaultReactorId={sideSheetEntity.reactorId}
-                defaultOperatorId={sideSheetEntity.operatorId}
-              />
-            </>
-          ) : null}
-        </ProductionRunForm>
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

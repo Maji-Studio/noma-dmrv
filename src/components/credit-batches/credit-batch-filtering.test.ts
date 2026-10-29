@@ -51,6 +51,14 @@ describe("filterCreditBatches", () => {
     expect(byFeedstock.map((batch) => batch.id)).toEqual(["batch-straw"]);
   });
 
+  it("also finds a batch by its name", () => {
+    const named = batches.map((batch) => batch.id === "batch-straw" ? { ...batch, name: "September maize" } : batch);
+    const result = filterCreditBatches(named, healthStates, {
+      search: "maize", startDate: "", endDate: "", feedstockTypeIds: [], readiness: "all",
+    });
+    expect(result.map((batch) => batch.id)).toEqual(["batch-straw"]);
+  });
+
   it("uses production-window overlap for date bounds", () => {
     const result = filterCreditBatches(batches, healthStates, {
       startDate: "2026-05-15",

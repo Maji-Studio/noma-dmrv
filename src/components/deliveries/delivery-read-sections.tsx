@@ -20,7 +20,13 @@ const ROUTE_EMPTY =
 export type DeliverySheetRecord = Omit<DeliveryWithRelations, "proofOfDeliveryCount">;
 
 /** `proofStatus` is the saved proof-of-delivery state of the record: neutral until its files load. */
-export function deliverySheetSections(delivery: DeliverySheetRecord, facilities: readonly { id: string; timezone: string }[], proofStatus: CertFieldStatus = "neutral"): DetailPanelSection[] {
+export function deliverySheetSections(
+  delivery: DeliverySheetRecord,
+  facilities: readonly { id: string; timezone: string }[],
+  proofStatus: CertFieldStatus = "neutral",
+  /** Read only (a link into an archived facility): no write actions. */
+  options: { readOnly?: boolean } = {},
+): DetailPanelSection[] {
   return [
     {
       title: "Delivery information",
@@ -68,7 +74,7 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
       // The leg this delivery adds to its product's biochar distribution.
       content: (
         <div className="flex flex-col gap-16">
-        <TransportDistanceDriftNotice target={{ entityType: "delivery", entityId: delivery.id }} recordCode={delivery.code} />
+        <TransportDistanceDriftNotice target={{ entityType: "delivery", entityId: delivery.id }} recordCode={delivery.code} readOnly={options.readOnly} />
         <TransportRoutePreview
           entityType="biochar"
           originName={delivery.facilityName}

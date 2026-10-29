@@ -107,6 +107,24 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
   per-entry correction-dependency reads so opening history does not repeatedly
   fetch later movements from the same bin.
 
+## Records in archived facilities (#1502)
+
+Links into an archived facility open the record read only through
+`src/hooks/use-linked-record-facility.ts:useLinkedRecordFacility` and
+`src/lib/linked-record-read-only.ts:linkedRecordReadOnly` (#1499). Still open:
+
+- `src/data-access/production-runs/queries.ts:getProductionRunById` filters
+  archived runs, and `tests/production-run-feedstock-type-gate.test.ts` pins that,
+  so `src/components/production-runs/production-run-list.tsx:ProductionRunList`
+  is wired for read only but its link still says it could not be opened. Needs a
+  separate read-only detail read.
+- `src/components/credit-batches/credit-batch-list.tsx:CreditBatchList` (preview
+  sheet and routed page) and
+  `src/components/storage-locations/storage-location-list.tsx:StorageLocationList`
+  (its own bin sheet) only wait for the facility; they do not open read only.
+- `src/data-access/orders.ts:deleteOrderInTransaction` does not refuse an
+  archived order.
+
 ## Account suspension across organizations (#1391 section 4) - **deferred**
 
 - Decided 2026-10-22: defer until after the first production deployment.

@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: true },
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: () => [null, vi.fn()],

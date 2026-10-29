@@ -7,6 +7,7 @@ describe("toCreditBatchEntityOption", () => {
       toCreditBatchEntityOption({
         id: "batch-1",
         code: "CB-26-001",
+        name: null,
         status: "pending",
         startDate: "2026-07-01",
         endDate: "2026-07-31",
@@ -17,5 +18,14 @@ describe("toCreditBatchEntityOption", () => {
       name: "Jul 1 to Jul 31, 2026",
       subtitle: "Pending",
     });
+  });
+
+  it("leads a named batch's option with its name before the dates", () => {
+    expect(
+      toCreditBatchEntityOption({
+        id: "batch-1", code: "CB-26-001", name: "September maize", status: "pending",
+        startDate: "2026-07-01", endDate: "2026-07-31",
+      }),
+    ).toMatchObject({ code: "CB-26-001", name: "September maize · Jul 1 to Jul 31, 2026" });
   });
 });
