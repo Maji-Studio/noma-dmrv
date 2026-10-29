@@ -1,3 +1,4 @@
+import { buildTransportCoverage } from "./certify-transport-coverage";
 import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { buildSelectableBatchesData } from "./selectable-batches";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
@@ -151,6 +152,31 @@ it.each(["pinned-reviewed", "other-template"])("groups only a shared selection p
     expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledOnce();
   } else {
     expect(result).toEqual({ success: false, error: "These credit batches use different Removal templates." });
+    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
+  }
+});
+
+it.each([
+  { ownedElsewhere: true, feedstockIds: [], satisfied: true },
+  { ownedElsewhere: undefined, feedstockIds: [], satisfied: false },
+  { ownedElsewhere: true, feedstockIds: ["missing"], satisfied: false },
+])("gates zero feedstock transport on ownership evidence: %j", async ({ ownedElsewhere, feedstockIds, satisfied }) => {
+  vi.clearAllMocks();
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  mocks.loadFacilityCertifierFacts.mockResolvedValue(CONNECTED);
+  const context = { ...batchContext(), requiredTransportCategories: ["feedstock"],
+    transportCoverage: buildTransportCoverage({ feedstock: [], biochar: [], sample: [] }, {
+      feedstockIds, biocharProductIds: [], sampleIds: [], feedstockTransportOwnedElsewhere: ownedElsewhere,
+    }),
+  };
+  mocks.buildCreditBatchContexts.mockResolvedValue({ contextsByBatch: { [CREDIT_BATCH_ID]: context }, accountingByBatch: {} });
+  mocks.createRemovalWithCreditBatches.mockResolvedValue("removal-1");
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+  if (satisfied) {
+    expect(result).toEqual({ success: true, data: { removalId: "removal-1" } });
+    expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, [CREDIT_BATCH_ID]);
+  } else {
+    expect(result).toEqual({ success: false, error: "CB-1 isn't ready to certify (1 unresolved issue)." });
     expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   }
 });

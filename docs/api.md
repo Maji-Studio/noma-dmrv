@@ -863,9 +863,9 @@ as name clashes, do not carry it. HTTP status is 409 for all of them.
 
 | Record | Used by | Code | Issue pointer | Safe issue metadata besides `reason` |
 |---|---|---|---|---|
-| Supplier | Feedstock intakes, including archived ones | `conflict` | `/supplierId` | `feedstockCodes`; `feedstocks` (`{ id, code, facilityId }` for each referenced intake, up to the blocker limit, in code order, matching `feedstockCodes`) |
-| Customer | Deliveries, including archived ones, or registered storage sites | `conflict` | `/customerId` | `deliveryCodes`; `deliveries` (`{ id, code, facilityId }` for each referenced delivery, up to the blocker limit, in code order, matching `deliveryCodes`); `locationIds` for registered storage-site blockers instead |
-| Customer location | Orders, including archived ones, or a registered storage site | `conflict` | `/locationId` | `orderCodes`; `orders` (`{ id, code, facilityId }` for each referenced order, up to the blocker limit, in code order, matching `orderCodes`); none for a registered storage site |
+| Supplier | Feedstock intakes, including archived ones | `conflict` | `/supplierId` | `feedstockCount` (total blockers); `feedstockCodes`; `feedstocks` (`{ id, code, facilityId }` for each referenced intake, up to the blocker limit, in code order, matching `feedstockCodes`) |
+| Customer | Deliveries, including archived ones, or registered storage sites | `conflict` | `/customerId` | `deliveryCount` (total blockers); `deliveryCodes`; `deliveries` (`{ id, code, facilityId }` for each referenced delivery, up to the blocker limit, in code order, matching `deliveryCodes`); `locationIds` for registered storage-site blockers instead |
+| Customer location | Orders, including archived ones, or a registered storage site | `conflict` | `/locationId` | `orderCount` (total blockers); `orderCodes`; `orders` (`{ id, code, facilityId }` for each referenced order, up to the blocker limit, in code order, matching `orderCodes`); none for a registered storage site |
 | Formulation, feedstock type | Their dependents | `conflict` | the record's own id field | Dependent codes (for example `orderCodes`) where the refusal lists them |
 | Feedstock | Production runs | `certification_locked` | `/feedstockId` | None |
 | Production run | Biochar products, credit batches, or both | `conflict` | `/productionRunId` | None; the top-level `conflict` is the first dependent record |
@@ -874,5 +874,6 @@ as name clashes, do not carry it. HTTP status is 409 for all of them.
 
 The party blocker limit is 5. Feedstock, delivery and order references carry their own
 `facilityId` so clients can link across facilities. FK-violation fallbacks keep
-empty code arrays and return empty reference arrays. Existing metadata fields
-and refusal messages are unchanged.
+empty code arrays and return empty reference arrays, omitting unknown totals.
+Refusal messages name the capped codes and append any overflow as "and N more".
+Existing metadata fields and refusal codes are unchanged.

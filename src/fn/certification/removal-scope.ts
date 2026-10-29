@@ -1,3 +1,4 @@
+import { hasLinkedFeedstock, ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCertifierRemovalById, getCreditBatchesByRemovalId, type CertifierRemovalRow } from "@/data-access/certifier-removals";
 import { projectChainOfCustodyFromBatchFacts, type ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -26,6 +27,7 @@ export interface RemovalScope {
     // "completed" claim.
     completedProductionRunIds: string[];
     productionFeedstockIds: string[];
+    productionHasLinkedFeedstock?: boolean;
     applicationIds: string[];
     applicationSlices: {
       applicationId: string;
@@ -94,13 +96,8 @@ export function resolveSingleBatchScope(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
+        productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
+        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: batch.durabilityOption,
@@ -140,13 +137,8 @@ export async function resolveScopeForRemoval(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
+        productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
+        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: accountingBatch.durabilityOption,
@@ -184,4 +176,3 @@ export async function resolveScopeForRemoval(
     ],
   };
 }
-

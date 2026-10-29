@@ -289,6 +289,21 @@ describe("CustomerSavedLocations", () => {
     expect(dialog.getByRole("link", { name: "Open order OR-001" }).getAttribute("href")).toBe("/orders?facility=f1&order=o1");
   });
 
+  it.each([
+    { total: 5, more: null },
+    { total: 7, more: "and 2 more" },
+  ])("shows the overflow only past five orders (total $total)", async ({ total, more }) => {
+    state.locations = [location("l1", "E2E North Block", { isDefault: true })];
+    state.remove.mockRejectedValue(inUseError(IN_USE, { orders: [{ id: "o1", code: "OR-001", facilityId: "f1" }, { id: "o2", code: "OR-002", facilityId: "f1" }, { id: "o3", code: "OR-003", facilityId: "f1" }, { id: "o4", code: "OR-004", facilityId: "f1" }, { id: "o5", code: "OR-005", facilityId: "f1" }], orderCount: total }));
+    render(<CustomerSavedLocations customerId="c1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete E2E North Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "E2E North Block is in use" }));
+    expect(dialog.getAllByRole("link")).toHaveLength(5);
+    if (more) expect(dialog.getByText(more)).toBeTruthy();
+    else expect(dialog.queryByText(/ more$/)).toBeNull();
+  });
+
   it("says only that an archived location is in use when its delete is refused", async () => {
     state.locations = [...state.locations, location("l3", "E2E Old Field", { archivedAt: ARCHIVED_AT })];
     state.remove.mockRejectedValue(inUseError(ARCHIVED_IN_USE));

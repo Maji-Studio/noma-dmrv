@@ -45,7 +45,7 @@ export function FeedstockEvidenceSection({
   __spine,
 }: FeedstockEvidenceSectionProps) {
   // The evidence panel shows the lock notice; queued retries must not run either.
-  const locked = useIsRecordCertificationLocked("feedstock", isEditMode ? feedstock?.id : undefined);
+  const locked = useIsRecordCertificationLocked("feedstock", isEditMode ? feedstock?.id : undefined, "transport");
   return (
     <FormSection
       title="Transport evidence"

@@ -464,11 +464,11 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
     if (kind === "supplier") {
       const [intake] = await db.update(feedstocks).set({ supplierId: row.data.id, archivedAt: archived ? new Date() : null })
         .where(eq(feedstocks.organizationId, a.ctx.organizationId)).returning();
-      meta = { feedstockCodes: [intake.code], feedstocks: [{ id: intake.id, code: intake.code, facilityId: intake.facilityId }], reason: "in_use" };
+      meta = { feedstockCount: 1, feedstockCodes: [intake.code], feedstocks: [{ id: intake.id, code: intake.code, facilityId: intake.facilityId }], reason: "in_use" };
     } else {
       const order = await insertReadOrder(a, "PARTY-ORDER", { customerId: row.data.id, customerLocationId: row.locations[0].id, archivedAt: archived ? new Date() : null });
       const delivery = await insertReadDelivery(a, order.id, order.quantityKg, archived);
-      meta = { deliveryCodes: [delivery.code], deliveries: [{ id: delivery.id, code: delivery.code, facilityId: delivery.facilityId }], reason: "in_use" };
+      meta = { deliveryCount: 1, deliveryCodes: [delivery.code], deliveries: [{ id: delivery.id, code: delivery.code, facilityId: delivery.facilityId }], reason: "in_use" };
     }
     const before = await snapshot();
     const refusal = await problem(await mutate(kind, "delete", row.data.id), 409, "conflict", `/${kind}Id`);

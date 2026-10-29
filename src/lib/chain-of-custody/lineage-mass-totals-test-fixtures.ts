@@ -21,7 +21,7 @@ export function massTotalsLineage(
     },
     reactor: null,
     feedstocks: [{
-      id: "feedstock-1", code: "FS-1", status: "complete", deliveryDate: null,
+      ownsTransport: true, id: "feedstock-1", code: "FS-1", status: "complete", deliveryDate: null,
       massDryKg: 2_000, wetMassUsedKg: 3_000, supplierName: null,
       feedstockTypeName: null, href: "/feedstock-intake",
     }],

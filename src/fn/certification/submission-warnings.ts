@@ -1,3 +1,4 @@
+import type { TransportCategory } from "@/lib/certification/readiness";
 import type { RemovalAdvisory } from "@/lib/certification/removal-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -27,7 +28,7 @@ export const RECORDED_AUTOMATIC_SOURCES = [
 export const RECORDED_TRANSPORT_SOURCES = [
   { category: "feedstock", id: "feedstock-transport", label: "Feedstock transport" },
   { category: "biochar", id: "delivery-transport", label: "Delivery transport" },
-] as const satisfies readonly { category: keyof TransportLegsByCategory; id: AutomaticSourceId; label: string }[];
+] as const satisfies readonly { category: TransportCategory; id: AutomaticSourceId; label: string }[];
 
 function carriedAutomaticSources(template: IsometricGhgEntryTemplate, lineSources: LineSources): Set<AutomaticSourceId> {
   const carried = new Set<AutomaticSourceId>();

@@ -69,3 +69,20 @@ it("retires the sample automatic figure", () => {
   const leg = { id: "sample-leg", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["sample"][number];
   expect(batchAutomaticFigures([], { ...emptyLegs, sample: [leg] })["sample-transport"]).toEqual(null);
 });
+
+
+it("distinguishes trips owned elsewhere from absent transport without changing other categories", () => {
+  const figures = batchAutomaticFigures([], { ...emptyLegs, feedstockTransportOwnedElsewhere: true });
+  expect(figures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
+  expect(figures["delivery-transport"]).toBeNull();
+  expect(figures["sample-transport"]).toBeNull();
+  expect(batchAutomaticFigures([], { ...emptyLegs, feedstockTransportOwnedElsewhere: false })["feedstock-transport"]).toBeNull();
+});
+
+
+it("does not let owned-elsewhere evidence override invalid recorded legs", () => {
+  const leg = { id: "leg", distanceKm: 10, loadMassKg: null, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["feedstock"][number];
+  const figures = batchAutomaticFigures([], { feedstock: [leg], biochar: [], sample: [], feedstockTransportOwnedElsewhere: true });
+  expect(figures["feedstock-transport"]).toBeNull();
+  expect(figures["delivery-transport"]).toBeNull();
+});

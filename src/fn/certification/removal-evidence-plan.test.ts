@@ -80,6 +80,7 @@ const ctx = {
     },
   ],
   batchesWithSamples: [],
+  transportCoverage: { feedstock: { entityIds: [] } },
   memberBatchClaims: [
     { creditBatchId: "batch-1", applicationIds: ["application-1"] },
   ],

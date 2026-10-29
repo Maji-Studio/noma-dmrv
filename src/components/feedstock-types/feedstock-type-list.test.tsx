@@ -213,6 +213,16 @@ describe("FeedstockTypeList", () => {
     expect(state.error).not.toHaveBeenCalled();
   });
 
+  it("offers only Close for an archived feedstock type in use", async () => {
+    const message = "This feedstock type is still used.";
+    state.remove.mockRejectedValue(new ActionError({ error: message, ...inUseDeleteRefusal(message, ["feedstockTypeId"]) }));
+    render(<FeedstockTypeList canManage />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Actions for FT-002" })).getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect((await screen.findAllByRole("button", { name: "Close" })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
+  });
+
   it("gates sampling to connected pyrolysis types with an active facility", () => {
     expect(
       shouldShowFeedstockTypeSampling({

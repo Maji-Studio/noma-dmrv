@@ -79,6 +79,7 @@ describe("buildTrailSteps", () => {
         wetMassUsedKg: 3_000,
         supplierName: "Supplier",
         feedstockTypeName: "Wood chips",
+        ownsTransport: true,
         href: "/feedstock-intake",
       },
     ];
