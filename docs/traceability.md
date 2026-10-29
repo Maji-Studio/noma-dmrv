@@ -95,7 +95,8 @@ inside batch context, with a "Batch roll-up" button back.
     whatever they lack; nodes/edges dedupe by id so a shared production run
     appears once. An application record's sheet offers "Trace rollback" into
     the drill-down.
-  - **Map** — the merged geo payload (nodes/legs deduped the same way).
+  - **Map** — the merged geo payload (nodes/legs deduped the same way), read as
+    a stage list and one chain at a time ([Carbon Viewer](#carbon-viewer--geography-carbon-in-transit)).
   - **Sankey** — the batch's honest mass balance in kg, drawn as a waterfall
     (`src/components/chain-of-custody/sankey/`): a big figure (dry biochar
     applied) with one sentence and an (i) for how it is made; the first column is
@@ -226,16 +227,41 @@ theme.
 
 ## Carbon Viewer — "Geography: carbon in transit"
 
-The map view (both anchors) renders the Carbon Transit panel. The Flow chart is the
-*logical lineage* tool; the MapLibre map is the *geography* tool.
+The Flow chart is the *logical lineage* tool; the MapLibre map is the *geography*
+tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
 
-- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
-  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
-  application out — on a dashed thread, transport legs as sub-rows, a "Not on
-  the map" cluster for anything unplottable) with the map, and docks a clicked
-  record's details over the map's left edge (`record-detail-panel.tsx`, closed
-  by its own X or a basemap click, never by re-clicking the rail row — the row
-  is a selection, not a toggle). `view="split"` is the compact half beside the
+- **Batch Map** (`TraceMap`, `trace-map*.tsx`): the map takes the full width and
+  one panel on the right (below the map on a phone) holds two states. At rest it
+  is the **stage list**: stages in chain order (feedstock intake, production run,
+  biochar product, order, delivery, application) with the kind's Flow accent,
+  icon and count; a stage opens in place with its records one line each, the map
+  frames it and lights its legs. Picking a record or a marker starts a **chain
+  walk**: one chain from the supplier to one end (a field, or the delivery or
+  product nothing is applied from yet), walked one step per stage ("01 / 06 · To
+  Coffee block A"). The chain holds every record upstream of its end; a stage with
+  one record is a plain step with its values open in place, and a stage where
+  several converge (intakes, runs, products) is one step titled with the count
+  ("2 production runs") that lists its records, each opening in place, one at a
+  time ([#1485](https://github.com/Maji-Studio/noma-dmrv/issues/1485), decided
+  2026-10-29). Values: wet first, a Dry figure of "Not recorded" when the kind
+  carries one and it is missing, a "Not recorded: a, b" Notice for the other plain
+  gaps, "Trace rollback", "View full record" through `recordHref`. Back / Next
+  step stage to stage, the camera frames every record of the step, only that
+  chain's legs are lit. A record picked from the list or a marker starts the first
+  chain through it (fields first) on its stage's step with the record open.
+  "Whole batch" returns to the stage list.
+  Only lit legs carry a km label (one per road, even when several product layers
+  share it); each road is drawn once. FIT, + / − and SAT stay. A batch with no
+  location at all shows an empty state instead of the map and keeps the list.
+  The model is pure and tested: `trace-model.ts` (stages, lighting, one drawn
+  leg per road), `trace-chains.ts` (chains, walk lighting).
+- **Application Map and Split** (`CarbonTransitPanel`): `view="map"` pairs the
+  custody stages rail (`custody-stages-rail.tsx`: three milestones — feedstock in
+  / pyrolysis / application out — on a dashed thread, transport legs as sub-rows,
+  a "Not on the map" cluster for anything unplottable) with the map, and docks a
+  clicked record's details over the map's left edge (`record-detail-panel.tsx`,
+  closed by its own X or a basemap click, never by re-clicking the rail row — the
+  row is a selection, not a toggle). `view="split"` is the compact half beside the
   Flow chart and keeps the legend plus the collapsed not-geolocated chip box.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
@@ -271,7 +297,9 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
-- `src/components/chain-of-custody/map/viewer-utils.test.ts`
+- `src/components/chain-of-custody/map/viewer-utils.test.ts`,
+  `trace-model.test.ts`, `trace-chains.test.ts`, `trace-map-view.test.tsx`,
+  `trace-record-values.test.tsx`
 
 ## Saved delivery and application provenance
 

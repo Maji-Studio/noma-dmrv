@@ -1,0 +1,62 @@
+/*
+ * The batch Traceability Map's imperative chrome, on top of carbon-viewer.css.
+ * Tokens only.
+ */
+
+/* km label on a lit leg: one per drawn path */
+.tm-km {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  color: var(--clr-dark-purple);
+  background: var(--paper);
+  border: 1px solid var(--clr-dark-purple-30);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* the current record (or the facility pivot) keeps a steady ring */
+.cvm-mk.tm-current .cvm-ring {
+  opacity: 1;
+}
+.cvm-mk.tm-current .cvm-lbl-code {
+  font-size: 11px;
+}
+
+/* the stage list and chain walk' accent squares */
+.tm-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--paper);
+  background: var(--tm-acc);
+}
+.tm-tile--ghost {
+  color: var(--tm-acc-ink);
+  background: transparent;
+  border: 1.5px solid var(--tm-acc);
+}
+
+/* a dimmed marker drops its label so the lit chain reads alone */
+.cvm-mk.tm-quiet .cvm-lbl {
+  display: none;
+}
+
+/* a label that would cover a neighbour's flips to the marker's left */
+.cvm-mk.tm-lbl-left .cvm-lbl {
+  left: auto;
+  right: 15px;
+  align-items: flex-end;
+  text-align: right;
+}
+.cvm-mk--facility.tm-lbl-left .cvm-lbl {
+  right: 19px;
+}
+
+/* a label that steps down below its neighbours' */
+.cvm-mk .cvm-lbl {
+  transform: translateY(var(--tm-lbl-dy, 0));
+}

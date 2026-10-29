@@ -26,17 +26,13 @@ import { useFacilityClock } from "@/hooks/use-facility-context";
 import dynamic from "next/dynamic";
 import { useState, type CSSProperties } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
-import type { ChainFacility, ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
-import {
-  useChainOfCustodyGeo,
-  useCreditBatchChainGeo,
-} from "@/hooks/use-chain-of-custody";
+import { useChainOfCustodyGeo } from "@/hooks/use-chain-of-custody";
 import { useRouteGeometries } from "@/hooks/use-geo";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
-import { buildLineageNodes, buildRollForwardNodes } from "../use-chain-graph";
+import { buildLineageNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
 import { CustodyStagesRail, RAIL_WIDTH_PX } from "./custody-stages-rail";
 import { RECORD_PANEL_WIDTH_PX, RecordDetailPanel } from "./record-detail-panel";
@@ -91,25 +87,11 @@ const MAP_VIEW_STACK_VARS = {
   "--cv-record-panel-w": `${RECORD_PANEL_WIDTH_PX}px`,
 } as CSSProperties;
 
-/**
- * Which anchor the panel plots: a single application or a batch roll-up,
- * optionally narrowed to the lineages flowing through one production run.
- */
-export type ChainGeoSource =
-  | { kind: "application"; id: string }
-  | { kind: "creditBatch"; id: string; runId: string | null };
-
 export interface CarbonTransitPanelProps {
-  source: ChainGeoSource;
-  /**
-   * The lineage payload(s) the page already holds — feeds marker popups.
-   * One entry for an application anchor; one per member for a batch.
-   */
+  /** The application this panel plots (the batch Map is `TraceMap`). */
+  applicationId: string;
+  /** The lineage payload the page already holds: feeds marker popups. */
   lineages: ChainOfCustodyData[] | undefined;
-  /** Batch only: member runs' roll-forwards, for records no rollback reaches. */
-  rollForwards?: ChainRunRollForward[];
-  /** Batch only: the facility popup when no rollback carries one. */
-  facility?: ChainFacility;
   /** map = full side rails; split = collapsed not-geolocated chip box. */
   view: "map" | "split";
   /** Cross-link highlight from the Flow chart (nonce re-triggers repeat clicks). */
@@ -139,15 +121,10 @@ export interface CarbonTransitPanelProps {
 
 function buildPopupContent(
   lineages: ChainOfCustodyData[] | undefined,
-  rollForwards: ChainRunRollForward[] | undefined,
-  batchFacility: ChainFacility | undefined,
   timeZone: string,
 ): PopupContentByNodeId {
   const content: PopupContentByNodeId = {};
-  const nodes = [
-    ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData, timeZone)),
-    ...buildRollForwardNodes(rollForwards ?? [], timeZone),
-  ];
+  const nodes = (lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData, timeZone));
   for (const node of nodes) {
     if (content[node.id]) continue;
     content[node.id] = {
@@ -159,7 +136,7 @@ function buildPopupContent(
       ],
     };
   }
-  const facility = lineages?.[0]?.facility ?? batchFacility;
+  const facility = lineages?.[0]?.facility;
   if (!facility) return content;
   content[`facility:${facility.id}`] = {
     typeLabel: "Facility",
@@ -172,10 +149,8 @@ function buildPopupContent(
 }
 
 export function CarbonTransitPanel({
-  source,
+  applicationId,
   lineages,
-  rollForwards,
-  facility,
   view,
   highlight,
   focusNodeIds,
@@ -186,37 +161,26 @@ export function CarbonTransitPanel({
   onDetailClose,
   onDetailTrace,
 }: CarbonTransitPanelProps) {
-  const { timeZone } = useFacilityClock(lineages?.[0]?.facility.id ?? facility?.id);
+  const { timeZone } = useFacilityClock(lineages?.[0]?.facility.id);
   // Transient hover isolation, shared between the map (line hover) and the rail
   // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
   const [hoverLegId, setHoverLegId] = useState<string | null>(null);
   // Which leg the open record was reached through. Several legs can share an
-  // anchor record (a batch's outbound legs, an application with two deliveries),
+  // anchor record (an application with two deliveries),
   // so the clicked leg has to be remembered rather than re-derived.
   const [detailLegId, setDetailLegId] = useState<string | null>(null);
-  // Drop the hovered leg whenever the plotted source changes — a leftover hover
-  // from the previous application/batch points at a leg that no longer exists,
+  // Drop the hovered leg whenever the plotted application changes — a leftover
+  // hover from the previous one points at a leg that no longer exists,
   // which would pin the whole map in isolation mode. Reset during render (the
   // React-recommended reset-on-prop-change) rather than via useEffect.
-  const sourceKey = `${source.kind}:${source.id}:${
-    source.kind === "creditBatch" ? (source.runId ?? "") : ""
-  }`;
-  const [hoverSourceKey, setHoverSourceKey] = useState(sourceKey);
-  if (hoverSourceKey !== sourceKey) {
-    setHoverSourceKey(sourceKey);
+  const [hoverSourceKey, setHoverSourceKey] = useState(applicationId);
+  if (hoverSourceKey !== applicationId) {
+    setHoverSourceKey(applicationId);
     setHoverLegId(null);
     setDetailLegId(null);
   }
 
-  const applicationGeo = useChainOfCustodyGeo(
-    source.kind === "application" ? source.id : null
-  );
-  const batchGeo = useCreditBatchChainGeo(
-    source.kind === "creditBatch" ? source.id : null,
-    source.kind === "creditBatch" ? source.runId : null
-  );
-  const { data: geo, isLoading, isError, error } =
-    source.kind === "application" ? applicationGeo : batchGeo;
+  const { data: geo, isLoading, isError, error } = useChainOfCustodyGeo(applicationId);
 
   const plottableLegs = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
@@ -261,11 +225,11 @@ export function CarbonTransitPanel({
     geo.nodes.some(
       (node) => node.positionSource === "own" || node.positionSource === "leg_origin"
     );
-  const popupContent = buildPopupContent(lineages, rollForwards, facility, timeZone);
+  const popupContent = buildPopupContent(lineages, timeZone);
 
   // A leg belongs to the focus when its chain-side anchor node sits in the
   // reachable sub-chain. Single-app view dims the sibling inbound legs (they
-  // share one downstream); a batch roll-up isolates the focused sub-chain.
+  // share one downstream).
   const focusLegIds = focusNodeIds
     ? new Set(
         geo.legs
@@ -347,11 +311,11 @@ export function CarbonTransitPanel({
           className="cv-stack relative flex h-full"
           style={MAP_VIEW_STACK_VARS}
         >
-          {/* Keyed on the plotted source: a batch/application change remounts
+          {/* Keyed on the plotted application: a change remounts
               the rail, collapsing both sides and returning the scroll to the
               top, which matches the map refitting to the new chain. */}
           <CustodyStagesRail
-            key={sourceKey}
+            key={applicationId}
             geo={geo}
             focusNodeIds={focusNodeIds}
             focusLegIds={focusLegIds}

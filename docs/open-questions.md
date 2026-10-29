@@ -21,6 +21,7 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 - Bin history (#1004): wet mass always, dry when available, the rest in the table, top to bottom on phones are settled; the layout pick is open.
 - Switch-template warning (#1144): how the warning leads to the template's line review.
 - Row links (#1130): the user wants the full row clickable.
+- Application Map and Split (#1486): they still use the old stages rail, docked record panel and "Not on the map" cluster (`src/components/chain-of-custody/map/carbon-transit-panel.tsx:CarbonTransitPanel`); Kenji's 2026-10-29 pick (stage list and chain walk) covers the batch Map only.
 
 ## Open-item problem wording
 
