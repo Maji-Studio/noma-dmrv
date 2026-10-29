@@ -6,7 +6,7 @@ import {
   emissionEntries, emissionEntryValues, facilities, feedstocks, feedstockTypes, organizations,
   productionRunFeedstocks, productionRuns, reactors, removalTemplateObservations, storageLocations,
 } from "@/db/schema";
-import { loadCreditBatchesLateProductionRuns } from "@/data-access/credit-batch-late-production-runs";
+import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import { readCreditBatchMembershipSubmissionLock, readCreditBatchesMembershipSubmissionLocks } from "@/data-access/credit-batch-certification-lock";
 import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
@@ -25,7 +25,7 @@ const BEFORE_RUN = new Date("2026-07-01T08:00:00Z");
 const RUN_CREATED_AT = new Date("2026-07-01T09:00:00Z");
 const AFTER_RUN = new Date("2026-07-01T10:00:00Z");
 
-describe("late production run detection (real DB)", () => {
+describe("missing production run detection (real DB)", () => {
   let main: LineageFixture;
   let otherFacility: LineageFixture;
   let foreignOrgId: string;
@@ -99,12 +99,12 @@ describe("late production run detection (real DB)", () => {
   }
 
   async function read() {
-    return (await loadCreditBatchesLateProductionRuns(ctx, [main.batchId])).get(main.batchId)!;
+    return (await loadCreditBatchesMissingProductionRuns(ctx, [main.batchId])).get(main.batchId)!;
   }
 
   async function todos() {
     return buildCreditBatchOpenItems({ facilityId: main.facilityId,
-      creditBatchId: main.batchId, canManage: true, lateProductionRuns: await read() });
+      creditBatchId: main.batchId, canManage: true, missingProductionRuns: await read() });
   }
 
   async function entryValues() {
@@ -151,9 +151,9 @@ describe("late production run detection (real DB)", () => {
       reactorId: foreignReactorId, biocharStorageLocationId: foreignBinId }, [foreignFeedstock.id]);
 
     expect((await read()).runs).toEqual([{ id: expected.id, code: expected.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT }]);
-    expect(await loadCreditBatchesLateProductionRuns({ ...ctx, organizationId: foreignOrgId }, [main.batchId]))
+    expect(await loadCreditBatchesMissingProductionRuns({ ...ctx, organizationId: foreignOrgId }, [main.batchId]))
       .toEqual(new Map());
-    await expect(loadCreditBatchesLateProductionRuns({ ...ctx, organizationId: "" }, [main.batchId])).rejects.toThrow();
+    await expect(loadCreditBatchesMissingProductionRuns({ ...ctx, organizationId: "" }, [main.batchId])).rejects.toThrow();
   });
 
   it("includes both facility-local boundary days using the end day, and returns the start day", async () => {
@@ -170,19 +170,94 @@ describe("late production run detection (real DB)", () => {
     ]);
   });
 
-  it("agrees with the read-only submission lock and omits unlocked batches", async () => {
+  it("agrees with the read-only submission lock and omits unheld batches", async () => {
+    await db.update(creditBatchApplications).set({ removalId: null })
+      .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId),
+        eq(creditBatchApplications.creditBatchId, otherFacility.batchId)));
     await run("LOCKED");
     await run("UNLOCKED", { facilityId: otherFacility.facilityId, reactorId: otherFacility.reactorId,
       biocharStorageLocationId: otherFacility.biocharBinId }, [otherFacility.feedstockId]);
     expect(await readCreditBatchMembershipSubmissionLock(ctx, db, main.batchId)).toBe(true);
     expect(await readCreditBatchMembershipSubmissionLock(ctx, db, otherFacility.batchId)).toBe(false);
-    const result = await loadCreditBatchesLateProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
+    const result = await loadCreditBatchesMissingProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
     expect([...result.keys()]).toEqual([main.batchId]);
     expect(result.get(main.batchId)?.sentRemovalCodes).toHaveLength(1);
     await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
       eq(certificationSubmissions.localEntityId, main.removalId)));
-    expect(await loadCreditBatchesLateProductionRuns(ctx, [main.batchId])).toEqual(new Map());
-    expect(await loadCreditBatchesLateProductionRuns(ctx, [])).toEqual(new Map());
+    const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+      .where(eq(certifierRemovals.id, main.removalId));
+    expect(await read()).toMatchObject({ sentRemovalCodes: [], heldRemovalCodes: [holder.code] });
+    expect(await loadCreditBatchesMissingProductionRuns(ctx, [])).toEqual(new Map());
+  });
+
+  it("finds only fitting runs for an unsent held batch and names its holder", async () => {
+    await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.removalId)));
+    const fitting = await run("HELD-MATCH");
+    await run("HELD-WRONG-TYPE", { startTime: new Date("2026-06-10T08:00:00Z"), endTime: new Date("2026-06-10T12:00:00Z") },
+      [otherFacility.feedstockId]);
+    await run("HELD-OUTSIDE", { startTime: new Date("2026-07-01T08:00:00Z"), endTime: new Date("2026-07-01T12:00:00Z") });
+    const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+      .where(eq(certifierRemovals.id, main.removalId));
+    expect(await read()).toEqual({ sentRemovalCodes: [], heldRemovalCodes: [holder.code],
+      batchStartDate: "2026-06-01", manualEntries: [],
+      runs: [{ id: fitting.id, code: fitting.code, startDate: "2026-06-09", createdAt: RUN_CREATED_AT }] });
+    expect((await todos()).check).toEqual([{
+      id: `missing-production-run:${fitting.id}`,
+      productionRun: { id: fitting.id, code: fitting.code },
+      title: `${fitting.code} is not in this credit batch yet`,
+      detail: `Its emissions are not counted. Add it in Edit before ${holder.code} is sent.`,
+      target: { tab: "overview", rowId: "batch-details" },
+    }]);
+    await db.insert(creditBatchApplications).values({ organizationId: ctx.organizationId,
+      creditBatchId: main.batchId, applicationId: otherFacility.applicationId,
+      allocatedWetMassKg: WET_MASS_KG, allocatedDryMassKg: BIOCHAR_OUTPUT_KG,
+      removalId: otherFacility.removalId });
+    const holders = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+      .where(inArray(certifierRemovals.id, [main.removalId, otherFacility.removalId]));
+    expect((await read()).heldRemovalCodes).toEqual(holders.map(row => row.code).sort());
+    expect(await loadCreditBatchesMissingProductionRuns({ ...ctx, organizationId: foreignOrgId }, [main.batchId]))
+      .toEqual(new Map());
+  });
+
+  it("keeps a manually covered run cleared when the batch becomes unsent and held", async () => {
+    const fitting = await run("HELD-COVERED");
+    const values = await entryValues();
+    await db.insert(emissionEntries).values({ ...values, kind: "value" });
+    expect((await todos()).check).toEqual([]);
+    await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.removalId)));
+    expect(await read()).toMatchObject({ sentRemovalCodes: [], heldRemovalCodes: [expect.any(String)],
+      runs: [{ id: fitting.id }], manualEntries: [{ occurredOn: values.occurredOn, createdAt: AFTER_RUN }] });
+    expect((await todos()).check).toEqual([]);
+  });
+
+  it.each(["FAILED_VERIFICATION", "DRAFT"])("shows missing runs for a returned %s holder without authorizing a write", async remoteStatus => {
+    await cleanupLineageFixture(main);
+    main = await createLineageFixture("ghgStatement");
+    const externalId = `returned-run-${crypto.randomUUID()}`;
+    await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+      provider: "isometric", submissionType: "removal", localEntityType: "removal",
+      localEntityId: main.removalId, externalId, version: 1, status: "submitted",
+      submittedAt: new Date("2026-06-16T00:00:00Z") });
+    await db.update(certificationSubmissions).set({ metadata: {
+      remoteStatus, submittedToVerifierAt: "2026-06-17T00:00:00Z", removalIds: [externalId],
+    } }).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.ghgStatementId!)));
+    const fitting = await run("RETURNED");
+    const [holder] = await db.select({ code: certifierRemovals.code }).from(certifierRemovals)
+      .where(eq(certifierRemovals.id, main.removalId));
+    expect(await read()).toMatchObject({ sentRemovalCodes: [], heldRemovalCodes: [holder.code],
+      runs: [{ id: fitting.id }] });
+    expect((await todos()).check.map(item => item.id)).toEqual([`missing-production-run:${fitting.id}`]);
+    // The mutation guard still requires a fresh registry read to reopen membership.
+    expect(await readCreditBatchMembershipSubmissionLock(ctx, db, main.batchId)).toBe(true);
+    await db.update(certificationSubmissions).set({ metadata: {
+      remoteStatus: "AWAITING_VERIFICATION", submittedToVerifierAt: "2026-06-17T00:00:00Z", removalIds: [externalId],
+    } }).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.localEntityId, main.ghgStatementId!)));
+    expect((await read()).sentRemovalCodes).toEqual([holder.code]);
+    expect((await todos()).check.map(item => item.id)).toEqual([`late-production-run:${fitting.id}`]);
   });
 
   it("keeps the Check for older entries sent by either locking Removal on the run day", async () => {
@@ -257,11 +332,11 @@ describe("late production run detection (real DB)", () => {
     const values = await entryValues();
     await db.insert(emissionEntries).values({ ...values, kind: "value", sentByRemovalId: otherFacility.removalId });
     // The receiver locks another batch in this same read, but not the entry's origin batch.
-    const result = await loadCreditBatchesLateProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
+    const result = await loadCreditBatchesMissingProductionRuns(ctx, [main.batchId, otherFacility.batchId]);
     expect([...result.keys()].sort()).toEqual([main.batchId, otherFacility.batchId].sort());
     expect(result.get(main.batchId)?.manualEntries).toEqual([{ occurredOn: "2026-06-09", createdAt: AFTER_RUN }]);
     expect(buildCreditBatchOpenItems({ facilityId: main.facilityId, creditBatchId: main.batchId,
-      canManage: true, lateProductionRuns: result.get(main.batchId) }).check).toEqual([]);
+      canManage: true, missingProductionRuns: result.get(main.batchId) }).check).toEqual([]);
   });
 
   it("resolves with a new undeleted additive value on the start day, even without a usable template", async () => {

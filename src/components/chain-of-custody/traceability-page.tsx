@@ -35,7 +35,7 @@ import type { ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel, TraceMap } from "./map";
 import { type RunPickerOption } from "./run-picker";
-import { BatchSankey } from "./sankey";
+import { BatchSankey, SankeyEmpty } from "./sankey";
 import { TraceabilityHeader } from "./traceability-header";
 import { ApplicationTrail } from "./trail";
 import {
@@ -45,7 +45,6 @@ import {
 } from "./use-chain-graph";
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 import {
-  NO_APPLICATION_SANKEY_MESSAGE,
   NO_LINEAGE_FOR_SELECTED_RUN,
   NO_RUN_APPLICATION_YET_WARNING,
 } from "@/lib/chain-of-custody/copy";
@@ -652,14 +651,21 @@ export function TraceabilityPage() {
         />
       );
     }
-    if ((filteredBatchLineages?.length ?? 0) === 0) {
+    const sankeyData = filteredSankey ?? batchData.sankey;
+    // No application, or nothing but zeros: there is no balance to draw.
+    const noLineages = (filteredBatchLineages?.length ?? 0) === 0;
+    if (noLineages || sankeyData.columns.every((column) => column.massKg === 0)) {
       return (
-        <CenteredMessage>{NO_APPLICATION_SANKEY_MESSAGE}</CenteredMessage>
+        <SankeyEmpty
+          reason={noLineages ? (selectedRunId ? "run-filtered" : "none-applied") : "no-dry-mass"}
+          onOpenFlow={() => handleViewChange(DEFAULT_BATCH_VIEW, DEFAULT_BATCH_VIEW)}
+        />
       );
     }
     return (
       <BatchSankey
-        sankey={filteredSankey ?? batchData.sankey}
+        sankey={sankeyData}
+        lineages={batchLineages ?? []}
         batchCode={batchData.batch.code}
       />
     );

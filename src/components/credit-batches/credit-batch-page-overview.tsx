@@ -11,9 +11,13 @@ import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { InfoHint } from "@/components/ui/tooltip";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { recordHref } from "@/lib/record-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
+  LATE_PRODUCTION_RUN_ITEM_PREFIX,
   type CreditBatchOpenItem,
 } from "@/lib/credit-batches/open-items";
 import { removalBarGroups, showOverviewRemovals } from "@/lib/credit-batches/removal-bar";
@@ -43,6 +47,45 @@ function itemRowClass(besideHint: boolean) {
     "group flex min-h-44 items-center justify-between gap-16 px-12 py-12 text-left hover:bg-[var(--color-surface-medium)]",
     besideHint ? "-ml-12 w-[calc(100%+12px)]" : "-mx-12 w-[calc(100%+24px)]",
     FOCUS_RING,
+  );
+}
+
+/**
+ * A Check that names a run: the code is a link to the run, so the row cannot be
+ * one button. Its action sits beside the text, named as on the sheet: a held
+ * batch's missing run is added in Edit, a Sent batch's late run is recorded on Emissions.
+ */
+function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: string; code: string } }) {
+  const { openItem, batch } = useCreditBatchPage();
+  const rest = item.title.startsWith(run.code) ? item.title.slice(run.code.length) : null;
+  return (
+    <li className={ROW_RULE}>
+      <div className="flex min-h-44 items-center justify-between gap-16 py-12">
+        <span className="flex min-w-0 flex-col gap-2">
+          <span className="body-medium font-medium">
+            {rest === null ? item.title : (
+              <>
+                <Link
+                  href={recordHref("productionRun", run.id, { facilityId: batch.facilityId })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(INLINE_HIT_AREA, RECORD_CODE_LINK)}
+                >
+                  {run.code}
+                </Link>
+                {rest}
+              </>
+            )}
+          </span>
+          {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+        </span>
+        {item.target && (
+          <Button type="button" variant="weak" size="small" className={cn("shrink-0", CENTRED_HIT_AREA)} onClick={() => openItem(item)}>
+            {item.id.startsWith(LATE_PRODUCTION_RUN_ITEM_PREFIX) ? "Open Emissions" : "Add in Edit"}
+          </Button>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -114,7 +157,9 @@ function OpenItemGroups() {
           </div>
           <ul className="flex flex-col">
             {openItems[group].map((item) => (
-              <OpenItemRow key={item.id} item={item} />
+              item.productionRun
+                ? <RunItemRow key={item.id} item={item} run={item.productionRun} />
+                : <OpenItemRow key={item.id} item={item} />
             ))}
           </ul>
         </section>

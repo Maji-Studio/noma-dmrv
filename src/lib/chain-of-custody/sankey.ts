@@ -94,7 +94,7 @@ export interface SankeyLineage {
 }
 
 /** Residuals smaller than this are rounding noise, not a labeled exit. */
-const EXIT_EPSILON_KG = 0.5;
+export const EXIT_EPSILON_KG = 0.5;
 
 interface ResidualResult {
   value: number;

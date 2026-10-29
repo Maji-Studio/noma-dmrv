@@ -47,7 +47,7 @@ interface CreditBatchProductionRunsPreviewProps {
   disabled?: boolean;
 }
 
-export function ProductionRunCaption({
+function ProductionRunCaption({
   run,
   facilityId,
 }: {
@@ -73,18 +73,17 @@ export function ProductionRunCaption({
   );
 }
 
-function ProductionRunPreviewRow({
+/** One run as a row; `action` is the control after the mass (Undo, Add run). */
+export function ProductionRunPreviewRow({
   run,
   currentCreditBatchId,
   facilityId,
-  onRemove,
-  disabled,
+  action,
 }: {
   run: CreditBatchProductionRunOption;
   currentCreditBatchId?: string;
   facilityId?: string;
-  onRemove?: () => void;
-  disabled?: boolean;
+  action?: ReactNode;
 }) {
   const assignedElsewhere =
     !!run.assignedCreditBatchId &&
@@ -95,13 +94,13 @@ function ProductionRunPreviewRow({
     <div
       data-testid="credit-batch-production-run-preview"
       data-production-run-id={run.id}
-      className={`flex min-w-0 items-center justify-between gap-12 border border-[var(--color-border-tertiary)] px-12 py-10 ${
+      className={`flex min-w-0 flex-wrap items-center justify-between gap-x-12 gap-y-8 border border-[var(--color-border-tertiary)] px-12 py-10 ${
         assignedElsewhere
           ? "bg-[var(--color-background-medium)]"
           : "bg-[var(--color-background-white)]"
       }`}
     >
-      <span className="flex min-w-0 flex-col gap-2">
+      <span className="flex min-w-0 flex-1 basis-[160px] flex-col gap-2">
         <span
           className={`body-small font-medium ${
             assignedElsewhere
@@ -118,7 +117,7 @@ function ProductionRunPreviewRow({
           </span>
         )}
       </span>
-      <span className="flex shrink-0 items-center gap-10">
+      <span className="ml-auto flex shrink-0 items-center gap-10">
         {isPreview && <StatusBadge status={run.status} size="small" />}
         <span className="text-right">
           <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
@@ -128,19 +127,7 @@ function ProductionRunPreviewRow({
             })}
           </span>
         </span>
-        {onRemove && (
-          <Button
-            type="button"
-            variant="noOutline"
-            size="small"
-            className={CENTRED_HIT_AREA}
-            disabled={disabled}
-            aria-label={`Undo adding ${run.code}`}
-            onClick={onRemove}
-          >
-            Undo
-          </Button>
-        )}
+        {action}
       </span>
     </div>
   );
@@ -266,11 +253,20 @@ export function CreditBatchProductionRunsPreview({
                 run={run}
                 currentCreditBatchId={currentCreditBatchId}
                 facilityId={facilityId}
-                disabled={disabled}
-                onRemove={
-                  onRemoveRun && removableRunIds?.has(run.id)
-                    ? () => onRemoveRun(run.id)
-                    : undefined
+                action={
+                  onRemoveRun && removableRunIds?.has(run.id) ? (
+                    <Button
+                      type="button"
+                      variant="noOutline"
+                      size="small"
+                      className={CENTRED_HIT_AREA}
+                      disabled={disabled}
+                      aria-label={`Undo adding ${run.code}`}
+                      onClick={() => onRemoveRun(run.id)}
+                    >
+                      Undo
+                    </Button>
+                  ) : undefined
                 }
               />
             ))}
