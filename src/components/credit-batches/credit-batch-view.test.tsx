@@ -319,7 +319,7 @@ describe("credit batch sheet missing runs", () => {
   });
 
   it("shows a Sent batch's late run beside, not instead of, the held notice", () => {
-    const lateRuns = [{ id: "run-8", code: "RUN-8", title: "RUN-8 was recorded after RM-9 was sent", detail: "It is not in this credit batch." }];
+    const lateRuns = [{ id: "run-8", code: "RUN-8", title: "RUN-8 was recorded after RM-9 was sent", titleAfterCode: " was recorded after RM-9 was sent", detail: "It is not in this credit batch." }];
     const sections = creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({}), lateRuns, canManage: false });
     render(<>{sections.find((section) => section.title === "Production runs")?.content}</>);
     expect(screen.getByTestId("credit-batch-late-run").textContent).toContain("RUN-8 was recorded after RM-9 was sent.");

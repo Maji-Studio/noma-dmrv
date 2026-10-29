@@ -1,7 +1,42 @@
-import { and, eq, gte, isNull, lte, type AnyColumn } from "drizzle-orm";
-import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
+import { applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { productionRunMembershipDateExpr } from "./production-runs/date-expr";
+import { requireOrgScope, type Executor } from "./utils";
+
+/** Allocations that prevent Add run, preferring this batch's held slice. */
+export async function loadCreditBatchRunHoldingAllocations(
+  ctx: OrgContext,
+  executor: Executor,
+  productionRunIds: readonly string[],
+  creditBatchId: string,
+  splitsApplicationsByBatch: boolean,
+) {
+  requireOrgScope(ctx);
+  if (!productionRunIds.length) return [];
+  return executor.select({
+    productionRunId: applicationOutputAllocations.productionRunId,
+    removalId: certifierRemovals.id,
+    removalCode: certifierRemovals.code,
+    creditBatchId: creditBatchApplications.creditBatchId,
+  }).from(applicationOutputAllocations)
+    .innerJoin(creditBatchApplications, and(
+      eq(creditBatchApplications.applicationId, applicationOutputAllocations.applicationId),
+      eq(creditBatchApplications.organizationId, ctx.organizationId),
+    ))
+    .innerJoin(certifierRemovals, and(
+      eq(certifierRemovals.id, creditBatchApplications.removalId),
+      eq(certifierRemovals.organizationId, ctx.organizationId),
+    ))
+    .where(and(
+      inArray(applicationOutputAllocations.productionRunId, [...productionRunIds]),
+      eq(applicationOutputAllocations.organizationId, ctx.organizationId),
+      isNotNull(creditBatchApplications.removalId),
+      splitsApplicationsByBatch ? eq(creditBatchApplications.creditBatchId, creditBatchId) : undefined,
+    ))
+    .orderBy(desc(eq(creditBatchApplications.creditBatchId, creditBatchId)));
+}
 
 /** Shared fit predicates for one cohort or a set-based join against stored batches. */
 export function creditBatchRunFitConditions(organizationId: string, window: {

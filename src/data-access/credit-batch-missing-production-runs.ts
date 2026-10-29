@@ -1,15 +1,16 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  creditBatches, creditBatchProductionRuns, emissionEntries, feedstocks,
+  creditBatches, creditBatchProductionRuns, emissionEntries, facilities, feedstocks,
   productionRunFeedstocks, productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { isSentRemoval, readsAsReturnedFromPersisted } from "@/lib/record-lock";
+import { removalSplitsApplicationsByBatch } from "@/lib/certification/removal-application-policy";
 import { listCreditBatchCertificationLinks } from "./credit-batch-certification-links";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { readRecordLockLineage } from "./record-lock-lineage";
-import { creditBatchRunFitConditions, filterSingleFeedstockTypeRuns } from "./credit-batch-run-fit";
+import { creditBatchRunFitConditions, filterSingleFeedstockTypeRuns, loadCreditBatchRunHoldingAllocations } from "./credit-batch-run-fit";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchMissingProductionRuns {
@@ -18,7 +19,7 @@ export interface CreditBatchMissingProductionRuns {
   heldRemovalCodes: string[];
   /** First day of the batch period; entries must be dated inside it. */
   batchStartDate: string;
-  runs: { id: string; code: string; startDate: string; createdAt: Date }[];
+  runs: { id: string; code: string; startDate: string; createdAt: Date; heldByRemovalCode: string | null }[];
   /** Undeleted additive values; creation time determines which runs they can report. */
   manualEntries: { occurredOn: string; createdAt: Date }[];
 }
@@ -48,13 +49,14 @@ export async function loadCreditBatchesMissingProductionRuns(
   }
   for (const id of sentByBatch.keys()) heldByBatch.delete(id);
   const sentBatchIds = [...sentByBatch.keys()];
+  const heldBatchIds = [...heldByBatch.keys()];
   // Unheld batches attach matching runs on completion and expand membership on save.
-  const batchIds = [...sentBatchIds, ...heldByBatch.keys()];
+  const batchIds = [...sentBatchIds, ...heldBatchIds];
   if (!batchIds.length) return new Map();
   const fit = creditBatchRunFitConditions(ctx.organizationId, {
     facilityId: creditBatches.facilityId, startDate: creditBatches.startDate, endDate: creditBatches.endDate,
   });
-  const [rows, entries] = await Promise.all([
+  const [rows, entries, heldBatches] = await Promise.all([
     db.selectDistinct({
       creditBatchId: creditBatches.id,
       batchStartDate: creditBatches.startDate,
@@ -82,6 +84,14 @@ export async function loadCreditBatchesMissingProductionRuns(
         eq(emissionEntries.lineRule, "additive"),
         isNull(emissionEntries.deletedAt),
       )),
+    heldBatchIds.length ? db.select({ creditBatchId: creditBatches.id, durabilityOption: facilities.durabilityOption })
+      .from(creditBatches).innerJoin(facilities, and(
+        eq(facilities.id, creditBatches.facilityId),
+        eq(facilities.organizationId, ctx.organizationId),
+      )).where(and(
+        eq(creditBatches.organizationId, ctx.organizationId),
+        inArray(creditBatches.id, heldBatchIds),
+      )) : [],
   ]);
   const result = new Map<string, CreditBatchMissingProductionRuns>(batchIds.map(id => [id, {
     sentRemovalCodes: sentByBatch.get(id) ?? [], heldRemovalCodes: heldByBatch.get(id) ?? [],
@@ -90,8 +100,19 @@ export async function loadCreditBatchesMissingProductionRuns(
   for (const row of filterSingleFeedstockTypeRuns(rows, row => row.batchFeedstockTypeId,
     row => `${row.creditBatchId}:${row.productionRunId}`)) {
     result.get(row.creditBatchId)!.batchStartDate = row.batchStartDate;
-    result.get(row.creditBatchId)!.runs.push({ id: row.productionRunId, code: row.code, startDate: row.startDate, createdAt: row.createdAt });
+    result.get(row.creditBatchId)!.runs.push({ id: row.productionRunId, code: row.code, startDate: row.startDate,
+      createdAt: row.createdAt, heldByRemovalCode: null });
   }
+  await Promise.all(heldBatches.map(async batch => {
+    const missing = result.get(batch.creditBatchId)!;
+    const allocations = await loadCreditBatchRunHoldingAllocations(ctx, db, missing.runs.map(run => run.id),
+      batch.creditBatchId, removalSplitsApplicationsByBatch(batch.durabilityOption));
+    const holdingCodes = new Map<string, string>();
+    for (const allocation of allocations) {
+      if (!holdingCodes.has(allocation.productionRunId)) holdingCodes.set(allocation.productionRunId, allocation.removalCode);
+    }
+    for (const run of missing.runs) run.heldByRemovalCode = holdingCodes.get(run.id) ?? null;
+  }));
   for (const entry of entries) {
     result.get(entry.creditBatchId)!.manualEntries.push({ occurredOn: entry.occurredOn, createdAt: entry.createdAt });
   }

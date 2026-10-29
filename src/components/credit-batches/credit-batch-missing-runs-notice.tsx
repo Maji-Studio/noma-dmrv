@@ -4,21 +4,32 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
-import { LATE_PRODUCTION_RUN_ITEM_PREFIX, MISSING_PRODUCTION_RUN_ITEM_PREFIX } from "@/lib/credit-batches/open-items";
+import {
+  LATE_PRODUCTION_RUN_ITEM_PREFIX,
+  MISSING_PRODUCTION_RUN_ITEM_PREFIX,
+  missingRunsAdminSentence,
+  missingRunsCountedSentence,
+  missingRunsMemberSentence,
+  sameDayEntrySentence,
+} from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 
 export interface MissingRunRef {
   id: string;
   code: string;
+  /** A later Emissions entry dated the run's day may already record its emissions. */
+  sameDayEntry?: boolean;
 }
 
 /** The runs the batch's missing-run Check names, from the batch's to-dos. */
 export function missingRunsFromTodos(
-  check: readonly { productionRun?: MissingRunRef; id: string }[] | undefined,
+  check: readonly { productionRun?: MissingRunRef; id: string; sameDayEntry?: boolean }[] | undefined,
 ): MissingRunRef[] {
   return (check ?? []).flatMap((item) =>
-    item.id.startsWith(MISSING_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun ? [item.productionRun] : [],
+    item.id.startsWith(MISSING_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun
+      ? [item.sameDayEntry ? { ...item.productionRun, sameDayEntry: true } : item.productionRun]
+      : [],
   );
 }
 
@@ -60,6 +71,11 @@ interface CreditBatchMissingRunsNoticeProps {
 export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit }: CreditBatchMissingRunsNoticeProps) {
   if (runs.length === 0) return null;
   const one = runs.length === 1;
+  const sameDay = runs.some((run) => run.sameDayEntry);
+  // With the Edit button the action is already there; without it say who adds the run.
+  const nextStep = canManage
+    ? (onEdit ? null : missingRunsAdminSentence(runs.length))
+    : missingRunsMemberSentence(runs.length);
   return (
     <Notice
       tone="warning"
@@ -72,7 +88,9 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       ) : undefined}
     >
       <MissingRunLinks runs={runs} facilityId={facilityId} />
-      {`. ${one ? "Its" : "Their"} emissions are not counted.${canManage ? "" : ` An admin can add ${one ? "it" : "them"} in Edit.`}`}
+      {`. ${missingRunsCountedSentence(runs.length)}`}
+      {nextStep && ` ${nextStep}`}
+      {canManage && sameDay && ` ${sameDayEntrySentence(runs.length)}`}
     </Notice>
   );
 }
@@ -80,15 +98,16 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
 /** A Sent batch's late-run Check, as the sheet reads it: the Check's own words. */
 export interface LateRunRef extends MissingRunRef {
   title: string;
+  titleAfterCode?: string;
   detail?: string;
 }
 
 export function lateRunsFromTodos(
-  check: readonly { id: string; productionRun?: MissingRunRef; title: string; detail?: string }[] | undefined,
+  check: readonly { id: string; productionRun?: MissingRunRef; title: string; titleAfterCode?: string; detail?: string }[] | undefined,
 ): LateRunRef[] {
   return (check ?? []).flatMap((item) =>
     item.id.startsWith(LATE_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun
-      ? [{ ...item.productionRun, title: item.title, detail: item.detail }]
+      ? [{ ...item.productionRun, title: item.title, titleAfterCode: item.titleAfterCode, detail: item.detail }]
       : [],
   );
 }
@@ -111,7 +130,7 @@ export function CreditBatchLateRunsNotice({
   return (
     <>
       {runs.map((run) => {
-        const rest = run.title.startsWith(run.code) ? run.title.slice(run.code.length) : null;
+        const rest = run.titleAfterCode ?? null;
         return (
           <Notice
             key={run.id}

@@ -57,7 +57,7 @@ function itemRowClass(besideHint: boolean) {
  */
 function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: string; code: string } }) {
   const { openItem, batch } = useCreditBatchPage();
-  const rest = item.title.startsWith(run.code) ? item.title.slice(run.code.length) : null;
+  const rest = item.titleAfterCode ?? null;
   return (
     <li className={ROW_RULE}>
       <div className="flex min-h-44 items-center justify-between gap-16 py-12">

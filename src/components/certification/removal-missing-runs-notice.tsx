@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MissingRunLinks } from "@/components/credit-batches/credit-batch-missing-runs-notice";
 import { Notice } from "@/components/ui/notice";
+import { missingRunsCountedSentence, missingRunsMemberSentence } from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
 import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import { NOTICE_ACTION_LINK_CLASS } from "./removal-resubmit-notice";
@@ -37,7 +38,8 @@ export function RemovalMissingRunsNotice({
             }
           >
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
-            {`. ${one ? "Its" : "Their"} emissions are not counted. ${canManage ? `Open the credit batch and add ${one ? "it" : "them"} in Edit.` : `An admin can add ${one ? "it" : "them"} in Edit.`}`}
+            {`. ${missingRunsCountedSentence(batch.runs.length)}`}
+            {!canManage && batch.runs.every((run) => run.canAdd) && ` ${missingRunsMemberSentence(batch.runs.length)}`}
           </Notice>
         );
       })}

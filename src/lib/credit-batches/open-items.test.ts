@@ -14,6 +14,11 @@ import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
   buildCreditBatchOpenItems,
   CREDIT_BATCH_DETAILS_ROW,
+  heldMissingRuns,
+  missingRunsCountedSentence,
+  missingRunsMemberSentence,
+  missingRunsAdminSentence,
+  sameDayEntrySentence,
 } from "./open-items";
 
 import { overviewBadgeCount, tabBadge } from "./batch-page";
@@ -365,13 +370,13 @@ it("surfaces a negative O/C_org as an unpaired H/C sample", () => {
 });
 
 describe("missing production runs", () => {
-  const run = { id: "run", code: "RUN-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01") };
+  const run = { id: "run", code: "RUN-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01"), heldByRemovalCode: null };
   const missingProductionRuns = { sentRemovalCodes: [], heldRemovalCodes: ["RM-009"],
     batchStartDate: "2026-09-01", runs: [run], manualEntries: [] };
 
   it.each([
-    { heldRemovalCodes: ["RM-009"], holders: "RM-009 is" },
-    { heldRemovalCodes: ["RM-009", "RM-010"], holders: "RM-009 and RM-010 are" },
+    { heldRemovalCodes: ["RM-009"], holders: "RM-009" },
+    { heldRemovalCodes: ["RM-009", "RM-010"], holders: "RM-009 and RM-010" },
   ])("names the unsent holders $holders and opens Edit", ({ heldRemovalCodes, holders }) => {
     const items = buildCreditBatchOpenItems({ ...batchContext,
       missingProductionRuns: { ...missingProductionRuns, heldRemovalCodes } });
@@ -379,7 +384,8 @@ describe("missing production runs", () => {
       id: "missing-production-run:run",
       productionRun: { id: "run", code: "RUN-112" },
       title: "RUN-112 is not in this credit batch yet",
-      detail: `Its emissions are not counted. Add it in Edit before ${holders} sent.`,
+      titleAfterCode: " is not in this credit batch yet",
+      detail: `Its emissions are not counted in ${holders}.`,
       target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
     }] });
     expect(overviewBadgeCount({ ...items, waiting: [] })).toBe(1);
@@ -392,34 +398,88 @@ describe("missing production runs", () => {
         id: "missing-production-run:run",
         productionRun: { id: "run", code: "RUN-112" },
         title: "RUN-112 is not in this credit batch yet",
-        detail: "Its emissions are not counted. An admin can add it in Edit.",
+        titleAfterCode: " is not in this credit batch yet",
+        detail: "Its emissions are not counted in RM-009. An admin can add it in Edit.",
         target: null,
       }] });
   });
 
   it.each([
-    { occurredOn: "2026-09-10", createdAt: new Date("2026-10-02"), covered: false },
-    { occurredOn: run.startDate, createdAt: new Date("2026-09-30"), covered: false },
-    { occurredOn: run.startDate, createdAt: run.createdAt, covered: false },
-    { occurredOn: run.startDate, createdAt: new Date("2026-10-02"), covered: true },
-  ])("keeps one Check per uncovered missing run after an entry ($occurredOn, $createdAt)", ({ occurredOn, createdAt, covered }) => {
+    { occurredOn: "2026-09-10", createdAt: new Date("2026-10-02"), sameDayEntry: false },
+    { occurredOn: run.startDate, createdAt: new Date("2026-09-30"), sameDayEntry: false },
+    { occurredOn: run.startDate, createdAt: run.createdAt, sameDayEntry: false },
+    { occurredOn: run.startDate, createdAt: new Date("2026-10-02"), sameDayEntry: true },
+  ])("keeps held runs visible and flags a later same-day entry ($occurredOn, $createdAt)", ({ occurredOn, createdAt, sameDayEntry }) => {
     const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
       ...missingProductionRuns, runs: [run, { ...run, id: "second", code: "RUN-113" }],
       manualEntries: [{ occurredOn, createdAt }],
     } });
     expect(blocking).toEqual([]);
-    expect(check.map(item => item.id)).toEqual(covered ? [] : ["missing-production-run:run", "missing-production-run:second"]);
+    expect(check.map(item => item.id)).toEqual(["missing-production-run:run", "missing-production-run:second"]);
+    expect(check.map(item => item.detail)).toEqual(Array(2).fill(sameDayEntry
+      ? "Its emissions are not counted in RM-009. If the Emissions entry dated Sep 9, 2026 already records them, delete it when you add the run."
+      : "Its emissions are not counted in RM-009."));
   });
 
-  it("uses the batch start day for a covered held run that started before the window", () => {
+  it("flags the missing-run Check with a structured same-day marker", () => {
+    const { check } = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
+      ...missingProductionRuns, runs: [run],
+      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
+    } });
+    expect(check[0].sameDayEntry).toBe(true);
+    const none = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns }).check;
+    expect(none[0].sameDayEntry).toBeUndefined();
+  });
+
+  it("uses the batch start day for the same-day warning on an early held run", () => {
     const early = { ...run, startDate: "2026-08-31" };
     const entry = { occurredOn: missingProductionRuns.batchStartDate, createdAt: new Date("2026-10-02") };
     expect(buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
       ...missingProductionRuns, runs: [early], manualEntries: [entry],
-    } }).check).toEqual([]);
-    expect(buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
+    } }).check).toEqual([{
+      id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true,
+      detail: "Its emissions are not counted in RM-009. If the Emissions entry dated Sep 1, 2026 already records them, delete it when you add the run.",
+      target: { tab: "overview", rowId: CREDIT_BATCH_DETAILS_ROW },
+    }]);
+    const otherDayItems = buildCreditBatchOpenItems({ ...batchContext, missingProductionRuns: {
       ...missingProductionRuns, runs: [early], manualEntries: [{ ...entry, occurredOn: early.startDate }],
-    } }).check.map(item => item.id)).toEqual(["missing-production-run:run"]);
+    } }).check;
+    expect(otherDayItems.map(item => item.id)).toEqual(["missing-production-run:run"]);
+    expect(otherDayItems[0].detail).toBe("Its emissions are not counted in RM-009.");
+  });
+
+  it.each([true, false])("opens Emissions for a held allocation for any role (canManage %s)", canManage => {
+    const missing = { ...missingProductionRuns, runs: [{ ...run, heldByRemovalCode: "RM-010" }],
+      manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }] };
+    const items = buildCreditBatchOpenItems({ ...batchContext, canManage, missingProductionRuns: missing });
+    expect(items).toEqual({ blocking: [], check: [{
+      id: "late-production-run:run", productionRun: { id: run.id, code: run.code },
+      title: "RUN-112 cannot be added to this credit batch", titleAfterCode: " cannot be added to this credit batch",
+      detail: "Its biochar is in an Application that RM-010 already holds. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
+      target: { tab: "emissions" },
+    }] });
+    expect(heldMissingRuns(missing)).toEqual([{
+      id: run.id, code: run.code, entryDate: run.startDate, heldByRemovalCode: "RM-010", sameDayEntry: true,
+    }]);
+  });
+
+  it("keeps the member's add guidance even when a same-day entry exists", () => {
+    expect(buildCreditBatchOpenItems({ ...batchContext, canManage: false, missingProductionRuns: {
+      ...missingProductionRuns, manualEntries: [{ occurredOn: run.startDate, createdAt: new Date("2026-10-02") }],
+    } }).check[0]).toEqual({
+      id: "missing-production-run:run", productionRun: { id: run.id, code: run.code },
+      title: "RUN-112 is not in this credit batch yet", titleAfterCode: " is not in this credit batch yet", sameDayEntry: true,
+      detail: "Its emissions are not counted in RM-009. An admin can add it in Edit.", target: null,
+    });
+  });
+
+  it("projects every fitting held run and excludes Sent and unheld batches", () => {
+    expect(heldMissingRuns(missingProductionRuns)).toEqual([{
+      id: run.id, code: run.code, entryDate: run.startDate, heldByRemovalCode: null, sameDayEntry: false,
+    }]);
+    expect(heldMissingRuns({ ...missingProductionRuns, sentRemovalCodes: ["RM-008"] })).toEqual([]);
+    expect(heldMissingRuns({ ...missingProductionRuns, heldRemovalCodes: [] })).toEqual([]);
   });
 
   it("omits unheld unsent batches whose membership expands automatically", () => {
@@ -435,6 +495,7 @@ describe("missing production runs", () => {
       id: "late-production-run:run",
       productionRun: { id: "run", code: "RUN-112" },
       title: "RUN-112 was recorded after RM-008 was sent",
+      titleAfterCode: " was recorded after RM-008 was sent",
       detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Sep 9, 2026.",
       target: { tab: "emissions" },
     }] });
@@ -468,7 +529,7 @@ describe("entries recorded after the Removal was sent", () => {
   it("places a waiting entry immediately after late production runs and keeps the list non-blocking", () => {
     const items = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting("noDraft"))],
       missingProductionRuns: { sentRemovalCodes: ["RM-009"], heldRemovalCodes: [], batchStartDate: "2026-09-01", manualEntries: [],
-        runs: [{ id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01") }] } });
+        runs: [{ id: "run", code: "PR-112", startDate: "2026-09-09", createdAt: new Date("2026-10-01"), heldByRemovalCode: null }] } });
     expect(items.blocking).toEqual([]);
     expect(items.check.map(item => item.id)).toEqual(["late-production-run:run", "late-entry:e1"]);
     expect(overviewBadgeCount({ ...items, waiting: [] })).toBe(2);
@@ -514,4 +575,18 @@ it("points an unavailable returned-Removal comparison to the Removal without cla
   }) });
   expect(check[0].detail).toBe("noma could not compare RM-26-003 with what it sent. Open the Removal to see why.");
   expect(check[0].title).toBe("RM-26-003: Resubmit needed");
+});
+
+describe("missing run copy", () => {
+  it.each([
+    { count: 1, counted: "Its emissions are not counted.", member: "An admin can add it in Edit.", admin: "Add it in Edit.",
+      sameDay: "If an Emissions entry already records its emissions, delete it when you add the run." },
+    { count: 2, counted: "Their emissions are not counted.", member: "An admin can add them in Edit.", admin: "Add them in Edit.",
+      sameDay: "If an Emissions entry already records their emissions, delete it when you add the runs." },
+  ])("uses singular or plural guidance for $count runs", ({ count, counted, member, admin, sameDay }) => {
+    expect(missingRunsCountedSentence(count)).toBe(counted);
+    expect(missingRunsMemberSentence(count)).toBe(member);
+    expect(missingRunsAdminSentence(count)).toBe(admin);
+    expect(sameDayEntrySentence(count)).toBe(sameDay);
+  });
 });
