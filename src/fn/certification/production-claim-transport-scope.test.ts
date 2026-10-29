@@ -67,12 +67,12 @@ describe("production-claim-aware transport requirements", () => {
     ).toEqual(REQUIRED);
   });
 
-  it("does not require feedstock coverage when all deliveries belong to earlier runs", () => {
+  it("still requires feedstock coverage when a production-claiming batch has no owned feedstock IDs", () => {
     expect(collectProductionClaimAwareRequiredTransportCategories({
       removalId: CURRENT_REMOVAL_ID,
       memberBatches: [{ ...batch("later", null), productionFeedstockIds: [] }],
       requiredTransportCategories: ["feedstock", "biochar"],
-    })).toEqual(["biochar"]);
+    })).toEqual(["feedstock", "biochar"]);
   });
 
   it("does not reintroduce transport owned by an earlier run through lineage", () => {

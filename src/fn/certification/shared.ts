@@ -1,3 +1,4 @@
+import type { TransportCategory } from "@/lib/certification/readiness";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
@@ -97,7 +98,7 @@ export async function loadTransportLegsByCategory(
   orgCtx: OrgContext,
   entityIds: TransportEntityIdsByCategory,
   lineages: ChainOfCustodyData[],
-  requiredTransportCategories: readonly ("feedstock" | "biochar" | "sample")[],
+  requiredTransportCategories: readonly TransportCategory[],
 ): Promise<TransportLegsByCategory> {
   const [feedstock, biochar] = await Promise.all([
     getTransportLegsWithEvidenceForEntities(orgCtx, "feedstock", entityIds.feedstockIds),

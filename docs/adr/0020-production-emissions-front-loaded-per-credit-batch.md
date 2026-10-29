@@ -4,14 +4,15 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
-> **Amended 2026-10-29: feedstock transport belongs to the first draw.** A
-> feedstock delivery's full transport legs belong to its earliest running or complete
-> linked production run, ordered by start time then run ID across the organization.
+> **Amended 2026-10-29: feedstock transport belongs to the earliest complete linked run.** A
+> feedstock record's full transport legs belong to its earliest complete linked run,
+> ordered by start time then run ID across the organization.
 > Only credit batches containing that run include those legs in production inputs.
-> Later pro-rata stock allocations retain the delivery for traceability and dry
+> Later pro-rata stock allocations retain the feedstock record for traceability and dry
 > mass but do not repeat its transport or require its transport evidence.
-> Failed and cancelled runs cannot own transport legs, and a delivery linked only
-> to those runs has no owner. Backdated, failed or cancelled runs can change live ownership;
+> Running, failed and cancelled runs cannot own transport legs. A feedstock record
+> linked only to those runs has no owner. Backdated runs or run status changes can
+> change live ownership;
 > already submitted snapshots remain immutable.
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)

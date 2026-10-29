@@ -15,6 +15,7 @@ import type { TransportLegsByCategory } from "./shared";
 
 export interface TransportCoverageBucket {
   count: number;
+  ownedElsewhere?: boolean;
   entityIds: string[];
   legIds: string[];
   firstLegEntityId: string | null;
@@ -67,6 +68,7 @@ export function buildTransportCoverage(
 ): TransportCoverage {
   return {
     feedstock: {
+      ownedElsewhere: entityIds.feedstockTransportOwnedElsewhere,
       missingEntityIds: missingFeedstockTransportIds(entityIds.feedstockIds, legs.feedstock),
       vehicleAdvisories: transportVehicleAdvisories(legs.feedstock, "Feedstock"),
       count: legs.feedstock.length,

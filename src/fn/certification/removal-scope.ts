@@ -1,3 +1,4 @@
+import { hasLinkedFeedstock, ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 import type { OrgContext } from "@/lib/auth/server";
 import { getCertifierRemovalById, getCreditBatchesByRemovalId, type CertifierRemovalRow } from "@/data-access/certifier-removals";
 import { projectChainOfCustodyFromBatchFacts, type ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -95,14 +96,8 @@ export function resolveSingleBatchScope(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionHasLinkedFeedstock: lineageFacts.runs.some((run) => run.feedstocks.length > 0),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
+        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
+        productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: batch.durabilityOption,
@@ -142,14 +137,8 @@ export async function resolveScopeForRemoval(
         ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionHasLinkedFeedstock: lineageFacts.runs.some((run) => run.feedstocks.length > 0),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
+        productionHasLinkedFeedstock: hasLinkedFeedstock(lineageFacts.runs),
+        productionFeedstockIds: ownedTransportFeedstockIds(lineageFacts.runs),
         applicationIds: lineageFacts.applicationIds,
         applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
         durabilityOption: accountingBatch.durabilityOption,

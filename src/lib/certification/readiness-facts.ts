@@ -58,6 +58,7 @@ export function toRemovalReadinessFacts(
       return {
         category,
         count: bucket.count,
+        ownedElsewhere: bucket.ownedElsewhere,
         missingEntityIds: bucket.missingEntityIds,
         lineageIssues: category === "feedstock"
           ? ctx.submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks")

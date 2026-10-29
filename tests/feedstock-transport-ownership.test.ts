@@ -30,6 +30,7 @@ describe("feedstock transport ownership data access", () => {
       const [type] = await tx.insert(feedstockTypes).values({ ...org, code: `TO-T-${tag}`, name: "Transport ownership", usage: "pyrolysis", category: "forestry" }).returning();
       const [supplier] = await tx.insert(suppliers).values({ ...org, code: `TO-S-${tag}`, name: "Transport ownership" }).returning();
       const [bin] = await tx.insert(storageLocations).values({ ...site, code: `TO-B-${tag}`, name: "Transport ownership", type: "feedstock_bin", feedstockTypeId: type.id }).returning();
+      const [biocharBin] = await tx.insert(storageLocations).values({ ...site, code: `TO-BB-${tag}`, name: "Transport ownership biochar", type: "biochar_bin" }).returning();
       const [reactor] = await tx.insert(reactors).values({ ...site, code: `TO-R-${tag}`, identifier: "Transport ownership", reactorType: "fixed-bed" }).returning();
       const [process] = await tx.insert(productionProcesses).values({ ...site, feedstockTypeId: type.id }).returning();
       const stocks = await tx.insert(feedstocks).values(Array.from({ length: EARLY_LEGS + MARCH_LEGS }, (_, index) => ({
@@ -44,7 +45,8 @@ describe("feedstock transport ownership data access", () => {
       const months = ["02", "03", "04"];
       const runs = await tx.insert(productionRuns).values(months.map((month) => ({
         ...site, reactorId: reactor.id, code: `TO-PR-${month}-${tag}`, startTime: new Date(`2026-${month}-10T00:00:00Z`),
-        feedstockMassDryKg: LEG_MASS_KG,
+        endTime: new Date(`2026-${month}-11T00:00:00Z`), status: "complete" as const, feedstockMassDryKg: LEG_MASS_KG,
+        biocharOutputKg: LEG_MASS_KG, biocharMoisturePercent: 0, biocharStorageLocationId: biocharBin.id,
       }))).returning();
       const batches = await tx.insert(creditBatches).values(months.map((month) => ({
         ...site, code: `TO-CB-${month}-${tag}`, feedstockTypeId: type.id, productionProcessId: process.id,

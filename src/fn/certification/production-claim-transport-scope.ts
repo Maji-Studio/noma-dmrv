@@ -37,7 +37,6 @@ export function collectProductionClaimAwareRequiredTransportCategories(args: {
   );
   return args.requiredTransportCategories.filter((category) => {
     if (category === "biochar") return true;
-    if (category === "feedstock") return productionBatches.some((batch) => batch.productionFeedstockIds.length > 0 || batch.productionHasLinkedFeedstock);
     return productionBatches.length > 0;
   });
 }

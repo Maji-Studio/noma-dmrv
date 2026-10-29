@@ -21,6 +21,19 @@ describe("toBatchHealthFacts", () => {
     transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
 
+  it.each([
+    { ownedElsewhere: true, missingEntityIds: [], satisfied: true },
+    { ownedElsewhere: undefined, missingEntityIds: [], satisfied: false },
+    { ownedElsewhere: true, missingEntityIds: ["missing"], satisfied: false },
+  ])("adapts zero feedstock coverage for batch health and Removal readiness: %j", ({ ownedElsewhere, missingEntityIds, satisfied }) => {
+    const ctx = { ...readyContext, transportCoverage: {
+      ...readyContext.transportCoverage,
+      feedstock: { ...readyContext.transportCoverage.feedstock, count: 0, ownedElsewhere, missingEntityIds },
+    } };
+    expect(deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1")).state).toBe(satisfied ? "ready" : "incomplete");
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx)).state).toBe(satisfied ? "ready" : "blocked");
+  });
+
   it("only emits the emissions check when pinned lines were derived", () => {
     expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).checks.map((check) => check.key))
       .toEqual(["emissions", "carbon", "feedstockTypeMapping", "production", "transport", "entityReadiness"]);

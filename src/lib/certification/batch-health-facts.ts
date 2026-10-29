@@ -102,7 +102,8 @@ export function toBatchHealthFacts(
     facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
-      present: ctx.transportCoverage[category].count > 0 &&
+      present: (ctx.transportCoverage[category].count > 0 ||
+        (ctx.transportCoverage[category].count === 0 && ctx.transportCoverage[category].ownedElsewhere === true)) &&
         (ctx.transportCoverage[category].missingEntityIds?.length ?? 0) === 0,
     })),
   };

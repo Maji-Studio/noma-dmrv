@@ -1,3 +1,4 @@
+import { ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 /**
  * Chain of custody data access
  * Resolves the upstream lineage for a single application back to its feedstocks.
@@ -320,9 +321,7 @@ export async function getChainOfCustodyData(
       );
     }
   }
-  const transportOwners = new Set(sources.flatMap((source) =>
-    source.feedstocks.filter((feedstock) => feedstock.ownsTransport).map((feedstock) => feedstock.id),
-  ));
+  const transportOwners = new Set(ownedTransportFeedstockIds(sources));
   const feedstocksForSources = Array.from(
     new Map(
       sources

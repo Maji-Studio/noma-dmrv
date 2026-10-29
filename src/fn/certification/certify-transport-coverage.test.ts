@@ -17,3 +17,12 @@ describe("per-feedstock transport coverage", () => {
     });
   });
 });
+
+it("carries owned-elsewhere evidence from the entity scope into feedstock coverage only", () => {
+  const coverage = buildTransportCoverage({ feedstock: [], biochar: [], sample: [] }, {
+    feedstockIds: [], biocharProductIds: [], sampleIds: [], feedstockTransportOwnedElsewhere: true,
+  });
+  expect(coverage.feedstock).toMatchObject({ count: 0, ownedElsewhere: true, missingEntityIds: [] });
+  expect(coverage.biochar.ownedElsewhere).toBeUndefined();
+  expect(coverage.sample.ownedElsewhere).toBeUndefined();
+});
