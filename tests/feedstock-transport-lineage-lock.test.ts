@@ -66,11 +66,11 @@ it.each(["sent", "reserved"] as const)("locks only owned feedstock transport for
 });
 
 async function insertSubmission(removalId: string, payloadSnapshot: Record<string, unknown>, state: "sent" | "reserved" | "rejected" = "sent",
-  options: { version?: number; externalId?: string; metadata?: Record<string, unknown> } = {}) {
+  options: { version?: number; externalId?: string; metadata?: Record<string, unknown>; lockedAt?: Date } = {}) {
   const [submission] = await db.insert(certificationSubmissions).values({
     organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
     localEntityType: "removal", localEntityId: removalId, version: options.version ?? 1,
-    status: state === "rejected" ? "rejected" : "draft", payloadSnapshot, lockedAt: state === "reserved" ? new Date() : null,
+    status: state === "rejected" ? "rejected" : "draft", payloadSnapshot, lockedAt: options.lockedAt ?? (state === "reserved" ? new Date() : null),
     externalId: options.externalId, metadata: options.metadata,
   }).returning();
   if (state === "sent") {
@@ -102,7 +102,7 @@ it("releases transport listed only by a rejected attempt with no registry mutati
   }, "none");
 });
 
-it.each(["externalId", "possible"] as const)("keeps transport locked when a rejected attempt has %s remote-effect evidence", async remoteEffect => {
+it.each(["externalId", "possible", "confirmed", "lockedAt"] as const)("keeps transport locked when a rejected attempt has %s remote-effect evidence", async remoteEffect => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
     await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
@@ -113,9 +113,9 @@ it.each(["externalId", "possible"] as const)("keeps transport locked when a reje
       await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       await insertSubmission(later.removalId, { transportFeedstockIds: [earlier.feedstockId] }, "rejected",
-        remoteEffect === "externalId" ? { externalId: `ext_rejected_${later.removalId}` } : {
-          metadata: { [SUBMISSION_METADATA_KEYS.externalMutation]: SUBMISSION_EXTERNAL_MUTATIONS.possible },
-        });
+        remoteEffect === "externalId" ? { externalId: `ext_rejected_${later.removalId}` }
+          : remoteEffect === "lockedAt" ? { lockedAt: new Date() }
+          : { metadata: { [SUBMISSION_METADATA_KEYS.externalMutation]: SUBMISSION_EXTERNAL_MUTATIONS[remoteEffect] } });
       await insertSubmission(later.removalId, { transportFeedstockIds: [later.feedstockId] }, "sent", { version: 2 });
 
       expect((await getRecordLocks(ctx, db, [{ entityType: "feedstock", entityId: earlier.feedstockId, transportOnly: true }], { sentOnly: true }))[0].level).toBe("sent");

@@ -143,9 +143,11 @@ export function isCountedElsewhere(records: LineRecords | null): records is Line
   return !!records?.countedOn?.length;
 }
 
+export const COUNTED_ON_PREFIX = "Counted on";
+
 /** "Counted on CB-26-001, CB-26-002". */
 export function countedOnText(records: LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> }): string {
-  return `Counted on ${records.countedOn.map((batch) => batch.code).join(", ")}`;
+  return `${COUNTED_ON_PREFIX} ${records.countedOn.map((batch) => batch.code).join(", ")}`;
 }
 
 /** The source exists but holds nothing for this line. */

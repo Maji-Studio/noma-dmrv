@@ -24,8 +24,10 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import {
+  COUNTED_ON_PREFIX,
   countedOnHref,
   isCountedElsewhere,
   isRecordsGap,
@@ -49,7 +51,10 @@ export const SOURCE_ICON: Record<RecordsSource, Icon> = {
   applications: PlantIcon,
 };
 
-const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap body-caption md:px-8";
+const CHIP_BASE = "inline-flex min-h-28 items-center gap-6 body-caption md:px-8";
+const CHIP = `${CHIP_BASE} whitespace-nowrap`;
+/** The counted-on chip may hold several codes, so it wraps between them (each code stays unbreakable). */
+const WRAPPING_CHIP = `${CHIP_BASE} flex-wrap`;
 /** Phones: the records link reads like the open row's records link, underlined. */
 const PHONE_LINK = "max-md:underline max-md:decoration-[color:var(--color-border-primary)] max-md:underline-offset-4";
 const ICON_SIZE = 14;
@@ -75,21 +80,21 @@ export function CountedOnLinks({ records, facilityId, interactive = true }: {
   interactive?: boolean;
 }) {
   return (
-    <span>
-      Counted on{" "}
+    <span className="inline-flex flex-wrap items-center gap-x-6 gap-y-8">
+      <span>{COUNTED_ON_PREFIX}</span>
       {records.countedOn.map((batch, index) => (
         <span key={batch.creditBatchId}>
-          {index > 0 && ", "}
           {interactive ? (
             <Link
               href={countedOnHref(batch.creditBatchId, facilityId)}
               onClick={(event) => event.stopPropagation()}
               aria-label={`Open credit batch ${batch.code}`}
-              className="underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current"
+              className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}
             >
               {batch.code}
             </Link>
-          ) : batch.code}
+          ) : <span className="font-mono whitespace-nowrap">{batch.code}</span>}
+          {index < records.countedOn.length - 1 && ","}
         </span>
       ))}
     </span>
@@ -117,7 +122,7 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     );
     chips.push(
       isCountedElsewhere(records) ? (
-        <span key="records" className={cn(CHIP, look)} aria-label={recordsText(records)}>
+        <span key="records" className={cn(WRAPPING_CHIP, look)} aria-label={recordsText(records)}>
           <SourceIcon size={ICON_SIZE} aria-hidden="true" />
           <CountedOnLinks records={records} facilityId={ids.facilityId} interactive={interactive} />
         </span>

@@ -16,7 +16,7 @@ import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, useEntryActions } from "./emission-line-body-parts";
-import { formatFigure, hasRecordsFigure, type EmissionEntry, type EmissionLine } from "./emission-line-display";
+import { formatFigure, hasRecordsFigure, isCountedElsewhere, isRecordsGap, type EmissionEntry, type EmissionLine } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 import { LateEntryStatus } from "./late-entry-status";
@@ -43,6 +43,7 @@ interface SourcesTableProps {
 
 export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: SourcesTableProps) {
   const { records } = model;
+  const shownFigure = records && (hasRecordsFigure(records) || isCountedElsewhere(records)) ? records.figure : null;
   const entryCount = model.values.length + model.stopped.length;
   const groupLabel = entryCount > 1 ? "Manual entries" : "Manual entry";
   return (
@@ -61,8 +62,8 @@ export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: Sour
             <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
-          <span role="cell" className={cn(AMOUNT_CELL, !hasRecordsFigure(records) && !records.countedOn?.length && "text-[var(--color-text-tertiary)]")}>
-            {hasRecordsFigure(records) ? formatFigure(records.figure) : records.countedOn?.length && records.figure ? formatFigure(records.figure) : MISSING_VALUE.notRecorded}
+          <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(records) && "text-[var(--color-text-tertiary)]")}>
+            {shownFigure ? formatFigure(shownFigure) : MISSING_VALUE.notRecorded}
           </span>
         </div>
       )}
