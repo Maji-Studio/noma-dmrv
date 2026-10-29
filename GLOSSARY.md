@@ -617,10 +617,13 @@ and an "attestation ledger" would each show.
 _Avoid_: timeline, ledger, audit log.
 
 **Mass balance**:
-The dry-mass flow reading of a **credit batch**: feedstock → production
-runs → biochar lots → applied, with every loss drawn as an explicit
-labeled exit — **conversion loss**, in-storage
-mass. Ribbon widths always mean dry kg; columns are never normalized.
+The mass flow reading of a **credit batch**, drawn as a waterfall in kg:
+feedstock → production runs → biochar lots → applied, with every loss drawn as
+an explicit labeled exit — **conversion loss**, in-storage mass. It starts on
+the wet feedstock when every member run's draws carry a wet mass and every dry
+input is known, with water driven off as the first exit, and is dry kg from
+there on; otherwise it starts on the dry feedstock. Columns are never
+normalized. It carries no CO₂e: that is registry-owned.
 _Avoid_: volume flow.
 
 **Conversion loss**:

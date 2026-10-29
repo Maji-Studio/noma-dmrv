@@ -10,9 +10,17 @@ export const NO_APPLICATION_YET_WARNING =
 export const NO_RUN_APPLICATION_YET_WARNING =
   "Nothing from this production run is applied yet. The roll-up stops where the biochar is now.";
 
-/** Sankey: the mass balance runs to applications, so it needs at least one. */
-export const NO_APPLICATION_SANKEY_MESSAGE =
-  "Nothing is applied yet, so there is no mass balance to show. Open Flow or Map to see where the biochar is now.";
+/** Sankey empty state, under a title that says nothing is applied. */
+export const SANKEY_EMPTY_DESCRIPTION =
+  "The mass balance starts once biochar is applied on a field.";
+
+/** Sankey empty state when applications exist but no mass is recorded on them. */
+export const SANKEY_NO_DRY_MASS_DESCRIPTION =
+  "Enter the dry masses on the production runs and applications to see the mass balance.";
+
+/** Sankey empty state when the Run filter leaves no application. */
+export const SANKEY_RUN_EMPTY_DESCRIPTION =
+  "Pick another run or clear the Run filter to see the batch.";
 
 /** Shown when the Run filter matches no lineage in the batch. */
 export const NO_LINEAGE_FOR_SELECTED_RUN =

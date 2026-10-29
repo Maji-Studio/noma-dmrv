@@ -788,23 +788,27 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     const sankey = adminPage.getByTestId("batch-sankey");
     await expect(sankey).toBeVisible({ timeout: 15000 });
 
-    // Seeded balance: 1000 in − 300 out = 700 conversion
-    // loss. Saved application shares are 100 + 150 kg, so this application-scoped
-    // Sankey shows 250 kg through lots and 50 kg outside these applications.
-    await expect(sankey.getByTestId("sankey-exit-ineligible_feedstock")).toHaveCount(0);
+    // Seeded balance: 1000 in - 300 out = 700 conversion loss. Saved
+    // application shares are 100 + 150 kg, so this application-scoped
+    // waterfall shows 250 kg through lots and 50 kg outside these applications.
+    await expect(sankey.getByTestId("sankey-column-ineligible_feedstock")).toHaveCount(0);
 
-    const conversion = sankey.getByTestId("sankey-exit-conversion_loss");
-    await expect(conversion).toBeVisible();
-    await expect(conversion).toContainText("Conversion loss");
-    await expect(conversion).toContainText("700 kg");
+    await expect(sankey.getByTestId("sankey-column-conversion_loss")).toHaveAccessibleName(
+      /^Conversion loss: .700 kg$/,
+    );
+    await expect(sankey.getByTestId("sankey-column-unallocated_output")).toHaveAccessibleName(
+      /^Outside these applications: .50 kg$/,
+    );
+    await expect(sankey.getByTestId("sankey-column-feedstock")).toBeVisible();
 
-    const outsideApplications = sankey.getByTestId("sankey-exit-unallocated_output");
-    await expect(outsideApplications).toBeVisible();
-    await expect(outsideApplications).toContainText("Outside these applications");
-    await expect(outsideApplications).toContainText("50 kg");
+    // The lit last column is selected: its records are the applications.
+    const applied = sankey.getByTestId("sankey-column-applied");
+    await expect(applied).toHaveAttribute("aria-pressed", "true");
+    await expect(sankey.getByTestId("sankey-record-row")).toHaveCount(2);
 
-    await expect(sankey.getByText("Feedstock", { exact: true })).toBeVisible();
-    await expect(sankey.getByText("Applied", { exact: true })).toBeVisible();
+    // Picking an exit lists the records behind it instead.
+    await sankey.getByTestId("sankey-column-conversion_loss").click();
+    await expect(sankey.getByTestId("sankey-record-row")).toHaveCount(1);
   });
 
   test("trail lists custody steps with their attesting evidence", async ({
