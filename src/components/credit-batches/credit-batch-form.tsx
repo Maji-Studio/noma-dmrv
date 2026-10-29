@@ -34,6 +34,7 @@ import {
   FormTextarea,
 } from "@/components/forms";
 import {
+  CREDIT_BATCH_NAME_MAX_LENGTH,
   creditBatchFormSchemaForCertifier,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
@@ -141,6 +142,7 @@ export function CreditBatchForm({
   } = useForm<CreditBatchFormInput, unknown, CreditBatchFormData>({
     resolver: resolveBatch,
     defaultValues: {
+      name: creditBatch?.name ?? "",
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       feedstockTypeId: creditBatch?.feedstockTypeId ?? defaultValues?.feedstockTypeId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate ?? defaultValues?.startDate, today),
@@ -390,6 +392,24 @@ export function CreditBatchForm({
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* ── Batch definition ── */}
       <FormSection title="Batch definition" divider={false}>
+        <FormField
+          id="name"
+          label="Name"
+          error={errors.name?.message}
+        >
+          <FormInput
+            id="name"
+            type="text"
+            autoComplete="off"
+            maxLength={CREDIT_BATCH_NAME_MAX_LENGTH}
+            placeholder={creditBatch?.code ?? "Optional. The batch code is used if blank"}
+            disabled={isSubmitting}
+            error={!!errors.name}
+            {...register("name", {
+              onChange: () => onClearServerError?.(),
+            })}
+          />
+        </FormField>
 
         <div className="space-y-8">
           <FormEntitySelect

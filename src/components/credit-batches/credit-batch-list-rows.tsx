@@ -21,6 +21,7 @@ import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-ch
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
+import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
@@ -42,7 +43,7 @@ const CODE_PREFIX = /^CB-/;
  * status, menu.
  */
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_44px] items-center gap-x-8 pl-12 xl:pr-4 xl:pl-16 xl:grid-cols-[104px_minmax(0,1fr)_176px_56px_104px_minmax(0,1.2fr)_44px] xl:gap-x-16";
+  "grid grid-cols-[minmax(0,1fr)_44px] items-center gap-x-8 pl-12 xl:pr-4 xl:pl-16 xl:grid-cols-[176px_minmax(0,1fr)_176px_56px_104px_minmax(0,1.2fr)_44px] xl:gap-x-16";
 
 export type FactsStatus = "loading" | "failed" | "ready";
 
@@ -151,7 +152,9 @@ export function CreditBatchListRow({
 }) {
   const applied = appliedDryLabel(facts, factsStatus);
   const dates = formatDateRange(creditBatch.startDate, creditBatch.endDate);
-  const codePrefix = CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
+  // A named batch shows its name; an unnamed one its code, without the shared "CB-" prefix on a phone.
+  const named = !!creditBatch.name?.trim();
+  const codePrefix = named ? "" : CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
   return (
     // The whole row is a pointer convenience; the code link is the keyboard
     // and screen-reader route to the same page (no role or tabIndex on the row).
@@ -167,12 +170,16 @@ export function CreditBatchListRow({
               href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
               // The link navigates itself; the row's own click must not push a second time.
               onClick={(event) => event.stopPropagation()}
-              aria-label={`Open credit batch ${creditBatch.code}`}
-              className="shrink-0 cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1"
+              aria-label={`Open credit batch ${creditBatchLabel(creditBatch)}`}
+              title={named ? creditBatch.code : undefined}
+              className={cn(
+                "cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1",
+                named ? "min-w-0 truncate max-xl:max-w-[60%] max-xl:shrink-0" : "shrink-0",
+              )}
             >
               {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code. */}
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
-              {creditBatch.code.slice(codePrefix.length)}
+              {named ? creditBatchLabel(creditBatch) : creditBatch.code.slice(codePrefix.length)}
             </Link>
             <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED)}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
@@ -207,7 +214,7 @@ export function CreditBatchListRow({
         </div>
       </div>
       <RowActionsMenu
-        label={`Actions for credit batch ${creditBatch.code}`}
+        label={`Actions for credit batch ${creditBatchLabel(creditBatch)}`}
         className="flex justify-center self-center [&>button]:size-44 xl:col-start-7 xl:row-start-1"
         actions={creditBatchRowActions({ creditBatch, lock, onOpen, onEdit, onDelete })}
       />

@@ -70,6 +70,13 @@ describe("CreditBatchListRow", () => {
     expect(within(row).getByLabelText("3 open to-dos").textContent).toBe("3");
   });
 
+  it("shows the name in place of the code, and keeps the code out of a second line", () => {
+    const { row } = renderRow({ creditBatch: { ...creditBatch, name: "September maize" } });
+    const link = within(row).getByRole("link", { name: "Open credit batch September maize" });
+    expect(link.textContent).toBe("September maize");
+    expect(row.textContent).not.toContain("CB-26-009");
+  });
+
   it("opens the batch page from the row, and the code is a real link to it", () => {
     const { props, row } = renderRow();
     fireEvent.click(row);

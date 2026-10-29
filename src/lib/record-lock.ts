@@ -256,7 +256,7 @@ export const recordLocks = {
   order: (facts: RecordLockFacts) => recordLock<"order">(facts, ["code", "quantityKg", "orderDate", "packaging"]),
   delivery: (facts: RecordLockFacts) => recordLock<"delivery">(facts, ["code", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote"]),
   application: (facts: RecordLockFacts) => recordLock<"application">(facts, ["code", "applicationDate", "fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethod", "evidenceMethod", "gpsLatitude", "gpsLongitude", "gisBoundary", "soilTemperatureSource", "soilTemperatureC"]),
-  creditBatch: (facts: RecordLockFacts) => recordLock<"creditBatch">(facts, ["code", "siteManagementNotes", ...(facts.dependents.every(holder => holder.kind === "sample") ? ["startDate", "endDate", "facilityId", "feedstockTypeId", "productionRunIds"] as const : [])]),
+  creditBatch: (facts: RecordLockFacts) => recordLock<"creditBatch">(facts, ["code", "name", "siteManagementNotes", ...(facts.dependents.every(holder => holder.kind === "sample") ? ["startDate", "endDate", "facilityId", "feedstockTypeId", "productionRunIds"] as const : [])]),
   removal: (facts: RecordLockFacts) => recordLock<"removal">(facts, []),
   stockEntry: (facts: RecordLockFacts) => recordLock<"stockEntry">(facts, []),
   storageLocation: (facts: RecordLockFacts) => recordLock<"storageLocation">(facts, ["code", "name", "capacityKg", "storageDescription", "storageMethod", "drawOrder", "stockMode", "mergedAt", "formulationId"]),

@@ -354,6 +354,7 @@ export function creditBatchSheetSections({
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
+        { label: "Name", value: creditBatch.name?.trim() || null },
         { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
         { label: "Start date", value: formatDate(creditBatch.startDate) },

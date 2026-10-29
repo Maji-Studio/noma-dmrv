@@ -34,6 +34,7 @@ import { isRecordEditable } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
 import { isCreditBatchDeletable } from "./credit-batch-list-rows";
 import { useCreditBatchPage } from "./credit-batch-page-context";
+import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { CountBadge, IdentityChip, MUTED_TEXT } from "./credit-batch-page-parts";
 import { CREDIT_BATCH_PROGRESS_TITLE, CreditBatchProgressCompact } from "./credit-batch-progress-compact";
 import { carbonEstimateGap } from "./credit-batch-view";
@@ -142,8 +143,9 @@ export function CreditBatchPageHeader(actions: CreditBatchHeaderActions) {
       </Link>
       <div className="flex flex-col gap-24">
         <div className="flex flex-col gap-12">
-          <PageHeader area="verification" title={batch.code} actions={<HeaderButtons {...actions} />} />
+          <PageHeader area="verification" title={creditBatchLabel(batch)} actions={<HeaderButtons {...actions} />} />
           <div className="flex flex-wrap items-center gap-12">
+            {batch.name?.trim() && <span className={cn("body-small font-medium tabular-nums", MUTED_TEXT)}>{batch.code}</span>}
             {batch.feedstockTypeName && <IdentityChip icon={<LeafIcon size={16} aria-hidden />}>{batch.feedstockTypeName}</IdentityChip>}
             <span className={cn("body-small", MUTED_TEXT)}>{formatDateRange(batch.startDate, batch.endDate)}</span>
           </div>
