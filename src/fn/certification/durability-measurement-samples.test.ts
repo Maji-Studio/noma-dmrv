@@ -162,7 +162,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     );
 
     await patchMeasurementSampleSourceBindings({
-      client: { patch } as never,
+      client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
       captures: ["sample-a", "sample-b"].map((sampleId) => ({
         measurementSampleId: `measurement-${sampleId}`,
         supplierReferenceId: `reference-${sampleId}`,
@@ -223,7 +223,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-existing",
@@ -254,7 +254,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-1",
@@ -293,6 +293,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-carbon",
       expect.objectContaining({ source_ids: ["source-durability"] }),
+      { idempotent: true },
     );
   });
 
@@ -307,7 +308,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-a",
@@ -373,11 +374,13 @@ describe("patchMeasurementSampleSourceBindings", () => {
       1,
       "/datapoints/datapoint-carbon-a",
       expect.objectContaining({ source_ids: ["source-inventory-a"] }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenNthCalledWith(
       2,
       "/datapoints/datapoint-carbon-b",
       expect.objectContaining({ source_ids: ["source-inventory-b"] }),
+      { idempotent: true },
     );
   });
 
@@ -437,7 +440,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-1",
@@ -476,18 +479,21 @@ describe("patchMeasurementSampleSourceBindings", () => {
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-inorganic-a",
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-s-a",
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
   });
 });

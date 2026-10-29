@@ -29,11 +29,16 @@ describe("Source set classification", () => {
   it.each([
     [["src-a"], "missing", ["src-b"], []],
     [["src-a", "src-b", "src-c"], "unexpected", [], ["src-c"]],
-    [[], "empty", ["src-a", "src-b"], []],
     [null, "garbled", [], []],
     [[17], "garbled", [], []],
   ])("classifies %j as %s", (sourceIds, reason, missing, unexpected) => {
     expect(classifySourceReadback(["src-a", "src-b"], { kind: "found", sourceIds })).toEqual({ outcome: "mismatch", missing, unexpected, reason });
+  });
+  it("leaves expected Sources unconfirmed while the remote list is empty", () => {
+    expect(classifySourceReadback(["src-a"], { kind: "found", sourceIds: [] })).toEqual({
+      outcome: "unconfirmed", reason: "sources_not_attached",
+    });
+    expect(classifySourceReadback([], { kind: "found", sourceIds: [] })).toEqual({ outcome: "confirmed" });
   });
   it("classifies ambiguous nodes as garbled", () => {
     expect(classifySourceReadback(["src-a"], { kind: "garbled", detail: "multiple_events" })).toEqual({ outcome: "mismatch", missing: [], unexpected: [], reason: "garbled" });
