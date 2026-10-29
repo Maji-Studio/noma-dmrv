@@ -263,10 +263,10 @@ export function buildWaterfall(
   const startBasis = startsWet ? "wet" : "dry";
   const dryStartReason: DryStartReason | null = startsWet
     ? null
-    : wetFeedstockKg == null
-      ? "wet-missing"
-      : !dryInputKnown
-        ? "dry-input-missing"
+    : !dryInputKnown
+      ? "dry-input-missing"
+      : wetFeedstockKg == null
+        ? "wet-missing"
         : "wet-below-dry";
   const hasWater = startsWet && waterKg != null && waterKg > EPSILON_KG;
   const startKg = startsWet ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
@@ -306,7 +306,7 @@ export function buildWaterfall(
     basis: startBasis, stage: null, recordKind: "feedstock",
     records: [...facts.feedstocks].sort(byCode),
     note: NOTES.feedstock,
-    figureMissing: dryStartReason === "dry-input-missing",
+    figureMissing: !dryInputKnown,
   });
   const pushStep = (key: WaterfallItemKey, label: string, massKg: number, stage: WaterfallStage, recordKind: LineageNodeKind, records: WaterfallRecord[]) => {
     items.push({ key, kind: "step", label, massKg, top: level, bottom: level - massKg, basis: "dry", stage, recordKind, records, note: NOTES[key] });
@@ -337,10 +337,11 @@ export function buildWaterfall(
     stage: null, recordKind: "application", records: [...facts.applications].sort(byCode), note: NOTES.applied,
   });
 
-  // The steps close on the applied column only when no level goes below zero
-  // and the last level is the applied mass. Otherwise a floating step would
-  // sit on a level nobody recorded: stand every column on the baseline.
-  const balanced = level >= -EPSILON_KG && Math.abs(level - endKg) <= EPSILON_KG;
+  // Hidden residuals still leave the flow; their sum can exceed one tolerance.
+  const omittedWaterKg = startsWet && !hasWater ? Math.max(0, waterKg ?? 0) : 0;
+  const closingLevel = level - sankey.omittedResidualKg - omittedWaterKg;
+  // A floating step would invent a level when the records cannot close.
+  const balanced = closingLevel >= -EPSILON_KG && Math.abs(closingLevel - endKg) <= EPSILON_KG;
   if (!balanced) {
     for (const item of items) {
       if (item.kind === "step") {

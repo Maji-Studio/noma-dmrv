@@ -62,6 +62,8 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
+  /** Hidden residuals still count toward the closing balance. */
+  omittedResidualKg: number;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
 }
@@ -227,6 +229,8 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
+  const omittedResidualKg = [conversionLoss, unallocated, inStorage]
+    .reduce((sum, { value }) => sum + (value <= EXIT_EPSILON_KG ? value : 0), 0);
 
   return {
     columns: [
@@ -256,6 +260,7 @@ export function buildBatchSankey(
       },
     ],
     exits,
+    omittedResidualKg,
     warnings,
   };
 }

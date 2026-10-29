@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildBatchSankey, type SankeyLineage } from "./sankey";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "./sankey";
+
+const RESIDUAL_TEST_INPUT_KG = 1_000;
 
 function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
   return {
@@ -54,7 +57,27 @@ describe("buildBatchSankey", () => {
       }),
     ]);
     expect(result.warnings).toEqual([]);
+    expect(result.omittedResidualKg).toBe(0);
   });
+
+  it.each([EXIT_EPSILON_KG / 2, EXIT_EPSILON_KG])(
+    "retains omitted residuals of %s kg for the closing balance",
+    (residualKg) => {
+      const runOutputKg = RESIDUAL_TEST_INPUT_KG - residualKg;
+      const lotKg = runOutputKg - residualKg;
+      const appliedKg = lotKg - residualKg;
+      const result = buildBatchSankey([lineage({
+        productionRun: { id: "run-1", feedstockMassDryKg: RESIDUAL_TEST_INPUT_KG, biocharDryMassKg: runOutputKg },
+        biocharProduct: { id: "lot-1", massKg: lotKg, moistureContentPercent: null },
+        application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(appliedKg) },
+      })]);
+
+      expect(result.exits).toEqual([]);
+      expect(result.omittedResidualKg).toBeCloseTo(RESIDUAL_TEST_INPUT_KG - appliedKg);
+      expect(result.omittedResidualKg).toBeGreaterThan(EXIT_EPSILON_KG);
+      expect(result.warnings).toEqual([]);
+    },
+  );
 
   it("dedupes runs, lots, and feedstocks shared across member applications", () => {
     const shared = {
@@ -261,6 +284,7 @@ describe("buildBatchSankey", () => {
       ),
     ).toEqual([]);
     expect(result.warnings).toHaveLength(3);
+    expect(result.omittedResidualKg).toBe(0);
   });
 
   it("converts a moist lot to a dry basis so it balances against runs (F14)", () => {
