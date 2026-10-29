@@ -7,6 +7,7 @@ A feedstock record's transport is counted only by the earliest complete linked r
 Removal previews, coverage and submission share that ownership; stock allocation
 and dry mass are unchanged. Archived runs and archived credit batches cannot own legs.
 A sent Removal locks a feedstock record's transport (legs, transport evidence, vehicle, distance) only when its snapshot lists the record as counted; the record's other fields stay locked through every linked run. See [ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).
+Ownership now freezes whenever any linked Removal holds the record's full lineage at Sent, including a Removal that sent its transport as zero (#1490). Run date/status/draw edits, membership changes, deletion and facility archive/restore compare owners before and after the write in one transaction and refuse changes to a Sent record's owner. Unsent records and edits that keep the owner retain their existing edit rules.
 Retired sample transport no longer receives generated ledger evidence. Ambiguous
 live evidence targets resolve through their effective automatic-source contract.
 Catalog, mapping revisions, persisted target shapes and schema remain unchanged.

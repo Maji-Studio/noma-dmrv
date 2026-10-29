@@ -1,3 +1,4 @@
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
 /**
  * Facilities Data Access Layer
  * CRUD operations for facilities with auth guards, pagination, and filtering
@@ -446,67 +447,72 @@ export async function archiveFacility(
       throw new SafeError("Facility is already archived");
     }
 
-    const archiveStampResult = await tx.execute<{ archive_stamp: string }>(sql`
-      select (
-        date_trunc('milliseconds', clock_timestamp()::timestamp)
-        + ${FACILITY_ARCHIVE_OFFSET_MICROSECONDS} * interval '1 microsecond'
-      )::text as archive_stamp
-    `);
-    const facilityArchiveStamp = archiveStampResult.rows[0]?.archive_stamp;
-    if (!facilityArchiveStamp) {
-      throw new Error("Failed to generate facility archive stamp");
-    }
-    const archivedAt = sql<Date>`${facilityArchiveStamp}::timestamp`;
+    const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+      await getTransportFreezeFeedstockIds(ctx, tx, { facilityId }),
+      { mutation: "archive", subject: "credit batch" });
+    return freeze(async () => {
+      const archiveStampResult = await tx.execute<{ archive_stamp: string }>(sql`
+        select (
+          date_trunc('milliseconds', clock_timestamp()::timestamp)
+          + ${FACILITY_ARCHIVE_OFFSET_MICROSECONDS} * interval '1 microsecond'
+        )::text as archive_stamp
+      `);
+      const facilityArchiveStamp = archiveStampResult.rows[0]?.archive_stamp;
+      if (!facilityArchiveStamp) {
+        throw new Error("Failed to generate facility archive stamp");
+      }
+      const archivedAt = sql<Date>`${facilityArchiveStamp}::timestamp`;
 
-    const [archived] = await tx
-      .update(facilities)
-      .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: archivedAt })
-      .where(
-        and(
-          eq(facilities.id, facilityId),
-          eq(facilities.organizationId, ctx.organizationId),
-          isNull(facilities.archivedAt),
-        ),
-      )
-      .returning();
+      const [archived] = await tx
+        .update(facilities)
+        .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: archivedAt })
+        .where(
+          and(
+            eq(facilities.id, facilityId),
+            eq(facilities.organizationId, ctx.organizationId),
+            isNull(facilities.archivedAt),
+          ),
+        )
+        .returning();
 
-    if (!archived) {
-      throw new SafeError("Facility is already archived");
-    }
+      if (!archived) {
+        throw new SafeError("Facility is already archived");
+      }
 
-    // Delivery corrections lock their delivery before products. Match both
-    // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
-    await tx.select({ id: deliveries.id }).from(deliveries)
-      .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)))
-      .orderBy(asc(deliveries.id)).for("no key update");
-    await tx.select({ id: biocharProducts.id }).from(biocharProducts)
-      .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
-      .orderBy(asc(biocharProducts.id)).for("no key update");
-    // Sample writers lock credit batches in id order; the bulk update below
-    // would take them in scan order and could deadlock against a sample move.
-    const previousBatches = await tx.select().from(creditBatches)
-      .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt)))
-      .orderBy(asc(creditBatches.id)).for("no key update");
+      // Delivery corrections lock their delivery before products. Match both
+      // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
+      await tx.select({ id: deliveries.id }).from(deliveries)
+        .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)))
+        .orderBy(asc(deliveries.id)).for("no key update");
+      await tx.select({ id: biocharProducts.id }).from(biocharProducts)
+        .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
+        .orderBy(asc(biocharProducts.id)).for("no key update");
+      // Sample writers lock credit batches in id order; the bulk update below
+      // would take them in scan order and could deadlock against a sample move.
+      const previousBatches = await tx.select().from(creditBatches)
+        .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt)))
+        .orderBy(asc(creditBatches.id)).for("no key update");
 
-    // Cascade: only rows not already archived get this stamp, so a future
-    // per-entity archive cannot be clobbered (restore clears indiscriminately
-    // today because facility cascade is the only writer of archived_at).
-    await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
-    await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
-    await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
-    await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
-    await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
-    await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
-    await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)));
-    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt))).returning();
-    for (const batch of batches) await recordActivityChange(ctx, tx, {
-      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "updated", source: "form",
-    }, previousBatches.find(row => row.id === batch.id)!, batch);
-    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), isNull(stockpileEvents.archivedAt)));
-    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), isNull(powerProcurementEvidence.archivedAt)));
+      // Cascade: only rows not already archived get this stamp, so a future
+      // per-entity archive cannot be clobbered (restore clears indiscriminately
+      // today because facility cascade is the only writer of archived_at).
+      await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
+      await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
+      await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
+      await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
+      await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
+      await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
+      await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)));
+      const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt))).returning();
+      for (const batch of batches) await recordActivityChange(ctx, tx, {
+        entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+        action: "updated", source: "form",
+      }, previousBatches.find(row => row.id === batch.id)!, batch);
+      await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), isNull(stockpileEvents.archivedAt)));
+      await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), isNull(powerProcurementEvidence.archivedAt)));
 
-    return archived;
+      return archived;
+    });
   });
 }
 
@@ -541,57 +547,62 @@ export async function restoreFacility(
       throw new SafeError("Facility is not archived");
     }
 
-    const facilityArchiveStamp = existing.archiveStamp;
-    if (!facilityArchiveStamp) {
-      throw new Error("Archived facility is missing its archive stamp");
-    }
-    const cascadeArchiveStamp =
-      sql<Date>`${facilityArchiveStamp}::timestamp`;
-    const archivedAt = null;
+    const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+      await getTransportFreezeFeedstockIds(ctx, tx, { facilityId }),
+      { mutation: "restore", subject: "credit batch" });
+    return freeze(async () => {
+      const facilityArchiveStamp = existing.archiveStamp;
+      if (!facilityArchiveStamp) {
+        throw new Error("Archived facility is missing its archive stamp");
+      }
+      const cascadeArchiveStamp =
+        sql<Date>`${facilityArchiveStamp}::timestamp`;
+      const archivedAt = null;
 
-    const [restored] = await tx
-      .update(facilities)
-      .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: new Date() })
-      .where(
-        and(
-          eq(facilities.id, facilityId),
-          eq(facilities.organizationId, ctx.organizationId),
-          isNotNull(facilities.archivedAt),
-        ),
-      )
-      .returning();
+      const [restored] = await tx
+        .update(facilities)
+        .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: new Date() })
+        .where(
+          and(
+            eq(facilities.id, facilityId),
+            eq(facilities.organizationId, ctx.organizationId),
+            isNotNull(facilities.archivedAt),
+          ),
+        )
+        .returning();
 
-    if (!restored) {
-      throw new SafeError("Facility is not archived");
-    }
+      if (!restored) {
+        throw new SafeError("Facility is not archived");
+      }
 
-    // Delivery corrections lock their delivery before products. Match both
-    // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
-    await tx.select({ id: deliveries.id }).from(deliveries)
-      .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)))
-      .orderBy(asc(deliveries.id)).for("no key update");
-    await tx.select({ id: biocharProducts.id }).from(biocharProducts)
-      .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)))
-      .orderBy(asc(biocharProducts.id)).for("no key update");
+      // Delivery corrections lock their delivery before products. Match both
+      // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
+      await tx.select({ id: deliveries.id }).from(deliveries)
+        .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)))
+        .orderBy(asc(deliveries.id)).for("no key update");
+      await tx.select({ id: biocharProducts.id }).from(biocharProducts)
+        .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)))
+        .orderBy(asc(biocharProducts.id)).for("no key update");
 
-    // Restore only children stamped by this facility archive. Rows archived
-    // individually keep their earlier stamp and remain archived.
-    await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
-    await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
-    await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
-    await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));
-    await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));
-    await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), eq(orders.archivedAt, cascadeArchiveStamp)));
-    await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)));
-    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp))).returning();
-    for (const batch of batches) await recordActivityChange(ctx, tx, {
-      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "updated", source: "form",
-    }, { ...batch, archivedAt: existing.archivedAt }, batch);
-    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), eq(stockpileEvents.archivedAt, cascadeArchiveStamp)));
-    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), eq(powerProcurementEvidence.archivedAt, cascadeArchiveStamp)));
+      // Restore only children stamped by this facility archive. Rows archived
+      // individually keep their earlier stamp and remain archived.
+      await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
+      await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
+      await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
+      await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));
+      await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));
+      await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), eq(orders.archivedAt, cascadeArchiveStamp)));
+      await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)));
+      const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp))).returning();
+      for (const batch of batches) await recordActivityChange(ctx, tx, {
+        entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+        action: "updated", source: "form",
+      }, { ...batch, archivedAt: existing.archivedAt }, batch);
+      await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), eq(stockpileEvents.archivedAt, cascadeArchiveStamp)));
+      await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), eq(powerProcurementEvidence.archivedAt, cascadeArchiveStamp)));
 
-    return restored;
+      return restored;
+    });
   });
 }
 

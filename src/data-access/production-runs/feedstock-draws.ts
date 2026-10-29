@@ -1,3 +1,4 @@
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import { z } from "zod";
@@ -216,31 +217,39 @@ export async function replaceProductionRunFeedstockDraws(
     }), ["feedstockDraws", index, "storageLocationId"]);
   }
 
-  await tx.delete(productionRunFeedstocks).where(
-    and(
-      eq(productionRunFeedstocks.productionRunId, params.productionRunId),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-    ),
-  );
-  await tx.delete(productionRunFeedstockDraws).where(
-    and(
-      eq(productionRunFeedstockDraws.productionRunId, params.productionRunId),
-      eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
-    ),
-  );
-
-  if (draws.length > 0) {
-    await tx.insert(productionRunFeedstockDraws).values(
-      draws.map((draw) => ({
-        organizationId: ctx.organizationId,
-        productionRunId: params.productionRunId,
-        storageLocationId: draw.storageLocationId,
-        wetMassKg: draw.wetMassKg,
-      })),
+  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+    await getTransportFreezeFeedstockIds(ctx, tx, {
+      runIds: [params.productionRunId], binIds: draws.map(draw => draw.storageLocationId),
+    }), { mutation: "update", subject: "production run" });
+  return freeze(async () => {
+    if (!draws.length) {
+      await tx.delete(productionRunFeedstocks).where(
+        and(
+          eq(productionRunFeedstocks.productionRunId, params.productionRunId),
+          eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        ),
+      );
+    }
+    await tx.delete(productionRunFeedstockDraws).where(
+      and(
+        eq(productionRunFeedstockDraws.productionRunId, params.productionRunId),
+        eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
+      ),
     );
-  }
 
-  await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId });
+    if (draws.length > 0) {
+      await tx.insert(productionRunFeedstockDraws).values(
+        draws.map((draw) => ({
+          organizationId: ctx.organizationId,
+          productionRunId: params.productionRunId,
+          storageLocationId: draw.storageLocationId,
+          wetMassKg: draw.wetMassKg,
+        })),
+      );
+    }
 
-  return sumProductionRunFeedstockDraws(draws);
+    await reallocateRunsForBins(ctx, tx, draws.map((draw) => draw.storageLocationId), { onlyRunId: params.productionRunId });
+
+    return sumProductionRunFeedstockDraws(draws);
+  });
 }

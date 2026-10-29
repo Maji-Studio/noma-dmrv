@@ -17,8 +17,18 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 > evidence, vehicle and distance) follows that list, so a Removal that did not
 > count them leaves them editable for the owner batch; snapshots without the
 > list, and records with no owner, keep the full lock. The record's other
-> fields stay locked through every linked run. Ownership can still move after
-> a Removal is sent (#1490).
+> fields stay locked through every linked run.
+>
+> Once any linked Removal holds the feedstock record's full lineage at Sent,
+> ownership is frozen (#1490), including when that Removal sent its transport
+> as zero because another batch owned it. Run dates, status, draws, batch
+> membership, deletion and facility archive/restore refuse if they change the
+> owner run. Writers capture owners and locked full-lineage facts before the
+> write, compare owners afterwards in the same transaction, and roll back with
+> `certification_locked` when a Sent record moves. Edits that keep the owner,
+> and ownership changes without Sent lineage, remain allowed subject to the
+> existing validation and dependency guards. Transport-leg locks and Removal
+> submission are unchanged.
 
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per

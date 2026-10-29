@@ -1,3 +1,4 @@
+import { prepareFeedstockTransportOwnershipFreeze } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gte, inArray, ne } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -107,16 +108,21 @@ export async function reallocateRunsForBins(
     const target = { entityType: "productionRun" as const, entityId: run.id };
     // We already hold bin/row locks. Never wait for an artifact held by a
     // submission that could be waiting for those same rows.
-    const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
-    assertStockLockSnapshot(artifacts !== null);
-    await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
-    await tx.delete(productionRunFeedstocks).where(and(
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-      eq(productionRunFeedstocks.productionRunId, run.id),
-    ));
-    if (proposed.length) await tx.insert(productionRunFeedstocks).values(proposed.map(row => ({
-      ...row, organizationId: ctx.organizationId, productionRunId: run.id,
-    })));
+    const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+      [...saved, ...proposed].map(row => row.feedstockId),
+      { mutation: "update", subject: "production run" });
+    await freeze(async () => {
+      const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
+      assertStockLockSnapshot(artifacts !== null);
+      await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
+      await tx.delete(productionRunFeedstocks).where(and(
+        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        eq(productionRunFeedstocks.productionRunId, run.id),
+      ));
+      if (proposed.length) await tx.insert(productionRunFeedstocks).values(proposed.map(row => ({
+        ...row, organizationId: ctx.organizationId, productionRunId: run.id,
+      })));
+    });
   }
 }
 
