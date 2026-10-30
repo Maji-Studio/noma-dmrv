@@ -1,4 +1,4 @@
-import { carriedEntryDatapointDescription, type CarriedEntryNote } from "@/lib/certification/emission-entry-carry-copy";
+import { aggregatedProductionRunDatapointDescription, carriedEntryDatapointDescription, type CarriedEntryNote } from "@/lib/certification/emission-entry-carry-copy";
 import { sumFigures, type EmissionFigure } from "@/lib/certification/emission-lines";
 import { canonicalUnit } from "../template-observations/units";
 import { effectiveContract } from "../template-observations/line-sources";
@@ -266,7 +266,7 @@ export function buildCreateDatapointRequest(
     : (raw as number);
 
   return {
-    description: `Aggregated from production runs ${agg.sourceProductionRunIds.join(", ")}`,
+    description: aggregatedProductionRunDatapointDescription(agg.sourceProductionRunIds),
     display_name: blueprintInput.input_key,
     project_id: projectId,
     quantity: {

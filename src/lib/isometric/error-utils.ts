@@ -81,6 +81,17 @@ function bodyReason(body: unknown): string | null {
   for (const key of ["message", "detail", "error", "reason"]) {
     const value = record[key];
     if (typeof value === "string" && value.trim()) return value;
+    if (key === "detail" && Array.isArray(value)) {
+      for (const item of value) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const detail = item as Record<string, unknown>;
+        if (typeof detail.msg !== "string") continue;
+        const loc = Array.isArray(detail.loc) ? detail.loc : [];
+        const path = ["body", "query", "path"].includes(loc[0]) ? loc.slice(1) : loc;
+        const field = path.filter(segment => typeof segment === "string" || typeof segment === "number").join(".");
+        return field ? `${field}: ${detail.msg}` : detail.msg;
+      }
+    }
   }
 
   const errors = record.errors;
