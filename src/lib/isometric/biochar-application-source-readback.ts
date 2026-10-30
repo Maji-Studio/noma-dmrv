@@ -37,9 +37,12 @@ export async function readBiocharApplicationSources(
   client: IsometricClient,
   input: { externalProjectId: string; externalApplicationId: string; externalStorageLocationId: string },
 ): Promise<SourceReadbackResult> {
+  const deadline = Date.now() + SOURCE_READBACK_TIMEOUT_MS;
   let after: string | null = null;
   const seenCursors = new Set<string>();
   for (let page = 0; page < BIOCHAR_APPLICATION_SOURCES_MAX_PAGES; page++) {
+    const timeoutMs = deadline - Date.now();
+    if (timeoutMs <= 0) return { kind: "no_answer", reason: "timeout" };
     let response: unknown;
     try {
       response = await client.graphql(BIOCHAR_APPLICATION_SOURCES_QUERY, {
@@ -47,7 +50,7 @@ export async function readBiocharApplicationSources(
         ids: [input.externalApplicationId],
         storageLocationId: input.externalStorageLocationId,
         after,
-      }, { timeoutMs: SOURCE_READBACK_TIMEOUT_MS });
+      }, { timeoutMs });
     } catch (error) {
       if (!(error instanceof IsometricApiError)) throw error;
       const reason = error.readFailureReason === "timeout" ? "timeout"
