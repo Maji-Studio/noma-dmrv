@@ -12,7 +12,7 @@ import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { sampleDocumentWarningKeys } from "@/lib/certification/sample-document-warnings";
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import {
-  buildCreditBatchOpenItems,
+  buildCreditBatchOpenItems as buildItems,
   CREDIT_BATCH_DETAILS_ROW,
   heldMissingRuns,
   missingRunsCountedSentence,
@@ -25,6 +25,9 @@ import {
 } from "./open-items";
 
 import { overviewBadgeCount, tabBadge } from "./batch-page";
+import { renderedOpenItems } from "../../../tests/helpers/rendered-open-items";
+
+const buildCreditBatchOpenItems: typeof buildItems = (input) => renderedOpenItems(buildItems(input));
 
 const batchContext = { facilityId: "facility", creditBatchId: "batch", canManage: true };
 

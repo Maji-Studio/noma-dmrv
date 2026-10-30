@@ -48,7 +48,7 @@ const LIST_SKELETON = "h-320 w-full";
 type UndoState = { id: number; line: EmissionLine; entry: EmissionEntry; version: number };
 type EntryTarget = { line: EmissionLine; entry: EmissionEntry };
 
-function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
+export function batchKpis(lines: EmissionLine[], timeZone: string, today: string): BatchKpis {
   const entries = lines.flatMap(valueEntries);
   const month = today.slice(0, MONTH_PREFIX_LENGTH);
   return {
@@ -66,12 +66,17 @@ function batchKpis(lines: EmissionLine[], timeZone: string, today: string): Batc
 interface BatchEmissionsProps {
   facilityId: string;
   batch: EmissionBatch;
+  /** The credit batch page is read only: entries and comments show, nothing can be added, edited or deleted. */
+  readOnly?: boolean;
+  /** The batch's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
-export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
+export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: zone }: BatchEmissionsProps) {
   const scope: EmissionBatchScope = { facilityId, creditBatchId: batch.creditBatchId };
   const toast = useToast();
-  const { timeZone } = useFacilityClock(scope.facilityId);
+  const clock = useFacilityClock(scope.facilityId);
+  const timeZone = zone ?? clock.timeZone;
   const today = formatFacilityDate(new Date(), timeZone);
   const fromEmissionsList = useOpenedFromEmissionsList();
   const linesQuery = useBatchEmissionLines(scope);
@@ -153,7 +158,7 @@ export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
         <BatchEmissionsPager creditBatchId={scope.creditBatchId} facilityId={scope.facilityId} lineFilter={filter} lineSort={sort} />
       )}
       {isEmissionLinesBlocked(linesQuery.error) ? (
-        <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} />
+        <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} readOnly={readOnly} />
       ) : linesQuery.error && !linesQuery.data ? (
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
           {linesQuery.error.message || "The components could not be loaded."}
@@ -162,7 +167,7 @@ export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
         <Skeleton className={LIST_SKELETON} />
       ) : (
         <>
-          <BatchKpiStrip kpis={batchKpis(lines, timeZone, today)} filter={filter} onFilter={setFilter} />
+          <BatchKpiStrip kpis={batchKpis(lines, timeZone, today)} timeZone={timeZone} filter={filter} onFilter={setFilter} />
           <div className="flex flex-col gap-12">
             <LineToolbar counts={counts} filter={filter} sort={sort} onFilter={setFilter} onSort={setSort} />
             <EmissionLineList
@@ -175,6 +180,7 @@ export function BatchEmissions({ facilityId, batch }: BatchEmissionsProps) {
               filterLabel={lineChipLabel(filter)}
               onClearFilter={() => setFilter(null)}
               actions={{
+                readOnly,
                 toggle: toggleLine,
                 form: (line, mode) => setForm({ componentId: line.componentId, mode }),
                 comment: (line) => {

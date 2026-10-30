@@ -27,21 +27,23 @@ interface AccordionBodyProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
   editingComment: boolean;
+  /** A read-only batch: no add, edit or delete of entries, files or the comment. */
+  readOnly?: boolean;
   onEditingComment: (editing: boolean) => void;
   onForm: (mode: EntryFormMode) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-export function EmissionLineAccordionBody({ id, line, scope, editingComment, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
+export function EmissionLineAccordionBody({ id, line, scope, editingComment, readOnly = false, onEditingComment, onForm, onDeleteEntry }: AccordionBodyProps) {
   const model = lineBodyModel(line);
   const setup = line.state === "needsSetup";
   // A line removed from the template takes no comment; the server refuses one.
-  const addComment = !setup && !line.removedFromTemplate && !line.comment && !editingComment;
+  const addComment = !readOnly && !setup && !line.removedFromTemplate && !line.comment && !editingComment;
   return (
     <div id={id} role="region" aria-label={`${line.displayName} details`} className="flex flex-col pb-10">
       {(setup || model.reviewWithoutEntries) && (
         <div className={cn(TABLE_ROW, "pb-12")}>
-          <div className={TEXT_CELL}>{setup ? <SetupNotice scope={scope} /> : <ReviewNotice line={line} scope={scope} />}</div>
+          <div className={TEXT_CELL}>{setup ? <SetupNotice scope={scope} readOnly={readOnly} /> : <ReviewNotice line={line} scope={scope} readOnly={readOnly} />}</div>
         </div>
       )}
       {!setup && (model.nothingYet ? (
@@ -49,13 +51,13 @@ export function EmissionLineAccordionBody({ id, line, scope, editingComment, onE
           <NothingYet line={line} className={TEXT_CELL} />
         </div>
       ) : (
-        <SourcesTable line={line} scope={scope} model={model} onForm={onForm} onDeleteEntry={onDeleteEntry} />
+        <SourcesTable line={line} scope={scope} model={model} readOnly={readOnly} onForm={onForm} onDeleteEntry={onDeleteEntry} />
       ))}
-      {!setup && <LineComment line={line} scope={scope} editing={editingComment} onEditingChange={onEditingComment} />}
-      {(model.canAddInBody || addComment) && (
+      {!setup && <LineComment line={line} scope={scope} readOnly={readOnly} editing={editingComment} onEditingChange={onEditingComment} />}
+      {((!readOnly && model.canAddInBody) || addComment) && (
         <div className={cn(TABLE_ROW, "pt-10")}>
           <div className={cn(TEXT_CELL, "flex flex-wrap items-center gap-x-24 gap-y-4")}>
-            {model.canAddInBody && <AddEntryLink line={line} onAdd={() => onForm({ kind: "add" })} />}
+            {!readOnly && model.canAddInBody && <AddEntryLink line={line} onAdd={() => onForm({ kind: "add" })} />}
             {addComment && (
               <QuietAction icon={<ChatTextIcon size={ICON} aria-hidden="true" />} onClick={() => onEditingComment(true)}>
                 Add comment

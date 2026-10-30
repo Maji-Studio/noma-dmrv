@@ -194,11 +194,12 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
  * caption line that wraps, then the upload panel. Until the file names load
  * the entry's own count stands in, so the slot never shows an empty bar.
  */
-export function EntryEvidence({ entry, scope, actions, className }: {
+export function EntryEvidence({ entry, scope, actions, className, readOnly = false }: {
   entry: EmissionEntry;
   scope: EmissionBatchScope;
   actions: ReturnType<typeof useEntryActions>;
   className?: string;
+  readOnly?: boolean;
 }) {
   const { files, countText } = useEntryFiles(entry);
   const missing = entry.documentCount === 0;
@@ -235,7 +236,7 @@ export function EntryEvidence({ entry, scope, actions, className }: {
             {countText}
           </span>
         )}
-        {missing && !actions.addingFile && (
+        {missing && !readOnly && !actions.addingFile && (
           <QuietAction onClick={actions.startAddFile} className="min-h-24 body-caption">Add file</QuietAction>
         )}
         {entry.note && <span className="min-w-0">{entry.note}</span>}
@@ -265,15 +266,16 @@ function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; u
 }
 
 /** A decided line noma cannot fill: nothing to decide, so no "Answer in Settings". */
-export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
-  return <Notice tone="info" action={<TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
+export function SetupNotice({ scope, readOnly = false }: { scope: EmissionBatchScope; readOnly?: boolean }) {
+  return <Notice tone="info" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
 }
 
-export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: EmissionBatchScope }) {
+/** `readOnly` keeps the notice text and drops its Settings link. */
+export function ReviewNotice({ line, scope, readOnly = false }: { line: EmissionLine; scope: EmissionBatchScope; readOnly?: boolean }) {
   const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
-    <Notice tone="warning" action={<TemplateReviewLink scope={scope} undecided={undecided} />}>
-      {line.blocker?.message ?? "This component has no decision yet. An Admin answers it in Settings, Removal templates."}
+    <Notice tone="warning" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={undecided} />}>
+      {line.blocker?.message ?? (readOnly ? "This component has no decision yet." : "This component has no decision yet. An Admin answers it in Settings, Removal templates.")}
     </Notice>
   );
 }

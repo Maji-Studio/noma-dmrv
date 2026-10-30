@@ -6,12 +6,14 @@ const {
   mockRedirect,
   mockRequireOrgContext,
   mockGetCreditBatchById,
+  mockGetFacilityById,
 } = vi.hoisted(() => ({
   NOT_FOUND_ERROR: "NEXT_NOT_FOUND",
   REDIRECT_ERROR: "NEXT_REDIRECT",
   mockRedirect: vi.fn(),
   mockRequireOrgContext: vi.fn(),
   mockGetCreditBatchById: vi.fn(),
+  mockGetFacilityById: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -25,6 +27,10 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: mockGetCreditBatchById,
+}));
+
+vi.mock("@/data-access/facilities", () => ({
+  getFacilityById: mockGetFacilityById,
 }));
 
 import CreditBatchRoute from "@/app/(app)/credit-batches/[id]/page";
@@ -46,6 +52,7 @@ describe("credit batch page route", () => {
       id: BATCH_ID,
       facilityId: "facility-1",
     });
+    mockGetFacilityById.mockResolvedValue({ id: "facility-1", archivedAt: null });
   });
 
   it("adds the batch's facility to a link without one and keeps the other params", async () => {
@@ -67,6 +74,18 @@ describe("credit batch page route", () => {
       }),
     ).rejects.toThrow(NOT_FOUND_ERROR);
     expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("opens a batch in an archived facility even when the facility param was rewritten", async () => {
+    mockGetFacilityById.mockResolvedValue({ id: "facility-1", archivedAt: new Date("2026-10-29") });
+
+    await expect(
+      CreditBatchRoute({
+        params: Promise.resolve({ id: BATCH_ID }),
+        searchParams: Promise.resolve({ facility: "facility-2" }),
+      }),
+    ).resolves.toBeTruthy();
+    expect(mockGetFacilityById).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "test-org" }), "facility-1");
   });
 
   it("is a not-found when the org-scoped read finds no batch", async () => {

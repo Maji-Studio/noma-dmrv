@@ -120,10 +120,10 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     },
     {
       title: "Supporting evidence",
-      fields: context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
+      fields: context.lock.isPending && !context.readOnly ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
       content: (
         <>
-          {context.lock.error && (
+          {context.lock.error && !context.readOnly && (
             <div className="flex flex-col gap-8">
               <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
               <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>Retry certification check</Button>

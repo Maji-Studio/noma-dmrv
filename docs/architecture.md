@@ -282,9 +282,15 @@ sections drop their write actions (distance refresh, uploads, sync). The sheet s
 mounted over the "Select a facility" empty state too, opening only for such a link.
 The archived facility never becomes the working facility, and server writes stay
 refused (#1499). Orders, feedstock intakes, deliveries, biochar products, lab
-Samples, applications (read by id with `includeArchived`), reactors and production
-runs pass the state. A production run still does not open, because
-`getProductionRunById` filters archived runs. Gaps:
+Samples, applications (read by id with `includeArchived`), reactors, production
+runs, credit batches (sheet and routed page) and storage bins pass the state. The
+routed credit batch page keeps the working facility where it is and still opens for
+a reload of an archived facility's batch. Production runs, batch members and
+application deliveries read through linked reads (`getLinkedProductionRunById`,
+`getLinkedCreditBatchMembers`, `getLinkedApplicationDelivery`) that return only rows
+archived with their facility and never authorize a write. Output bins in an archived
+facility read their stock through `getLinkedOutputBinInventory` (read-only sheet
+only); feedstock bin reads already include archived rows. Gaps:
 [open-questions.md](./open-questions.md#records-in-archived-facilities-1502).
 
 ### Quick-Add and cascading selects

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { useLinkedCreditBatchMembers } from "@/hooks/use-linked-credit-batch-members";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
@@ -29,13 +30,17 @@ function tonnesOrMissing(kg: number | null): string {
 
 /** One run table: feedstock dry mass and dry biochar per member run, with a total row. */
 export function CreditBatchProductionTab() {
-  const { batch } = useCreditBatchPage();
-  const runsQuery = useCreditBatchProductionRunOptions({
-    facilityId: batch.facilityId,
+  const { batch, archived } = useCreditBatchPage();
+  // An archived facility's members come from the linked read; the form-option
+  // read skips it, so it stays idle there.
+  const optionsQuery = useCreditBatchProductionRunOptions({
+    facilityId: archived ? undefined : batch.facilityId,
     startDate: batch.startDate,
     endDate: batch.endDate,
     includeCreditBatchId: batch.id,
   });
+  const linkedMembers = useLinkedCreditBatchMembers(batch.id, archived);
+  const runsQuery = archived ? linkedMembers : optionsQuery;
   const memberIds = new Set(batch.productionRunIds);
   const runs = (runsQuery.data ?? []).filter((run) => memberIds.has(run.id));
   const totals = computeCohortInputTotals(runs);
@@ -119,15 +124,15 @@ export function CreditBatchProductionTab() {
 
 /** The existing durability panel; it brings its own heading and its one "Record another Sample" action. */
 export function CreditBatchSamplesTab() {
-  const { batch, focus } = useCreditBatchPage();
+  const { batch, focus, readOnly } = useCreditBatchPage();
   return (
     <div className={cn(PAGE_PANEL, "p-16 sm:p-24 [&>section]:border-t-0 [&>section]:pt-0")}>
-      <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} focusedSampleId={focus} />
+      <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} focusedSampleId={focus} canRecord={!readOnly} />
     </div>
   );
 }
 
 export function CreditBatchActivitiesTab() {
-  const { batch } = useCreditBatchPage();
-  return <CreditBatchActivityView facilityId={batch.facilityId} creditBatchId={batch.id} batchCode={batch.code} inline />;
+  const { batch, facilityTimeZone } = useCreditBatchPage();
+  return <CreditBatchActivityView facilityId={batch.facilityId} timeZone={facilityTimeZone} creditBatchId={batch.id} batchCode={batch.code} inline />;
 }

@@ -39,4 +39,11 @@ describe("productionRunSheetSections", () => {
     expect(widths[0]).toBe(100);
     expect(widths[1]).toBeCloseTo(30, 5);
   });
+
+  it("hands the Samples and incidents the run's own facility zone", () => {
+    const archivedRun = { ...run, facilityId: "archived" } as ProductionRunWithRelations;
+    const sections = productionRunSheetSections(archivedRun, [{ id: "archived", timezone: "Africa/Dar_es_Salaam" }]);
+    const children = (sections.at(-1)!.content as { props: { children: { props: { timeZone?: string } }[] } }).props.children;
+    expect(children.map((child) => child.props.timeZone)).toEqual(["Africa/Dar_es_Salaam", "Africa/Dar_es_Salaam"]);
+  });
 });

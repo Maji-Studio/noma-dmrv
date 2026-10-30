@@ -8,7 +8,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import type { CreditBatchOpenItem } from "./open-items";
+import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "./open-items";
 
 export const CREDIT_BATCH_PAGE_TABS = ["overview", "production", "samples", "emissions", "removals", "activities"] as const;
 export type CreditBatchPageTab = (typeof CREDIT_BATCH_PAGE_TABS)[number];
@@ -29,6 +29,19 @@ export interface CreditBatchOpenItemGroups {
   blocking: readonly CreditBatchOpenItem[];
   check: readonly CreditBatchOpenItem[];
   waiting: readonly CreditBatchOpenItem[];
+}
+
+/**
+ * On a read-only batch a to-do is a plain fact: the batch-details row (opens
+ * Edit), the repair links and the Emissions tab (where records are made) lose
+ * their target, and the instruction (what to do) is dropped. Other tabs stay reachable.
+ */
+export function readOnlyOpenItems(items: CreditBatchOpenItemGroups): CreditBatchOpenItemGroups {
+  const plain = (item: CreditBatchOpenItem): CreditBatchOpenItem => {
+    const writes = item.target && ("href" in item.target || item.target.rowId === CREDIT_BATCH_DETAILS_ROW || item.target.tab === "emissions");
+    return { ...item, ...(writes ? { target: null } : {}), instruction: undefined };
+  };
+  return { blocking: items.blocking.map(plain), check: items.check.map(plain), waiting: items.waiting.map(plain) };
 }
 
 /** The Overview total: Blocking and Check items, used by the Overview tab badge (via `tabBadge`) and the header progress step. Waiting items never count (Kenji, 2026-10-18). */

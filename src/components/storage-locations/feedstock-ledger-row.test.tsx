@@ -73,3 +73,10 @@ it("shows a correction as Original to Corrected, with times only when it moved",
   const moved = await render(entry({ id: "fix", correctsMovementId: "loss", occurredAt: MOVED_AT, wetDeltaKg: -80 }), original);
   expect(text(moved.renderer.root)).toContain("Oct 1, 2026, 14:00");
 });
+
+it("hides Edit and Delete on a read-only bin's Lost mass entry but keeps the entry", async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<FeedstockLedgerRow entry={entry()} timeZone="UTC" facilityId={FACILITY_ID} />); });
+  expect(buttons(renderer)).toEqual([]);
+  expect(text(renderer.root)).toContain("Spilled");
+});

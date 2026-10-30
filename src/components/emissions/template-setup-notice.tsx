@@ -18,10 +18,13 @@ export function TemplateSetupNotice({
   blocker,
   facilityId,
   creditBatchId,
+  readOnly = false,
 }: {
   blocker: RemovalTemplateBlocker;
   facilityId: string;
   creditBatchId: string;
+  /** A read-only batch states the problem and offers no Settings link. */
+  readOnly?: boolean;
 }) {
   const fixTarget = removalTemplateBlockerDestination(blocker.code);
   const link = batchHealthFixLinkFor(
@@ -34,7 +37,7 @@ export function TemplateSetupNotice({
   return (
     <Notice
       tone="warning"
-      action={<Link href={link.href} className={buttonVariants({ variant: "weak", size: "small" })}>{label}</Link>}
+      action={readOnly ? undefined : <Link href={link.href} className={buttonVariants({ variant: "weak", size: "small" })}>{label}</Link>}
     >
       {blocker.message}
     </Notice>

@@ -50,7 +50,7 @@ function Headline({ wetKg, dryKg }: { wetKg: number | null; dryKg: number }) {
   );
 }
 
-export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger }: {
+export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger, readOnly = false, balance: linkedBalance, timeZone }: {
   storageLocationId: string;
   facilityId: string;
   movementId?: string;
@@ -58,8 +58,15 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   compact?: boolean;
   /** Draws the opener in the caller's own style, given the history icon. */
   renderTrigger?: (open: () => void, icon: ReactNode) => ReactNode;
+  /** Hides Lost mass Edit and Delete on a read-only bin; the history stays visible. */
+  readOnly?: boolean;
+  /** The bin now, already read by the card: a read-only bin cannot use the active-only balance read. */
+  balance?: { beforeEstimatedWetKg: number | null; beforeDryKg: number };
+  /** The record's own zone when its facility is archived and outside the facility list. */
+  timeZone?: string;
 }) {
   const clock = useFacilityClock(facilityId);
+  const zone = timeZone ?? clock.timeZone;
   const [open, setOpen] = useState(false);
   const historyTitleId = useId();
   const lostMassTitleId = useId();
@@ -67,10 +74,10 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const [deleting, setDeleting] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
   // The bin now, as its stock card reads it; one movement opened on its own needs no headline.
-  const balance = useOutputStockBalance(open && !movementId ? { storageLocationId, facilityId } : null);
+  const liveBalance = useOutputStockBalance(!readOnly && open && !movementId ? { storageLocationId, facilityId } : null);
   const entries = history.data ?? [];
-  const days = buildHistoryDays(entries, clock.timeZone, movementId);
-  const now = balance.data;
+  const days = buildHistoryDays(entries, zone, movementId);
+  const now = readOnly ? (movementId ? undefined : linkedBalance) : liveBalance.data;
   const openHistory = () => setOpen(true);
   const icon = <ClockCounterClockwiseIcon size={compact ? 18 : ICON_PX} aria-hidden="true" />;
 
@@ -97,8 +104,8 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
             <section key={day.day} aria-label={day.day} className="flex flex-col">
               <DayHeader day={day} />
               {day.rows.map((row) => isModeChange(row.entry) || row.entry.kind === "moisture_update"
-                ? <HistoryBreak key={row.entry.id} entry={row.entry} timeZone={clock.timeZone} facilityId={facilityId} />
-                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={clock.timeZone} facilityId={facilityId} onEdit={setEditing} onDelete={setDeleting} />)}
+                ? <HistoryBreak key={row.entry.id} entry={row.entry} timeZone={zone} facilityId={facilityId} />
+                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={zone} facilityId={facilityId} onEdit={readOnly ? undefined : setEditing} onDelete={readOnly ? undefined : setDeleting} />)}
             </section>
           ))}
         </div>}
@@ -109,6 +116,6 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
       {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
         onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
     </FormDialog>
-    {deleting && <OutputLossDeleteDialog key={deleting.id} entry={deleting} storageLocationId={storageLocationId} timeZone={clock.timeZone} onClose={() => setDeleting(null)} />}
+    {deleting && <OutputLossDeleteDialog key={deleting.id} entry={deleting} storageLocationId={storageLocationId} timeZone={zone} onClose={() => setDeleting(null)} />}
   </>;
 }

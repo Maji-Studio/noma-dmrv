@@ -5,6 +5,7 @@ import type { OutputSubBin } from "@/types/output-stock";
 
 const state = vi.hoisted(() => ({ wetKg: 200 as number | null, subBins: [] as unknown[] }));
 vi.mock("@/hooks/use-output-stock", () => ({
+  useLinkedOutputBinInventory: () => ({ data: undefined, isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "BCF", beforeDryKg: 90, beforeEstimatedWetKg: state.wetKg, moistureEstimate: null }, isLoading: false }),
   useOutputSubBins: () => ({ data: { stockMode: "split", drawOrder: "oldest_first", subBins: state.subBins }, isLoading: false }),
   useOutputStockHistory: () => ({ data: [], isLoading: false }),

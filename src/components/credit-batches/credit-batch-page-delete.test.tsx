@@ -52,6 +52,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useUpdateCreditBatch: () => ({ isPending: false }),
   useDeleteCreditBatch: () => ({ mutateAsync: harness.remove, isPending: false }),
 }));
+vi.mock("@/hooks/use-linked-record-facility", () => ({ useLinkedRecordFacility: () => ({ ready: true, readOnly: null }) }));
 vi.mock("@/hooks/use-record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).openRecordLocksModule);
 vi.mock("@/components/record-locks", async () => (await import("../../../tests/helpers/record-lock-mocks")).stubRecordLockComponentsModule);
 vi.mock("@/components/navigation", () => ({ EntityNotFound: () => null }));

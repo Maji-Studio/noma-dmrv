@@ -152,7 +152,7 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   };
   if (input.cascadeFingerprint !== undefined && input.cascadeFingerprint !== cascade.cascadeFingerprint) throw cascadeChanged();
   for (const order of lockedOrders) {
-    await deleteOrderInTransaction(ctx, tx, { orderId: order.id, expectedVersion: order.version }, source);
+    await deleteOrderInTransaction(ctx, tx, { orderId: order.id, expectedVersion: order.version }, source, "customer-cascade");
   }
   let deletingLocationId: string | undefined;
   try {

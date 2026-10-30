@@ -4,7 +4,6 @@
  */
 "use client";
 
-import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityDay } from "@/lib/format-utils";
@@ -23,9 +22,8 @@ export interface BatchKpis {
 
 interface KpiCell { label: string; value: string; detail: string; filter?: LineFilter }
 
-export function BatchKpiStrip({ kpis, filter, onFilter }: { kpis: BatchKpis; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
-  const { facilityId } = useFacilityContext();
-  const { timeZone } = useFacilityClock(facilityId);
+/** `timeZone` is the batch's own facility zone: the working facility may be another one. */
+export function BatchKpiStrip({ kpis, timeZone, filter, onFilter }: { kpis: BatchKpis; timeZone: string; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
   const cells: KpiCell[] = [
     { label: "Components open", value: String(kpis.open), detail: `of ${kpis.total} components`, filter: "open" },
     { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "component" : "components", filter: "missing" },

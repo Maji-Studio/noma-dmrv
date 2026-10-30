@@ -10,6 +10,7 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: null, selectedFacility: null }),
 }));
+vi.mock("@/hooks/use-linked-application-delivery", () => ({ useLinkedApplicationDelivery: () => ({ data: undefined }) }));
 vi.mock("@/hooks/use-applications", () => ({
   useApplications: () => ({
     data: { items: [], total: 0 },
