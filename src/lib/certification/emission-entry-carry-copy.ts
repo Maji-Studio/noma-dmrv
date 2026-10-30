@@ -3,6 +3,20 @@ import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
 import type { EmissionFigure } from "./emission-lines";
 
 export const DATAPOINT_DESCRIPTION_MAX_LENGTH = 500;
+
+export function aggregatedProductionRunDatapointDescription(runIds: readonly string[]): string {
+  const fullDescription = `Aggregated from production runs ${runIds.join(", ")}`;
+  if (fullDescription.length <= DATAPOINT_DESCRIPTION_MAX_LENGTH) return fullDescription;
+
+  const base = `Aggregated from ${runIds.length} production runs:`;
+  for (let count = runIds.length - 1; count >= 0; count--) {
+    const remaining = runIds.length - count;
+    const description = [base, runIds.slice(0, count).join(", "), `and ${remaining} more`].filter(Boolean).join(" ");
+    if (description.length <= DATAPOINT_DESCRIPTION_MAX_LENGTH) return description;
+  }
+  return base;
+}
+
 export interface CarriedEntryNote {
   entryId: string;
   creditBatchCode: string;

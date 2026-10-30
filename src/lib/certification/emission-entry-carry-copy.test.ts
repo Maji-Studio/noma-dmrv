@@ -1,6 +1,44 @@
 import { buildRemovalSourceDescription } from "./removal-source-bindings";
-import { expect, it } from "vitest";
-import { carriedEntryDatapointDescription, carriedEntrySourceDescription, DATAPOINT_DESCRIPTION_MAX_LENGTH } from "./emission-entry-carry-copy";
+import { describe, expect, it } from "vitest";
+import { aggregatedProductionRunDatapointDescription, carriedEntryDatapointDescription, carriedEntrySourceDescription, DATAPOINT_DESCRIPTION_MAX_LENGTH } from "./emission-entry-carry-copy";
+
+function productionRunIds(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+}
+
+describe("aggregatedProductionRunDatapointDescription", () => {
+  it.each([0, 1, 12])("preserves the full description for %i runs when it fits", count => {
+    const ids = productionRunIds(count);
+    const description = aggregatedProductionRunDatapointDescription(ids);
+    expect(description).toBe(`Aggregated from production runs ${ids.join(", ")}`);
+    expect(description.length).toBeLessThanOrEqual(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+  });
+
+  it("preserves a description that exactly fills the limit", () => {
+    const prefix = "Aggregated from production runs ";
+    const ids = ["x".repeat(DATAPOINT_DESCRIPTION_MAX_LENGTH - prefix.length)];
+    const description = aggregatedProductionRunDatapointDescription(ids);
+    expect(description).toBe(`${prefix}${ids[0]}`);
+    expect(description.length).toBe(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+  });
+
+  it.each([14, 200])("lists as many of %i UUID runs as fit and counts the remainder", count => {
+    const ids = productionRunIds(count);
+    const description = aggregatedProductionRunDatapointDescription(ids);
+    expect(description.length).toBeLessThanOrEqual(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+    const match = description.match(/^Aggregated from (\d+) production runs: (.*) and (\d+) more$/);
+    expect(match).not.toBeNull();
+    const [, total, listed, remaining] = match!;
+    const listedIds = listed.split(", ");
+    expect(Number(total)).toBe(count);
+    expect(listedIds).toEqual(ids.slice(0, listedIds.length));
+    expect(Number(remaining)).toBeGreaterThan(0);
+    expect(listedIds.length + Number(remaining)).toBe(count);
+    const nextCandidate = `Aggregated from ${count} production runs: ${ids.slice(0, listedIds.length + 1).join(", ")} and ${Number(remaining) - 1} more`;
+    expect(nextCandidate.length).toBeGreaterThan(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+  });
+});
+
 const entry = { entryId: "e", creditBatchCode: "CB-26-009", occurredOn: "2026-09-14", value: { magnitude: "120.00", unit: "L" }, earlierRemovalCode: "RM-009" };
 it("identifies the original batch and use date in both verifier notes", () => {
   expect(carriedEntryDatapointDescription([entry])).toBe("Recorded emissions entries. Includes 120 L used on Sep 14, 2026 for credit batch CB-26-009, recorded after its Removal RM-009 was sent.");
