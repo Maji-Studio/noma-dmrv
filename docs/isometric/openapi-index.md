@@ -69,7 +69,7 @@ has no parallel committed client.
 2. Find HTTP calls and their non-test consumers:
 
    ```bash
-   rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?|findRegistryRecord' src/lib/isometric src/fn/certification
+   rg -n 'client\.(get|post|patch|delete|graphql)|client\.paginate(All)?|findRegistryRecord' src/lib/isometric src/fn/certification
    ```
 
 3. Check live template compatibility with

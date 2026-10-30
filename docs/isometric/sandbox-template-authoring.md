@@ -59,7 +59,13 @@ The sampled 1,000-year code path uses
 | `product_mass` | scalar | `mass` | Standalone product-mass Datapoint |
 | `s_fraction` | list | `dimensionless_ratio` | Same-Sample reflectance fractions |
 
-Each sampled batch needs at least three complete paired replicates. Create one
+Each sampled batch needs at least three complete paired replicates. The Isometric
+module's per-Sample reflectance-count guidance is in the
+[shortlist](./requirements-shortlist.md#agricultural-soil-storage-and-application).
+`src/lib/certification/sample-entry-warnings.ts:sampleEntryWarnings` warns on
+missing or fewer than 500 readings without blocking submission. Lab reports and
+optional reflectance histograms remain Sample evidence; this advisory does not
+change the three-replicate gate. Create one
 remote measurement-sample submission per physical Sample, retaining its stable
 identity and sampling instant. Never replace these with one mean/standard
 deviation request or repeat batch mass on each Sample. A current four-input component was observed on the sandbox project, but the

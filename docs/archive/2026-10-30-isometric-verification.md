@@ -1,8 +1,9 @@
 # Isometric docs verification, 2026-10-30
 
-Evidence for the docs cleanup at staging baseline `5eb7aa111`. All registry
-calls in this pass were reads. No Application, Datapoint, Source, template or
-submission was created, changed or deleted.
+Read this archived record to check the cleanup's source dates, sandbox probes
+and verification limits. Observations were collected with code baseline
+`5eb7aa111`; the later rebase below is a separate code check. All registry calls
+were reads. No Application, Datapoint, Source, template or submission was changed.
 
 ## Access and limits
 
@@ -66,7 +67,7 @@ used. Registry text does not independently establish the project's PDD choices.
 | Source | Check and correction |
 |---|---|
 | [Biochar v1.1.1](https://registry.isometric.com/protocol/biochar/1.1/1.1.1?tag=1.1.1) | §§9.1.2, 9.2.4 and 9.2.4.1 support the recorded monitoring cadence, accuracy, calibration, temperature comparison and retention thresholds |
-| [Agricultural Soils v1.1.0](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1/1.1.0) | §§3.3 and 4.1.1 distinguish at least three Samples per production batch and at least 500 R₀ measurements per Sample |
+| [Agricultural Soils v1.1.0](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1/1.1.0) | §§3.3 and 4.1.1 distinguish at least three Samples per production batch and guidance for at least 500 R₀ measurements per Sample |
 | [Feedstock v1.2.3](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2/1.2.3) | §§2 and 2.3 make EC15 conditional for non-forestry feedstocks; EC14's zero counterfactual applies to government-managed/funded wildfire mitigation or restoration with evidence |
 | [Energy v1.2.0](https://registry.isometric.com/module/energy-use-accounting/1.2/1.2.0) | §§5.1, 5.3 and 5.6 support the recorded annual-use threshold, conjunctive procurement criteria and hourly meter reporting |
 | [Transportation v1.1](https://registry.isometric.com/module/transportation/1.1) | §§3.1, 5 and 6 support the preferred energy method, justified fallback, round-trip default and transport records; exact patch retrieval failed |
@@ -79,7 +80,7 @@ project applicability and registry-side calculations retain their open checks.
 ## Reconciliation after the readback fix
 
 PR [#1514](https://github.com/Maji-Studio/noma-dmrv/pull/1514) merged on 2026-10-30.
-The cleanup was rebased onto staging `e77794b07`, preserving the peer's history
+The cleanup was later rebased onto code baseline `e77794b07`, preserving the peer's history
 entry in the archive and consolidating its implementation notes into the owning
 guides. Code inspection confirmed exact-ID matching, the registered external
 Storage Location parameter, cursor validation and the 10-page/50-node bound.

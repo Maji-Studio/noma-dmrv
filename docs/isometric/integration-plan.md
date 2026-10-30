@@ -79,7 +79,7 @@ memory. See `src/fn/certification/sources-transfer.ts`.
 Post-submit verification follows component attributions and
 Datapoints; propagation delay and a true mismatch are different outcomes.
 
-Each Delivery needs uploaded proof before submission, regardless of template
+Each Removal-lineage Delivery needs uploaded proof before submission, regardless of template
 transport categories. The accepted classifications are owned by
 `src/lib/certification/delivery-evidence.ts`. Application evidence health is
 informational and is a separate rule. Confirmed Application-owned photos, PDFs,
