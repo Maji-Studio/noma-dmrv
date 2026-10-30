@@ -6,26 +6,20 @@
 > [`versions.json`](./versions.json) and the
 > [2026-07-24 v1.1 gap-check](../archive/2026-07-24-isometric-gap-check-v1-1.md).
 
-## Pinned version set
-
-| Authority | Pinned version | Registry source |
-|---|---:|---|
-| Biochar Production and Storage Protocol | 1.1 (patch 1.1.1) | <https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1> |
-| Biochar Storage in Agricultural Soils | 1.1 (patch 1.1.0) | <https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1?tag=1.1.0> |
-| Biomass Feedstock Accounting | 1.2 (patch 1.2.3) | <https://registry.isometric.com/module/biomass-feedstock-accounting/1.2?tag=1.2.3> |
-| Energy Use Accounting | 1.2 (patch 1.2.0) | <https://registry.isometric.com/module/energy-use-accounting/1.2?tag=1.2.0> |
-| Transportation Emissions Accounting | 1.1 (patch 1.1.0) | <https://registry.isometric.com/module/transportation/1.1?tag=1.1.0> |
-| Embodied Emissions Accounting | 1.0 (patch 1.0.3) | <https://registry.isometric.com/module/embodied-emissions/1.0?tag=1.0.3> |
+Pinned versions and tagged registry URLs live only in
+[versions.json](./versions.json). The [2026-10-30 public-source cross-check](../archive/2026-10-30-isometric-verification.md#public-source-cross-check)
+records source scope, corrections and verification limits. It is not MCP
+verification or a change to the project pin.
 
 ## Feedstock
 
 | Requirement | When | Minimum records or computation | Source |
 |---|---|---|---|
-| Demonstrate one valid EC1-EC12 path, one of EC13-EC14, and EC15 for each feedstock | Before crediting and when the relied-on facts change | Criterion outcomes and evidence for the path actually used | [BFA v1.2 eligibility](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#biomass-feedstock-eligibility) |
+| Demonstrate an acceptable EC1-EC12 combination, one of EC13-EC14, and EC15 when applicable | Before crediting and when the relied-on facts change | Criterion outcomes and evidence for the path actually used | [BFA v1.2 eligibility](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#biomass-feedstock-eligibility) |
 | FSC Mix should remain at or below 50% of project feedstock; PPDs for FSC Controlled Wood Sources and PEFC Controlled Sources should target FSC Mix at or below 25% | Project sourcing | Eligibility evidence stays outside noma; these are sourcing recommendations, not a general ineligible-biomass cap | [BFA v1.2.3 Appendix 3](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2?tag=1.2.3#appendix-3-acceptable-forest-certification-programs-for-ec9) |
-| Evaluate counterfactual storage: 15-year release, 50-year durable storage discount, and zero for wildfire feedstock | Per applicable feedstock assessment | Counterfactual category, quantities, assessment date, evidence, reassessment/expiry | [BFA v1.2 counterfactual eligibility](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#counterfactual-storage-eligibility) |
+| Evaluate counterfactual storage: 15-year release, 50-year durable storage discount, and zero for evidenced government-managed/funded wildfire mitigation or restoration feedstock | Per applicable feedstock assessment | Counterfactual category, quantities, assessment date, evidence, reassessment/expiry | [BFA v1.2 counterfactual eligibility](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#counterfactual-storage-eligibility) |
 | For potential market leakage, apply the v1.2 EC1-EC12 combination and calculate replacement emissions where an exemption does not apply | Per applicable feedstock | Highest-value replacement use; energy, embodied, and transport replacement emissions; C1/C2 evidence | [BFA v1.2 leakage criteria](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#eligibility-criteria-for-biomass-feedstocks-with-potential-market-leakage-impacts) |
-| Apply EC15 to dedicated-energy feedstock | When such feedstock is proposed | Non-forestry status, energy-use share, and the applicable ethanol-radius facts | [BFA v1.2 dedicated energy](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#dedicated-energy-feedstock-eligibility) |
+| Apply the EC15 dedicated-energy eligibility test | Non-forestry feedstocks | Non-forestry status, energy-use share, and the applicable ethanol-radius facts | [BFA v1.2 dedicated energy](https://registry.isometric.com/module/biomass-feedstock-accounting/1.2#dedicated-energy-feedstock-eligibility) |
 
 ## Production and project controls
 
@@ -40,48 +34,30 @@
 
 ### Project reactor monitoring
 
-The project uses the sub-atmospheric pressure alternative in
-[Biochar v1.1.1 §9.1.2, Pyrolysis gas loss](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1).
-The registry text requires pressure to be "Recorded at a frequency of 1-minute
-intervals at minimum" and the calibrated sensor to "have an accuracy of 2% of
-full scale or better". Calibration must meet or exceed manufacturer requirements
-and be at least annual. §9.1.2 says "Raw data must be made available upon request."
-The project's five-year retention commitment comes from PDD B.19.
+Source read 2026-10-15 and monitoring thresholds rechecked publicly 2026-10-30. The project PDD selects the
+sub-atmospheric pressure alternative under
+[Biochar v1.1.1 §9.1.2](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1).
+It requires at least one-minute recording, sensor accuracy of 2% full scale or
+better, calibration meeting manufacturer requirements and at least annually,
+and raw data available on request. PDD B.19 commits to at least five-year
+retention; E.3 adds annual accredited leakage inspection. B.18 selects no
+external reactor model. The route does not require continuous gas telemetry.
+See [approved PDD evidence, #627](https://github.com/Maji-Studio/noma-dmrv/issues/627).
 
-The [approved PDD evidence in #627](https://github.com/Maji-Studio/noma-dmrv/issues/627)
-selects this route: B.18 uses no external reactor model; B.19 retains batch dates,
-total production and continuous operational records in the dMRV for at least
-five years; E.3 adds annual accredited leakage inspection. E.1/E.3 use annual
-accredited emissions testing, so the following operational temperature and
-record-retention requirements apply to this project.
+The same historical reading of §9.2.4 requires operational feedstock comparable
+to the emissions test, flue-stack temperature within 10% of the test value,
+one-minute temperature recording, 2% full-scale accuracy or better and at least
+annual calibration meeting manufacturer requirements. §9.2.4.1 requires retaining
+the signed accredited test report, raw temperature data, temperature-equipment
+calibration records and manufacturer manuals for at least five years.
+[Authoritative sections](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1)
+remain the source to recheck before changing a gate.
 
-[Biochar v1.1.1 §9.2.4, Emissions testing](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1),
-verbatim from the registry (read 2026-10-15; [...] marks omitted text):
-
-> For emissions testing to be considered representative of actual project operations, the following criteria must be satisfied:
-> * The biomass feedstock used during project operations should be identical or similar to the feedstock used during emissions testing. [...]
-> * The temperature within the flue stack during project operations should be similar to that of the emissions test, defined as being within 10% of the measured value(s) during the corresponding emissions test.
-> Measurement of the temperature within the flue stack should be conducted using a calibrated sensor which satisfies the below requirements:
-> * Must have an accuracy of 2% of full scale or better;
-> * Recorded at a frequency of 1-minute intervals at minimum;
-> * Must be calibrated in accordance with and at a frequency which meets or exceeds manufacturer calibration requirements, but which in any case must be no less than annual; and
-> * Raw data must be made available upon request.
-
-[§9.2.4.1, Required Records & Documentation - emissions testing](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1),
-verbatim from the registry (read 2026-10-15; [...] marks omitted text):
-
-> The Project Proponent must maintain the following records as evidence supporting calculation of direct emissions from the biomass conversion process for a period of at least five years: * Results of emissions tests [...] including a signed report from the accredited emissions testing entity; * Raw data provided via pyrolyzer temperature measurements for the Reporting Period, $RP$; * Calibration records for all temperature measurement equipment; and * Manufacturer operating manuals [...]
-
-The Readings file (`sensor_data`) uploaded on each production run is the retained
-raw record, stored unchanged; file presence is the readiness gate
-(Kenji, 2026-10-16; [decision](./changes.md#2026-10-15-correct-reactor-monitoring-citations-and-retain-document-only-gates-627-slices-1-2-4)).
-This one file is the retained evidence for both the §9.1.2 pressure series and the
-§9.2.4 / §9.2.4.1 flue-stack temperature series; noma does not check its contents,
-which are the operator's responsibility.
-The approved project route does not require continuous gas telemetry.
-
-See the [integration contract](./integration-plan.md#reactor-time-series-upload)
-for the file-presence gate and the separate optional readings importer.
+The unchanged Readings file retains pressure/temperature evidence. Only uploaded
+file presence gates readiness; noma does not check contents. The
+[operator decision](./changes.md#2026-10-15-correct-reactor-monitoring-citations-and-retain-document-only-gates-627-slices-1-2-4)
+and [integration contract](./integration-plan.md#reactor-time-series-upload)
+distinguish that gate from optional parsed readings and registry submission.
 
 ## Agricultural-soil storage and application
 
@@ -90,7 +66,7 @@ for the file-presence gate and the separate optional readings importer.
 | Characterize total carbon, moisture, H/C, O/C, volatile matter or fixed carbon, ash, PAH, and the applicable contaminant panel | At the module cadence | Accredited lab reports, methods, QA/QC, replicates, and complete results | [Agricultural Soils v1.1 chemical characteristics](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1#chemical-characteristics) |
 | Apply WBC pollutant thresholds when local regulation does not supply the controlling limit | When the condition applies | Measured Pb/Cd/Cu/Ni/Hg/Zn/Cr/As, PAH, PCB, dioxin/furan results and threshold decision | [Agricultural Soils v1.1](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1) |
 | For 200-year durability, provide the blueprint's H/C, carbon, product-mass, and soil-temperature evidence | Per submitted batch/path | Raw sample statistics and facility soil-temperature reference; registry computes credited durability | [Agricultural Soils v1.1 quantification](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1#quantification-of-coe) |
-| For 1,000-year durability, provide at least three complete samples and at least 500 R0 measurements under ISO 7404-5 | Per submitted batch/path | Total-carbon replicates, product mass, the fraction of R0 readings above the 2% benchmark, and method evidence | [Agricultural Soils v1.1 quantification](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1#quantification-of-coe) |
+| For 1,000-year durability, provide at least three complete Samples; the module recommends at least 500 ISO 7404-5 R0 readings per Sample | Per submitted batch/path | Total-carbon replicates, product mass, the fraction of R0 readings above the 2% benchmark, and method evidence | [Agricultural Soils v1.1 quantification](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1#quantification-of-coe) |
 | Measure applied mass on a calibrated legal-for-trade scale | Each application | Gross/tare or equivalent weigh evidence and calibration support | [Biochar v1.1 applied mass](https://registry.isometric.com/protocol/biochar/1.1#measurement-of-mass-of-biochar-applied) |
 | Supply field-management information and reassess reversal risk | With the GHG Statement and at required events/intervals | Irrigation, tillage, fertilizer, rotation, risk questionnaire/history, buffer derivation | [Agricultural Soils v1.1](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1) |
 
@@ -119,7 +95,7 @@ for the file-presence gate and the separate optional readings importer.
 |---|---|---|---|
 | Inventory all relevant products, materials, equipment, vehicles, and infrastructure across the full lifecycle | Project design and material change | Item/material makeup, weights, design life, replacements, lifecycle stages | [Embodied v1.0](https://registry.isometric.com/module/embodied-emissions/1.0) |
 | Keep a complete record for every factor | Each inventory factor | Source, value/unit, basis tier, product and manufacturer, category, EPD expiry, verification standard/record, vintage | [Embodied v1.0](https://registry.isometric.com/module/embodied-emissions/1.0) |
-| Review temporal allocation at required crediting-period checkpoints and true up deviations | Year 1, 3, 5, and renewal where applicable | Allocation schedule, actual delivery, review event, early notification/reversal response | [Embodied v1.0](https://registry.isometric.com/module/embodied-emissions/1.0) |
+| Review temporal allocation at renewal and revise it when the method changes or is not followed | Each crediting-period renewal, relevant method change or noncompliance | Allocation schedule, actual delivery, review event, early notification/reversal response | [Embodied v1.0](https://registry.isometric.com/module/embodied-emissions/1.0) |
 | Begin the Reporting Period with feedstock sourcing and end it with application | Each GHG entry/reporting period | Earliest sourcing date and latest application date | [Biochar v1.1 reporting period](https://registry.isometric.com/protocol/biochar/1.1#calculation-approach-and-reporting-period) |
 | Document excluded SSRs and distinguish the protocol's 5% verification materiality from any separate de-minimis rule | Validation and verification | Boundary justification and verifier materiality record | [Biochar v1.1 verification materiality](https://registry.isometric.com/protocol/biochar/1.1#verification-materiality) |
 | Apply the Biochar Protocol's co-product allocation procedure when a co-product exists | Each applicable Reporting Period | Applicability statement or allocation inputs and calculation | [Biochar v1.1 co-product allocation](https://registry.isometric.com/protocol/biochar/1.1#co-product-allocation) |
