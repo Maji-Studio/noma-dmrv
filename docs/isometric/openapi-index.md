@@ -3,8 +3,8 @@
 Use this to find the owning wrapper and its application consumer, not as API
 authority. The committed contract is `src/lib/isometric/generated/certify.d.ts`.
 Code checked 2026-10-30. Before trusting live behavior, read the dated
-[registry observations](./registry-behavior.md), especially the GraphQL filter
-correction that supersedes the old query assumption below.
+[registry observations](./registry-behavior.md), especially the ignored
+GraphQL ID filter and account-specific authentication observations.
 
 ## Code lookup
 
@@ -43,22 +43,14 @@ union. Preserve this when changing retry behavior; see
 
 ## GraphQL evidence read (outside OpenAPI)
 
-`POST /graphql` at the Certify origin is wired through
-`src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`,
-consumed by `src/fn/certification/biochar-application-source-readback.ts` on
-submission and Removal summary refresh. It reads
-`project.biocharSpreadEvents(first: 50, after: $after, filter: { idIn: $ids, storageLocationId: $storageLocationId })`
-with `nodes { id biocharSpreadEventSources { source { id } } }` and
-`pageInfo { hasNextPage endCursor }`. Variables include the requested Application
-id in `ids` and its registered external Storage Location id in `storageLocationId`.
-Verified on the sandbox (2026-10-30): `BiocharSpreadEventFilter.idIn` is ignored,
-`storageLocationId` narrows correctly, and the root has no `node(id:)` field.
-The client matches the node by id and follows cursors when absent, up to 10 pages.
-Duplicate matching ids are garbled; no match within that bound stays unconfirmed.
-Verified on the sandbox (2026-10-19): both Certify authentication headers are
-required, the REST Biochar Application id (`bse_...`) is the
-`BiocharSpreadEvent.id`, and the Source list matches the `source_ids` sent on
-create. This call is not generated from REST types; see
+Application Source links are read at `/graphql` on the Certify origin by
+`src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`.
+Submission and summary refresh supply the registration's external Storage
+Location ID. The client narrows by location, matches the exact Application ID
+locally and follows bounded cursors; it never trusts `idIn` to filter correctly.
+The [registry behavior record](./registry-behavior.md#application-source-readback)
+owns dated probes and authentication limits. This query is outside generated
+REST types; the full staging submission retest remains in
 [open questions](../open-questions-isometric.md).
 
 ## Unwired boundaries

@@ -46,8 +46,8 @@ local code, isolated sandbox probes and full submission verification are distinc
   public registry pages supplied a scoped source cross-check. The
   [verification record](../archive/2026-10-30-isometric-verification.md) distinguishes
   exact patch checks, the Transportation minor-page fallback and historical facts.
-- Authenticated MCP access still needs administrator review. For exact-ID readback and the
-  full evidence-bearing staging retest, see [open questions](../open-questions-isometric.md).
+- Authenticated MCP access still needs administrator review. Exact-ID readback is implemented; the
+  full evidence-bearing staging retest remains in [open questions](../open-questions-isometric.md).
 
 The [2026-07-24 gap-check](../archive/2026-07-24-isometric-gap-check-v1-1.md)
 is historical evidence, not an exhaustive current assessment. Production Data
