@@ -1,5 +1,17 @@
 # Isometric Docs Change Log
 
+## 2026-10-30: Match Application Source readback by id
+
+The sandbox ignores `BiocharSpreadEventFilter.idIn` (verified 2026-10-30), while
+`storageLocationId` narrows correctly. There is no root `node(id:)` lookup.
+Application Source readback keeps both filters, matches the requested node by id,
+and follows cursors when absent, bounded at 10 pages of 50 nodes (the API caps
+page size at 50). Other
+Applications no longer cause false mismatches. Submission and summary refresh use
+the Application registration's external Storage Location id. Mismatch logs include
+the reason and missing/unexpected registry Source ids. Empty-Sources retries and
+fail-closed handling are unchanged. No binding, revision or schema change.
+
 ## 2026-10-29: Resubmit reuses registry Sources
 
 An interrupted Removal resubmits by reusing what Isometric holds. Measurement-sample

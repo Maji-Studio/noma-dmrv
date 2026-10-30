@@ -835,15 +835,33 @@ describe("Biochar Application evidence links", () => {
     await ensure([sourceIntent()]);
     expect(mocks.confirm).toHaveBeenCalledOnce();
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+    expect(mocks.client.graphql).toHaveBeenCalledWith(expect.any(String), {
+      projectId: "prj-test", ids: ["bca-test"], storageLocationId: "slc-test", after: null,
+    }, expect.any(Object));
+  });
+  it("confirms Sources when the registry ignores idIn and returns another Application too", async () => {
+    const response = answer(["src-a"]);
+    response.data.project.biocharSpreadEvents.nodes.unshift({
+      id: "bca-other", biocharSpreadEventSources: [{ source: { id: "src-other" } }],
+    });
+    mocks.client.graphql.mockResolvedValue(response);
+    await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
+    expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "confirmed");
+    expect(mocks.markDrift).not.toHaveBeenCalled();
   });
   it("stops submission and records Source drift on mismatch", async () => {
     mocks.client.graphql.mockResolvedValue(answer(["src-other"]));
     await expect(ensure([sourceIntent()])).rejects.toMatchObject({ name: "SafeError", message: expect.stringContaining("APP-001") });
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "mismatch");
     expect(mocks.markDrift).toHaveBeenCalledWith(orgCtx, "journal-1", "source_set_mismatch");
+    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({
+      reason: "missing", missing: ["src-a"], unexpected: ["src-other"],
+    }), "Biochar Application evidence link mismatch on submission");
   });
   it("continues with an unconfirmed note and warning when the event is absent", async () => {
-    mocks.client.graphql.mockResolvedValue({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes: [] } } } });
+    mocks.client.graphql.mockResolvedValue({ data: { project: { __typename: "Project", biocharSpreadEvents: {
+      nodes: [], pageInfo: { hasNextPage: false, endCursor: null },
+    } } } });
     await expect(ensure([sourceIntent()])).resolves.toBeUndefined();
     expect(mocks.recordReadback).toHaveBeenCalledWith(orgCtx, "journal-1", "unconfirmed");
     expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ registrationId: "journal-1", reason: "event_not_found" }), expect.any(String));

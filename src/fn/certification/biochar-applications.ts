@@ -364,6 +364,7 @@ async function ensureBiocharApplication(args: {
             externalProjectId: args.intent.externalProjectId,
             externalApplicationId,
             expectedSourceIds: body.source_ids ?? [],
+            externalStorageLocationId: registration!.externalStorageLocationId,
             sourceReadbackStatus: registration!.sourceReadbackStatus,
             log: args.log,
           });

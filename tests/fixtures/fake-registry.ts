@@ -295,7 +295,9 @@ export class FakeIsometricRegistry {
             ? record.source_ids.map(id => ({ source: { id } }))
             : record.source_ids,
         }));
-      return { data: { project: { __typename: "Project", biocharSpreadEvents: { nodes } } } };
+      return { data: { project: { __typename: "Project", biocharSpreadEvents: {
+        nodes, pageInfo: { hasNextPage: false, endCursor: null },
+      } } } };
     }
     if (method === "POST" && path === "/datapoints") {
       return this.create(this.datapoints, "dpt", body, ApiError);
