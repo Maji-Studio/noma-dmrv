@@ -39,6 +39,8 @@ function formatFieldPosition(
 }
 
 export function applicationSheetSections(application: ApplicationListItem, context: ApplicationSheetContext): DetailPanelSection[] {
+  // A failed refetch over a delivery that already loaded changes nothing the sheet shows.
+  const deliveryReadFailed = !!context.deliveryRead?.error && !context.delivery;
   return [
     {
       title: "Application details",
@@ -53,7 +55,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
             : context.deliveryRead?.error ? LOAD_FAILED : null,
-          ...(context.deliveryRead?.error && !context.delivery ? { valuePresent: false } : {}),
+          ...(deliveryReadFailed ? { valuePresent: false } : {}),
           ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
         {
@@ -71,12 +73,12 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits || context.deliveryRead?.error ? (
+      content: application.heldOutOfCredits || deliveryReadFailed ? (
         <>
-          {context.deliveryRead?.error && (
+          {deliveryReadFailed && (
             <Notice
               tone="warning"
-              action={<Button type="button" variant="default" size="small" busy={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+              action={<Button type="button" variant="default" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
             >
               The delivery could not be loaded.
             </Notice>

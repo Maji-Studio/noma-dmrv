@@ -79,4 +79,13 @@ describe("read-only sheet sections", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a loaded delivery without a warning when a refetch fails", () => {
+    const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch: vi.fn() };
+    const delivery = { code: "DL-1", deliveryDate: new Date("2026-10-29") } as unknown as Parameters<typeof applicationSheetSections>[1]["delivery"];
+    const sections = applicationSheetSections(APPLICATION, { delivery, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    expect(sections[0].fields.find((f) => f.label === "Delivery source")?.valuePresent).not.toBe(false);
+    render(<>{sections[0].content}</>);
+    expect(screen.queryByText("The delivery could not be loaded.")).toBeNull();
+  });
 });
