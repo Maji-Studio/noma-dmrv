@@ -12,7 +12,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
@@ -562,7 +562,7 @@ export function DeliveryList() {
       readOnly={sheetReadOnly}
       sections={
         sideSheetEntity
-          ? deliverySheetSections(sideSheetEntity, facilities, proofStatus, { readOnly: !!sheetReadOnly })
+          ? deliverySheetSections(sideSheetEntity, facilitiesWithLinked(facilities, linkedRecord), proofStatus, { readOnly: !!sheetReadOnly })
           : undefined
       }
     >

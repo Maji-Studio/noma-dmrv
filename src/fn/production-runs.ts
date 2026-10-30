@@ -10,6 +10,7 @@ import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 import {
   getProductionRunById as getProductionRunByIdData,
+  getLinkedProductionRunById,
   type ProductionRunWithRelations,
 } from "@/data-access/production-runs";
 import {
@@ -46,6 +47,19 @@ export async function getProductionRunByIdFn(
     {
       fallbackMessage: "Failed to load production run",
       log: logFor("production-run:get"),
+    },
+  );
+}
+
+/** Org-scoped detail for linked sheets, including facility-cascade archives. */
+export async function getLinkedProductionRunByIdFn(
+  productionRunId: string,
+): Promise<ActionResult<ProductionRunWithRelations>> {
+  return withAction(
+    (ctx) => getLinkedProductionRunById(ctx, z.uuid().parse(productionRunId)),
+    {
+      fallbackMessage: "Failed to load production run",
+      log: logFor("production-run:linked-detail"),
     },
   );
 }

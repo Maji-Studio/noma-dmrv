@@ -11,9 +11,11 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
+  or,
   sql,
   SQL,
   count,
@@ -376,6 +378,42 @@ export async function getProductionRunById(
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
 
+  return getProductionRunDetail(ctx, productionRunId, "active", executor);
+}
+
+/** Linked detail read; never use this to authorize a write.
+ * Facility archive stamps its active children with the same SQL timestamp.
+ * Matching that stamp keeps independently archived runs hidden, even when
+ * their facility is subsequently archived. Active links keep their usual shape.
+ */
+export async function getLinkedProductionRunById(
+  ctx: OrgContext,
+  productionRunId: string,
+  executor: Executor = db,
+): Promise<ProductionRunWithRelations> {
+  requireOrgScope(ctx);
+
+  return getProductionRunDetail(ctx, productionRunId, "facility-cascade", executor);
+}
+
+async function getProductionRunDetail(
+  ctx: OrgContext,
+  productionRunId: string,
+  archiveVisibility: "active" | "facility-cascade",
+  executor: Executor,
+): Promise<ProductionRunWithRelations> {
+  requireOrgScope(ctx);
+
+  const archivedPredicate = archiveVisibility === "active"
+    ? isNull(productionRuns.archivedAt)
+    : or(
+        isNull(productionRuns.archivedAt),
+        and(
+          isNotNull(facilities.archivedAt),
+          eq(productionRuns.archivedAt, facilities.archivedAt),
+        ),
+      );
+
   const [run] = await executor
     .select({
       id: productionRuns.id,
@@ -422,7 +460,7 @@ export async function getProductionRunById(
       and(
         eq(productionRuns.id, productionRunId),
         eq(productionRuns.organizationId, ctx.organizationId),
-        isNull(productionRuns.archivedAt),
+        archivedPredicate,
       ),
     );
 

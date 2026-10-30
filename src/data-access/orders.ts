@@ -404,10 +404,18 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   });
 }
 
-export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"]): Promise<Order> {
+export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"], mode: "direct" | "customer-cascade"): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion } = input;
   await lockBiocharTransportRouteTopology(ctx, tx);
+  // Topology stabilizes repoints; facility before order matches archive/restore.
+  // The customer cascade already holds those locks and permits archived facilities.
+  if (mode === "direct") {
+    const [snapshot] = await tx.select({ facilityId: orders.facilityId }).from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+    if (!snapshot) throw orderReferenceNotFound("orderId");
+    await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), "not_found", ["facilityId"]);
+  }
   const [existing] = await tx.select().from(orders)
     .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId))).for("update");
   if (!existing) throw orderReferenceNotFound("orderId");

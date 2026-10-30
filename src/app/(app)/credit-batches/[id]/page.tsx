@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { CreditBatchPage } from "@/components/credit-batches";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getFacilityById } from "@/data-access/facilities";
 import { creditBatchKeys } from "@/hooks/credit-batch-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
 import { createServerHydrationState } from "@/lib/react-query/server-hydration";
@@ -12,6 +13,9 @@ import { createServerHydrationState } from "@/lib/react-query/server-hydration";
  * org-scoped read, so another organization's batch is a not-found. A
  * `?facility=` naming a different facility is a not-found too; a link without
  * one gains the batch's facility so the sidebar and facility context agree.
+ * The exception is a batch in an archived facility: the facility selection
+ * rewrites `?facility=` to an active facility, so a reload of that URL still
+ * opens the batch, read only (#1502).
  */
 interface CreditBatchPageProps {
   params: Promise<{ id: string }>;
@@ -34,7 +38,9 @@ export default async function CreditBatchRoute({ params, searchParams }: CreditB
 
   const facility = sp.facility;
   if (facility !== undefined && facility !== batch.facilityId) {
-    notFound();
+    // A mismatch is a not-found unless the batch's own facility is archived.
+    const batchFacility = await getFacilityById(ctx, batch.facilityId).catch(() => null);
+    if (batchFacility?.archivedAt == null) notFound();
   }
   if (facility === undefined) {
     const nextParams = new URLSearchParams();

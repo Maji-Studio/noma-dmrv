@@ -37,6 +37,8 @@ interface ProductionIncidentTableProps {
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   readOnly?: boolean;
+  /** The run's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
 export function ProductionIncidentTable({
@@ -45,13 +47,15 @@ export function ProductionIncidentTable({
   defaultReactorId,
   defaultOperatorId,
   readOnly = false,
+  timeZone: zone,
 }: ProductionIncidentTableProps) {
   const { data: incidents, isLoading, error } = useProductionIncidents(productionRunId);
   const createIncident = useCreateProductionIncident();
   const updateIncident = useUpdateProductionIncident();
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
-  const { timeZone } = useFacilityClock(facilityId);
+  const clock = useFacilityClock(facilityId);
+  const timeZone = zone ?? clock.timeZone;
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }

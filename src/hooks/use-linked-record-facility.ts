@@ -9,7 +9,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
  * facility read failed and nothing can show it is active (fail closed).
  */
 export type LinkedRecordReadOnly =
-  | { reason: "archived"; facilityId: string; facilityName: string }
+  | { reason: "archived"; facilityId: string; facilityName: string; timezone: string }
   | { reason: "unchecked"; facilityId: string; retry: () => void; retrying: boolean };
 
 /** What a list page needs to open a linked record's sheet. */
@@ -23,10 +23,15 @@ export type LinkedRecordFacility = {
   readOnly: LinkedRecordReadOnly | null;
 };
 
-/** Synchronize the external facility stores before exposing a linked sheet. */
+/**
+ * Synchronize the external facility stores before exposing a linked sheet.
+ * `switchFacility: false` only resolves read-only status: the routed credit
+ * batch page keeps the working facility where it is.
+ */
 export function useLinkedRecordFacility(
   record: { facilityId?: string | null } | null | undefined,
   isLoading = false,
+  { switchFacility = true }: { switchFacility?: boolean } = {},
 ): LinkedRecordFacility {
   const {
     activeOrganizationId,
@@ -52,26 +57,33 @@ export function useLinkedRecordFacility(
       return;
     }
     const request = `${facilityId}:${recordFacilityId}`;
-    if (canSwitch && requestedSwitch.current !== request) {
+    if (switchFacility && canSwitch && requestedSwitch.current !== request) {
       requestedSwitch.current = request;
       setFacilityId(recordFacilityId);
     }
-  }, [canSwitch, facilityId, recordFacilityId, setFacilityId]);
+  }, [canSwitch, facilityId, recordFacilityId, setFacilityId, switchFacility]);
 
   const facilityRead = needsLookup && lookup.data?.id === recordFacilityId ? lookup.data : undefined;
+  const unchecked: LinkedRecordReadOnly | null = recordFacilityId
+    ? { reason: "unchecked", facilityId: recordFacilityId, retry: () => void lookup.refetch(), retrying: lookup.isFetching }
+    : null;
+  // A failed refetch fails closed even while cached data exists: the cache
+  // may be older than an archive nobody could read.
   const readOnly: LinkedRecordReadOnly | null = !needsLookup || !recordFacilityId
     ? null
-    : facilityRead
-      ? facilityRead.archivedAt != null
-        ? { reason: "archived", facilityId: facilityRead.id, facilityName: facilityRead.name }
-        : null
-      : lookup.isError || activeOrganizationId === null
-        ? { reason: "unchecked", facilityId: recordFacilityId, retry: () => void lookup.refetch(), retrying: lookup.isFetching }
-        : null;
+    : lookup.isRefetchError
+      ? unchecked
+      : facilityRead
+        ? facilityRead.archivedAt != null
+          ? { reason: "archived", facilityId: facilityRead.id, facilityName: facilityRead.name, timezone: facilityRead.timezone }
+          : null
+        : lookup.isError || activeOrganizationId === null
+          ? unchecked
+          : null;
   // A facility that cannot be selected (archived, or beyond the loaded list)
   // shows the record where it is, once its read settles. An archived facility,
   // or one whose read failed, opens the record read only.
   const ready = !!record && !isLoading && !facilitiesLoading &&
-    (!recordFacilityId || recordFacilityId === facilityId || (!selectable && lookupSettled));
+    (!recordFacilityId || recordFacilityId === facilityId || (!switchFacility && selectable) || (!selectable && lookupSettled));
   return { ready, readOnly: ready ? readOnly : null };
 }

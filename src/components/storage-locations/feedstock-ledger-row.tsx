@@ -45,8 +45,9 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
   corrected?: FeedstockLedgerEntry;
   timeZone: string;
   facilityId: string;
-  onEdit: (entry: FeedstockLedgerEntry) => void;
-  onDelete: (entry: FeedstockLedgerEntry) => void;
+  /** Left out on a read-only bin: the Lost mass entry then shows without Edit or Delete. */
+  onEdit?: (entry: FeedstockLedgerEntry) => void;
+  onDelete?: (entry: FeedstockLedgerEntry) => void;
 }) {
   // A deleted product's ingredient draw and a corrected Lost mass entry both stay listed, struck through.
   const reversed = !!entry.reversed;
@@ -80,7 +81,7 @@ export function FeedstockLedgerRow({ entry, corrected, timeZone, facilityId, onE
         ...(entry.reversedBy && !replaced ? [{ label: "Why deleted", value: entry.reversedBy.reason }] : []),
         { label: "Recorded", value: recordedBy(entry.recordedAt, entry.occurredAt, entry.actorName, timeZone) },
       ]} />
-      {entry.kind === "loss" && !reversed && (entry.editLockedReason === null
+      {entry.kind === "loss" && !reversed && onEdit && onDelete && (entry.editLockedReason === null
         ? <div className="flex flex-wrap gap-8">
             <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
             <Button type="button" variant="noOutline" onClick={() => onDelete(entry)}>Delete</Button>

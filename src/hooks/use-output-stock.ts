@@ -3,8 +3,8 @@ import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
-import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn, removeOutputLossFn } from "@/fn/output-stock";
-import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
+import { getLinkedOutputBinInventoryFn, getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn, removeOutputLossFn } from "@/fn/output-stock";
+import type { LinkedOutputBinInventoryInput, OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
@@ -27,6 +27,7 @@ export const outputStockKeys = {
   balance: (storageLocationId: string, facilityId: string, occurredAt?: string) => ["outputStock", "balance", storageLocationId, facilityId, occurredAt ?? "now"] as const,
   history: (id: string) => ["outputStock", "history", id] as const,
   subBins: (input: OutputSubBinsInput | null) => ["outputStock", "subBins", input] as const,
+  linkedInventory: (input: LinkedOutputBinInventoryInput | null) => [...outputStockKeys.all, "linkedInventory", input] as const,
   matching: (facilityId: string, formulationId: string) => ["outputStock", "matching", facilityId, formulationId] as const,
 };
 
@@ -150,4 +151,18 @@ function updateOutputStockCaches(client: QueryClient, data: { savedProducts: Bio
     void client.invalidateQueries({ queryKey: key });
   }
   invalidateStockEntityQueries(client, "delivery");
+}
+
+/** Read-only inventory for active or facility-cascade-archived output bins. */
+export function useLinkedOutputBinInventory(input: LinkedOutputBinInventoryInput | null) {
+  return useQuery({
+    queryKey: outputStockKeys.linkedInventory(input),
+    enabled: input !== null,
+    queryFn: async () => {
+      if (!input) throw new Error("Choose a storage bin first.");
+      return unwrap(await getLinkedOutputBinInventoryFn(input));
+    },
+    staleTime: 0,
+    retry: false,
+  });
 }

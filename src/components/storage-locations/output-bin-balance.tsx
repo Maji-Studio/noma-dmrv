@@ -2,7 +2,7 @@
 import { EmptyState, Notice } from "@/components/ui";
 import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
+import { useLinkedOutputBinInventory, useOutputStockBalance, useOutputStockHistory, useOutputSubBins } from "@/hooks/use-output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { moistureDrawCaption } from "@/lib/output-stock/moisture-guidance";
@@ -67,21 +67,31 @@ export function drawMoistureBasis(bases: readonly (MoistureBasis | null | undefi
  * tracked dry biochar under it, a split bin's sub-bins as bays or a mix bin
  * as one pile, then the stock action and the history.
  */
-export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, onAdjust }: {
+export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, onAdjust, readOnly = false, timeZone }: {
   storageLocationId: string;
   facilityId: string;
   capacityKg: number | null;
   onAdjust?: () => void;
+  /** Hides the history's Lost mass Edit and Delete; the history stays visible. */
+  readOnly?: boolean;
+  /** The record's own zone when its facility is archived and outside the facility list. */
+  timeZone?: string;
 }) {
-  const preview = useOutputStockBalance({ storageLocationId, facilityId });
+  const bin = { storageLocationId, facilityId };
+  // A read-only bin (archived facility) reads its stock through the linked read; the live reads need an active bin.
+  const linked = useLinkedOutputBinInventory(readOnly ? bin : null);
+  const liveBalance = useOutputStockBalance(readOnly ? null : bin);
   // As of each fetch, like the balance above, so a new entry shows on refetch.
-  const subBins = useOutputSubBins({ storageLocationId, facilityId });
+  const liveSubBins = useOutputSubBins(readOnly ? null : bin);
+  const preview = readOnly ? { data: linked.data?.balance, isLoading: linked.isLoading, error: linked.error } : liveBalance;
+  const subBins = readOnly ? { data: linked.data?.contents, isLoading: linked.isLoading, error: linked.error } : liveSubBins;
   const clock = useFacilityClock(facilityId);
+  const zone = timeZone ?? clock.timeZone;
   const mode = subBins.data?.stockMode;
   const layers = subBins.data?.subBins ?? [];
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
   const dryKg = preview.data?.beforeDryKg ?? null;
-  const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), clock.timeZone);
+  const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), zone);
   const mixMoisture = mode === "mix" ? preview.data?.moistureEstimate?.moisturePercent ?? null : null;
   const ready = !!preview.data && !subBins.isLoading;
   // Shares the history modal's query, so opening it shows the same data at once.
@@ -109,13 +119,13 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
     >
       {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
       {!subBins.isLoading && layers.length > 0 && (mode === "mix"
-        ? <MixPileBay bands={mixPileBands(layers, dryKg, wetKg, mixMoisture, clock.timeZone)} capacityKg={capacityKg} />
-        : <SubBinBays subBins={layers} timeZone={clock.timeZone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
+        ? <MixPileBay bands={mixPileBands(layers, dryKg, wetKg, mixMoisture, zone)} capacityKg={capacityKg} />
+        : <SubBinBays subBins={layers} timeZone={zone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
       {!subBins.isLoading && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
     </StockCard>
-    <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
+    <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} readOnly={readOnly} balance={readOnly ? preview.data : undefined} timeZone={zone}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
-      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={clock.timeZone} now={history.dataUpdatedAt} formatEstimate={estimateKg} /> : undefined}
+      {history.error ? <Notice tone="error">{history.error.message}</Notice> : history.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : series && series.points.length > 1 ? <StockLevelChart compact points={series.points} modeChanges={series.modeChanges} timeZone={zone} now={history.dataUpdatedAt} formatEstimate={estimateKg} /> : undefined}
     </StockChartCard>
   </div>;
 }

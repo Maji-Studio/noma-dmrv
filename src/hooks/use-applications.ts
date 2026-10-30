@@ -41,6 +41,7 @@ export const applicationKeys = {
   statsPrefix: () => [...applicationKeys.all, "stats"] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
+  linkedDelivery: (id: string) => [...applicationKeys.all, "linked-delivery", id] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };

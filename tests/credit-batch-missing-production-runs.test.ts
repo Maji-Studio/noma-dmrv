@@ -303,7 +303,8 @@ describe("missing production run detection (real DB)", () => {
     expect((await todos()).check).toEqual([{
       id: `missing-production-run:${fitting.id}`, productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`, titleAfterCode: " is not in this credit batch yet",
-      detail: `Its emissions are not counted in ${holder.code}. If the Emissions entry dated Jun 9, 2026 already records them, delete it when you add the run.`,
+      detail: `Its emissions are not counted in ${holder.code}.`,
+      instruction: "If the Emissions entry dated Jun 9, 2026 already records them, delete it when you add the run.",
       sameDayEntryDate: values.occurredOn,
       target: { tab: "overview", rowId: "batch-details" },
     }]);
@@ -398,7 +399,8 @@ describe("missing production run detection (real DB)", () => {
     await db.insert(emissionEntries).values({ ...values, kind: "value", lineRule: "single", occurredOn: "2026-06-01" });
     expect((await read()).manualEntries).toEqual([]);
     expect((await todos()).check).toMatchObject([{ id: `late-production-run:${lateRun.id}`,
-      detail: "It is not in this credit batch. Record its diesel and power on the Emissions tab, dated Jun 1, 2026." }]);
+      detail: "It is not in this credit batch.",
+      instruction: "Record its diesel and power on the Emissions tab, dated Jun 1, 2026." }]);
     await db.insert(emissionEntries).values({ ...values, kind: "value", occurredOn: "2026-06-01" });
     expect((await todos()).check).toEqual([]);
   });

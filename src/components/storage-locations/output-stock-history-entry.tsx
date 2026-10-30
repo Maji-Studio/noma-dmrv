@@ -144,8 +144,9 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
   linked: boolean;
   timeZone: string;
   facilityId: string;
-  onEdit: (entry: OutputStockHistoryEntry) => void;
-  onDelete: (entry: OutputStockHistoryEntry) => void;
+  /** Left out on a read-only bin: the Lost mass entry then shows without Edit or Delete. */
+  onEdit?: (entry: OutputStockHistoryEntry) => void;
+  onDelete?: (entry: OutputStockHistoryEntry) => void;
 }) {
   const { entry, status } = row;
   const struck = status !== "counts";
@@ -171,7 +172,7 @@ export function HistoryEntry({ row, defaultOpen, linked, timeZone, facilityId, o
         <PartsTable row={row} subject={subject} />
         {row.moistureEntry?.moistureReset && <MoistureResetChange reset={row.moistureEntry.moistureReset} saved={savedWetChange(row) !== null} />}
         <LedgerFacts facts={facts(row, timeZone, linked)} />
-        {row.kind === "loss" && !struck && (entry.editLockedReason === null
+        {row.kind === "loss" && !struck && onEdit && onDelete && (entry.editLockedReason === null
           ? <div className="flex flex-wrap gap-8">
               <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
               <Button type="button" variant="noOutline" onClick={() => onDelete(entry)}>Delete</Button>

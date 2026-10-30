@@ -103,7 +103,12 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   ];
 }
 
-export function storageLocationSheetSections(bin: StorageLocationWithFacility, onReconcile: (bin: StorageLocationWithFacility) => void): DetailPanelSection[] {
+export function storageLocationSheetSections(
+  bin: StorageLocationWithFacility,
+  onReconcile?: (bin: StorageLocationWithFacility) => void,
+  /** A read-only bin hides the history's Lost mass controls and reads times in its own facility's zone. */
+  view: { readOnly?: boolean; timeZone?: string } = {},
+): DetailPanelSection[] {
   return [
     {
       title: "Storage details",
@@ -146,10 +151,10 @@ export function storageLocationSheetSections(bin: StorageLocationWithFacility, o
       fields: buildStorageDetailFields(bin),
       content: bin.type === "feedstock_bin" ? (
         <FeedstockBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
-          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
+          onAdjust={bin.archivedAt || !onReconcile ? undefined : () => onReconcile(bin)} readOnly={view.readOnly} timeZone={view.timeZone} />
       ) : (
         <OutputBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
-          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
+          onAdjust={bin.archivedAt || !onReconcile ? undefined : () => onReconcile(bin)} readOnly={view.readOnly} timeZone={view.timeZone} />
       ),
     },
   ];

@@ -88,8 +88,9 @@ export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "subm
     : `Created ${formatFacilityDay(removal.createdAt, timeZone)}`;
 }
 
-function RemovalCardBody({ group, facilityId }: { group: RemovalBarGroup; facilityId: string }) {
-  const { timeZone } = useFacilityClock(facilityId);
+function RemovalCardBody({ group, facilityId, timeZone: zone }: { group: RemovalBarGroup; facilityId: string; timeZone?: string }) {
+  const clock = useFacilityClock(facilityId);
+  const timeZone = zone ?? clock.timeZone;
   const removal = group.removal;
   if (!removal) return null;
   return (
@@ -117,7 +118,7 @@ function RemovalCardBody({ group, facilityId }: { group: RemovalBarGroup; facili
 }
 
 /** A link to the Removal that opens a facts-only hover card on hover or focus. */
-function RemovalHoverLink({ group, facilityId, href, className, style, children }: { group: RemovalBarGroup; facilityId: string; href: string; className?: string; style?: CSSProperties; children: ReactNode }) {
+function RemovalHoverLink({ group, facilityId, timeZone, href, className, style, children }: { group: RemovalBarGroup; facilityId: string; timeZone?: string; href: string; className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
     <PreviewCard.Root>
       <PreviewCard.Trigger
@@ -130,7 +131,7 @@ function RemovalHoverLink({ group, facilityId, href, className, style, children 
       <PreviewCard.Portal>
         <PreviewCard.Positioner side="top" sideOffset={CARD_OFFSET_PX} className="z-[var(--z-layer-popover)]">
           <PreviewCard.Popup className="border border-[var(--ink)] bg-[var(--paper)] transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
-            <RemovalCardBody group={group} facilityId={facilityId} />
+            <RemovalCardBody group={group} facilityId={facilityId} timeZone={timeZone} />
           </PreviewCard.Popup>
         </PreviewCard.Positioner>
       </PreviewCard.Portal>
@@ -145,7 +146,8 @@ function compactLabel(group: RemovalBarGroup): string {
 }
 
 /** Overview: one slim bar and one wrapping line of key items. Each Removal's key item opens its hover card. */
-export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGroup[]; facilityId: string }) {
+/** `timeZone` is the batch's own facility zone when that facility is archived and outside the facility list. */
+export function CompactRemovalBar({ groups, facilityId, timeZone }: { groups: RemovalBarGroup[]; facilityId: string; timeZone?: string }) {
   return (
     <div className="flex flex-col gap-12">
       {/* The segments are too small to be targets: the key items below are the links. */}
@@ -163,7 +165,7 @@ export function CompactRemovalBar({ groups, facilityId }: { groups: RemovalBarGr
         {groups.map((group) => (
           <li key={group.id}>
             {group.removal ? (
-              <RemovalHoverLink facilityId={facilityId} group={group} href={recordHref("removal", group.removal.id, { facilityId })} className="group inline-flex min-h-44 items-center gap-6">
+              <RemovalHoverLink facilityId={facilityId} timeZone={timeZone} group={group} href={recordHref("removal", group.removal.id, { facilityId })} className="group inline-flex min-h-44 items-center gap-6">
                 <SegmentSwatch segment={group.segment} />
                 <span className="underline-offset-2 group-hover:underline">{compactLabel(group)}</span>
               </RemovalHoverLink>

@@ -46,19 +46,23 @@ interface ProductionSampleTableProps {
   productionRunId: string;
   facilityId: string;
   readOnly?: boolean;
+  /** The run's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
 export function ProductionSampleTable({
   productionRunId,
   facilityId,
   readOnly = false,
+  timeZone: zone,
 }: ProductionSampleTableProps) {
   const { data: samples, isLoading, error } = useProductionSamples(productionRunId);
   const createSample = useCreateProductionSample();
   const updateSample = useUpdateProductionSample();
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
-  const { timeZone } = useFacilityClock(facilityId);
+  const clock = useFacilityClock(facilityId);
+  const timeZone = zone ?? clock.timeZone;
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }

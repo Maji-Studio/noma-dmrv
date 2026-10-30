@@ -15,8 +15,7 @@
 import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
-import { Notice } from "@/components/ui/notice";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
+import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
@@ -288,18 +287,7 @@ function EntitySideSheet({
               {/* Read only, the reason is the one status: lock lines say how to
                   change or free the record, which does not apply here. */}
               {readOnly && readOnlyState ? (
-                <Notice
-                  tone={readOnlyState.tone}
-                  boxed
-                  data-read-only-notice={readOnlyState.tone}
-                  action={readOnlyState.retry ? (
-                    <Button variant="default" size="small" busy={readOnlyState.retry.running} onClick={readOnlyState.retry.run}>
-                      {RECORD_LOCK_RETRY_LABEL}
-                    </Button>
-                  ) : undefined}
-                >
-                  {readOnlyState.message}
-                </Notice>
+                <ReadOnlyNotice readOnly={readOnlyState} />
               ) : viewModeNotice}
               {sections && (
                 <EntitySideSheetSections

@@ -5,6 +5,8 @@ import {
   gte,
   inArray,
   isNull,
+  isNotNull,
+  type SQL,
   lte,
   or,
   sql,
@@ -15,7 +17,7 @@ import {
   creditBatches,
   creditBatchProductionRuns,
 } from "@/db/schema/credits";
-import { storageLocations } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -115,6 +117,26 @@ export async function getCreditBatchProductionRunOptions(
     if (assignmentScope) conditions.push(assignmentScope);
   }
 
+  return readCreditBatchProductionRuns(ctx, and(...conditions));
+}
+
+/** Persisted members only, including facility-cascade archives. Never authorizes writes. */
+export async function getLinkedCreditBatchMembers(ctx: OrgContext, creditBatchId: string): Promise<CreditBatchProductionRunOption[]> {
+  requireOrgScope(ctx);
+  const matchingFacility = db.select({ id: facilities.id }).from(facilities).where(and(
+    eq(facilities.organizationId, ctx.organizationId),
+    eq(facilities.id, creditBatches.facilityId),
+    or(isNull(productionRuns.archivedAt), and(isNotNull(facilities.archivedAt), eq(productionRuns.archivedAt, facilities.archivedAt))),
+    or(isNull(creditBatches.archivedAt), and(isNotNull(facilities.archivedAt), eq(creditBatches.archivedAt, facilities.archivedAt))),
+  ));
+  return readCreditBatchProductionRuns(ctx, and(
+    eq(creditBatches.id, creditBatchId),
+    inArray(productionRuns.facilityId, matchingFacility),
+  ));
+}
+
+async function readCreditBatchProductionRuns(ctx: OrgContext, rowFilter: SQL | undefined): Promise<CreditBatchProductionRunOption[]> {
+  requireOrgScope(ctx);
   const rows = await db
     .select({
       id: productionRuns.id,
@@ -148,7 +170,7 @@ export async function getCreditBatchProductionRunOptions(
       creditBatches,
       and(eq(creditBatches.id, creditBatchProductionRuns.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)),
     )
-    .where(and(...conditions))
+    .where(and(eq(productionRuns.organizationId, ctx.organizationId), rowFilter))
     .orderBy(desc(productionRuns.startTime));
 
   // Resolve each run's DISTINCT feedstock-type set in a SEPARATE query — joining

@@ -19,7 +19,7 @@ vi.mock("@/hooks/use-certification", () => ({
   }),
 }));
 
-function mount(canManage: boolean, locked = false, activeFocusTarget?: string, inRemoval = false) {
+function mount(canManage: boolean, locked = false, activeFocusTarget?: string, inRemoval = false, readOnly = false) {
   render(
     <CreditBatchRemovalTemplate
       creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: mocks.pin }}
@@ -28,6 +28,7 @@ function mount(canManage: boolean, locked = false, activeFocusTarget?: string, i
       activeFocusTarget={activeFocusTarget}
       linesToDecide={mocks.linesToDecide}
       inRemoval={inRemoval}
+      readOnly={readOnly}
     />,
   );
 }
@@ -151,5 +152,13 @@ describe("CreditBatchRemovalTemplate", () => {
       mount(true);
       expect(landingLine()).toBeNull();
     });
+  });
+
+  it("states the missing template as a fact alone on a read-only batch", () => {
+    mocks.pin = null;
+    mount(false, false, undefined, false, true);
+    expect(screen.getByText("This credit batch has no Removal template.")).toBeTruthy();
+    expect(screen.queryByText(/Ask an Admin|Set a Removal template/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
   });
 });

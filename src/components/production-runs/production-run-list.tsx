@@ -21,6 +21,7 @@ import {
   useCreateProductionRun,
   useDeleteProductionRun,
   useProductionRun,
+  useLinkedProductionRun,
   useProductionRuns,
   useUpdateProductionRun,
   useProductionRunStats,
@@ -34,7 +35,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -300,7 +301,12 @@ export function ProductionRunList() {
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters, {
     enabled: !!facilityId,
   });
-  const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
+  const focusedNormalRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
+  // The normal read hides runs archived with their facility; the separate
+  // linked read opens them read only. It never authorizes a write.
+  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !focusedNormalRun.data;
+  const focusedLinkedRun = useLinkedProductionRun(focusedRunId ?? "", needsLinkedRun);
+  const focusedRun = focusedNormalRun.data || !needsLinkedRun ? focusedNormalRun : focusedLinkedRun;
   const linkedRecord = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
@@ -541,7 +547,7 @@ export function ProductionRunList() {
       editLabel="Edit production run"
       readOnly={sheetReadOnly}
       size="wide"
-      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
+      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilitiesWithLinked(facilities, linkedRecord)) : undefined}
     >
       <ProductionRunForm
         key={sideSheetEntity?.id ?? "create"}

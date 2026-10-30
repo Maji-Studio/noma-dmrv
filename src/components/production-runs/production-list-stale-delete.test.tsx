@@ -13,7 +13,7 @@ vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQuerySta
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility", facilities: [] }) }));
 vi.mock("@/hooks/use-production-runs", () => ({
   useProductionRuns: () => ({ data: { items: [state.row], totalPages: 1 } }),
-  useProductionRun: () => ({}), useProductionRunStats: () => ({}),
+  useProductionRun: () => ({}), useLinkedProductionRun: () => ({}), useProductionRunStats: () => ({}),
   useCreateProductionRun: () => ({}), useUpdateProductionRun: () => ({}),
   useDeleteProductionRun: () => ({ mutateAsync: state.remove }),
 }));

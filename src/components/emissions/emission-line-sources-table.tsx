@@ -43,11 +43,12 @@ interface SourcesTableProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
   model: ReturnType<typeof lineBodyModel>;
+  readOnly?: boolean;
   onForm: (mode: EntryFormMode) => void;
   onDeleteEntry: (line: EmissionLine, entry: EmissionEntry) => void;
 }
 
-export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: SourcesTableProps) {
+export function SourcesTable({ line, scope, model, readOnly = false, onForm, onDeleteEntry }: SourcesTableProps) {
   const { records } = model;
   const shownFigure = records && (hasRecordsFigure(records) || isCountedElsewhere(records)) ? records.figure : null;
   const entryCount = model.values.length + model.stopped.length;
@@ -80,6 +81,7 @@ export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: Sour
           entry={entry}
           scope={scope}
           groupLabel={index === 0 ? groupLabel : null}
+          readOnly={readOnly}
           onEdit={() => onForm({ kind: "edit", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
         />
@@ -91,7 +93,8 @@ export function SourcesTable({ line, scope, model, onForm, onDeleteEntry }: Sour
           entry={entry}
           scope={scope}
           groupLabel={!model.values.length && index === 0 ? groupLabel : null}
-          canEnterAgain={model.takesEntries}
+          canEnterAgain={model.takesEntries && !readOnly}
+          readOnly={readOnly}
           onEnterAgain={() => onForm({ kind: "again", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
         />
@@ -123,11 +126,12 @@ function EntrySource({ groupLabel, dateText, muted }: { groupLabel: string | nul
   );
 }
 
-function EntryRow({ line, entry, scope, groupLabel, onEdit, onDelete }: {
+function EntryRow({ line, entry, scope, groupLabel, readOnly, onEdit, onDelete }: {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
   groupLabel: string | null;
+  readOnly: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -139,7 +143,7 @@ function EntryRow({ line, entry, scope, groupLabel, onEdit, onDelete }: {
       <EntrySource groupLabel={groupLabel} dateText={dateText} />
       <span role="cell" className={DATE_CELL}>{dateText}</span>
       <span role="cell" className={DETAIL_CELL}>
-        <EntryEvidence entry={entry} scope={scope} actions={actions} />
+        <EntryEvidence entry={entry} scope={scope} actions={actions} readOnly={readOnly} />
         <LateEntryStatus entry={entry} facilityId={scope.facilityId} className="pt-4" />
       </span>
       <span role="cell" className={AMOUNT_CELL}>
@@ -148,18 +152,19 @@ function EntryRow({ line, entry, scope, groupLabel, onEdit, onDelete }: {
         {detail && <span className="body-caption text-[var(--color-text-tertiary)]">{detail}</span>}
       </span>
       <span role="cell" className={MENU_CELL}>
-        <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={actions.items} />
+        {!readOnly && <EntryMenu label={`Actions for the manual entry, ${dateText}`} items={actions.items} />}
       </span>
     </div>
   );
 }
 
-function StoppedRow({ line, entry, scope, groupLabel, canEnterAgain, onEnterAgain, onDelete }: {
+function StoppedRow({ line, entry, scope, groupLabel, canEnterAgain, readOnly, onEnterAgain, onDelete }: {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
   groupLabel: string | null;
   canEnterAgain: boolean;
+  readOnly: boolean;
   onEnterAgain: () => void;
   onDelete: () => void;
 }) {
@@ -171,16 +176,16 @@ function StoppedRow({ line, entry, scope, groupLabel, canEnterAgain, onEnterAgai
       <EntrySource groupLabel={groupLabel} dateText={dateText} muted />
       <span role="cell" className={cn(DATE_CELL, "text-[var(--color-text-tertiary)]")}>{dateText}</span>
       <span role="cell" className={cn(DETAIL_CELL, "flex flex-col items-start gap-8")}>
-        <span className="body-caption text-[var(--st-wait)]">{stoppedEntryMessage(entry, canEnterAgain)}</span>
-        {entry.canConfirm && <Button size="small" variant="primary" busy={confirming} onClick={() => void confirmEntry()}>Confirm</Button>}
-        {!entry.canConfirm && canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>}
+        <span className="body-caption text-[var(--st-wait)]">{stoppedEntryMessage(entry, canEnterAgain, readOnly)}</span>
+        {!readOnly && entry.canConfirm && <Button size="small" variant="primary" busy={confirming} onClick={() => void confirmEntry()}>Confirm</Button>}
+        {!readOnly && !entry.canConfirm && canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>}
         {error && <ServerError message={error} />}
       </span>
       <span role="cell" className={cn(AMOUNT_CELL, "text-[var(--color-text-tertiary)] line-through")}>
         {figures.map((figure) => <span key={figure}>{figure}</span>)}
       </span>
       <span role="cell" className={MENU_CELL}>
-        <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />
+        {!readOnly && <EntryMenu label={`Actions for the stopped manual entry, ${dateText}`} items={[{ label: "Delete", onSelect: onDelete, destructive: true }]} />}
       </span>
     </div>
   );

@@ -15,7 +15,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => conte
 const lookup = vi.hoisted(() => ({
   calls: [] as Array<{ id: string; enabled: boolean; organizationId: string | null | undefined }>,
   refetch: vi.fn(),
-  result: { data: undefined, isError: false } as { data?: { id: string; name: string; archivedAt: Date | null }; isError: boolean; isFetching?: boolean; refetch?: () => void },
+  result: { data: undefined, isError: false } as { data?: { id: string; name: string; archivedAt: Date | null; timezone?: string }; isError: boolean; isRefetchError?: boolean; isFetching?: boolean; refetch?: () => void },
 }));
 vi.mock("@/hooks/use-facilities", () => ({
   useFacility: (id: string, enabled: boolean, organizationId?: string | null) => {
@@ -88,9 +88,9 @@ describe("useLinkedRecordFacility", () => {
   });
 
   it("opens a record in an archived facility read only, without selecting the facility", () => {
-    lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
+    lookup.result = { data: { id: "archived-facility", name: "Mafinga", timezone: "Africa/Dar_es_Salaam", archivedAt: new Date("2026-10-29") }, isError: false };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
-    expect(result.current).toEqual({ ready: true, readOnly: { reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" } });
+    expect(result.current).toEqual({ ready: true, readOnly: { reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga", timezone: "Africa/Dar_es_Salaam" } });
     expect(context.setFacilityId).not.toHaveBeenCalled();
     expect(lookup.calls.at(-1)).toEqual({ id: "archived-facility", enabled: true, organizationId: "org-a" });
   });
@@ -98,19 +98,19 @@ describe("useLinkedRecordFacility", () => {
   it("opens it read only when no facility is active", () => {
     context.facilityId = null;
     context.facilities = [];
-    lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
+    lookup.result = { data: { id: "archived-facility", name: "Mafinga", timezone: "Africa/Dar_es_Salaam", archivedAt: new Date("2026-10-29") }, isError: false };
     const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
     expect(result.current.ready).toBe(true);
-    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" });
+    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga", timezone: "Africa/Dar_es_Salaam" });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 
   it("withholds the sheet until the facility read says whether it is archived", () => {
     const { result, rerender } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }));
     expect(result.current).toEqual({ ready: false, readOnly: null });
-    lookup.result = { data: { id: "archived-facility", name: "Mafinga", archivedAt: new Date("2026-10-29") }, isError: false };
+    lookup.result = { data: { id: "archived-facility", name: "Mafinga", timezone: "Africa/Dar_es_Salaam", archivedAt: new Date("2026-10-29") }, isError: false };
     rerender();
-    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga" });
+    expect(result.current.readOnly).toEqual({ reason: "archived", facilityId: "archived-facility", facilityName: "Mafinga", timezone: "Africa/Dar_es_Salaam" });
   });
 
   it("fails closed: a facility read that errors opens the record read only", () => {
@@ -122,6 +122,12 @@ describe("useLinkedRecordFacility", () => {
     if (result.current.readOnly?.reason !== "unchecked") throw new Error("expected unchecked");
     result.current.readOnly.retry();
     expect(lookup.refetch).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when a refetch errors while cached data still says active", () => {
+    lookup.result = { data: { id: "far-facility", name: "Far", archivedAt: null }, isError: false, isRefetchError: true };
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "far-facility" }));
+    expect(result.current.readOnly).toMatchObject({ reason: "unchecked", facilityId: "far-facility" });
   });
 
   it("fails closed without an active organization, since nothing can check the facility", () => {
@@ -140,6 +146,19 @@ describe("useLinkedRecordFacility", () => {
   it.each([null, undefined])("does nothing for an unloaded or missing record (%s)", (record) => {
     const { result } = renderHook(() => useLinkedRecordFacility(record));
     expect(result.current).toEqual({ ready: false, readOnly: null });
+    expect(context.setFacilityId).not.toHaveBeenCalled();
+  });
+
+  it("with switchFacility off, never moves the working facility and settles for a selectable facility", () => {
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "facility-b" }, false, { switchFacility: false }));
+    expect(context.setFacilityId).not.toHaveBeenCalled();
+    expect(result.current).toEqual({ ready: true, readOnly: null });
+  });
+
+  it("with switchFacility off, still opens an archived facility's record read only", () => {
+    lookup.result = { data: { id: "archived-facility", name: "Mafinga", timezone: "Africa/Dar_es_Salaam", archivedAt: new Date("2026-10-29") }, isError: false };
+    const { result } = renderHook(() => useLinkedRecordFacility({ facilityId: "archived-facility" }, false, { switchFacility: false }));
+    expect(result.current.readOnly).toMatchObject({ reason: "archived", facilityId: "archived-facility" });
     expect(context.setFacilityId).not.toHaveBeenCalled();
   });
 });

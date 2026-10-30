@@ -52,16 +52,18 @@ interface LineCommentProps {
   line: EmissionLine;
   scope: EmissionBatchScope;
   editing: boolean;
+  /** A read-only batch: the comment shows, with no editor and no menu. */
+  readOnly?: boolean;
   onEditingChange: (editing: boolean) => void;
 }
 
 /** The comment row: the saved comment, or its editor while adding or editing. Nothing when there is neither. */
-export function LineComment({ line, scope, editing, onEditingChange }: LineCommentProps) {
-  if (editing) {
+export function LineComment({ line, scope, editing, readOnly = false, onEditingChange }: LineCommentProps) {
+  if (editing && !readOnly) {
     return <CommentEditor line={line} scope={scope} onDone={() => onEditingChange(false)} />;
   }
   if (!line.comment) return null;
-  return <CommentView line={line} scope={scope} onEdit={() => onEditingChange(true)} />;
+  return <CommentView line={line} scope={scope} readOnly={readOnly} onEdit={() => onEditingChange(true)} />;
 }
 
 function CommentLabel({ htmlFor }: { htmlFor?: string }) {
@@ -74,7 +76,7 @@ function CommentLabel({ htmlFor }: { htmlFor?: string }) {
   return htmlFor ? <label htmlFor={htmlFor} className={LABEL_CELL}>{content}</label> : <span className={LABEL_CELL}>{content}</span>;
 }
 
-function CommentView({ line, scope, onEdit }: { line: EmissionLine; scope: EmissionBatchScope; onEdit: () => void }) {
+function CommentView({ line, scope, readOnly, onEdit }: { line: EmissionLine; scope: EmissionBatchScope; readOnly: boolean; onEdit: () => void }) {
   const remove = useCommentDelete(line, scope);
   const comment = line.comment;
   if (!comment) return null;
@@ -85,15 +87,17 @@ function CommentView({ line, scope, onEdit }: { line: EmissionLine; scope: Emiss
         <span className="sr-only">Comment: </span>
         {comment.body}
       </p>
-      <span className={MENU_CELL}>
-        <EntryMenu
-          label="Actions for the comment"
-          items={[
-            { label: "Edit comment", onSelect: onEdit },
-            { label: "Delete comment", onSelect: remove.request, destructive: true },
-          ]}
-        />
-      </span>
+      {!readOnly && (
+        <span className={MENU_CELL}>
+          <EntryMenu
+            label="Actions for the comment"
+            items={[
+              { label: "Edit comment", onSelect: onEdit },
+              { label: "Delete comment", onSelect: remove.request, destructive: true },
+            ]}
+          />
+        </span>
+      )}
       {remove.dialog}
     </div>
   );

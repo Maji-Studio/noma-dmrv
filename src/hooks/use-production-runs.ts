@@ -26,6 +26,7 @@ import type {
 } from "@/data-access/production-runs";
 import {
   getProductionRunByIdFn,
+  getLinkedProductionRunByIdFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -75,6 +76,7 @@ export const productionRunKeys = {
     [...productionRunKeys.lists(), filters] as const,
   details: () => [...productionRunKeys.all, "detail"] as const,
   detail: (id: string) => [...productionRunKeys.details(), id] as const,
+  linkedDetail: (id: string) => [...productionRunKeys.all, "linked-detail", id] as const,
   stats: (facilityId?: string) =>
     [...productionRunKeys.all, "stats", facilityId] as const,
   // Prefix that matches every stats variant regardless of facilityId — use for
@@ -143,6 +145,16 @@ export function useProductionRun(productionRunId: string, enabled = true) {
     enabled: enabled && !!productionRunId,
     retry: false,
     staleTime: 30000,
+  });
+}
+
+/** Separate cache prevents archived linked details from populating edit reads. */
+export function useLinkedProductionRun(productionRunId: string, enabled = true) {
+  return useQuery({
+    queryKey: productionRunKeys.linkedDetail(productionRunId),
+    queryFn: async () => unwrap(await getLinkedProductionRunByIdFn(productionRunId)),
+    enabled: enabled && !!productionRunId,
+    retry: false,
   });
 }
 

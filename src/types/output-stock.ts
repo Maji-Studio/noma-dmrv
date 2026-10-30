@@ -222,3 +222,18 @@ export type IngredientStockPreview = Omit<OutputStockPreview,
   afterAllocations?: OutputStockBalanceView[];
 };
 export type AffectedStockPreview = OutputStockPreview | IngredientStockPreview;
+
+/** Read-only bin inventory; no correction or stock-posting inputs. */
+export type LinkedOutputBinInventoryInput = Pick<OutputSubBinsInput, 'storageLocationId' | 'facilityId' | 'occurredAt'>;
+export interface LinkedOutputBinInventory {
+  contents: OutputSubBins;
+  balance: {
+    binName: string;
+    beforeDryKg: number;
+    beforeEstimatedWetKg: number | null;
+    moistureEstimate: {
+      moisturePercent: number | null;
+      basis: MoistureBasis | null;
+    };
+  };
+}

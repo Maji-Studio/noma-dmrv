@@ -27,6 +27,7 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useUpdateCreditBatch: () => ({}),
   useDeleteCreditBatch: () => ({ mutateAsync: harness.remove }),
 }));
+vi.mock("@/hooks/use-linked-credit-batch-members", () => ({ useLinkedCreditBatchMembers: () => ({ data: undefined, isLoading: false, error: null, isFetching: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }), useCreditBatchTodos: () => ({ data: undefined, isError: false }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: harness.error, success: harness.success }) }));
 vi.mock("@/components/ui", () => ({ Button: () => null, EmptyState: () => null, ListPagination: () => null, PageHeader: () => null }));

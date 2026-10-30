@@ -9,7 +9,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import type { ApplicationEvidenceMethod, ApplicationStatus } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
-import { and, count, desc, eq, ilike, inArray, isNull, or, SQL, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, or, SQL, sql } from "drizzle-orm";
 import { getApplicationAllocationShares, type ApplicationAllocationShare } from "./delivery-allocation-provenance";
 import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
@@ -234,14 +234,34 @@ export async function getApplicationDeliveryOptions(
 ): Promise<ApplicationDeliveryOptionData[]> {
   requireOrgScope(ctx);
 
-  const site = applicationSiteDefaultsQuery(ctx).as("application_site_defaults");
-
   const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)];
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
   }
 
-  const whereClause = and(...conditions);
+  return readApplicationDeliveries(ctx, and(...conditions));
+}
+
+/** One application's recorded source, including facility-cascade archives. Never authorizes writes. */
+export async function getLinkedApplicationDelivery(ctx: OrgContext, applicationId: string): Promise<(ApplicationDeliveryOptionData & { facilityTimezone: string | null }) | null> {
+  requireOrgScope(ctx);
+  const linkedDelivery = db.select({ deliveryId: applications.deliveryId }).from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)));
+  const archivedFacility = db.select({ id: facilities.id }).from(facilities).where(and(
+    eq(facilities.organizationId, ctx.organizationId), isNotNull(facilities.archivedAt),
+    eq(deliveries.archivedAt, facilities.archivedAt),
+  ));
+  const results = await readApplicationDeliveries(ctx, and(
+    inArray(deliveries.id, linkedDelivery),
+    or(isNull(deliveries.archivedAt), inArray(deliveries.facilityId, archivedFacility)),
+  ));
+  return results[0] ?? null;
+}
+
+async function readApplicationDeliveries(ctx: OrgContext, rowFilter: SQL | undefined) {
+  requireOrgScope(ctx);
+  const site = applicationSiteDefaultsQuery(ctx).as("application_site_defaults");
+  const whereClause = and(eq(deliveries.organizationId, ctx.organizationId), rowFilter);
 
   const [rawDeliveries, appliedRows] = await Promise.all([
     db

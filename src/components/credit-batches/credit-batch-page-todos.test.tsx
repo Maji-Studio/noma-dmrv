@@ -28,6 +28,7 @@ vi.mock("nuqs", () => ({
   parseAsStringLiteral: () => ({ withDefault: () => ({ withOptions: () => ({}) }) }),
   useQueryState: () => ["overview", vi.fn()],
 }));
+vi.mock("@/hooks/use-linked-record-facility", () => ({ useLinkedRecordFacility: () => ({ ready: true, readOnly: null }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility-1", isResolving: false }) }));
 vi.mock("@/fn/certification", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/fn/certification")>()),

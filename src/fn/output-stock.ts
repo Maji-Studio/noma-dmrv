@@ -1,9 +1,9 @@
 'use server';
 
 import { getMatchingOutputBins, getOutputStockHistory, previewOutputStock } from '@/data-access/output-stock-operations';
-import { getOutputSubBins } from '@/data-access/output-sub-bins';
+import { getLinkedOutputBinInventory, getOutputSubBins } from '@/data-access/output-sub-bins';
 import { matchingOutputBinsSchema, outputStockFormPostSchema, outputStockPreviewSchema, outputSubBinsSchema } from '@/schemas/output-stock';
-import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from '@/types/output-stock';
+import type { LinkedOutputBinInventoryInput, OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from '@/types/output-stock';
 import { recordOutputStockMovement } from '@/lib/operations/output-stock';
 import { runOperationInProcess } from '@/lib/operations/runner';
 import { z } from 'zod';
@@ -38,4 +38,9 @@ export async function removeOutputLossFn(data: RemoveLossData) {
     fallbackMessage: 'Failed to remove Lost mass',
     log: { message: 'Failed to remove Lost mass', context: { op: 'output-stock:remove-loss' } },
   });
+}
+
+export async function getLinkedOutputBinInventoryFn(input: LinkedOutputBinInventoryInput) {
+  return withAction(ctx => getLinkedOutputBinInventory(ctx,
+    outputSubBinsSchema.pick({ storageLocationId: true, facilityId: true, occurredAt: true }).parse(input)));
 }

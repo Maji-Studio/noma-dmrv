@@ -10,6 +10,7 @@ import {
   missingRunsAdminSentence,
   missingRunsCountedSentence,
   missingRunsMemberSentence,
+  openItemText,
   sameDayEntryWarning,
 } from "@/lib/credit-batches/open-items";
 import { recordHref } from "@/lib/record-links";
@@ -61,6 +62,8 @@ interface CreditBatchMissingRunsNoticeProps {
   canManage: boolean;
   /** Opens Edit, where Add run lives; omitted when the viewer cannot edit. */
   onEdit?: () => void;
+  /** A read-only batch states the fact alone: no next step, no button. */
+  readOnly?: boolean;
 }
 
 /**
@@ -68,12 +71,12 @@ interface CreditBatchMissingRunsNoticeProps {
  * their emissions are not counted. Only a batch held by an unsent Removal
  * has them.
  */
-export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit }: CreditBatchMissingRunsNoticeProps) {
+export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEdit, readOnly = false }: CreditBatchMissingRunsNoticeProps) {
   if (runs.length === 0) return null;
   const one = runs.length === 1;
   const sameDay = sameDayEntryWarning(runs);
   // With the Edit button the action is already there; without it say who adds the run.
-  const nextStep = canManage
+  const nextStep = readOnly ? null : canManage
     ? (onEdit ? null : missingRunsAdminSentence(runs.length))
     : missingRunsMemberSentence(runs.length);
   return (
@@ -81,7 +84,7 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       tone="warning"
       data-testid="credit-batch-missing-runs"
       title={one ? "1 completed run is not in this credit batch yet" : `${runs.length} completed runs are not in this credit batch yet`}
-      action={onEdit ? (
+      action={onEdit && !readOnly ? (
         <Button type="button" variant="weak" size="small" className={CENTRED_HIT_AREA} onClick={onEdit}>
           Add in Edit
         </Button>
@@ -90,7 +93,7 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
       <MissingRunLinks runs={runs} facilityId={facilityId} />
       {`. ${missingRunsCountedSentence(runs.length)}`}
       {nextStep && ` ${nextStep}`}
-      {canManage && sameDay && ` ${sameDay}`}
+      {!readOnly && canManage && sameDay && ` ${sameDay}`}
     </Notice>
   );
 }
@@ -100,14 +103,15 @@ export interface LateRunRef extends MissingRunRef {
   title: string;
   titleAfterCode?: string;
   detail?: string;
+  instruction?: string;
 }
 
 export function lateRunsFromTodos(
-  check: readonly { id: string; productionRun?: MissingRunRef; title: string; titleAfterCode?: string; detail?: string }[] | undefined,
+  check: readonly { id: string; productionRun?: MissingRunRef; title: string; titleAfterCode?: string; detail?: string; instruction?: string }[] | undefined,
 ): LateRunRef[] {
   return (check ?? []).flatMap((item) =>
     item.id.startsWith(LATE_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun
-      ? [{ ...item.productionRun, title: item.title, titleAfterCode: item.titleAfterCode, detail: item.detail }]
+      ? [{ ...item.productionRun, title: item.title, titleAfterCode: item.titleAfterCode, detail: item.detail, instruction: item.instruction }]
       : [],
   );
 }
@@ -123,10 +127,13 @@ export function CreditBatchLateRunsNotice({
   runs,
   creditBatchId,
   facilityId,
+  readOnly = false,
 }: {
   runs: readonly LateRunRef[];
   creditBatchId: string;
   facilityId: string;
+  /** A read-only batch states the fact alone: no record instruction, no Open Emissions button. */
+  readOnly?: boolean;
 }) {
   return (
     <>
@@ -143,16 +150,16 @@ export function CreditBatchLateRunsNotice({
                 {`${rest}.`}
               </>
             )}
-            action={
+            action={readOnly ? undefined : (
               <Link
                 href={recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" })}
                 className={cn(buttonVariants({ variant: "weak", size: "small" }), CENTRED_HIT_AREA)}
               >
                 Open Emissions
               </Link>
-            }
+            )}
           >
-            {run.detail}
+            {readOnly ? run.detail : openItemText(run)}
           </Notice>
         );
       })}

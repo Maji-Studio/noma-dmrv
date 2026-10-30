@@ -63,6 +63,8 @@ const NAME_MARK = "relative ml-2 inline-flex shrink-0 align-[-5px]";
 const META_CELL = "max-md:flex max-md:min-h-28 max-md:items-center";
 
 export interface LineActions {
+  /** A read-only batch: entries and comments show, nothing offers to add, edit or delete. */
+  readOnly?: boolean;
   toggle: (line: EmissionLine) => void;
   form: (line: EmissionLine, mode: EntryFormMode) => void;
   /** Expands the row and opens its comment editor. */
@@ -209,7 +211,7 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
           </div>
           {/* Phones: never narrower than its widest source, so it wraps instead of running under the Total. */}
           <div className={cn(META_CELL, "max-md:flex-1 md:col-start-3 md:row-start-1 md:min-w-0")}>
-            {line.state === "needsSetup" ? (
+            {line.state === "needsSetup" ? (actions.readOnly ? null : (
               <Link
                 href={removalTemplatesSettingsHref(scope.facilityId)}
                 onClick={(event) => event.stopPropagation()}
@@ -217,12 +219,12 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
               >
                 {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
               </Link>
-            ) : (
+            )) : (
               <SourceChips
                 line={line}
                 ids={scope}
                 onEntries={() => !expanded && actions.toggle(line)}
-                emptyAction={!addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
+                emptyAction={!actions.readOnly && !addEntryRefusal(line) ? <AddEntryLink line={line} onAdd={() => actions.form(line, { kind: "add" })} /> : undefined}
               />
             )}
           </div>
@@ -249,6 +251,7 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
           line={line}
           scope={scope}
           editingComment={editingComment}
+          readOnly={actions.readOnly}
           onEditingComment={(editing) => actions.editingComment(line, editing)}
           onForm={(mode) => actions.form(line, mode)}
           onDeleteEntry={actions.deleteEntry}
@@ -261,18 +264,18 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
 /** The row menu: Add (or Edit) manual entry, the records page, Open Removal templates, the comment. */
 function RowMenu({ line, scope, actions }: { line: EmissionLine; scope: EmissionBatchScope; actions: LineActions }) {
   const records = lineRecords(line);
-  const entry = entryMenuItem(line, actions.form);
+  const entry = actions.readOnly ? null : entryMenuItem(line, actions.form);
   const upstream = records ? (
     <DropdownMenu.Item key="open" render={<Link href={recordsHref(records, scope)} />}>
       {openSourceLabel(records.source)}
     </DropdownMenu.Item>
   ) : null;
-  const setup = line.state === "needsSetup" ? (
+  const setup = line.state === "needsSetup" && !actions.readOnly ? (
     <DropdownMenu.Item key="setup" render={<Link href={removalTemplatesSettingsHref(scope.facilityId)} />}>
       {OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </DropdownMenu.Item>
   ) : null;
-  const comment = line.state !== "needsSetup" && !line.removedFromTemplate ? (
+  const comment = !actions.readOnly && line.state !== "needsSetup" && !line.removedFromTemplate ? (
     <DropdownMenu.Item key="comment" onClick={() => actions.comment(line)}>
       {line.comment ? "Edit comment" : "Add comment"}
     </DropdownMenu.Item>

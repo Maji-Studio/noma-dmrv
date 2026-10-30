@@ -18,6 +18,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
   LATE_PRODUCTION_RUN_ITEM_PREFIX,
+  openItemText,
   type CreditBatchOpenItem,
 } from "@/lib/credit-batches/open-items";
 import { removalBarGroups, showOverviewRemovals } from "@/lib/credit-batches/removal-bar";
@@ -77,7 +78,7 @@ function RunItemRow({ item, run }: { item: CreditBatchOpenItem; run: { id: strin
               </>
             )}
           </span>
-          {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+          {openItemText(item) && <span className={cn("body-small", MUTED_TEXT)}>{openItemText(item)}</span>}
         </span>
         {item.target && (
           <Button type="button" variant="weak" size="small" className={cn("shrink-0", CENTRED_HIT_AREA)} onClick={() => openItem(item)}>
@@ -96,7 +97,7 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
     <>
       <span className="flex min-w-0 flex-col gap-2">
         <span className="body-medium font-medium">{item.title}</span>
-        {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+        {openItemText(item) && <span className={cn("body-small", MUTED_TEXT)}>{openItemText(item)}</span>}
       </span>
       <ArrowRightIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-primary)]" aria-hidden />
     </>
@@ -107,7 +108,7 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
     <div className={cn("flex min-h-44 items-center py-12", item.why && "pr-12")}>
       <span className="flex min-w-0 flex-col gap-2">
         <span className="body-medium font-medium">{item.title}</span>
-        {item.detail && <span className={cn("body-small", MUTED_TEXT)}>{item.detail}</span>}
+        {openItemText(item) && <span className={cn("body-small", MUTED_TEXT)}>{openItemText(item)}</span>}
       </span>
     </div>
   ) : "href" in item.target ? (
@@ -193,7 +194,7 @@ function TodosUnavailable() {
 }
 
 function RemovalsPanel() {
-  const { batch, pageModel, go, canManage } = useCreditBatchPage();
+  const { batch, pageModel, go, canManage, facilityTimeZone, readOnly } = useCreditBatchPage();
   if (!pageModel) return null;
   const groups = removalBarGroups(pageModel);
   return (
@@ -215,9 +216,9 @@ function RemovalsPanel() {
       }
     >
       {pageModel.removals.length === 0 && (
-        <p className={cn("body-small", MUTED_TEXT)}>Nothing blocks this credit batch. Start a Removal to submit its applied biochar.</p>
+        <p className={cn("body-small", MUTED_TEXT)}>{readOnly ? "Nothing blocks this credit batch." : "Nothing blocks this credit batch. Start a Removal to submit its applied biochar."}</p>
       )}
-      <CompactRemovalBar groups={groups} facilityId={batch.facilityId} />
+      <CompactRemovalBar groups={groups} facilityId={batch.facilityId} timeZone={facilityTimeZone} />
       <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} canManage={canManage} />
     </PagePanel>
   );
@@ -260,7 +261,7 @@ function LockMark({ text }: { text: string }) {
 
 /** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
 function DetailsPanel() {
-  const { batch, lock, canManage, focus, linesToDecide } = useCreditBatchPage();
+  const { batch, lock, canManage, focus, linesToDecide, readOnly } = useCreditBatchPage();
   const sent = lock?.level === "sent";
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   // When everything is locked the panel says so once and the rows stay quiet.
@@ -278,7 +279,7 @@ function DetailsPanel() {
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
         </dl>
         <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} />
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} />
         </div>
       </PagePanel>
     </FocusRow>

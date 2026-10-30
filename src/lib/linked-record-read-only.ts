@@ -33,3 +33,17 @@ export function linkedRecordReadOnly(
     retry: { run: readOnly.retry, running: readOnly.retrying },
   };
 }
+
+/**
+ * The facilities a linked sheet resolves times against: the selectable ones
+ * plus the archived facility the record belongs to, which the context leaves
+ * out. Use the record's own facility, never the working one.
+ */
+export function facilitiesWithLinked<T extends { id: string; timezone: string }>(
+  facilities: readonly T[],
+  linked: LinkedRecordFacility,
+): readonly { id: string; timezone: string }[] {
+  const readOnly = linked.readOnly;
+  if (readOnly?.reason !== "archived" || facilities.some((facility) => facility.id === readOnly.facilityId)) return facilities;
+  return [...facilities, { id: readOnly.facilityId, timezone: readOnly.timezone }];
+}
