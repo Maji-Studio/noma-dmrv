@@ -304,9 +304,13 @@ export function ProductionRunList() {
   const focusedNormalRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
   // The normal read hides runs archived with their facility; the separate
   // linked read opens them read only. It never authorizes a write.
-  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !focusedNormalRun.data;
+  // A normal read that errored cannot supply the record even when it still
+  // holds cached data, so the linked read is tried then too.
+  const normalRunUsable = !!focusedNormalRun.data && !focusedNormalRun.isError;
+  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !normalRunUsable;
   const focusedLinkedRun = useLinkedProductionRun(focusedRunId ?? "", needsLinkedRun);
-  const focusedRun = focusedNormalRun.data || !needsLinkedRun ? focusedNormalRun : focusedLinkedRun;
+  // Cached data from a failed normal read still beats a linked read that has none.
+  const focusedRun = !needsLinkedRun || normalRunUsable || (!focusedLinkedRun.data && focusedNormalRun.data) ? focusedNormalRun : focusedLinkedRun;
   const linkedRecord = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(

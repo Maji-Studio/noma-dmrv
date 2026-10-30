@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * #1499: a read-only sheet (a link into an archived facility) passes its
  * state into the section builders, so their write actions go away: the
@@ -5,6 +6,7 @@
  * sync on the application sheet.
  */
 import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { ApplicationListItem } from "@/data-access/applications";
@@ -55,5 +57,21 @@ describe("read-only sheet sections", () => {
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, lock: LOCK, durabilityOption: "1000_year", readOnly });
     expect(findElements(sections, ApplicationSupportingEvidencePanel).map((el) => el.props.readOnly)).toEqual([readOnly]);
     expect(findElements(sections, ApplicationStorageLocationSync).map((el) => el.props.readOnly)).toEqual([readOnly]);
+  });
+
+  it("says the archived delivery is loading, not missing", () => {
+    const deliveryRead = { isPending: true, error: null, isFetching: true, refetch: vi.fn() };
+    const [details] = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    expect(details.fields.find((field) => field.label === "Delivery source")?.value).toBe("Loading the delivery.");
+  });
+
+  it("shows a failed archived delivery read with Try again", () => {
+    const refetch = vi.fn();
+    const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
+    const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    render(<>{sections[0].content}</>);
+    expect(screen.getByText("The delivery could not be loaded.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

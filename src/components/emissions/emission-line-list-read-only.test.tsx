@@ -81,4 +81,26 @@ describe("emission lines on a read-only batch", () => {
     expect(screen.queryAllByRole("link", { name: /Removal templates|Answer in Settings|Decide/i })).toEqual([]);
     expect(screen.getByRole("region", { name: "Needs setup line details" }).textContent).not.toBe("");
   });
+
+  it.each([[true, false], [false, true]])("late entry waiting for a Removal: readOnly=%s hides the repair link (shown=%s)", (readOnly, linked) => {
+    const late = makeLine({ state: "filled", entries: [makeEntry({ carry: { receiver: null, waitingReason: "noDraft" } })] });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EmissionLineList
+          lines={[late]}
+          grouped
+          scope={SCOPE}
+          actions={{ readOnly, toggle: vi.fn(), form: vi.fn(), comment: vi.fn(), editingComment: vi.fn(), deleteEntry: vi.fn() }}
+          expanded={new Set(["line-1"])}
+          editingCommentId={null}
+          undo={null}
+          filterLabel={null}
+          onClearFilter={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(/Waiting for a Removal\./)).toBeTruthy();
+    expect(!!screen.queryByRole("link", { name: "New Removal" })).toBe(linked);
+    cleanup();
+  });
 });

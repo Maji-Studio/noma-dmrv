@@ -100,4 +100,11 @@ describe("ProductionRunList link into an archived facility", () => {
     render(<ProductionRunList />);
     expect(harness.linkedEnabled.every((enabled) => !enabled)).toBe(true);
   });
+
+  it("tries the linked read when the normal read errored, even with cached data", () => {
+    harness.normal = { ...harness.normal, data: RUN, isError: true };
+    render(<ProductionRunList />);
+    expect(harness.linkedEnabled.at(-1)).toBe(true);
+    expect(screen.getByRole("dialog", { name: "RUN-1" }).textContent).toBe("Mafinga is archived, so this production run is read-only.");
+  });
 });

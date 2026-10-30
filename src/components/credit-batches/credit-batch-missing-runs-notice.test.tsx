@@ -120,4 +120,9 @@ describe("CreditBatchLateRunsNotice", () => {
     const { container } = render(<CreditBatchLateRunsNotice runs={[]} creditBatchId="batch-1" facilityId="facility-1" />);
     expect(container.textContent).toBe("");
   });
+
+  it("drops 'yet' from the title when read only", () => {
+    render(<CreditBatchMissingRunsNotice runs={[RUNS[0]]} facilityId="facility-1" canManage={false} readOnly />);
+    expect(screen.getByText("1 completed run is not in this credit batch")).toBeTruthy();
+  });
 });

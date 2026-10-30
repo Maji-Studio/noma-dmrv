@@ -62,4 +62,11 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
+
+  it("offers no Set template link on a read-only batch, only the fact", () => {
+    query.error = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
+    render(<CreditBatchEmissionsPanel creditBatchId="cb-1" facilityId="f-1" readOnly />);
+    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
+    expect(screen.getByText(/Removal template/)).toBeTruthy();
+  });
 });

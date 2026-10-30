@@ -65,8 +65,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   /** The record's own zone when its facility is archived and outside the facility list. */
   timeZone?: string;
 }) {
-  const clock = useFacilityClock(facilityId);
-  const zone = timeZone ?? clock.timeZone;
+  const { timeZone: zone } = useFacilityClock(facilityId, { timeZone });
   const [open, setOpen] = useState(false);
   const historyTitleId = useId();
   const lostMassTitleId = useId();

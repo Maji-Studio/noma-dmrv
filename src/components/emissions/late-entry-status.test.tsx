@@ -66,4 +66,16 @@ describe("LateEntryStatus", () => {
     expect(container.textContent).toContain(CARRY_WAITING_REASONS.noDraft);
     expect(screen.getByRole("link", { name: "New Removal" }).className).toContain("min-h-44");
   });
+
+  it.each(["noDraft", "incompatibleTemplate", "templateUnknown"] as const)("shows the %s wait as a fact with no action link when read only", (reason) => {
+    const { container } = render(
+      <TemplatePermissionProvider canManage>
+        <LateEntryStatus entry={{ recordedAfter: AFTER, carry: { receiver: null, waitingReason: reason } }} facilityId="f1" readOnly />
+      </TemplatePermissionProvider>,
+    );
+    expect(container.textContent).toContain("Waiting for a Removal.");
+    expect(container.textContent).not.toContain("Open the Removal to load it.");
+    expect(container.textContent).not.toContain("Admin");
+    expect(screen.queryByRole("link", { name: /Removal(s| templates)?$/ })).toBeNull();
+  });
 });

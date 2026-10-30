@@ -21,6 +21,8 @@ export interface ApplicationSheetContext {
   delivery: Pick<ApplicationDeliveryOption, "productBinName" | "formulationName" | "deliveryDate" | "deliveryDay"> | undefined;
   lock: Pick<UseQueryResult<unknown>, "data" | "isPending" | "error" | "isFetching" | "refetch">;
   durabilityOption: string;
+  /** The linked delivery read of an archived facility's application, so the sheet can say loading or failed instead of "not recorded". */
+  deliveryRead?: Pick<UseQueryResult<unknown>, "isPending" | "error" | "isFetching" | "refetch">;
   /** Read only (a link into an archived facility): no upload, delete or sync. */
   readOnly?: boolean;
 }
@@ -48,7 +50,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : null,
+            : context.deliveryRead?.isPending ? "Loading the delivery." : null,
         },
         {
           label: "Biochar product applied",
@@ -65,9 +67,17 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits
-        ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>
-        : undefined,
+      content: application.heldOutOfCredits || context.deliveryRead?.error ? (
+        <>
+          {context.deliveryRead?.error && (
+            <div className="flex flex-col gap-8">
+              <ServerError message="The delivery could not be loaded." />
+              <Button type="button" variant="weak" disabled={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>Try again</Button>
+            </div>
+          )}
+          {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
+        </>
+      ) : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
       // The bar and key line are always visible; the ledger and source runs

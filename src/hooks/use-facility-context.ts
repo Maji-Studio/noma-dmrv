@@ -6,7 +6,7 @@
 
 import { createContext, useContext } from "react";
 import type { Facility } from "@/db/schema";
-import { facilityTimeHelperText, resolveFacilityTimezone } from "@/lib/date-utils";
+import { facilityTimeCue, facilityTimeHelperText, resolveFacilityTimezone } from "@/lib/date-utils";
 
 export const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
 
@@ -52,8 +52,14 @@ export function useFacilityContext(): FacilityContextValue {
 /**
  * The clock a facility's stock events are entered and shown on: its IANA
  * zone and the cue that names it. Every viewer sees the same wall clock.
+ * `timeZone` is the record's own zone for a facility that is archived and so
+ * outside the facility list; it wins over the list lookup.
  */
-export function useFacilityClock(facilityId: string | null | undefined): { timeZone: string; hint: string } {
+export function useFacilityClock(
+  facilityId: string | null | undefined,
+  override?: { timeZone?: string | null },
+): { timeZone: string; hint: string } {
   const { facilities } = useFacilityContext();
+  if (override?.timeZone) return { timeZone: override.timeZone, hint: facilityTimeCue(override.timeZone) };
   return { timeZone: resolveFacilityTimezone(facilities, facilityId), hint: facilityTimeHelperText(facilities, facilityId) };
 }
