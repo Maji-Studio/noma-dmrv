@@ -41,7 +41,7 @@ local code, isolated sandbox probes and full submission verification are distinc
 
 - Protocol pin observed 2026-07-24; original requirements cross-check 2026-08-04.
   Later source-specific checks keep their dates in the owning document.
-- Code cleanup checked against staging `5eb7aa111` on 2026-10-30.
+- Code checked 2026-10-30; exact baselines are in the verification record.
 - Direct sandbox reads reproduced the filter/readback behavior on 2026-10-30;
   public registry pages supplied a scoped source cross-check. The
   [verification record](../archive/2026-10-30-isometric-verification.md) distinguishes

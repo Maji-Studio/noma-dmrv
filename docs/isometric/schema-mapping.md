@@ -1,7 +1,7 @@
 # Isometric Requirement-to-Implementation Mapping
 
 Read this for implementation coverage and remaining gaps. Code checked on
-2026-10-30 against staging `5eb7aa111`; pinned-source interpretations retain
+2026-10-30; pinned-source interpretations retain
 historical provenance in [versions.json](./versions.json) and the
 [requirements shortlist](./requirements-shortlist.md). Direct read probes and public-source checks are scoped in the
 [verification record](../archive/2026-10-30-isometric-verification.md).
