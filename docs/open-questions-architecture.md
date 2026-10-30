@@ -324,6 +324,16 @@ Production-run auto-attachment retains scope-before-batch-artifacts, opposite
 membership's artifacts-before-scope, as well as run-before-artifacts, opposite
 membership refresh. Both sides retry transaction aborts.
 
+- `src/data-access/feedstock-transport-ownership-freeze.ts:prepareFeedstockTransportOwnershipFreeze`
+  takes sorted `feedstock-transport-owner` advisory locks before its snapshot.
+  Run updates hold those locks before auto-attachment requests batch artifacts
+  and the batch row; batch updates hold artifacts and the batch row before
+  requesting the same feedstock locks. A concurrent run edit and batch edit
+  sharing a feedstock can deadlock. The operations runner retries the deadlock;
+  direct run, timezone, archive and restore wrappers do not. Coordinate these
+  orders before removing reliance on retries. The separate claim-time snapshot
+  limit remains in [Counted transport IDs](./open-questions.md#counted-transport-ids-when-an-ownership-write-precedes-a-claim-1490).
+
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
   lock bins before the run row and certification lineage. Feedstock edits in

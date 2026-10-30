@@ -11,10 +11,11 @@ import { replaceProductionRunFeedstockDraws } from "@/data-access/production-run
 import { attachProductionRunToMatchingCreditBatch } from "@/data-access/credit-batch-membership";
 import { createCreditBatchInTransaction, deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
+import { updateFacility } from "@/data-access/facility-mutations";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-ownership";
 import { prepareFeedstockTransportOwnershipFreeze } from "@/data-access/feedstock-transport-ownership-freeze";
-import { reallocateRunsForBins } from "@/data-access/feedstock-run-allocations";
+import { reallocateRunsForBins, reallocateRunsForFacility } from "@/data-access/feedstock-run-allocations";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { lockBinStocks } from "@/data-access/lock-bin-stocks";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
@@ -26,6 +27,13 @@ const EARLY = new Date("2026-06-12T08:00:00Z");
 const EARLY_END = new Date("2026-06-12T12:00:00Z");
 const LATE = new Date("2026-06-14T08:00:00Z");
 const LATE_END = new Date("2026-06-14T12:00:00Z");
+const PRE_WINDOW = new Date("2026-06-11T08:00:00Z");
+const PRE_WINDOW_END = new Date("2026-06-11T12:00:00Z");
+const EXTRA_RUN = new Date("2026-06-12T13:00:00Z");
+const EXTRA_RUN_END = new Date("2026-06-12T14:00:00Z");
+const MOVED_DELIVERY = new Date("2026-06-12T00:00:00Z");
+// Early enough in UTC that a Los Angeles cutoff falls on the previous day.
+const AFTER_UTC_MIDNIGHT = new Date("2026-06-12T00:30:00Z");
 const RACE_LATE = new Date("2026-06-15T08:00:00Z");
 const ARCHIVE_STAMP = new Date("2026-06-18T00:00:00Z");
 const ctx = makeTestOrgContext();
@@ -165,6 +173,19 @@ it.each(MODES)("draw addition: %s", async mode => {
       return replaceProductionRunFeedstockDraws(ctx, tx, { productionRunId: a.productionRunId, facilityId: a.facilityId,
         draws: [{ storageLocationId: a.feedstockBinId, wetMassKg: 500 }] });
     }), a, mode === "unsent-moves" ? a.productionRunId : b.productionRunId);
+  });
+});
+
+it("draw addition freezes an archived intake the allocator selects", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, a.productionRunId));
+    await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, a.productionRunId));
+    await db.update(feedstocks).set({ archivedAt: ARCHIVE_STAMP }).where(eq(feedstocks.id, a.feedstockId));
+    await expectFreeze("sent-moves", db.transaction(async tx => {
+      await lockBinStocks(ctx, tx, [a.feedstockBinId]);
+      return replaceProductionRunFeedstockDraws(ctx, tx, { productionRunId: a.productionRunId, facilityId: a.facilityId,
+        draws: [{ storageLocationId: a.feedstockBinId, wetMassKg: 500 }] });
+    }), a, b.productionRunId);
   });
 });
 
@@ -366,7 +387,7 @@ it.each(ELIGIBILITY_WRITES.flatMap(path => MODES.map(mode => ({ path, mode }))))
           .where(eq(productionRuns.id, a.productionRunId)).then(() => undefined);
       await expectFreeze(path === "run-status" ? mode : "sent-stays", db.transaction(async tx => {
         const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId], {
-          subject: path === "batch-archive" ? "credit batch" : "production run", mutation: path === "run-status" ? "update" : "archive",
+          subject: path === "batch-archive" ? "credit batch" : "production run", mutation: "update",
         });
         return freeze(() => write(tx));
       }), a, path === "run-status" && mode === "sent-moves" ? a.productionRunId : b.productionRunId);
@@ -572,5 +593,146 @@ it("serializes a run-date edit with membership creation for a shared Sent feedst
       await barrier.rollback();
       await membership?.catch(() => undefined);
     }
+  });
+});
+
+// The extra run has no output lineage and belongs to A's unsent batch.
+async function withExtraRun(a: LineageFixture, test: (id: string) => Promise<void>) {
+  const [run] = await db.select().from(productionRuns).where(eq(productionRuns.id, a.productionRunId));
+  const id = crypto.randomUUID();
+  await db.insert(productionRuns).values({ ...run, id, code: `E2E-FREEZE-${id}`, stockPostingSequence: undefined,
+    startTime: EXTRA_RUN, endTime: EXTRA_RUN_END });
+  await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
+    creditBatchId: a.batchId, productionRunId: id });
+  try {
+    await test(id);
+  } finally {
+    await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, id));
+    await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, id));
+    await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, id));
+    await db.delete(productionRuns).where(eq(productionRuns.id, id));
+  }
+}
+
+it("allows a same-batch owner handoff without acquiring the Sent lineage artifact", async () => {
+  await withPair("sent-moves", async (a, b) => withExtraRun(a, async id => {
+    await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+      productionRunId: id, feedstockId: a.feedstockId, wetMassUsedKg: 500 });
+    const barrier = await openOperationBarrier(db.$client);
+    try {
+      await acquireCertificationArtifactLocksSorted(barrier.tx, [{
+        provider: "isometric", localEntityType: "removal", localEntityId: b.removalId,
+      }]);
+      await updateProductionRun(ctx, a.productionRunId, {
+        expectedVersion: await runVersion(a), startTime: LATE, endTime: LATE_END,
+      });
+      expect(await owner(a)).toBe(id);
+    } finally {
+      await barrier.rollback();
+    }
+  }));
+});
+
+it.each([false, true])("intake rebuild compares all runs together, batch changes=%s", async changesBatch => {
+  await withPair("sent-moves", async (a, b) => withExtraRun(a, async id => {
+    const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
+    const replacementId = crypto.randomUUID();
+    await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
+    // Only the unsent runs are rebuilt. B retains its historical shared lineage.
+    await db.delete(productionRunFeedstockDraws).where(and(
+      eq(productionRunFeedstockDraws.productionRunId, b.productionRunId),
+      eq(productionRunFeedstockDraws.storageLocationId, a.feedstockBinId),
+    ));
+    await db.update(productionRuns).set({ startTime: PRE_WINDOW,
+      endTime: PRE_WINDOW_END }).where(eq(productionRuns.id, a.productionRunId));
+    await db.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
+      productionRunId: id, storageLocationId: a.feedstockBinId, wetMassKg: 500 });
+    await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+      productionRunId: id, feedstockId: replacementId, wetMassUsedKg: 500 });
+    if (changesBatch) await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, id));
+    try {
+      // Force the losing run to be rewritten first, independent of fixture UUID order.
+      const [firstId, secondId] = [a.productionRunId, id].sort();
+      if (firstId !== a.productionRunId) {
+        // Free A's slot on the shared reactor before the extra run takes it.
+        await db.update(productionRuns).set({ startTime: EARLY, endTime: EARLY_END }).where(eq(productionRuns.id, secondId));
+        await db.update(productionRuns).set({ startTime: PRE_WINDOW,
+          endTime: PRE_WINDOW_END }).where(eq(productionRuns.id, firstId));
+        await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, firstId));
+        await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, secondId));
+        await db.insert(productionRunFeedstocks).values([
+          { organizationId: TEST_ORG_ID, productionRunId: firstId, feedstockId: a.feedstockId, wetMassUsedKg: 500 },
+          { organizationId: TEST_ORG_ID, productionRunId: secondId, feedstockId: replacementId, wetMassUsedKg: 1_000 },
+        ]);
+        if (changesBatch) {
+          await removeMembership(a);
+          await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID, creditBatchId: a.batchId, productionRunId: firstId });
+        }
+      }
+      expect(await owner(a)).toBe(firstId);
+      const write = db.transaction(async tx => {
+        await tx.update(feedstocks).set({ deliveryDate: MOVED_DELIVERY }).where(eq(feedstocks.id, a.feedstockId));
+        await reallocateRunsForBins(ctx, tx, [a.feedstockBinId], { change: { mutation: "update", subject: "feedstock" } });
+      });
+      if (changesBatch) {
+        await expect(write).rejects.toMatchObject({ code: "certification_locked" });
+        expect(await owner(a)).toBe(firstId);
+      } else {
+        await write;
+        expect(await owner(a)).toBe(secondId);
+      }
+    } finally {
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, replacementId));
+      await db.delete(feedstocks).where(eq(feedstocks.id, replacementId));
+    }
+  }));
+});
+
+it.each(["sent-moves", "unsent-moves"] as const)("timezone rebuild moves ownership across batches: %s", async mode => {
+  await withPair(mode, async (a, b) => {
+    const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
+    const replacementId = crypto.randomUUID();
+    await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
+    await db.update(feedstocks).set({ deliveryDate: MOVED_DELIVERY }).where(eq(feedstocks.id, a.feedstockId));
+    await db.update(productionRuns).set({ startTime: AFTER_UTC_MIDNIGHT }).where(eq(productionRuns.id, a.productionRunId));
+    // B's historical lineage stays outside the bins rebuilt by this facility.
+    await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, b.productionRunId));
+    try {
+      const version = await facilityVersion(a);
+      // The public timezone guard refuses batched runs before the rebuild.
+      await expect(updateFacility(ctx, a.facilityId, { expectedVersion: version, timezone: "America/Los_Angeles" }))
+        .rejects.toMatchObject({ code: "conflict" });
+      const write = db.transaction(async tx => {
+        await tx.select().from(facilities).where(eq(facilities.id, a.facilityId)).for("update");
+        await tx.update(facilities).set({ timezone: "America/Los_Angeles" }).where(eq(facilities.id, a.facilityId));
+        await reallocateRunsForFacility(ctx, tx, a.facilityId, { mutation: "update", subject: "facility" });
+      });
+      await expectFreeze(mode, write, a, mode === "sent-moves" ? a.productionRunId : b.productionRunId);
+      const [facility] = await db.select().from(facilities).where(eq(facilities.id, a.facilityId));
+      expect(facility.timezone).toBe(mode === "sent-moves" ? "UTC" : "America/Los_Angeles");
+    } finally {
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, replacementId));
+      await db.delete(feedstocks).where(eq(feedstocks.id, replacementId));
+    }
+  });
+});
+
+it("refuses a batch move that keeps the owning run", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await expect(db.transaction(async tx => {
+      const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx, [a.feedstockId], {
+        mutation: "update", subject: "credit batch",
+      });
+      await freeze(async () => {
+        await tx.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, a.productionRunId));
+        await tx.insert(creditBatchProductionRuns).values({
+          organizationId: TEST_ORG_ID, creditBatchId: b.batchId, productionRunId: a.productionRunId,
+        });
+      });
+    })).rejects.toMatchObject({ code: "certification_locked" });
+    expect(await owner(a)).toBe(a.productionRunId);
+    const memberships = await db.select().from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.productionRunId, a.productionRunId));
+    expect(memberships.map(row => row.creditBatchId)).toEqual([a.batchId]);
   });
 });
