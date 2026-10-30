@@ -86,7 +86,7 @@ Dated API observations and current readback rules belong in
 
 ### Deprecated GHG Entry aliases (`isometric/ghg-entry-migration`, opened 2026-06-10, `needs-registry-check`)
 
-- **Anchor:** `src/lib/isometric/generated/certify.d.ts`.
+- **Anchor:** `src/lib/isometric/generated/certify.d.ts:components`.
 - **Gap:** Noma uses `ghg_entry` routes, but generated deprecated `Removal*`, `GhgStatement.removal_ids` and `Component.removal_template_component_id` fields remain. The original question recorded a September 2026 alias sunset; do not infer current availability from that date.
 - **To resolve:** Check the current spec, regenerate types, and remove obsolete test fields and the alias note in [openapi-index.md](./isometric/openapi-index.md) when the spec removes them. No app route migration is expected.
 
@@ -122,7 +122,7 @@ Dated API observations and current readback rules belong in
 
 ### Mixed-mode transport (`isometric/transport-mixed-mode`, opened 2026-05-13, deferred)
 
-- **Anchor:** `src/lib/isometric/utils/aggregation.ts`.
+- **Anchor:** `src/lib/isometric/utils/aggregation.ts:aggregateTransportMassDistance`.
 - **Gap:** One `mass_distance` component has one factor. Combining road with rail/ship fails the mixed-mode check; distinct modes cannot share one road scalar.
 - **To resolve:** Revisit per-mode component instances when the transport UI permits a non-road mode.
 
@@ -134,13 +134,13 @@ Dated API observations and current readback rules belong in
 
 ### Structured monitoring submissions (`isometric/phase-5-slice-c`, opened 2026-05-29, deferred, `needs-registry-check`)
 
-- **Anchor:** `src/lib/isometric/generated/certify.d.ts` monitoring-submission routes.
+- **Anchor:** `src/lib/isometric/generated/certify.d.ts:paths` monitoring-submission routes.
 - **Gap:** The recorded route is `POST /projects/{project_id}/monitoring_requirements/{id}/submissions`. The approved MVP requires no continuous reactor gas telemetry.
 - **To resolve:** Confirm the registry monitoring-evidence contract if operator demand requires a submission path.
 
 ### Facility list endpoint (`isometric/facilities-list-endpoint`, opened 2026-06-10, `needs-registry-check`)
 
-- **Anchor:** `src/components/certification/facility-certifier-dialog.tsx`.
+- **Anchor:** `src/components/certification/facility-certifier-dialog.tsx:FacilityCertifierDialog`.
 - **Gap:** The recorded API check found no facility list/create route; the committed spec still has no facility list. `externalFacilityId` remains an unvalidated pasted ID from Certify. The missing read capability was filed with Isometric; UI-only creation is intentional.
 - **To resolve:** When a real project-scoped facility list exists, replace the free-text field using the existing project-template picker pattern.
 
@@ -158,31 +158,31 @@ Dated API observations and current readback rules belong in
 
 ### Changed-hash orphan cleanup (`isometric/phase-5-changed-hash-orphans`, deferred)
 
-- **Anchor:** `src/fn/certification/submit-removal.ts` and `src/fn/certification/registry-create.ts:performRegistryCreate`.
+- **Anchor:** `src/fn/certification/submit-removal.ts:submitRemoval` and `src/fn/certification/registry-create.ts:performRegistryCreate`.
 - **Gap:** Same-hash retries reconcile saved references; changed inputs intentionally create fresh version references. Resources from an older failed hash can remain unused.
 - **To resolve:** Reconcile/report these only if real partial-failure traffic warrants per-Datapoint bookkeeping.
 
 ### Stream large Source files (`isometric/sources-stream-large-files`, deferred)
 
-- **Anchor:** `src/fn/certification/sources-mirror-core.ts` and `src/fn/certification/sources-transfer.ts:downloadDocumentBlob`.
+- **Anchor:** `src/fn/certification/sources-mirror-core.ts:mirrorDerivedCandidate` and `src/fn/certification/sources-transfer.ts:downloadDocumentBlob`.
 - **Gap:** The preflight refuses documents over `SOURCES_MAX_BYTES`, currently 50 MB. Download reads the whole managed object into bytes, then a Blob. The earlier HTTP loopback is gone; whole-file buffering remains.
 - **To resolve:** Add provider-to-registry streaming with correct content length only when a real LCA PDF/video exceeds the cap.
 
 ### Mirror lock spans remote transfers (`isometric/sources-lock-hold-time`, deferred)
 
-- **Anchor:** `src/fn/certification/sources-mirror-core.ts` mirror transaction.
+- **Anchor:** `src/fn/certification/sources-mirror-core.ts:mirrorDerivedCandidate` mirror transaction.
 - **Gap:** The per-document advisory lock spans lookup, create/upload-URL acquisition, storage read and PUT. Submit and visibility changes share the lock; slow transfers serialize other work on that document.
 - **To resolve:** Before multi-operator scale, consider locked reservation, unlocked upload and locked completion with persisted upload status. Preserve orphan and visibility fencing.
 
 ### Per-Datapoint submission journal (`isometric/phase-4-datapoint-ledger`, deferred)
 
-- **Anchor:** `src/fn/certification/submit-removal.ts` and `src/db/schema/certification.ts:certificationSubmissions`.
+- **Anchor:** `src/fn/certification/submit-removal.ts:submitRemoval` and `src/db/schema/certification.ts:certificationSubmissions`.
 - **Gap:** Partial failures can leave successful remote Datapoints without their GHG Entry. The journal does not track each Datapoint independently.
 - **To resolve:** Add per-Datapoint resume bookkeeping only if partial failures justify it. Coordinate with changed-hash orphan cleanup.
 
 ### PATCH or supersede a changed GHG Entry (`isometric/phase-4-ghg-entry-patch`, deferred, `needs-registry-check`)
 
-- **Anchor:** `src/fn/certification/submit-removal.ts`.
+- **Anchor:** `src/fn/certification/submit-removal.ts:submitRemoval`.
 - **Gap:** Changed payloads create a new versioned remote GHG Entry. Which fields the registry permits to change in place, and whether verifier review prefers that, remain unsettled.
 - **To resolve:** Confirm mutable fields and lifecycle restrictions before considering PATCH. Preserve the submission journal.
 
@@ -200,7 +200,7 @@ Dated API observations and current readback rules belong in
 
 ### Mirror preflight helper (`code/mirror-preflight-helper`, opened 2026-05-26, deferred)
 
-- **Anchor:** `src/fn/certification/sources-mirror-core.ts` and `src/fn/certification/sources-transfer.ts:buildSourceRequestBody`.
+- **Anchor:** `src/fn/certification/sources-mirror-core.ts:mirrorDerivedCandidate` and `src/fn/certification/sources-transfer.ts:buildSourceRequestBody`.
 - **Gap:** Inline storage-key, size, MIME and storage-head guards narrow fields manually; the request builder still uses non-null assertions.
 - **To resolve:** Extract a helper returning validated locals when this code is next changed.
 
@@ -212,9 +212,9 @@ Dated API observations and current readback rules belong in
 
 ### Submission test fixtures (`code/isometric-submission-test-fixtures`, opened 2026-05-26, deferred)
 
-- **Anchor:** `tests/isometric-submit-removal.test.ts`, `tests/isometric-sources-mirror-flow.test.ts` and `tests/isometric-ghg-statement-submit.test.ts`.
-- **Gap:** Each repeats mock declarations and setup, increasing the cost of submission dependency changes.
-- **To resolve:** Share fixture defaults while keeping hoisted `vi.mock` calls in each file. Follow [testing.md](./testing.md).
+- **Anchor:** `tests/fixtures/submit-removal-orchestrator.ts:makeContext`; related suites include `tests/isometric-submit-removal.test.ts`, `tests/isometric-sources-mirror-flow.test.ts` and `tests/isometric-ghg-statement-submit.test.ts`.
+- **Gap:** Mock declarations and setup still repeat across submission tests despite shared orchestrator context fixtures, increasing the cost of dependency changes.
+- **To resolve:** Extend existing shared fixture defaults while keeping hoisted `vi.mock` calls in each file. Follow [testing.md](./testing.md).
 
 ### Source row on narrow screens (`ux/sources-panel-row-layout`, opened 2026-05-27, deferred)
 
@@ -230,7 +230,7 @@ Dated API observations and current readback rules belong in
 
 ### Protocol-pin migration (`isometric/protocol-pin-migration`, opened 2026-06-04, `needs-registry-check`)
 
-- **Anchor:** `docs/isometric/versions.json` and `.claude/workflows/isometric-gap-check.js`.
+- **Anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`, backed by `docs/isometric/versions.json` and `.claude/workflows/isometric-gap-check.js`.
 - **Gap:** #278 owns whether/when to move beyond the project/local v1.1 pin. Current latest-certified versions need registry verification. Editing local pins does not migrate registry templates.
 - **To resolve:** Follow #278 impact analysis, registry migration and acceptance checks; rerun the authoritative gap workflow before repinning.
 

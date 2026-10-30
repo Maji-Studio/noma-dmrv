@@ -2,7 +2,7 @@
 
 Read this before debugging evidence links, reconciliation or API drift. These
 are dated observations with limited scope, not protocol authority. Code was
-checked against staging `5eb7aa111` on 2026-10-30. Direct sandbox reads and public
+checked on 2026-10-30; exact baselines are in the verification record. Direct sandbox reads and public
 registry sources were also checked; authenticated MCP access was unavailable.
 The [verification record](../archive/2026-10-30-isometric-verification.md) records
 request variations, results and limits. Historical observations keep their dates.
