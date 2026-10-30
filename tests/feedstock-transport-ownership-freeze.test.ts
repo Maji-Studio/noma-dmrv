@@ -176,6 +176,19 @@ it.each(MODES)("draw addition: %s", async mode => {
   });
 });
 
+it("draw addition freezes an archived intake the allocator selects", async () => {
+  await withPair("sent-moves", async (a, b) => {
+    await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, a.productionRunId));
+    await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, a.productionRunId));
+    await db.update(feedstocks).set({ archivedAt: ARCHIVE_STAMP }).where(eq(feedstocks.id, a.feedstockId));
+    await expectFreeze("sent-moves", db.transaction(async tx => {
+      await lockBinStocks(ctx, tx, [a.feedstockBinId]);
+      return replaceProductionRunFeedstockDraws(ctx, tx, { productionRunId: a.productionRunId, facilityId: a.facilityId,
+        draws: [{ storageLocationId: a.feedstockBinId, wetMassKg: 500 }] });
+    }), a, b.productionRunId);
+  });
+});
+
 it.each(MODES)("provenance reallocation removes the old feedstock id: %s", async mode => {
   await withPair(mode, async (a, b) => {
     if (mode === "sent-stays") await makeNonOwner(a);

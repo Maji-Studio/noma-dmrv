@@ -1,4 +1,4 @@
-import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
+import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import { and, eq, gte, inArray, ne } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -18,8 +18,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Rebuild provenance in the caller's transaction. Callers hold the changed bin
  * locks before changing inputs. Lock every other source bin before reading its
- * basis, then the runs in ID order, then transport-owner advisory locks before
- * one ownership snapshot for the entire rebuild. Transaction retries handle the existing
+ * basis, then the runs in ID order, then transport-owner advisory locks for
+ * every rewritten run before one ownership snapshot. Transaction retries handle the existing
  * intake-row/bin lock inversion shared with production-run writers.
  *
  * A run writer can restrict this to its own run; an intake writer visits every
@@ -75,42 +75,49 @@ export async function reallocateRunsForBins(
   const currentDraws = await readDrawSnapshot();
   assertStockLockSnapshot(JSON.stringify(draws) === JSON.stringify(currentDraws));
 
-  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
-    options.transportOwnershipFreeze ? [] : await getTransportFreezeFeedstockIds(ctx, tx, {
-      binIds: [...ids, ...draws.map(draw => draw.storageLocationId)], runIds,
-    }), options.change ?? { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze);
-  await freeze(async () => {
-    for (const run of runs) {
-      if (!onlyRunId && run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
-      const timezone = await getOutputStockFacilityTimezone(ctx, run.facilityId, tx);
-      const cutoffDay = formatFacilityDate(run.startTime, timezone);
-      const proposed: FeedstockWetAllocation[] = [];
-      const runDraws = draws.filter(draw => draw.productionRunId === run.id);
-      if (onlyRunId) runDraws.sort((a, b) => ids.indexOf(a.storageLocationId) - ids.indexOf(b.storageLocationId));
-      for (const [index, draw] of runDraws.entries()) {
-        try {
-          proposed.push(...await withProductionRunErrors(() => allocateFeedstockWetMass(
-            ctx, tx, draw.storageLocationId, draw.wetMassKg, cutoffDay,
-          ), ["feedstockDraws", index, "storageLocationId"]));
-        } catch (error) {
-          if (run.id !== onlyRunId && error instanceof DomainError) {
-            throw new DomainError(error.code, `Run ${run.code}: ${error.message}`, {
-              ...error,
-              issues: error.issues.map(issue => ({ ...issue, message: `Run ${run.code}: ${issue.message}` })),
-              cause: error,
-            });
-          }
-          throw error;
+  // Allocation reads intakes only, so plan every run before writing any.
+  const rewrites: { run: typeof runs[number]; saved: { feedstockId: string }[]; proposed: FeedstockWetAllocation[] }[] = [];
+  for (const run of runs) {
+    if (!onlyRunId && run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
+    const timezone = await getOutputStockFacilityTimezone(ctx, run.facilityId, tx);
+    const cutoffDay = formatFacilityDate(run.startTime, timezone);
+    const proposed: FeedstockWetAllocation[] = [];
+    const runDraws = draws.filter(draw => draw.productionRunId === run.id);
+    if (onlyRunId) runDraws.sort((a, b) => ids.indexOf(a.storageLocationId) - ids.indexOf(b.storageLocationId));
+    for (const [index, draw] of runDraws.entries()) {
+      try {
+        proposed.push(...await withProductionRunErrors(() => allocateFeedstockWetMass(
+          ctx, tx, draw.storageLocationId, draw.wetMassKg, cutoffDay,
+        ), ["feedstockDraws", index, "storageLocationId"]));
+      } catch (error) {
+        if (run.id !== onlyRunId && error instanceof DomainError) {
+          throw new DomainError(error.code, `Run ${run.code}: ${error.message}`, {
+            ...error,
+            issues: error.issues.map(issue => ({ ...issue, message: `Run ${run.code}: ${issue.message}` })),
+            cause: error,
+          });
         }
+        throw error;
       }
-      const saved = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
-        .from(productionRunFeedstocks).where(and(
-          eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-          eq(productionRunFeedstocks.productionRunId, run.id),
-        ));
-      const previous = new Map(saved.map(row => [row.feedstockId, row.wetMassUsedKg]));
-      if (saved.length === proposed.length && proposed.every(row => previous.get(row.feedstockId) === row.wetMassUsedKg)) continue;
+    }
+    const saved = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
+      .from(productionRunFeedstocks).where(and(
+        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        eq(productionRunFeedstocks.productionRunId, run.id),
+      ));
+    const previous = new Map(saved.map(row => [row.feedstockId, row.wetMassUsedKg]));
+    if (saved.length === proposed.length && proposed.every(row => previous.get(row.feedstockId) === row.wetMassUsedKg)) continue;
+    rewrites.push({ run, saved, proposed });
+  }
+  if (!rewrites.length) return;
 
+  // One snapshot over every rewritten run, so a handoff between them compares
+  // the final owner rather than each intermediate one.
+  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+    rewrites.flatMap(({ saved, proposed }) => [...saved, ...proposed].map(row => row.feedstockId)),
+    options.change ?? { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze);
+  await freeze(async () => {
+    for (const { run, proposed } of rewrites) {
       const target = { entityType: "productionRun" as const, entityId: run.id };
       // We already hold bin/row locks. Never wait for an artifact held by a
       // submission that could be waiting for those same rows.

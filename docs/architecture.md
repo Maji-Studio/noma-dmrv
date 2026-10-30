@@ -602,8 +602,9 @@ batch `UPDATE`. Delete takes the transport-owner locks after bin/run locks
 and before lineage artifacts. Creation first takes them in draw replacement
 after the run insert; auto-attachment takes its own snapshot after process scope,
 batch artifacts and batch UPDATE when no enclosing freeze exists. Joined scopes
-reuse the outer locks. Intake and timezone rebuilds take one freeze after all
-source-bin locks and sorted run UPDATE locks, before any per-run rewrites.
+reuse the outer locks. Intake and timezone rebuilds plan every run first, then
+take one freeze over the rewritten runs' saved and planned records after all
+source-bin locks and sorted run UPDATE locks, before any per-run rewrite.
 A changed run facility after discovery refuses the write.
 Archived facilities cannot accept run updates; facility archive also archives
 its runs. The pre-facility operator, reference and generated-code checks are
