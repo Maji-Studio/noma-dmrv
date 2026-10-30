@@ -106,7 +106,8 @@ version-specific references on supersession. Confirmed retries read by saved
 external ID. Absent provider GHG Entry associations are accepted; present ones
 must match. Evidence readback uses GraphQL because REST omits the Source IDs.
 The [registry behavior record](./registry-behavior.md) describes the filter trap;
-the peer-owned query correction and full staging retest remain pending.
+exact-ID readback and the full staging retest remain open in
+[open questions](../open-questions-isometric.md).
 
 Empty expected Source sets are not checked; confirmed checks are reused. For
 nonempty expected sets, a wrong or malformed readback blocks submission. Empty

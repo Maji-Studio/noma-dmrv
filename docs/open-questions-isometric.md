@@ -7,15 +7,21 @@ anchor and evidence before closure. Local code checks do not resolve
 original dates and are not fresh verification. Protocol pins live in
 [versions.json](./isometric/versions.json). Code checked 2026-10-30.
 
-The peer-owned Source readback query below retains its old text until the fix
-merges. Its ID-filter assumption is superseded by the
-[2026-10-30 filter observation](./isometric/registry-behavior.md#application-source-readback).
+For current filter and authentication behavior, use
+[registry behavior](./isometric/registry-behavior.md#application-source-readback)
+rather than the historical probe below.
 
 ### Applications retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
 
 - **Anchor:** `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`.
 - **Gap:** Dependent Application claims keep their payloads and IDs with `review_required` / `storage_location_replaced`. `ensureBiocharApplication` blocks reuse, including ambiguous creates; unclaimed Applications use the replacement.
 - **To resolve:** Confirm the registry correction/supersession contract and provide an explicit recovery preserving the journal and preventing duplicate POSTs.
+
+### Application readback must match the exact event ID (`isometric/biochar-application-id-filter`, opened 2026-10-30)
+
+- **Anchor:** `src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`.
+- **Gap:** Direct sandbox reads return unrelated events despite `idIn`; the historical probe below did not establish filter correctness. [Verification evidence](./archive/2026-10-30-isometric-verification.md#sandbox-api-observations) also supersedes its missing-secret HTTP-status assumption.
+- **To resolve:** Match the exact event ID after location-scoped pagination and verify an evidence-bearing Removal through submission and refresh. Keep the historical probe until its query can be reconciled with the corrected implementation.
 
 ### Biochar Application Source readback awaits a staging retest (`isometric/biochar-application-source-readback`, opened 2026-09-08)
 
@@ -124,7 +130,7 @@ merges. Its ID-filter assumption is superseded by the
 
 ### Reconciliation scans have finite bounds (`isometric/reconciliation-lookup-bound`, opened 2026-08-24, `needs-registry-check`)
 
-- **Anchor:** `src/lib/isometric/storage-locations.ts:findStorageLocationBySupplierRef` and `src/lib/isometric/biochar-applications.ts:findBiocharApplicationBySupplierRef`.
+- **Anchor:** `src/lib/isometric/storage-locations.ts:findStorageLocationBySupplierReference` and `src/lib/isometric/biochar-applications.ts:findBiocharApplicationBySupplierReference`.
 - **Gap:** Without a supplier-reference filter, each lookup stops at 1,000 records, 50 × 20 pages. Storage Locations scan one project; Applications scan the entire visible account. Other list reads use the client default of 10,000 records and throw `IsometricPageLimitError`; Production Batch/Sample scans can therefore block deletion too.
 - **To resolve:** Request a registry supplier-reference filter or deliberately raise the relevant lookup/client bound when that specific project or account approaches it. Keep fail-closed behavior rather than risking duplicate POSTs.
 
@@ -145,12 +151,6 @@ merges. Its ID-filter assumption is superseded by the
 - **Anchor:** `src/lib/isometric/generated/certify.d.ts`.
 - **Gap:** Noma uses `ghg_entry` routes, but generated deprecated `Removal*`, `GhgStatement.removal_ids` and `Component.removal_template_component_id` fields remain. The original question recorded a September 2026 alias sunset; do not infer current availability from that date.
 - **To resolve:** Check the current spec, regenerate types, and remove obsolete test fields and the alias note in [openapi-index.md](./isometric/openapi-index.md) when the spec removes them. No app route migration is expected.
-
-### Credit allocation and buffer-pool display (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
-
-- **Anchor:** `src/lib/isometric/generated/certify.d.ts` schemas `GhgEntry` and `GhgStatement`.
-- **Gap:** Types expose reversal-risk percentage and credit allocation between buffer pool and supplier; no operator display of that split is implemented.
-- **To resolve:** Add the display when needed. This is an optional capability, not a submission blocker.
 
 ### Facility membership inside an organization (`security/facility-membership`, opened 2026-06-18)
 
@@ -280,13 +280,13 @@ merges. Its ID-filter assumption is superseded by the
 
 ### Source row on narrow screens (`ux/sources-panel-row-layout`, opened 2026-05-27, deferred)
 
-- **Anchor:** `src/components/certification/sources-panel.tsx:SourceRow`.
+- **Anchor:** `src/components/certification/sources-panel.tsx:CandidateRow`.
 - **Gap:** The 2026-05-27 sandbox test pass recorded Mirror clipping below about 640 px with long filenames. The action row still lacks wrapping; no fresh visual retest establishes closure.
 - **To resolve:** Reproduce at narrow widths, then wrap or simplify actions under the [design system](./design-system.md).
 
 ### Annual-test direct-emissions attribution (`isometric/pyrolyzer-direct-attribution`, `needs-registry-check`)
 
-- **Anchor:** `src/lib/isometric/transformers/datapoint.ts:PERIOD_INPUT_TUPLES`.
+- **Anchor:** `src/lib/isometric/datapoint-mapping.ts:lookupPeriodInputTuple`.
 - **Gap:** `pyrolyzer_direct` remains a registry-owned PROJECT-scope component; the unresolved point is verifier acceptance of annual-test and throughput-proportional attribution under the v1.1 pin.
 - **To resolve:** Ask registry/verifier and retain the fail-closed Removal-scope guard regardless.
 

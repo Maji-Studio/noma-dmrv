@@ -44,7 +44,7 @@ both Isometric and provider-null paths.
 | Embodied inventory | Generic documents only | missing | No item/material/equipment inventory or complete factor records |
 | GHG/SSR materiality assessment | None | missing | `ghg_materiality_assessments` does not exist; no issuance gate |
 | Co-product allocation | None | missing | Add a no-co-products applicability record or an allocation model |
-| Reversal risk | Registry risk score and buffer contribution | registry-owned | Noma has no batch-level buffer input |
+| Reversal risk | Registry risk score and buffer contribution; displayed by `src/components/certification/registry-carbon-result-card.tsx:RegistryCarbonResultCard` | registry-owned | Noma has no batch-level buffer input |
 | Removal Sources | Evidence targets on `src/lib/isometric/semantic-binding-catalog.ts` roles, classified by `src/lib/certification/removal-source-bindings.ts`, and post-submit verification in `src/lib/isometric/source-binding-verification.ts` | implemented | Sources bind to exact inputs, including generated transport/durability ledgers and the safety-margin mass target |
 | Safety margin | Reviewed automatic-source contract and `src/lib/isometric/semantic-binding-catalog.ts` | implemented | noma submits removal dry mass only; the fixed carbon intensity and its justification remain registry-owned |
 | GHG Statement report | `certifier_ghg_statement_reports`, `src/fn/certification/ghg-statement-reports.ts` | implemented | Generated data summary is immutable after preparation/approval; external report URL remains supported for project-specific qualitative reports |

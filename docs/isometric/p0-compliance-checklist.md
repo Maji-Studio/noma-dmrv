@@ -20,7 +20,7 @@ interpretation pinned in [versions.json](./versions.json). Code checked
 | `P0-11` | Low-carbon procurement EC1-EC5 | `power_procurement_evidence` exists | Conjunctive evaluator, qualified/non-qualified kWh split, and claim gate | partial |
 | `P0-12` | Book-and-Claim Units | No BCU structures | Full eligibility, quantity/cap, ownership, retirement, additionality, decarbonization statement, and anti-double-count model before use | not adopted |
 | `P0-13` | SSR/materiality assessment | No `ghg_materiality_assessments` | Versioned boundary/materiality assessment and appropriate issuance guard | open |
-| `P0-14` | Reversal risk and buffer | Registry supplies risk score and buffer allocation | Confirm registry-owned assessment; local allocation display remains a follow-up | registry-owned |
+| `P0-14` | Reversal risk and buffer | Registry supplies risk score and buffer allocation | Registry owns assessment; existing Removal/statement result cards display risk and allocation | registry-owned |
 | `P0-15` | Embodied emissions | Generic documents only | Reproducible full-lifecycle inventory and complete per-factor records | open |
 | `P0-16` | Transport method hierarchy | Method is stored; distance-method justification lives in the PDD (#942 q11) | Maintain the justification in the PDD; no noma field or gate | outside noma |
 | `P0-17` | Transport trip/evidence completeness | Every leg counts its round trip; uploaded proof is required per Delivery | Remaining scale/record completeness checks; any onward-trip exception needs its own evidence model | open |

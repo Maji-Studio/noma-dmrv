@@ -58,6 +58,4 @@ then run the repository static gates. For implementation behavior, run the
 relevant tests; protocol changes affecting workflows also need the matching E2E
 paths. A docs-only cleanup does not require an application behavior change.
 
-Review before/after claims and verification dates. Keep peer-owned sections
-untouched until their PR merges, then rebase and reconcile them before landing.
-Never present a successful coverage check as proof of full protocol compliance.
+Review before/after claims and verification dates. Never present a successful coverage check as proof of full protocol compliance.
