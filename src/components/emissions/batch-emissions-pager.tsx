@@ -37,11 +37,13 @@ interface BatchEmissionsPagerProps {
   facilityId: string;
   lineFilter: LineFilter | null;
   lineSort: LineSort;
+  /** The batch's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
-export function BatchEmissionsPager({ creditBatchId, facilityId, lineFilter, lineSort }: BatchEmissionsPagerProps) {
+export function BatchEmissionsPager({ creditBatchId, facilityId, lineFilter, lineSort, timeZone: zone }: BatchEmissionsPagerProps) {
   const router = useRouter();
-  const { timeZone } = useFacilityClock(facilityId);
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
   const today = formatFacilityDate(new Date(), timeZone);
   const overview = useEmissionsOverview(facilityId);
   const { query } = useEmissionsOverviewQuery();

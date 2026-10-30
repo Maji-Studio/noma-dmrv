@@ -23,7 +23,7 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "f1", selectedFacility: { id: "f1", name: "Facility", timeZone: "UTC" } }),
 }));
-vi.mock("@/hooks/use-linked-application-delivery", () => ({ useLinkedApplicationDelivery: () => ({ data: undefined }) }));
+vi.mock("@/hooks/use-linked-application-delivery", () => ({ useLinkedApplicationDelivery: () => ({ data: undefined, isPending: false, error: null, isFetching: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/use-applications", () => ({
   useApplications: () => ({ data: { items: [], total: 2, totalPages: 1 }, isLoading: false, error: null }),
   useApplicationStats: () => state.stats,

@@ -4,6 +4,8 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { LOAD_FAILED } from "@/lib/copy-utils";
+import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -21,6 +23,8 @@ export interface ApplicationSheetContext {
   delivery: Pick<ApplicationDeliveryOption, "productBinName" | "formulationName" | "deliveryDate" | "deliveryDay"> | undefined;
   lock: Pick<UseQueryResult<unknown>, "data" | "isPending" | "error" | "isFetching" | "refetch">;
   durabilityOption: string;
+  /** The linked delivery read of an archived facility's application, so the sheet can say loading or failed instead of "not recorded". */
+  deliveryRead?: Pick<UseQueryResult<unknown>, "isPending" | "error" | "isFetching" | "refetch">;
   /** Read only (a link into an archived facility): no upload, delete or sync. */
   readOnly?: boolean;
 }
@@ -35,6 +39,8 @@ function formatFieldPosition(
 }
 
 export function applicationSheetSections(application: ApplicationListItem, context: ApplicationSheetContext): DetailPanelSection[] {
+  // A failed refetch over a delivery that already loaded changes nothing the sheet shows.
+  const deliveryReadFailed = !!context.deliveryRead?.error && !context.delivery;
   return [
     {
       title: "Application details",
@@ -48,7 +54,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : null,
+            : context.deliveryRead?.error ? LOAD_FAILED : null,
+          ...(deliveryReadFailed ? { valuePresent: false } : {}),
+          ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
         {
           label: "Biochar product applied",
@@ -65,9 +73,19 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits
-        ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>
-        : undefined,
+      content: application.heldOutOfCredits || deliveryReadFailed ? (
+        <>
+          {deliveryReadFailed && (
+            <Notice
+              tone="warning"
+              action={<Button type="button" variant="default" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+            >
+              The delivery could not be loaded.
+            </Notice>
+          )}
+          {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
+        </>
+      ) : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
       // The bar and key line are always visible; the ledger and source runs

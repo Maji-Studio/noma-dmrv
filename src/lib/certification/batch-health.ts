@@ -1,8 +1,3 @@
-import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
-import type { RemovalCorrection } from "./removal-entry-correction";
-import { templateLineFixTarget } from "./template-fix-targets";
-import type { BatchEmissionLine } from "./emission-lines";
-import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 /**
  * Per-credit-batch health classifier — the pure decision behind "is this batch
  * complete enough to group into a removal, and if not, what's missing?" It is
@@ -20,6 +15,11 @@ import type { SampleDocumentWarningKey } from "./sample-document-warnings";
  * overview hint can never disagree on whether a batch is "ready".
  */
 
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import type { RemovalCorrection } from "./removal-entry-correction";
+import { templateLineFixTarget } from "./template-fix-targets";
+import type { BatchEmissionLine } from "./emission-lines";
+import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 import type { SubmissionLineageBlocker } from "./submission-readiness";
 import type { TransportCategory } from "./readiness";
 import {
@@ -30,9 +30,11 @@ import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
+  type BlockerCopy,
 } from "./removal-template-blockers";
 import {
   describeFeedstockTypeMappingGap,
+  feedstockTypeMappingGapCopy,
   type FeedstockTypeMappingGap,
 } from "./feedstock-type-mapping";
 
@@ -97,6 +99,8 @@ export interface BatchHealthCheck {
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
+  /** Fact/instruction split; detail above preserves the full copy for existing consumers. */
+  copy?: BlockerCopy;
   /** UI hint for the most specific workflow that resolves an unmet check. */
   fixTarget?: BatchHealthFixTarget;
   /** Stable discriminator when one requirement expands into workflow issues. */
@@ -211,8 +215,18 @@ const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 const MERGED_CHECK_SEPARATOR = " · ";
+const LINK_PRODUCTION_INSTRUCTION = "Link production data before reviewing transport coverage";
+const COMPLETE_FACILITY_INSTRUCTION = "Complete facility setup to evaluate transport coverage";
 /** One open item for lineage and configuration blockers found by the submit-time build. */
 const SUBMISSION_BLOCKERS_LABEL = "Submission blockers";
+
+function emissionCheckDetail(line: BatchEmissionLine): { message: string; copy?: BlockerCopy } {
+  if (line.blocker?.code === "entryHasNoRemoval") return line.blocker;
+  const instruction = line.blocker?.code === "entryMissingEvidence"
+    ? `Add a file for ${line.displayName}.`
+    : `Check the manual entry on ${line.displayName}.`;
+  return { message: instruction, copy: { instruction } };
+}
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   const missingInputs = Array.from(
@@ -256,6 +270,7 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: PRODUCTION_LABEL,
     status: "unmet",
     detail: gap.detail,
+    copy: gap.copy,
     fixTarget: gap.fixTarget,
   };
 }
@@ -284,6 +299,10 @@ function feedstockTypeMappingCheck(
     detail: facts.feedstockTypeMappingGaps
       .map(describeFeedstockTypeMappingGap)
       .join(MERGED_CHECK_SEPARATOR),
+    copy: {
+      detail: facts.feedstockTypeMappingGaps.map((gap) => feedstockTypeMappingGapCopy(gap).detail).join(MERGED_CHECK_SEPARATOR),
+      instruction: facts.feedstockTypeMappingGaps.map((gap) => feedstockTypeMappingGapCopy(gap).instruction).join(MERGED_CHECK_SEPARATOR),
+    },
     fixTarget: "feedstockTypes",
     affectedRecords: facts.feedstockTypeMappingGaps.map((gap) => ({
       id: gap.feedstockTypeId,
@@ -302,7 +321,8 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
-      detail: "Link production data before reviewing transport coverage",
+      detail: LINK_PRODUCTION_INSTRUCTION,
+      copy: { instruction: LINK_PRODUCTION_INSTRUCTION },
     }];
   }
   // Required categories come from the facility's default template; without a
@@ -314,7 +334,8 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
-      detail: "Complete facility setup to evaluate transport coverage",
+      detail: COMPLETE_FACILITY_INSTRUCTION,
+      copy: { instruction: COMPLETE_FACILITY_INSTRUCTION },
     }];
   }
   if (facts.requiredTransport.length === 0) {
@@ -420,6 +441,10 @@ function mergeUnmetChecksByDestination(
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
+      copy: existing.copy && check.copy ? {
+        detail: mergeCheckText(existing.copy.detail, check.copy.detail),
+        instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),
+      } : undefined,
       affectedRecords: mergeAffectedRecords(
         existing.affectedRecords,
         check.affectedRecords,
@@ -509,6 +534,12 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
+  const emissionDetails = [...emissionIssues.values()].map(emissionCheckDetail);
+  const emissionCopies = emissionDetails.map((detail) => detail.copy);
+  const emissionCopy = emissionCopies.every((copy) => copy != null) ? {
+    detail: emissionCopies.map((copy) => copy.detail).filter(Boolean).join(" ") || undefined,
+    instruction: emissionCopies.map((copy) => copy.instruction).filter(Boolean).join(" ") || undefined,
+  } : undefined;
   const linesToDecide = new Set(facts.undecidedLineIds).size;
   const pinBlockers = (facts.templateBlockers ?? []).filter(
     (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateSetup",
@@ -526,7 +557,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
         const key = fixTarget === "templateSetup" ? "templateSet" : "templateLines";
         return {
           key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
-          detail: blocker.message, fixTarget,
+          detail: blocker.message, copy: blocker.copy, fixTarget,
           unmetLabel: key === "templateLines"
             ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
             : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
@@ -537,9 +568,8 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,
-        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryHasNoRemoval"
-          ? line.blocker.message : line.blocker?.code === "entryMissingEvidence"
-          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
+        detail: emissionDetails.map((detail) => detail.message).join(" ") || undefined,
+        ...(emissionIssues.size && emissionCopy ? { copy: emissionCopy } : {}),
       }] : []),
       // Template line blockers (no source, unassigned, not set up) are
       // facility-level and stay in Removal readiness, like the rest of coverage.

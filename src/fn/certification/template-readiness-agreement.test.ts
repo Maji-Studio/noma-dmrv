@@ -11,7 +11,7 @@ import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { removalTemplateVerdict } from "@/lib/certification/removal-template-verdict";
 import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR, UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 
@@ -128,7 +128,7 @@ it.each([
   expect(verdict.blocker).toBe(code);
   expect(facts.lineSourceProblems.length > 0).toBe(verdict.toDecideCount > 0);
   const resolved = resolveRemovalTemplate([{ id: "batch", removalTemplateId: template.id }], facility);
-  expect(resolved.templateBlockers).toEqual([{ code, message: REMOVAL_TEMPLATE_BLOCKERS[code] }]);
+  expect(resolved.templateBlockers).toEqual([{ ...removalTemplateBlocker(code), code, message: REMOVAL_TEMPLATE_BLOCKERS[code] }]);
   const health = deriveBatchHealth(toBatchHealthFacts(context(resolved), "batch"));
   const check = health.checks.find((check) => check.key === key)!;
   expect(check).toMatchObject({
@@ -144,9 +144,9 @@ it("keeps every batch blocker in the original order", () => {
   facility.templatesById[template.id]!.observation = null;
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facility);
   expect(resolved.templateBlockers).toEqual([
-    { code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead },
-    { code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
-    { code: "templateLinesNeedReview", message: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview },
+    { code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead, copy: { detail: "Template not fully read.", instruction: "Try again." } },
+    { code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint, copy: { instruction: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint } },
+    { code: "templateLinesNeedReview", message: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview, copy: { detail: "This Removal template has components to decide.", instruction: "Answer them in Settings, Removal templates." } },
   ]);
 });
 

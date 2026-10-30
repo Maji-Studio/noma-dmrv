@@ -54,8 +54,7 @@ export function ProductionIncidentTable({
   const updateIncident = useUpdateProductionIncident();
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
-  const clock = useFacilityClock(facilityId);
-  const timeZone = zone ?? clock.timeZone;
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }

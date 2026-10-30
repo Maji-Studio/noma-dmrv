@@ -14,6 +14,7 @@ describe("missingApplicationLineageGap", () => {
     ).toEqual({
       kind: "noProductionRuns",
       detail: `No completed production runs are linked to ${subject}. Complete a matching production run to continue.`,
+      copy: { detail: `No completed production runs are linked to ${subject}.`, instruction: "Complete a matching production run to continue." },
       fixTarget: "productionRuns",
     });
   });
@@ -30,6 +31,7 @@ describe("missingApplicationLineageGap", () => {
     ).toEqual({
       kind: "noApplications",
       detail: `Some completed production runs linked to ${subject} have no application. Review the product, delivery, and application chain.`,
+      copy: { detail: `Some completed production runs linked to ${subject} have no application.`, instruction: "Review the product, delivery, and application chain." },
       fixTarget: "applications",
     });
   });

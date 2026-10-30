@@ -41,7 +41,7 @@ describe("Removal template pins", () => {
   it("blocks an unpinned member without substituting the default", () => {
     const result = resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: null }], facts());
     expect(result.removalTemplate).toBeNull();
-    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates." }]);
+    expect(result.templateBlockers).toEqual([{ code: "unpinnedTemplate", message: "Set a Removal template in Settings, Removal templates.", copy: { instruction: "Set a Removal template in Settings, Removal templates." } }]);
   });
   it("refuses mixed pins", () => {
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }, { removalTemplateId: "other-default" }], facts()).templateBlockers)
@@ -82,6 +82,7 @@ describe("Removal template pins", () => {
     const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], input);
     expect(resolved.templateBlockers).toEqual([{
       code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint,
+      copy: { instruction: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
     }]);
     const readiness = {
       local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,

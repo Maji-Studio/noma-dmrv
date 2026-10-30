@@ -61,8 +61,7 @@ export function ProductionSampleTable({
   const updateSample = useUpdateProductionSample();
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
-  const clock = useFacilityClock(facilityId);
-  const timeZone = zone ?? clock.timeZone;
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }

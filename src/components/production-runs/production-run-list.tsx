@@ -304,9 +304,13 @@ export function ProductionRunList() {
   const focusedNormalRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
   // The normal read hides runs archived with their facility; the separate
   // linked read opens them read only. It never authorizes a write.
-  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !focusedNormalRun.data;
+  // A normal read that errored cannot supply the record even when it still
+  // holds cached data, so the linked read is tried then too.
+  const normalRunUsable = !!focusedNormalRun.data && !focusedNormalRun.isError;
+  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !normalRunUsable;
   const focusedLinkedRun = useLinkedProductionRun(focusedRunId ?? "", needsLinkedRun);
-  const focusedRun = focusedNormalRun.data || !needsLinkedRun ? focusedNormalRun : focusedLinkedRun;
+  // Cached data from a failed normal read still beats a linked read that has none.
+  const focusedRun = !needsLinkedRun || normalRunUsable || (!focusedLinkedRun.data && focusedNormalRun.data) ? focusedNormalRun : focusedLinkedRun;
   const linkedRecord = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
   const linkedFacilityReady = linkedRecord.ready;
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
@@ -468,6 +472,8 @@ export function ProductionRunList() {
       return;
     }
     if (focusedRun.isLoading || focusedRun.isFetching || focusedRun.isPending) return;
+    // The linked read is the fallback for an errored normal read: wait for it before calling the link invalid.
+    if (needsLinkedRun && (focusedLinkedRun.isLoading || focusedLinkedRun.isFetching || focusedLinkedRun.isPending)) return;
     if (handledInvalidRunIdRef.current === focusedRunId) return;
 
     if (focusedRun.isError || (focusedRun.isSuccess && !focusedRun.data)) {
@@ -484,6 +490,10 @@ export function ProductionRunList() {
     focusedRun.isPending,
     focusedRun.isSuccess,
     focusedRunId,
+    focusedLinkedRun.isFetching,
+    focusedLinkedRun.isLoading,
+    focusedLinkedRun.isPending,
+    needsLinkedRun,
     setFocusedRunId,
     toast,
   ]);

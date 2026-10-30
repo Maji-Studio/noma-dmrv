@@ -39,7 +39,7 @@ function RemovalLinks({ removals }: { removals: { removalCode: string; removalHr
   );
 }
 
-export function CreditBatchLateEntries({ facilityId, creditBatchId, canManage }: { facilityId: string; creditBatchId: string; canManage: boolean }) {
+export function CreditBatchLateEntries({ facilityId, creditBatchId, canManage, readOnly = false }: { facilityId: string; creditBatchId: string; canManage: boolean; readOnly?: boolean }) {
   const { data: lines } = useBatchEmissionLines({ facilityId, creditBatchId });
   const rows = lateEntryRows(lines ?? [], facilityId, { canManage });
   if (!rows.length) return null;
@@ -73,7 +73,7 @@ export function CreditBatchLateEntries({ facilityId, creditBatchId, canManage }:
                 Recorded after <RemovalLinks removals={[row.view.recordedAfter]} /> was sent.
               </span>
             )}
-            <LateEntryDestinationLine destination={row.view.destination} className="col-span-2" withAction={false} />
+            <LateEntryDestinationLine destination={row.view.destination} className="col-span-2" withAction={false} readOnly={readOnly} />
           </li>
         ))}
       </ul>

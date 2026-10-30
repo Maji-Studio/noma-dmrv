@@ -75,6 +75,8 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
   if (runs.length === 0) return null;
   const one = runs.length === 1;
   const sameDay = sameDayEntryWarning(runs);
+  // A read-only batch can no longer take the run, so its title drops "yet".
+  const yet = readOnly ? "" : " yet";
   // With the Edit button the action is already there; without it say who adds the run.
   const nextStep = readOnly ? null : canManage
     ? (onEdit ? null : missingRunsAdminSentence(runs.length))
@@ -83,7 +85,7 @@ export function CreditBatchMissingRunsNotice({ runs, facilityId, canManage, onEd
     <Notice
       tone="warning"
       data-testid="credit-batch-missing-runs"
-      title={one ? "1 completed run is not in this credit batch yet" : `${runs.length} completed runs are not in this credit batch yet`}
+      title={one ? `1 completed run is not in this credit batch${yet}` : `${runs.length} completed runs are not in this credit batch${yet}`}
       action={onEdit && !readOnly ? (
         <Button type="button" variant="weak" size="small" className={CENTRED_HIT_AREA} onClick={onEdit}>
           Add in Edit

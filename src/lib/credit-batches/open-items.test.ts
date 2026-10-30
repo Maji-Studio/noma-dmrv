@@ -22,9 +22,10 @@ import {
   missingRunsAdminSentence,
   refusedRunsSentence,
   sameDayEntrySentence,
+  openItemText,
 } from "./open-items";
 
-import { overviewBadgeCount, tabBadge } from "./batch-page";
+import { overviewBadgeCount, readOnlyOpenItems, tabBadge } from "./batch-page";
 import { renderedOpenItems } from "../../../tests/helpers/rendered-open-items";
 
 const buildCreditBatchOpenItems: typeof buildItems = (input) => renderedOpenItems(buildItems(input));
@@ -398,6 +399,12 @@ describe("missing production runs", () => {
     expect(tabBadge("overview", { ...items, waiting: [] })).toEqual({ count: 1, blocking: false });
   });
 
+  it("drops \"yet\" from the title on a read-only batch", () => {
+    const [item] = readOnlyOpenItems({ ...buildItems({ ...batchContext, missingProductionRuns }), waiting: [] }).check;
+    expect(item.title).toBe("RUN-112 is not in this credit batch");
+    expect(item.titleAfterCode).toBe(" is not in this credit batch");
+  });
+
   it("asks an admin to add the run when the viewer cannot manage", () => {
     expect(buildCreditBatchOpenItems({ ...batchContext, canManage: false, missingProductionRuns }))
       .toEqual({ blocking: [], check: [{
@@ -626,4 +633,20 @@ describe("missing run copy", () => {
     expect(missingRunsMemberSentence(count)).toBe(member);
     expect(missingRunsAdminSentence(count)).toBe(admin);
   });
+});
+
+
+it("removes member-only template repair guidance from read-only checks", () => {
+  const health = {
+    state: "incomplete" as const, issueCount: 1, checks: [{
+      key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided",
+      unmetLabel: "1 component to decide", status: "unmet" as const,
+      fixTarget: "templateLineReview" as const, linesToDecide: 1,
+    }],
+  };
+  const groups = buildItems({ ...batchContext, canManage: false, health });
+  expect(openItemText(groups.blocking[0])).toBe("An Admin answers it in Settings, Removal templates.");
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+  expect(readOnly.title).toBe("1 component to decide");
+  expect(openItemText(readOnly)).toBeUndefined();
 });

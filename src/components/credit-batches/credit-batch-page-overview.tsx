@@ -219,7 +219,7 @@ function RemovalsPanel() {
         <p className={cn("body-small", MUTED_TEXT)}>{readOnly ? "Nothing blocks this credit batch." : "Nothing blocks this credit batch. Start a Removal to submit its applied biochar."}</p>
       )}
       <CompactRemovalBar groups={groups} facilityId={batch.facilityId} timeZone={facilityTimeZone} />
-      <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} canManage={canManage} />
+      <CreditBatchLateEntries facilityId={batch.facilityId} creditBatchId={batch.id} canManage={canManage} readOnly={!!readOnly} />
     </PagePanel>
   );
 }
@@ -265,8 +265,9 @@ function DetailsPanel() {
   const sent = lock?.level === "sent";
   const membershipLocked = isCreditBatchMembershipLocked(lock);
   // When everything is locked the panel says so once and the rows stay quiet.
-  const rowLock = membershipLocked && !sent;
-  const lockText = sent ? SENT_LOCK_TEXT : membershipLocked ? MEMBERSHIP_LOCK_TEXT : null;
+  const rowLock = membershipLocked && !sent && !readOnly;
+  // A read-only batch offers no edit, so the membership lock and its "notes stay open" reason have nothing to explain.
+  const lockText = sent ? SENT_LOCK_TEXT : membershipLocked && !readOnly ? MEMBERSHIP_LOCK_TEXT : null;
   return (
     <FocusRow rowId={CREDIT_BATCH_DETAILS_ROW}>
       <PagePanel title="Batch details" labelledBy="credit-batch-details" titleAddon={lockText ? <LockMark text={lockText} /> : undefined}>

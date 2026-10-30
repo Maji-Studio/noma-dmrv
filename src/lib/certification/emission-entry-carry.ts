@@ -12,9 +12,14 @@ export interface CarryContender extends EntryContender {
   /** `creditBatchIds` (from EntryContender) lines up with these codes, so each can link to its batch. */
   observation: EntryObservation | null;
 }
+/** The unread-template wait: the fact, then the step that loads the template. */
+export const TEMPLATE_UNKNOWN_COPY = {
+  detail: "noma has not read the next draft's template yet.",
+  instruction: "Open the Removal to load it.",
+} as const;
 export const CARRY_WAITING_DETAILS = {
   noDraft: "No later draft is available at this facility.",
-  templateUnknown: "noma has not read the next draft's template yet. Open the Removal to load it.",
+  templateUnknown: `${TEMPLATE_UNKNOWN_COPY.detail} ${TEMPLATE_UNKNOWN_COPY.instruction}`,
   incompatibleTemplate: "The next draft's template cannot take this component.",
 } as const;
 export type CarryWaitingReason = keyof typeof CARRY_WAITING_DETAILS;

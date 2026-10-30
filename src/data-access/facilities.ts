@@ -9,6 +9,7 @@ import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
 import {
   facilities,
   reactors,
@@ -296,7 +297,7 @@ export async function getFacilityById(
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new DomainError("not_found", "Facility not found");
   }
 
   return facility;

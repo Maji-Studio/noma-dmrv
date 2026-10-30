@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * #1499: a read-only sheet (a link into an archived facility) passes its
  * state into the section builders, so their write actions go away: the
@@ -5,6 +6,7 @@
  * sync on the application sheet.
  */
 import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { ApplicationListItem } from "@/data-access/applications";
@@ -55,5 +57,35 @@ describe("read-only sheet sections", () => {
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, lock: LOCK, durabilityOption: "1000_year", readOnly });
     expect(findElements(sections, ApplicationSupportingEvidencePanel).map((el) => el.props.readOnly)).toEqual([readOnly]);
     expect(findElements(sections, ApplicationStorageLocationSync).map((el) => el.props.readOnly)).toEqual([readOnly]);
+  });
+
+  it("shows the shared skeleton while the archived delivery loads", () => {
+    const deliveryRead = { isPending: true, error: null, isFetching: true, refetch: vi.fn() };
+    const [details] = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    const field = details.fields.find((f) => f.label === "Delivery source");
+    expect(field?.pending).toBe(true);
+    expect(field?.value).toBeNull();
+  });
+
+  it("shows a failed archived delivery read with Try again", () => {
+    const refetch = vi.fn();
+    const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
+    const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    const field = sections[0].fields.find((f) => f.label === "Delivery source");
+    expect(field?.value).toBe("Could not load");
+    expect(field?.valuePresent).toBe(false);
+    render(<>{sections[0].content}</>);
+    expect(screen.getByText("The delivery could not be loaded.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a loaded delivery without a warning when a refetch fails", () => {
+    const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch: vi.fn() };
+    const delivery = { code: "DL-1", deliveryDate: new Date("2026-10-29") } as unknown as Parameters<typeof applicationSheetSections>[1]["delivery"];
+    const sections = applicationSheetSections(APPLICATION, { delivery, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    expect(sections[0].fields.find((f) => f.label === "Delivery source")?.valuePresent).not.toBe(false);
+    render(<>{sections[0].content}</>);
+    expect(screen.queryByText("The delivery could not be loaded.")).toBeNull();
   });
 });

@@ -1,16 +1,25 @@
 /** The setup read and action refuse a facility with no Isometric project link with this sentence; the summary card branches on it. */
 export const SETUP_NOT_LINKED_MESSAGE = "Link this facility to an Isometric project first.";
 
+/** Fact and repair step of the template blockers that have both; each message below is built from them. */
+const SET_REMOVAL_TEMPLATE = "Set a Removal template in Settings, Removal templates.";
+const NOT_REMOVAL_TEMPLATE = "This template is not a Removal template.";
+const TEMPLATE_NOT_FULLY_READ = "Template not fully read.";
+const TRY_AGAIN = "Try again.";
+const SET_FIXED_DATAPOINTS = "Set each value in the Isometric template editor before submitting.";
+const COMPONENTS_TO_DECIDE = "This Removal template has components to decide.";
+const ANSWER_IN_SETTINGS = "Answer them in Settings, Removal templates.";
+
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This component belongs at the project level in Isometric.",
-  notRemovalTemplate: "This template is not a Removal template. Set a Removal template in Settings, Removal templates.",
-  unpinnedTemplate: "Set a Removal template in Settings, Removal templates.",
+  notRemovalTemplate: `${NOT_REMOVAL_TEMPLATE} ${SET_REMOVAL_TEMPLATE}`,
+  unpinnedTemplate: SET_REMOVAL_TEMPLATE,
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
-  templateNotFullyRead: "Template not fully read. Try again.",
+  templateNotFullyRead: `${TEMPLATE_NOT_FULLY_READ} ${TRY_AGAIN}`,
   unsupportedSequestration: "This template uses an unsupported storage component.",
-  missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
-  templateLinesNeedReview: "This Removal template has components to decide. Answer them in Settings, Removal templates.",
+  missingFixedDatapoint: SET_FIXED_DATAPOINTS,
+  templateLinesNeedReview: `${COMPONENTS_TO_DECIDE} ${ANSWER_IN_SETTINGS}`,
 } as const;
 /**
  * Landing line for a deep link to a credit batch's template block when the
@@ -19,9 +28,20 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
  */
 export const REMOVAL_TEMPLATE_LANDING_LINE = "Check this credit batch's Removal template before submitting a Removal.";
 export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
-export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string }
+/** Optional split for surfaces that can show facts without repair steps.
+ * The existing message/detail remains the complete copy for other consumers.
+ */
+export interface BlockerCopy { detail?: string; instruction?: string }
+const TEMPLATE_BLOCKER_COPY: Partial<Record<RemovalTemplateBlockerCode, BlockerCopy>> = {
+  notRemovalTemplate: { detail: NOT_REMOVAL_TEMPLATE, instruction: SET_REMOVAL_TEMPLATE },
+  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE },
+  templateNotFullyRead: { detail: TEMPLATE_NOT_FULLY_READ, instruction: TRY_AGAIN },
+  missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS },
+  templateLinesNeedReview: { detail: COMPONENTS_TO_DECIDE, instruction: ANSWER_IN_SETTINGS },
+};
+export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string; copy?: BlockerCopy }
 export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): RemovalTemplateBlocker {
-  return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code] };
+  return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code], ...(TEMPLATE_BLOCKER_COPY[code] ? { copy: TEMPLATE_BLOCKER_COPY[code] } : {}) };
 }
 
 /** Per-line template blocker codes, routed by the same table as the template codes. */

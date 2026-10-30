@@ -89,8 +89,7 @@ export function removalDateLine(removal: Pick<RemovalBarRemoval, "phase" | "subm
 }
 
 function RemovalCardBody({ group, facilityId, timeZone: zone }: { group: RemovalBarGroup; facilityId: string; timeZone?: string }) {
-  const clock = useFacilityClock(facilityId);
-  const timeZone = zone ?? clock.timeZone;
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
   const removal = group.removal;
   if (!removal) return null;
   return (
