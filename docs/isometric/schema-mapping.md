@@ -1,39 +1,23 @@
 # Isometric Requirement-to-Implementation Mapping
 
-> **Non-authoritative.** Status is verified against the current repository and
-> the pinned sources in [`versions.json`](./versions.json). `Implemented` means
-> the cited code path exists; it does not imply Isometric or verifier approval.
+Read this for implementation coverage and remaining gaps. Code checked on
+2026-10-30 against staging `5eb7aa111`; pinned-source interpretations retain
+historical provenance in [versions.json](./versions.json) and the
+[requirements shortlist](./requirements-shortlist.md). Direct read probes and public-source checks are scoped in the
+[verification record](../archive/2026-10-30-isometric-verification.md).
+Implemented code does not imply verifier approval.
 
-## Which write rules live where
+## Policy boundaries
 
-`src/lib/certifier-policy/isometric.ts` owns unsampled Credit batch eligibility:
-an Isometric facility connection, organization credentials, and computed Method-B
-eligibility are required. Data-access gathers these facts in the write transaction
-under the existing lock sequence; the module has no database or auth dependencies.
-
-`validateBatchPeriod` applies noma's conservative one-calendar-month cap only to
-Isometric batches (D14, [#368](https://github.com/Maji-Studio/noma-dmrv/issues/368)).
-The shared date helper owns date validity and ordering for every certifier.
-Create, update, membership, run options, and the certifier-aware form check use
-this split. The Isometric-conditional DB constraint
-`credit_batches_isometric_max_one_month` enforces `end_date < start_date + interval '1 month'`.
-The form and server use the same strict, month-end-clamped boundary. Isometric
-readiness and submission also check earliest member-run start to latest end and
-name the latest-ending run when that span reaches one month.
-
-As an implementation decision of [#368](https://github.com/Maji-Studio/noma-dmrv/issues/368)'s
-D14 follow-through, linking a facility to Isometric refuses archived facilities
-and active credit batches with overlong periods under mapping and facility locks.
-In the same transaction, it stamps active null-certifier batches `isometric` and
-records activity, leaving archived batches unchanged. This app decision does not
-change the protocol pin or claim a pinned v1.1 requirement; see
+`src/lib/certifier-policy/isometric.ts` owns Isometric-specific unsampled-batch
+eligibility and period rules. The one-calendar-month cap is a conservative noma
+choice, not a newly claimed pinned-protocol requirement. It applies to Isometric
+batches and is enforced by schema, shared validation and submission checks.
+Linking a facility refuses incompatible active batches and stamps active
+null-certifier batches atomically. See
 [ADR 0016](../adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md).
-
-To move a rule between noma-wide and Isometric-only, record the decision here or
-in the owning ADR, move its shared check or certifier condition, and align every
-caller and any DB backstop. Cover Isometric and provider `null` in regression
-tests. Keep provider-specific rules concrete until a second certifier needs a
-shared interface.
+When changing ownership of a rule, align all callers and DB backstops, and cover
+both Isometric and provider-null paths.
 
 | Area | Current implementation evidence | Status | Remaining gap |
 |---|---|---|---|
@@ -54,14 +38,14 @@ shared interface.
 | Custody handoffs | Chain-of-Custody trail reconstructed from domain lineage and evidence | missing | `custody_handoffs` does not exist; there is no canonical handoff ledger |
 | Low-carbon procurement | `power_procurement_evidence` in `src/db/schema/compliance.ts` | schema-implemented | No conjunctive EC1-EC5 evaluator, annual intensity roll-up, or claim gate |
 | Electricity/fuel metering | Run-level electricity and three diesel input fields in `src/db/schema/production.ts`; Readings file retained unchanged | partial | No queryable hourly electricity meter stream or complete meter/fuel evidence metadata |
-| Registry energy mapping | `src/lib/isometric/semantic-binding-catalog.ts` and `src/lib/isometric/utils/aggregation.ts` | implemented | Electricity is one grid component; diesel uses separate `Generator diesel usage` and `Startup diesel usage` components. Display-name mapping remains an operational coupling |
-| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by the factor and its Source remains open, as do per-record-type evidence gates. Distance-method fallback justification lives in the PDD, outside noma |
+| Registry energy mapping | `src/lib/isometric/semantic-binding-catalog.ts` and `src/lib/isometric/utils/aggregation.ts` | implemented | Reviewed component-ID contracts select electricity and separate generator/preprocessing versus startup diesel quantities; display names have no binding authority. See ADR 0032 |
+| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by the factor and its Source remains open, as do scale and transport-record completeness checks. Each Delivery already needs uploaded proof before submission. Distance-method fallback justification lives in the PDD, outside noma |
 | BCU accounting | None | missing | No BCU schema, retirement, ownership, cap, additionality, or anti-double-count structures |
 | Embodied inventory | Generic documents only | missing | No item/material/equipment inventory or complete factor records |
 | GHG/SSR materiality assessment | None | missing | `ghg_materiality_assessments` does not exist; no issuance gate |
 | Co-product allocation | None | missing | Add a no-co-products applicability record or an allocation model |
 | Reversal risk | Registry risk score and buffer contribution | registry-owned | Noma has no batch-level buffer input |
 | Removal Sources | Evidence targets on `src/lib/isometric/semantic-binding-catalog.ts` roles, classified by `src/lib/certification/removal-source-bindings.ts`, and post-submit verification in `src/lib/isometric/source-binding-verification.ts` | implemented | Sources bind to exact inputs, including generated transport/durability ledgers and the safety-margin mass target |
-| Safety margin | Named `Safety margin` mapping in `src/lib/isometric/semantic-binding-catalog.ts` | implemented | noma submits removal dry mass only; the fixed carbon intensity and its justification remain registry-owned |
+| Safety margin | Reviewed automatic-source contract and `src/lib/isometric/semantic-binding-catalog.ts` | implemented | noma submits removal dry mass only; the fixed carbon intensity and its justification remain registry-owned |
 | GHG Statement report | `certifier_ghg_statement_reports`, `src/fn/certification/ghg-statement-reports.ts` | implemented | Generated data summary is immutable after preparation/approval; external report URL remains supported for project-specific qualitative reports |
 | Reporting window | `src/fn/certification/removal-reporting-window.ts` | partial | End is latest application date; start still uses earliest production start instead of earliest feedstock sourcing |

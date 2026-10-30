@@ -1,88 +1,57 @@
-# Isometric Requirements KB
+# Isometric knowledge base
 
-> **Non-authoritative.** These files interpret the Isometric sources pinned in
-> [`versions.json`](./versions.json). Verify the linked registry material before
-> changing credit logic or making a credit claim.
+Use this index to find protocol interpretations, implementation boundaries and
+registry gotchas. These docs are non-authoritative. Call the official Isometric
+MCP `how_to` and verify registry sources before changing credit logic or making
+a credit claim. [Versions](./versions.json) is the sole protocol/module pin.
 
-## Current scope
+## Find the right owner
 
-This knowledge base describes the Certify project observed and re-pinned on
-2026-07-24:
-
-- Biochar Production and Storage Protocol v1.1
-- Biochar Storage in Agricultural Soils v1.1
-- Biomass Feedstock Accounting v1.2
-- Energy Use Accounting v1.2
-- Transportation Emissions Accounting v1.1
-- Embodied Emissions Accounting v1.0
-
-The GHG Accounting module and Biochar Storage in Soil Environments module are
-not part of this pinned v1.1 interpretation set. Historical ADRs and archived
-plans may cite them; their current-applicability notes take precedence.
-
-## Current documents
-
-| File | Purpose |
+| Task | Read |
 |---|---|
-| [`versions.json`](./versions.json) | Single protocol and module version pin |
-| [`requirements-shortlist.md`](./requirements-shortlist.md) | Source-linked requirement shortlist for product and engineering work |
-| [`schema-mapping.md`](./schema-mapping.md) | Current code/schema coverage and verified gaps |
-| [`p0-compliance-checklist.md`](./p0-compliance-checklist.md) | Submission-critical implementation checklist |
-| [`simple-implementation-guide.md`](./simple-implementation-guide.md) | Plain-language guide to what exists, what is derived, and what is missing |
-| [`condition-registry.md`](./condition-registry.md) | Conditional-field trigger map |
-| [`integration-plan.md`](./integration-plan.md) | Current Certify integration contract |
-| [`openapi-index.md`](./openapi-index.md) | Committed Certify type surface and proven call sites |
-| [`sandbox-template-authoring.md`](./sandbox-template-authoring.md) | Current sandbox template contract and validation workflow |
-| [`changes.md`](./changes.md) | Dated implementation and interpretation changes |
-| [`update-playbook.md`](./update-playbook.md) | Version and API refresh procedure |
+| Debug evidence links, filters, PATCH or reconciliation | [Registry behavior](./registry-behavior.md) first |
+| Change a protocol interpretation | [Versions](./versions.json), [requirements shortlist](./requirements-shortlist.md), [schema mapping](./schema-mapping.md) |
+| Check submission gaps and conditional gates | [P0 checklist](./p0-compliance-checklist.md), [condition registry](./condition-registry.md) |
+| Understand local versus registry ownership | [Implementation guide](./simple-implementation-guide.md) |
+| Change submission, evidence or retry behavior | [Integration contract](./integration-plan.md), [API index](./openapi-index.md) |
+| Change/select a template | [Sandbox template guide](./sandbox-template-authoring.md) |
+| Resolve an undecided behavior | [Isometric open questions](../open-questions-isometric.md) |
+| Refresh sources or generated types | [Update playbook](./update-playbook.md) |
+| Find past decisions or investigations | [Change history](./changes.md), [ADRs](../adr/) |
 
-Archived 2026-08-04 Production Data research is preserved in
-[`facility-production-data-api`](../archive/2026-08-04-facility-production-data-api.md),
-[`follow-up research`](../archive/2026-08-04-production-data-follow-up-research.md),
-[`repo seams`](../archive/2026-08-04-production-data-follow-up-repo-seams.md),
-and [`support questions`](../archive/2026-08-04-production-data-follow-up-support-questions.md).
+The pinned interpretation is the 2026-07-24 project observation: Biochar v1.1,
+Agricultural Soils v1.1 and the accounting modules in `versions.json`.
+GHG Accounting and Soil Environments are outside this pinned set. Historical
+ADRs/plans may refer to another version; read their applicability notes.
 
-The 2026-07-24 adversarial source review is preserved at
-[`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](../archive/2026-07-24-isometric-gap-check-v1-1.md).
-It is evidence for the current gap classifications, not a claim that its
-candidate list is exhaustive.
+## Implementation entry points
 
-## Implementation map
+- HTTP client, generated types and semantic catalog: `src/lib/isometric/`.
+- Submission orchestration: `src/fn/certification/`.
+- Provider-neutral persistence: `src/db/schema/certification.ts`.
+- Organization-scoped encrypted credentials: `src/data-access/certifier-credentials.ts`.
+- Canonical accounting and roll-ups: `src/data-access/credit-batch-accounting.ts`.
+- Evidence classification: `src/lib/certification/removal-source-bindings.ts`.
 
-- Certify HTTP client and generated types: `src/lib/isometric/`
-- Removal and GHG Statement orchestration: `src/fn/certification/`
-- Provider-neutral persistence: `src/db/schema/certification.ts`
-- Per-organization encrypted credentials:
-  `src/data-access/certifier-credentials.ts`
-- Credit-batch lineage, roll-ups, and stored-CO2e preview:
-  `src/data-access/credit-batch-accounting.ts`
-- Exact evidence-to-registry-input rules: targets declared in
-  `src/lib/isometric/semantic-binding-catalog.ts`, classified by
-  `src/lib/certification/removal-source-bindings.ts`
-- Certification workspace UI: `src/components/certification/`
+Prefer these owners over copying signatures or mapping tables into prose.
+Use [status terms](./simple-implementation-guide.md#status-vocabulary) precisely;
+local code, isolated sandbox probes and full submission verification are distinct.
 
-Application code uses `resolveIsometricClient(ctx)` from
-`src/data-access/certifier-credentials.ts`. It requires org scope and loads only
-that organization's encrypted credentials. Platform Admin verification of a
-selected organization's saved credentials uses the explicitly guarded
-`verifyIsometricCredentialsForOrganization(ctx, organizationId)`.
-Environment credentials remain an escape hatch for scripts and dedicated health
-checks, parsed by `client-env.ts` without loading app configuration. `client.ts`
-takes explicit credentials and never imports data-access.
+## Verification provenance
 
-## Reading order
+- Protocol pin observed 2026-07-24; original requirements cross-check 2026-08-04.
+  Later source-specific checks keep their dates in the owning document.
+- Code cleanup checked against staging `5eb7aa111` on 2026-10-30.
+- Direct sandbox reads reproduced the filter/readback behavior on 2026-10-30;
+  public registry pages supplied a scoped source cross-check. The
+  [verification record](../archive/2026-10-30-isometric-verification.md) distinguishes
+  exact patch checks, the Transportation minor-page fallback and historical facts.
+- Authenticated MCP access still needs administrator review. The peer readback
+  fix and full evidence-bearing staging submission retest remain outstanding.
 
-For a compliance change, read `versions.json`, the shortlist, schema mapping,
-P0 checklist, and relevant current code/tests. For an integration change, read
-the integration contract, OpenAPI index, relevant ADRs, and
-[`docs/open-questions-isometric.md`](../open-questions-isometric.md).
-
-Do not copy historical migration instructions or proposal data models into a
-current implementation claim. Use `implemented`, `partial`, `missing`, and
-`registry-owned` precisely.
-
-## Freshness
-
-- Version pin observed: 2026-07-24
-- Requirements and integration cross-check: 2026-08-04
-- Authority: registry URLs recorded in `versions.json`
+The [2026-07-24 gap-check](../archive/2026-07-24-isometric-gap-check-v1-1.md)
+is historical evidence, not an exhaustive current assessment. Production Data
+research is preserved in the [API research](../archive/2026-08-04-facility-production-data-api.md),
+[follow-up](../archive/2026-08-04-production-data-follow-up-research.md),
+[repo seams](../archive/2026-08-04-production-data-follow-up-repo-seams.md) and
+[support questions](../archive/2026-08-04-production-data-follow-up-support-questions.md).
