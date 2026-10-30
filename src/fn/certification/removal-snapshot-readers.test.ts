@@ -1,11 +1,74 @@
 import { describe, expect, it } from "vitest";
 import {
+  aggregatedProductionRunDatapointDescription,
+  DATAPOINT_DESCRIPTION_MAX_LENGTH,
+} from "@/lib/certification/emission-entry-carry-copy";
+import {
   assertRemovalSnapshotConfigurationCurrent,
   readRemovalEntrySnapshot,
   readRemovalBiocharApplicationIntents,
   readRemovalSourceBindingPlan,
   readRemovalSupersedePreviousId,
+  readRemovalTransport,
 } from "./removal-snapshot-readers";
+
+describe("readRemovalTransport", () => {
+  const STORED_DESCRIPTION_LENGTH = 590;
+  const UUID_RUN_COUNT = 14;
+  const UUID_SUFFIX_LENGTH = 12;
+  const body = {
+    supplier_reference_id: "datapoint-ref-1",
+    quantity: { magnitude: "120.00", unit: "L" },
+    source_ids: ["source-1"],
+    type: "quantity",
+    display_name: "Diesel use",
+    project_id: "project-1",
+  };
+
+  function storedRow(storedBody: Record<string, unknown>) {
+    return {
+      payloadSnapshot: {
+        transport: {
+          removalSupplierRef: "removal-ref-1",
+          datapointBodies: [{ rtcId: "component-1", inputKey: "fuel", body: storedBody }],
+          omittedTemplateComponentIds: ["omitted-component-1"],
+        },
+      },
+    };
+  }
+
+  it("fits a pre-cap stored aggregate without changing other fields or the row", () => {
+    const ids = [
+      ...Array.from({ length: UUID_RUN_COUNT }, (_, index) =>
+        `00000000-0000-4000-8000-${String(index).padStart(UUID_SUFFIX_LENGTH, "0")}`,
+      ),
+      "legacy-production-run-0001",
+    ];
+    const description = `Aggregated from production runs ${ids.join(", ")}`;
+    expect(description.length).toBe(STORED_DESCRIPTION_LENGTH);
+    const row = storedRow({ ...body, description });
+    const before = structuredClone(row);
+
+    const transport = readRemovalTransport(row as never);
+    const expectedDescription = aggregatedProductionRunDatapointDescription(ids);
+    expect(expectedDescription.length).toBeLessThanOrEqual(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+    expect(transport).toEqual({
+      ...before.payloadSnapshot.transport,
+      datapointBodies: [{
+        ...before.payloadSnapshot.transport.datapointBodies[0],
+        body: { ...body, description: expectedDescription },
+      }],
+    });
+    expect(row).toEqual(before);
+    expect(transport.datapointBodies[0]).not.toBe(row.payloadSnapshot.transport.datapointBodies[0]);
+    expect(transport.datapointBodies[0].body).not.toBe(row.payloadSnapshot.transport.datapointBodies[0].body);
+  });
+
+  it.each([{}, { description: null }, { description: { __typename: "Undefined" } }])("preserves non-string or absent descriptions: %j", descriptionFields => {
+    const row = storedRow({ ...body, ...descriptionFields });
+    expect(readRemovalTransport(row as never)).toEqual(row.payloadSnapshot.transport);
+  });
+});
 
 describe("assertRemovalSnapshotConfigurationCurrent", () => {
   const row = {
