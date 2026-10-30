@@ -59,16 +59,21 @@ describe("read-only sheet sections", () => {
     expect(findElements(sections, ApplicationStorageLocationSync).map((el) => el.props.readOnly)).toEqual([readOnly]);
   });
 
-  it("says the archived delivery is loading, not missing", () => {
+  it("shows the shared skeleton while the archived delivery loads", () => {
     const deliveryRead = { isPending: true, error: null, isFetching: true, refetch: vi.fn() };
     const [details] = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
-    expect(details.fields.find((field) => field.label === "Delivery source")?.value).toBe("Loading the delivery.");
+    const field = details.fields.find((f) => f.label === "Delivery source");
+    expect(field?.pending).toBe(true);
+    expect(field?.value).toBeNull();
   });
 
   it("shows a failed archived delivery read with Try again", () => {
     const refetch = vi.fn();
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
+    const field = sections[0].fields.find((f) => f.label === "Delivery source");
+    expect(field?.value).toBe("Could not load");
+    expect(field?.valuePresent).toBe(false);
     render(<>{sections[0].content}</>);
     expect(screen.getByText("The delivery could not be loaded.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));

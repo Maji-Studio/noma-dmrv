@@ -4,6 +4,8 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { LOAD_FAILED } from "@/lib/copy-utils";
+import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -50,7 +52,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : context.deliveryRead?.isPending ? "Loading the delivery." : null,
+            : context.deliveryRead?.error ? LOAD_FAILED : null,
+          ...(context.deliveryRead?.error && !context.delivery ? { valuePresent: false } : {}),
+          ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
         {
           label: "Biochar product applied",
@@ -70,10 +74,12 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       content: application.heldOutOfCredits || context.deliveryRead?.error ? (
         <>
           {context.deliveryRead?.error && (
-            <div className="flex flex-col gap-8">
-              <ServerError message="The delivery could not be loaded." />
-              <Button type="button" variant="weak" disabled={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>Try again</Button>
-            </div>
+            <Notice
+              tone="warning"
+              action={<Button type="button" variant="default" size="small" busy={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+            >
+              The delivery could not be loaded.
+            </Notice>
           )}
           {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
         </>

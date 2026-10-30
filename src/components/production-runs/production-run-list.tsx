@@ -472,6 +472,8 @@ export function ProductionRunList() {
       return;
     }
     if (focusedRun.isLoading || focusedRun.isFetching || focusedRun.isPending) return;
+    // The linked read is the fallback for an errored normal read: wait for it before calling the link invalid.
+    if (needsLinkedRun && (focusedLinkedRun.isLoading || focusedLinkedRun.isFetching || focusedLinkedRun.isPending)) return;
     if (handledInvalidRunIdRef.current === focusedRunId) return;
 
     if (focusedRun.isError || (focusedRun.isSuccess && !focusedRun.data)) {
@@ -488,6 +490,10 @@ export function ProductionRunList() {
     focusedRun.isPending,
     focusedRun.isSuccess,
     focusedRunId,
+    focusedLinkedRun.isFetching,
+    focusedLinkedRun.isLoading,
+    focusedLinkedRun.isPending,
+    needsLinkedRun,
     setFocusedRunId,
     toast,
   ]);

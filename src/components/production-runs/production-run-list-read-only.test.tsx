@@ -15,11 +15,12 @@ const harness = vi.hoisted(() => ({
   linkedEnabled: [] as boolean[],
   sectionFacilities: [] as unknown[],
   toastError: vi.fn(),
+  setRun: vi.fn(),
 }));
 
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
-  useQueryState: (key: string) => [key === "run" ? RUN.id : null, vi.fn()],
+  useQueryState: (key: string) => [key === "run" ? RUN.id : null, harness.setRun],
 }));
 vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: null, facilities: [] }) }));
@@ -79,6 +80,7 @@ beforeEach(() => {
   harness.linkedEnabled = [];
   harness.sectionFacilities = [];
   harness.toastError.mockReset();
+  harness.setRun.mockReset();
 });
 afterEach(cleanup);
 
@@ -106,5 +108,18 @@ describe("ProductionRunList link into an archived facility", () => {
     render(<ProductionRunList />);
     expect(harness.linkedEnabled.at(-1)).toBe(true);
     expect(screen.getByRole("dialog", { name: "RUN-1" }).textContent).toBe("Mafinga is archived, so this production run is read-only.");
+  });
+
+  it("waits for the linked read before calling the link invalid, then opens the run", () => {
+    harness.normal = { ...harness.normal, data: RUN, isError: true };
+    harness.linked = { data: undefined, isLoading: true, isFetching: true, isPending: true, isSuccess: false, isError: false };
+    const { rerender } = render(<ProductionRunList />);
+    expect(harness.toastError).not.toHaveBeenCalled();
+    expect(harness.setRun).not.toHaveBeenCalledWith(null);
+    harness.linked = { data: RUN, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false };
+    rerender(<ProductionRunList />);
+    expect(harness.toastError).not.toHaveBeenCalled();
+    expect(harness.setRun).not.toHaveBeenCalledWith(null);
+    expect(screen.getByRole("dialog", { name: "RUN-1" })).toBeTruthy();
   });
 });
