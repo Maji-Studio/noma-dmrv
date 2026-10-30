@@ -1,113 +1,45 @@
-# Isometric Certify OpenAPI Index
+# Isometric Certify API index
 
-> **Current-code index, not API authority.** Operation names come from the
-> committed generated type file
-> `src/lib/isometric/generated/certify.d.ts`. A row is marked wired only when a
-> current non-test call site is cited. Regenerate the types before relying on
-> upstream API shape.
+Use this to find the owning wrapper and its application consumer, not as API
+authority. The committed contract is `src/lib/isometric/generated/certify.d.ts`.
+Code checked 2026-10-30. Before trusting live behavior, read the dated
+[registry observations](./registry-behavior.md), especially the GraphQL filter
+correction that supersedes the old query assumption below.
 
-## Ownership and status
+## Code lookup
 
-`pnpm regenerate-certify-types` generates `certify.d.ts` from the docs-hosted
-Certify OpenAPI URL. `.github/workflows/isometric-health.yml` owns the drift
-check.
+Wrapper paths below are relative to `src/lib/isometric/`; consumer paths are
+relative to `src/fn/certification/`. A wrapper's presence alone does not prove
+that an operation is invoked by the app.
 
-There is no checked-in JSON snapshot. The generated types are the local API
-contract reference; regeneration fetches the schema from its URL.
-
-Status terms:
-
-- **wired:** current application/server code invokes the operation;
-- **sandbox/dark:** invoked by implemented code whose surrounding feature is
-  sandbox-only or has no rendered UI;
-- **not wired:** present in generated types but no current application call
-  site was found.
-
-## Wired read/configuration operations
-
-| Method and path | Use | Current call site |
+| Resource | Wrapper | Application consumer and boundary |
 |---|---|---|
-| `GET /projects` | Project picker, mapping validation, submission context | `src/lib/isometric/projects.ts` → `listProjects`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
-| `GET /projects/{project_id}/ghg_entry_templates` | Template picker and live submission compilation | `src/lib/isometric/projects.ts` → `listGhgEntryTemplates`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
-| `GET /component_blueprints` | Validate live template inputs and units | `src/lib/isometric/projects.ts` → `listComponentBlueprints`; consumer in `src/fn/certification/certify-context-core.ts` |
-| `GET /feedstock_types` | Read-only registry catalog in the local feedstock-type workflow | `src/lib/isometric/feedstock-types.ts`; consumer in `src/fn/certification/feedstock-types.ts` |
+| Projects, templates, blueprints | `projects.ts` | `facility-mapping.ts`, `certify-context-core.ts`; read/select/validate |
+| Feedstock catalog | `feedstock-types.ts` | `feedstock-types.ts`; read only |
+| Datapoints, Components, GHG Entries and attributions | `submissions.ts` | `submit-removal.ts`, `durability-measurement-samples.ts`, `removal-breakdown.ts`; Source verification in `src/lib/isometric/source-binding-verification.ts` |
+| GHG Statements | `ghg-statements.ts` | `ghg-statements.ts`, `ghg-statement-reconciliation.ts`, `ghg-statement-reports.ts`; discover/create/read/submit/resubmit |
+| Sources and signed uploads | `sources.ts` | `sources.ts`, `sources-transfer.ts`; reconcile/create/upload |
+| Measurement samples | `measurement-samples.ts` | `durability-measurement-samples.ts`; sampled 1,000-year sandbox creation; exact lookup also supports deletion |
+| Production Batches | `production-batches.ts` | `production-batches.ts`; list/create/read/reconcile |
+| Storage Locations | `storage-locations.ts` | `storage-locations.ts`, `storage-location-actions.ts`; project-scoped list/create/read/recover |
+| Biochar Applications | `biochar-applications.ts` | `biochar-applications.ts`; list/create/read/reconcile per immutable slice |
+| Registry cleanup | The resource wrappers above | `delete-removal.ts`; GHG Entry first, then Applications, measurements, unshared batches and released Sources |
 
-## Removal/GHG Entry and Datapoint operations
+Noma uses `/ghg_entries`, not the deprecated `/removals` aliases still present in
+the committed types. Measurement lookup scans the list; there is no committed
+single-measurement GET or supplier-reference filter. Storage Location and
+Application reconciliation are bounded; see [registry behavior](./registry-behavior.md).
 
-| Method and path | Use | Current call site |
-|---|---|---|
-| `GET /datapoints` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findDatapointBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
-| `POST /datapoints` | Create ordinary and direct durability Datapoints | `src/lib/isometric/submissions.ts` → `createDatapoint`; consumer in `src/fn/certification/submit-removal.ts` |
-| `GET /datapoints/{id}` | Verify an exact Source-to-input binding | `src/lib/isometric/submissions.ts` → `getDatapoint`; consumer in `src/lib/isometric/source-binding-verification.ts` |
-| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs (read first; skip when present; send the union; retried as idempotent) | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
-| `GET /components/{id}` | Resolve attributed component inputs for Source verification | `src/lib/isometric/submissions.ts` → `getComponent`; consumer in `src/lib/isometric/source-binding-verification.ts` |
-| `GET /ghg_entries` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findGhgEntryBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
-| `POST /ghg_entries` | Create the compiled Removal/GHG Entry | `src/lib/isometric/submissions.ts` → `createGhgEntry`; consumer in `src/fn/certification/submit-removal.ts` |
-| `GET /ghg_entries/{id}` | Removal breakdown and generated GHG Statement report facts | `src/lib/isometric/submissions.ts` → `getGhgEntry`; consumers in `src/fn/certification/removal-breakdown.ts`, `ghg-statement-breakdown.ts`, and `ghg-statement-reports.ts` |
-| `GET /ghg_entries/{id}/component_attributions` | Post-submit Source binding verification | `src/lib/isometric/submissions.ts` → `listGhgEntryComponentAttributions`; consumer in `src/lib/isometric/source-binding-verification.ts` |
+Source visibility is an organization policy applied at creation. Changing it
+does not rewrite remote Sources. Live immutable snapshot references retain
+Sources; Removal deletion can delete released, unshared ones. The historical
+2026-09-10 probe recorded irreversible Source deletion and refusal while locked
+Datapoints or a verified statement use the Source. Failed cleanup is audited.
 
-The deprecated `/removals*` aliases remain in the generated type file but have
-no current call site. noma calls only the `ghg_entries` route family.
-
-## GHG Statement operations
-
-| Method and path | Use | Current call site |
-|---|---|---|
-| `GET /ghg_statements` | Project-period discovery, draft adoption, reconciliation | `src/lib/isometric/ghg-statements.ts` → `listGhgStatementsForProject` and `findDraftGhgStatementsByPeriod`; consumers in `src/fn/certification/ghg-statements.ts` and `ghg-statement-reconciliation.ts` |
-| `POST /ghg_statements` | Create a statement when no exact draft can be adopted | `src/lib/isometric/ghg-statements.ts` → `createGhgStatement`; consumer in `src/fn/certification/ghg-statements.ts` |
-| `GET /ghg_statements/{id}` | Refresh status, validate membership, and build reports | `src/lib/isometric/ghg-statements.ts` → `getGhgStatement`; consumers in `src/fn/certification/ghg-statements.ts` and `ghg-statement-reports.ts` |
-| `POST /ghg_statements/{id}/submit` | Submit and resubmit with a generated or external report URL | `src/lib/isometric/ghg-statements.ts` → `submitGhgStatement` / `resubmitGhgStatement`; consumer in `src/fn/certification/ghg-statements.ts` |
-
-## Source operations
-
-| Method and path | Use | Current call site |
-|---|---|---|
-| `GET /sources` | Supplier-reference reconciliation | `src/lib/isometric/sources.ts` → `findSourceBySupplierRef`; consumer in `src/fn/certification/sources.ts` |
-| `POST /sources` | Create a mirrored document Source | `src/lib/isometric/sources.ts` → `createSource`; consumer in `src/fn/certification/sources.ts` |
-| `POST /sources/{id}/signed_upload_url` | Resume an interrupted Source upload or recognize an already-uploaded Source | `src/lib/isometric/sources.ts` → `requestSignedUploadUrl`; consumer in `src/fn/certification/sources.ts` |
-| `DELETE /sources/{id}` | Remove the Sources whose local mapping a Removal deletion released; 204, irreversible, refused while locked Datapoints or a verified statement use the Source (verified 2026-09-10) | `src/lib/isometric/sources.ts` → `deleteSource`; consumer in `src/fn/certification/delete-removal.ts` |
-
-`PATCH /sources/{id}` is not wired. Source visibility is now an
-organization-wide policy applied when a Source is created; noma does not
-rewrite existing remote Sources when the policy changes. Source deletion is
-limited to Removal deletion: a Source that any live submission snapshot still
-cites keeps its local mapping and is never deleted, so immutable snapshots
-keep resolving their Source IDs.
-
-## Durability measurement operations
-
-| Method and path | Status | Use | Current call site |
-|---|---|---|---|
-| `GET /measurement_samples` | wired | Client-side supplier-reference reconciliation and exact journal identity lookup during deletion; Certify has no reference filter or single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`, `getMeasurementSample`; consumers in `src/fn/certification/durability-measurement-samples.ts` and `src/fn/certification/delete-removal.ts` |
-| `DELETE /measurement_samples/{id}` | wired | Delete only exact version-owned measurements during Removal deletion | `src/lib/isometric/measurement-samples.ts` → `deleteMeasurementSample`; consumer in `src/fn/certification/delete-removal.ts` |
-| `POST /measurement_samples` | sandbox | Create sampled 1,000-year durability values and returned Datapoints | `src/lib/isometric/measurement-samples.ts` → `createMeasurementSample`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
-
-Creation and submission reconciliation are used by the sampled 1,000-year
-sandbox path. Lookup and deletion also support Removal cleanup. Their presence
-is not evidence of a live 200-year durability measurement submission path.
-
-## Production and storage traceability operations
-
-| Method and path | Status | Use | Current call site |
-|---|---|---|---|
-| `GET /production_batches` | wired | Supplier-reference reconciliation through client-side pagination | `src/lib/isometric/production-batches.ts` → `findProductionBatchBySupplierRef`; consumer in `src/fn/certification/production-batches.ts` |
-| `DELETE /production_batches/{id}` | wired | Remove unshared registry batches during Removal deletion, retaining local credit batches | `src/lib/isometric/production-batches.ts` → `deleteProductionBatch`; consumer in `src/fn/certification/delete-removal.ts` |
-| `POST /production_batches` | wired | Register one Isometric Production Batch per noma credit batch | `src/lib/isometric/production-batches.ts` → `createProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
-| `GET /production_batches/{id}` | wired | Verify the saved Production Batch identity before reuse or recover a confirmed missing record | `src/lib/isometric/production-batches.ts` → `getProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
-| `GET /projects/{project_id}/storage_locations` | wired | Bounded supplier-reference reconciliation before an explicit or Removal-submission sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
-| `POST /projects/{project_id}/storage_locations` | wired | Register a customer location as a reusable `biochar_field` site in the configured environment | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
-| `GET /projects/{project_id}/storage_locations/{id}` | wired | Drift check against the submitted snapshot; confirmed 404 recovery through stable-reference reconciliation | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
-| `GET /biochar_applications` | wired | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
-| `GET /biochar_applications/{id}` | wired | Exact confirmed-identity readback without an account-wide supplier-reference scan | `src/lib/isometric/biochar-applications.ts` → `getBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
-| `POST /biochar_applications` | wired | After Production Batch and Storage Location confirmation, register one record per immutable Application by credit-batch slice. Arrival is the slice's allocated wet kg and departure is zero. | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
-| `DELETE /biochar_applications/{id}` | wired | Only while deleting a never-finalized Removal, after its draft GHG Entry is gone; a 404 counts as already deleted | `src/lib/isometric/biochar-applications.ts` → `deleteBiocharApplication`; consumer in `src/fn/certification/delete-removal.ts` |
-| `DELETE /ghg_entries/{id}` | wired | First step of deleting a never-finalized Removal; the registry refuses it unless the GHG Entry is still `DRAFT`, and that refusal stops the deletion | `src/lib/isometric/submissions.ts` → `deleteGhgEntry`; consumer in `src/fn/certification/delete-removal.ts` |
-
-Storage Location PATCH and Biochar Application correction operations remain
-intentionally unwired; the DELETE operations above are wired only
-inside Removal deletion. Drift is surfaced for operator review. Both
-Storage Location and Biochar Application synchronization follow the configured
-Isometric environment.
+Datapoint Source PATCH is a full-list replacement. The durability path GETs the
+current set, skips when all intended IDs exist, otherwise PATCHes the sorted
+union. Preserve this when changing retry behavior; see
+`durability-measurement-samples.ts` and [registry behavior](./registry-behavior.md).
 
 ## GraphQL evidence read (outside OpenAPI)
 
@@ -129,45 +61,29 @@ required, the REST Biochar Application id (`bse_...`) is the
 create. This call is not generated from REST types; see
 [open questions](../open-questions-isometric.md).
 
-## Present in generated types but not wired
+## Unwired boundaries
 
-The following operation families have no current application call site:
+Generated types include APIs that the app does not use: reactor sensors and
+bulk time series, monitoring submissions, storage units, feedstock batches,
+measurement locations, standalone Component/attribution mutations, Datapoint
+deletion/reverse lookups, Source updates/private URLs and other resource deletes.
+`POST /components` has a wrapper but no non-test consumer. Storage Location PATCH
+and Application corrections are also unwired. The issued-credit Registry API
+has no parallel committed client.
 
-- reactor sensors, file uploads, and bulk time-series submissions;
-- organization identity;
-- monitoring requirements and MonitoringSubmissions;
-- storage units;
-- feedstock batches;
-- measurement locations;
-- standalone project/GHG-statement Components and attribution mutations;
-- Datapoint deletion and reverse-lookup endpoints;
-- Source private URL and update;
-- resource DELETE operations other than GHG Entry, Biochar Application, MeasurementSample, ProductionBatch and Source;
-- deprecated Removal/template aliases.
+## Refresh
 
-`POST /components` has a typed wrapper in
-`src/lib/isometric/submissions.ts`, but no non-test consumer; it is therefore
-not wired.
-
-The Registry API for issued credits, orders, deliveries, retirements, and
-transfers is not integrated and has no committed generated client type surface
-parallel to `certify.d.ts`.
-
-## Refresh procedure
-
-1. Run `pnpm regenerate-certify-types`.
-2. Review the diff in
-   `src/lib/isometric/generated/certify.d.ts`.
-3. Search current call sites:
+1. Run `pnpm regenerate-certify-types` and inspect the generated diff.
+2. Find HTTP calls and their non-test consumers:
 
    ```bash
-   rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?|findRegistryRecord' \
-     src/lib/isometric src/fn/certification
+   rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?|findRegistryRecord' src/lib/isometric src/fn/certification
    ```
 
-4. For each claimed wired operation, cite both the HTTP wrapper/direct call and
-   a current consumer.
-5. Run `pnpm isometric:coverage-check -- --source=fixture` for template/mapping
-   compatibility.
-6. Update this file only for committed types and code. Record live-only
-   observations in `changes.md` with their observation date.
+3. Check live template compatibility with
+   `pnpm isometric:coverage-check -- --source=fixture`.
+4. Update this index for committed code only. Record external observations,
+   environment, date and verification limits in [registry behavior](./registry-behavior.md).
+
+The drift workflow is `.github/workflows/isometric-health.yml`; the schema URL
+and version refresh process are owned by [update playbook](./update-playbook.md).
