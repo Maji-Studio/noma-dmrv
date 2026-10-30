@@ -3,6 +3,7 @@ import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
 import type { EmissionFigure } from "./emission-lines";
 
 export const DATAPOINT_DESCRIPTION_MAX_LENGTH = 500;
+const AGGREGATED_PRODUCTION_RUN_DESCRIPTION_PREFIX = "Aggregated from production runs ";
 
 /** Longest render(shown) within the registry cap, trying shown = total down to 0. */
 function fitDatapointDescription(total: number, render: (shown: number) => string, fallback: string): string {
@@ -16,8 +17,17 @@ function fitDatapointDescription(total: number, render: (shown: number) => strin
 export function aggregatedProductionRunDatapointDescription(runIds: readonly string[]): string {
   const base = `Aggregated from ${runIds.length} production runs:`;
   return fitDatapointDescription(runIds.length, shown => shown === runIds.length
-    ? `Aggregated from production runs ${runIds.join(", ")}`
+    ? `${AGGREGATED_PRODUCTION_RUN_DESCRIPTION_PREFIX}${runIds.join(", ")}`
     : [base, runIds.slice(0, shown).join(", "), `and ${runIds.length - shown} more`].filter(Boolean).join(" "), base);
+}
+
+export function fitStoredDatapointDescription(description: string): string {
+  if (description.length <= DATAPOINT_DESCRIPTION_MAX_LENGTH) return description;
+  if (description.startsWith(AGGREGATED_PRODUCTION_RUN_DESCRIPTION_PREFIX)) {
+    const runIds = description.slice(AGGREGATED_PRODUCTION_RUN_DESCRIPTION_PREFIX.length).split(", ");
+    return aggregatedProductionRunDatapointDescription(runIds);
+  }
+  return description.slice(0, DATAPOINT_DESCRIPTION_MAX_LENGTH);
 }
 
 export interface CarriedEntryNote {

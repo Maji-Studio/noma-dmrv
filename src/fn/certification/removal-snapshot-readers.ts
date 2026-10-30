@@ -6,6 +6,7 @@
  * schema has drifted (e.g. a body field renamed or removed).
  */
 import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { fitStoredDatapointDescription } from "@/lib/certification/emission-entry-carry-copy";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
 import { FIRST_REMOVAL_SUBMISSION_VERSION } from "@/lib/isometric/biochar-applications";
@@ -242,9 +243,17 @@ export function readRemovalTransport(
       "This saved submission uses an older transport format and cannot resume. Select Refresh review, then submit again.",
     );
   }
+  // Fit descriptions from snapshots stored before the datapoint description cap.
+  const datapointBodies = (parsed.data.datapointBodies as DatapointTransport[]).map((datapoint) => {
+    const body = { ...datapoint.body };
+    if (typeof body.description === "string") {
+      body.description = fitStoredDatapointDescription(body.description);
+    }
+    return { ...datapoint, body };
+  });
   return {
     removalSupplierRef: parsed.data.removalSupplierRef,
-    datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
+    datapointBodies,
     omittedTemplateComponentIds: parsed.data.omittedTemplateComponentIds,
   };
 }

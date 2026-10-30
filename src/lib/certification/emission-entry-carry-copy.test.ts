@@ -1,6 +1,6 @@
 import { buildRemovalSourceDescription } from "./removal-source-bindings";
 import { describe, expect, it } from "vitest";
-import { aggregatedProductionRunDatapointDescription, carriedEntryDatapointDescription, carriedEntrySourceDescription, DATAPOINT_DESCRIPTION_MAX_LENGTH } from "./emission-entry-carry-copy";
+import { aggregatedProductionRunDatapointDescription, carriedEntryDatapointDescription, carriedEntrySourceDescription, DATAPOINT_DESCRIPTION_MAX_LENGTH, fitStoredDatapointDescription } from "./emission-entry-carry-copy";
 
 function productionRunIds(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
@@ -36,6 +36,29 @@ describe("aggregatedProductionRunDatapointDescription", () => {
     expect(listedIds.length + Number(remaining)).toBe(count);
     const nextCandidate = `Aggregated from ${count} production runs: ${ids.slice(0, listedIds.length + 1).join(", ")} and ${Number(remaining) - 1} more`;
     expect(nextCandidate.length).toBeGreaterThan(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+  });
+});
+
+describe("fitStoredDatapointDescription", () => {
+  const STORED_RUN_COUNT = 14;
+
+  it.each(["", "Recorded emissions entries", "Aggregated from production runs run-1", "x".repeat(DATAPOINT_DESCRIPTION_MAX_LENGTH)])("preserves descriptions within the cap: %s", description => {
+    expect(fitStoredDatapointDescription(description)).toBe(description);
+  });
+
+  it("fits a stored aggregate exactly like a fresh build", () => {
+    const ids = productionRunIds(STORED_RUN_COUNT);
+    const storedDescription = `Aggregated from production runs ${ids.join(", ")}`;
+    expect(storedDescription.length).toBeGreaterThan(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+
+    const description = fitStoredDatapointDescription(storedDescription);
+    expect(description).toBe(aggregatedProductionRunDatapointDescription(ids));
+    expect(description.length).toBeLessThanOrEqual(DATAPOINT_DESCRIPTION_MAX_LENGTH);
+  });
+
+  it("slices unknown over-cap text without an ellipsis", () => {
+    const storedDescription = "x".repeat(DATAPOINT_DESCRIPTION_MAX_LENGTH + 1);
+    expect(fitStoredDatapointDescription(storedDescription)).toBe("x".repeat(DATAPOINT_DESCRIPTION_MAX_LENGTH));
   });
 });
 
