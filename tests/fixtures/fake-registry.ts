@@ -286,16 +286,28 @@ export class FakeIsometricRegistry {
     ApiError: ApiErrorCtor,
   ): unknown {
     if (method === "POST" && path === "/graphql") {
-      const { variables } = body as { variables: { projectId: string; ids: string[] } };
-      const nodes = this.biocharApplications
-        .filter(record => record.project_id === variables.projectId && variables.ids.includes(record.id))
+      const { query: graphqlQuery, variables } = body as {
+        query: string;
+        variables: { projectId: string; storageLocationId?: string; first?: number; after?: string | null };
+      };
+      // The sandbox ignores idIn. POST bodies are stored with storage_site_id.
+      const records = this.biocharApplications.filter(record =>
+        record.project_id === variables.projectId &&
+        (variables.storageLocationId === undefined || record.storage_site_id === variables.storageLocationId));
+      const first = variables.first ?? Number(graphqlQuery.match(/first:\s*(\d+)/)?.[1] ?? DEFAULT_PAGE_SIZE);
+      const page = paginateSlice(records, { first, after: variables.after ?? undefined });
+      const nodes = page.nodes
         .map(record => ({
           id: record.id,
           biocharSpreadEventSources: Array.isArray(record.source_ids)
             ? record.source_ids.map(id => ({ source: { id } }))
             : record.source_ids,
         }));
-      return { data: { project: { __typename: "Project", biocharSpreadEvents: { nodes } } } };
+      return { data: { project: { __typename: "Project", biocharSpreadEvents: {
+        nodes, pageInfo: {
+          hasNextPage: page.page_info.has_next_page, endCursor: page.page_info.end_cursor,
+        },
+      } } } };
     }
     if (method === "POST" && path === "/datapoints") {
       return this.create(this.datapoints, "dpt", body, ApiError);

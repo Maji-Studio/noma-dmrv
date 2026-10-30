@@ -20,7 +20,7 @@ import { checkBiocharApplicationSourceReadback, refreshRemovalEvidenceLinks } fr
 const ctx: OrgContext = { organizationId: "org-test", userId: "user-test", orgRole: "member", isPlatformAdmin: false };
 const log = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as Logger;
 const previous = new Date("2026-10-18T12:00:00Z");
-const row = () => ({ id: "journal-1", externalApplicationId: "bca-test", externalProjectId: "prj-test", expectedSourceIds: ["src-a"], lifecycleStatus: "confirmed", sourceReadbackStatus: "unconfirmed", sourceReadbackCheckedAt: previous });
+const row = () => ({ id: "journal-1", externalApplicationId: "bca-test", externalProjectId: "prj-test", externalStorageLocationId: "slc-registered", expectedSourceIds: ["src-a"], lifecycleStatus: "confirmed", sourceReadbackStatus: "unconfirmed", sourceReadbackCheckedAt: previous });
 const answer = (ids: string[]) => ({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes: [{ id: "bca-test", biocharSpreadEventSources: ids.map(id => ({ source: { id } })) }] } } } });
 beforeEach(() => {
   vi.resetAllMocks();
@@ -77,6 +77,9 @@ describe("Removal summary evidence re-check", () => {
   it("clears an unconfirmed note on success", async () => {
     expect(await refresh()).toEqual({ unconfirmedCount: 0, mismatchCount: 0, checkedAt: "2026-10-19T12:00:00.000Z" });
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");
+    expect(mocks.graphql).toHaveBeenCalledWith(expect.any(String), {
+      projectId: "prj-test", ids: ["bca-test"], storageLocationId: "slc-registered", after: null,
+    }, expect.any(Object));
   });
   it("keeps no answer unconfirmed", async () => {
     mocks.graphql.mockResolvedValue({ errors: [{ message: "unavailable" }] });
@@ -89,7 +92,9 @@ describe("Removal summary evidence re-check", () => {
     expect(await refresh()).toMatchObject({ unconfirmedCount: 0, mismatchCount: 1 });
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "mismatch");
     expect(mocks.drift).not.toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({ registrationId: "journal-1" }), expect.any(String));
+    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({
+      registrationId: "journal-1", reason: "missing", missing: ["src-a"], unexpected: ["src-other"],
+    }), "Biochar Application evidence link mismatch on summary refresh");
   });
   it("heals a stored mismatch when the remote Sources match", async () => {
     mocks.list.mockResolvedValue([{ ...row(), sourceReadbackStatus: "mismatch" }]);
@@ -159,7 +164,7 @@ describe("submission evidence recheck", () => {
   const check = (sourceReadbackStatus = "mismatch") => checkBiocharApplicationSourceReadback({
     orgCtx: ctx, client: { graphql: mocks.graphql } as never,
     registrationId: "journal-1", applicationCode: "APP-001",
-    externalProjectId: "prj-test", externalApplicationId: "bca-test",
+    externalProjectId: "prj-test", externalApplicationId: "bca-test", externalStorageLocationId: "slc-registered",
     expectedSourceIds: ["src-a"], sourceReadbackStatus, log,
   });
   const settle = async <T>(promise: Promise<T>) => {
@@ -174,6 +179,18 @@ describe("submission evidence recheck", () => {
     await expect(check()).resolves.toBeUndefined();
     expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "confirmed");
     expect(mocks.drift).not.toHaveBeenCalled();
+    expect(mocks.graphql).toHaveBeenCalledWith(expect.any(String), {
+      projectId: "prj-test", ids: ["bca-test"], storageLocationId: "slc-registered", after: null,
+    }, expect.any(Object));
+  });
+  it("logs the reason and registry Source ids when submission mismatches", async () => {
+    mocks.graphql.mockResolvedValue(answer(["src-other"]));
+    await expect(check()).rejects.toMatchObject({ name: "SafeError" });
+    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({
+      registrationId: "journal-1", reason: "missing", missing: ["src-a"], unexpected: ["src-other"],
+    }), "Biochar Application evidence link mismatch on submission");
+    expect(mocks.record).toHaveBeenCalledWith(ctx, "journal-1", "mismatch");
+    expect(mocks.drift).toHaveBeenCalledWith(ctx, "journal-1", "source_set_mismatch");
   });
   it("restores drift on no answer after a mismatch", async () => {
     mocks.graphql.mockResolvedValue({ errors: [{ message: "unavailable" }] });

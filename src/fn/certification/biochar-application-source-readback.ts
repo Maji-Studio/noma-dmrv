@@ -34,6 +34,7 @@ export async function checkBiocharApplicationSourceReadback(args: {
   applicationCode: string;
   externalProjectId: string;
   externalApplicationId: string;
+  externalStorageLocationId: string;
   expectedSourceIds: readonly string[];
   sourceReadbackStatus: string;
   log: Logger;
@@ -66,6 +67,9 @@ export async function checkBiocharApplicationSourceReadback(args: {
   }
   await recordBiocharApplicationSourceReadback(args.orgCtx, args.registrationId, result.outcome);
   if (result.outcome === "mismatch") {
+    args.log.error({ registrationId: args.registrationId, externalApplicationId: args.externalApplicationId,
+      externalProjectId: args.externalProjectId, reason: result.reason, missing: result.missing,
+      unexpected: result.unexpected }, "Biochar Application evidence link mismatch on submission");
     await markBiocharApplicationDrift(args.orgCtx, args.registrationId, "source_set_mismatch");
     throw new SafeError(
       `Application ${args.applicationCode}'s registry evidence links do not match its reviewed Sources. Reconcile its supporting evidence before retrying the Removal submission.`,
@@ -107,6 +111,7 @@ export async function refreshRemovalEvidenceLinks(
       const result = failClosedOnEmptySources(row.expectedSourceIds,
         classifySourceReadback(row.expectedSourceIds, await readBiocharApplicationSources(client, {
           externalProjectId: row.externalProjectId, externalApplicationId: row.externalApplicationId!,
+          externalStorageLocationId: row.externalStorageLocationId,
         })));
       const status = row.sourceReadbackStatus === "mismatch" && result.outcome === "unconfirmed"
         ? "mismatch" : result.outcome;
@@ -127,7 +132,8 @@ export async function refreshRemovalEvidenceLinks(
       row.sourceReadbackStatus = saved.sourceReadbackStatus;
       row.sourceReadbackCheckedAt = saved.sourceReadbackCheckedAt;
       if (result.outcome === "mismatch") {
-        log.error(ids, "Biochar Application evidence link mismatch on summary refresh");
+        log.error({ ...ids, reason: result.reason, missing: result.missing, unexpected: result.unexpected },
+          "Biochar Application evidence link mismatch on summary refresh");
       } else if (result.outcome === "unconfirmed") {
         log.warn({ ...ids, reason: result.reason }, "Biochar Application evidence links not confirmed");
       }

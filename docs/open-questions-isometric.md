@@ -29,15 +29,17 @@ retired questions do not belong in this file.
   `https://api.sandbox.isometric.com/graphql` or `https://api.isometric.com/graphql`.
   Authentication requires both Certify headers: `Authorization: Bearer <accessToken>`
   and `X-Client-Secret: <clientSecret>`. Omitting the latter returns HTTP 401.
-- **Query:** the root has no Biochar Spread Event lookup; query through the project:
+- **Query:** the root has no Biochar Spread Event lookup or `node(id:)` field;
+  query through the project with the registered external Storage Location id:
 
   ```graphql
-  query BiocharApplicationSources($projectId: ID!, $ids: [ID!]) {
+  query BiocharApplicationSources($projectId: ID!, $ids: [ID!], $storageLocationId: ID!, $after: String) {
     project(id: $projectId) {
       __typename
       ... on Project {
-        biocharSpreadEvents(first: 2, filter: { idIn: $ids }) {
+        biocharSpreadEvents(first: 50, after: $after, filter: { idIn: $ids, storageLocationId: $storageLocationId }) {
           nodes { id biocharSpreadEventSources { source { id } } }
+          pageInfo { hasNextPage endCursor }
         }
       }
       ... on ObjectNotFoundError { message }
@@ -45,11 +47,21 @@ retired questions do not belong in this file.
   }
   ```
 
-- **Observed shapes:** an unknown event returns
-  `{"data":{"project":{"__typename":"Project","biocharSpreadEvents":{"nodes":[]}}}}`.
+- **Observed shapes (sandbox, verified 2026-10-30):**
+  `BiocharSpreadEventFilter.idIn` is ignored, including bogus ids and inline
+  literals; `storageLocationId` narrows correctly. A response can contain other
+  Applications even when the requested id is absent. Connections expose `nodes`,
+  `pageInfo { hasNextPage endCursor }` and `totalCount`, and accept `first`/`after`.
+  An exhausted empty connection has `nodes: []` and
+  `pageInfo: { hasNextPage: false, endCursor: null }`.
   An unknown project returns
   `{"data":{"project":{"__typename":"ObjectNotFoundError","message":"..."}}}`.
   GraphQL errors use `{"errors":[...],"data":null}` or partial data with HTTP 200.
+  The client retains `idIn`, selects only the requested node by id, and follows
+  cursors on pages without a match, bounded at 10 pages of 50 nodes (the API refuses a page size above 50).
+  Duplicate matching ids are garbled; no match within the bound is
+  `event_not_found`. Unusable paging metadata is `unreadable_response` when
+  needed. Both no-answer outcomes stay unconfirmed.
 - **Implemented (#737, decision 737-q2):** after Application confirmation,
   GraphQL compares the expected Source set, ignoring order and duplicates.
   Missing, unexpected or malformed sets stop submission with
