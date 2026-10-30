@@ -7,6 +7,7 @@ API traps belong in [registry behavior](./registry-behavior.md). Existing entry
 anchors remain here so older links still work. Add future dated logs to the
 archive and link them here.
 
+- <a id="2026-10-30-match-application-source-readback-by-id"></a> [2026-10-30: Match Application Source readback by id](../archive/2026-10-30-isometric-change-history.md#2026-10-30-match-application-source-readback-by-id)
 - [2026-10-30: Read-only API probes and public-source corrections](../archive/2026-10-30-isometric-verification.md)
 
 - <a id="2026-10-29-resubmit-reuses-registry-sources"></a> [2026-10-29: Resubmit reuses registry Sources](../archive/2026-10-30-isometric-change-history.md#2026-10-29-resubmit-reuses-registry-sources)

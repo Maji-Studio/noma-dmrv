@@ -31,17 +31,22 @@ request variations, results and limits. Historical observations keep their dates
 | `BiocharSpreadEventFilter.idIn` is ignored, including inline literals and a fabricated ID | Direct sandbox reads, 2026-10-30; inline and variable cases | Never treat the first returned event as the requested event, or an ID filter as proof of identity |
 | `storageLocationId` narrows results; the root has no `node(id:)` lookup | Direct sandbox reads, 2026-10-30 | Narrow by location, paginate as needed and match the exact event ID locally |
 
-The older "verified query" in [API index](./openapi-index.md#graphql-evidence-read-outside-openapi)
-and the open-question query proved Source readback, **not that `idIn` filters**.
-Their historical authentication statement is also superseded by the scoped
-probe above. The [exact-ID readback follow-up](../open-questions-isometric.md)
-and full evidence-bearing staging retest remain open. Do not mark the retest
-complete from an isolated GraphQL probe.
+The application client keeps both configured headers. Historical probe results
+are not a contract to remove authentication or trust HTTP status alone.
 
-The implementation owner is
-`src/lib/isometric/biochar-application-source-readback.ts`; orchestration and
-mismatch persistence are in
-`src/fn/certification/biochar-application-source-readback.ts`.
+The implementation in
+`src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`
+keeps `idIn` as a hint, narrows by the registered Storage Location and matches
+only the requested Application ID locally. It follows cursors across at most
+10 pages of 50 nodes under one readback deadline. Duplicate matching IDs are
+garbled. Exhausting the bound without a match is `event_not_found`; unusable
+paging metadata is `unreadable_response` when needed. Both no-answer outcomes
+stay unconfirmed. Submission and summary refresh use the registration's saved
+external Storage Location ID, not a newly edited local site.
+
+The [full staging retest](../open-questions-isometric.md) remains open. Do not
+close it from an isolated GraphQL probe. Orchestration and mismatch persistence
+are owned by `src/fn/certification/biochar-application-source-readback.ts`.
 
 ## Source PATCH and failure visibility
 

@@ -7,9 +7,8 @@ anchor and evidence before closure. Local code checks do not resolve
 original dates and are not fresh verification. Protocol pins live in
 [versions.json](./isometric/versions.json). Code checked 2026-10-30.
 
-For current filter and authentication behavior, use
-[registry behavior](./isometric/registry-behavior.md#application-source-readback)
-rather than the historical probe below.
+Dated API observations and current readback rules belong in
+[registry behavior](./isometric/registry-behavior.md#application-source-readback).
 
 ### Applications retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
 
@@ -17,72 +16,11 @@ rather than the historical probe below.
 - **Gap:** Dependent Application claims keep their payloads and IDs with `review_required` / `storage_location_replaced`. `ensureBiocharApplication` blocks reuse, including ambiguous creates; unclaimed Applications use the replacement.
 - **To resolve:** Confirm the registry correction/supersession contract and provide an explicit recovery preserving the journal and preventing duplicate POSTs.
 
-### Application readback must match the exact event ID (`isometric/biochar-application-id-filter`, opened 2026-10-30)
-
-- **Anchor:** `src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`.
-- **Gap:** Direct sandbox reads return unrelated events despite `idIn`; the historical probe below did not establish filter correctness. [Verification evidence](./archive/2026-10-30-isometric-verification.md#sandbox-api-observations) also supersedes its missing-secret HTTP-status assumption.
-- **To resolve:** Match the exact event ID after location-scoped pagination and verify an evidence-bearing Removal through submission and refresh. Keep the historical probe until its query can be reconciled with the corrected implementation.
-
 ### Biochar Application Source readback awaits a staging retest (`isometric/biochar-application-source-readback`, opened 2026-09-08)
 
-- **Verified probe (2026-10-19):** Certify REST accepts `source_ids` but omits
-  them on POST and GET. GraphQL uses `POST /graphql` at the same origin:
-  `https://api.sandbox.isometric.com/graphql` or `https://api.isometric.com/graphql`.
-  Authentication requires both Certify headers: `Authorization: Bearer <accessToken>`
-  and `X-Client-Secret: <clientSecret>`. Omitting the latter returns HTTP 401.
-- **Query:** the root has no Biochar Spread Event lookup or `node(id:)` field;
-  query through the project with the registered external Storage Location id:
-
-  ```graphql
-  query BiocharApplicationSources($projectId: ID!, $ids: [ID!], $storageLocationId: ID!, $after: String) {
-    project(id: $projectId) {
-      __typename
-      ... on Project {
-        biocharSpreadEvents(first: 50, after: $after, filter: { idIn: $ids, storageLocationId: $storageLocationId }) {
-          nodes { id biocharSpreadEventSources { source { id } } }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-      ... on ObjectNotFoundError { message }
-    }
-  }
-  ```
-
-- **Observed shapes (sandbox, verified 2026-10-30):**
-  `BiocharSpreadEventFilter.idIn` is ignored, including bogus ids and inline
-  literals; `storageLocationId` narrows correctly. A response can contain other
-  Applications even when the requested id is absent. Connections expose `nodes`,
-  `pageInfo { hasNextPage endCursor }` and `totalCount`, and accept `first`/`after`.
-  An exhausted empty connection has `nodes: []` and
-  `pageInfo: { hasNextPage: false, endCursor: null }`.
-  An unknown project returns
-  `{"data":{"project":{"__typename":"ObjectNotFoundError","message":"..."}}}`.
-  GraphQL errors use `{"errors":[...],"data":null}` or partial data with HTTP 200.
-  The client retains `idIn`, selects only the requested node by id, and follows
-  cursors on pages without a match, bounded at 10 pages of 50 nodes (the API refuses a page size above 50).
-  Duplicate matching ids are garbled; no match within the bound is
-  `event_not_found`. Unusable paging metadata is `unreadable_response` when
-  needed. Both no-answer outcomes stay unconfirmed.
-- **Implemented (#737, decision 737-q2):** after Application confirmation,
-  GraphQL compares the expected Source set, ignoring order and duplicates.
-  Missing, unexpected or malformed sets stop submission with
-  `source_set_mismatch` drift. An empty set is reread after 1, 2 and 4 seconds
-  (Isometric can answer before it attaches the Sources) and stops submission if
-  it stays empty. No answer continues with persisted `unconfirmed` status and an
-  ID-only warning. Summary reloads retry unconfirmed and mismatch,
-  lifecycle-confirmed registrations; success clears the note (a stored mismatch
-  heals once Isometric matches), and a new mismatch is recorded without changing
-  submission drift or failing the summary.
-  Empty expected sets stay `not_checked`; confirmed checks are reused.
-  REST still skips omitted/null `source_ids` and rejects malformed or wrong sets.
-- **Verified on a live record (2026-10-19):** a sandbox Biochar Application
-  created with noma's request builder came back with id `bse_...`, which is
-  also its `BiocharSpreadEvent.id`. `biocharSpreadEventSources` listed exactly
-  the `source_ids` sent on create; REST still omitted them. After
-  `DELETE /biochar_applications/{id}` the event no longer resolves.
-- **To resolve:** retest one fresh evidence-bearing Removal through the full
-  submit path on staging (issue #737 step 4), then retire this entry. Until
-  then event-not-found stays no answer, never drift.
+- **Anchor:** `src/fn/certification/biochar-application-source-readback.ts:checkBiocharApplicationSourceReadback`.
+- **Gap:** Exact-ID matching and location-scoped pagination are implemented in [#1514](https://github.com/Maji-Studio/noma-dmrv/pull/1514). Isolated sandbox probes confirm the ID-filter trap and available Source readback, but do not establish the complete evidence-bearing Removal path on staging.
+- **To resolve:** Submit one fresh evidence-bearing Removal on staging, then verify persisted Source status and summary refresh. Preserve empty-set propagation retries, mismatch persistence and unconfirmed no-answer behavior. Close this entry only with full-path evidence; [registry behavior](./isometric/registry-behavior.md#application-source-readback) owns the probe details.
 
 ### Removal deletion leaves Datapoints behind (`isometric/removal-deletion-orphans`, opened 2026-09-08, `needs-registry-check`)
 

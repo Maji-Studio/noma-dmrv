@@ -75,3 +75,13 @@ used. Registry text does not independently establish the project's PDD choices.
 The check is scoped to retained shortlist claims, not an exhaustive extraction
 of every requirement or a new compliance approval. Application protocol support,
 project applicability and registry-side calculations retain their open checks.
+
+## Reconciliation after the readback fix
+
+PR [#1514](https://github.com/Maji-Studio/noma-dmrv/pull/1514) merged on 2026-10-30.
+The cleanup was rebased onto staging `e77794b07`, preserving the peer's history
+entry in the archive and consolidating its implementation notes into the owning
+guides. Code inspection confirmed exact-ID matching, the registered external
+Storage Location parameter, cursor validation and the 10-page/50-node bound.
+The old unconditional missing-secret HTTP-401 statement was replaced by the
+scoped direct-probe results above. No full staging submission retest is claimed.
