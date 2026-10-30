@@ -1,5 +1,7 @@
 Archived on 2026-10-30 with the history-layout choice approved on the review
-page. This preserves the prior log; current behavior is indexed in the
+page. The saved choice was to move all existing dated entries to the archive
+and keep a linked index in changes.md. This preserves every prior entry;
+current behavior is indexed in the
 [Isometric knowledge base](../isometric/README.md).
 
 # Isometric Docs Change Log

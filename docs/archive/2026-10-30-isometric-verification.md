@@ -12,7 +12,8 @@ initialization returned 401; sandbox MCP initialization and `tools/call` for
 remains unavailable and needs administrator review. Certify REST/GraphQL with
 local sandbox credentials worked, so API behavior was checked directly. Public
 registry pages supplied the protocol fallback; this is not MCP verification.
-No production account visibility or project UI protocol/Standard version was
+The prior investigation reported that the MCP GraphQL account saw production
+only. That account view and the project UI protocol/Standard version were not
 rechecked. The pin is unchanged.
 
 ## Sandbox API observations

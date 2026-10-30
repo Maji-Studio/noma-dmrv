@@ -10,12 +10,13 @@ request variations, results and limits. Historical observations keep their dates
 ## Environment and authority
 
 - Sandbox project: `prj_1K9YJ33RKSBX9FFF`. Direct reads on 2026-10-30 confirmed
-  visibility with local `.env.local` sandbox credentials. The handoff records
-  that the MCP GraphQL account saw production only; that account view was not rechecked. A missing MCP result does not prove sandbox
-  absence. Confirm the account and environment before interpreting an empty list.
+  visibility with local `.env.local` sandbox credentials. The historical account-scope observation in the
+  [verification record](../archive/2026-10-30-isometric-verification.md#access-and-limits)
+  reports MCP GraphQL production-only visibility; it was not rechecked. A missing
+  MCP result does not prove sandbox absence. Confirm the account and environment before interpreting an empty list.
 - Call official MCP `how_to` before registry/protocol work, then use its relevant
-  docs/schema tools. Sandbox GraphQL introspection is disabled confirmed by direct reads on
-  2026-10-30; the historical MCP workflow uses `graphql_analyze_type` for schema information.
+  docs/schema tools. Direct reads on 2026-10-30 confirmed disabled sandbox GraphQL introspection.
+  The historical MCP workflow uses `graphql_analyze_type` for schema information.
 - Protocol/module pins are historical observations in [versions.json](./versions.json).
   `GET /projects` supplies no protocol version in the committed REST contract.
   Do not infer a new pin from component support or a successful submission.
@@ -33,10 +34,9 @@ request variations, results and limits. Historical observations keep their dates
 The older "verified query" in [API index](./openapi-index.md#graphql-evidence-read-outside-openapi)
 and the open-question query proved Source readback, **not that `idIn` filters**.
 Their historical authentication statement is also superseded by the scoped
-probe above. Those sections are reserved for the separate `fix/application-readback-match-by-id`
-change and must be reconciled after it merges. The full evidence-bearing Removal
-submission on staging remains an open retest. Do not mark that retest complete
-from an isolated GraphQL probe.
+probe above. The [exact-ID readback follow-up](../open-questions-isometric.md)
+and full evidence-bearing staging retest remain open. Do not mark the retest
+complete from an isolated GraphQL probe.
 
 The implementation owner is
 `src/lib/isometric/biochar-application-source-readback.ts`; orchestration and
