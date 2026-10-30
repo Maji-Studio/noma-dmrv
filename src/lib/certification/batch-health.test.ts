@@ -1,3 +1,5 @@
+import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
+import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -508,4 +510,79 @@ it("keeps returned Removal corrections advisory and routes them to that Removal"
   expect(health.issueCount).toBe(0);
   expect(checkFor(health, "emissions").status).toBe("met");
   expect(health.advisories).toEqual([{ message: "Resubmit needed", fixTarget: "removal", removalId: "returned", removalCode: "RM-001" }]);
+});
+
+
+describe("read-only batch health copy", () => {
+  it.each(["unpinnedTemplate", "notRemovalTemplate", "templateNotFullyRead", "missingFixedDatapoint", "templateLinesNeedReview"] as const)("keeps editable %s copy and removes repair instructions", (code) => {
+    const blocker = removalTemplateBlocker(code);
+    const health = deriveBatchHealth(facts({ templateBlockers: [blocker] }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(openItemText(groups.blocking[0])).toBe(blocker.message);
+    expect(health.checks.find((check) => check.status === "unmet")?.detail).toBe(blocker.message);
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(readOnly.detail).toBe(blocker.copy?.detail);
+    expect(openItemText(readOnly) ?? "").not.toMatch(/Set a Removal template|Add a file|Check the manual entry|in Settings|An Admin|Upload|Try again/);
+    expect(readOnly.instruction).toBeUndefined();
+  });
+
+  it("shows merged template facts before their instructions", () => {
+    const blockers = [removalTemplateBlocker("notRemovalTemplate"), removalTemplateBlocker("missingFixedDatapoint")];
+    const health = deriveBatchHealth(facts({ templateBlockers: blockers }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(openItemText(groups.blocking[0])).toBe("This template is not a Removal template. Set a Removal template in Settings, Removal templates. · Set each value in the Isometric template editor before submitting.");
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(openItemText(readOnly)).toBe("This template is not a Removal template.");
+  });
+
+  it("keeps Add a file health instructions on editable batches only", () => {
+    const emissionLines = deriveBatchEmissionLines({
+      definition: { groups: [{ id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "", components: [{
+        id: "power", displayName: "Power", description: null, blueprintKey: "grid_electricity_use",
+        inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+      }] }] },
+      lineSources: { power: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+      entriesCanSubmit: true, problems: [], enrichmentComplete: true, automaticFigures: {},
+      entries: [{ componentId: "power", counts: true, kind: "value", hasEvidence: false, total: { magnitude: "1", unit: "kWh" } }],
+    });
+    const health = deriveBatchHealth(facts({ emissionLines }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(checkFor(health, "emissions").detail).toBe("Add a file for Power.");
+    expect(openItemText(groups.blocking[0])).toBe("Add a file for Power.");
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(readOnly.title).toBeTruthy();
+    expect(openItemText(readOnly)).toBeUndefined();
+  });
+});
+
+
+it("keeps legacy production facts while hiding their repair sentence", () => {
+  const health = deriveBatchHealth(facts({ hasSubmittableRuns: false }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  expect(openItemText(groups.blocking[0])).toBe("No production data is linked. Link a production run before submitting.");
+  expect(openItemText(readOnlyOpenItems({ ...groups, waiting: [] }).blocking[0])).toBe("No production data is linked.");
+});
+
+
+it("shows only the title for health text without explicit copy on a read-only batch", () => {
+  const health = deriveBatchHealth(facts({ carbonMissingInputs: ["moisture"] }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  expect(checkFor(health, "carbon").copy).toBeUndefined();
+  expect(openItemText(groups.blocking[0])).toBe("Missing: moisture");
+  expect(groups.blocking[0].detailMayInstruct).toBe(true);
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+  expect(readOnly.title).toBe(groups.blocking[0].title);
+  expect(openItemText(readOnly)).toBeUndefined();
+});
+
+
+it("merges feedstock mapping facts before their source-owned instructions", () => {
+  const health = deriveBatchHealth(facts({ feedstockTypeMappingGaps: [
+    { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "wood", feedstockTypeName: "Wood" },
+    { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "husk", feedstockTypeName: "Husk" },
+  ] }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  const detail = "Credit batch CB-1 uses pyrolysis feedstock type Wood, which is not linked to an Isometric feedstock type. · Credit batch CB-1 uses pyrolysis feedstock type Husk, which is not linked to an Isometric feedstock type.";
+  expect(openItemText(groups.blocking[0])).toBe(`${detail} Edit Wood in Feedstock types. · Edit Husk in Feedstock types.`);
+  expect(openItemText(readOnlyOpenItems({ ...groups, waiting: [] }).blocking[0])).toBe(detail);
 });

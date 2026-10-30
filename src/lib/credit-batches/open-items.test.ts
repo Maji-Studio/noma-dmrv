@@ -22,9 +22,10 @@ import {
   missingRunsAdminSentence,
   refusedRunsSentence,
   sameDayEntrySentence,
+  openItemText,
 } from "./open-items";
 
-import { overviewBadgeCount, tabBadge } from "./batch-page";
+import { overviewBadgeCount, readOnlyOpenItems, tabBadge } from "./batch-page";
 import { renderedOpenItems } from "../../../tests/helpers/rendered-open-items";
 
 const buildCreditBatchOpenItems: typeof buildItems = (input) => renderedOpenItems(buildItems(input));
@@ -626,4 +627,20 @@ describe("missing run copy", () => {
     expect(missingRunsMemberSentence(count)).toBe(member);
     expect(missingRunsAdminSentence(count)).toBe(admin);
   });
+});
+
+
+it("removes member-only template repair guidance from read-only checks", () => {
+  const health = {
+    state: "incomplete" as const, issueCount: 1, checks: [{
+      key: "templateLines" as const, label: "Components decided", requirementLabel: "Components decided",
+      unmetLabel: "1 component to decide", status: "unmet" as const,
+      fixTarget: "templateLineReview" as const, linesToDecide: 1,
+    }],
+  };
+  const groups = buildItems({ ...batchContext, canManage: false, health });
+  expect(openItemText(groups.blocking[0])).toBe("An Admin answers it in Settings, Removal templates.");
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+  expect(readOnly.title).toBe("1 component to decide");
+  expect(openItemText(readOnly)).toBeUndefined();
 });

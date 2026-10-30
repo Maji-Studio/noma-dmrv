@@ -29,7 +29,7 @@ import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
 import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
-import { lateEntryView, waitingDetail, waitingEntryTitle } from "@/lib/certification/late-entry-view";
+import { lateEntryView, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
@@ -38,6 +38,8 @@ export { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 /** Overview rows a health check lands on: the Removal template block and the batch details. */
 export const CREDIT_BATCH_TEMPLATE_ROW = ENTITY_FOCUS_TARGETS.removalTemplate;
 export const CREDIT_BATCH_DETAILS_ROW = "batch-details";
+export const MISSING_PRODUCTION_RUN_TITLE = " is not in this credit batch yet";
+export const READ_ONLY_MISSING_PRODUCTION_RUN_TITLE = " is not in this credit batch";
 export const MISSING_PRODUCTION_RUN_ITEM_PREFIX = "missing-production-run:";
 /** Emissions Checks for Sent batches' late runs and held runs that Add run refuses. */
 export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
@@ -45,10 +47,14 @@ export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 export interface CreditBatchOpenItem {
   id: string;
   title: string;
+  /** Factual alternative when an editable status label is phrased as an action. */
+  readOnlyTitle?: string;
   /** The title text after the linked production run code. */
   titleAfterCode?: string;
   /** What is the case. A read-only batch shows this alone. */
   detail?: string;
+  /** Unsplit source text may include repair steps; hide it on a read-only batch. */
+  detailMayInstruct?: true;
   /** What to do about it; dropped on a read-only batch. Shown after `detail`. */
   instruction?: string;
   /** The protocol reasoning behind a requirement, shown behind an ⓘ. */
@@ -277,7 +283,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         });
         continue;
       }
-      const titleAfterCode = " is not in this credit batch yet";
+      const titleAfterCode = MISSING_PRODUCTION_RUN_TITLE;
       const sameDayInstruction = run.sameDayEntry
         ? `If the Emissions entry dated ${formatCalendarDate(run.entryDate)} already records them, delete it when you add the run.`
         : undefined;
@@ -299,11 +305,12 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     for (const entry of line.entries) {
       const view = lateEntryView(entry, input.facilityId, { canManage });
       if (view?.destination.kind !== "waiting" || !entry.occurredOn) continue;
-      const reason = waitingDetail(view.destination.reason, canManage);
+      const reason = waitingDetailCopy(view.destination.reason, canManage);
       check.push({
         id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
         title: waitingEntryTitle(line.displayName, entry.occurredOn),
-        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason}` : reason,
+        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason.detail}` : reason.detail,
+        ...(reason.instruction ? { instruction: reason.instruction } : {}),
         target: view.destination.action ? { href: view.destination.action.href } : null,
       });
     }
@@ -313,11 +320,14 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
     if (healthCheck.status !== "unmet") continue;
     const fix = resolveBatchHealthFixTarget(healthCheck);
     let target: CreditBatchOpenItem["target"];
-    let detail = healthCheck.detail;
+    const copy = healthCheck.copy;
+    let detail = copy ? copy.detail : healthCheck.detail;
+    let instruction = copy?.instruction;
     const memberText = memberTemplateText(fix, canManage, healthCheck.linesToDecide ?? 0);
     if (memberText) {
       target = null;
-      detail = memberText;
+      detail = undefined;
+      instruction = memberText;
     } else if (fix === "labSamples") {
       target = { tab: "samples" };
     } else if (fix === "emissions") {
@@ -337,6 +347,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       id: `health:${healthCheck.key}:${healthCheck.issueKey ?? fix}`,
       title: certCheckLabel(healthCheck),
       detail,
+      ...(!copy ? { detailMayInstruct: true as const } : {}),
+      ...(instruction ? { instruction } : {}),
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
     });
@@ -366,6 +378,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
   }
   for (const line of input.emissionLines ?? []) {
     if (line.state === "needsReview") {
+      const copy = line.blocker?.copy;
       const fixTarget = line.blocker?.fixTarget;
       const settingsFix = fixTarget === "templateLineReview" || fixTarget === "templateLines" ||
         fixTarget === "certificationTemplates" || fixTarget === "certificationEmissions";
@@ -380,7 +393,10 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       check.push({
         id: `emission:${line.componentId}`,
         title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
-        detail: memberText ?? line.blocker?.message,
+        readOnlyTitle: `${line.displayName}: Entry needs review`,
+        ...(!copy ? { detailMayInstruct: true as const } : {}),
+        detail: memberText ? undefined : copy ? copy.detail : line.blocker?.message,
+        ...((memberText ?? copy?.instruction) ? { instruction: memberText ?? copy?.instruction } : {}),
         target,
       });
     }

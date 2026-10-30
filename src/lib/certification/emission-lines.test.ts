@@ -1,3 +1,5 @@
+import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
+import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
 import { batchAutomaticFigures } from "./batch-automatic-figures";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
@@ -201,4 +203,45 @@ it("records a biomass transport zero with no records when every linked trip is o
   expect(line.records).toEqual({ source: "transportLegs", count: 0, figure: { magnitude: "0", unit: "km * tonne" },
     countedOn: [{ creditBatchId: "cb", code: "CB-26-001" }] });
   expect(line.total).toEqual({ magnitude: "0", unit: "km * tonne" });
+});
+
+
+it("separates missing-file instructions without changing the blocker message", () => {
+  const f = facts();
+  f.entries = [entry(f, { hasEvidence: false })];
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.blocker).toMatchObject({ code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", copy: { instruction: "Add a file for each emissions entry with a value." } });
+  // Open items also accept a reviewed line carrying this evidence blocker.
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true,
+    emissionLines: [{ ...line, state: "needsReview" }],
+  });
+  expect(openItemText(groups.check[0])).toBe(line.blocker?.message);
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).check;
+  expect(openItemText(readOnly)).toBeUndefined();
+  expect(readOnly.title).toBe(`${line.displayName}: Entry needs review`);
+  expect(readOnly.instruction).toBeUndefined();
+});
+
+
+it("leaves a supplied stale-entry reason unsplit", () => {
+  const f = facts();
+  const instruction = "Confirm this entry for the changed template component.";
+  f.entries = [entry(f, { counts: false, reason: instruction })];
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.blocker?.message).toBe(instruction);
+  expect(line.blocker?.copy).toBeUndefined();
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, emissionLines: [line] });
+  expect(openItemText(groups.check[0])).toBe(instruction);
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).check;
+  expect(openItemText(readOnly)).toBeUndefined();
+  expect(readOnly.title).toBe(`${line.displayName}: Entry needs review`);
+});
+
+
+it("splits the stale-entry fallback instruction when no reason is supplied", () => {
+  const f = facts();
+  f.entries = [entry(f, { counts: false })];
+  const [line] = deriveBatchEmissionLines(f);
+  expect(line.blocker?.message).toBe("Enter the values again for the current template component.");
+  expect(line.blocker?.copy).toEqual({ instruction: line.blocker?.message });
 });

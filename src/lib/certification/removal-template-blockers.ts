@@ -19,9 +19,20 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
  */
 export const REMOVAL_TEMPLATE_LANDING_LINE = "Check this credit batch's Removal template before submitting a Removal.";
 export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
-export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string }
+/** Optional split for surfaces that can show facts without repair steps.
+ * The existing message/detail remains the complete copy for other consumers.
+ */
+export interface BlockerCopy { detail?: string; instruction?: string }
+const TEMPLATE_BLOCKER_COPY: Partial<Record<RemovalTemplateBlockerCode, BlockerCopy>> = {
+  notRemovalTemplate: { detail: "This template is not a Removal template.", instruction: REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate },
+  unpinnedTemplate: { instruction: REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate },
+  templateNotFullyRead: { detail: "Template not fully read.", instruction: "Try again." },
+  missingFixedDatapoint: { instruction: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint },
+  templateLinesNeedReview: { detail: "This Removal template has components to decide.", instruction: "Answer them in Settings, Removal templates." },
+};
+export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string; copy?: BlockerCopy }
 export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): RemovalTemplateBlocker {
-  return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code] };
+  return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code], ...(TEMPLATE_BLOCKER_COPY[code] ? { copy: TEMPLATE_BLOCKER_COPY[code] } : {}) };
 }
 
 /** Per-line template blocker codes, routed by the same table as the template codes. */

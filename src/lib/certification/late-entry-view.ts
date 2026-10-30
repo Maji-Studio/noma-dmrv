@@ -13,11 +13,13 @@ import { formatDayString } from "@/lib/format-utils";
 import {
   CARRY_WAITING_REASONS,
   CARRY_WAITING_DETAILS,
+  TEMPLATE_UNKNOWN_COPY,
   type CarryWaitingReason,
   type EntryCarryDestination,
   type EntryCarryDisposition,
   type EntryRevisionDestination,
 } from "./emission-entry-carry";
+import type { BlockerCopy } from "./removal-template-blockers";
 
 const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates.";
 
@@ -64,6 +66,14 @@ export function waitingAction(
   if (reason === "incompatibleTemplate") return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
   if (draft) return { label: "Open Removal", href: recordHref("removal", draft.removalId, { facilityId }) };
   return { label: "Open Removals", href: certificationRemovalsHref({ facility: facilityId }) };
+}
+
+/** Fact and repair step for a batch that may be read only. */
+export function waitingDetailCopy(reason: CarryWaitingReason, canManage = true): BlockerCopy {
+  if (reason === "templateUnknown") return TEMPLATE_UNKNOWN_COPY;
+  return { detail: CARRY_WAITING_DETAILS[reason],
+    ...(reason === "incompatibleTemplate" && !canManage ? { instruction: MEMBER_TEMPLATE_TEXT } : {}),
+  };
 }
 
 /** The reason without its "Waiting for a Removal." lead, for places that already say so. */
