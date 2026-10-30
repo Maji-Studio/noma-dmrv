@@ -3,7 +3,7 @@ import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, product
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { getLineageUnderLockedArtifacts, getFeedstockLineageBatchTargets, tryLockCertifiedLineageArtifacts } from "./certification-lineage-guards";
 import { getFeedstockTransportOwnerBatches } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
@@ -27,7 +27,7 @@ export type TransportOwnershipChange = {
   subject: "production run" | "credit batch" | "facility" | "feedstock";
 };
 
-/** Include existing provenance and every intake a replacement bin draw can select. */
+/** Include existing provenance and every intake a replacement bin draw can select, archived included like the allocator. */
 export async function getTransportFreezeFeedstockIds(
   ctx: OrgContext,
   tx: DbTransaction,
@@ -45,7 +45,7 @@ export async function getTransportFreezeFeedstockIds(
     .leftJoin(creditBatchProductionRuns, and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
     .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), or(...conditions))) : [];
   const intakes = candidates.binIds?.length ? await tx.select({ id: feedstocks.id }).from(feedstocks)
-    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, [...candidates.binIds]), isNull(feedstocks.archivedAt))) : [];
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, [...candidates.binIds]))) : [];
   return [...new Set([...draws, ...intakes].map(row => row.id))].sort();
 }
 

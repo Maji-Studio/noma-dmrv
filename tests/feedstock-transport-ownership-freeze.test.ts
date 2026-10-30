@@ -27,6 +27,13 @@ const EARLY = new Date("2026-06-12T08:00:00Z");
 const EARLY_END = new Date("2026-06-12T12:00:00Z");
 const LATE = new Date("2026-06-14T08:00:00Z");
 const LATE_END = new Date("2026-06-14T12:00:00Z");
+const PRE_WINDOW = new Date("2026-06-11T08:00:00Z");
+const PRE_WINDOW_END = new Date("2026-06-11T12:00:00Z");
+const EXTRA_RUN = new Date("2026-06-12T13:00:00Z");
+const EXTRA_RUN_END = new Date("2026-06-12T14:00:00Z");
+const MOVED_DELIVERY = new Date("2026-06-12T00:00:00Z");
+// Early enough in UTC that a Los Angeles cutoff falls on the previous day.
+const AFTER_UTC_MIDNIGHT = new Date("2026-06-12T00:30:00Z");
 const RACE_LATE = new Date("2026-06-15T08:00:00Z");
 const ARCHIVE_STAMP = new Date("2026-06-18T00:00:00Z");
 const ctx = makeTestOrgContext();
@@ -581,7 +588,7 @@ async function withExtraRun(a: LineageFixture, test: (id: string) => Promise<voi
   const [run] = await db.select().from(productionRuns).where(eq(productionRuns.id, a.productionRunId));
   const id = crypto.randomUUID();
   await db.insert(productionRuns).values({ ...run, id, code: `E2E-FREEZE-${id}`, stockPostingSequence: undefined,
-    startTime: new Date("2026-06-12T13:00:00Z"), endTime: new Date("2026-06-12T14:00:00Z") });
+    startTime: EXTRA_RUN, endTime: EXTRA_RUN_END });
   await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
     creditBatchId: a.batchId, productionRunId: id });
   try {
@@ -623,8 +630,8 @@ it.each([false, true])("intake rebuild compares all runs together, batch changes
       eq(productionRunFeedstockDraws.productionRunId, b.productionRunId),
       eq(productionRunFeedstockDraws.storageLocationId, a.feedstockBinId),
     ));
-    await db.update(productionRuns).set({ startTime: new Date("2026-06-11T08:00:00Z"),
-      endTime: new Date("2026-06-11T12:00:00Z") }).where(eq(productionRuns.id, a.productionRunId));
+    await db.update(productionRuns).set({ startTime: PRE_WINDOW,
+      endTime: PRE_WINDOW_END }).where(eq(productionRuns.id, a.productionRunId));
     await db.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
       productionRunId: id, storageLocationId: a.feedstockBinId, wetMassKg: 500 });
     await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
@@ -636,8 +643,8 @@ it.each([false, true])("intake rebuild compares all runs together, batch changes
       if (firstId !== a.productionRunId) {
         // Free A's slot on the shared reactor before the extra run takes it.
         await db.update(productionRuns).set({ startTime: EARLY, endTime: EARLY_END }).where(eq(productionRuns.id, secondId));
-        await db.update(productionRuns).set({ startTime: new Date("2026-06-11T08:00:00Z"),
-          endTime: new Date("2026-06-11T12:00:00Z") }).where(eq(productionRuns.id, firstId));
+        await db.update(productionRuns).set({ startTime: PRE_WINDOW,
+          endTime: PRE_WINDOW_END }).where(eq(productionRuns.id, firstId));
         await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, firstId));
         await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, secondId));
         await db.insert(productionRunFeedstocks).values([
@@ -651,7 +658,7 @@ it.each([false, true])("intake rebuild compares all runs together, batch changes
       }
       expect(await owner(a)).toBe(firstId);
       const write = db.transaction(async tx => {
-        await tx.update(feedstocks).set({ deliveryDate: new Date("2026-06-12T00:00:00Z") }).where(eq(feedstocks.id, a.feedstockId));
+        await tx.update(feedstocks).set({ deliveryDate: MOVED_DELIVERY }).where(eq(feedstocks.id, a.feedstockId));
         await reallocateRunsForBins(ctx, tx, [a.feedstockBinId], { change: { mutation: "update", subject: "feedstock" } });
       });
       if (changesBatch) {
@@ -673,8 +680,8 @@ it.each(["sent-moves", "unsent-moves"] as const)("timezone rebuild moves ownersh
     const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
     const replacementId = crypto.randomUUID();
     await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
-    await db.update(feedstocks).set({ deliveryDate: new Date("2026-06-12T00:00:00Z") }).where(eq(feedstocks.id, a.feedstockId));
-    await db.update(productionRuns).set({ startTime: new Date("2026-06-12T00:30:00Z") }).where(eq(productionRuns.id, a.productionRunId));
+    await db.update(feedstocks).set({ deliveryDate: MOVED_DELIVERY }).where(eq(feedstocks.id, a.feedstockId));
+    await db.update(productionRuns).set({ startTime: AFTER_UTC_MIDNIGHT }).where(eq(productionRuns.id, a.productionRunId));
     // B's historical lineage stays outside the bins rebuilt by this facility.
     await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, b.productionRunId));
     try {
