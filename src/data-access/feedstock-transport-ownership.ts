@@ -60,11 +60,12 @@ export async function getFeedstockTransportOwnerBatches(
   ctx: OrgContext,
   feedstockIds: string[],
   executor: Pick<DbTransaction, "select"> = db,
+  options: { includeArchived?: boolean } = {},
 ): Promise<Map<string, CountedOnBatch[]>> {
   requireOrgScope(ctx);
   const ids = [...new Set(feedstockIds)];
   if (!ids.length) return new Map();
-  const draws = await loadEligibleDraws(ctx, ids, executor);
+  const draws = await loadEligibleDraws(ctx, ids, executor, options);
   const owners = feedstockTransportOwners(draws);
   const result = new Map<string, CountedOnBatch[]>();
   for (const [feedstockId, runId] of owners) {

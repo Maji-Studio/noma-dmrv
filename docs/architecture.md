@@ -565,7 +565,10 @@ They then discover current/prospective runs and certification artifacts, lock
 sorted artifacts, sorted runs `FOR UPDATE` on create or membership refresh,
 the target production-process advisory scope, and the batch
 `FOR UPDATE` with its version
-check (insert on create). Both artifact helpers use
+check. The sorted per-feedstock `feedstock-transport-owner` advisory locks
+follow the batch lock on update/delete and precede the insert on create. They
+are taken at the outermost write boundary before the ownership snapshot.
+Both artifact helpers use
 `acquireCertificationArtifactLocksSorted` and its global key ordering; create
 has no existing certification lineage to guard. Runs stay before process scope
 because production-run auto-attachment already holds its run when requesting
@@ -592,9 +595,16 @@ Production-run creation already takes its active facility `FOR SHARE` before
 reactor `SHARE`, bin-stock advisory locks, reactor-overlap advisory lock, the
 run insert and auto-attachment. Updates take the current and target facilities
 `FOR SHARE` in id order (archived included; a changed target must also be active) before an optional reactor `SHARE`, sorted bin-stock
-advisory locks, run `UPDATE`, lineage artifacts, reactor-overlap advisory lock,
+advisory locks, run `UPDATE`, sorted per-feedstock `feedstock-transport-owner`
+advisory locks and ownership snapshot, lineage artifacts, reactor-overlap advisory lock,
 the run/draw writes, then auto-attachment's process scope, batch artifacts and
-batch `UPDATE`. A changed run facility after discovery refuses the write.
+batch `UPDATE`. Delete takes the transport-owner locks after bin/run locks
+and before lineage artifacts. Creation first takes them in draw replacement
+after the run insert; auto-attachment takes its own snapshot after process scope,
+batch artifacts and batch UPDATE when no enclosing freeze exists. Joined scopes
+reuse the outer locks. Intake and timezone rebuilds take one freeze after all
+source-bin locks and sorted run UPDATE locks, before any per-run rewrites.
+A changed run facility after discovery refuses the write.
 Archived facilities cannot accept run updates; facility archive also archives
 its runs. The pre-facility operator, reference and generated-code checks are
 unlocked reads. API calls may first claim an idempotency record; none of the
