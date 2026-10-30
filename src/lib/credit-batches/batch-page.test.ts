@@ -279,6 +279,7 @@ it("uses final missing-run wording on read-only batches without changing the inp
   const missing: CreditBatchOpenItem = {
     id: "missing-production-run:run", productionRun: { id: "run", code: "RUN-1" },
     title: `RUN-1${MISSING_PRODUCTION_RUN_TITLE}`, titleAfterCode: MISSING_PRODUCTION_RUN_TITLE,
+    readOnlyTitle: `RUN-1${READ_ONLY_MISSING_PRODUCTION_RUN_TITLE}`, readOnlyTitleAfterCode: READ_ONLY_MISSING_PRODUCTION_RUN_TITLE,
     detail: "Its emissions are not counted in RM-1.", target: null,
   };
   const [readOnly] = readOnlyOpenItems({ blocking: [], check: [missing], waiting: [] }).check;

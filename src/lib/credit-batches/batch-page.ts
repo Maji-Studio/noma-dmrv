@@ -8,7 +8,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import { CREDIT_BATCH_DETAILS_ROW, MISSING_PRODUCTION_RUN_ITEM_PREFIX, READ_ONLY_MISSING_PRODUCTION_RUN_TITLE, type CreditBatchOpenItem } from "./open-items";
+import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "./open-items";
 
 export const CREDIT_BATCH_PAGE_TABS = ["overview", "production", "samples", "emissions", "removals", "activities"] as const;
 export type CreditBatchPageTab = (typeof CREDIT_BATCH_PAGE_TABS)[number];
@@ -34,8 +34,9 @@ export interface CreditBatchOpenItemGroups {
 /**
  * On a read-only batch a to-do is a plain fact: the batch-details row (opens
  * Edit), the repair links and the Emissions tab (where records are made) lose
- * their target. Repair instructions are dropped.
- * Missing runs use final wording without "yet". Other tabs stay reachable.
+ * their target. Repair instructions are dropped, and so is a detail that may
+ * hold one. Items with read-only wording (a missing run drops "yet") use it.
+ * Other tabs stay reachable.
  */
 export function readOnlyOpenItems(items: CreditBatchOpenItemGroups): CreditBatchOpenItemGroups {
   const plain = (item: CreditBatchOpenItem): CreditBatchOpenItem => {
@@ -44,10 +45,7 @@ export function readOnlyOpenItems(items: CreditBatchOpenItemGroups): CreditBatch
       ...item,
       ...(item.detailMayInstruct ? { detail: undefined } : {}),
       title: item.readOnlyTitle ?? item.title,
-      ...(item.id.startsWith(MISSING_PRODUCTION_RUN_ITEM_PREFIX) && item.productionRun ? {
-        title: `${item.productionRun.code}${READ_ONLY_MISSING_PRODUCTION_RUN_TITLE}`,
-        titleAfterCode: READ_ONLY_MISSING_PRODUCTION_RUN_TITLE,
-      } : {}),
+      titleAfterCode: item.readOnlyTitleAfterCode ?? item.titleAfterCode,
       ...(writes ? { target: null } : {}), instruction: undefined,
     };
   };

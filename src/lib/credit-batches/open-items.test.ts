@@ -399,6 +399,12 @@ describe("missing production runs", () => {
     expect(tabBadge("overview", { ...items, waiting: [] })).toEqual({ count: 1, blocking: false });
   });
 
+  it("drops \"yet\" from the title on a read-only batch", () => {
+    const [item] = readOnlyOpenItems({ ...buildItems({ ...batchContext, missingProductionRuns }), waiting: [] }).check;
+    expect(item.title).toBe("RUN-112 is not in this credit batch");
+    expect(item.titleAfterCode).toBe(" is not in this credit batch");
+  });
+
   it("asks an admin to add the run when the viewer cannot manage", () => {
     expect(buildCreditBatchOpenItems({ ...batchContext, canManage: false, missingProductionRuns }))
       .toEqual({ blocking: [], check: [{

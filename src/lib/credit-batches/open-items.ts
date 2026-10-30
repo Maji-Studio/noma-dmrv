@@ -47,8 +47,9 @@ export const LATE_PRODUCTION_RUN_ITEM_PREFIX = "late-production-run:";
 export interface CreditBatchOpenItem {
   id: string;
   title: string;
-  /** Factual alternative when an editable status label is phrased as an action. */
+  /** The title, and the text after its linked run code, when the batch is read only and the editable wording no longer fits. */
   readOnlyTitle?: string;
+  readOnlyTitleAfterCode?: string;
   /** The title text after the linked production run code. */
   titleAfterCode?: string;
   /** What is the case. A read-only batch shows this alone. */
@@ -292,6 +293,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         productionRun: { id: run.id, code: run.code },
         title: `${run.code}${titleAfterCode}`,
         titleAfterCode,
+        readOnlyTitle: `${run.code}${READ_ONLY_MISSING_PRODUCTION_RUN_TITLE}`,
+        readOnlyTitleAfterCode: READ_ONLY_MISSING_PRODUCTION_RUN_TITLE,
         ...(run.sameDayEntry ? { sameDayEntryDate: run.entryDate } : {}),
         detail: `Its emissions are not counted in ${codes}.`,
         instruction: canManage ? sameDayInstruction : missingRunsMemberSentence(1),
@@ -393,7 +396,6 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       check.push({
         id: `emission:${line.componentId}`,
         title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
-        readOnlyTitle: `${line.displayName}: Entry needs review`,
         ...(!copy ? { detailMayInstruct: true as const } : {}),
         detail: memberText ? undefined : copy ? copy.detail : line.blocker?.message,
         ...((memberText ?? copy?.instruction) ? { instruction: memberText ?? copy?.instruction } : {}),

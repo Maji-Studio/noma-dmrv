@@ -218,7 +218,7 @@ it("separates missing-file instructions without changing the blocker message", (
   expect(openItemText(groups.check[0])).toBe(line.blocker?.message);
   const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).check;
   expect(openItemText(readOnly)).toBeUndefined();
-  expect(readOnly.title).toBe(`${line.displayName}: Entry needs review`);
+  expect(readOnly.title).toBe(`${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`);
   expect(readOnly.instruction).toBeUndefined();
 });
 
@@ -234,7 +234,7 @@ it("leaves a supplied stale-entry reason unsplit", () => {
   expect(openItemText(groups.check[0])).toBe(instruction);
   const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).check;
   expect(openItemText(readOnly)).toBeUndefined();
-  expect(readOnly.title).toBe(`${line.displayName}: Entry needs review`);
+  expect(readOnly.title).toBe(`${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`);
 });
 
 

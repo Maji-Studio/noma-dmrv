@@ -10,6 +10,7 @@ export function renderedOpenItems<T extends { blocking: CreditBatchOpenItem[]; c
     const joined: CreditBatchOpenItem = { ...item, detail: openItemText(item) };
     delete joined.instruction;
     delete joined.readOnlyTitle;
+    delete joined.readOnlyTitleAfterCode;
     delete joined.detailMayInstruct;
     return joined;
   };
