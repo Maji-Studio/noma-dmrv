@@ -1,16 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createIsometricClient, createIsometricClientFromTransport, IsometricApiError } from "./client";
-import { classifySourceReadback, failClosedOnEmptySources, readBiocharApplicationSources } from "./biochar-application-source-readback";
+import { createIsometricClient, createIsometricClientFromTransport, IsometricApiError, SOURCE_READBACK_TIMEOUT_MS } from "./client";
+import { BIOCHAR_APPLICATION_SOURCES_MAX_PAGES, classifySourceReadback, failClosedOnEmptySources, readBiocharApplicationSources } from "./biochar-application-source-readback";
 
 const log = vi.hoisted(() => ({ debug: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { child: () => log } }));
 vi.mock("@/db", () => ({}));
-const input = { externalProjectId: "prj-test", externalApplicationId: "bca-test" };
+const input = { externalProjectId: "prj-test", externalApplicationId: "bca-test", externalStorageLocationId: "slc-test" };
 const fetchMock = vi.fn<typeof fetch>();
 const credentials = { baseUrl: "https://api.sandbox.isometric.com/mrv/v0", clientSecret: randomUUID(), accessToken: randomUUID() };
 const client = createIsometricClient(credentials);
-const response = (nodes: unknown) => ({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes } } } });
+const ELAPSED_PAGE_MS = 1000;
+const READBACK_PAGE_SIZE = 50;
+const response = (nodes: unknown, pageInfo: unknown = { hasNextPage: false, endCursor: null }) =>
+  ({ data: { project: { __typename: "Project", biocharSpreadEvents: { nodes, pageInfo } } } });
 const node = (sources: unknown) => ({ id: "bca-test", biocharSpreadEventSources: sources });
 const sources = (ids: string[]) => ids.map(id => ({ source: { id } }));
 
@@ -63,8 +66,10 @@ describe("GraphQL Source readback", () => {
     expect(url.toString()).toBe("https://api.sandbox.isometric.com/graphql");
     expect(init?.headers).toMatchObject({ Authorization: `Bearer ${credentials.accessToken}`, "X-Client-Secret": credentials.clientSecret });
     const body = JSON.parse(init!.body as string);
-    expect(body.variables).toEqual({ projectId: "prj-test", ids: ["bca-test"] });
-    expect(body.query).toContain("biocharSpreadEvents(first: 2, filter: { idIn: $ids })");
+    expect(body.variables).toEqual({ projectId: "prj-test", ids: ["bca-test"], storageLocationId: "slc-test", after: null });
+    expect(body.query).toContain("filter: { idIn: $ids, storageLocationId: $storageLocationId }");
+    expect(body.query).toContain("after: $after");
+    expect(body.query).toContain("pageInfo { hasNextPage endCursor }");
     expect(body.query).toContain("project(id: $projectId)");
     const logs = JSON.stringify([log.debug.mock.calls, log.warn.mock.calls, log.error.mock.calls]);
     expect(logs.includes(credentials.accessToken) || logs.includes(credentials.clientSecret)).toBe(false);
@@ -73,9 +78,78 @@ describe("GraphQL Source readback", () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify(response([node(list)]))));
     expect(await read()).toMatchObject({ kind: "garbled" });
   });
-  it("rejects two event nodes", async () => {
+  it("finds and confirms the requested node when idIn is ignored", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(response([
+      { id: "bca-other", biocharSpreadEventSources: sources(["src-other"]) }, node(sources(["src-a"])),
+    ]))));
+    const result = await read();
+    expect(result).toEqual({ kind: "found", sourceIds: ["src-a"] });
+    expect(classifySourceReadback(["src-a"], result)).toEqual({ outcome: "confirmed" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+  it("follows the cursor to find the requested node on the second page", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(response([
+      { id: "bca-other", biocharSpreadEventSources: [] },
+    ], { hasNextPage: true, endCursor: "cursor-1" }))))
+      .mockResolvedValueOnce(new Response(JSON.stringify(response([node(sources(["src-a"]))]))));
+    expect(await read()).toEqual({ kind: "found", sourceIds: ["src-a"] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string).variables).toEqual({
+      projectId: "prj-test", ids: ["bca-test"], storageLocationId: "slc-test", after: "cursor-1",
+    });
+  });
+  it("gives the second page only the remaining read budget", async () => {
+    const graphql = vi.fn()
+      .mockImplementationOnce(async () => {
+        vi.setSystemTime(Date.now() + ELAPSED_PAGE_MS);
+        return response([], { hasNextPage: true, endCursor: "cursor-1" });
+      })
+      .mockResolvedValueOnce(response([node(sources(["src-a"]))]));
+    expect(await readBiocharApplicationSources({ ...client, graphql }, input)).toEqual({ kind: "found", sourceIds: ["src-a"] });
+    expect(graphql).toHaveBeenNthCalledWith(1, expect.any(String), expect.any(Object), { timeoutMs: SOURCE_READBACK_TIMEOUT_MS });
+    expect(graphql).toHaveBeenNthCalledWith(2, expect.any(String), expect.any(Object), { timeoutMs: SOURCE_READBACK_TIMEOUT_MS - ELAPSED_PAGE_MS });
+  });
+  it("returns timeout without starting another page when the read budget is exhausted", async () => {
+    const graphql = vi.fn().mockImplementationOnce(async () => {
+      vi.setSystemTime(Date.now() + SOURCE_READBACK_TIMEOUT_MS);
+      return response([], { hasNextPage: true, endCursor: "cursor-1" });
+    });
+    expect(await readBiocharApplicationSources({ ...client, graphql }, input)).toEqual({ kind: "no_answer", reason: "timeout" });
+    expect(graphql).toHaveBeenCalledOnce();
+  });
+  it("stops unconfirmed at the named page bound when no node matches", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(response([
+      { id: "bca-other", biocharSpreadEventSources: [] },
+    ], { hasNextPage: true, endCursor: `cursor-${fetchMock.mock.calls.length}` }))));
+    const result = await read();
+    expect(result).toEqual({ kind: "no_answer", reason: "event_not_found" });
+    expect(classifySourceReadback(["src-a"], result)).toEqual({ outcome: "unconfirmed", reason: "event_not_found" });
+    expect(fetchMock).toHaveBeenCalledTimes(BIOCHAR_APPLICATION_SOURCES_MAX_PAGES);
+  });
+  it.each([null, {}, { hasNextPage: "true" }, { hasNextPage: true },
+    { hasNextPage: true, endCursor: null }, { hasNextPage: true, endCursor: 17 },
+    { hasNextPage: true, endCursor: " " }])("fails closed on unreadable paging metadata %j", async pageInfo => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(response([], pageInfo))));
+    expect(await read()).toEqual({ kind: "no_answer", reason: "unreadable_response" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+  it("rejects a repeated paging cursor", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(response([], { hasNextPage: true, endCursor: "cursor-1" }))));
+    expect(await read()).toEqual({ kind: "no_answer", reason: "unreadable_response" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it("does not need paging metadata once the requested node is found", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(response([node(sources(["src-a"]))], null))));
+    expect(await read()).toEqual({ kind: "found", sourceIds: ["src-a"] });
+  });
+  it("does not trust partial data with errors on a later page", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(response([], { hasNextPage: true, endCursor: "cursor-1" }))))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...response([node(sources(["src-a"]))]), errors: [{ message: "failed" }] })));
+    expect(await read()).toEqual({ kind: "no_answer", reason: "graphql_errors" });
+  });
+  it("rejects duplicate matching event ids", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify(response([node([]), node([])]))));
-    expect(await read()).toMatchObject({ kind: "garbled" });
+    expect(await read()).toEqual({ kind: "garbled", detail: "multiple_events" });
   });
   it.each([
     [response([]), "event_not_found"],
@@ -156,16 +230,63 @@ describe("fake registry GraphQL adapter", () => {
     const { createFakeClientModule, installFakeRegistry } = await import("../../../tests/fixtures/fake-registry");
     const registry = installFakeRegistry();
     const fake = createFakeClientModule(actual).createIsometricClient(null);
-    const created = await fake.post<{ id: string }>("/biochar_applications", { project_id: "prj-test", source_ids: ["src-a", "src-b"] });
+    const created = await fake.post<{ id: string }>("/biochar_applications", {
+      project_id: input.externalProjectId, storage_site_id: input.externalStorageLocationId, source_ids: ["src-a", "src-b"],
+    });
     expect(await readBiocharApplicationSources(fake, { ...input, externalApplicationId: created.id })).toEqual({ kind: "found", sourceIds: ["src-a", "src-b"] });
-    expect(await readBiocharApplicationSources(fake, { externalProjectId: "prj-other", externalApplicationId: created.id })).toEqual({ kind: "no_answer", reason: "event_not_found" });
-    expect(registry.requestCount("POST", "/graphql")).toBe(2);
+    expect(await readBiocharApplicationSources(fake, { ...input, externalProjectId: "prj-other", externalApplicationId: created.id })).toEqual({ kind: "no_answer", reason: "event_not_found" });
+    expect(await readBiocharApplicationSources(fake, { ...input, externalStorageLocationId: "slc-other", externalApplicationId: created.id })).toEqual({ kind: "no_answer", reason: "event_not_found" });
+    expect(registry.requestCount("POST", "/graphql")).toBe(3);
     registry.biocharApplications[0].source_ids = ["src-other"];
     expect(classifySourceReadback(["src-a"], await readBiocharApplicationSources(fake, { ...input, externalApplicationId: created.id }))).toMatchObject({ outcome: "mismatch", missing: ["src-a"], unexpected: ["src-other"] });
     registry.biocharApplications[0].source_ids = null;
     expect(await readBiocharApplicationSources(fake, { ...input, externalApplicationId: created.id })).toMatchObject({ kind: "garbled" });
     registry.failNext("POST /graphql", "reject-before-commit", { status: 401 });
     expect(await readBiocharApplicationSources(fake, { ...input, externalApplicationId: created.id })).toEqual({ kind: "no_answer", reason: "http_status" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("finds the requested Application after another full page in the same storage location", async () => {
+    const actual = await import("./client");
+    const { createFakeClientModule, installFakeRegistry } = await import("../../../tests/fixtures/fake-registry");
+    const registry = installFakeRegistry();
+    const fake = createFakeClientModule(actual).createIsometricClient(null);
+    for (let index = 0; index < READBACK_PAGE_SIZE; index++) {
+      await fake.post("/biochar_applications", {
+        project_id: input.externalProjectId, storage_site_id: input.externalStorageLocationId, source_ids: ["src-other"],
+      });
+    }
+    const created = await fake.post<{ id: string }>("/biochar_applications", {
+      project_id: input.externalProjectId, storage_site_id: input.externalStorageLocationId, source_ids: ["src-a"],
+    });
+    expect(await readBiocharApplicationSources(fake, { ...input, externalApplicationId: created.id })).toEqual({ kind: "found", sourceIds: ["src-a"] });
+    expect(registry.requestCount("POST", "/graphql")).toBe(2);
+    const requests = registry.requests.filter(request => request.path === "/graphql");
+    expect(requests[1].body).toMatchObject({ variables: { after: String(READBACK_PAGE_SIZE) } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("pages by first and after while ignoring ids and scoping by project and storage location", async () => {
+    const actual = await import("./client");
+    const { createFakeClientModule, installFakeRegistry } = await import("../../../tests/fixtures/fake-registry");
+    installFakeRegistry();
+    const fake = createFakeClientModule(actual).createIsometricClient(null);
+    const post = (projectId: string, storageLocationId: string) => fake.post<{ id: string }>("/biochar_applications", {
+      project_id: projectId, storage_site_id: storageLocationId, source_ids: ["src-a"],
+    });
+    await post("prj-other", input.externalStorageLocationId);
+    const otherStorage = await post(input.externalProjectId, "slc-other");
+    const first = await post(input.externalProjectId, input.externalStorageLocationId);
+    const second = await post(input.externalProjectId, input.externalStorageLocationId);
+    const query = "query BiocharApplicationSources($first: Int, $after: String) { project { biocharSpreadEvents(first: $first, after: $after) { nodes { id } pageInfo { hasNextPage endCursor } } } }";
+    const variables = { projectId: input.externalProjectId, storageLocationId: input.externalStorageLocationId, ids: ["bca-absent"], first: 1 };
+    expect(await fake.graphql(query, variables)).toMatchObject(response([
+      { id: first.id },
+    ], { hasNextPage: true, endCursor: "1" }));
+    expect(await fake.graphql(query, { ...variables, after: "1" })).toMatchObject(response([
+      { id: second.id },
+    ], { hasNextPage: false, endCursor: null }));
+    expect(await fake.graphql(query, { ...variables, storageLocationId: undefined })).toMatchObject(response([
+      { id: otherStorage.id },
+    ], { hasNextPage: true, endCursor: "1" }));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

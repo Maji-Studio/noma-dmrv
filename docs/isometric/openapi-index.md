@@ -115,7 +115,14 @@ Isometric environment.
 `src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`,
 consumed by `src/fn/certification/biochar-application-source-readback.ts` on
 submission and Removal summary refresh. It reads
-`project.biocharSpreadEvents(filter: { idIn: $ids }).biocharSpreadEventSources`.
+`project.biocharSpreadEvents(first: 50, after: $after, filter: { idIn: $ids, storageLocationId: $storageLocationId })`
+with `nodes { id biocharSpreadEventSources { source { id } } }` and
+`pageInfo { hasNextPage endCursor }`. Variables include the requested Application
+id in `ids` and its registered external Storage Location id in `storageLocationId`.
+Verified on the sandbox (2026-10-30): `BiocharSpreadEventFilter.idIn` is ignored,
+`storageLocationId` narrows correctly, and the root has no `node(id:)` field.
+The client matches the node by id and follows cursors when absent, up to 10 pages.
+Duplicate matching ids are garbled; no match within that bound stays unconfirmed.
 Verified on the sandbox (2026-10-19): both Certify authentication headers are
 required, the REST Biochar Application id (`bse_...`) is the
 `BiocharSpreadEvent.id`, and the Source list matches the `source_ids` sent on

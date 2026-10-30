@@ -372,6 +372,7 @@ export async function listBiocharApplicationSourceReadbacks(
   const rows = await db.select({
     id: certifierBiocharApplications.id,
     externalApplicationId: certifierBiocharApplications.externalApplicationId,
+    externalStorageLocationId: certifierBiocharApplications.externalStorageLocationId,
     externalProjectId: certifierStorageLocations.externalProjectId,
     submittedPayload: certifierBiocharApplications.submittedPayload,
     lifecycleStatus: certifierBiocharApplications.lifecycleStatus,
