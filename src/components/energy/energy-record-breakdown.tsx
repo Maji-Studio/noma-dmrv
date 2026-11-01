@@ -68,7 +68,7 @@ function recordNote(record: EnergyRecord): string | null {
     case "batch":
       return `${formatCount(record.runCount, "production run")} and ${formatCount(record.deliveryCount, "delivery", "deliveries")} behind these figures. Delivery transport counts the share of each truck that carried this credit batch.`;
     case "run":
-      return "Feedstock transport counts each feedstock record once, on the earliest completed run in a credit batch that drew from it, as the Removal does.";
+      return "Each feedstock record's transport counts once, on the earliest completed run in a credit batch that drew from it. The Removal counts it the same way.";
     case "delivery":
       return record.dryMassKg == null
         ? null

@@ -9,6 +9,7 @@ import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatUtcDate } from "@/lib/date-utils";
 import { db } from "@/db";
@@ -36,7 +37,6 @@ const DELIVERED_WET_KG = 200;
 const FEEDSTOCK_WET_KG = 2_000;
 const FEEDSTOCK_DRAW_KG = 500;
 const LEG_KM = 12;
-const ROUND_TRIP_MULTIPLIER = 2;
 
 type Fixture = Awaited<ReturnType<typeof postedStockFixture>>;
 let fixture: Fixture;
@@ -215,7 +215,7 @@ describe.sequential("energy read", () => {
     expect(delivery?.footprint.gaps.biocharTransport).toEqual({ missing: 1, of: 1, unit: "delivery", recorded: false });
     const run = breakdown.records.find((record) => record.id === fixture.runs[0].id);
     expect(run?.footprint.activity.feedstockTransport).toBeCloseTo(
-      ROUND_TRIP_MULTIPLIER * LEG_KM * (FEEDSTOCK_WET_KG / KG_PER_TONNE),
+      countedRoundTripKm(LEG_KM) * (FEEDSTOCK_WET_KG / KG_PER_TONNE),
     );
   });
 });

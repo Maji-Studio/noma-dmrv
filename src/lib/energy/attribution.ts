@@ -3,7 +3,8 @@
  * per record (litres, kWh, tonne-km), and into dated flows for the facility.
  * No CO2e is computed: Isometric derives the figures that count.
  *
- * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution"):
+ * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution";
+ * feedstock transport ownership below replaces the plan's wet-mass split):
  *
  * - A null reading is a missing reading, never zero.
  * - Feedstock transport is 2 x one-way km x load tonnes per leg and counts
