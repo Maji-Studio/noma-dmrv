@@ -989,6 +989,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/monitoring_requirements/{monitoring_requirement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Monitoring Requirement
+         * @description Get a specific monitoring requirement within a project.
+         */
+        get: operations["get_project_monitoring_requirement_projects__project_id__monitoring_requirements__monitoring_requirement_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/monitoring_requirements/{monitoring_requirement_id}/submissions/{id}": {
         parameters: {
             query?: never;
@@ -1004,26 +1024,6 @@ export interface paths {
          * @description Deletes a monitoring submission for a project monitoring requirement
          */
         delete: operations["delete_monitoring_submission_projects__project_id__monitoring_requirements__monitoring_requirement_id__submissions__id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/projects/{project_id}/monitoring_requirements/{requirement_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Project Monitoring Requirement
-         * @description Get a specific monitoring requirement within a project.
-         */
-        get: operations["get_project_monitoring_requirement_projects__project_id__monitoring_requirements__requirement_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2021,17 +2021,20 @@ export interface components {
              * @description The size (in bytes) of the file that will be uploaded. The pre-signed URL will only accept a file of this size.
              */
             content_length: number;
-            /**
-             * Content Type
-             * @description The content type of the file that will be uploaded. This must also be passed as a 'content-type' header during the upload. The pre-signed URL will only accept a file of this content-type.
-             * @constant
-             */
-            content_type: "application/vnd.apache.parquet";
+            /** @description The content type of the file that will be uploaded. This must also be passed as a 'content-type' header during the upload. The pre-signed URL will only accept a file of this content-type. */
+            content_type: components["schemas"]["SupportedFileUploadContentType"];
             /**
              * File Name
              * @description The original filename of the file that will be uploaded. This is used for display purposes only and does not affect the upload process.
              */
             file_name: string;
+            /**
+             * @description The kind of file that will be uploaded. Kind must match the content type of the file:
+             *     - `time_series_data` must be in Apache Parquet format
+             *     - `site_geojson` must be in GeoJSON format
+             * @default time_series_data
+             */
+            kind: components["schemas"]["FileUploadKind"];
         };
         /** CreateGhgEntryRequest */
         CreateGhgEntryRequest: {
@@ -2651,6 +2654,12 @@ export interface components {
             upload_url: string;
         };
         /**
+         * FileUploadKind
+         * @description Supported kinds of file uploads.
+         * @enum {string}
+         */
+        FileUploadKind: "time_series_data" | "site_geojson";
+        /**
          * Frequency
          * @enum {string}
          */
@@ -2871,8 +2880,13 @@ export interface components {
              */
             id: string;
             /**
+             * Pending Total Co2E Reduced Kg
+             * @description If the GHG statement has pending changes, this is the net CO₂e reduced by the reduction entries in the GHG statement, including any changes that are pending. If the GHG statement has no pending changes, this is None.
+             */
+            pending_total_co2e_reduced_kg: number | null;
+            /**
              * Pending Total Co2E Removed Kg
-             * @description If the GHG statement has pending changes, this is the net CO₂e removed by the entries in the GHG statement, including any changes that are pending. If the GHG statement has no pending changes, this is None.
+             * @description If the GHG statement has pending changes, this is the net CO₂e removed by the removal entries in the GHG statement, including any changes that are pending. If the GHG statement has no pending changes, this is None.
              */
             pending_total_co2e_removed_kg: number | null;
             /**
@@ -2923,68 +2937,162 @@ export interface components {
          * @enum {string}
          */
         InputDataShape: "SCALAR" | "LIST";
-        IsometricIDPathParam_BiocharSpreadEvent_: components["schemas"]["IsometricIDRequestParam_BiocharSpreadEvent_"];
-        IsometricIDPathParam_Component_: components["schemas"]["IsometricIDRequestParam_Component_"];
-        IsometricIDPathParam_DataUploadSubmission_: components["schemas"]["IsometricIDRequestParam_DataUploadSubmission_"];
-        IsometricIDPathParam_Datapoint_: components["schemas"]["IsometricIDRequestParam_Datapoint_"];
-        IsometricIDPathParam_FeedstockBatch_: components["schemas"]["IsometricIDRequestParam_FeedstockBatch_"];
-        IsometricIDPathParam_FeedstockType_: components["schemas"]["IsometricIDRequestParam_FeedstockType_"];
-        IsometricIDPathParam_GhgEntryTemplate_: components["schemas"]["IsometricIDRequestParam_GhgEntryTemplate_"];
-        IsometricIDPathParam_GhgEntry_: components["schemas"]["IsometricIDRequestParam_GhgEntry_"];
-        IsometricIDPathParam_GhgStatement_: components["schemas"]["IsometricIDRequestParam_GhgStatement_"];
-        IsometricIDPathParam_MeasurementLocation_: components["schemas"]["IsometricIDRequestParam_MeasurementLocation_"];
-        IsometricIDPathParam_MeasurementSample_: components["schemas"]["IsometricIDRequestParam_MeasurementSample_"];
-        IsometricIDPathParam_MonitoringRequirement_: components["schemas"]["IsometricIDRequestParam_MonitoringRequirement_"];
-        IsometricIDPathParam_MonitoringSubmission_: components["schemas"]["IsometricIDRequestParam_MonitoringSubmission_"];
-        IsometricIDPathParam_ProductionBatch_: components["schemas"]["IsometricIDRequestParam_ProductionBatch_"];
-        IsometricIDPathParam_Project_: components["schemas"]["IsometricIDRequestParam_Project_"];
-        IsometricIDPathParam_Sensor_: components["schemas"]["IsometricIDRequestParam_Sensor_"];
-        IsometricIDPathParam_Source_: components["schemas"]["IsometricIDRequestParam_Source_"];
-        IsometricIDPathParam_StorageLocation_: components["schemas"]["IsometricIDRequestParam_StorageLocation_"];
-        IsometricIDPathParam_StorageUnit_: components["schemas"]["IsometricIDRequestParam_StorageUnit_"];
-        IsometricIDQueryParam_GhgEntryTemplate_: components["schemas"]["IsometricIDRequestParam_GhgEntryTemplate_"];
-        IsometricIDQueryParam_GhgEntry_: components["schemas"]["IsometricIDRequestParam_GhgEntry_"];
-        IsometricIDQueryParam_GhgStatement_: components["schemas"]["IsometricIDRequestParam_GhgStatement_"];
-        IsometricIDQueryParam_MeasurementSample_: components["schemas"]["IsometricIDRequestParam_MeasurementSample_"];
-        IsometricIDQueryParam_Project_: components["schemas"]["IsometricIDRequestParam_Project_"];
-        IsometricIDQueryParam_StorageLocation_: components["schemas"]["IsometricIDRequestParam_StorageLocation_"];
-        IsometricIDQueryParam_StorageUnit_: components["schemas"]["IsometricIDRequestParam_StorageUnit_"];
         /**
          * @example bse_1F1FDSGPE1S0374B
          * @example bse_1F1FDSGPE1S0374B
          * @example bse_1DGG1R6DZSBXACD8
          */
-        IsometricIDRequestParam_BiocharSpreadEvent_: string;
+        IsometricIDPathParam_BiocharSpreadEvent_: string;
         /**
          * @example cmp_1EP2SB7MZ1S036PY
          * @example cmp_1EP2SB7MZ1S036PY
          * @example cmp_1EHK4R6QJSBXFC5N
          */
-        IsometricIDRequestParam_Component_: string;
+        IsometricIDPathParam_Component_: string;
         /**
          * @example dus_1GBBSJ6P91S0R41N
          * @example dus_1GBBSJ6P91S0R41N
          * @example dus_1CRY1X1Q3SBX1CY2
          */
-        IsometricIDRequestParam_DataUploadSubmission_: string;
+        IsometricIDPathParam_DataUploadSubmission_: string;
         /**
          * @example dtp_1DVKHKS101S0Q61Q
          * @example dtp_1DVKHKS101S0Q61Q
          * @example dtp_1DJN8P57VSBXASFX
          */
-        IsometricIDRequestParam_Datapoint_: string;
+        IsometricIDPathParam_Datapoint_: string;
         /**
          * @example ftb_1DYYDB3C91S0ZHPX
          * @example ftb_1DYYDB3C91S0ZHPX
          * @example ftb_1G59XDK6HSBXCZ9B
          */
-        IsometricIDRequestParam_FeedstockBatch_: string;
+        IsometricIDPathParam_FeedstockBatch_: string;
         /**
          * @example ftt_1D7KZ1P761S0G7BN
          * @example ftt_1D7KZ1P761S0G7BN
          * @example ftt_1CSRJN4HHSBXZ3TK
          */
-        IsometricIDRequestParam_FeedstockType_: string;
+        IsometricIDPathParam_FeedstockType_: string;
+        /**
+         * @example rvt_1EVC8RZFE1S0BAT6
+         * @example rvt_1EVC8RZFE1S0BAT6
+         * @example rvt_1ECDZGE2DSBX88EX
+         */
+        IsometricIDPathParam_GhgEntryTemplate_: string;
+        /**
+         * @example rmv_1EEM6NJXX1S0EXKD
+         * @example rmv_1EEM6NJXX1S0EXKD
+         * @example rmv_1E3V4J2EWSBX5E82
+         */
+        IsometricIDPathParam_GhgEntry_: string;
+        /**
+         * @example ggs_1GDQJ99Z51S0DYW9
+         * @example ggs_1GDQJ99Z51S0DYW9
+         * @example ggs_1FWVEQRWSSBXK3NB
+         */
+        IsometricIDPathParam_GhgStatement_: string;
+        /**
+         * @example mlc_1CCZASA6Q1S0V8T4
+         * @example mlc_1CCZASA6Q1S0V8T4
+         * @example mlc_1GF73PG90SBXKEX1
+         */
+        IsometricIDPathParam_MeasurementLocation_: string;
+        /**
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1FN0MEX2ZSBX40DT
+         */
+        IsometricIDPathParam_MeasurementSample_: string;
+        /**
+         * @example mnr_1DJJQY5C61S0R519
+         * @example mnr_1DJJQY5C61S0R519
+         * @example mnr_1EKAZQMAZSBXDV59
+         */
+        IsometricIDPathParam_MonitoringRequirement_: string;
+        /**
+         * @example mns_1D46WGW6A1S03FRG
+         * @example mns_1D46WGW6A1S03FRG
+         * @example mns_1DCRH1P6JSBX480H
+         */
+        IsometricIDPathParam_MonitoringSubmission_: string;
+        /**
+         * @example ptb_1GAFJ4C051S06E0Z
+         * @example ptb_1GAFJ4C051S06E0Z
+         * @example ptb_1FQVMJYTASBXSZT8
+         */
+        IsometricIDPathParam_ProductionBatch_: string;
+        /**
+         * @example prj_1CTWZQGKE1S0VAXA
+         * @example prj_1CTWZQGKE1S0VAXA
+         * @example prj_1E0QTWB22SBX34D1
+         */
+        IsometricIDPathParam_Project_: string;
+        /**
+         * @example sns_1GJ82BEMB1S0FBFV
+         * @example sns_1GJ82BEMB1S0FBFV
+         * @example sns_1CCYZYWFWSBXYG38
+         */
+        IsometricIDPathParam_Sensor_: string;
+        /**
+         * @example src_1EBBF4M7X1S06G1Y
+         * @example src_1EBBF4M7X1S06G1Y
+         * @example src_1DW1B17VNSBX37N0
+         */
+        IsometricIDPathParam_Source_: string;
+        /**
+         * @example slc_1F3PMGVC91S0SBK3
+         * @example slc_1F3PMGVC91S0SBK3
+         * @example slc_1DCY5K78BSBX3XMZ
+         */
+        IsometricIDPathParam_StorageLocation_: string;
+        /**
+         * @example sgu_1E844FWM71S0E0TM
+         * @example sgu_1E844FWM71S0E0TM
+         * @example sgu_1DTBHQEBGSBXBCZV
+         */
+        IsometricIDPathParam_StorageUnit_: string;
+        /**
+         * @example rvt_1EVC8RZFE1S0BAT6
+         * @example rvt_1EVC8RZFE1S0BAT6
+         * @example rvt_1ECDZGE2DSBX88EX
+         */
+        IsometricIDQueryParam_GhgEntryTemplate_: string;
+        /**
+         * @example rmv_1EEM6NJXX1S0EXKD
+         * @example rmv_1EEM6NJXX1S0EXKD
+         * @example rmv_1E3V4J2EWSBX5E82
+         */
+        IsometricIDQueryParam_GhgEntry_: string;
+        /**
+         * @example ggs_1GDQJ99Z51S0DYW9
+         * @example ggs_1GDQJ99Z51S0DYW9
+         * @example ggs_1FWVEQRWSSBXK3NB
+         */
+        IsometricIDQueryParam_GhgStatement_: string;
+        /**
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1FN0MEX2ZSBX40DT
+         */
+        IsometricIDQueryParam_MeasurementSample_: string;
+        /**
+         * @example prj_1CTWZQGKE1S0VAXA
+         * @example prj_1CTWZQGKE1S0VAXA
+         * @example prj_1E0QTWB22SBX34D1
+         */
+        IsometricIDQueryParam_Project_: string;
+        /**
+         * @example slc_1F3PMGVC91S0SBK3
+         * @example slc_1F3PMGVC91S0SBK3
+         * @example slc_1DCY5K78BSBX3XMZ
+         */
+        IsometricIDQueryParam_StorageLocation_: string;
+        /**
+         * @example sgu_1E844FWM71S0E0TM
+         * @example sgu_1E844FWM71S0E0TM
+         * @example sgu_1DTBHQEBGSBXBCZV
+         */
+        IsometricIDQueryParam_StorageUnit_: string;
         /**
          * @example rvt_1EVC8RZFE1S0BAT6
          * @example rvt_1EVC8RZFE1S0BAT6
@@ -2997,72 +3105,6 @@ export interface components {
          * @example rmv_1E3V4J2EWSBX5E82
          */
         IsometricIDRequestParam_GhgEntry_: string;
-        /**
-         * @example ggs_1GDQJ99Z51S0DYW9
-         * @example ggs_1GDQJ99Z51S0DYW9
-         * @example ggs_1FWVEQRWSSBXK3NB
-         */
-        IsometricIDRequestParam_GhgStatement_: string;
-        /**
-         * @example mlc_1CCZASA6Q1S0V8T4
-         * @example mlc_1CCZASA6Q1S0V8T4
-         * @example mlc_1GF73PG90SBXKEX1
-         */
-        IsometricIDRequestParam_MeasurementLocation_: string;
-        /**
-         * @example mts_1D7HS15KD1S03M0Z
-         * @example mts_1D7HS15KD1S03M0Z
-         * @example mts_1FN0MEX2ZSBX40DT
-         */
-        IsometricIDRequestParam_MeasurementSample_: string;
-        /**
-         * @example mnr_1DJJQY5C61S0R519
-         * @example mnr_1DJJQY5C61S0R519
-         * @example mnr_1EKAZQMAZSBXDV59
-         */
-        IsometricIDRequestParam_MonitoringRequirement_: string;
-        /**
-         * @example mns_1D46WGW6A1S03FRG
-         * @example mns_1D46WGW6A1S03FRG
-         * @example mns_1DCRH1P6JSBX480H
-         */
-        IsometricIDRequestParam_MonitoringSubmission_: string;
-        /**
-         * @example ptb_1GAFJ4C051S06E0Z
-         * @example ptb_1GAFJ4C051S06E0Z
-         * @example ptb_1FQVMJYTASBXSZT8
-         */
-        IsometricIDRequestParam_ProductionBatch_: string;
-        /**
-         * @example prj_1CTWZQGKE1S0VAXA
-         * @example prj_1CTWZQGKE1S0VAXA
-         * @example prj_1E0QTWB22SBX34D1
-         */
-        IsometricIDRequestParam_Project_: string;
-        /**
-         * @example sns_1GJ82BEMB1S0FBFV
-         * @example sns_1GJ82BEMB1S0FBFV
-         * @example sns_1CCYZYWFWSBXYG38
-         */
-        IsometricIDRequestParam_Sensor_: string;
-        /**
-         * @example src_1EBBF4M7X1S06G1Y
-         * @example src_1EBBF4M7X1S06G1Y
-         * @example src_1DW1B17VNSBX37N0
-         */
-        IsometricIDRequestParam_Source_: string;
-        /**
-         * @example slc_1F3PMGVC91S0SBK3
-         * @example slc_1F3PMGVC91S0SBK3
-         * @example slc_1DCY5K78BSBX3XMZ
-         */
-        IsometricIDRequestParam_StorageLocation_: string;
-        /**
-         * @example sgu_1E844FWM71S0E0TM
-         * @example sgu_1E844FWM71S0E0TM
-         * @example sgu_1DTBHQEBGSBXBCZV
-         */
-        IsometricIDRequestParam_StorageUnit_: string;
         /** LinkMonitoringSubmissionRequirementsRequest */
         LinkMonitoringSubmissionRequirementsRequest: {
             /**
@@ -3831,12 +3873,12 @@ export interface components {
          * QuantityKindQualifierType
          * @enum {string}
          */
-        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "high_boiling_residue" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "mass_transferred" | "aggregated_container_contents" | "approximate_quantity_recovered" | "ash_content" | "fine_soil_oven_dry" | "loss_on_ignition" | "nameplate_charge" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "capacity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_conocarpus" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_malus" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorbus" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abarema_jupunba" | "species_abies_balsamea" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acer_pensylvanicum" | "species_acer_rubrum" | "species_acer_saccharum" | "species_acridocarpus_katangensis" | "species_adenanthera_pavonina" | "species_aegiphila_sellowiana" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_amphiodon_effusus" | "species_anacardium_giganteum" | "species_anacardium_occidentale" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_aniba_parviflora" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_montana" | "species_annona_paludosa" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_burchellii" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_artocarpus_heterophyllus" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astrocaryum_gynacanthum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_avicennia_alba" | "species_avicennia_marina" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bellucia_grossularioides" | "species_bertholletia_excelsa" | "species_betula_alleghaniensis" | "species_betula_lenta" | "species_betula_papyrifera" | "species_betula_populifolia" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_potabile" | "species_brosimum_rubescens" | "species_bruguiera_gymnorhiza" | "species_bruguiera_parviflora" | "species_bruguiera_sexangula" | "species_buchenavia_congesta" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_chrysophylla" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_densa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_grandiflora" | "species_casearia_javitensis" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_castilla_ulei" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_ceriops_decandra" | "species_ceriops_tagal" | "species_chamaecrista_apoucouita" | "species_chamaecrista_bahiae" | "species_chimarrhis_turbinata" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_bicolor" | "species_cordia_nodosa" | "species_cordia_scabrifolia" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couratari_oblongifolia" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_cajucara" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_diphylla" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_diplotropis_purpurea" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_ephedranthus_amazonicus" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_omissa" | "species_eugenia_punicifolia" | "species_eugenia_tapacumensis" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_fagus_grandifolia" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fraxinus_americana" | "species_fraxinus_nigra" | "species_fraxinus_pennsylvanica" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_geissospermum_vellosii" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_poeppigiana" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_gustavia_elliptica" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_hasseltia_floribunda" | "species_heisteria_ovata" | "species_helicostylis_tomentosa" | "species_henriettea_succosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_brachyrhachis" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_gracilifolia" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_rubiginosa" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_jupunba_trapezifolia" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_aculeata" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_larix_laricina" | "species_lecythis_idatimon" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_guianensis" | "species_licania_heteromorpha" | "species_licania_kunthiana" | "species_licania_membranacea" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_macrolobium_bifolium" | "species_maesopsis_eminii" | "species_mangifera_indica" | "species_manilkara_bidentata" | "species_manilkara_huberi" | "species_manilkara_subsericea" | "species_maprounea_guianensis" | "species_maquira_coriacea" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_matayba_inelegans" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_micropholis_guyanensis" | "species_minquartia_guianensis" | "species_minquartia_macrophylla" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_atramentifera" | "species_myrcia_cuprea" | "species_myrcia_eximia" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_naucleopsis_ternstroemiiflora" | "species_nectandra_cuspidata" | "species_neea_floribunda" | "species_neea_oppositifolia" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_canaliculata" | "species_ocotea_cujumary" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ostrya_virginiana" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_guianensis" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_campestris" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pentaclethra_macroloba" | "species_perebea_mollis" | "species_pericopsis_angolensis" | "species_persea_americana" | "species_philocosmos_mwelerianus" | "species_picea_glauca" | "species_picea_mariana" | "species_picea_rubens" | "species_piliostigma_thonningii" | "species_pinus_strobus" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_balsamifera" | "species_populus_grandidentata" | "species_populus_hybrid" | "species_populus_tremuloides" | "species_posoqueria_longiflora" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pourouma_villosa" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_decorticans" | "species_pouteria_filipes" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_pradosia_lactescens" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_pallidum" | "species_protium_robustum" | "species_protium_subserratum" | "species_protium_tenuifolium" | "species_prunus_serotina" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_laevigata" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_pseudopiptadenia_suaveolens" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_amazonum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_alba" | "species_quercus_bicolor" | "species_quercus_rubra" | "species_rauvolfia_paraensis" | "species_rhizophora_apiculata" | "species_rhizophora_mucronata" | "species_rinorea_guianensis" | "species_rinorea_racemosa" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_sagotia_racemosa" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_argutum" | "species_sapium_glandulosum" | "species_sapium_marginatum" | "species_sapium_marmieri" | "species_sarcaulus_brasiliensis" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_sickingia_tinctoria" | "species_simaba_cedron" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_siparuna_guianensis" | "species_sloanea_eichleri" | "species_sloanea_grandiflora" | "species_socratea_exorrhiza" | "species_sonneratia_alba" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_guianense" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swartzia_racemosa" | "species_swietenia_macrophylla" | "species_syagrus_cocoides" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tabernaemontana_angulata" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_tachigali_myrmecophila" | "species_tachigali_paraensis" | "species_tachigali_vulgaris" | "species_talisia_esculenta" | "species_talisia_guianensis" | "species_talisia_longifolia" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_tectona_grandis" | "species_terminalia_amazonia" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_theobroma_subincanum" | "species_thuja_occidentalis" | "species_thyrsodium_guianense" | "species_thyrsodium_spruceanum" | "species_tilia_americana" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_tsuga_canadensis" | "species_unknown" | "species_unonopsis_guatterioides" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_vatairea_sericea" | "species_virola_michelii" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_vismia_sandwithii" | "species_vochysia_guianensis" | "species_vochysia_inundata" | "species_xylocarpus_granatum" | "species_xylocarpus_moluccensis" | "species_xylopia_aromatica" | "species_xylopia_cayennensis" | "species_xylopia_frutescens" | "species_xylopia_nitida" | "species_zanthoxylum_rhoifolium" | "species_zygia_racemosa" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
+        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "high_boiling_residue" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "mass_transferred" | "aggregated_container_contents" | "approximate_quantity_recovered" | "ash_content" | "fine_soil_oven_dry" | "loss_on_ignition" | "nameplate_charge" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "capacity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "maximum" | "mean" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_conocarpus" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_malus" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorbus" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abarema_jupunba" | "species_abies_balsamea" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acer_pensylvanicum" | "species_acer_rubrum" | "species_acer_saccharum" | "species_acridocarpus_katangensis" | "species_adenanthera_pavonina" | "species_aegiphila_sellowiana" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_amphiodon_effusus" | "species_anacardium_giganteum" | "species_anacardium_occidentale" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_aniba_parviflora" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_montana" | "species_annona_paludosa" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_burchellii" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_artocarpus_heterophyllus" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astrocaryum_gynacanthum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_avicennia_alba" | "species_avicennia_marina" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bellucia_grossularioides" | "species_bertholletia_excelsa" | "species_betula_alleghaniensis" | "species_betula_lenta" | "species_betula_papyrifera" | "species_betula_populifolia" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_potabile" | "species_brosimum_rubescens" | "species_bruguiera_gymnorhiza" | "species_bruguiera_parviflora" | "species_bruguiera_sexangula" | "species_buchenavia_congesta" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_chrysophylla" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_densa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_grandiflora" | "species_casearia_javitensis" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_castilla_ulei" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_ceriops_decandra" | "species_ceriops_tagal" | "species_chamaecrista_apoucouita" | "species_chamaecrista_bahiae" | "species_chimarrhis_turbinata" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_bicolor" | "species_cordia_nodosa" | "species_cordia_scabrifolia" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couratari_oblongifolia" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_cajucara" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_diphylla" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_diplotropis_purpurea" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_ephedranthus_amazonicus" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_omissa" | "species_eugenia_punicifolia" | "species_eugenia_tapacumensis" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_fagus_grandifolia" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fraxinus_americana" | "species_fraxinus_nigra" | "species_fraxinus_pennsylvanica" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_geissospermum_vellosii" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_poeppigiana" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_gustavia_elliptica" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_hasseltia_floribunda" | "species_heisteria_ovata" | "species_helicostylis_tomentosa" | "species_henriettea_succosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_brachyrhachis" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_gracilifolia" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_rubiginosa" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_jupunba_trapezifolia" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_aculeata" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_larix_laricina" | "species_lecythis_idatimon" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_guianensis" | "species_licania_heteromorpha" | "species_licania_kunthiana" | "species_licania_membranacea" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_macrolobium_bifolium" | "species_maesopsis_eminii" | "species_mangifera_indica" | "species_manilkara_bidentata" | "species_manilkara_huberi" | "species_manilkara_subsericea" | "species_maprounea_guianensis" | "species_maquira_coriacea" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_matayba_inelegans" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_micropholis_guyanensis" | "species_minquartia_guianensis" | "species_minquartia_macrophylla" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_atramentifera" | "species_myrcia_cuprea" | "species_myrcia_eximia" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_naucleopsis_ternstroemiiflora" | "species_nectandra_cuspidata" | "species_neea_floribunda" | "species_neea_oppositifolia" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_canaliculata" | "species_ocotea_cujumary" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ostrya_virginiana" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_guianensis" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_campestris" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pentaclethra_macroloba" | "species_perebea_mollis" | "species_pericopsis_angolensis" | "species_persea_americana" | "species_philocosmos_mwelerianus" | "species_picea_glauca" | "species_picea_mariana" | "species_picea_rubens" | "species_piliostigma_thonningii" | "species_pinus_strobus" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_balsamifera" | "species_populus_grandidentata" | "species_populus_hybrid" | "species_populus_tremuloides" | "species_posoqueria_longiflora" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pourouma_villosa" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_decorticans" | "species_pouteria_filipes" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_pradosia_lactescens" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_pallidum" | "species_protium_robustum" | "species_protium_subserratum" | "species_protium_tenuifolium" | "species_prunus_serotina" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_laevigata" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_pseudopiptadenia_suaveolens" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_amazonum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_alba" | "species_quercus_bicolor" | "species_quercus_rubra" | "species_rauvolfia_paraensis" | "species_rhizophora_apiculata" | "species_rhizophora_mucronata" | "species_rinorea_guianensis" | "species_rinorea_racemosa" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_sagotia_racemosa" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_argutum" | "species_sapium_glandulosum" | "species_sapium_marginatum" | "species_sapium_marmieri" | "species_sarcaulus_brasiliensis" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_sickingia_tinctoria" | "species_simaba_cedron" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_siparuna_guianensis" | "species_sloanea_eichleri" | "species_sloanea_grandiflora" | "species_socratea_exorrhiza" | "species_sonneratia_alba" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_guianense" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swartzia_racemosa" | "species_swietenia_macrophylla" | "species_syagrus_cocoides" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tabernaemontana_angulata" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_tachigali_myrmecophila" | "species_tachigali_paraensis" | "species_tachigali_vulgaris" | "species_talisia_esculenta" | "species_talisia_guianensis" | "species_talisia_longifolia" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_tectona_grandis" | "species_terminalia_amazonia" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_theobroma_subincanum" | "species_thuja_occidentalis" | "species_thyrsodium_guianense" | "species_thyrsodium_spruceanum" | "species_tilia_americana" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_tsuga_canadensis" | "species_unknown" | "species_unonopsis_guatterioides" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_vatairea_sericea" | "species_virola_michelii" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_vismia_sandwithii" | "species_vochysia_guianensis" | "species_vochysia_inundata" | "species_xylocarpus_granatum" | "species_xylocarpus_moluccensis" | "species_xylopia_aromatica" | "species_xylopia_cayennensis" | "species_xylopia_frutescens" | "species_xylopia_nitida" | "species_zanthoxylum_rhoifolium" | "species_zygia_racemosa" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
         /**
          * QuantityKindType
          * @enum {string}
          */
-        QuantityKindType: "acidity" | "activity_concentration" | "amount_of_substance" | "amount_of_substance_concentration" | "amount_of_substance_per_mass" | "area" | "area_carbon_emission_factor" | "buffer_ph" | "bulk_density" | "count" | "currency" | "currency_carbon_emission_factor" | "depth" | "diameter" | "diameter_at_breast_height" | "dimensionless" | "dimensionless_ratio" | "distance" | "distance_carbon_emission_factor" | "dose_equivalent_rate" | "electric_current" | "electrical_conductivity" | "elevation" | "energy" | "energy_carbon_emission_factor" | "energy_density" | "exchangeable_amount_of_substance_per_mass" | "fuel_economy" | "height" | "ionic_strength" | "latitude" | "longitude" | "mass" | "mass_carbon" | "mass_carbon_emission_factor" | "mass_cdr_potential" | "mass_concentration" | "mass_density" | "mass_distance" | "mass_distance_carbon_emission_factor" | "mass_energy_density" | "mass_flow_rate" | "mass_fraction" | "mass_fraction_dry_basis" | "mass_fraction_wet_basis" | "mass_per_area" | "mass_ratio" | "molality_of_solute" | "molar_mass" | "mole_fraction" | "partial_pressure" | "particle_diameter" | "particle_mass_density" | "power" | "pressure" | "specific_surface_area" | "specific_volume" | "temperature" | "time" | "time_emission_factor" | "voltage" | "volume" | "volume_carbon_emission_factor" | "volume_distance_carbon_emission_factor" | "volume_flow_rate" | "volume_fraction" | "volume_per_area";
+        QuantityKindType: "acidity" | "activity_concentration" | "amount_of_substance" | "amount_of_substance_concentration" | "amount_of_substance_per_mass" | "area" | "area_carbon_emission_factor" | "buffer_ph" | "bulk_density" | "count" | "currency" | "currency_carbon_emission_factor" | "depth" | "diameter" | "diameter_at_breast_height" | "dimensionless" | "dimensionless_ratio" | "distance" | "distance_carbon_emission_factor" | "dose_equivalent_rate" | "electric_current" | "electrical_conductivity" | "elevation" | "energy" | "energy_carbon_emission_factor" | "energy_density" | "exchangeable_amount_of_substance_per_mass" | "fuel_economy" | "height" | "ionic_strength" | "latitude" | "longitude" | "mass" | "mass_carbon" | "mass_carbon_emission_factor" | "mass_cdr_potential" | "mass_concentration" | "mass_density" | "mass_distance" | "mass_distance_carbon_emission_factor" | "mass_energy_density" | "mass_flow_rate" | "mass_fraction" | "mass_fraction_dry_basis" | "mass_fraction_wet_basis" | "mass_per_area" | "mass_per_area_per_time" | "mass_ratio" | "molality_of_solute" | "molar_mass" | "mole_fraction" | "partial_pressure" | "particle_diameter" | "particle_mass_density" | "power" | "pressure" | "specific_surface_area" | "specific_volume" | "temperature" | "time" | "time_emission_factor" | "voltage" | "volume" | "volume_carbon_emission_factor" | "volume_distance_carbon_emission_factor" | "volume_flow_rate" | "volume_fraction" | "volume_per_area";
         /** Removal */
         Removal: {
             /**
@@ -4243,6 +4285,12 @@ export interface components {
             ghg_statement_report_url: string;
         };
         /**
+         * SupportedFileUploadContentType
+         * @description Supported HTTP content types for file uploads.
+         * @enum {string}
+         */
+        SupportedFileUploadContentType: "application/vnd.apache.parquet" | "application/geo+json";
+        /**
          * Undefined
          * @description An explicit representation of an undefined value in the Isometric REST API. Used, for example, to distinguish between explicit null inputs that clear a property, and not provided inputs which leave the property as is.
          */
@@ -4320,9 +4368,13 @@ export interface operations {
     get_biochar_applications_biochar_applications_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -4459,9 +4511,13 @@ export interface operations {
     get_component_blueprints_component_blueprints_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -4537,9 +4593,13 @@ export interface operations {
                 ghg_entry_id?: components["schemas"]["IsometricIDQueryParam_GhgEntry_"] | null;
                 /** @deprecated */
                 removal_id?: components["schemas"]["IsometricIDRequestParam_GhgEntry_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -4715,9 +4775,13 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["DataUploadSubmissionStatus"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -4835,9 +4899,13 @@ export interface operations {
                 /** @deprecated */
                 used_in_removal_template?: components["schemas"]["IsometricIDRequestParam_GhgEntryTemplate_"] | null;
                 used_in_scope?: components["schemas"]["ComponentScope"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5012,9 +5080,13 @@ export interface operations {
     get_datapoint_components_datapoints__id__components_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5051,9 +5123,13 @@ export interface operations {
     get_datapoint_ghg_entry_template_components_datapoints__id__ghg_entry_template_components_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5090,9 +5166,13 @@ export interface operations {
     get_datapoint_removal_template_components_datapoints__id__removal_template_components_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5232,9 +5312,13 @@ export interface operations {
         parameters: {
             query?: {
                 supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5269,9 +5353,13 @@ export interface operations {
     get_feedstock_batches_feedstock_types__feedstock_type_id__feedstock_batches_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5449,9 +5537,13 @@ export interface operations {
         parameters: {
             query?: {
                 supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5626,9 +5718,13 @@ export interface operations {
     get_ghg_entry_components_ghg_entries__id__component_attributions_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5739,9 +5835,13 @@ export interface operations {
     get_ghg_statements_ghg_statements_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -5885,9 +5985,13 @@ export interface operations {
         parameters: {
             query?: {
                 supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6024,9 +6128,13 @@ export interface operations {
     get_measurement_samples_measurement_samples_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6235,9 +6343,13 @@ export interface operations {
     get_processes_processes_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6272,9 +6384,13 @@ export interface operations {
     get_production_batches_production_batches_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6589,9 +6705,13 @@ export interface operations {
     get_projects_projects_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6628,9 +6748,13 @@ export interface operations {
             query?: {
                 storage_location_id?: components["schemas"]["IsometricIDQueryParam_StorageLocation_"] | null;
                 storage_unit_id?: components["schemas"]["IsometricIDQueryParam_StorageUnit_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6667,9 +6791,13 @@ export interface operations {
     get_ghg_entry_templates_projects__project_id__ghg_entry_templates_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6741,9 +6869,13 @@ export interface operations {
     get_monitoring_submissions_projects__project_id__monitoring_requirements__id__submissions_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6765,6 +6897,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedListResource_MonitoringSubmission_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_monitoring_requirement_projects__project_id__monitoring_requirements__monitoring_requirement_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+                monitoring_requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMonitoringRequirement"];
                 };
             };
             /** @description Validation Error */
@@ -6812,47 +6979,16 @@ export interface operations {
             };
         };
     };
-    get_project_monitoring_requirement_projects__project_id__monitoring_requirements__requirement_id__get: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description A secret token identifying the client connecting to the API */
-                "x-client-secret": string;
-            };
-            path: {
-                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectMonitoringRequirement"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_removal_templates_projects__project_id__removal_templates_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -6924,9 +7060,13 @@ export interface operations {
     get_storage_locations_projects__project_id__storage_locations_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7108,9 +7248,13 @@ export interface operations {
     get_project_storage_location_monitoring_requirements_projects__project_id__storage_locations__id__monitoring_requirements_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7149,9 +7293,13 @@ export interface operations {
         parameters: {
             query?: {
                 supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7326,9 +7474,13 @@ export interface operations {
     get_removal_components_removals__id__component_attributions_get: {
         parameters: {
             query?: {
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7405,9 +7557,13 @@ export interface operations {
             query?: {
                 project_id?: components["schemas"]["IsometricIDQueryParam_Project_"] | null;
                 reference?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7514,9 +7670,13 @@ export interface operations {
             query?: {
                 supplier_reference_id?: string | null;
                 project_id?: components["schemas"]["IsometricIDQueryParam_Project_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {
@@ -7765,9 +7925,13 @@ export interface operations {
             query?: {
                 storage_location_id?: components["schemas"]["IsometricIDQueryParam_StorageLocation_"] | null;
                 supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
                 last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
                 before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
                 first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
                 after?: string | null;
             };
             header: {

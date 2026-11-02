@@ -21,9 +21,10 @@ import { insertRemovalFixture } from "../helpers/removal-fixture";
  *  3. Settings round-trip — needs a seeded `certifier_projects` mapping against
  *     the REAL sandbox project (the connection card resolves the project from
  *     Isometric), so it's gated behind the sandbox skip. Asserts the retired
- *     route redirects, Settings, Facilities renders the linked project, and
- *     Registry and Diagnostics, reached from the settings rail, mount. The link/edit/unlink dialog
- *     behaviour is covered by `facility-certifier-mapping.spec.ts`.
+ *     route redirects, Settings, Facilities renders the linked project,
+ *     Registry, reached from the settings rail, mounts, and Platform,
+ *     Diagnostics mounts. The link/edit/unlink dialog behaviour is covered by
+ *     `facility-certifier-mapping.spec.ts`.
  *
  * Playwright loads `.env.test` only; we additionally pull `.env.local` (without
  * overriding) so a developer/CI with sandbox creds + `ISOMETRIC_DEMO_PROJECT_ID`
@@ -292,7 +293,9 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
       await expect(page).toHaveURL(new RegExp(`facility=${facilityId}`));
       await expect(page.getByText("Registry: Isometric")).toBeVisible();
 
-      await rail.getByRole("link", { name: "Diagnostics" }).click();
+      // D · Diagnostics left Settings for Platform (#1373); admins reach it
+      // there.
+      await page.goto("/platform/diagnostics");
       await expect(
         page.getByRole("heading", { name: "Diagnostics", level: 1 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
