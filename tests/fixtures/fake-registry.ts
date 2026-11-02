@@ -72,6 +72,7 @@ export interface FakeGhgStatementRecord {
   submitted_at: string | null;
   credits_issued_at: string | null;
   pending_total_co2e_removed_kg: number | null;
+  pending_total_co2e_reduced_kg: number | null;
 }
 
 export interface LoggedRequest {
@@ -216,6 +217,7 @@ export class FakeIsometricRegistry {
       submitted_at: null,
       credits_issued_at: null,
       pending_total_co2e_removed_kg: null,
+      pending_total_co2e_reduced_kg: null,
     };
     this.ghgStatements.push(statement);
     return statement;

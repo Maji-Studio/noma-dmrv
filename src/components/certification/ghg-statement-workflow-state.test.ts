@@ -15,6 +15,7 @@ function statement(
     ghg_entry_ids: ["entry_1"],
     removal_ids: [],
     pending_total_co2e_removed_kg: 100,
+    pending_total_co2e_reduced_kg: null,
     reporting_period_start_at: "2026-01-01",
     reporting_period_end_at: "2026-01-31",
     ghg_statement_report_url: null,

@@ -99,7 +99,7 @@ it.each(["submit", "resubmit", "reconciled"] as const)(
     const remoteAfter: GhgStatement = {
       id: externalId, project_id: "prj_fixture", status: "AWAITING_VERIFICATION",
       verifier: null, removal_ids: [], credit_allocation: null,
-      ghg_statement_report_url: REPORT_URL, pending_total_co2e_removed_kg: null,
+      ghg_statement_report_url: REPORT_URL, pending_total_co2e_removed_kg: null, pending_total_co2e_reduced_kg: null,
       submitted_at: REGISTRY_AT, credits_issued_at: null, ghg_entry_ids: ["entry_fixture"],
       reporting_period_start_at: null, reporting_period_end_at: null,
     };
