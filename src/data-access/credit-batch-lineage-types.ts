@@ -72,6 +72,7 @@ export interface BatchLineageApplicationFact {
     productionDate: string;
     massKg: number | null;
     moistureContentPercent: number | null;
+    composition?: unknown;
     formulationName: string | null;
     linkedProductionRunId: string;
   };
@@ -98,6 +99,7 @@ export interface BatchRunForwardProductFact {
   productionDate: string;
   massKg: number;
   moistureContentPercent: number;
+  composition?: unknown;
   formulationName: string | null;
   drawnWetMassKg: number;
   drawnDryMassKg: number;

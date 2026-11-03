@@ -25,7 +25,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
-import { sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
+import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -451,14 +451,7 @@ export async function getDashboardOverview(
       .map((p) => p.row.massDryKg),
   );
   const currentLots = lotPoints.filter((p) => inCurrentDayPeriod(p.day));
-  // Match the products list: source dry biochar excludes blend ingredients.
-  // Retain the wet-mass fallback when neither allocation nor moisture gives
-  // a dry figure, so a product without a reading still counts as before.
-  const lotDryKg = (row: (typeof lotRows)[number]) =>
-    sourceBiocharDryMassKg(row) ??
-    row.massKg ??
-    0;
-  const baggedKg = sum(currentLots.map((p) => lotDryKg(p.row)));
+  const baggedKg = sum(currentLots.map((p) => sourceBiocharMassFlowKg(p.row)));
 
   const massFlow: DashboardMassFlowSegment[] = [
     { key: "delivered", tonnes: deliveredKg / 1000 },

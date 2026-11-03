@@ -102,6 +102,11 @@ describe("dashboard display totals", () => {
     },
     { label: "unchanged pure biochar", product: PRODUCT, expectedKg: PURE_DRY_KG },
     {
+      label: "wet source biochar excluding ingredients without moisture or an allocation",
+      product: { ...PRODUCT, composition: COMPOSITION, moistureContentPercent: null },
+      expectedKg: BLEND_KG - INGREDIENT_KG,
+    },
+    {
       label: "the existing wet fallback without moisture or an allocation",
       product: { ...PRODUCT, moistureContentPercent: null },
       expectedKg: BLEND_KG,

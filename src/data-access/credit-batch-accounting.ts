@@ -206,6 +206,7 @@ async function loadLineageWithExecutor(
           productionDate: biocharProducts.productionDate,
           productMassKg: biocharProducts.massKg,
           productMoisturePercent: biocharProducts.moistureContentPercent,
+          productComposition: biocharProducts.composition,
           formulationName: formulations.name,
           linkedProductionRunId: applicationOutputAllocations.productionRunId,
         })
@@ -364,7 +365,7 @@ async function loadLineageWithExecutor(
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
       delivery: { proofOfDeliveryCount: proofCounts.get(row.deliveryId) ?? 0, id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, recordedDistanceKm: row.recordedDistanceKm, customerLocationId: row.customerLocationId },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
-      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
+      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, composition: row.productComposition, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
     };
     const key = `${row.creditBatchId}:${effectiveRunId}`;
     const facts = applicationsByBatchRun.get(key) ?? [];
