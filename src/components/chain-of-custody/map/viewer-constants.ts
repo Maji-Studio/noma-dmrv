@@ -21,7 +21,7 @@ export const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-sat-layer`;
 // ---------------------------------------------------------------------------
 
 /** Marker family per plotted node kind. */
-export type ViewerMarkerKind = "supplier" | "facility" | "field";
+export type ViewerMarkerKind = "supplier" | "facility" | "field" | "customer";
 
 // ---------------------------------------------------------------------------
 // Route lines ("carbon in transit")

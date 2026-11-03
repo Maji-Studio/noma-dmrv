@@ -36,6 +36,7 @@ import {
   LEG_LINE_WIDTH,
   SAT_LAYER_ID,
   SAT_SOURCE_ID,
+  type ViewerMarkerKind,
 } from "./viewer-constants";
 import { resolveMapTap } from "./nearest-marker";
 import { createSiteMarkerElement } from "./viewer-elements";
@@ -172,7 +173,7 @@ function declutterLabels(map: maplibregl.Map, markers: maplibregl.Marker[]) {
 
 interface Plotted {
   nodeId: string;
-  kind: "supplier" | "facility" | "field";
+  kind: ViewerMarkerKind;
   code: string;
   sub: string | null;
   lat: number;
@@ -187,8 +188,12 @@ function plotted(geo: ChainOfCustodyGeoData): Plotted[] {
   for (const node of geo.nodes) {
     if (node.lat == null || node.lng == null) continue;
     if (node.positionSource !== "own" && node.positionSource !== "leg_origin") continue;
-    if (node.kind !== "feedstock" && node.kind !== "application") continue;
-    out.push({ nodeId: node.id, kind: node.kind === "feedstock" ? "supplier" : "field", code: node.code, sub: node.sub, lat: node.lat, lng: node.lng });
+    let kind: ViewerMarkerKind;
+    if (node.kind === "feedstock") kind = "supplier";
+    else if (node.kind === "application") kind = "field";
+    else if (node.kind === "delivery" && node.positionSource === "own") kind = "customer";
+    else continue;
+    out.push({ nodeId: node.id, kind, code: node.code, sub: node.sub, lat: node.lat, lng: node.lng });
   }
   return out;
 }

@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ChainOfCustodyGeoData } from "@/data-access/chain-of-custody-geo";
 import TraceMapCanvas, { type TraceMapCanvasProps } from "./trace-map-canvas";
 import type { MapLighting } from "./trace-model";
+import { buildTraceModel } from "./trace-model";
+import { BATCH_EDGES, BATCH_NODES, batchGeo, geoNode } from "./trace-fixtures";
+import type { ChainWalk } from "./trace-chains";
+import { TraceMapView } from "./trace-map-view";
 
 type Camera = { points: number[][] };
 const mocks = vi.hoisted(() => ({ maps: [] as Array<{
@@ -12,6 +17,9 @@ const mocks = vi.hoisted(() => ({ maps: [] as Array<{
   flyTo: ReturnType<typeof vi.fn>;
 }> }));
 vi.mock("@/components/map", () => ({ applyBrandRecolor: vi.fn(), MapControls: () => null }));
+vi.mock("./lazy-trace-map-canvas", async () => ({ LazyTraceMapCanvas: (await import("./trace-map-canvas")).default }));
+vi.mock("@/hooks/use-media-query", () => ({ useIsMobile: () => false }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("maplibre-gl", () => {
   class LngLatBounds {
     points: number[][] = [];
@@ -22,10 +30,14 @@ vi.mock("maplibre-gl", () => {
   return {
     Map: class {
       load?: () => void;
-      container = { clientWidth: 800, clientHeight: 600 };
+      container: HTMLElement;
       cameraForBounds = vi.fn((bounds: LngLatBounds): Camera => ({ points: bounds.points }));
       flyTo = vi.fn();
-      constructor() { mocks.maps.push(this); }
+      constructor({ container }: { container: HTMLElement }) {
+        this.container = container;
+        Object.defineProperties(container, { clientWidth: { value: 800 }, clientHeight: { value: 600 } });
+        mocks.maps.push(this);
+      }
       addControl() {}
       once(event: string, callback: () => void) { if (event === "load") this.load = callback; }
       on() {}
@@ -48,12 +60,13 @@ vi.mock("maplibre-gl", () => {
       setLngLat(point: number[]) { this.point = point; return this; }
       getLngLat() { return this.point; }
       getElement() { return this.element; }
-      addTo() { return this; }
-      remove() {}
+      addTo(map: { container: HTMLElement }) { map.container.appendChild(this.element); return this; }
+      remove() { this.element.remove(); }
     },
   };
 });
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+Element.prototype.scrollTo = vi.fn();
 
 const geo: ChainOfCustodyGeoData = {
   facility: { id: "facility", code: "FAC", name: "Facility", lat: -6, lng: 35 },
@@ -104,4 +117,64 @@ it("refits when geography changes after load, without the flight", async () => {
   // The field moved (an edit refetched the payload): refit on its new place.
   view.rerender(<TraceMapCanvas {...props({ lighting: lighting([{ lat: -6, lng: 35 }, { lat: -8, lng: 40 }]) })} />);
   expect(lastFrame()).toEqual({ points: [[35, -6], [40, -8]], duration: 0 });
+});
+
+it.each([true, false])("renders and walks an unapplied delivery destination (facility GPS: %s)", async (hasFacilityGps) => {
+  const destination = { lat: -7, lng: 39 };
+  const data = batchGeo({
+    ...(!hasFacilityGps ? { facility: { ...geo.facility, lat: null, lng: null } } : {}),
+    nodes: [geoNode("delivery", "delivery:dl1", "DL-26-001", destination)],
+    legs: [],
+  });
+  const model = buildTraceModel(BATCH_NODES.slice(2, 5), BATCH_EDGES.slice(2, 4), data);
+  function DeliveryView() {
+    const [walk, setWalk] = useState<ChainWalk | null>(null);
+    return <TraceMapView model={model} routeGeometries={undefined} walk={walk} onWalkChange={setWalk} />;
+  }
+  render(<DeliveryView />);
+  await act(async () => { mocks.maps.at(-1)!.load!(); });
+
+  const map = within(screen.getByTestId("carbon-viewer-map"));
+  const marker = map.getByRole("button", { name: "DL-26-001" });
+  expect(map.getAllByTestId("carbon-viewer-marker")).toHaveLength(hasFacilityGps ? 2 : 1);
+  expect(marker.dataset.position).toBe(JSON.stringify([destination.lng, destination.lat]));
+  expect(marker.classList.contains("cvm-mk--customer")).toBe(true);
+  expect(marker.tabIndex).toBe(0);
+  expect(lastFrame().points).toContainEqual([destination.lng, destination.lat]);
+
+  const panel = within(screen.getByRole("complementary"));
+  expect(panel.queryByText("1 delivery · no location recorded")).toBeNull();
+  fireEvent.click(panel.getByRole("button", { name: /Delivery/ }));
+  expect(lastFrame().points).toEqual([[destination.lng, destination.lat]]);
+  fireEvent.click(marker);
+  expect(panel.getByText("01 / 03 · To DL-26-001")).toBeTruthy();
+  fireEvent.click(panel.getByRole("button", { name: /^Next/ }));
+  fireEvent.click(panel.getByRole("button", { name: /^Next/ }));
+  expect(panel.getByText("03 / 03 · To DL-26-001")).toBeTruthy();
+  expect(marker.classList.contains("tm-current")).toBe(true);
+  expect(marker.classList.contains("cvm-dim")).toBe(false);
+  expect(lastFrame().points).toEqual([[destination.lng, destination.lat]]);
+
+  // Keyboard selection of the destination returns the walk to the delivery.
+  fireEvent.click(panel.getByRole("button", { name: /^Back/ }));
+  expect(marker.classList.contains("tm-current")).toBe(false);
+  fireEvent.keyDown(marker, { key: "Enter" });
+  expect(panel.getByText("03 / 03 · To DL-26-001")).toBeTruthy();
+  expect(marker.classList.contains("tm-current")).toBe(true);
+});
+
+it("keeps deliveries without GPS on the facility fallback without a destination marker", async () => {
+  const data = batchGeo({
+    nodes: [{ ...geoNode("delivery", "delivery:dl1", "DL-26-001", null), lat: -6, lng: 35 }],
+    legs: [],
+  });
+  const model = buildTraceModel(BATCH_NODES.slice(2, 5), BATCH_EDGES.slice(2, 4), data);
+  render(<TraceMapView model={model} routeGeometries={undefined} walk={{ endId: "delivery:dl1", stepIndex: 2, openRecordId: null }} onWalkChange={vi.fn()} />);
+  await act(async () => { mocks.maps.at(-1)!.load!(); });
+
+  const map = within(screen.getByTestId("carbon-viewer-map"));
+  expect(map.queryByRole("button", { name: "DL-26-001" })).toBeNull();
+  expect(map.getAllByTestId("carbon-viewer-marker")).toHaveLength(1);
+  expect(map.getByTestId("carbon-viewer-marker").dataset.nodeId).toBe("facility:fac-1");
+  expect(lastFrame().points).toEqual([[data.facility.lng, data.facility.lat]]);
 });
