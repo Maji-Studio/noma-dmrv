@@ -10,7 +10,6 @@ const CARD_MAX = 460;
 const CARD_GUTTER = 16; // card content lines up with the sheet head
 const CARD_GAP = 32; // keeps the neighbouring card off screen
 const SNAP_REST_MS = 140;
-const MAX_DEPTH = 4;
 const FAN = 0.05; // how much a card shrinks as it leaves the centre
 const FADE = 0.5;
 const deck = $("deck"); const rail = $("rail"); const railS = $("railS");
@@ -201,11 +200,6 @@ function renderCrumb() {
   $("cbk").addEventListener("click", () => popTo(depth - 1));
   c.querySelectorAll("[data-depth]").forEach((b) => b.addEventListener("click", () => popTo(+b.dataset.depth)));
 }
-function openBranch(fromId, br) {
-  const start = br.ids.includes(fromId) ? br.ids.indexOf(fromId) : Math.max(0, br.ids.findIndex((x) => CHAIN.includes(x)));
-  if (st.levels.length > MAX_DEPTH) st.levels.splice(1, st.levels.length - MAX_DEPTH);
-  pushLevel(br.ids, start, br.label, fromId);
-}
 /** Select any record, from the map or the graph. */
 function goRecord(id) {
   if (!R[id]) return;
@@ -241,6 +235,6 @@ function events() {
 
 export function mount() {
   events();
-  Object.assign(ctx, { pitch: () => pitch, buildDeck, layoutDeck, buildRail, railFx, cardFx, setActive, scrollToIdx, go, pushLevel, popTo, enterLevel, openBranch, goRecord, slidesCount: () => slides.length, slideAt: (i) => slides[i] });
+  Object.assign(ctx, { pitch: () => pitch, buildDeck, layoutDeck, buildRail, railFx, cardFx, setActive, scrollToIdx, go, pushLevel, popTo, enterLevel, goRecord, slidesCount: () => slides.length, slideAt: (i) => slides[i] });
 
 }
