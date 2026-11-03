@@ -11,7 +11,7 @@ import {
   readOnlyOpenItems,
   tabBadge,
 } from "./batch-page";
-import type { CreditBatchOpenItem } from "./open-items";
+import { MISSING_PRODUCTION_RUN_TITLE, READ_ONLY_MISSING_PRODUCTION_RUN_TITLE, type CreditBatchOpenItem } from "./open-items";
 
 type Removal = CreditBatchPageModel["removals"][number];
 type Statement = NonNullable<CreditBatchPageModel["milestones"]["ghgStatement"]>;
@@ -272,4 +272,19 @@ describe("readOnlyOpenItems", () => {
     expect(conditional.detail).toBe("Its emissions are not counted in RM-1.");
     expect(conditional.instruction).toBeUndefined();
   });
+});
+
+
+it("uses final missing-run wording on read-only batches without changing the input", () => {
+  const missing: CreditBatchOpenItem = {
+    id: "missing-production-run:run", productionRun: { id: "run", code: "RUN-1" },
+    title: `RUN-1${MISSING_PRODUCTION_RUN_TITLE}`, titleAfterCode: MISSING_PRODUCTION_RUN_TITLE,
+    readOnlyTitle: `RUN-1${READ_ONLY_MISSING_PRODUCTION_RUN_TITLE}`, readOnlyTitleAfterCode: READ_ONLY_MISSING_PRODUCTION_RUN_TITLE,
+    detail: "Its emissions are not counted in RM-1.", target: null,
+  };
+  const [readOnly] = readOnlyOpenItems({ blocking: [], check: [missing], waiting: [] }).check;
+  expect(readOnly.title).toBe("RUN-1 is not in this credit batch");
+  expect(readOnly.titleAfterCode).toBe(READ_ONLY_MISSING_PRODUCTION_RUN_TITLE);
+  expect(readOnly.detail).toBe(missing.detail);
+  expect(missing.title).toBe("RUN-1 is not in this credit batch yet");
 });

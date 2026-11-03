@@ -101,8 +101,7 @@ export function CreditBatchActivityView({
   /** The batch's own facility zone when that facility is archived and outside the facility list. */
   timeZone?: string;
 }) {
-  const clock = useFacilityClock(facilityId);
-  const timeZone = zone ?? clock.timeZone;
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
   const [filters, setFilters] = useState<ActivityFilters>({});
   // Index of the first row a "Show older activity" press added; that row takes focus once.
   const [focusIndex, setFocusIndex] = useState<number | null>(null);

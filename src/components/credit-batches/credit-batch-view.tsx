@@ -438,6 +438,7 @@ export function creditBatchSheetSections({
         <CreditBatchEmissionsPanel
           creditBatchId={creditBatch.id}
           facilityId={creditBatch.facilityId}
+          readOnly={readOnly}
         />
       ),
     },

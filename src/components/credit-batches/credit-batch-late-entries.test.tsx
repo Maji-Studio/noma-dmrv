@@ -81,4 +81,17 @@ describe("CreditBatchLateEntries", () => {
     lines.mockReturnValue(line(entry("a", { recordedAfter: { removalId: "rm-9", removalCode: "RM-26-009" }, reportedIn: { ...DEST, anotherCreditBatch: false } })));
     expect(render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage />).container.innerHTML).toBe("");
   });
+
+  it("states a waiting entry as a fact when read only, with no Admin sentence", () => {
+    lines.mockReturnValue(line(entry("a", { carry: { receiver: null, waitingReason: "incompatibleTemplate" } })));
+    const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage={false} readOnly />);
+    expect(container.textContent).toContain("The next draft's template cannot take this component.");
+    expect(container.textContent).not.toContain("An Admin changes it");
+  });
+
+  it("keeps the Admin sentence when not read only", () => {
+    lines.mockReturnValue(line(entry("a", { carry: { receiver: null, waitingReason: "incompatibleTemplate" } })));
+    const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage={false} />);
+    expect(container.textContent).toContain("An Admin changes it");
+  });
 });

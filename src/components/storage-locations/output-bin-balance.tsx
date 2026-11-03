@@ -85,8 +85,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const liveSubBins = useOutputSubBins(readOnly ? null : bin);
   const preview = readOnly ? { data: linked.data?.balance, isLoading: linked.isLoading, error: linked.error } : liveBalance;
   const subBins = readOnly ? { data: linked.data?.contents, isLoading: linked.isLoading, error: linked.error } : liveSubBins;
-  const clock = useFacilityClock(facilityId);
-  const zone = timeZone ?? clock.timeZone;
+  const { timeZone: zone } = useFacilityClock(facilityId, { timeZone });
   const mode = subBins.data?.stockMode;
   const layers = subBins.data?.subBins ?? [];
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;

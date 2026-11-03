@@ -75,8 +75,7 @@ interface BatchEmissionsProps {
 export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: zone }: BatchEmissionsProps) {
   const scope: EmissionBatchScope = { facilityId, creditBatchId: batch.creditBatchId };
   const toast = useToast();
-  const clock = useFacilityClock(scope.facilityId);
-  const timeZone = zone ?? clock.timeZone;
+  const { timeZone } = useFacilityClock(scope.facilityId, { timeZone: zone });
   const today = formatFacilityDate(new Date(), timeZone);
   const fromEmissionsList = useOpenedFromEmissionsList();
   const linesQuery = useBatchEmissionLines(scope);
@@ -155,7 +154,7 @@ export function BatchEmissions({ facilityId, batch, readOnly = false, timeZone: 
   return (
     <div className="flex min-w-0 flex-col gap-24">
       {fromEmissionsList && (
-        <BatchEmissionsPager creditBatchId={scope.creditBatchId} facilityId={scope.facilityId} lineFilter={filter} lineSort={sort} />
+        <BatchEmissionsPager creditBatchId={scope.creditBatchId} facilityId={scope.facilityId} lineFilter={filter} lineSort={sort} timeZone={timeZone} />
       )}
       {isEmissionLinesBlocked(linesQuery.error) ? (
         <TemplateSetupNotice blocker={linesQuery.error.blocker} facilityId={scope.facilityId} creditBatchId={scope.creditBatchId} readOnly={readOnly} />

@@ -6,6 +6,7 @@ import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getFacilityById } from "@/data-access/facilities";
 import { creditBatchKeys } from "@/hooks/credit-batch-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
 import { createServerHydrationState } from "@/lib/react-query/server-hydration";
 
 /**
@@ -39,7 +40,10 @@ export default async function CreditBatchRoute({ params, searchParams }: CreditB
   const facility = sp.facility;
   if (facility !== undefined && facility !== batch.facilityId) {
     // A mismatch is a not-found unless the batch's own facility is archived.
-    const batchFacility = await getFacilityById(ctx, batch.facilityId).catch(() => null);
+    const batchFacility = await getFacilityById(ctx, batch.facilityId).catch((error: unknown) => {
+      if (error instanceof DomainError && error.code === "not_found") return null;
+      throw error;
+    });
     if (batchFacility?.archivedAt == null) notFound();
   }
   if (facility === undefined) {

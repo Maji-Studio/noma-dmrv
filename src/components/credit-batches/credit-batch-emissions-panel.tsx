@@ -44,9 +44,12 @@ function PanelSection({ children }: { children: React.ReactNode }) {
 export function CreditBatchEmissionsPanel({
   creditBatchId,
   facilityId,
+  readOnly = false,
 }: {
   creditBatchId: string;
   facilityId: string;
+  /** A read-only batch states a template problem and offers no repair link. */
+  readOnly?: boolean;
 }) {
   const { data: lines, isLoading, error, refetch, isRefetching } = useBatchEmissionLines(
     facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
@@ -55,7 +58,7 @@ export function CreditBatchEmissionsPanel({
   if (isEmissionLinesBlocked(error)) {
     return (
       <PanelSection>
-        <TemplateSetupNotice blocker={error.blocker} facilityId={facilityId} creditBatchId={creditBatchId} />
+        <TemplateSetupNotice blocker={error.blocker} facilityId={facilityId} creditBatchId={creditBatchId} readOnly={readOnly} />
       </PanelSection>
     );
   }

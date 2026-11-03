@@ -1,4 +1,3 @@
-import type { EntryCarryDisposition, EntryCarryDestination, EntryRevisionDestination } from "./emission-entry-carry";
 import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
@@ -6,10 +5,15 @@ import type { AutomaticSourceId } from "@/lib/isometric/template-observations/ca
 import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
 import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
+import type { EntryCarryDisposition, EntryCarryDestination, EntryRevisionDestination } from "./emission-entry-carry";
 import { emissionLineBindingDecision } from "./emission-line-binding";
+import type { BlockerCopy } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
 
-const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the same unit before adding them.";
+const UNIT_MISMATCH_COPY = { detail: "Emissions values use different units.", instruction: "Use the same unit before adding them." };
+const UNIT_MISMATCH_MESSAGE = `${UNIT_MISMATCH_COPY.detail} ${UNIT_MISMATCH_COPY.instruction}`;
+const REENTER_EMISSION_ENTRY = "Enter the values again for the current template component.";
+const MISSING_EVIDENCE_INSTRUCTION = "Add a file for each emissions entry with a value.";
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
@@ -102,11 +106,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
         ? { countedOn: facts.feedstockTransportCountedOn } : {}),
     } : null;
     let state: EmissionLineState;
-    let blocker: RemovalBlocker | undefined = decision?.blocker;
+    let blocker: (RemovalBlocker & { copy?: BlockerCopy }) | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
-      blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
@@ -122,12 +126,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const unitMismatch = entries.some((entry) => entry.unitMismatch) || figures.some((figure) => figure.unit !== figures[0]?.unit);
     if (unitMismatch) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: UNIT_MISMATCH_MESSAGE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: UNIT_MISMATCH_MESSAGE, copy: UNIT_MISMATCH_COPY, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const stale = entries.find((entry) => !entry.counts);
     if (stale) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template component.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: stale.reason ?? REENTER_EMISSION_ENTRY, ...(stale.reason == null ? { copy: { instruction: REENTER_EMISSION_ENTRY } } : {}), fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
