@@ -1,6 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emissions-overview";
-import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
+import { withoutRegistryCalculatedLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { loadBatchesEmissionLines } from "./batches-emission-lines";
 import { formatFacilityDate } from "@/lib/date-utils";
 
@@ -51,7 +51,7 @@ export async function loadFacilityEmissionsOverview(
       // Template observations retain component names, but no template-level name.
       templateName: null,
       // One setup item represents an unread or unpinned template until its lines are known.
-      lineCounts: lineCounts(display.status === "ready" ? display.lines : [{ state: "needsSetup" }]),
+      lineCounts: lineCounts(display.status === "ready" ? withoutRegistryCalculatedLines(display.lines) : [{ state: "needsSetup" }]),
       entriesThisMonth: stored.filter((entry) =>
         entry.kind === "value" &&
         formatFacilityDate(entry.createdAt, timezone).slice(0, MONTH_PREFIX_LENGTH) === month,

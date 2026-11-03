@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { batchAutomaticFigures } from "./batch-automatic-figures";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
-import { deriveBatchEmissionLines, EMISSION_LINE_STATE_LABELS, type BatchEmissionLineFacts, type EmissionLineEntryFact } from "./emission-lines";
+import { deriveBatchEmissionLines, withoutRegistryCalculatedLines, EMISSION_LINE_STATE_LABELS, type BatchEmissionLine, type BatchEmissionLineFacts, type EmissionLineEntryFact } from "./emission-lines";
 
 function facts(): BatchEmissionLineFacts {
   const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
@@ -167,8 +167,36 @@ it.each([0, 1, 15])("counts sequestration as filled only with applications (coun
   expect(line.automaticFigure).toBeNull();
   expect(line.blocker).toBeUndefined();
   expect(line.records).toMatchObject({ source: "applications", count, figure: null });
+  expect(withoutRegistryCalculatedLines([line])).toEqual(count > 0 ? [] : [line]);
   facts.enrichmentComplete = false;
-  expect(deriveBatchEmissionLines(facts).find((candidate) => candidate.componentId === line.componentId)?.state).toBe("needsReview");
+  const reviewLine = deriveBatchEmissionLines(facts).find((candidate) => candidate.componentId === line.componentId)!;
+  expect(reviewLine.state).toBe("needsReview");
+  expect(withoutRegistryCalculatedLines([reviewLine])).toEqual([reviewLine]);
+});
+
+it.each([
+  ["handled", {}, false],
+  ["empty", { state: "empty" }, true],
+  ["needs setup", { state: "needsSetup" }, true],
+  ["needs review", { state: "needsReview" }, true],
+  ["missing evidence", { state: "missingEvidence" }, true],
+  ["confirmed zero", { state: "confirmedZero" }, true],
+  ["blocked filled", { blocker: { code: "lineNeedsReview", message: "Check entry.", fixTarget: "emissions" } }, true],
+  ["no records", { records: null }, true],
+  ["not registry calculated", { records: { source: "applications", count: 1, figure: null } }, true],
+  ["other automatic source", { contract: { scope: "operating", origin: "reviewed", automaticSource: "run-electricity", entryPolicy: "additive" } }, true],
+  ["no contract", { contract: undefined }, true],
+  ["with an entry", { entries: [{ id: "entry-1" } as BatchEmissionLine["entries"][number]] }, true],
+  ["with a comment", { comment: { id: "comment-1" } } as Partial<BatchEmissionLine>, true],
+] satisfies Array<[string, Partial<BatchEmissionLine>, boolean]>)("keeps only actionable or other components visible: %s", (_name, overrides, visible) => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const handled = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),
+    problems: [], enrichmentComplete: true, automaticFigures: {}, automaticRecordCounts: { sequestration: 1 }, entries: [],
+  }).find((line) => line.contract?.automaticSource === "sequestration")!;
+  const line: BatchEmissionLine = { ...handled, ...overrides };
+  const lines = [line];
+  expect(withoutRegistryCalculatedLines(lines)).toEqual(visible ? [line] : []);
+  expect(lines).toEqual([line]);
 });
 
 it("permits counted entry-only values and zeros, but keeps the Removal's empty line blocker", () => {
