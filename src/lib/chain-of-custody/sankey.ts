@@ -28,6 +28,7 @@
 
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { roundDisplayedMassKg } from "@/lib/mass-precision";
 
 export type SankeyColumnKey =
   | "feedstock"
@@ -118,7 +119,11 @@ function residual(
   const raw = upstreamKg - downstreamKg;
   return {
     raw,
-    value: Math.max(0, raw),
+    // Subtract the displayed columns, rather than independently rounding
+    // their raw difference. Keep raw masses for tolerance and warnings.
+    value: Math.max(0, roundDisplayedMassKg(
+      roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg),
+    )),
     shown: raw > EXIT_EPSILON_KG,
     warning: raw < -EXIT_EPSILON_KG ? inconsistencyWarning : null,
   };

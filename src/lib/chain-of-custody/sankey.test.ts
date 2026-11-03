@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { formatMassKg } from "@/lib/format-utils";
 import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "./sankey";
 
 const RESIDUAL_TEST_INPUT_KG = 1_000;
@@ -37,6 +38,32 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
 }
 
 describe("buildBatchSankey", () => {
+  it("closes every displayed column using the same precision as the mass labels", () => {
+    // Independently rounded raw differences would read 40, 20, 20 and fail
+    // to connect the displayed columns 100 -> 60.1 -> 40 -> 20.1.
+    const result = buildBatchSankey([lineage({
+      productionRun: { id: "run-1", feedstockMassDryKg: 100.04, biocharDryMassKg: 60.06 },
+      biocharProduct: { id: "lot-1", massKg: 40.04, moistureContentPercent: null },
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(20.06) },
+    })]);
+
+    expect(result.columns.map(({ massKg }) => formatMassKg(massKg))).toEqual([
+      "100 kg", "60.1 kg", "40 kg", "20.1 kg",
+    ]);
+    expect(result.exits.map(({ massKg }) => formatMassKg(massKg))).toEqual([
+      "39.9 kg", "20.1 kg", "19.9 kg",
+    ]);
+    // Compare integer tenths parsed from the actual labels, avoiding binary
+    // floating-point subtraction in the displayed-figures assertion.
+    const displayedTenths = (massKg: number) => Math.round(Number(formatMassKg(massKg).replace(/[^\d.-]/g, "")) * 10);
+    result.exits.forEach((exit, index) => {
+      expect(displayedTenths(result.columns[index].massKg) - displayedTenths(exit.massKg))
+        .toBe(displayedTenths(result.columns[index + 1].massKg));
+    });
+    expect(result.omittedResidualKg).toBe(0);
+    expect(result.warnings).toEqual([]);
+  });
+
   it.each([
     { moisture: 20, allocated: null, expectedKg: BLENDED_DRY_KG },
     { moisture: null, allocated: null, expectedKg: BLEND_KG - INGREDIENT_KG },
