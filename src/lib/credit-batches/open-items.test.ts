@@ -657,3 +657,20 @@ it("removes member-only template repair guidance from read-only checks", () => {
   expect(readOnly.title).toBe("1 component to decide");
   expect(openItemText(readOnly)).toBeUndefined();
 });
+
+it("links an interrupted Removal to Review & submit, but adds no submitted to-do", () => {
+  // The raw builder: the instruction stays separate so a read-only batch drops it.
+  const result = buildItems({
+    ...batchContext,
+    removals: [
+      { id: "interrupted", code: "RM-26-003", status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false } },
+      { id: "submitted", code: "RM-26-001", status: { kind: "submitted", label: "Submitted", value: "issued", isActionable: false, isTerminal: true } },
+    ],
+  });
+  expect(result.check).toEqual([{
+    id: "interrupted:interrupted",
+    title: "RM-26-003: Submission interrupted",
+    instruction: "Open the Removal and finish Review & submit.",
+    target: { href: "/removals?facility=facility&resume=interrupted" },
+  }]);
+});

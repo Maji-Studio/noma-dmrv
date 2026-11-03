@@ -187,10 +187,11 @@ describe("dashboard query budget", () => {
     expect(result.activity.find((item) => item.title === "Feedstock received")?.dateIso).toBe(
       "2026-06-22T00:00:00.000Z",
     );
-    // Attention: flags before pending batches, the overdue pending batch counted once.
+    // Attention: flags before pending batches, the overdue pending batch counted
+    // once. It holds no Removal, so it is not awaiting verification (#1528).
     expect(result.attention.map((item) => item.title)).toEqual([
       "Feedstock record missing data",
-      "Period ended · awaiting verification",
+      "Period ended · not submitted yet",
     ]);
     expect(result.attention[1]?.date).toBe("2026-07-31");
     // Timestamp-backed dates stay UTC instants (a zone-less string would

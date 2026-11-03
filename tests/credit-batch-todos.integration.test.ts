@@ -2,6 +2,7 @@ import { afterEach, beforeEach, assert, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  applications, certificationSubmissions, certifierRemovals, creditBatchApplications,
   certifierCredentials, certifierProjects, creditBatches, facilities, feedstockTypes,
   organizations, productionProcesses, removalTemplateObservations, samples, emissionEntries, emissionEntryValues,
   productionRuns, productionRunFeedstocks,
@@ -28,7 +29,9 @@ import * as facilityFacts from "@/fn/certification/facility-certifier-facts";
 import * as missingProductionRuns from "@/data-access/credit-batch-missing-production-runs";
 import templateFixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "./fixtures/isometric/sandbox-enrichment-2026-10-15.json";
-import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { deleteOutputApplicationFixtures, insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 
 // Keep guards, credential resolution, enrichment, observations and all queries real.
@@ -345,6 +348,52 @@ it.each(["none", "removal"] as const)("keeps raw counts for a batch in a %s Remo
   }, submission);
 });
 
+it("reads interrupted on the list and timeline when an older holder is interrupted and the newest is submitted", async () => {
+  await ensureTestOrg();
+  await withLineageFixture(async (lineage) => {
+    const lineageCtx = makeTestOrgContext();
+    vi.mocked(requireOrgContext).mockResolvedValue(lineageCtx);
+    // The fixture's (older) Removal: an attempt that was started and not finished.
+    await db.insert(certificationSubmissions).values({
+      organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+      localEntityType: "removal", localEntityId: lineage.removalId, version: 1,
+      status: "draft", payloadHash: "interrupted", payloadSnapshot: {},
+      metadata: { lastAttemptOutcome: "interrupted" },
+    });
+    const [newer] = await insertRemovalFixture(db, {
+      organizationId: TEST_ORG_ID, facilityId: lineage.facilityId, startedOn: "2026-06-01", completedOn: "2026-06-30",
+    });
+    const [application] = await insertOutputApplicationFixture(db, {
+      organizationId: TEST_ORG_ID, deliveryId: lineage.deliveryId, code: `HOLDERS-${lineage.batchId}`,
+      applicationDate: new Date("2026-06-18"), fieldSizeHa: 1, biocharAppliedTons: 0.1, biocharAppliedDryTons: 0.05,
+    }, row => row);
+    try {
+      await db.insert(creditBatchApplications).values({
+        organizationId: TEST_ORG_ID, creditBatchId: lineage.batchId, applicationId: application.id,
+        allocatedWetMassKg: 100, allocatedDryMassKg: 50, removalId: newer.id,
+      });
+      await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: newer.id, version: 1, status: "submitted",
+        externalId: `holders-${newer.id}`, payloadHash: "submitted", payloadSnapshot: {},
+        submittedAt: new Date("2026-06-19T00:00:00Z"),
+      });
+
+      const result = await loadCreditBatchHealthSummaries(lineage.facilityId, [lineage.batchId]);
+      assert(result.success, JSON.stringify(result));
+      const summary = result.data[lineage.batchId];
+      // The newest holder alone would read Submitted; the batch-level rule reads every holder.
+      expect(summary).toMatchObject({ removalId: newer.id, removalStatus: { kind: "submitted" }, removalInterrupted: true });
+      expect(creditBatchStateOf(summary)).toEqual({ state: "interrupted", blockingCount: 0, openTodoCount: 0 });
+    } finally {
+      await db.delete(certificationSubmissions).where(eq(certificationSubmissions.localEntityId, newer.id));
+      await db.delete(creditBatchApplications).where(eq(creditBatchApplications.applicationId, application.id));
+      await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
+      await db.delete(certifierRemovals).where(eq(certifierRemovals.id, newer.id));
+    }
+  }, "none");
+});
+
 it("projects a late run Check through the shared page and list read without adding a blocker", async () => {
   await ensureTestOrg();
   await withLineageFixture(async (lineage) => {
@@ -363,9 +412,11 @@ it("projects a late run Check through the shared page and list read without addi
       const { todos, summaries } = await parity([{ id: lineage.batchId, removalTemplateId: null }], [{
         blocking: [PIN_BLOCKER, "health:carbon:carbon+lab-samples", "health:entityReadiness:production-runs",
           "health:entityReadiness:submission-deliveryEvidence"],
-        check: [...DOCUMENT_IDS, `late-production-run:${lateRun.id}`],
+        // The fixture's submitted Removal has no reporting window, which the
+        // Removals list reads as Submission interrupted; it is a Check too (#1528).
+        check: [...DOCUMENT_IDS, `late-production-run:${lateRun.id}`, `interrupted:${lineage.removalId}`],
       }], { ctx: lineageCtx, facilityId: lineage.facilityId });
-      expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 1);
+      expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 2);
       expect(todos.get(lineage.batchId)?.check.find(item => item.id === `late-production-run:${lateRun.id}`))
         .toMatchObject({ title: expect.stringContaining(lateRun.code), target: { tab: "emissions" },
           detail: "It is not in this credit batch.", instruction: "Record its diesel and power on the Emissions tab, dated Jun 18, 2026." });

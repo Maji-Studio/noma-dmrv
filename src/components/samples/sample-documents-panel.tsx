@@ -9,7 +9,6 @@ import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
@@ -20,7 +19,7 @@ import {
   useSetDocumentVisibility,
 } from "@/hooks/use-documents";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type {
   DocumentEntityType,
   DocumentVisibility,
@@ -95,7 +94,7 @@ export function SampleDocumentsPanel({
 
   return (
     <section className="flex flex-col gap-12">
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind="sample" lockId={sampleId} />}
       {/* With nothing uploaded the empty message says so; "0 files" above it
           would say it twice. */}
       {uploadedDocs.length > 0 && (

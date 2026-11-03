@@ -9,6 +9,13 @@ import { TEST_GIS_BOUNDARY } from "../../../tests/helpers/application-evidence-f
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const mocks = vi.hoisted(() => ({ locked: false, lockArgs: [] as unknown[][] }));
 
+const recordLockMock = vi.hoisted(() => ({ lock: undefined as unknown, args: [] as unknown[][] }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLock: (...args: unknown[]) => {
+    recordLockMock.args.push(args);
+    return { lock: recordLockMock.lock, status: "ready", retry: () => {}, retrying: false };
+  },
+}));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);

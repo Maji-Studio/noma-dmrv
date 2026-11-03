@@ -7,7 +7,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FormField, FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { applicationKeys } from "@/hooks/use-applications";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -22,7 +21,7 @@ import {
   isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
 import {
@@ -146,7 +145,7 @@ export function ApplicationSupportingEvidencePanel({
 
   return (
     <div className="flex flex-col gap-16">
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind="application" lockId={applicationId} />}
       {(error || errorMessage) && (
         <ServerError
           message={

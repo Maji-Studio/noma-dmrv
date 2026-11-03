@@ -1,6 +1,8 @@
+import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import type { OrgContext } from "@/lib/auth/server";
+import { findInterruptedRemoval } from "@/lib/certification/status";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthState } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
@@ -14,6 +16,8 @@ export interface CreditBatchTodos {
   linesToDecide: number;
   blocking: CreditBatchOpenItem[];
   check: CreditBatchOpenItem[];
+  /** Any holding Removal interrupted: the batch-level rule every surface reads. */
+  removalInterrupted: boolean;
 }
 
 /** Shared read for batches whose organization and facility the caller authorized. */
@@ -34,10 +38,11 @@ export async function loadCreditBatchTodos(
     }
     return [id, deriveBatchHealth(toBatchHealthFacts(context, id))];
   }));
-  const [batchesWithSamples, emissionDisplayByBatch, missingProductionRunsByBatch] = await Promise.all([
+  const [batchesWithSamples, emissionDisplayByBatch, missingProductionRunsByBatch, removalsByBatch] = await Promise.all([
     getCreditBatchesWithSamples(ctx, ids),
     loadBatchesEmissionLines(ctx, batches, { comments: false }),
     loadCreditBatchesMissingProductionRuns(ctx, ids),
+    loadCreditBatchRemovalDisplays(ctx, ids),
   ]);
   const durabilityByBatch = new Map(buildDurabilityBatchSummaries(batchesWithSamples)
     .map((summary) => [summary.creditBatchId, summary]));
@@ -45,12 +50,17 @@ export async function loadCreditBatchTodos(
   return new Map(ids.map((id) => {
     const health = healthByBatch.get(id)!;
     const emissionDisplay = emissionDisplayByBatch.get(id);
+    const removals = removalsByBatch.get(id);
     const { blocking, check } = buildCreditBatchOpenItems({
       facilityId, creditBatchId: id, canManage, health,
+      removals,
       durability: durabilityByBatch.get(id),
       emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,
       missingProductionRuns: missingProductionRunsByBatch.get(id),
     });
-    return [id, { state: health.state, linesToDecide: batchLinesToDecide(health), blocking, check }];
+    return [id, {
+      state: health.state, linesToDecide: batchLinesToDecide(health), blocking, check,
+      removalInterrupted: findInterruptedRemoval(removals) !== undefined,
+    }];
   }));
 }

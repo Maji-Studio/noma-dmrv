@@ -74,6 +74,7 @@ import type {
 } from "@/schemas/certification";
 import type { StatusHistoryEntityType } from "@/lib/certification/status-history";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { unwrap } from "@/hooks/types";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
@@ -686,8 +687,13 @@ export function useSubmitRemoval() {
       invalidateCertificationReadiness(queryClient);
     },
     // Claim reservation and release record activity even when the registry
-    // call fails afterwards.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
+    // call fails afterwards. The dashboard's Needs attention rows read the
+    // Removal's submission state (#1528), so a sent, failed or resumed attempt
+    // refreshes them too; batch to-dos and list states sit under certification.
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: activityKeys.all }),
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
+    ]),
   });
 }
 
@@ -714,10 +720,13 @@ export function useDeleteRemoval() {
   return useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
-    onSuccess: () =>
+    // Deleting an interrupted Removal drops its Needs attention row (#1528).
+    onSuccess: () => Promise.all([
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
       }),
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
+    ]),
   });
 }
 

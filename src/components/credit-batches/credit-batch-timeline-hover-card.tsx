@@ -36,6 +36,7 @@ const NEGLIGIBLE_TONNES = 0.005;
 const STATE_BADGE: Record<TimelineState, StatusValue> = {
   blocking: "pending",
   ready: "running",
+  interrupted: "failed",
   submitted: "complete",
   issued: "issued",
 };

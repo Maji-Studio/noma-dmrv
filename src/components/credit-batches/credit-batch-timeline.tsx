@@ -205,6 +205,7 @@ export function CreditBatchTimeline({
 
   const inYear = timelineBatches.filter((batch) => placeOnYear(batch, year));
   const openCount = inYear.filter((batch) => viewOf(batch).state === "blocking").length;
+  const anyInterrupted = inYear.some((batch) => viewOf(batch).state === "interrupted");
   const todayPct = monthIndexIn(year, today) >= 0 ? dayPercentOfYear(today) : null;
 
   return (
@@ -242,7 +243,7 @@ export function CreditBatchTimeline({
             {openCount > 0 && `, ${openCount} open`}
           </p>
         </div>
-        <StateLegend />
+        <StateLegend interrupted={anyInterrupted} />
       </div>
       {/* Scrolls inside the panel on narrow screens; the page itself never scrolls sideways. */}
       <div ref={centerOnToday(year, todayPct)} className="relative -mx-20 overflow-x-auto px-20 sm:mx-0 sm:px-0">

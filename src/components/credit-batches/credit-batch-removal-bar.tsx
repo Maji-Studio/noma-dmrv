@@ -44,6 +44,7 @@ const SEGMENT_FILLS: Record<RemovalBarSegment, string> = {
 };
 
 export const NOT_IN_REMOVAL_LABEL = "Applied, not in a Removal";
+const COMPACT_DRAFT_WORD = "Draft";
 
 export function tonnesFromKg(kg: number): string {
   return formatTonnes(kgToTonnes(kg));
@@ -138,10 +139,16 @@ function RemovalHoverLink({ group, facilityId, timeZone, href, className, style,
   );
 }
 
-function compactLabel(group: RemovalBarGroup): string {
+/**
+ * The swatch already shows submitted (solid) and draft (light), by phase: a
+ * newer correction draft does not undo a submitted version. Words appear only
+ * where the swatch cannot say it: an interrupted submission, or a draft.
+ */
+export function compactLabel(group: Pick<RemovalBarGroup, "removal" | "dryKg">): string {
   if (!group.removal) return `${tonnesFromKg(group.dryKg)} not in a Removal`;
-  const draft = group.removal.phase === "draft" ? " draft" : "";
-  return `${group.removal.code}${draft} ${tonnesFromKg(group.dryKg)}`;
+  const { code, status, phase } = group.removal;
+  const word = status.kind === "interrupted" ? status.label : phase === "draft" ? COMPACT_DRAFT_WORD : null;
+  return [code, word, tonnesFromKg(group.dryKg)].filter(Boolean).join(" · ");
 }
 
 /** Overview: one slim bar and one wrapping line of key items. Each Removal's key item opens its hover card. */
