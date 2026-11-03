@@ -20,6 +20,29 @@ export type CertificationLineageMutation = "create" | "update" | "delete";
 export const RECORD_FILES_LOCKED_MESSAGE =
   "This record is in a submitted Removal, so its files cannot change.";
 
+/** The same line for a record whose every holding Removal was interrupted while being sent. */
+export const RECORD_FILES_INTERRUPTED_MESSAGE =
+  "This record is in a Removal whose submission was interrupted.";
+
+/** The lock fields the files line reads; the server lock and its screen view both fit. */
+interface FilesLockFacts {
+  level: RecordLock["level"];
+  heldBy: readonly unknown[];
+  interruptedHolders?: readonly unknown[];
+}
+
+/**
+ * The files line, worded as the record header words the same lock: interrupted
+ * only when every holder is interrupted (a mixed lock reads Sent there too).
+ * An unknown lock keeps the submitted line, as before the lock read answers.
+ */
+export function formatRecordFilesLockedMessage(lock: FilesLockFacts | undefined): string {
+  const interrupted = lock?.level === "sent" ? lock.interruptedHolders?.length ?? 0 : 0;
+  return lock && interrupted > 0 && interrupted >= lock.heldBy.length
+    ? RECORD_FILES_INTERRUPTED_MESSAGE
+    : RECORD_FILES_LOCKED_MESSAGE;
+}
+
 const ENTITY_LABELS: Record<CertificationLineageLockEntityType, string> = {
   creditBatch: "credit batch",
   productionRun: "production run",

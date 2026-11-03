@@ -22,7 +22,7 @@ export function creditBatchStateOf(
 ): CreditBatchStateView {
   if (!summary) return { state: null, blockingCount: 0, openTodoCount: 0 };
   const lifecycle = deriveCreditBatchLifecycle(summary);
-  const state = deriveTimelineState({
+  const state = summary.removalStatus?.kind === "interrupted" ? "interrupted" : deriveTimelineState({
     lifecycleStepIndex: lifecycle.currentStepIndex,
     lifecycleFailed: lifecycle.stepStates[lifecycle.currentStepIndex] === "failed",
     healthState: summary.state,

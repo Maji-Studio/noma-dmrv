@@ -18,8 +18,7 @@ import { FormTextarea } from "@/components/forms/form-textarea";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { Notice } from "@/components/ui/notice";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import {
   productionSampleFormSchema,
   type ProductionSampleFormData,
@@ -268,7 +267,7 @@ export function ProductionSampleForm({
 
       {/* Documentation */}
       <FormSection title="Documentation">
-        {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+        {locked && <RecordFilesLockedNotice lockKind="productionRun" lockId={productionRunId} />}
 
         {isEditMode && (
           <FailedDeferredAttachments

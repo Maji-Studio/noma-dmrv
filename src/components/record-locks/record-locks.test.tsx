@@ -106,22 +106,22 @@ describe("Interrupted display", () => {
   it("reads Interrupted in the sheet tag only when every holder is interrupted", () => {
     const tag = (lock: RecordLockView) => recordLockSheetProps({ lock, status: "ready" }).titleBadge;
     const { unmount } = render(<>{tag(allInterrupted)}</>);
-    expect(screen.getByText("Interrupted").getAttribute("data-record-lock")).toBe("sent");
+    expect(screen.getByText("Submission interrupted").getAttribute("data-record-lock")).toBe("sent");
     // Interrupted takes the red of the Removal's own "Submission interrupted" badge, not Sent's.
-    expect(screen.getByText("Interrupted").className).toContain("--st-bad");
+    expect(screen.getByText("Submission interrupted").className).toContain("--st-bad");
     expect(screen.queryByText("Sent")).toBeNull();
     unmount();
     for (const lock of [mixed, normal]) {
       const r = render(<>{tag(lock)}</>);
       expect(screen.getByText("Sent")).toBeTruthy();
-      expect(screen.queryByText("Interrupted")).toBeNull();
+      expect(screen.queryByText("Submission interrupted")).toBeNull();
       r.unmount();
     }
   });
 
   it("names the overview mark Interrupted only when every holder is interrupted", () => {
     const { unmount } = render(<RecordLockSentMark lock={allInterrupted} />);
-    const icon = screen.getByRole("img", { name: "Interrupted" });
+    const icon = screen.getByRole("img", { name: "Submission interrupted" });
     expect(icon.getAttribute("title")).toBe("Sending to Isometric was started and not finished");
     expect(icon.getAttribute("data-record-lock")).toBe("sent");
     unmount();
@@ -135,7 +135,7 @@ describe("Interrupted display", () => {
 
   it("labels tiles and credit batch rows Interrupted only when every holder is interrupted", () => {
     const { unmount } = render(<RecordLockOverviewChip lock={allInterrupted} />);
-    expect(screen.getByText("Interrupted")).toBeTruthy();
+    expect(screen.getByText("Submission interrupted")).toBeTruthy();
     unmount();
     for (const lock of [mixed, normal]) {
       const r = render(<RecordLockOverviewChip lock={lock} />);

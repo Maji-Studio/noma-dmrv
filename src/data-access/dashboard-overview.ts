@@ -12,6 +12,7 @@
  * millions, and this keeps the module free of fragile SQL bucketing. Round
  * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
+import { removalResubmitHref } from "@/lib/removal-correction-copy";
 import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import {
@@ -44,9 +45,15 @@ import {
 import { unionAll } from "drizzle-orm/pg-core";
 import { getCo2eStoredPreviews } from "./credit-batches";
 import {
+  batchRemovalDisplayFactsSql,
+  removalDisplayFromFacts,
+  type BatchRemovalDisplayFacts,
+} from "./credit-batch-removal-display";
+import {
   applicationEvidenceGapWhere,
+  creditBatchAttention,
   feedstocksMissingDataWhere,
-  overdueBatchesWhere,
+  pendingBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import {
@@ -213,8 +220,8 @@ export async function getDashboardOverview(
 
   const [
     [runRows, lotRows, applicationRows, { rows: batchRows, previews: batchPreviews }, feedstockRows],
-    attentionItems,
-    { overdueBatches, ...stationsData },
+    { items: attentionItems, batchCount: batchAttentionCount },
+    stationsData,
     structuralGapCounts,
   ] =
     await Promise.all([
@@ -293,8 +300,8 @@ export async function getDashboardOverview(
             ),
           ),
       ]),
-      getAttentionItems(ctx, facilityId, todayStr),
-      getDashboardStations(ctx, facilityId, todayStr),
+      getDashboardAttentionItems(ctx, facilityId, todayStr),
+      getDashboardStations(ctx, facilityId),
       loadDashboardStructuralGapCounts(ctx, facilityId),
     ]);
 
@@ -472,7 +479,7 @@ export async function getDashboardOverview(
   );
   const attentionTotal =
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
-    overdueBatches +
+    batchAttentionCount +
     structuralGapTotal;
 
   return {
@@ -524,13 +531,14 @@ interface AttentionRow {
   dateDay: string | null;
   dateMs: number | null;
   ord: number;
+  removals: BatchRemovalDisplayFacts[];
 }
 
-const ATTENTION_TITLES: Record<AttentionKind, string> = {
+/** Pending batches take their title from `creditBatchAttention`. */
+const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> = {
   "run-mass": "Complete run missing mass data",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
-  "batch-pending": "Period ended · awaiting verification",
 };
 
 /** Flags sort before pending batches; within a kind the branch ordinal holds. */
@@ -561,14 +569,17 @@ function attentionHref(
 /**
  * Cheap record checks derived from existing MRV data, fetched as one
  * `union all` of capped, narrow, indexed selects. An item disappears the
- * moment the underlying record is fixed (no independent lifecycle). The
- * uncapped overdue-batch count comes from the station aggregates.
+ * moment the underlying record is fixed (no independent lifecycle). Pending
+ * batches are read uncapped with their Removals' display facts (correlated
+ * subqueries, no extra round trip): an interrupted Removal is one row per
+ * Removal, a closed period one row per batch (`creditBatchAttention`), and
+ * `batchCount` is their exact total for the queue size.
  */
-async function getAttentionItems(
+export async function getDashboardAttentionItems(
   ctx: OrgContext,
   facilityId: string,
   todayStr: string,
-): Promise<DashboardAttentionItem[]> {
+): Promise<{ items: DashboardAttentionItem[]; batchCount: number }> {
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
@@ -576,6 +587,7 @@ async function getAttentionItems(
     db
       .select({
         kind: attentionKind("run-mass"),
+        removals: sql<BatchRemovalDisplayFacts[]>`'[]'::jsonb`,
         id: productionRuns.id,
         code: productionRuns.code,
         dateDay: dayColumn(productionRunDateExpr(ctx.organizationId)),
@@ -589,6 +601,7 @@ async function getAttentionItems(
     db
       .select({
         kind: attentionKind("feedstock-missing"),
+        removals: sql<BatchRemovalDisplayFacts[]>`'[]'::jsonb`,
         id: feedstocks.id,
         code: feedstocks.code,
         dateDay: noDay,
@@ -604,6 +617,7 @@ async function getAttentionItems(
     db
       .select({
         kind: attentionKind("application-evidence"),
+        removals: sql<BatchRemovalDisplayFacts[]>`'[]'::jsonb`,
         id: applications.id,
         code: applications.code,
         dateDay: noDay,
@@ -624,6 +638,7 @@ async function getAttentionItems(
     db
       .select({
         kind: attentionKind("batch-pending"),
+        removals: batchRemovalDisplayFactsSql(ctx),
         id: creditBatches.id,
         code: creditBatches.code,
         dateDay: dayColumn(creditBatches.endDate),
@@ -634,18 +649,43 @@ async function getAttentionItems(
       // Redundant org predicate for the lexical guard (see note above).
       .where(
         and(
-          overdueBatchesWhere(orgId, facilityId, todayStr),
+          pendingBatchesWhere(orgId, facilityId),
           eq(creditBatches.organizationId, orgId),
         ),
       )
-      .orderBy(asc(creditBatches.endDate))
-      .limit(ATTENTION_PER_CHECK),
+      .orderBy(asc(creditBatches.endDate)),
   );
 
+  const interrupted = new Map<string, DashboardAttentionItem>();
+  const periods: DashboardAttentionItem[] = [];
+  for (const row of rows) {
+    if (row.kind !== "batch-pending") continue;
+    const removals = row.removals.map(removalDisplayFromFacts);
+    const attention = creditBatchAttention({ endDate: row.dateDay }, removals, todayStr);
+    for (const removal of removals) {
+      if (removal.status.kind !== "interrupted") continue;
+      // A Removal holding slices of several batches is one row naming them all.
+      const existing = interrupted.get(removal.id);
+      interrupted.set(removal.id, {
+        id: `removal-interrupted-${removal.id}`,
+        entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
+        date: null,
+        title: removal.status.label,
+        href: removalResubmitHref(removal.id, facilityId),
+      });
+    }
+    if (!attention.periodTitle) continue;
+    periods.push({
+      id: `batch-pending-${row.id}`,
+      entityCode: row.code,
+      date: row.dateDay,
+      title: attention.periodTitle,
+      href: attentionHref(row.kind, row.id, facilityId),
+    });
+  }
   const rank = (kind: AttentionKind) => ATTENTION_ORDER.indexOf(kind);
-  return rows
+  const flags = rows.flatMap((row) => (row.kind === "batch-pending" ? [] : [{ ...row, kind: row.kind }]))
     .sort((a, b) => rank(a.kind) - rank(b.kind) || a.ord - b.ord)
-    .slice(0, ATTENTION_TOTAL)
     .map((row) => ({
       id: `${row.kind}-${row.id}`,
       entityCode: row.code,
@@ -653,4 +693,9 @@ async function getAttentionItems(
       title: ATTENTION_TITLES[row.kind],
       href: attentionHref(row.kind, row.id, facilityId),
     }));
+  return {
+    // An interrupted submission leads: it blocks the Removal until resumed.
+    items: [...interrupted.values(), ...flags, ...periods.slice(0, ATTENTION_PER_CHECK)].slice(0, ATTENTION_TOTAL),
+    batchCount: interrupted.size + periods.length,
+  };
 }

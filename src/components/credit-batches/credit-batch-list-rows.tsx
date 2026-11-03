@@ -117,7 +117,7 @@ function BatchState({
         // A failed read shows nothing here: the list's Notice says so once, with Retry.
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
       )}
-      <LockChip lock={lock} className="hidden xl:inline-flex" />
+      {view.state !== "interrupted" && <LockChip lock={lock} className="hidden xl:inline-flex" />}
     </span>
   );
 }

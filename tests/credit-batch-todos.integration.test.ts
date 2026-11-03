@@ -363,9 +363,11 @@ it("projects a late run Check through the shared page and list read without addi
       const { todos, summaries } = await parity([{ id: lineage.batchId, removalTemplateId: null }], [{
         blocking: [PIN_BLOCKER, "health:carbon:carbon+lab-samples", "health:entityReadiness:production-runs",
           "health:entityReadiness:submission-deliveryEvidence"],
-        check: [...DOCUMENT_IDS, `late-production-run:${lateRun.id}`],
+        // The fixture's submitted Removal has no reporting window, which the
+        // Removals list reads as Submission interrupted; it is a Check too (#1528).
+        check: [...DOCUMENT_IDS, `late-production-run:${lateRun.id}`, `interrupted:${lineage.removalId}`],
       }], { ctx: lineageCtx, facilityId: lineage.facilityId });
-      expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 1);
+      expect(summaries[lineage.batchId].checkCount).toBe(DOCUMENT_IDS.length + 2);
       expect(todos.get(lineage.batchId)?.check.find(item => item.id === `late-production-run:${lateRun.id}`))
         .toMatchObject({ title: expect.stringContaining(lateRun.code), target: { tab: "emissions" },
           detail: "It is not in this credit batch.", instruction: "Record its diesel and power on the Emissions tab, dated Jun 18, 2026." });

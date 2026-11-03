@@ -120,6 +120,8 @@ export interface CreditBatchMilestoneInput {
 }
 
 function removalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
+  const interrupted = model.removals.find(removal => removal.status.kind === "interrupted");
+  if (interrupted) return `${interrupted.code}: ${interrupted.status.label}`;
   const { firstRemovalSubmittedAt, firstRemovalSubmittedCode } = model.milestones;
   if (!firstRemovalSubmittedAt) {
     const draft = model.removals.find((removal) => removal.phase === "draft");

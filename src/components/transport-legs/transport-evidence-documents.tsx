@@ -11,7 +11,6 @@ import {
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Notice } from "@/components/ui/notice";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -21,7 +20,7 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
 import { TRANSPORT_EVIDENCE_HINTS } from "./transport-evidence-hints";
@@ -113,7 +112,7 @@ export function TransportEvidenceDocuments({
 
   return (
     <div className="flex flex-col gap-12">
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind={entityType === "transport_leg" ? undefined : entityType} lockId={entityId} />}
       {error && (
         <ServerError
           message={

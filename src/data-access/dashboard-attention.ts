@@ -6,6 +6,10 @@
  *   - station badges (uncapped counts, `dashboard-stations.ts`)
  *   - the needs-attention list (capped sample rows, `dashboard-overview.ts`)
  *
+ * Credit batches are the exception: their rows depend on the Removal display
+ * state, so the overview reads every pending batch and `creditBatchAttention`
+ * decides, and the queue counts them from that read.
+ *
  * Every predicate is facility- and org-scoped and skips archived rows. The
  * application evidence-gap check stays fail-closed (issue #461): an application
  * with unresolved evidence keeps surfacing until the gap is filled.
@@ -17,7 +21,8 @@ import {
   feedstocks,
   productionRuns,
 } from "@/db/schema";
-import { and, eq, isNull, lt, or, type SQL } from "drizzle-orm";
+import { and, eq, isNull, or, type SQL } from "drizzle-orm";
+import type { DerivedStatus } from "@/lib/certification/status";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
 /** Complete production runs missing either mass reading. */
@@ -50,19 +55,48 @@ export function feedstocksMissingDataWhere(
   );
 }
 
-/** Pending credit batches whose measurement period has already closed. */
-export function overdueBatchesWhere(
+/**
+ * Pending credit batches. Whether one needs attention depends on its holding
+ * Removals' display state, which only JS derives (`creditBatchAttention`).
+ */
+export function pendingBatchesWhere(
   organizationId: string,
   facilityId: string,
-  todayStr: string,
 ): SQL | undefined {
   return and(
     eq(creditBatches.organizationId, organizationId),
     eq(creditBatches.facilityId, facilityId),
     isNull(creditBatches.archivedAt),
     eq(creditBatches.status, "pending"),
-    lt(creditBatches.endDate, todayStr),
   );
+}
+
+export const PERIOD_ENDED_SUBMITTED_TITLE = "Period ended · awaiting verification";
+export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted yet";
+
+/**
+ * What a pending batch puts in Needs attention, from its Removals' display
+ * state (#1528). Each interrupted Removal gets its own row, and the batch then
+ * shows no period row. Otherwise a closed period reads "awaiting verification"
+ * only once a Removal is submitted; with no Removal or only a draft it reads
+ * "not submitted yet". The batch status alone cannot say this: it stays
+ * pending after submission.
+ */
+export function creditBatchAttention(
+  batch: { endDate: string | null },
+  removals: readonly { status: Pick<DerivedStatus, "kind"> }[],
+  todayStr: string,
+): { interrupted: boolean; periodTitle: string | null } {
+  if (removals.some((removal) => removal.status.kind === "interrupted")) {
+    return { interrupted: true, periodTitle: null };
+  }
+  if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, periodTitle: null };
+  return {
+    interrupted: false,
+    periodTitle: removals.some((removal) => removal.status.kind === "submitted")
+      ? PERIOD_ENDED_SUBMITTED_TITLE
+      : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
+  };
 }
 
 /**

@@ -140,8 +140,7 @@ function RemovalHoverLink({ group, facilityId, timeZone, href, className, style,
 
 function compactLabel(group: RemovalBarGroup): string {
   if (!group.removal) return `${tonnesFromKg(group.dryKg)} not in a Removal`;
-  const draft = group.removal.phase === "draft" ? " draft" : "";
-  return `${group.removal.code}${draft} ${tonnesFromKg(group.dryKg)}`;
+  return `${group.removal.code} ${group.removal.status.label} ${tonnesFromKg(group.dryKg)}`;
 }
 
 /** Overview: one slim bar and one wrapping line of key items. Each Removal's key item opens its hover card. */

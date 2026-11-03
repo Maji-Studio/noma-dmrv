@@ -24,6 +24,8 @@ import {
   type RemoteGhgStatus,
 } from "./status";
 
+export type SubmissionDisplayFacts = Pick<CertificationSubmissionRow, "status" | "metadata" | "payloadSnapshot">;
+
 export type CertificationArtifact = "removal" | "ghgStatement";
 
 export const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
@@ -35,7 +37,7 @@ export const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
 ];
 
 function readSnapshotReportingWindow(
-  latest: CertificationSubmissionRow | null,
+  latest: SubmissionDisplayFacts | null,
 ): RemovalReportingWindowDates | "unknown" {
   const semantic = (latest?.payloadSnapshot as {
     semantic?: { startedOn?: unknown; completedOn?: unknown };
@@ -58,7 +60,7 @@ function readSnapshotReportingWindow(
 }
 
 export function isRemovalSubmissionInterruptedFromSubmission(
-  latest: CertificationSubmissionRow | null,
+  latest: SubmissionDisplayFacts | null,
   reportingWindow: RemovalReportingWindowDates | "unknown",
 ): boolean {
   const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
@@ -83,7 +85,7 @@ export function isRemovalSubmissionInterruptedFromSubmission(
 
 /** The persisted verifier status off a submission row, or null when absent. */
 export function readRemoteStatus(
-  latest: CertificationSubmissionRow,
+  latest: SubmissionDisplayFacts,
 ): RemoteGhgStatus | null {
   const raw = getMetadataValue(
     latest.metadata,
@@ -134,7 +136,7 @@ export function overlayLiveRemoteStatus<
  * local-only; GHG statements fold in the persisted remote overlay.
  */
 export function deriveSubmissionStatus(
-  latest: CertificationSubmissionRow | null,
+  latest: SubmissionDisplayFacts | null,
   isLockedInFlight: boolean,
   artifact: CertificationArtifact,
   reportingWindow: RemovalReportingWindowDates | "unknown",

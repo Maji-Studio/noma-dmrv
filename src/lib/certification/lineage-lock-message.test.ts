@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatCertificationLineageLockMessage } from "./lineage-lock-message";
+import {
+  formatCertificationLineageLockMessage,
+  formatRecordFilesLockedMessage,
+  RECORD_FILES_INTERRUPTED_MESSAGE,
+  RECORD_FILES_LOCKED_MESSAGE,
+} from "./lineage-lock-message";
 
 describe("formatCertificationLineageLockMessage", () => {
   it("offers an unlocked order when creating a delivery", () => {
@@ -139,4 +144,22 @@ it("never prints internal holder IDs when a human label is missing", () => {
     lock: { level: "sent", heldBy: [{ kind: "removal", id: "internal-uuid" }], freeFields: [], howToFree: "Resume the Removal." } });
   expect(message).toContain("Held by a Removal.");
   expect(message).not.toContain("internal-uuid");
+});
+
+describe("formatRecordFilesLockedMessage", () => {
+  const interrupted = { kind: "removal", id: "interrupted" };
+  const submitted = { kind: "removal", id: "submitted" };
+
+  it("reads interrupted only when every holder was interrupted, as the record header does", () => {
+    expect(formatRecordFilesLockedMessage({ level: "sent", heldBy: [interrupted], interruptedHolders: [interrupted] }))
+      .toBe("This record is in a Removal whose submission was interrupted.");
+    expect(RECORD_FILES_INTERRUPTED_MESSAGE).toBe("This record is in a Removal whose submission was interrupted.");
+  });
+
+  it("keeps the submitted line for a submitted, mixed or unknown lock", () => {
+    expect(formatRecordFilesLockedMessage({ level: "sent", heldBy: [submitted] })).toBe(RECORD_FILES_LOCKED_MESSAGE);
+    expect(formatRecordFilesLockedMessage({ level: "sent", heldBy: [submitted, interrupted], interruptedHolders: [interrupted] }))
+      .toBe(RECORD_FILES_LOCKED_MESSAGE);
+    expect(formatRecordFilesLockedMessage(undefined)).toBe(RECORD_FILES_LOCKED_MESSAGE);
+  });
 });

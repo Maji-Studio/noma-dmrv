@@ -303,3 +303,11 @@ it("states a Waiting item as a fact on a read-only batch", () => {
   expect(readOnly.detail).toBeUndefined();
   expect(readOnly.title).toBe("0.05 t produced and not applied");
 });
+
+it("names an interrupted Removal in the milestone instead of calling it a draft", () => {
+  const pageModel = model({ removals: [removal({
+    status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false },
+  })] });
+  const steps = creditBatchMilestones({ pageModel, blockingCount: 0, openCount: 1, timeZone: "UTC" });
+  expect(steps.find(step => step.key === "removal")?.caption).toBe(`${pageModel.removals[0].code}: Submission interrupted`);
+});

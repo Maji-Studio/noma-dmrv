@@ -38,7 +38,6 @@ import {
 import { unionAll } from "drizzle-orm/pg-core";
 import {
   applicationEvidenceGapWhere,
-  overdueBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { requireOrgScope } from "./utils";
@@ -151,13 +150,11 @@ export function epochMs(column: SQLWrapper): SQL<number | null> {
 /**
  * Every station and certification count in one statement: each entity is one
  * filtered-aggregate subquery scanned once, and the cross join of their
- * single rows is the snapshot. `overdueBatches` feeds the attention total in
- * `dashboard-overview.ts`; it is not a station badge.
+ * single rows is the snapshot.
  */
 async function loadStationAggregates(
   ctx: OrgContext,
   facilityId: string,
-  todayStr: string,
 ) {
   const orgId = ctx.organizationId;
   const feedstockAgg = db
@@ -262,9 +259,6 @@ async function loadStationAggregates(
       withoutSamples: countRows(
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
       ).as("batch_without_samples"),
-      overdue: countRows(
-        overdueBatchesWhere(orgId, facilityId, todayStr),
-      ).as("batch_overdue"),
     })
     .from(creditBatches)
     .leftJoin(sampleCounts, eq(sampleCounts.creditBatchId, creditBatches.id))
@@ -292,7 +286,6 @@ async function loadStationAggregates(
       batchTotal: batchAgg.total,
       pendingBatches: batchAgg.pending,
       batchesWithoutSamples: batchAgg.withoutSamples,
-      overdueBatches: batchAgg.overdue,
     })
     .from(feedstockAgg)
     .crossJoin(runAgg)
@@ -510,25 +503,14 @@ function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] 
 // Aggregate
 // ============================================
 
-/** Station snapshot plus the batch-only attention count the overview adds to the queue size. */
-export interface DashboardStationsSnapshot extends DashboardStationsData {
-  /** Pending credit batches whose measurement period has closed (uncapped). */
-  overdueBatches: number;
-}
-
-/**
- * `todayStr` ('YYYY-MM-DD', UTC) is the overdue-batch cutoff; the overview
- * passes the same value to its attention list so count and list agree.
- */
 export async function getDashboardStations(
   ctx: OrgContext,
   facilityId: string,
-  todayStr: string,
-): Promise<DashboardStationsSnapshot> {
+): Promise<DashboardStationsData> {
   requireOrgScope(ctx);
 
   const [counts, activityRows] = await Promise.all([
-    loadStationAggregates(ctx, facilityId, todayStr),
+    loadStationAggregates(ctx, facilityId),
     loadActivityRows(ctx, facilityId),
   ]);
 
@@ -625,6 +607,5 @@ export async function getDashboardStations(
       batches: buildRecentBatches(activityRows),
       batchesWithoutSamples: counts.batchesWithoutSamples,
     },
-    overdueBatches: counts.overdueBatches,
   };
 }

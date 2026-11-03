@@ -163,7 +163,7 @@ export function timelineYears(batches: readonly DateWindow[], today: string): nu
   return filled;
 }
 
-export type TimelineState = "blocking" | "ready" | "submitted" | "issued";
+export type TimelineState = "blocking" | "ready" | "interrupted" | "submitted" | "issued";
 
 /**
  * The state a bar shows. A submitted Removal or an issued batch wins over data

@@ -1,3 +1,6 @@
+import { getDashboardAttentionItems } from "@/data-access/dashboard-overview";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -84,6 +87,24 @@ describe("credit batch page model", () => {
 
       const model = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(model.removals[0]).toMatchObject({ phase: "draft", status: { kind: "interrupted" } });
+      const displays = await loadCreditBatchRemovalDisplays(makeTestOrgContext(), [fixture.batchId]);
+      expect(displays.get(fixture.batchId)?.[0].status.kind).toBe("interrupted");
+      const todos = buildCreditBatchOpenItems({
+        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
+        removals: displays.get(fixture.batchId),
+      });
+      expect(todos.check).toContainEqual(expect.objectContaining({
+        title: `${model.removals[0].code}: submission interrupted`,
+        target: { href: `/removals?facility=${fixture.facilityId}&resume=${fixture.removalId}` },
+      }));
+      const interruptedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(interruptedAttention.items).toContainEqual(expect.objectContaining({
+        title: "Submission interrupted",
+        href: `/removals?facility=${fixture.facilityId}&resume=${fixture.removalId}`,
+        entityCode: expect.stringMatching(new RegExp(`^${model.removals[0].code} · `)),
+      }));
+      expect(interruptedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
+
       expect(model.mass).toMatchObject({ inDraftDryKg: 190, inSubmittedDryKg: 0 });
       expect(model.milestones).toMatchObject({ firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null });
 
@@ -91,9 +112,24 @@ describe("credit batch page model", () => {
         .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
       const completedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(completedModel.removals[0].phase).toBe("submitted");
+      const submittedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(submittedAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · awaiting verification" }));
+      expect(submittedAttention.items.some(item => item.title === "Submission interrupted")).toBe(false);
+      const submittedTodos = buildCreditBatchOpenItems({
+        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
+        removals: completedModel.removals,
+      });
+      expect(submittedTodos.check).toEqual([]);
+
       expect(completedModel.milestones).toMatchObject({
         firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: completedModel.removals[0].code,
       });
+      await db.update(certificationSubmissions).set({ status: "draft", metadata: {}, lockedAt: null })
+        .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
+      const draftAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(draftAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · not submitted yet" }));
+      expect(draftAttention.items.some(item => item.title === "Period ended · awaiting verification")).toBe(false);
+
     } finally {
       await cleanupLineageFixture(fixture);
     }

@@ -28,7 +28,7 @@ import type { RemovalCorrection } from "@/lib/certification/removal-entry-correc
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
-import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
+import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, removalResubmitHref, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 import { lateEntryView, readOnlyWaitingDetail, readOnlyWaitingEntryTitle, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
@@ -77,6 +77,7 @@ export interface CreditBatchOpenItemsInput {
   facilityId: string;
   creditBatchId: string;
   health?: BatchHealth;
+  removals?: readonly Pick<CreditBatchPageModel["removals"][number], "id" | "code" | "status">[];
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   missingProductionRuns?: CreditBatchMissingProductionRuns;
@@ -408,6 +409,16 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         target,
       });
     }
+  }
+
+  for (const removal of input.removals ?? []) {
+    if (removal.status.kind !== "interrupted") continue;
+    check.push({
+      id: `interrupted:${removal.id}`,
+      title: `${removal.code}: submission interrupted`,
+      // The wizard reopened on the Removal is where Review & submit reconciles it.
+      target: { href: removalResubmitHref(removal.id, input.facilityId) },
+    });
   }
 
   for (const correction of input.health?.removalCorrections ?? []) {
