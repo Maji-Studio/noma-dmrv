@@ -16,4 +16,5 @@ ALTER TABLE "feedstock_bin_method_changes" ADD CONSTRAINT "feedstock_bin_method_
 ALTER TABLE "feedstock_bin_method_changes" ADD CONSTRAINT "feedstock_bin_method_changes_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstock_bin_method_changes" ADD CONSTRAINT "feedstock_bin_method_changes_storage_location_id_organization_id_storage_locations_id_organization_id_fk" FOREIGN KEY ("storage_location_id","organization_id") REFERENCES "public"."storage_locations"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "feedstock_bin_method_changes_bin_idx" ON "feedstock_bin_method_changes" USING btree ("organization_id","storage_location_id","effective_at");--> statement-breakpoint
-ALTER TABLE "production_run_feedstocks" ADD CONSTRAINT "production_run_feedstocks_positive_wet_mass" CHECK ("production_run_feedstocks"."wet_mass_used_kg" > 0) NOT VALID;
+DELETE FROM production_run_feedstocks WHERE wet_mass_used_kg <= 0;--> statement-breakpoint
+ALTER TABLE "production_run_feedstocks" ADD CONSTRAINT "production_run_feedstocks_positive_wet_mass" CHECK ("production_run_feedstocks"."wet_mass_used_kg" > 0);

@@ -94,7 +94,7 @@ describe('feedstock draw methods in the database', () => {
       .where(and(eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.storageLocationId, f.bin.id))).returning();
     draws.sort((a, b) => a.id.localeCompare(b.id));
     expect(draws[0].createdAt).toEqual(draws[1].createdAt);
-    // A protected legacy allocation deliberately differs from a fresh Oldest-first plan.
+    // A protected saved allocation deliberately differs from a fresh Oldest-first plan.
     await tx.insert(productionRunFeedstocks).values(draws.map((draw, index) => ({ organizationId: TEST_ORG_ID,
       productionRunId: draw.productionRunId, feedstockId: f.deliveries[2 - index].id, wetMassUsedKg: 10 })));
     const before = await allocations(tx, draws[0].productionRunId);

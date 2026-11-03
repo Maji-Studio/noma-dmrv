@@ -27,17 +27,17 @@ function expectNoMassFilter(clauses: SQL[]) {
   expect(sql).not.toContain('wet_mass_used_kg');
   expect(sql).toContain('organization_id');
 }
-it('keeps legacy zero-share links in record freeze dependencies', async () => {
-  const { tx, clauses } = reader([[{ feedstockId: 'intake', id: 'legacy-run' }]]);
+it('keeps share links in record freeze dependencies', async () => {
+  const { tx, clauses } = reader([[{ feedstockId: 'intake', id: 'saved-run' }]]);
   expect((await readRecordDependentsBatch(ctx, tx, 'feedstock', ['intake'])).get('intake'))
-    .toEqual([{ kind: 'productionRun', id: 'legacy-run' }]);
+    .toEqual([{ kind: 'productionRun', id: 'saved-run' }]);
   expectNoMassFilter(clauses);
 });
-it('keeps legacy zero-share links in advisory and write feedstock-type freezes', async () => {
+it('keeps share links in advisory and write feedstock-type freezes', async () => {
   mocks.locks.mockResolvedValue([{ level: 'sent', heldBy: [{ kind: 'removal', id: 'removal' }] }]);
   mocks.lineage.mockResolvedValue([{ removalId: 'removal' }]);
   const removal = { id: 'removal', code: 'RM1', facilityId: 'facility' };
-  const advisory = reader([[{ id: 'type' }], [{ id: 'legacy-run' }], [removal]]);
+  const advisory = reader([[{ id: 'type' }], [{ id: 'saved-run' }], [removal]]);
   expect(await getFeedstockTypeLinkLock(ctx, advisory.tx, 'type')).toEqual({ locked: true, removals: [removal] });
   expectNoMassFilter(advisory.clauses);
   const write = reader([[{ id: 'batch' }], [removal]]);

@@ -2,11 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { addDaysIso, startOfFacilityDay } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
-import { replayFeedstockDraws, FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
-import { replayFeedstockBinStock } from "./feedstock-bin-ledger";
-import { getFeedstockMethodChanges } from "./feedstock-bin-method-history";
+import { FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
 import { getOutputStockFacilityTimezone } from "./output-stock-dates";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -101,29 +98,4 @@ export async function throwFeedstockReplayOverdraw(ctx: OrgContext, executor: Fe
   const message = error.availableWetKg === 0 ? `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`
     : `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Lower the draw or move the run’s start.`;
   throw new StockOverdrawError(message, { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
-}
-
-/** Preview an additional draw at the end of a facility day using saved earlier run shares. */
-export async function allocateFeedstockWetMass(ctx: OrgContext, executor: FeedstockStockReader,
-  storageLocationId: string, totalWetMassKg: number, cutoffDay: string): Promise<FeedstockWetAllocation[]> {
-  requireOrgScope(ctx);
-  const [bin] = await executor.select().from(storageLocations).where(and(
-    eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
-  ));
-  if (!bin) throw new StockOverdrawError(`At the run’s start this bin ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
-  const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, executor);
-  const end = startOfFacilityDay(addDaysIso(cutoffDay, 1), timezone).getTime() - 1;
-  const at = new Date(end).toISOString();
-  const ledger = await replayFeedstockBinStock(ctx, storageLocationId, executor);
-  const id = 'preview';
-  try {
-    const replay = replayFeedstockDraws([...ledger.entries.filter(entry => entry.occurredAt <= at).map(entry => ({ ...entry,
-      savedShares: entry.kind === 'run_draw' ? ledger.withdrawals.get(entry.id) ?? [] : undefined,
-    })), { id, kind: 'run_draw', occurredAt: at, recordedAt: at, wetDeltaKg: -totalWetMassKg }], bin,
-    await getFeedstockMethodChanges(ctx, storageLocationId, executor));
-    return (replay.withdrawals.get(id) ?? []).map(row => ({ feedstockId: row.feedstockId, wetMassUsedKg: row.wetKg }));
-  } catch (error) {
-    if (error instanceof FeedstockReplayOverdrawError) return throwFeedstockReplayOverdraw(ctx, executor, storageLocationId, error);
-    throw error;
-  }
 }

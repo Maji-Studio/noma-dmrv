@@ -7,20 +7,23 @@ const locks = vi.hoisted(() => vi.fn());
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('./certification-lineage-guards', () => ({ getRecordLocks: locks }));
 import { getFeedstockTransportOwners } from './feedstock-transport-ownership';
-it.each(['sent-zero', 'sent-positive', 'unlocked'])('preserves the old candidate set for %s lineage', async scenario => {
-  locks.mockResolvedValue([{ level: scenario === 'sent-zero' ? 'sent' : 'unlocked' }, { level: scenario === 'sent-positive' ? 'sent' : 'unlocked' }]);
+it('chooses the first completed share owner without reading submission locks or filtering mass', async () => {
   const conditions: SQL[] = [];
-  function query(rows: unknown[]) {
-    const chain = { from: () => chain, innerJoin: () => chain,
-      where: (condition: SQL) => { conditions.push(condition); return chain; },
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve) };
-    return chain;
-  }
-  const candidates = [[{ feedstockId: 'intake' }], [{ feedstockId: 'intake', runId: 'legacy' }, { feedstockId: 'intake', runId: 'positive' }]];
-  const reader = { selectDistinct: () => query(candidates.shift()!), select: () => query([]) } as unknown as DbTransaction;
-  await getFeedstockTransportOwners({ organizationId: 'org', userId: 'user' } as OrgContext, ['intake'], reader);
-  expect(locks).toHaveBeenCalledWith(expect.anything(), reader, [{ entityType: 'productionRun', entityId: 'legacy' }, { entityType: 'productionRun', entityId: 'positive' }], { sentOnly: true });
-  const sql = new PgDialect().sqlToQuery(conditions[2]);
-  expect(sql.sql).toContain('"wet_mass_used_kg" >');
-  expect(sql.params.filter(value => value === 'intake')).toHaveLength(scenario === 'unlocked' ? 1 : 2);
+  const rows = ['later', 'earlier'].map((runId, index) => ({ feedstockId: 'intake', runId,
+    status: 'complete', startTime: new Date(`2026-01-0${2 - index}T00:00:00Z`) }));
+  const chain = { from: () => chain,
+    innerJoin: (_table: unknown, condition: SQL) => { conditions.push(condition); return chain; },
+    where: (condition: SQL) => { conditions.push(condition); return chain; },
+    then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve) };
+  const selectDistinct = vi.fn();
+  const reader = { select: () => chain, selectDistinct } as unknown as DbTransaction;
+  const ctx = { organizationId: 'org', userId: 'user' } as OrgContext;
+  expect(await getFeedstockTransportOwners(ctx, ['intake'], reader)).toEqual(new Map([['intake', 'earlier']]));
+  expect(locks).not.toHaveBeenCalled();
+  expect(selectDistinct).not.toHaveBeenCalled();
+  const sql = conditions.map(condition => new PgDialect().sqlToQuery(condition).sql).join(' ');
+  expect(sql).not.toContain('wet_mass_used_kg');
+  expect(sql).toContain('"production_runs"."archived_at" is null');
+  expect(sql).toContain('"credit_batches"."archived_at" is null');
+  expect(sql).toContain('"organization_id"');
 });

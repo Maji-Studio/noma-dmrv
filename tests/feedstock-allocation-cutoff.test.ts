@@ -5,7 +5,7 @@ import { facilities, feedstocks, feedstockTypes, productionRunFeedstockDraws, pr
 import { createProductionRunInTransaction, updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { createFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
-import { allocateFeedstockWetMass, deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
+import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { reallocateRunsForBins, reallocateRunsForFacility } from "@/data-access/feedstock-run-allocations";
 import { feedstockUpdatePayload } from "@/components/feedstocks/feedstock-update-payload";
 import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
@@ -271,13 +271,6 @@ describe("facility-day feedstock allocations", () => {
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id,
       { expectedVersion: run.version, startTime: new Date("2026-02-20T08:00:00Z") }))).rejects.toMatchObject({ code: "insufficient_stock" });
     expect(await shares(tx, run.id)).toEqual(before);
-  }));
-  it("does not expose a bin code outside the caller's organization", () => scenario(async (tx, f) => {
-    const otherCtx = { ...ctx, organizationId: crypto.randomUUID() };
-    await expect(allocateFeedstockWetMass(otherCtx, tx, f.bins[0].id, DRAW_KG, "2026-02-20"))
-      .rejects.toMatchObject({
-        message: "At the run’s start this bin held no wet feedstock. Move the run’s start or correct the intake’s delivery date.",
-      });
   }));
   it("rolls back an intake edit that empties the qualifying basis", () => scenario(async (tx, f) => {
     const run = await f.run(new Date("2026-03-10T08:00:00Z"));

@@ -1,4 +1,3 @@
-import { touchedRunFeedstock } from './touched-run-feedstock';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
 import type { CertifierProvider } from "@/schemas/credit-batches";
 import { recordMembershipActivity } from "./write-activity";
@@ -498,7 +497,7 @@ export async function resolveSingleFeedstockType(
     )
     .where(and(
       inArray(productionRunFeedstocks.productionRunId, uniqueRunIds),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
     ));
 
   const mappedRunIds = new Set(
@@ -556,7 +555,7 @@ async function resolveSingleRunFeedstockTypeOrNull(
     .where(
       and(
         eq(productionRunFeedstocks.productionRunId, productionRunId),
-        eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
+        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
       ),
     );
 

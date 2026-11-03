@@ -105,6 +105,8 @@ disambiguates).
 Material received into one feedstock bin, with its feedstock type, supplier,
 wet mass, moisture and delivery date.
 _On screen_: the list of feedstock records is called Feedstock intake.
+On feedstock bin screens, a "delivery" is one Feedstock record as received,
+not a customer **Delivery**, which has its own transport and proof of delivery.
 
 **Feedstock bin**:
 A storage bin holding one **feedstock type**, set when the bin is created.

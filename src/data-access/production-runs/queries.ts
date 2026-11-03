@@ -1,4 +1,3 @@
-import { touchedRunFeedstock } from '../touched-run-feedstock';
 /**
  * Production-run read operations: list/pagination, by-id, stats, energy totals,
  * sample bulk-load, and dropdown options.
@@ -217,7 +216,7 @@ export async function getProductionRuns(
         .from(productionRunFeedstocks)
         .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock()))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
         .orderBy(asc(productionRunFeedstocks.productionRunId), asc(feedstocks.code), asc(productionRunFeedstocks.id))
     : [];
   const allFeedstockDraws = runIds.length > 0
@@ -322,7 +321,7 @@ async function getProductionRunFeedstocks(
     .from(productionRunFeedstocks)
     .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock()))
+    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     .orderBy(asc(feedstocks.code), asc(productionRunFeedstocks.id));
 
   return result;

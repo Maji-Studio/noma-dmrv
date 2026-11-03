@@ -419,6 +419,7 @@ export async function getStorageLocationById(
   id: string,
   executor: StorageLocationReadExecutor = db,
   occurredAt?: string,
+  draw?: { excludeProductId?: string; drawWetKg?: number },
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
 
@@ -494,5 +495,5 @@ export async function getStorageLocationById(
     lanes: "feedstock",
   });
   const option = toFeedstockBinEntityOption(result, stock);
-  return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, occurredAt, executor))?.moisturePercent ?? null } };
+  return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, occurredAt, executor, draw?.excludeProductId, draw?.drawWetKg))?.moisturePercent ?? null } };
 }

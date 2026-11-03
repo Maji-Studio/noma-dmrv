@@ -1,4 +1,3 @@
-import { touchedRunFeedstock } from './touched-run-feedstock';
 import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { getDeliveryProofCounts } from "./delivery-proof";
 import { db, type DbTransaction } from "@/db";
@@ -297,7 +296,6 @@ async function loadLineageWithExecutor(
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
           wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-          touched: touchedRunFeedstock(),
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
         })
@@ -317,9 +315,7 @@ async function loadLineageWithExecutor(
   const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), executor);
 
   const feedstocksByRun = new Map<string, BatchLineageFeedstockFact[]>();
-  for (const { touched, ...row } of feedstockRows) {
-    // Preserve transport counted from legacy zero rows under Sent lineage.
-    if (!touched && transportOwners.get(row.id) !== row.runId) continue;
+  for (const row of feedstockRows) {
     const facts = feedstocksByRun.get(row.runId) ?? [];
     facts.push({ ...row, ownsTransport: transportOwners.get(row.id) === row.runId });
     feedstocksByRun.set(row.runId, facts);

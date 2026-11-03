@@ -34,9 +34,10 @@ export async function reallocateRunsForBins(
   ctx: OrgContext,
   tx: DbTransaction,
   binIds: readonly (string | null)[],
-  options: { onlyRunId?: string; boundaryExclusive?: boolean; earliestDeliveryDate?: Date; earliestEventAt?: Date; eventTie?: { recordedAt: Date; id: string }; facilityId?: string; transportOwnershipFreeze?: TransportOwnershipFreezeScope; change?: TransportOwnershipChange } = {},
+  options: { allowSentRewrite?: boolean; onlyRunId?: string; boundaryExclusive?: boolean; earliestDeliveryDate?: Date; earliestEventAt?: Date; eventTie?: { recordedAt: Date; id: string }; facilityId?: string; transportOwnershipFreeze?: TransportOwnershipFreezeScope; change?: TransportOwnershipChange } = {},
 ): Promise<string[]> {
   requireOrgScope(ctx);
+  if (options.allowSentRewrite && process.env.NODE_ENV === 'production') throw new DomainError('forbidden', 'Sent allocations cannot be rewritten in production.');
   const { onlyRunId } = options;
   const ids = [...new Set(binIds.filter((id): id is string => id !== null))];
   if (!ids.length) return [];
@@ -147,15 +148,23 @@ export async function reallocateRunsForBins(
   // the final owner rather than each intermediate one.
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
     rewrites.flatMap(({ saved, proposed }) => [...saved, ...proposed].map(row => row.feedstockId)),
-    options.change ?? { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze);
+    options.change ?? { mutation: "update", subject: "production run" }, options.transportOwnershipFreeze, { allowSentRewrite: options.allowSentRewrite });
   await freeze(async () => {
     for (const { run, proposed } of rewrites) {
       const target = { entityType: "productionRun" as const, entityId: run.id };
       // We already hold bin/row locks. Never wait for an artifact held by a
       // submission that could be waiting for those same rows.
-      const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
-      assertStockLockSnapshot(artifacts !== null);
-      await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
+      if (!options.allowSentRewrite) {
+        const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
+        assertStockLockSnapshot(artifacts !== null);
+        try {
+          await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
+        } catch (error) {
+          if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
+          throw new DomainError(error.code, error.message, { issues: error.issues.map(issue => ({ ...issue,
+            meta: { ...issue.meta, runId: run.id, runCode: run.code } })), cause: error });
+        }
+      }
       await tx.delete(productionRunFeedstocks).where(and(
         eq(productionRunFeedstocks.organizationId, ctx.organizationId),
         eq(productionRunFeedstocks.productionRunId, run.id),

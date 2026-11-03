@@ -88,7 +88,7 @@ it('retains an immutable saved share until its intake arrives', () => {
   expect(result.remaining.get('a')).toBe(6);
 });
 
-it.each([oldest, newest, mix])('charges legacy saved-share deficits without rewriting provenance: %j', method => {
+it.each([oldest, newest, mix])('charges saved-share deficits without rewriting provenance: %j', method => {
   const savedShares = [{ feedstockId: 'a', wetKg: 5 }, { feedstockId: 'b', wetKg: 5 }];
   const result = replayFeedstockDraws([
     event('a', 1, 10), { ...event('first', 2, -10, 'run_draw'), savedShares: [{ feedstockId: 'a', wetKg: 10 }] },

@@ -156,3 +156,11 @@ it('estimates the Oldest first draw and remaining inventory from the same replay
   expect(after.currentWetKg).toBe(120);
   expect(after.remainingDryKg).toBe(116);
 });
+
+it('uses the same oldest-first requested draw estimate for the read and saved ingredient', async () => {
+  const stock = () => reader([{ wet: 100, dry: 80 }, { wet: 100, dry: 100 }], [], [], [], [], 'split');
+  const estimate = await getIngredientMoistureBasis(ctx, 'bin', undefined, stock(), undefined, 30);
+  expect(estimate).toEqual({ wetMassKg: 30, dryMassKg: 24, moisturePercent: 20 });
+  const saved = await resolveCompositionIngredientMassBasis(ctx, stock(), { ingredients: [{ ...ingredient, moistureContentPercent: 20 }] });
+  expect(saved.ingredients).toEqual([expect.objectContaining({ moistureEstimate: estimate })]);
+});

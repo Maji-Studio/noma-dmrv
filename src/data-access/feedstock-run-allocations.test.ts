@@ -3,12 +3,12 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
-const mocks = vi.hoisted(() => ({ replay: vi.fn(), freeze: vi.fn(), lock: vi.fn() }));
+const mocks = vi.hoisted(() => ({ replay: vi.fn(), freeze: vi.fn(), lock: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('./lock-bin-stocks', () => ({ lockBinStocks: mocks.lock, assertStockLockSnapshot: (valid: boolean) => { if (!valid) throw new Error('changed'); } }));
 vi.mock('./feedstock-bin-ledger', () => ({ replayFeedstockBinStock: mocks.replay }));
 vi.mock('./feedstock-transport-ownership-freeze', () => ({ prepareFeedstockTransportOwnershipFreeze: mocks.freeze }));
-vi.mock('./certification-lineage-guards', () => ({ tryLockCertifiedLineageArtifacts: async () => [], assertLockedLineagesAllowMutation: vi.fn() }));
+vi.mock('./certification-lineage-guards', () => ({ tryLockCertifiedLineageArtifacts: async () => [], assertLockedLineagesAllowMutation: mocks.lineage }));
 import { reallocateRunsForBins, reallocateRunsForFacility } from './feedstock-run-allocations';
 
 it('clears stale shares on an explicitly edited cancelled run, excluding other cancelled runs', async () => {
@@ -84,4 +84,37 @@ it.each(['empty-at-switch', 'non-run overdraw'])('validates every facility bin e
   expect(mocks.replay).toHaveBeenCalledWith(ctx, 'no-draw-bin', tx, expect.objectContaining({ boundary: expect.objectContaining({ occurredAt: '' }) }));
   const inventory = new PgDialect().sqlToQuery(conditions[0]);
   expect(inventory.params).toEqual(['org', 'facility', 'feedstock_bin']);
+});
+
+it.each([false, true])('Sent rewrite opt-in %s controls the lineage guard and is forwarded to the freeze', async allowSentRewrite => {
+  const { DomainError } = await import('@/lib/domain-errors');
+  const at = new Date('2026-01-01T00:00:00Z');
+  const draw = { id: 'draw', productionRunId: 'run', storageLocationId: 'bin', createdAt: at };
+  const results: unknown[] = [[{ runId: 'run' }], [draw], [{ id: 'run', code: 'PR1', status: 'complete' }], [draw],
+    [{ feedstockId: 'previous', wetMassUsedKg: 5 }]];
+  const select = () => {
+    const rows = results.shift();
+    const query = { from: () => query, innerJoin: () => query, orderBy: () => query, for: () => query, where: () => query,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve) };
+    return query;
+  };
+  const remove = vi.fn(() => ({ where: async () => {} }));
+  const values = vi.fn();
+  const tx = { select, delete: remove, insert: () => ({ values }) } as unknown as DbTransaction;
+  const ctx = { organizationId: 'org', userId: 'user' } as OrgContext;
+  mocks.replay.mockReset().mockResolvedValue({ entries: [{ kind: 'run_draw', sourceId: 'run', id: 'draw' }],
+    withdrawals: new Map([['draw', [{ feedstockId: 'replacement', wetKg: 5 }]]]) });
+  mocks.freeze.mockReset().mockResolvedValue(async (work: () => Promise<void>) => work());
+  mocks.lineage.mockReset().mockRejectedValue(new DomainError('certification_locked', 'Sent', { issues: [{ path: [], code: 'certification_locked', message: 'Sent', meta: { removalIds: ['removal'] } }] }));
+  const result = reallocateRunsForBins(ctx, tx, ['bin'], { allowSentRewrite });
+  if (allowSentRewrite) {
+    await expect(result).resolves.toEqual(['run']);
+    expect(mocks.lineage).not.toHaveBeenCalled();
+    expect(values).toHaveBeenCalledWith([{ organizationId: 'org', productionRunId: 'run', feedstockId: 'replacement', wetMassUsedKg: 5 }]);
+  } else {
+    await expect(result).rejects.toMatchObject({ code: 'certification_locked', issues: [{ meta: { runId: 'run', runCode: 'PR1', removalIds: ['removal'] } }] });
+    expect(mocks.lineage).toHaveBeenCalledOnce();
+    expect(remove).not.toHaveBeenCalled();
+  }
+  expect(mocks.freeze).toHaveBeenCalledWith(ctx, tx, ['previous', 'replacement'], { mutation: 'update', subject: 'production run' }, undefined, { allowSentRewrite });
 });

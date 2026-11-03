@@ -263,7 +263,7 @@ Mass weighted takes proportional wet shares; In order empties deliveries Oldest
 first or Newest first. Complete intakes become available at the start of their
 facility-local delivery day. Stock edits re-plan runs from the earliest affected
 instant, with recorded time at millisecond precision then event ID breaking ties.
-Earlier runs keep saved shares, including legacy shares under Sent Removals.
+Earlier runs keep saved shares.
 Later withdrawals that exceed available stock refuse the edit. Rebuilds are
 transactional and refuse changes to Sent lineage. Timezone edits lock the facility,
 source bins, then runs in ID order. Rebuilds allow archived historical bins;
@@ -274,21 +274,29 @@ stock is zero to gram precision at each Mass weighted to In order switch. This
 covers intake edits, loss corrections, run cancellation/deletion/draw changes and
 product deletion; dry-only corrections pass when wet stock remains zero.
 
-New saved run shares must have positive wet mass. Migration 0173 adds the CHECK
-as `NOT VALID`, without deleting legacy rows or changing Sent lineage. Touched
-readers ignore nonpositive shares. Transport ownership retains legacy zero rows
-for deliveries linked to Sent runs because the old earliest-owner rule counted them.
-This also retains an earlier unsent zero owner when removing it would newly charge
-a later Sent run.
-Raw saved replay history and transport-freeze candidate discovery retain all rows.
+Every saved run share has positive wet mass. Migration 0173 deletes nonpositive
+rows before adding the normal validated CHECK. Ownership is the earliest completed,
+non-archived run in a non-archived credit batch with a share row for the feedstock
+record; submission status never changes the candidate set.
 
 `pnpm feedstock:recalculate` rebuilds allocations per bin and reports rewritten
-runs and transport ownership counts. `--dry-run` rolls back each bin after planning.
-Each bin starts just after its last run draw under a Sent Removal, ordered by
-run time, draw recorded time and draw ID; without Sent runs it starts at the first
-event. The report names kept Sent runs. Later runs are rewritten, deleting their
-old shares (including zero rows) and inserting positive shares. A later rewrite
-that would change Sent lineage is still refused with run and Removal codes.
+runs and owned transport legs before/after per credit batch code. `--dry-run`
+rolls back each bin after planning. Without `--include-sent`, each bin starts just
+after its last Sent run draw, ordered by run time, draw recorded time and draw ID;
+without Sent runs it starts at the first event. The report warns about kept Sent
+runs separately from refused runs. Certification refusals identify the blocking
+run and Removal codes when the guard supplies them, or the blocked feedstock for
+a transport ownership refusal.
+
+For the one-off pre-production staging rebuild, run
+`pnpm feedstock:recalculate --include-sent --dry-run`, review the per-bin report,
+then `pnpm feedstock:recalculate --include-sent`. This explicitly rebuilds from each
+bin's first event, including shares under sent RM-26-001. The report lists rewritten
+Sent runs with their Removal codes. Only this CLI path may opt out of the Sent
+lineage refusal and transport ownership freeze. The option is rejected when
+`NODE_ENV=production`; ordinary writes, including facility timezone edits, retain
+both guards. The command rebuilds local shares, not registry submission snapshots.
+
 A failed bin rolls back independently; other bins continue and the command exits
 unsuccessfully. The CLI uses a short-lived `Pool(getPgPoolConfig(...))` and Drizzle
 reader for inventory, identity checks and transactions, and ends the pool in

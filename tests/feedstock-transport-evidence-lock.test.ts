@@ -60,8 +60,7 @@ it("keeps transport views and BoL writes open until the owner Removal is sent, a
       const ids = [owner.feedstockId, later.feedstockId];
       const lineageQueries = vi.spyOn(db, "selectDistinct");
       const views = await getRecordLockViews(ctx, "feedstock", ids);
-      // Includes the legacy zero-share lookup needed to preserve Sent transport ownership.
-      expect(lineageQueries).toHaveBeenCalledTimes(3);
+      expect(lineageQueries).toHaveBeenCalledTimes(2);
       lineageQueries.mockRestore();
       expect(views[owner.feedstockId]).toMatchObject({ level: "sent", transport: { level: "open", heldBy: [] } });
       expect(views[later.feedstockId].transport).toMatchObject({ level: "sent", heldBy: [{ kind: "removal", id: later.removalId }] });
@@ -117,4 +116,25 @@ it("keeps transport views and BoL writes open until the owner Removal is sent, a
       }
     }, "none");
   }, "none");
+});
+
+it('creating a draft for a later batch leaves every delivery owner unchanged', async () => {
+  const ctx = makeTestOrgContext();
+  await withLineageFixture(async earlier => {
+    await withLineageFixture(async later => {
+      for (const [fixture, day] of [[earlier, '12'], [later, '13']] as const) {
+        await db.update(productionRuns).set({ status: 'complete', startTime: new Date(`2026-06-${day}T08:00:00Z`), endTime: new Date(`2026-06-${day}T12:00:00Z`) })
+          .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId)));
+      }
+      await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+        productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
+      const ids = [earlier.feedstockId, later.feedstockId];
+      const before = await getFeedstockTransportOwners(ctx, ids);
+      expect(before).toEqual(new Map([[earlier.feedstockId, earlier.productionRunId], [later.feedstockId, later.productionRunId]]));
+      await db.insert(certificationSubmissions).values({ organizationId: TEST_ORG_ID, provider: 'isometric', submissionType: 'removal',
+        localEntityType: 'removal', localEntityId: later.removalId, version: 1, status: 'draft', payloadHash: 'test',
+        payloadSnapshot: { transportFeedstockIds: [later.feedstockId] } });
+      expect(await getFeedstockTransportOwners(ctx, ids)).toEqual(before);
+    }, 'none');
+  }, 'none');
 });

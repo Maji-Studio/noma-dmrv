@@ -26,9 +26,18 @@ async function ownedLegCounts(ctx: OrgContext, tx: DbTransaction, storageLocatio
   return counts;
 }
 
-/** One bin is atomic: a locked lineage rolls back that bin, while the CLI continues other bins. */
-export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction, storageLocationId: string) {
+/** Inventory stays inside the verified organization scope. */
+export async function listFeedstockRecalculationBins(ctx: OrgContext, reader: Pick<DbTransaction, 'select'>) {
   requireOrgScope(ctx);
+  return reader.select({ id: storageLocations.id, code: storageLocations.code }).from(storageLocations).where(and(
+    eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.type, 'feedstock_bin'),
+  )).orderBy(storageLocations.id);
+}
+
+/** One bin is atomic: a locked lineage rolls back that bin, while the CLI continues other bins. */
+export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction, storageLocationId: string, options: { allowSentRewrite?: boolean } = {}) {
+  requireOrgScope(ctx);
+  if (options.allowSentRewrite && process.env.NODE_ENV === 'production') throw new DomainError('forbidden', 'Sent allocations cannot be rewritten in production.');
   await lockBinStocks(ctx, tx, [storageLocationId], { allowArchived: true });
   const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations).where(and(
     eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
@@ -40,7 +49,7 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId)));
   const locks = await getRecordLocks(ctx, tx, runs.map(run => ({ entityType: 'productionRun', entityId: run.id })), { sentOnly: true });
   const kept = runs.filter((_, index) => locks[index].level === 'sent');
-  const last = [...kept].sort((a, b) => compareFeedstockEvents(
+  const last = [...(options.allowSentRewrite ? [] : kept)].sort((a, b) => compareFeedstockEvents(
     { id: a.drawId, occurredAt: a.startTime.toISOString(), recordedAt: a.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
     { id: b.drawId, occurredAt: b.startTime.toISOString(), recordedAt: b.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
   )).at(-1);
@@ -49,18 +58,29 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, removalIds),
   )) : [];
   let rewrittenRunIds: string[] = [];
-  const refused: { runId: string; code: string; removalCodes: string[] }[] = [];
+  const refused: { runId?: string; code?: string; feedstockId?: string; removalCodes: string[] }[] = [];
   try {
     rewrittenRunIds = await tx.transaction(savepoint => reallocateRunsForBins(ctx, savepoint, [storageLocationId], last ? {
       earliestEventAt: last.startTime, eventTie: { recordedAt: last.recordedAt, id: last.drawId }, boundaryExclusive: true,
-    } : {}));
+    } : options.allowSentRewrite ? { allowSentRewrite: true } : {}));
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    for (const [index, lock] of locks.entries()) if (lock.level === 'sent') refused.push({ runId: runs[index].id, code: runs[index].code,
-      removalCodes: removals.filter(row => lock.heldBy.some(holder => holder.id === row.id)).map(row => row.code) });
-    if (!refused.length) throw error;
+    for (const issue of error.issues) {
+      const meta = issue.meta;
+      const ids = Array.isArray(meta?.removalIds) ? meta.removalIds.filter((id): id is string => typeof id === 'string') : [];
+      const blockedRemovals = ids.length ? await tx.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(
+        eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids),
+      )) : [];
+      refused.push({ runId: typeof meta?.runId === 'string' ? meta.runId : undefined,
+        code: typeof meta?.runCode === 'string' ? meta.runCode : undefined,
+        feedstockId: typeof meta?.feedstockId === 'string' ? meta.feedstockId : undefined,
+        removalCodes: blockedRemovals.map(row => row.code) });
+    }
+    // A bin-level refusal still fails the command when a guard has no structured target.
+    if (!refused.length) refused.push({ removalCodes: [] });
   }
-  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, keptSentRuns: kept.map(run => ({ runId: run.id, code: run.code,
-    removalCodes: removals.filter(row => locks[runs.indexOf(run)].heldBy.some(holder => holder.id === row.id)).map(row => row.code) })), rewrittenRunIds, refused, ownedLegsBefore: before,
+  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, keptSentRuns: (options.allowSentRewrite ? [] : kept).map(run => ({ runId: run.id, code: run.code,
+    removalCodes: removals.filter(row => locks[runs.indexOf(run)].heldBy.some(holder => holder.id === row.id)).map(row => row.code) })), rewrittenSentRuns: kept.filter(run => rewrittenRunIds.includes(run.id)).map(run => ({ runId: run.id, code: run.code,
+      removalCodes: removals.filter(row => locks[runs.indexOf(run)].heldBy.some(holder => holder.id === row.id)).map(row => row.code) })), rewrittenRunIds, refused, ownedLegsBefore: before,
     ownedLegsAfter: await ownedLegCounts(ctx, tx, storageLocationId) };
 }

@@ -432,7 +432,8 @@ export async function assertLockedLineagesAllowMutation(
       lineageEntityType: check.target.entityType,
       lineageRelationship: check.lineageRelationship,
       lock,
-    }));
+    }), { issues: [{ path: [], code: 'certification_locked', message: 'Sent lineage prevents this change.',
+      meta: { entityId: check.target.entityId, entityType: check.target.entityType, removalIds: lock.heldBy.map(holder => holder.id) } }] });
   }
 }
 
