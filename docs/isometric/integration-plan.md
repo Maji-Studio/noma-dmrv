@@ -1,470 +1,160 @@
-# Isometric Certify Integration Contract
-
-> **Current state.** This document describes the integration implemented in the
-> repository. Dated implementation history belongs in
-> [`changes.md`](./changes.md); historical decisions belong in
-> [`docs/adr`](../adr/); unresolved decisions belong in
-> [`docs/open-questions-isometric.md`](../open-questions-isometric.md).
-
-## Boundary
-
-noma compiles operational data into Isometric GHG Entries (called Removals in
-the noma UI), reconciles those entries into GHG Statements, mirrors supporting
-evidence as Sources, and can prepare a controlled GHG Statement report.
-
-Provider-neutral persistence is in `src/db/schema/certification.ts`. Pure
-Isometric HTTP/types/transformers are in `src/lib/isometric/`. Authenticated
-orchestration is in `src/fn/certification/`.
-
-Interactive Removal and GHG Statement submission uses
-`POST /api/certification/submissions` as a thin NDJSON transport over that
-orchestration layer. The route completes organization authentication, Admin
-authorization, request validation, and per-user rate limiting before opening a
-stream. The stream reports real orchestration checkpoints; it is not a
-background-job boundary. A 15-second transport ping keeps a healthy, quiet
-submission distinguishable from a stalled connection; clients ignore pings and
-time out after 60 seconds without stream data. Disconnecting does not
-deliberately cancel the core, but a serverless runtime may stop it after the
-response is gone. Refresh or retry is safe because the submission ledger
-reconciles incomplete local state idempotently. The non-streaming server-action
-wrappers remain compatibility/fallback entry points over the same cores, with
-guards and rate-limit keys kept in sync with the route.
-
-## Credentials and authorization
-
-Application credentials are not environment-only:
-
-- each organization stores one Isometric access token and client secret in
-  `certifier_credentials`;
-- both values are encrypted through `src/lib/crypto/secrets.ts`;
-- Admins manage their active organization's credentials through
-  `src/data-access/certifier-credentials.ts`;
-- application calls construct an organization-specific client with
-  `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,
-  which calls `requireOrgScope` and filters credentials on `ctx.organizationId`;
-- Platform Admin verification of a selected organization's saved credentials uses
-  `verifyIsometricCredentialsForOrganization(ctx, organizationId)`
-  in the same data-access module, with an explicit privilege check and
-  `// org-scope-ok:` waiver;
-- environment credentials are retained only for scripts and dedicated health
-  checks through `getIsometricClientFromEnv()` in `client-env.ts`, which validates
-  only the credential pair and environment selector. The HTTP client accepts
-  credentials explicitly and does not read app configuration.
-
-External certification writes require organization Admin authorization. This
-includes Removal submission, GHG Statement create/submit,
-generated-report preparation/approval, Source mirroring, and mapping changes.
-Data access is organization-scoped and resolves the facility from trusted
-lineage. Fine-grained “user may access facility X inside this organization”
-membership does not exist; that narrower authorization question remains open.
-
-The local New Removal grouping step writes no registry resource. It is
-organization/facility-scoped, re-derives selected-batch health on the server,
-and locks membership during creation. The later registry submission is
-Admin-only.
-
-## Facility and project mapping
-
-Each facility has a provider-aware `certifier_projects` mapping containing the
-external project, default GHG-entry template, protocol metadata, and the
-external facility ID (`fcl_…`). The facility ID is required: production-batch
-registration (issue #630) submits against it.
-Adopting it for the first time (null to a value) is allowed even when the
-facility already has submissions; changing or clearing an established facility
-ID, or rebinding the project, still requires superseding those submissions.
-Several noma facilities may share one Isometric project.
-
-There is no Certify facilities-list operation in the committed API surface.
-Operators therefore paste the external facility ID created in the Isometric UI.
-Project and template choices are read from the API and validated against the
-organization-specific connection.
-
-## New Removal workflow
-
-The current workflow is:
-
-1. Select ungrouped, ready credit batches for one facility.
-2. Rebuild each batch's health from current lineage and facility facts.
-3. Create one local `certifier_removals` row and assign the selected batches
-   atomically.
-4. Compile the live template, ordinary Datapoints, durability bindings,
-   reporting window, evidence plan, warnings, and semantic hash.
-5. Present the compilation for operator review.
-6. On Admin confirmation, rerun preflight, materialize generated evidence
-   ledgers, mirror required Sources, recompile, claim the submission ledger,
-   create/reconcile Datapoints and durability measurements, create/reconcile the
-   GHG Entry, ensure Production Batches then Storage Locations then Biochar
-   Applications, and verify Source bindings.
-
-The submission scope is the applied-mass-scoped union of production lineage for
-all member credit batches. Lineage and credit-batch roll-ups come from
-`src/data-access/credit-batch-accounting.ts`; submission code must not recreate
-that accounting independently.
-
-An unchanged submitted Removal can be reopened and recompiled. The same
-review/readiness gates apply. An unchanged semantic payload reuses the existing
-registry version; changed reviewed data, mappings, or evidence create a
-superseding version.
-
-## Reporting window
-
-`completed_on` is the latest application date across the Removal's lineage and
-fails closed when no application exists. `started_on` currently uses the
-facility day of the earliest production start. Both are facility calendar days
-(see `changes.md`, 2026-10-21). The pinned protocol says the Reporting Period begins
-with feedstock sourcing, so the start boundary is a known implementation gap
-and must not be described as conformant.
-
-Cross-period allocation follows the recorded front-loading interpretation:
-production-side emissions attach to the earliest applicable GHG Entry for the
-batch; later-period entries carry their delivery emissions and applied-mass
-storage claim.
-
-## Biochar Applications and storage sites
-
-Removal preflight freezes one Biochar Application intent per immutable
-Application by credit-batch allocation slice. Submission first confirms all
-referenced Production Batches, then each reusable project-scoped Storage
-Location, then creates or reconciles the Biochar Applications in the configured
-Isometric environment. Multiple Applications may share a Delivery subject to
-the existing allocation and capacity rules.
-
-When a registered Storage Location GET returns 404, explicit **Check again**
-and Removal submission recheck under the site/project locks, reconcile the
-unchanged stable supplier reference, and adopt an exact replacement or create
-one if absent. Recovery replaces only the external ID; the local Application,
-customer location, and submitted site snapshot remain. Changed local facts,
-live remote mismatches, duplicate matches, and inconclusive reads fail closed
-or retain the existing drift review. Authentication and transient errors never
-establish absence. Lost POST responses and persistence failures reconcile by
-reference before retrying creation. Absence confirmed by the locked GET remains
-recorded as drift if recovery cannot complete, including inconclusive or
-contradictory reference lookups.
-
-Biochar Application journals retain their original dependency IDs and payloads.
-Replacing a Storage Location marks dependent claims for review atomically,
-including unconfirmed claims whose POST may already have reached Isometric.
-Those stale claims block Removal submission with a dependency-specific error;
-recovery does not silently repoint confirmed history. New, unclaimed Biochar
-Applications use the replacement. Biochar Application creation holds the same
-external-project lock and rechecks the storage registration before using it.
-
-For the provider request, `truck_mass_on_arrival` is exactly the slice's
-allocated wet kg and `truck_mass_on_departure` is zero kg. These fields encode
-the applied slice mass convention, not Delivery weighing observations.
-Commingled slices partition and sum to the physical Application total.
-
-Each slice uses the ordinary local idempotency journal. Noma claims the exact
-payload and stable supplier reference before POST, reconciles unconfirmed
-orphans across bounded list pages, reads confirmed retries by their persisted
-external identity, and fails closed on payload or identity drift. Isometric's
-provider-managed `ghg_entry_id` and `removal_id` may both remain null on a fully
-persisted Biochar Application; null is accepted and recorded, while any present
-association must match the current GHG Entry. The journal row and supplier
-reference are versioned by immutable Removal submission: supersession creates a
-fresh Biochar Application for the new GHG Entry and leaves the prior registry
-artifact intact. The documented provider response omits
-`source_ids` on both create and GET. REST still accepts omitted/null Source
-readback and checks any returned set. GraphQL now reads the authoritative links
-through `project.biocharSpreadEvents.biocharSpreadEventSources` after Application
-confirmation. The call uses `/graphql` at the Certify origin with both Certify
-authentication headers, a 10-second attempt timeout and at most two attempts.
-Wrong or malformed sets stop submission and record `source_set_mismatch` drift.
-An empty list right after create means Isometric has not attached the Sources yet:
-submission rereads after 1, 2 and 4 seconds, and a list that is still empty (or a
-reread with no answer after an empty one) is a mismatch.
-No answer continues with persisted `unconfirmed` status and an ID-only warning
-unless the previous readback was a mismatch. A retry without an answer keeps that
-mismatch, restores `source_set_mismatch` drift, and stops submission until an
-authoritative exact match confirms the corrected evidence set.
-The immutable snapshot retains the expected IDs; empty expected sets are not checked.
-
-Removal summary reloads recheck unconfirmed and mismatch lifecycle-confirmed
-registrations, unconfirmed first. Each load rechecks at most three eligible registrations concurrently with one shared
-client resolution. Rows outside that limit retain their persisted status and counts;
-a failed recheck retains the row's previous status without failing the summary.
-Success clears the note, including a stored mismatch that Isometric now matches;
-no answer keeps a stored mismatch, and an empty list on reload is a mismatch. A mismatch on refresh records the evidence status and logs
-IDs without failing the summary or marking submission drift. The summary and list
-row expose `evidenceLinks` counts and the latest check time for the UI.
-Confirmed checks are reused on submission retries. The sandbox confirmed the
-query, the auth and the REST/GraphQL id equivalence on a live Application; the
-full-submit retest on staging is tracked in
-[open questions](../open-questions-isometric.md).
-Other registry failures block submission and leave the claim safely retryable.
-
-## Deleting a never-finalized Removal
-
-Deletion removes draft GHG Entries first (a registry refusal stops all cleanup),
-then Biochar Applications, exact version-owned MeasurementSamples, and unshared
-Production Batches. Measurement ownership comes from immutable durability
-submissions and their journal, with exact supplier-reference reconciliation for
-interrupted POSTs. Legacy snapshots without measurements remain deletable;
-inconsistent identities fail closed. This never deletes local credit batches,
-production lineage or lab samples.
-
-Batch candidates come from the Removal's application-by-credit-batch membership,
-including failures before Biochar Application creation. Other memberships,
-registrations, immutable submission references and production-claim reservations
-retain shared batches and their journal. Every deletion claim stores a lease on
-the Removal, including Removals without submission ledger rows. Membership
-creation checks that lease under the credit-batch locks; submission creation and
-resume check it under the artifact lock. Abandoned leases expire with the shared
-submission lock TTL. Release and finalization compare the claim timestamp so an
-older caller cannot release or finalize a replacement claim. Each destructive
-registry call revalidates exact claim ownership and the ledger while holding
-the Removal row, artifact lock, and ordered credit-batch row locks on a dedicated
-connection. The final batch sharing check uses that same transaction before
-DELETE, preventing membership or submission takeover during the request even
-after lease expiry. Registry lookups remain outside these locks; per-artifact
-audit writes use the application pool after the protected mutation releases its
-locks. Finalization also locks the batches and rechecks retained outcomes; if the other owner has
-gone, it keeps the Removal available for a cleanup retry.
-Pooled contenders use the application's bounded database lock wait, so a request
-waiting for cleanup cannot hold a pool slot indefinitely. The dedicated mutation
-connection keeps its locks through the remote call and is not subject to that timeout.
-
-Only confirmed remote deletion or absence permits exact, organization-scoped
-journal removal, after the owning Biochar Application journal rows are removed.
-The retained ledger records deleted, absent and retained artifacts. The final
-deletion sync event includes these outcomes even without submission ledger rows. A partial
-failure releases the claim and keeps local state retryable; it never reports
-completed cleanup. Auth/network errors and generic 400s fail. A 404 or the exact
-provider missing-resource 400 for the addressed batch or measurement is absence.
-
-## Template and input contract
-
-The live template is read at compilation time. Every monitored ordinary input
-must resolve through the semantic binding catalog
-(`src/lib/isometric/semantic-binding-catalog.ts`, projected as `INPUT_MAPPING`
-in `src/lib/isometric/transformers/datapoint.ts`), and every durability component
-must have an explicit supported binding. Unit, quantity-kind, component-name,
-tier, and scope conflicts fail before a registry write.
-
-### Energy
-
-Production energy uses:
-
-- `pyrolysis / grid_electricity_use / electricity_use` for total grid kWh;
-- `Generator diesel usage`, a
-  `pyrolysis / fuel_usage_by_volume / volume_of_fuel` component receiving
-  generator plus preprocessing litres;
-- `Startup diesel usage`, another component with the same tuple receiving
-  reactor-startup/plant litres.
-
-The two diesel components share a registry-fixed lifecycle factor. noma does
-not convert litres to kWh and does not submit or store that factor. The display
-names are currently the component discriminator; an unknown or renamed diesel
-component fails closed.
-
-### Safety margin
-
-`Safety margin` is the only named Removal-scope exception under
-`miscellaneous / mass_based_ci_emissions / mass`. noma supplies the same dry
-biochar mass used by the storage claim. The carbon-intensity Datapoint and its
-justification are registry-owned fixed configuration. Other miscellaneous
-emission inputs remain PROJECT-scope and trip the scope guard if placed in a
-Removal template.
-
-### PROJECT-scope emissions
-
-Establishment and end-of-life components remain project-level in Isometric.
-Operating components, including staff travel, direct gases, lab electricity and
-sampling consumables, use their reviewed template contracts and emissions
-entries under [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
-
-Period inputs are never stubbed, independently of the
-emissions-entry activation gate. A missing operating input blocks submission
-until records, entries or a Removal-confirmed zero supply it. Operators confirm
-zeros on Empty components. Forbidden project-level inputs still fail closed.
-See [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
-
-## Durability paths
-
-The facility declares one durability tier. Compilation verifies the template's
-sequestration blueprint against that tier.
-
-### Sampled 1,000-year path
-
-The sampled 1,000-year path is implemented for the Isometric sandbox:
-
-- every member batch must have at least three complete replicates;
-- paired total-carbon, directly measured inorganic-carbon, and reflectance
-  fraction values are created through a measurement sample;
-- `s_fraction` binds the measurement sample's
-  `dimensionless_ratio/inertinite_fraction` response Datapoints, while
-  `product_mass` is created as a standalone direct Datapoint;
-- the component input table binds `total_carbon_contents`,
-  `inorganic_carbon_contents`, and `s_fraction` as lists and `product_mass` as
-  a scalar on `biochar_sequestration_1000_year_f_durable_max`;
-- the component calculates organic carbon per replicate as total minus
-  inorganic, calculates the binomial lower durability estimate, and caps it at
-  0.95;
-- noma exposes the raw and capped calculation only as an explanatory preview
-  and evidence record;
-- the registry computes the credited result.
-
-The deprecated `biochar_sequestration_1000_year` remains readable as legacy
-total-carbon/uncapped history but is rejected for new template configuration and
-submission builds. Production remains blocked. External confirmation and
-sandbox-template migration are still required before end-to-end verification.
-The Protocol v1.1, Agricultural Soils module v1.1, and Standard v1.7 pins do not
-change with this component migration.
-
-### 200-year path
-
-The measurement properties, aggregation, builders, and evidence-ledger format
-exist, but the H/C unit transform and complete explicit input binding are not
-confirmed. The path therefore fails closed even in sandbox. It is not a live
-submission path.
-
-### Method B
-
-The local production-process prerequisites and immutable unsampled-batch choice
-are implemented. The registry representation for an unsampled durability claim
-is not confirmed, so no production-live Method-B submission is claimed.
-
-## Sources and evidence
-
-Proof of delivery is a Removal-readiness requirement (#942 q12).
-Each delivery in the Removal lineage needs at least one delivery-owned,
-`uploaded` document classified as `delivery_receipt`, `bill_of_lading` or
-`photo`. A pending upload with a storage key is not proof. Weighbridge tickets
-and other transport evidence do not satisfy this requirement. Documents have
-no archive column or archive upload status; deleted document rows cannot count.
-Saving a delivery without proof remains allowed.
-
-This gate applies regardless of template transport categories: proof supports
-mass verification under [Biochar v1.1 §8.3.1.1](https://registry.isometric.com/protocol/biochar/1.1#measurement-of-mass-of-biochar-applied).
-The shared lineage predicate feeds Removal readiness, batch health and submission;
-the delivery badge uses the same predicate. The fix opens Delivery evidence.
-The gate does not change registry Source binding rules below.
-
-Source attribution is target-specific, not Removal-wide.
-
-`src/lib/certification/removal-source-bindings.ts` classifies operator
-documents and generated evidence ledgers into an immutable plan of exact
-component/input targets, taken from the evidence targets the semantic binding
-catalog declares on each input:
-
-- feedstock bill of lading to feedstock transport `mass_distance`;
-- delivery bill of lading to biochar transport `mass_distance`;
-- delivery receipts and photos remain retained Delivery documents and do not
-  bind to sequestration inputs;
-- application-boundary inventory/logbook evidence to sequestration
-  `product_mass` and, when present, safety-margin `mass`;
-- generated transport ledger to the transport inputs present in the template;
-- generated durability ledger to the tier-specific durability inputs;
-- `emission_entry` files to the exact `{componentId, inputKey}` targets in the
-  contribution manifest, validated against the frozen entry set. Paired inputs
-  each receive the entry's files; recorded zeros and tombstoned entries add none.
-  Datapoints receive the sorted, deduplicated union of automatic and entry Sources.
-  Source descriptions identify the emissions entry by component name, entry date,
-  and credit batch code. The lineage retains the entry ID.
-
-Confirmed Application-owned photos, PDFs, weighbridge tickets, and affidavits
-are also mirrored as Sources and attached to each corresponding Biochar
-Application through its `source_ids`. GIS boundary uploads remain local: noma
-does not mirror them until the Application stores an explicit active-boundary
-document identity, so replaced or historical boundaries cannot be submitted.
-
-A draft retry reuses the exact operator-evidence tuple stored in its immutable
-submission snapshot. Submitted and accepted Removals keep that frozen operator
-evidence on a superseding claim while current deterministic transport and
-durability ledgers are regenerated and attached. Evidence added later requires
-a new Removal or a future amendment workflow; a rejected or superseded attempt
-that has no live claim rebuilds from current evidence.
-
-The plan and mapping revision are hash-covered in the submission snapshot.
-After GHG-entry creation, noma follows component attributions to Components and
-Datapoints and verifies that every planned Source is attached to its intended
-target. Missing registry propagation is recorded as awaiting sync; a true
-mismatch requires resubmission.
-
-Generated transport and durability ledgers are created after side-effect-free
-preflight and before Source mirroring. Generation failure blocks submission.
-Remote Sources are never deleted because submitted snapshots depend on their
-IDs.
-
-## GHG Statements and generated reports
-
-GHG Statements are facility-scoped local artifacts backed by Isometric
-statements. Creation adopts one exact pre-existing draft for the requested
-project/period; ambiguous matches fail closed. Membership reconciliation never
-steals a Removal from another local statement.
-
-Submission requires at least one registry-linked GHG Entry and organization
-Admin confirmation. noma can use either:
-
-- an approved generated report, or
-- a controlled external report URL.
-
-The generated report workflow is:
-
-1. Load the live statement and each live GHG Entry.
-2. Build a data-only report model and source fingerprint.
-3. Render and store an immutable PDF version.
-4. Require explicit Admin approval.
-5. Rebuild the fingerprint at submit time and reject stale reports.
-6. Mint a verifier capability URL, submit/resubmit the statement, and mark the
-   report version submitted only after success or successful reconciliation.
-
-The generated PDF contains identifiers, dates, membership, registry-calculated
-totals, and document-control metadata. It does not claim qualitative
-methodology, evidence sufficiency, exception resolution, or human review.
-
-## Idempotency and reconciliation
-
-`certification_submissions` is the lock, immutable snapshot store, and version
-ledger. `certifier_sync_events` is the attempt/audit stream.
-
-For resources with a caller-controlled supplier reference, the contract is:
-
-1. Canonicalize and hash the semantic payload.
-2. Claim the latest local ledger row under the mapping/ledger locks.
-3. Return the existing external ID for the same completed hash.
-4. For a stale same-hash attempt, look up the remote resource by supplier
-   reference before retrying the POST.
-5. For changed reviewed inputs, create a new local/remote version rather than
-   mutating the historical snapshot.
-6. Persist remote status and reconciliation facts without logging credentials
-   or PII.
-
-This pattern covers Removal/GHG Entry, Datapoint, Source, measurement-sample,
-and GHG Statement creation where the remote API supports the necessary lookup.
-`claimSubmissionDraft` in
-`src/data-access/certification-submissions.ts` is the internal Postgres-backed
-claim seam.
+# Isometric Certify integration contract
+
+Read this for the invariants around Removal submission, evidence, retries and
+GHG Statements. Code ownership is indexed in [README](./README.md); API limits
+and dated observations live in [registry behavior](./registry-behavior.md).
+This is an implementation guide, not registry approval. Code checked 2026-10-30;
+external observations retain their original dates.
+
+## Authorization and mapping
+
+Application calls use organization-scoped encrypted credentials through
+`src/data-access/certifier-credentials.ts:resolveIsometricClient`.
+Environment credentials in `client-env.ts` are for scripts and health checks.
+External certification writes require organization Admin authorization; local
+Removal grouping does not. Resolve facility scope from trusted lineage, never
+from a client-supplied facility ID. Intra-organization facility membership is
+still an [open decision](../open-questions-isometric.md).
+
+A facility maps to a project, template and external facility ID. Several
+facilities may share a project. First adoption of an external facility ID is
+allowed with existing submissions; rebinding an established identity requires
+superseding the affected submissions. Operators obtain the facility ID from
+Certify because the committed API has no facilities-list operation.
+
+## Removal scope and submission
+
+A Removal assigns unassigned **Application by credit-batch slices**, not entire
+credit batches. Later applied slices of the same batch can join another Removal.
+The 1,000-year grouping path selects one credit batch. Canonical lineage and
+roll-ups come from `src/data-access/credit-batch-accounting.ts`; do not rebuild
+accounting in submission code. Attribution is defined by
+[ADR 0020](../adr/0020-production-emissions-front-loaded-per-credit-batch.md).
+
+Compilation reads the live template and builds inputs, evidence targets, warnings
+and a semantic hash. Admin confirmation reruns preflight, generates evidence,
+mirrors Sources, recompiles and claims the submission ledger. Registry creation
+then confirms Datapoints and measurements, the GHG Entry, Production Batches,
+Storage Locations and Biochar Applications, followed by Source verification.
+Read `src/fn/certification/submit-removal.ts` for ordering and recovery.
+
+Batch context construction loads canonical roll-ups together before deriving
+member contexts; preserve that batching when changing lineage reads.
+
+The submission route streams actual checkpoints; it is not a background job.
+Authentication, Admin authorization, validation and rate limiting precede the
+stream. Disconnects may interrupt serverless execution. Refresh/retry recovers
+through the ledger; it does not establish that the registry write failed.
+
+### Reporting window
+
+Dates use facility calendar days. Completion is the latest Application date and
+requires an Application. Start currently uses earliest production start, not
+feedstock sourcing. This is a known gap against the historical pinned protocol
+interpretation, not a conformant reporting boundary. See
+`src/fn/certification/removal-reporting-window.ts` and the
+[requirements shortlist](./requirements-shortlist.md).
+
+## Immutable versions and evidence
+
+`certification_submissions` records claims, semantic hashes and immutable
+snapshots. Same-hash retries reuse confirmed identities or reconcile by stable
+supplier reference before creating. Changed reviewed inputs create a superseding
+version. See `src/data-access/certification-submissions.ts` and
+`src/fn/certification/registry-create.ts`.
+
+A draft retry keeps its frozen operator-evidence tuple. Submitted and accepted
+Removals retain that evidence on supersession while deterministic ledgers are
+regenerated. Later uploads require a new Removal or a future amendment workflow;
+a rejected or superseded attempt with no live claim rebuilds from current evidence.
+
+Sources target exact inputs through
+`src/lib/certification/removal-source-bindings.ts` and the semantic catalog.
+Do not attach every Source to every Datapoint. Entry files target their frozen
+contribution inputs; recorded zeros contribute no files. Lab Sources stay
+sample-specific. Source descriptions are server-derived from the evidence role
+and owning records, not an unimplemented free-label field. Mirrors read managed
+objects directly through the storage provider; large files still buffer in
+memory. See `src/fn/certification/sources-transfer.ts`.
+Post-submit verification follows component attributions and
+Datapoints; propagation delay and a true mismatch are different outcomes.
+
+Each Removal-lineage Delivery needs uploaded proof before submission, regardless of template
+transport categories. The accepted classifications are owned by
+`src/lib/certification/delivery-evidence.ts`. Application evidence health is
+informational and is a separate rule. Confirmed Application-owned photos, PDFs,
+weighbridge tickets and affidavits also attach to Biochar Applications. GIS
+uploads remain local until an explicit active-boundary identity is supported.
+
+## Storage Locations and Biochar Applications
+
+Preflight freezes one Application intent per allocation slice. Its arrival mass
+is the slice's wet kg and departure mass is zero. These are an applied-mass
+encoding, not truck weighing observations. Commingled slices must sum to the
+physical Application total.
+
+A confirmed missing Storage Location is recovered under the site/project locks
+by stable-reference reconciliation before creation. Only its external ID changes.
+Auth errors, transient failures, duplicate matches and contradictory reads do
+not prove absence. Existing Biochar Application claims keep their old dependency
+IDs and become `review_required`; recovery never silently rewrites history.
+See `src/fn/certification/storage-locations.ts` and
+`src/data-access/certifier-storage-locations.ts`.
+
+Biochar Application journals claim immutable payloads before POST and use
+version-specific references on supersession. Confirmed retries read by saved
+external ID. Absent provider GHG Entry associations are accepted; present ones
+must match. Evidence readback uses GraphQL because REST omits the Source IDs.
+The [registry behavior record](./registry-behavior.md) describes the filter trap;
+readback now matches the exact ID through bounded, location-scoped pages. The
+full staging retest remains in [open questions](../open-questions-isometric.md).
+
+Empty expected Source sets are not checked; confirmed checks are reused. For
+nonempty expected sets, a wrong or malformed readback blocks submission. Empty
+readbacks get propagation retries before becoming a mismatch. An unavailable read persists `unconfirmed`
+and a warning; it must never clear a previous mismatch. Summary refresh rechecks
+a bounded number of unconfirmed/mismatch registrations without failing the whole
+summary. See `src/fn/certification/biochar-application-source-readback.ts`.
+
+## Templates and durability
+
+[Sandbox template authoring](./sandbox-template-authoring.md) owns the compatible
+storage shapes, validation commands and support boundaries. Reviewed contracts
+keyed by component ID determine automatic sources and emissions-entry support.
+Display names confer no binding authority. Establishment/end-of-life stay at
+project scope; missing operating inputs need records, entries or an explicitly
+confirmed zero. See [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+Fixed factors and their justification remain registry-owned.
+
+## Deletion and reports
+
+Deleting a never-finalized Removal deletes the draft GHG Entry first; refusal
+stops cleanup. Further cleanup removes Biochar Applications, exact version-owned
+measurements and unshared Production Batches. Live snapshot
+references retain shared artifacts. Datapoints and shared Storage Locations
+remain. Local production lineage, credit batches and Samples are never deleted.
+Ownership and sharing must be rechecked under the deletion locks at each remote
+mutation; a partial failure before finalization leaves local state retryable.
+After local finalization, released Sources are deleted best-effort. A refusal
+is audited and leaves that Source behind while Removal deletion succeeds; it
+does not leave a Removal available for a Source-cleanup retry. See
+`src/fn/certification/delete-removal.ts` and
+`src/data-access/certifier-removal-deletion.ts`.
+
+GHG Statement creation serializes the overlap check and registry creation under
+the organization/facility certification boundary lock. It adopts only one exact
+draft for the project/period and
+never steals another statement's Removal. Submission requires linked GHG Entries
+and either an approved immutable generated report or a controlled external URL.
+Generated reports contain registry facts, not methodology or human-review claims.
+A refreshed source fingerprint must still match at submission. See
+`src/fn/certification/ghg-statement-reports.ts`.
 
 ## Reactor time-series upload
 
-The Readings file (`sensor_data`) stays unchanged on the production run,
-retrievable for verifier requests. Certification readiness and Removal submission
-use Readings file presence.
-This one file is the retained evidence for both the §9.1.2 pressure series and the
-§9.2.4 / §9.2.4.1 flue-stack temperature series; noma does not check its contents,
-which are the operator's responsibility.
-The [project monitoring requirement](./requirements-shortlist.md#project-reactor-monitoring)
-defines the evidence requirements.
-There is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
-
-The legacy `production_run_readings` table and row importer are retained.
-Operator file upload does not populate row-level readings. Parsed rows, Sensors,
-Parquet and reactor MeasurementSamples are outside the approved submission route.
-
-## Operational checks
-
-- `pnpm isometric:coverage-check -- --source=fixture` fetches live templates
-  selected by the checked-in fixture and uses the same line contracts as readiness
-  and submission (ADR 0032). Entry-only operating lines warn; unsettled contracts,
-  forbidden lines and unmapped inputs fail.
-- `pnpm isometric:coverage-check -- --source=db` inspects configured facility
-  templates when credentials/database access are available.
-- `.github/workflows/isometric-health.yml` performs the repository's scheduled
-  sandbox/type/coverage health checks.
-- [`openapi-index.md`](./openapi-index.md) is the call-site-owned inventory of
-  the committed generated Certify surface.
-
-Do not use generated operation counts as a freshness signal. A green check
-means only that the checked contract still matches its source, not that an
-unimplemented protocol requirement has been satisfied.
+The unchanged Readings file is the retained pressure/temperature evidence on each
+production run. Readiness checks file presence independently of parsed readings;
+noma does not check file contents. There is no reactor time-series submission.
+The optional row importer is a separate operational path. See
+[project monitoring](./requirements-shortlist.md#project-reactor-monitoring) and
+[ADR 0006](../adr/0006-data-upload-submission-idempotency.md).

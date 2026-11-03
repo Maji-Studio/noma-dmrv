@@ -1,93 +1,61 @@
-# Isometric Update Playbook
+# Isometric update playbook
 
-> This process produces non-authoritative summaries. Registry sources remain authoritative.
+Read this before refreshing the protocol pin, registry observations or generated
+Certify types. Keep a dated evidence trail and one owner per topic. These docs
+remain non-authoritative; a code check cannot confirm a registry requirement.
 
-## Goal
-Refresh local Isometric requirements docs with minimal tokens while preserving source traceability.
+## Verify authority first
 
-## 1) Check Latest Certified Versions
-1. Use Isometric MCP `protocols_get_metadata` for pinned protocol/module slugs.
-2. Confirm `status = CERTIFIED` and capture:
-   - minor version
-   - latest certified patch in that minor
-   - published/certified dates
-   - authoritative URL
-3. If repo policy pins a specific minor version, keep that minor and only move patch if allowed.
+1. Call official Isometric MCP `how_to` before registry/protocol claims.
+2. For pinned slugs in [versions.json](./versions.json), fetch metadata and
+   confirm certified status, minor/patch versions, publication/certification
+   dates and tagged authoritative URLs. Do not bump the project's minor pin
+   without an explicit decision.
+3. Read the relevant protocol/module content; fetch every page before drawing
+   conclusions. Use targeted analysis to locate sections, then verify the text.
+4. Check the account/environment before probing the sandbox project. The MCP
+   GraphQL account may see a different environment from local Certify keys.
+5. If authentication or tools are unavailable, state the verification gap and
+   retain historical dates. Do not mark local summaries as registry-confirmed.
 
-### Regenerate the Certify TypeScript surface
+## Update the owning documents
 
-If the OpenAPI spec changed (the daily `isometric-health.yml` workflow
-fails on its `Detect Certify OpenAPI drift` step), run the regen
-locally and commit the diff:
+- Change pins in `versions.json` first, then update only affected requirement
+  rows with section references and authoritative URLs.
+- Check actual schemas, builders, gates and tests before changing coverage in
+  [schema mapping](./schema-mapping.md), [checklist](./p0-compliance-checklist.md)
+  or [conditions](./condition-registry.md). A table column is not a complete gate.
+- Record API quirks in [registry behavior](./registry-behavior.md), including
+  environment, date, request variations, response and verification limits.
+- Remove resolved questions from [open questions](../open-questions-isometric.md)
+  only when code or authoritative evidence resolves them. Put the durable rule
+  in its owning guide/ADR, not in a growing resolution log.
+- Put implementation history in the archive, linked from [changes](./changes.md).
+  Preserve existing history until its archive move is approved.
+- Keep code-owned field/mapping inventories in code. Docs explain intent,
+  ownership, gaps and traps, with links to the implementation.
+
+## Regenerate Certify types
+
+The source URL is pinned by `regenerate-certify-types` in `package.json` and
+`ISOMETRIC_OPENAPI_URL` in `.github/workflows/isometric-health.yml`:
+`https://docs.isometric.com/api-reference/certify/mrv.openapi.json`.
+The historical API-root `/openapi.json` serves another spec; do not substitute it.
 
 ```bash
-pnpm regenerate-certify-types   # defaults to the docs-hosted Certify spec
+pnpm regenerate-certify-types
 git diff src/lib/isometric/generated/certify.d.ts
-git add src/lib/isometric/generated/certify.d.ts && git commit -m "chore: regenerate Certify OpenAPI types"
 ```
 
-The URL is pinned in `package.json`'s `regenerate-certify-types` script
-(default `https://docs.isometric.com/api-reference/certify/mrv.openapi.json`)
-and in the workflow env (`ISOMETRIC_OPENAPI_URL`). Note: the bare
-`https://api.isometric.com/openapi.json` now serves Isometric's internal
-FastAPI spec (no Certify routes) — always use the docs-hosted Certify spec
-above. Override locally only if testing against a non-default spec.
+Review operation changes and non-test consumers before updating the
+[API index](./openapi-index.md). Generated operation counts are not a freshness
+or compliance signal. Template fixture mode still calls live services.
 
-## 2) Re-run Requirement Extraction
-1. Use `protocols_analyze` per protocol/module with targeted prompts by domain:
-   - feedstock
-   - production
-   - storage/application
-   - energy
-   - transportation
-   - credits/verification
-   - evidence/chain of custody
-2. For any weak/ambiguous result, call `protocols_get_content`.
-3. If `protocols_get_content` is paginated, fetch all pages before summarizing.
+## Validate and review
 
-## 3) Diff Old vs New Requirements
-1. Compare extracted references (section IDs, equations, thresholds, cadences) to current shortlist.
-2. Mark changes as:
-   - added requirement
-   - removed requirement
-   - threshold/formula change
-   - evidence/cadence change
-3. Use `git diff docs/isometric/requirements-shortlist.md docs/isometric/schema-mapping.md`.
+Run `pnpm docs:check`, check relative links/anchors and referenced code paths,
+then run the repository static gates. For implementation behavior, run the
+relevant tests; protocol changes affecting workflows also need the matching E2E
+paths. A docs-only cleanup does not require an application behavior change.
 
-## 4) Update `versions.json` and Shortlist
-1. Update `docs/isometric/versions.json` first.
-2. Update source URLs to tagged authoritative URLs.
-3. Refresh `requirements-shortlist.md` rows with changed fields only (keep concise).
-4. Preserve the non-authoritative warning.
-
-## 5) Refresh Schema Mapping
-1. Re-scan `src/db/schema/*`.
-2. Update `schema-mapping.md` coverage status (`full`, `partial`, `missing`).
-3. Re-rank priorities (`P0/P1/P2`) by crediting risk and implementation impact.
-
-## 6) Record Change Log
-1. Add an entry to `docs/isometric/changes.md`:
-   - date
-   - old -> new versions
-   - requirements changed
-   - top gap changes
-
-## PR Checklist (Protocol/Module Bump)
-- `versions.json` updated first and accurately.
-- Every shortlist row has section/reference + authoritative URL.
-- Non-authoritative interpretation warning remains present.
-- `schema-mapping.md` updated with current table/column references.
-- Top priority gaps revalidated.
-- `changes.md` appended.
-- No database schema changes included in this docs-only update.
-- If the bump changes schema, validation, or workflow behavior in the app, run `pnpm test:e2e` and keep the relevant Playwright paths green before merge.
-
-## Quick Refresh Checklist (8 steps)
-1. Pull metadata for pinned slugs.
-2. Update `versions.json`.
-3. Re-run targeted MCP extraction.
-4. Resolve ambiguities with full content retrieval.
-5. Update shortlist table rows.
-6. Update schema mapping and priorities.
-7. Append changelog entry.
-8. Run `git diff docs/isometric` and open PR.
+Review before/after claims and verification dates. Never present a successful coverage check as proof of full protocol compliance.
