@@ -31,8 +31,10 @@ const [lowerId, higherId] = [randomUUID(), randomUUID()].sort();
 const oldestDayId = randomUUID();
 const newestDayId = randomUUID();
 const olderProductId = randomUUID();
-const ascendingIds = [oldestDayId, olderProductId, lowerId, higherId, newestDayId];
-const descendingIds = [newestDayId, lowerId, higherId, olderProductId, oldestDayId];
+// Codes share a prefix and end in the ID, so code-then-ID ties follow ID order.
+const sameDayIds = [olderProductId, lowerId, higherId].sort();
+const ascendingIds = [oldestDayId, ...sameDayIds, newestDayId];
+const descendingIds = [newestDayId, ...[...sameDayIds].reverse(), oldestDayId];
 
 beforeAll(async () => {
   fixture = await createActivityWriteFixture(ctx);

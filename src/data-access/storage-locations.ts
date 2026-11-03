@@ -137,18 +137,20 @@ export async function getStorageLocations(
   // nulls to the end in *either* direction rather than taking Postgres's
   // default (NULLS LAST on ASC, NULLS FIRST on DESC, which would lead the
   // "Largest capacity" board with every uncapped bin).
-  const direction = sortOrder === "desc" ? sql`DESC` : sql`ASC`;
+  const orderFn = sortOrder === "desc" ? desc : asc;
   const primaryOrder =
     sortBy === "lastActivityAt"
-      ? sql`${storageLocationLastActivityAt(ctx.organizationId)} ${direction} NULLS LAST`
+      ? sql`${orderFn(storageLocationLastActivityAt(ctx.organizationId))} NULLS LAST`
       : sortBy === "capacityKg"
-        ? sql`${storageLocations.capacityKg} ${direction} NULLS LAST`
-        : (sortOrder === "desc" ? desc : asc)(
-            SORT_COLUMNS[sortBy] ?? storageLocations.code,
-          );
-  // Break ties in the selected direction so equal dates page in code order.
-  const orderFn = sortOrder === "desc" ? desc : asc;
-  const orderBy = [primaryOrder, orderFn(storageLocations.code), orderFn(storageLocations.id)];
+        ? sql`${orderFn(storageLocations.capacityKg)} NULLS LAST`
+        : orderFn(SORT_COLUMNS[sortBy] ?? storageLocations.code);
+  // Code breaks every tie. Without it, rows sharing a sort value (every bin of
+  // one type, every bin with no activity) come back in whatever order the plan
+  // produced, and a row can repeat on page 2 after appearing on page 1.
+  const orderBy = [
+    ...(sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)]),
+    asc(storageLocations.id),
+  ];
 
   // Count total for pagination
   // org-scope-ok: whereClause includes the active organization predicate.
