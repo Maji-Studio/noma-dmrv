@@ -37,6 +37,7 @@ import { TraceChainWalk } from "./trace-chain-walk";
 import { TraceStageList } from "./trace-stage-list";
 import {
   groupDrawnLegs,
+  happensAtFacility,
   restingLighting,
   stageLighting,
   type TraceModel,
@@ -120,7 +121,14 @@ export function TraceMapView({
   };
   const onMarker = (nodeId: string) => {
     if (nodeId.startsWith("facility:")) {
-      if (chain) return;
+      if (current) {
+        // The walk moves to the chain's first step at the facility (its runs).
+        const atFacility = current.steps.findIndex(
+          (step) => happensAtFacility(step.kind) && step.records.every((record) => !record.position),
+        );
+        if (atFacility >= 0) onWalkChange({ endId: current.chain.end.id, stepIndex: atFacility, openRecordId: null });
+        return;
+      }
       const first = model.stages.findIndex((candidate) => candidate.records.every((record) => !record.position));
       if (first >= 0) selectStage(first);
       return;

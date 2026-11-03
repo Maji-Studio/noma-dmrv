@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 // jsdom has no element scrolling; the list scrolls to the open stage or step.
 Element.prototype.scrollTo = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 afterEach(() => {
   cleanup();
@@ -177,4 +178,18 @@ it("heads the panel with the payload's warnings when there is no map", () => {
   render(<View model={model} initialWalk={fieldAWalk} singleChain layout="panel" />);
   expect(screen.queryByTestId("canvas")).toBeNull();
   expect(within(panel()).getByText("One leg has no distance.")).toBeTruthy();
+});
+
+it("a facility marker moves an application's walk to its first step at the facility", () => {
+  render(<View model={batchModel()} initialWalk={{ ...fieldAWalk, stepIndex: 4 }} singleChain onTrace={undefined} />);
+  clickMarker("facility:fac-1");
+  expect(within(panel()).getByText(/02 \/ 05/)).toBeTruthy();
+});
+
+it("a list that does not scroll itself brings the current step into view", () => {
+  render(<View model={batchModel()} initialWalk={fieldAWalk} singleChain layout="panel" />);
+  vi.mocked(Element.prototype.scrollIntoView).mockClear();
+  fireEvent.click(within(panel()).getByRole("button", { name: /^Next/ }));
+  // jsdom lays nothing out: the list reads as not scrolling.
+  expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" }));
 });

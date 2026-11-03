@@ -12,6 +12,7 @@ vi.mock("@/hooks/use-chain-of-custody", () => ({
 vi.mock("@/hooks/use-geo", () => ({ useRouteGeometries: () => ({ data: undefined }) }));
 
 Element.prototype.scrollTo = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 afterEach(cleanup);
 
 const walkPanel = () => screen.getByRole("complementary");
