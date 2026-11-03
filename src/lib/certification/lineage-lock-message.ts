@@ -20,9 +20,14 @@ export type CertificationLineageMutation = "create" | "update" | "delete";
 export const RECORD_FILES_LOCKED_MESSAGE =
   "This record is in a submitted Removal, so its files cannot change.";
 
-/** The same line for a record whose every holding Removal was interrupted while being sent. */
+/**
+ * The same line for a record whose every holding Removal was interrupted while
+ * being sent. It keeps the consequence and names no release: finishing the
+ * submission leaves the record Sent, and the header's lock notice already says
+ * how to edit again (record-lock.ts `INTERRUPTED_HOW_TO_FREE`).
+ */
 export const RECORD_FILES_INTERRUPTED_MESSAGE =
-  "This record is in a Removal whose submission was interrupted.";
+  "This record is in a Removal whose submission was interrupted, so its files cannot change.";
 
 /** The lock fields the files line reads; the server lock and its screen view both fit. */
 interface FilesLockFacts {

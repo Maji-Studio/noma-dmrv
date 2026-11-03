@@ -11,6 +11,7 @@ const open: CreditBatchHealthSummary = {
   removalCode: null,
   productionEmissionsClaimedByRemovalCode: null,
   removalStatus: null,
+  removalInterrupted: false,
   ghgStatementId: null,
   ghgStatementStatus: null,
 };
@@ -35,6 +36,14 @@ describe("creditBatchStateOf", () => {
       removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
     });
     expect(submitted).toEqual({ state: "submitted", blockingCount: 0, openTodoCount: 0 });
+  });
+  it("reads interrupted when an older holder is interrupted and the newest is submitted", () => {
+    expect(creditBatchStateOf({
+      ...open,
+      removalId: "newest-submitted",
+      removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
+      removalInterrupted: true,
+    })).toEqual({ state: "interrupted", blockingCount: 0, openTodoCount: 0 });
   });
   it("drops the count once credits are issued", () => {
     expect(creditBatchStateOf({

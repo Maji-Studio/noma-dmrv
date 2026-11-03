@@ -5,7 +5,7 @@
  */
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import type { DerivedStatusKind } from "@/lib/certification/status";
+import { findInterruptedRemoval, type DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "./open-items";
@@ -120,7 +120,7 @@ export interface CreditBatchMilestoneInput {
 }
 
 function removalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
-  const interrupted = model.removals.find(removal => removal.status.kind === "interrupted");
+  const interrupted = findInterruptedRemoval(model.removals);
   if (interrupted) return `${interrupted.code}: ${interrupted.status.label}`;
   const { firstRemovalSubmittedAt, firstRemovalSubmittedCode } = model.milestones;
   if (!firstRemovalSubmittedAt) {

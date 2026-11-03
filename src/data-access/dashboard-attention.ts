@@ -22,7 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
-import type { DerivedStatus } from "@/lib/certification/status";
+import { findInterruptedRemoval, type DerivedStatus } from "@/lib/certification/status";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
 /** Complete production runs missing either mass reading. */
@@ -78,22 +78,23 @@ export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted y
  * What a pending batch puts in Needs attention, from its Removals' display
  * state (#1528). Each interrupted Removal gets its own row, and the batch then
  * shows no period row. Otherwise a closed period reads "awaiting verification"
- * only once a Removal is submitted; with no Removal or only a draft it reads
- * "not submitted yet". The batch status alone cannot say this: it stays
- * pending after submission.
+ * only once a Removal is submitted (its phase, as on the batch page: a newer
+ * draft does not undo an earlier submitted version); with no Removal or only a
+ * draft it reads "not submitted yet". The batch status alone cannot say this:
+ * it stays pending after submission.
  */
 export function creditBatchAttention(
   batch: { endDate: string | null },
-  removals: readonly { status: Pick<DerivedStatus, "kind"> }[],
+  removals: readonly { status: Pick<DerivedStatus, "kind">; phase: "draft" | "submitted" }[],
   todayStr: string,
 ): { interrupted: boolean; periodTitle: string | null } {
-  if (removals.some((removal) => removal.status.kind === "interrupted")) {
+  if (findInterruptedRemoval(removals)) {
     return { interrupted: true, periodTitle: null };
   }
   if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, periodTitle: null };
   return {
     interrupted: false,
-    periodTitle: removals.some((removal) => removal.status.kind === "submitted")
+    periodTitle: removals.some((removal) => removal.phase === "submitted")
       ? PERIOD_ENDED_SUBMITTED_TITLE
       : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
   };

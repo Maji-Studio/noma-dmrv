@@ -7,7 +7,10 @@ import {
 
 const TODAY = "2026-11-03";
 const ENDED = { endDate: "2026-10-31" };
-const removal = (kind: "interrupted" | "submitted" | "not-submitted") => ({ status: { kind } });
+const removal = (kind: "interrupted" | "submitted" | "not-submitted") => ({
+  status: { kind },
+  phase: kind === "submitted" ? "submitted" as const : "draft" as const,
+});
 
 describe("creditBatchAttention", () => {
   it("shows the interrupted Removal instead of a period row", () => {
@@ -19,6 +22,11 @@ describe("creditBatchAttention", () => {
 
   it("awaits verification only once a Removal is submitted", () => {
     expect(creditBatchAttention(ENDED, [removal("submitted")], TODAY).periodTitle).toBe(PERIOD_ENDED_SUBMITTED_TITLE);
+  });
+
+  it("awaits verification when a newer draft follows a submitted version, as the batch page does", () => {
+    const corrected = { status: { kind: "not-submitted" as const }, phase: "submitted" as const };
+    expect(creditBatchAttention(ENDED, [corrected], TODAY).periodTitle).toBe(PERIOD_ENDED_SUBMITTED_TITLE);
   });
 
   it("reads not submitted yet with no Removal or only a draft", () => {

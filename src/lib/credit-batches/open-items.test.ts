@@ -668,7 +668,8 @@ it("links an interrupted Removal to Review & submit, but adds no submitted to-do
   });
   expect(result.check).toEqual([{
     id: "interrupted:interrupted",
-    title: "RM-26-003: submission interrupted",
+    title: "RM-26-003: Submission interrupted",
+    detail: "Open the Removal and finish Review & submit.",
     target: { href: "/removals?facility=facility&resume=interrupted" },
   }]);
 });

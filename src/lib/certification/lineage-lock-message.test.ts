@@ -152,8 +152,8 @@ describe("formatRecordFilesLockedMessage", () => {
 
   it("reads interrupted only when every holder was interrupted, as the record header does", () => {
     expect(formatRecordFilesLockedMessage({ level: "sent", heldBy: [interrupted], interruptedHolders: [interrupted] }))
-      .toBe("This record is in a Removal whose submission was interrupted.");
-    expect(RECORD_FILES_INTERRUPTED_MESSAGE).toBe("This record is in a Removal whose submission was interrupted.");
+      .toBe("This record is in a Removal whose submission was interrupted, so its files cannot change.");
+    expect(RECORD_FILES_INTERRUPTED_MESSAGE).toBe("This record is in a Removal whose submission was interrupted, so its files cannot change.");
   });
 
   it("keeps the submitted line for a submitted, mixed or unknown lock", () => {

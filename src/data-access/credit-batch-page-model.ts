@@ -16,7 +16,7 @@ import { GRAMS_PER_KG, massGrams } from "@/lib/calculations/gram-allocation";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import {
   deriveSubmissionStatus,
-  isRemovalSubmissionInterruptedFromSubmission,
+  hasSubmittedRemovalVersion,
 } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { requireOrgScope } from "./utils";
@@ -140,9 +140,6 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
       .map(result => result.certification_submissions)
       .filter(version => version.localEntityId === row.id);
     const submission = versions[0] ?? null;
-    const submittedVersions = versions.filter(version =>
-      version.status === "submitted" || version.status === "accepted",
-    );
     // Superseding a submitted version preserves its original registry timestamp.
     const submittedAt = versions.flatMap(version =>
       (version.status === "submitted" || version.status === "accepted" || version.status === "superseded") && version.submittedAt
@@ -159,10 +156,7 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
       window,
     );
     // A newer draft does not undo an earlier submitted version.
-    const isSubmitted = submittedVersions.some(version =>
-      !isRemovalSubmissionInterruptedFromSubmission(version, window),
-    );
-    const phase: "draft" | "submitted" = isSubmitted ? "submitted" : "draft";
+    const phase: "draft" | "submitted" = hasSubmittedRemovalVersion(versions, window) ? "submitted" : "draft";
     return {
       id: row.id,
       code: row.code,

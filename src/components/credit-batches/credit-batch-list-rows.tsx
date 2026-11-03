@@ -18,6 +18,7 @@ import { EyeIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react/dist
 import { RowActionsMenu } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
+import { isInterruptedLockDisplay } from "@/components/record-locks/record-lock-labels";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
@@ -117,13 +118,22 @@ function BatchState({
         // A failed read shows nothing here: the list's Notice says so once, with Retry.
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
       )}
-      {view.state !== "interrupted" && <LockChip lock={lock} className="hidden xl:inline-flex" />}
+      <LockChip lock={lock} state={view.state} className="hidden xl:inline-flex" />
     </span>
   );
 }
 
-/** Overview rows show the lock only once Sent, like every other list (#1162). */
-function LockChip({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
+/**
+ * Overview rows show the lock only once Sent, like every other list (#1162).
+ * An interrupted batch whose lock also reads interrupted drops the chip, which
+ * would repeat its state; a batch still Sent through another holder keeps it.
+ */
+function LockChip({ lock, state, className }: {
+  lock: RecordLockView | undefined;
+  state: CreditBatchStateView["state"];
+  className?: string;
+}) {
+  if (state === "interrupted" && isInterruptedLockDisplay(lock)) return null;
   return <RecordLockOverviewChip lock={lock} className={className} />;
 }
 
@@ -196,7 +206,7 @@ export function CreditBatchListRow({
           {/* A caption on the two-line row, body text in the table; only one is ever displayed. */}
           <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4 xl:hidden">
             <span className={cn("body-caption", MUTED)}>{dates}</span>
-            <LockChip lock={lock} />
+            <LockChip lock={lock} state={view.state} />
           </span>
           <span className={cn("hidden body-small xl:col-start-3 xl:row-start-1 xl:block", MUTED)}>{dates}</span>
           <span className="hidden body-small tabular-nums xl:col-start-4 xl:row-start-1 xl:block xl:text-right">

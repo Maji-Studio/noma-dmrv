@@ -8,13 +8,18 @@
  * The facts ride as correlated subqueries on the caller's batch select, so a
  * list of batches costs no extra round trip.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { deriveSubmissionStatus, type SubmissionDisplayFacts } from "@/lib/certification/from-submission";
+import {
+  deriveSubmissionStatus,
+  hasSubmittedRemovalVersion,
+  type SubmissionDisplayFacts,
+} from "@/lib/certification/from-submission";
 import type { DerivedStatus } from "@/lib/certification/status";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { epochMs } from "./dashboard-stations";
 import { requireOrgScope } from "./utils";
 
 /** The latest attempt's display facts; the payload carries only its reporting window. */
@@ -26,13 +31,36 @@ export interface BatchRemovalDisplayFacts {
   startedOn: string | null;
   completedOn: string | null;
   submission: RemovalDisplaySubmission | null;
+  /** Every submitted or accepted version, for the phase the batch page reads. */
+  submittedVersions: SubmissionDisplayFacts[];
 }
 
 export interface RemovalDisplay {
   id: string;
   code: string;
   status: DerivedStatus;
+  /** As on the batch page: a newer draft does not undo an earlier submitted version. */
+  phase: "draft" | "submitted";
 }
+
+/** The outer `certifier_removals` row's Isometric Removal versions; callers add the org predicate. */
+function outerRemovalVersions(...extra: SQL[]) {
+  return and(
+    eq(certificationSubmissions.localEntityId, certifierRemovals.id),
+    eq(certificationSubmissions.provider, "isometric"),
+    eq(certificationSubmissions.localEntityType, "removal"),
+    eq(certificationSubmissions.submissionType, "removal"),
+    ...extra,
+  );
+}
+
+/** The display facts of one version; the payload carries only its reporting window. */
+const versionFactsSql = sql`
+  'status', ${certificationSubmissions.status},
+  'metadata', ${certificationSubmissions.metadata},
+  'payloadSnapshot', jsonb_build_object('semantic', jsonb_build_object(
+    'startedOn', ${certificationSubmissions.payloadSnapshot} -> 'semantic' -> 'startedOn',
+    'completedOn', ${certificationSubmissions.payloadSnapshot} -> 'semantic' -> 'completedOn'))`;
 
 /**
  * The latest Isometric Removal attempt of the outer `certifier_removals` row.
@@ -43,31 +71,38 @@ function latestRemovalDisplaySubmissionSql(ctx: OrgContext) {
   requireOrgScope(ctx);
   const latest = db.select({
     value: sql<RemovalDisplaySubmission>`jsonb_build_object(
-      'status', ${certificationSubmissions.status},
-      'lockedAtMs', extract(epoch from ${certificationSubmissions.lockedAt}) * 1000,
-      'metadata', ${certificationSubmissions.metadata},
-      'payloadSnapshot', jsonb_build_object('semantic', jsonb_build_object(
-        'startedOn', ${certificationSubmissions.payloadSnapshot} -> 'semantic' -> 'startedOn',
-        'completedOn', ${certificationSubmissions.payloadSnapshot} -> 'semantic' -> 'completedOn')))`,
+      'lockedAtMs', ${epochMs(certificationSubmissions.lockedAt)}, ${versionFactsSql})`,
   }).from(certificationSubmissions).where(and(
     eq(certificationSubmissions.organizationId, ctx.organizationId),
-    eq(certificationSubmissions.localEntityId, certifierRemovals.id),
-    eq(certificationSubmissions.provider, "isometric"),
-    eq(certificationSubmissions.localEntityType, "removal"),
-    eq(certificationSubmissions.submissionType, "removal"),
-  )).orderBy(sql`${certificationSubmissions.version} desc`).limit(1);
+    outerRemovalVersions(),
+  ))
+    .orderBy(sql`${certificationSubmissions.version} desc`).limit(1);
   return sql<RemovalDisplaySubmission | null>`(${latest})`;
+}
+
+/** Every submitted or accepted version of the outer `certifier_removals` row. */
+function submittedRemovalVersionsSql(ctx: OrgContext) {
+  requireOrgScope(ctx);
+  const versions = db.select({
+    value: sql<SubmissionDisplayFacts[]>`coalesce(jsonb_agg(jsonb_build_object(${versionFactsSql})), '[]'::jsonb)`,
+  }).from(certificationSubmissions).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId),
+    outerRemovalVersions(inArray(certificationSubmissions.status, ["submitted", "accepted"])),
+  ));
+  return sql<SubmissionDisplayFacts[]>`(${versions})`;
 }
 
 /** Every Removal holding a slice of the outer, org-scoped `credit_batches` row. */
 export function batchRemovalDisplayFactsSql(ctx: OrgContext) {
   requireOrgScope(ctx);
   const latest = latestRemovalDisplaySubmissionSql(ctx);
+  const submittedVersions = submittedRemovalVersionsSql(ctx);
   const holders = db.select({
     value: sql<BatchRemovalDisplayFacts[]>`coalesce(jsonb_agg(distinct jsonb_build_object(
       'id', ${certifierRemovals.id}, 'code', ${certifierRemovals.code},
       'startedOn', ${certifierRemovals.startedOn}, 'completedOn', ${certifierRemovals.completedOn},
-      'submission', (${latest})
+      'submission', (${latest}),
+      'submittedVersions', (${submittedVersions})
     )), '[]'::jsonb)`,
   }).from(creditBatchApplications).innerJoin(certifierRemovals, and(
     eq(certifierRemovals.id, creditBatchApplications.removalId),
@@ -84,7 +119,13 @@ export function removalDisplayFromFacts(row: BatchRemovalDisplayFacts): RemovalD
   const latest = row.submission;
   const lockedAt = latest?.lockedAtMs == null ? null : new Date(Number(latest.lockedAtMs));
   const inFlight = latest ? isLockedInFlight({ status: latest.status, lockedAt }) : false;
-  return { id: row.id, code: row.code, status: deriveSubmissionStatus(latest, inFlight, "removal", row) };
+  const window = { startedOn: row.startedOn, completedOn: row.completedOn };
+  return {
+    id: row.id,
+    code: row.code,
+    status: deriveSubmissionStatus(latest, inFlight, "removal", window),
+    phase: hasSubmittedRemovalVersion(row.submittedVersions, window) ? "submitted" : "draft",
+  };
 }
 
 /** Each batch's holding Removals with their display state, in one statement. */

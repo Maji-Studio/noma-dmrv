@@ -94,7 +94,7 @@ describe("credit batch page model", () => {
         removals: displays.get(fixture.batchId),
       });
       expect(todos.check).toContainEqual(expect.objectContaining({
-        title: `${model.removals[0].code}: submission interrupted`,
+        title: `${model.removals[0].code}: Submission interrupted`,
         target: { href: `/removals?facility=${fixture.facilityId}&resume=${fixture.removalId}` },
       }));
       const interruptedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
@@ -124,6 +124,20 @@ describe("credit batch page model", () => {
       expect(completedModel.milestones).toMatchObject({
         firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: completedModel.removals[0].code,
       });
+      // A newer draft (a correction) does not undo the submitted version, on the page or the dashboard.
+      await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: fixture.removalId, version: 2,
+        status: "draft", payloadHash: "correction", payloadSnapshot: {}, metadata: {},
+      });
+      const correctedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(correctedModel.removals[0]).toMatchObject({ phase: "submitted", status: { kind: "not-submitted" } });
+      const correctedDisplays = await loadCreditBatchRemovalDisplays(makeTestOrgContext(), [fixture.batchId]);
+      expect(correctedDisplays.get(fixture.batchId)?.[0]).toMatchObject({ phase: "submitted", status: { kind: "not-submitted" } });
+      const correctedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(correctedAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · awaiting verification" }));
+      expect(correctedAttention.items.some(item => item.title === "Period ended · not submitted yet")).toBe(false);
+
       await db.update(certificationSubmissions).set({ status: "draft", metadata: {}, lockedAt: null })
         .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
       const draftAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");

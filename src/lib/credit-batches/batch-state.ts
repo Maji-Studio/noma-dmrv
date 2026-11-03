@@ -1,8 +1,8 @@
 /**
  * The one state a credit batch shows on /credit-batches, in the Timeline and
- * the List alike: Open, Ready, Submitted or Issued, plus the open to-dos while
- * it is Open. Open to-dos are Blocking + Check items, the batch page's Overview
- * badge; Waiting items never count.
+ * the List alike: Open, Ready, Submission interrupted, Submitted or Issued,
+ * plus the open to-dos while it is Open. Open to-dos are Blocking + Check
+ * items, the batch page's Overview badge; Waiting items never count.
  */
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import { deriveCreditBatchLifecycle } from "@/lib/certification/credit-batch-lifecycle";
@@ -22,7 +22,8 @@ export function creditBatchStateOf(
 ): CreditBatchStateView {
   if (!summary) return { state: null, blockingCount: 0, openTodoCount: 0 };
   const lifecycle = deriveCreditBatchLifecycle(summary);
-  const state = summary.removalStatus?.kind === "interrupted" ? "interrupted" : deriveTimelineState({
+  const state = deriveTimelineState({
+    removalInterrupted: summary.removalInterrupted,
     lifecycleStepIndex: lifecycle.currentStepIndex,
     lifecycleFailed: lifecycle.stepStates[lifecycle.currentStepIndex] === "failed",
     healthState: summary.state,

@@ -83,6 +83,22 @@ export function isRemovalSubmissionInterruptedFromSubmission(
   );
 }
 
+/**
+ * Whether a Removal counts as submitted (its phase): any submitted or accepted
+ * version that was not interrupted. A newer draft (a correction or supersede)
+ * does not undo an earlier submitted version. The batch page and the dashboard
+ * both read it here.
+ */
+export function hasSubmittedRemovalVersion(
+  versions: readonly SubmissionDisplayFacts[],
+  reportingWindow: RemovalReportingWindowDates,
+): boolean {
+  return versions.some((version) =>
+    (version.status === "submitted" || version.status === "accepted") &&
+    !isRemovalSubmissionInterruptedFromSubmission(version, reportingWindow),
+  );
+}
+
 /** The persisted verifier status off a submission row, or null when absent. */
 export function readRemoteStatus(
   latest: SubmissionDisplayFacts,

@@ -52,11 +52,12 @@ export const UNKNOWN_TONE = TONE_BY_STATE_CLASS.neutral;
 /**
  * Solid, tint, edge and badge per state, for bars, hover cards and the legend.
  * The timeline keeps its own scale (Kenji, 2026-10-19) so each step of the
- * lifecycle has one color: Open orange, Ready purple, Submitted green, Issued
+ * lifecycle has one color: Open orange, Ready purple, Submission interrupted
+ * red (the Removal badge and lock chip's red, #1528), Submitted green, Issued
  * ink. Other screens keep the shared mapping in status-state.ts.
  */
 export const STATE_TONE: Record<TimelineState, Tone & { title: string }> = {
-  interrupted: { ...TONE_BY_STATE_CLASS.warning, title: STATE_TITLE.interrupted },
+  interrupted: { ...TONE_BY_STATE_CLASS.error, title: STATE_TITLE.interrupted },
   blocking: { ...TONE_BY_STATE_CLASS.warning, title: STATE_TITLE.blocking },
   ready: { ...TONE_BY_STATE_CLASS["in-progress"], title: STATE_TITLE.ready },
   submitted: { ...TONE_BY_STATE_CLASS.success, title: STATE_TITLE.submitted },

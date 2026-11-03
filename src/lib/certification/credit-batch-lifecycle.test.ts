@@ -14,6 +14,7 @@ function summary(
     removalCode: null,
     productionEmissionsClaimedByRemovalCode: null,
     removalStatus: null,
+    removalInterrupted: false,
     ghgStatementId: null,
     ghgStatementStatus: null,
     ...overrides,

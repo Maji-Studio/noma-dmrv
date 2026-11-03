@@ -101,6 +101,8 @@ export interface CreditBatchHealthSummary {
   productionEmissionsClaimedByRemovalCode: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
+  /** Any Removal holding this batch is interrupted, not only the newest (`findInterruptedRemoval`). */
+  removalInterrupted: boolean;
   recordLock?: RecordLock;
   /** The downstream GHG Statement, once the submitted Removal is rolled up. */
   ghgStatementId: string | null;
@@ -448,6 +450,7 @@ export async function loadCreditBatchHealthSummaries(
         issueCount: todos.blocking.length,
         linesToDecide: todos.linesToDecide,
         checkCount: todos.check.length,
+        removalInterrupted: todos.removalInterrupted,
         removalId,
         removalCode: batchRow?.removalCode ?? null,
         productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,
