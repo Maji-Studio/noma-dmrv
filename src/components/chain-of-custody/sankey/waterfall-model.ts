@@ -8,11 +8,14 @@
  * carry a wet mass (then "Water driven off" is the first step: wet less the
  * runs' dry feedstock), otherwise dry. Steps: the lib's exits in flow order.
  * End column: the dry biochar applied, lit.
+ * Step masses and their record masses are display-rounded differences of
+ * display-rounded inputs, like the lib's exits; start, end and the balance
+ * check stay raw.
  */
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import { roundDisplayedMassKg } from "@/lib/mass-precision";
+import { displayedDifferenceKg } from "@/lib/mass-precision";
 import {
   EXIT_EPSILON_KG,
   type CreditBatchSankeyData,
@@ -38,7 +41,10 @@ export interface WaterfallRecord {
   code: string;
   /** One quiet name after the code: feedstock type, field, blend. */
   name: string | null;
-  /** This record's part of the column, in kg, on the column's basis. */
+  /**
+   * This record's part of the column, in kg, on the column's basis;
+   * step records use display-rounded differences of display-rounded inputs.
+   */
   massKg: number | null;
   /** Short line on the row: why there is no figure, or that it is out of balance. */
   note?: string;
@@ -261,9 +267,7 @@ export function buildWaterfall(
   const rawWaterKg = wetFeedstockKg == null || !dryInputKnown ? null : wetFeedstockKg - dryFeedstockKg;
   const wetBelowDry = rawWaterKg != null && rawWaterKg < -EPSILON_KG;
   const startsWet = rawWaterKg != null && !wetBelowDry;
-  const waterKg = rawWaterKg == null || wetFeedstockKg == null ? null : roundDisplayedMassKg(
-    roundDisplayedMassKg(wetFeedstockKg) - roundDisplayedMassKg(dryFeedstockKg),
-  );
+  const waterKg = rawWaterKg == null || wetFeedstockKg == null ? null : displayedDifferenceKg(wetFeedstockKg, dryFeedstockKg);
   const startBasis = startsWet ? "wet" : "dry";
   const dryStartReason: DryStartReason | null = startsWet
     ? null
@@ -272,7 +276,7 @@ export function buildWaterfall(
       : wetFeedstockKg == null
         ? "wet-missing"
         : "wet-below-dry";
-  const hasWater = startsWet && rawWaterKg != null && rawWaterKg > EPSILON_KG;
+  const hasWater = startsWet && waterKg != null && waterKg > 0;
   const startKg = startsWet ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
 
   const runRecord = (run: RunFacts, massKg: number | null): WaterfallRecord => ({
@@ -288,7 +292,7 @@ export function buildWaterfall(
   const withNote = (record: WaterfallRecord, upstreamKg: number | null, downstreamKg: number | null, words: RowWords): WaterfallRecord => {
     if (upstreamKg == null || downstreamKg == null) return { ...record, massKg: null, note: words.missing };
     const raw = upstreamKg - downstreamKg;
-    const massKg = roundDisplayedMassKg(roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg));
+    const massKg = displayedDifferenceKg(upstreamKg, downstreamKg);
     if (raw < -EPSILON_KG) {
       warnings.push(words.warning(record.code));
       return { ...record, massKg, note: words.negative };

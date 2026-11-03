@@ -30,7 +30,7 @@
 
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import { roundDisplayedMassKg } from "@/lib/mass-precision";
+import { displayedDifferenceKg } from "@/lib/mass-precision";
 
 export type SankeyColumnKey =
   | "feedstock"
@@ -122,9 +122,7 @@ function residual(
   const raw = upstreamKg - downstreamKg;
   // Subtract the displayed columns, rather than independently rounding
   // their raw difference. Keep raw masses for tolerance and warnings.
-  const value = Math.max(0, roundDisplayedMassKg(
-    roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg),
-  ));
+  const value = Math.max(0, displayedDifferenceKg(upstreamKg, downstreamKg));
   return {
     raw,
     value,

@@ -14,3 +14,8 @@ const displayedMass = new Intl.NumberFormat("en-US", {
 export function roundDisplayedMassKg(kg: number): number {
   return Number(displayedMass.format(kg));
 }
+
+/** Difference of displayed masses, rounded to the same display precision. */
+export function displayedDifferenceKg(upstreamKg: number, downstreamKg: number): number {
+  return roundDisplayedMassKg(roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg));
+}
