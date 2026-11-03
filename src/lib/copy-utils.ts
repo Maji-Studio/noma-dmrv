@@ -50,6 +50,7 @@ export const UNREADABLE_TIME = "Unreadable time";
 /** What a value says when the read that should supply it failed. */
 export const LOAD_FAILED = "Could not load";
 
+export const TRY_AGAIN_LABEL = "Try again";
 
 /** What a registry record says when the ID noma saved no longer resolves on Isometric. */
 export const NOT_FOUND_ON_ISOMETRIC = "Not found on Isometric";
