@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { recordSummary } from "./trace-record-values";
-import { ROW_FOCUS_CLASS, ScrollTarget, TILE_TEXT_INSET_PX, TraceThread, TraceTile } from "./trace-tile";
+import { ROW_FOCUS_CLASS, ScrollTarget, TILE_TEXT_INSET_PX, TRACE_COUNTER_CLASS, TraceThread, TraceTile } from "./trace-tile";
 import { placeWithoutPosition, type TraceModel, type TraceStage } from "./trace-model";
 
 /** "2 feedstocks · 2 places": what a stage holds and where the map shows it. */
@@ -53,11 +53,11 @@ export function TraceStageList({
   return (
     <>
       <div className="flex shrink-0 items-center justify-between gap-12 border-b border-[var(--clr-dark-purple-10)] px-16 py-10">
-        <p className="body-caption min-w-0 truncate font-mono uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
+        <span className={cn(TRACE_COUNTER_CLASS, "min-w-0 truncate")}>
           {stage
             ? `${String((stageIndex ?? 0) + 1).padStart(2, "0")} / ${String(model.stages.length).padStart(2, "0")} · ${stage.title}`
             : null}
-        </p>
+        </span>
         <div className="ml-auto flex shrink-0 gap-8">
           {stageIndex !== null ? (
             <Button
