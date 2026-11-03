@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { ChainStep, TraceChain } from "./trace-chains";
 import type { TraceModel, TraceRecord } from "./trace-model";
 import { RecordValues, recordSummary } from "./trace-record-values";
-import { ROW_FOCUS_CLASS, ScrollTarget, TILE_TEXT_INSET_PX, TraceThread, TraceTile } from "./trace-tile";
+import { ROW_FOCUS_CLASS, ScrollTarget, TRACE_COUNTER_CLASS, TILE_TEXT_INSET_PX, TraceThread, TraceTile } from "./trace-tile";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -74,9 +74,9 @@ export function TraceChainWalk({
             ) : null}
           </div>
         </div>
-        <p className="body-caption font-mono uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
+        <span className={TRACE_COUNTER_CLASS}>
           {pad(stepIndex + 1)} / {pad(steps.length)} · To {chain.end.shortCode}
-        </p>
+        </span>
       </div>
       <ol className="min-h-0 flex-1 overflow-y-auto px-16 py-12">
         {steps.map((step, index) => {
