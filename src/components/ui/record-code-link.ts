@@ -4,3 +4,7 @@
  */
 export const RECORD_CODE_LINK =
   "whitespace-nowrap font-mono text-[var(--color-text-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
+
+/** The same link for a record's name in running text (a facility): body font, not mono. */
+export const RECORD_NAME_LINK =
+  "text-[var(--color-text-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
