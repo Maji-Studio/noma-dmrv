@@ -1,6 +1,6 @@
 import { applicationDestinationMessage, deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerDetails } from "./submission-readiness";
 import { describe, expect, it } from "vitest";
-import { deliveryProofBlocker, hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
+import { deliveryProofBlocker, hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlockerMessage, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
 
 const sampled = { sampling: "sampled", durabilityOption: "1000_year" };
 
@@ -30,11 +30,11 @@ describe("submission readiness predicates", () => {
   });
   it("accepts either positive distance source and checks delivered deliveries only", () => {
     const input = { deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null };
-    expect(deliveryDistanceBlocker(input)).toContain("Delivery DL-1 has no positive transport distance");
-    expect(deliveryDistanceBlocker({ ...input, distanceKmOverride: 5 })).toBeNull();
-    expect(deliveryDistanceBlocker({ ...input, recordedDistanceKm: 5 })).toBeNull();
-    expect(deliveryDistanceBlocker({ ...input, distanceKmOverride: 0, recordedDistanceKm: 5 })).toBeNull();
-    expect(deliveryDistanceBlocker({ ...input, deliveryStatus: "scheduled" })).toBeNull();
+    expect(deliveryDistanceBlockerMessage(input)?.message).toContain("Delivery DL-1 has no positive transport distance");
+    expect(deliveryDistanceBlockerMessage({ ...input, distanceKmOverride: 5 })).toBeNull();
+    expect(deliveryDistanceBlockerMessage({ ...input, recordedDistanceKm: 5 })).toBeNull();
+    expect(deliveryDistanceBlockerMessage({ ...input, distanceKmOverride: 0, recordedDistanceKm: 5 })).toBeNull();
+    expect(deliveryDistanceBlockerMessage({ ...input, deliveryStatus: "scheduled" })).toBeNull();
   });
   it.each([
     [[{ ...sampled, sampling: "unsampled" }], "Unsampled Method B"],

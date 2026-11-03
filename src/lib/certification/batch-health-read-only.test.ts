@@ -114,6 +114,31 @@ describe("read-only batch health facts", () => {
     expect(item.detail).toBe(hasCopy ? check.readOnlyDetail : undefined);
   });
 
+  it("states no fact when a fact-bearing check merges with one that has none, in either order", () => {
+    const carbonFact = "Credit batch CB-1 is marked as sampled but has no Samples.";
+    const health = deriveBatchHealth({ ...healthy,
+      carbonMissingInputs: [`${carbonFact} Add at least 3 Samples before submitting.`], carbonBlockerFacts: [carbonFact],
+      entityReadinessGaps: ["Sample S-1 moisture"],
+      entityReadinessIssues: [{ key: "lab-samples", label: "Sample evidence", fixTarget: "labSamples",
+        affectedRecords: [{ id: "sample-1", code: "S-1", missing: ["Moisture"] }] }],
+    });
+    const check = health.checks.find((check) => check.status === "unmet" && check.fixTarget === "labSamples")!;
+    expect(check.issueKey).toContain("+");
+    expect(check.readOnlyDetail).toBeUndefined();
+    const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
+    expect(item.detail).toBeUndefined();
+  });
+
+  it("merges missing feedstock transport coverage with its lineage fact", () => {
+    const health = deriveBatchHealth({ ...healthy,
+      requiredTransport: [{ category: "feedstock", present: false }],
+      submissionLineageBlockers: buildSubmissionLineageBlockers([], ["fs-1"], { "fs-1": "FS-1" }, ["feedstock"]),
+    });
+    const check = health.checks.find((check) => check.status === "unmet" && check.fixTarget === "feedstocks")!;
+    expect(check.detail).toBe("Missing feedstock transport legs · Feedstock FS-1 has no usable transport leg. Record a positive distance and load mass before submitting.");
+    expect(check.readOnlyDetail).toBe("Missing feedstock transport legs · Feedstock FS-1 has no usable transport leg.");
+  });
+
   it("shows only the soil temperature title, which states the fact", () => {
     const health = deriveBatchHealth(loadedFacts());
     const check = health.checks.find((check) => check.key === "facilityEmissions")!;

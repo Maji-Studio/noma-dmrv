@@ -229,8 +229,8 @@ function uniqueFacts(facts: readonly string[] | undefined): string | undefined {
   return [...new Set(facts?.filter(Boolean))].join(MERGED_CHECK_SEPARATOR) || undefined;
 }
 
-/** The fact a check states read only, the same precedence open items use. */
-function readOnlyFact(check: BatchHealthCheckBase): string | undefined {
+/** The fact a check states on a read-only batch; undefined when its detail may hold a repair step. */
+function batchHealthReadOnlyFact(check: Pick<BatchHealthCheck, "readOnlyDetail" | "copy">): string | undefined {
   return check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail;
 }
 
@@ -371,6 +371,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
         label: TRANSPORT_LABEL,
         status: "unmet",
         detail: `Missing ${category} transport legs`,
+        readOnlyDetail: `Missing ${category} transport legs`,
         fixTarget: category === "feedstock" ? "feedstocks" : "deliveries",
       }));
 }
@@ -457,9 +458,9 @@ function mergeUnmetChecksByDestination(
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
       // Read only, a merged item states every side's fact or none: a bare detail may hold a repair step.
-      ...((existing.readOnlyDetail || check.readOnlyDetail) && readOnlyFact(existing) && readOnlyFact(check) ? {
-        readOnlyDetail: mergeCheckText(readOnlyFact(existing), readOnlyFact(check)),
-      } : {}),
+      readOnlyDetail: (existing.readOnlyDetail || check.readOnlyDetail) && batchHealthReadOnlyFact(existing) && batchHealthReadOnlyFact(check)
+        ? mergeCheckText(batchHealthReadOnlyFact(existing), batchHealthReadOnlyFact(check))
+        : undefined,
       copy: existing.copy && check.copy ? {
         detail: mergeCheckText(existing.copy.detail, check.copy.detail),
         instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),

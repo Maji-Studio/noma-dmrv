@@ -102,10 +102,6 @@ export function deliveryDistanceBlockerMessage(input: {
     : null;
 }
 
-export function deliveryDistanceBlocker(input: Parameters<typeof deliveryDistanceBlockerMessage>[0]): string | null {
-  return deliveryDistanceBlockerMessage(input)?.message ?? null;
-}
-
 export function missingFeedstockTransportIds(
   feedstockIds: readonly string[],
   legs: readonly {

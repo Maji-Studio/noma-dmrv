@@ -357,6 +357,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       title: certCheckLabel(healthCheck),
       detail,
       ...(!copy ? { detailMayInstruct: true as const } : {}),
+      // Not copy.detail: it is already the detail, and a member's template item drops it.
       ...((healthCheck.readOnlyDetail ?? copy?.readOnlyDetail) ? { readOnlyDetail: healthCheck.readOnlyDetail ?? copy?.readOnlyDetail } : {}),
       ...(instruction ? { instruction } : {}),
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
