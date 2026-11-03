@@ -22,6 +22,11 @@ collects only `tests/e2e/`; `playwright.visual.config.ts` collects only
 `tests/visual/`. A Playwright spec outside those two folders, or a Vitest spec
 inside them, is **silently never run**. Put it in the right directory.
 
+Tests that take a table-level lock must be listed in
+`tests/helpers/table-lock-barrier-files.ts` so Vitest runs them after all other
+suites, one file at a time (#1379). `tests/table-lock-barrier-isolation.test.ts`
+enforces the list and rejects stale entries.
+
 - `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
   `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
   put pure module, component, schema, hook, and route-handler tests beside the
