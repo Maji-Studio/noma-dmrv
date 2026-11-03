@@ -39,13 +39,27 @@ function sequestrationLine(applicationCount: number) {
 }
 
 describe("Isometric sequestration display", () => {
-  it.each([0, 1, 15])("drops the sequestration line with %s applications, so counts and filters never include it", (count) => {
+  it.each([1, 15])("drops handled sequestration with %s applications from counts and filters", (count) => {
     const sequestration = sequestrationLine(count);
     const other = makeLine({ componentId: "other", state: "empty" });
     const shown = withoutRegistryCalculatedLines([sequestration, other]);
     expect(shown).toEqual([other]);
     expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
     expect(groupLines(shown).map((group) => group.key)).not.toContain(sequestration.groupKey);
+  });
+
+  it("keeps a batch without applications open and makes counts agree with filters", () => {
+    const empty = sequestrationLine(0);
+    expect(lineTotalText(empty)).toBe("Not recorded");
+    expect(recordsChipText(empty.records!)).toBe("No applications yet");
+    expect(recordsFigureText(empty.records!)).toBe("Not recorded");
+    expect(isRecordsGap(empty.records)).toBe(true);
+    const shown = withoutRegistryCalculatedLines([empty, sequestrationLine(15)]);
+    expect(shown).toEqual([empty]);
+    expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
+    expect(shown.filter((line) => lineMatches(line, "open"))).toEqual([empty]);
+    expect(shown.filter((line) => lineMatches(line, "done"))).toEqual([]);
+    expect(groupLines(shown).map((group) => group.key)).toContain(empty.groupKey);
   });
 });
 

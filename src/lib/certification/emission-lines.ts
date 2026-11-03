@@ -26,7 +26,7 @@ export interface EmissionLineRecords {
   source: EmissionRecordSource;
   count: number;
   figure: EmissionFigure | null;
-  /** Sequestration uses application and lab data; noma has no scalar figure to display. */
+  /** The Emissions filter reads this to hide handled sequestration calculated by Isometric. */
   calculatedBy?: "isometric";
   /** A recorded zero whose legs another credit batch counts: those batches, linked in place of the count. */
   countedOn?: readonly CountedOnBatch[];
@@ -151,10 +151,16 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];
 
 /**
- * Isometric calculates sequestration; the operator never records anything for it. Display
- * surfaces (the Emissions tab, its counts, the facility overview) drop the line with this.
+ * Display surfaces (the Emissions tab, its counts, the facility overview) hide handled
+ * sequestration calculated by Isometric, keeping open states and blockers visible.
  * Submission, readiness and payloads read the full list from deriveBatchEmissionLines.
  */
-export function withoutRegistryCalculatedLines<T extends { contract?: { automaticSource?: string } | null }>(lines: readonly T[]): T[] {
-  return lines.filter((line) => line.contract?.automaticSource !== "sequestration");
+export function withoutRegistryCalculatedLines<T extends {
+  contract?: { automaticSource?: AutomaticSourceId } | null;
+  records?: Pick<EmissionLineRecords, "calculatedBy"> | null;
+  state: EmissionLineState;
+  blocker?: RemovalBlocker | null;
+}>(lines: readonly T[]): T[] {
+  return lines.filter((line) => !(line.contract?.automaticSource === "sequestration"
+    && line.records?.calculatedBy === "isometric" && line.state === "filled" && !line.blocker));
 }
