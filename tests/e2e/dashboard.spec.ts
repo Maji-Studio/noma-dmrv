@@ -65,7 +65,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     await expect(kpis.getByText("Estimated CO₂e stored", { exact: true })).toBeVisible();
     // The popup has no tooltip role; count its exact text page-wide.
     const hintCopies = page.getByText(
-      "Dry mass of biochar applied to soil at customer sites.",
+      "Dry mass of biochar applied to soil at customer sites, counted on the application date.",
       { exact: true },
     );
     const closedCount = await hintCopies.count();
@@ -205,9 +205,9 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(reactorSheet).not.toBeVisible();
       await expect(page).toHaveURL(new RegExp(`/dashboard\\?facility=${facilityId}`));
       const structuralGaps = page.getByTestId("structural-gap-list");
-      await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
+      await expect(structuralGaps.getByText("Supplier location GPS missing")).toBeVisible();
       await expect(
-        structuralGaps.getByText("Transport endpoint GPS missing"),
+        structuralGaps.getByText("Feedstock route GPS missing"),
       ).toBeVisible();
       await expect(
         structuralGaps.getByText("Supplier form · Location · 1 affected"),

@@ -13,7 +13,7 @@
  * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
 import { removalResubmitHref } from "@/lib/removal-correction-copy";
-import { recordHref } from "@/lib/record-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import {
   applications,
@@ -52,11 +52,21 @@ import {
 } from "./credit-batch-removal-display";
 import {
   applicationEvidenceGapWhere,
+  ATTENTION_PER_CHECK,
+  capOrGroup,
   creditBatchAttention,
   feedstocksMissingDataWhere,
+  PERIOD_ENDED_NOT_SUBMITTED_TITLE,
   pendingBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
+import { facilityListHref } from "@/lib/dashboard-links";
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import { loadReturnedRemovalIds } from "./dashboard-returned-removals";
+import {
+  withCrossCuttingAttention,
+  type DashboardBatchAttentionCounts,
+} from "./dashboard-station-attention";
 import {
   epochMs,
   getDashboardStations,
@@ -84,10 +94,6 @@ export type {
 
 export type DashboardRange = "week" | "month" | "all";
 
-/** Per-check row cap for the attention queue (the queue is a sample, not a list page). */
-const ATTENTION_PER_CHECK = 4;
-/** Total attention-queue cap, flags first. */
-const ATTENTION_TOTAL = 8;
 const WEEK_DAYS = 7;
 const MONTH_DAYS = 30;
 
@@ -96,6 +102,21 @@ export type DashboardKpiKey =
   | "biocharProduced"
   | "appliedToSoil"
   | "co2eStored";
+
+/**
+ * Each KPI counts by its own record date (#1532 F9): runs by the day they
+ * started, applications by their application date, the CO₂e estimate by the
+ * day its credit batch's period ends. The clocks stay as they are; the hint
+ * says which one each figure uses, so a month can show applications next to
+ * no estimate.
+ */
+export const KPI_HINTS: Record<DashboardKpiKey, string> = {
+  feedstockProcessed: "Dry feedstock mass into complete runs, counted on the day each run started.",
+  biocharProduced: "Dry biochar mass out of complete runs, counted on the day each run started.",
+  appliedToSoil: "Dry mass of biochar applied to soil at customer sites, counted on the application date.",
+  co2eStored:
+    "Carbon stored in the credit batches' biochar, before project emissions are subtracted. Counted on the day each batch's period ends, so it can trail the runs and applications behind it.",
+};
 
 export interface DashboardKpi {
   key: DashboardKpiKey;
@@ -131,8 +152,13 @@ export interface DashboardMassFlowSegment {
 
 export interface DashboardAttentionItem {
   id: string;
-  /** Entity code shown in the mono column, e.g. "PR-26-0042". */
+  /**
+   * Entity code shown in the mono column, e.g. "PR-26-0042"; on a grouped row
+   * the list it links to, e.g. "Production runs".
+   */
   entityCode: string;
+  /** Records a grouped row stands for; absent on a single record's row. */
+  count?: number;
   /** Canonical record date shown beside the entity code. */
   date: string | Date | null;
   title: string;
@@ -146,11 +172,14 @@ export interface DashboardOverview extends DashboardStationsData {
   kpis: DashboardKpi[];
   /** Chain segments in flow order, supplier → application. */
   massFlow: DashboardMassFlowSegment[];
-  /** Capped sample of open items shown as rows (flags first). */
+  /** Every open row: a record, or one grouped row per over-cap check. */
   attention: DashboardAttentionItem[];
-  /** Cross-cutting certification blockers, kept separate from station badges. */
+  /** Cross-cutting certification blockers: one grouped row each, also counted on the station whose form fixes them. */
   structuralGaps: DashboardStructuralGap[];
-  /** Exact uncapped count of open items — the "N open" figure. */
+  /**
+   * The "N open" figure: records, counted exactly. A single row is one, a
+   * grouped row its count, a structural gap its affected records.
+   */
   attentionTotal: number;
 }
 
@@ -222,7 +251,7 @@ export async function getDashboardOverview(
 
   const [
     [runRows, lotRows, applicationRows, { rows: batchRows, previews: batchPreviews }, feedstockRows],
-    { items: attentionItems, batchCount: batchAttentionCount },
+    { items: attentionItems, batches: batchAttention },
     stationsData,
     structuralGapCounts,
   ] =
@@ -387,6 +416,7 @@ export async function getDashboardOverview(
     {
       key: "feedstockProcessed",
       label: "Feedstock processed",
+      hint: KPI_HINTS.feedstockProcessed,
       unit: "t",
       value:
         currentFeedstockRuns.length > 0 ? feedstockInCurrentKg / 1000 : null,
@@ -402,6 +432,7 @@ export async function getDashboardOverview(
     {
       key: "biocharProduced",
       label: "Biochar produced",
+      hint: KPI_HINTS.biocharProduced,
       unit: "t",
       value: currentOutputRuns.length > 0 ? outputCurrentKg / 1000 : null,
       deltaPercent:
@@ -416,7 +447,7 @@ export async function getDashboardOverview(
     {
       key: "appliedToSoil",
       label: "Applied to soil",
-      hint: "Dry mass of biochar applied to soil at customer sites.",
+      hint: KPI_HINTS.appliedToSoil,
       unit: "t",
       value: currentApplications.length > 0 ? appliedCurrentTons : null,
       deltaPercent:
@@ -428,7 +459,7 @@ export async function getDashboardOverview(
     {
       key: "co2eStored",
       label: "Estimated CO₂e stored",
-      hint: "Carbon stored in the credit batches' biochar, before project emissions are subtracted.",
+      hint: KPI_HINTS.co2eStored,
       unit: "t",
       value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
@@ -438,7 +469,9 @@ export async function getDashboardOverview(
       detail:
         currentStoredBatches.length > 0
           ? `before project emissions, ${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
-          : "no estimate in period",
+          : currentBatches.length > 0
+            ? "no estimate in period"
+            : "no credit batch ended in period",
     },
   ];
 
@@ -468,21 +501,22 @@ export async function getDashboardOverview(
     { key: "applied", tonnes: tonnesToKg(appliedCurrentTons) / 1000 },
   ];
 
-  // Every attention check except overdue batches maps 1:1 to a flow station,
-  // and the station badge counts are exact (uncapped) — so the true queue size
-  // is their sum plus the batch-only count, without re-running the row queries.
+  // "N open" counts records (#1532 F5): a single row is one, a grouped row
+  // its count, a structural gap its affected records. Every counted record is
+  // reachable from one of the card's rows.
   const structuralGaps = buildDashboardStructuralGaps(
     structuralGapCounts,
     facilityId,
   );
-  const structuralGapTotal = structuralGaps.reduce(
-    (total, gap) => total + gap.count,
-    0,
-  );
   const attentionTotal =
-    stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
-    batchAttentionCount +
-    structuralGapTotal;
+    attentionItems.reduce((total, item) => total + (item.count ?? 1), 0) +
+    structuralGaps.reduce((total, gap) => total + gap.count, 0);
+  const stations = withCrossCuttingAttention(
+    stationsData.stations,
+    structuralGaps,
+    batchAttention,
+    facilityId,
+  );
 
   return {
     range,
@@ -493,6 +527,7 @@ export async function getDashboardOverview(
     structuralGaps,
     attentionTotal,
     ...stationsData,
+    stations,
   };
 }
 
@@ -533,7 +568,46 @@ interface AttentionRow {
   dateDay: string | null;
   dateMs: number | null;
   ord: number;
+  /** Records the branch matched before its cap (window count). */
+  total: number;
+  /** Every matched record id before the cap; empty on the batch branch. */
+  allIds: string[];
   removals: BatchRemovalDisplayFacts[];
+}
+
+type FlagKind = Exclude<AttentionKind, "batch-pending">;
+
+/** Uncapped size of a capped branch, read in the same statement. */
+const branchTotal = sql<number>`count(*) over ()`.mapWith(Number);
+function branchIds(id: SQLWrapper): SQL<string[]> {
+  return sql<string[]>`array_agg(${id}::text) over ()`;
+}
+
+/**
+ * The grouped row an over-cap check folds into. Runs and applications lists
+ * filter to exact ids (within the filter's limit); the feedstock list has no
+ * such filter, so its row opens the plain list.
+ */
+const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facilityId: string, ids: string[]) => string }> = {
+  "run-mass": {
+    title: "Complete runs missing mass data",
+    list: "Production runs",
+    href: (facilityId, ids) => facilityListHref(RECORD_LINKS.productionRun.path, facilityId, ids),
+  },
+  "feedstock-missing": {
+    title: "Feedstock records missing data",
+    list: "Feedstock intake",
+    href: (facilityId) => facilityListHref(RECORD_LINKS.feedstock.path, facilityId),
+  },
+  "application-evidence": {
+    title: "Applications missing evidence",
+    list: "Applications",
+    href: (facilityId, ids) => facilityListHref(RECORD_LINKS.application.path, facilityId, ids),
+  },
+};
+
+function groupedRow(kind: string, list: string, title: string, count: number, href: string): DashboardAttentionItem {
+  return { id: `${kind}-group`, entityCode: list, count, date: null, title, href };
 }
 
 /** Pending batches take their title from `creditBatchAttention`. */
@@ -544,11 +618,10 @@ const ATTENTION_TITLES: Record<Exclude<AttentionKind, "batch-pending">, string> 
 };
 
 /** Flags sort before pending batches; within a kind the branch ordinal holds. */
-const ATTENTION_ORDER: AttentionKind[] = [
+const FLAG_ORDER: FlagKind[] = [
   "run-mass",
   "feedstock-missing",
   "application-evidence",
-  "batch-pending",
 ];
 
 function attentionHref(
@@ -570,18 +643,21 @@ function attentionHref(
 
 /**
  * Cheap record checks derived from existing MRV data, fetched as one
- * `union all` of capped, narrow, indexed selects. An item disappears the
- * moment the underlying record is fixed (no independent lifecycle). Pending
- * batches are read uncapped with their Removals' display facts (correlated
- * subqueries, no extra round trip): an interrupted Removal is one row per
- * Removal, a closed period one row per batch (`creditBatchAttention`), and
- * `batchCount` is their exact total for the queue size.
+ * `union all` of capped, narrow, indexed selects; a window count and id list
+ * carry each check's uncapped size, so an over-cap check folds into one
+ * grouped row (`capOrGroup`). An item disappears the moment the underlying
+ * record is fixed (no independent lifecycle). Pending batches are read
+ * uncapped with their Removals' display facts (correlated subqueries, no
+ * extra round trip): an interrupted Removal is one row per Removal, a period
+ * closed without a submission one row per batch (`creditBatchAttention`),
+ * each kind grouped past the cap the same way, and `batches` counts them for
+ * the Production station.
  */
 export async function getDashboardAttentionItems(
   ctx: OrgContext,
   facilityId: string,
   todayStr: string,
-): Promise<{ items: DashboardAttentionItem[]; batchCount: number }> {
+): Promise<{ items: DashboardAttentionItem[]; batches: DashboardBatchAttentionCounts }> {
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
@@ -595,6 +671,8 @@ export async function getDashboardAttentionItems(
         dateDay: dayColumn(productionRunDateExpr(ctx.organizationId)),
         dateMs: noInstant,
         ord: branchOrdinal(desc(productionRuns.startTime)),
+        total: branchTotal,
+        allIds: branchIds(productionRuns.id),
       })
       .from(productionRuns)
       .where(runsMissingMassWhere(orgId, facilityId))
@@ -611,6 +689,8 @@ export async function getDashboardAttentionItems(
           feedstocks.deliveryDate,
         ),
         ord: branchOrdinal(desc(feedstocks.createdAt)),
+        total: branchTotal,
+        allIds: branchIds(feedstocks.id),
       })
       .from(feedstocks)
       .where(feedstocksMissingDataWhere(orgId, facilityId))
@@ -625,6 +705,8 @@ export async function getDashboardAttentionItems(
         dateDay: noDay,
         dateMs: epochMs(applications.applicationDate),
         ord: branchOrdinal(desc(applications.applicationDate)),
+        total: branchTotal,
+        allIds: branchIds(applications.id),
       })
       .from(applications)
       .innerJoin(
@@ -646,6 +728,9 @@ export async function getDashboardAttentionItems(
         dateDay: dayColumn(creditBatches.endDate),
         dateMs: noInstant,
         ord: branchOrdinal(asc(creditBatches.endDate)),
+        total: branchTotal,
+        // Batches are read uncapped and grouped in JS, so no id list rides along.
+        allIds: sql<string[]>`'{}'::text[]`,
       })
       .from(creditBatches)
       // Redundant org predicate for the lexical guard (see note above).
@@ -658,12 +743,21 @@ export async function getDashboardAttentionItems(
       .orderBy(asc(creditBatches.endDate)),
   );
 
+  const batchRows = rows.filter((row) => row.kind === "batch-pending")
+    .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
+  // Only a submitted period can have come back from the verifier, so only its
+  // Removals (already read above) pay for the lineage read; none, no extra trip.
+  const submittedHolders = batchRows
+    .filter(({ row, removals }) => creditBatchAttention({ endDate: row.dateDay }, removals, todayStr).period === "submitted")
+    .flatMap(({ row }) => row.removals.map((removal) => ({ removalId: removal.id, ghgStatementId: removal.ghgStatementId })));
+  const returnedRemovalIds = await loadReturnedRemovalIds(ctx, submittedHolders);
+
   const interrupted = new Map<string, DashboardAttentionItem>();
-  const periods: DashboardAttentionItem[] = [];
-  for (const row of rows) {
-    if (row.kind !== "batch-pending") continue;
-    const removals = row.removals.map(removalDisplayFromFacts);
-    const attention = creditBatchAttention({ endDate: row.dateDay }, removals, todayStr);
+  // Only periods waiting on the operator; one awaiting verification waits on the verifier.
+  const notSubmitted: DashboardAttentionItem[] = [];
+  const returned: DashboardAttentionItem[] = [];
+  for (const { row, removals } of batchRows) {
+    const attention = creditBatchAttention({ endDate: row.dateDay }, removals, todayStr, returnedRemovalIds);
     for (const removal of removals) {
       if (removal.status.kind !== "interrupted") continue;
       // A Removal holding slices of several batches is one row naming them all.
@@ -676,28 +770,47 @@ export async function getDashboardAttentionItems(
         href: removalResubmitHref(removal.id, facilityId),
       });
     }
-    if (!attention.periodTitle) continue;
-    periods.push({
-      id: `batch-pending-${row.id}`,
-      entityCode: row.code,
-      date: row.dateDay,
-      title: attention.periodTitle,
-      href: attentionHref(row.kind, row.id, facilityId),
-    });
+    if (attention.period === "notSubmitted" || attention.period === "returned") {
+      (attention.period === "returned" ? returned : notSubmitted).push({
+        id: `batch-pending-${row.id}`,
+        entityCode: row.code,
+        date: row.dateDay,
+        title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
+        href: attentionHref(row.kind, row.id, facilityId),
+      });
+    }
   }
-  const rank = (kind: AttentionKind) => ATTENTION_ORDER.indexOf(kind);
-  const flags = rows.flatMap((row) => (row.kind === "batch-pending" ? [] : [{ ...row, kind: row.kind }]))
-    .sort((a, b) => rank(a.kind) - rank(b.kind) || a.ord - b.ord)
-    .map((row) => ({
-      id: `${row.kind}-${row.id}`,
-      entityCode: row.code,
-      date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
-      title: ATTENTION_TITLES[row.kind],
-      href: attentionHref(row.kind, row.id, facilityId),
-    }));
+  const interruptedRows = [...interrupted.values()];
+  const removalsList = facilityListHref(RECORD_LINKS.removal.path, facilityId);
+  const batchList = facilityListHref(RECORD_LINKS.creditBatch.path, facilityId);
+  const flags = FLAG_ORDER.flatMap((kind) => {
+    const kindRows = rows.filter((row) => row.kind === kind).sort((a, b) => a.ord - b.ord);
+    const first = kindRows[0];
+    if (!first) return [];
+    const group = FLAG_GROUPS[kind];
+    return capOrGroup(
+      kindRows.map((row): DashboardAttentionItem => ({
+        id: `${kind}-${row.id}`,
+        entityCode: row.code,
+        date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
+        title: ATTENTION_TITLES[kind],
+        href: attentionHref(kind, row.id, facilityId),
+      })),
+      first.total,
+      () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds)),
+    );
+  });
   return {
     // An interrupted submission leads: it blocks the Removal until resumed.
-    items: [...interrupted.values(), ...flags, ...periods.slice(0, ATTENTION_PER_CHECK)].slice(0, ATTENTION_TOTAL),
-    batchCount: interrupted.size + periods.length,
+    items: [
+      ...capOrGroup(interruptedRows, interruptedRows.length, () =>
+        groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
+      ...flags,
+      ...capOrGroup(returned, returned.length, () =>
+        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList)),
+      ...capOrGroup(notSubmitted, notSubmitted.length, () =>
+        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
+    ],
+    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length, returned: returned.length },
   };
 }

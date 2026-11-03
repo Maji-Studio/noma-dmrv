@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 import {
   dateOrStringSchema,
   emptyToNull,
@@ -466,7 +467,7 @@ export const deleteProductionRunSchema = z.object({
  */
 export const productionRunFilterSchema = z.object({
   // Exact-record deep link from certification readiness.
-  ids: z.array(z.uuid()).max(100).optional(),
+  ids: z.array(z.uuid()).max(EXACT_ID_FILTER_MAX).optional(),
 
   // Text search across code
   search: z

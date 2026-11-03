@@ -46,7 +46,7 @@ describe("DashboardAttentionRow", () => {
     );
   });
 
-  it("removes row badges and only shows the truncation footer when needed", () => {
+  it("removes row badges and shows grouped rows with their count", () => {
     const html = renderToStaticMarkup(
       <AttentionList
         attention={[
@@ -57,14 +57,24 @@ describe("DashboardAttentionRow", () => {
             title: "Complete run missing mass data",
             href: "/production-runs?run=run-1",
           },
+          {
+            id: "application-evidence-group",
+            entityCode: "Applications",
+            count: 6,
+            date: null,
+            title: "Applications missing evidence",
+            href: "/applications?facility=f1&ids=a1",
+          },
         ]}
         structuralGaps={[
           {
-            key: "transportEndpointGps",
-            label: "Transport endpoint GPS missing",
+            key: "feedstockRouteGps",
+            label: "Feedstock route GPS missing",
             metadata: "Feedstock form · Transport route · 1 affected",
             count: 1,
             href: "/feedstock-intake?feedstock=feedstock-1&focus=transport-route",
+            station: "feedstock",
+            stationReason: "1 route missing GPS",
           },
         ]}
         total={3}
@@ -74,7 +84,10 @@ describe("DashboardAttentionRow", () => {
     expect(html).not.toContain(">Flag<");
     expect(html).not.toContain(">Upcoming<");
     expect(html).not.toContain("from blocking checks");
-    expect(html).toContain("Showing first 2 of 3");
+    // A grouped row names its list and count; every counted row is shown, so no truncation footer.
+    expect(html).toContain("Applications · 6 affected");
+    expect(html).toContain(">3 open<");
+    expect(html).not.toContain("Showing first");
   });
 });
 
