@@ -30,7 +30,6 @@ import { Notice } from "@/components/ui/notice";
 import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
-import { MapWarningBanner } from "./map-warning-banner";
 import { LazyTraceMapCanvas } from "./lazy-trace-map-canvas";
 import { buildChains, chainStepLighting, resolveWalk, walkTo, type ChainWalk } from "./trace-chains";
 import { TraceChainWalk } from "./trace-chain-walk";
@@ -65,6 +64,8 @@ const DESKTOP_PADDING = { top: 72, right: PANEL_CLEARANCE_PX + 144, bottom: 56, 
 const STACKED_PADDING = { top: 48, right: 56, bottom: 32, left: 32 };
 /** The Split column: room on the right for the controls and a label beside a marker. */
 const COLUMN_PADDING = { top: 48, right: 120, bottom: 40, left: 48 };
+/** A warning over the map sits on a paper card, square like the map's other chrome. */
+const MAP_NOTICE_CARD_CLASS = "border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-12 py-8";
 /** Phone: the app bar (56px) sits above the page. */
 const PAGE_HEIGHT_CLASS = "h-[calc(100%-56px)] md:h-full";
 
@@ -170,10 +171,13 @@ export function TraceMapView({
           </div>
         )}
         {/* Left edge, clear of the panel and the controls on the right. */}
-        <MapWarningBanner
-          warnings={model.geo.warnings}
-          className={cn("left-16 top-16 max-w-[calc(100%-96px)]", !column && "lg:max-w-[320px]")}
-        />
+        {model.geo.warnings.length > 0 ? (
+          <div className={cn("absolute left-16 top-16 z-10 flex max-w-[calc(100%-96px)] flex-col gap-8", !column && "lg:max-w-[320px]")}>
+            {model.geo.warnings.map((warning) => (
+              <Notice key={warning} tone="warning" className={MAP_NOTICE_CARD_CLASS}>{warning}</Notice>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
 
