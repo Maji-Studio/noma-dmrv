@@ -27,7 +27,7 @@ Operators asked how much a credit batch, production run, delivery or application
 - The energy page multiplies recorded activity by those factors and labels every result as an estimate. Without factors it shows activity only, in the units operators enter.
 - Estimates never reach a submission. Isometric stays the system of record for project emissions and applies the factors bound on its own template; ADR 0018's journal removal and scope guard are unchanged.
 - A missing reading stays missing. It is counted and shown, never read as zero, so totals over records with gaps are a floor. A feedstock moved partly by rail, ship, pipeline or air counts as missing too: only road freight has a factor, and pricing those legs as road would overstate them.
-- Attribution follows the saved provenance: feedstock transport splits across runs by wet mass drawn, a delivery or application carries its source runs' production energy by dry mass, and transport counts the round trip ([`round-trip.ts`](../../src/lib/calculations/round-trip.ts)). The rules are in the plan.
+- Attribution follows the saved provenance. Feedstock transport counts once, on the owning run, the earliest complete run in a credit batch that drew it, as the Removal does (#1487, #1522). A delivery or application carries its source runs' production energy by dry mass, and transport counts the round trip ([`round-trip.ts`](../../src/lib/calculations/round-trip.ts)). The other rules are in the plan; feedstock transport ownership replaces its wet-mass split.
 
 ## Consequences
 

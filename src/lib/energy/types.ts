@@ -38,15 +38,9 @@ export interface EnergyFeedstockInput {
   code: string;
   /** Facility day of the receipt. */
   day: string;
-  wetMassKg: number | null;
+  /** Owning run resolved by the shared feedstock transport owner lookup. */
+  transportOwnerRunId: string | null;
   legs: EnergyTransportLegInput[];
-}
-
-/** Wet feedstock a run drew from one feedstock. */
-export interface EnergyFeedstockDrawInput {
-  runId: string;
-  feedstockId: string;
-  wetMassKg: number;
 }
 
 export interface EnergyDeliveryInput {
@@ -88,7 +82,6 @@ export interface EnergyInputs {
   emissionEntryFlows?: EnergyFlow[];
   runs: EnergyRunInput[];
   feedstocks: EnergyFeedstockInput[];
-  feedstockDraws: EnergyFeedstockDrawInput[];
   deliveries: EnergyDeliveryInput[];
   deliveryRunShares: EnergyRunShareInput[];
   applications: EnergyApplicationInput[];
@@ -109,8 +102,7 @@ export interface ReadingGap {
   unit: ReadingGapUnit;
   /**
    * Whether any contribution of this source was recorded (a recorded zero
-   * counts). Ids dedupe, so `missing === of` can still hide a recorded share:
-   * one feedstock drawn by a scalable and an unscalable run.
+   * counts), including when other contributions are missing.
    */
   recorded: boolean;
 }
