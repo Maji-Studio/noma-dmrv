@@ -38,3 +38,23 @@ export function nearestPointWithin(
   }
   return best;
 }
+
+export type MapTapResult = { kind: "marker"; nodeId: string } | { kind: "background" };
+
+/**
+ * What a tap on the map canvas does. On phones a tap near a marker is a tap on
+ * the nearest one; with no marker in range, and always on desktop, it is a tap
+ * on the background.
+ */
+export function resolveMapTap({
+  nearestMarkerTaps,
+  markers,
+  tap,
+}: {
+  nearestMarkerTaps: boolean;
+  markers: readonly PickPoint[];
+  tap: { x: number; y: number };
+}): MapTapResult {
+  const nodeId = nearestMarkerTaps ? nearestPointWithin(markers, tap) : null;
+  return nodeId ? { kind: "marker", nodeId } : { kind: "background" };
+}

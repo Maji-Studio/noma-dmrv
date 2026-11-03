@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { nearestPointWithin, TOUCH_PICK_HALF_PX } from "./nearest-marker";
+import { nearestPointWithin, resolveMapTap, TOUCH_PICK_HALF_PX } from "./nearest-marker";
 
 const points = [
   { nodeId: "a", x: 100, y: 100 },
@@ -30,4 +30,16 @@ it("picks the nearest when two are in range", () => {
 it("breaks a tie by list order", () => {
   expect(nearestPointWithin(points, { x: 110, y: 100 })).toBe("a");
   expect(nearestPointWithin([...points].reverse(), { x: 110, y: 100 })).toBe("b");
+});
+
+it("resolves a phone tap in range to the marker", () => {
+  expect(resolveMapTap({ nearestMarkerTaps: true, markers: points, tap: { x: 108, y: 100 } })).toEqual({ kind: "marker", nodeId: "a" });
+});
+
+it("resolves a phone tap out of range to the background", () => {
+  expect(resolveMapTap({ nearestMarkerTaps: true, markers: points, tap: { x: 300, y: 300 } })).toEqual({ kind: "background" });
+});
+
+it("resolves a desktop tap to the background even when a marker is in range", () => {
+  expect(resolveMapTap({ nearestMarkerTaps: false, markers: points, tap: { x: 108, y: 100 } })).toEqual({ kind: "background" });
 });

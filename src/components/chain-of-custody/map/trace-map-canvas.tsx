@@ -37,7 +37,7 @@ import {
   SAT_LAYER_ID,
   SAT_SOURCE_ID,
 } from "./viewer-constants";
-import { nearestPointWithin } from "./nearest-marker";
+import { resolveMapTap } from "./nearest-marker";
 import { createSiteMarkerElement } from "./viewer-elements";
 import { chipAnchor, legLineCoordinates } from "./viewer-utils";
 import { litKmRange, type DrawnLeg, type MapLighting } from "./trace-model";
@@ -306,20 +306,13 @@ export default function TraceMapCanvas({
     const resize = new ResizeObserver(() => map.resize());
     resize.observe(container);
     map.on("click", (event) => {
-      // Phones: a tap near a marker is a tap on the nearest one (44px target);
-      // only a tap with no marker in range falls through to the background.
-      if (latest.current.nearestMarkerTaps) {
-        const points = markersRef.current.map((marker) => {
-          const point = map.project(marker.getLngLat());
-          return { nodeId: marker.getElement().dataset.nodeId ?? "", x: point.x, y: point.y };
-        });
-        const nodeId = nearestPointWithin(points, event.point);
-        if (nodeId) {
-          latest.current.onMarkerClick?.(nodeId);
-          return;
-        }
-      }
-      latest.current.onBackgroundClick?.();
+      const points = markersRef.current.map((marker) => {
+        const point = map.project(marker.getLngLat());
+        return { nodeId: marker.getElement().dataset.nodeId ?? "", x: point.x, y: point.y };
+      });
+      const result = resolveMapTap({ nearestMarkerTaps: !!latest.current.nearestMarkerTaps, markers: points, tap: event.point });
+      if (result.kind === "marker") latest.current.onMarkerClick?.(result.nodeId);
+      else latest.current.onBackgroundClick?.();
     });
     map.on("zoom", () => syncChipVisibility(map, chipsRef.current));
     map.on("zoomend", () => declutterLabels(map, markersRef.current));
