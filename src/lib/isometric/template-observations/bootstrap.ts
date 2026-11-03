@@ -37,7 +37,7 @@ export const BOOTSTRAP_LINE_SOURCES: Readonly<Record<string, Readonly<LineContra
   // Staff travel local
   rtc_1M4ZRZWZCSBXH6EX: { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },
 
-  // cula-template-2026-10-15.json
+  // production-template-2026-10-15.json
   // Biomass transportation to processing site via truck
   rtc_1M2QJGQS21S0XCMB: { scope: "operating", automaticSource: "feedstock-transport", entryPolicy: "additive", origin: "bootstrap" },
   // Metered electricity use emissions

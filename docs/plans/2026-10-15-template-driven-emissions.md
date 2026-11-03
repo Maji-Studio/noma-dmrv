@@ -9,9 +9,9 @@ This plan authorizes no registry changes and no production submissions. Template
 
 ## 1. Goal
 
-Operators can fill every line of the target Removal template ("LCA based template Cula", `rvt_1M2QJGQS21S0A8H5`) per credit batch. Two kinds of line are added: lines noma cannot derive from records, and lines that need more than the run figures. Every number shows where it came from, needs evidence, and goes out once.
+Operators can fill every line of the target Removal template ("LCA based template", `rvt_1M2QJGQS21S0A8H5`) per credit batch. Two kinds of line are added: lines noma cannot derive from records, and lines that need more than the run figures. Every number shows where it came from, needs evidence, and goes out once.
 
-**Cula lines and where each gets its number** (template read on 2026-10-15; Cula's facility is 1000-year):
+**Lines of the production template and where each gets its number** (template read on 2026-10-15; its facility is 1000-year):
 
 | Line | Blueprint / inputs | Source after this plan |
 |---|---|---|
@@ -32,7 +32,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Topic | Decision |
 |---|---|
 | Operating lines | Stay on each Removal and are entered per batch. #1020 drops the move to project level. |
-| Pyrolyzer CO, CH₄ | Ordinary entries per batch, typed by the operator. The form shows Cula's line description (with the 36,792 / 17,520 formula) and the batch's dry feedstock beside the gas-mass field. Nothing is computed for the operator. |
+| Pyrolyzer CO, CH₄ | Ordinary entries per batch, typed by the operator. The form shows the production template's line description (with the 36,792 / 17,520 formula) and the batch's dry feedstock beside the gas-mass field. Nothing is computed for the operator. |
 | Entry dates (2026-10-16) | Single lines cover the whole batch and store its start date; other create dates are optional and default to facility today clamped to the batch window. Explicit dates keep their validation; updates never move single-line dates. |
 | Sample shipping | Entered per line. Old sample transport legs are deleted by the hand-run retirement CLI at activation (Kenji, 2026-10-16), rather than hidden. Certification-locked legs are skipped. Sample legs stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
@@ -43,11 +43,11 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Late entries | Go on the next Removal from the same batch. Once the batch is fully applied and its period has ended, they may go on the facility's next compatible draft ending on or after their date (§7, #1059). |
 | Evidence | Required, marked as a certification requirement, and the Removal cannot be submitted without it. Recorded zeros are exempt. |
 | #291 chain | Superseded. #639, #640, #641, #642, #893, #626 and #638 are folded in, and #894 is closed. |
-| Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
+| Testing | Kenji copies the production template into the sandbox (not 1:1). Tests use a fixture of the production template as read on 2026-10-15. A read-only production key is needed before the first real submission. |
 | Naming | "Emissions entry", with an "Add entry" button. "Activity" stays the history log of #1037-#1047. |
-| Durability | Build for both tiers. The Cula facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
+| Durability | Build for both tiers. The production template's facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
 | Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. Resubmitting supersedes it (Kenji, 2026-10-15). A re-entered sent entry is held via a link and stamped on resubmit (Kenji, 2026-10-21, "link"). The derived state shows as a badge reading "Correction needed" while the window is open with no changes and "Resubmit needed" once a sent fact changed (Kenji, 2026-10-21: "Returned" was unclear); the sheet notice title and the credit batch to-do read "Returned by Isometric" (Kenji, 2026-10-21, screen variant A). "Correction needed" is the same label #1134 shows where a Removal has no correction data. |
-| Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than Cula. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
+| Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than the production template. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
 
 ## 3. What the code tells us
 
@@ -168,7 +168,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Entry policy per input shape** (code, next to the catalog)
 - `additive`: entries sum, and add to the line's automatic source if it has one. Applies to fuel volume, electricity, mass, distance and mass × distance.
 - `single`: at most one active entry per batch, and never an automatic source. Applies to gas concentration with mass flow, and meter readings.
-- Paired mass and distance inputs on one component (the current production and Cula truck lines): one entry or none. With an automatic figure the component takes no manual entries; without one it takes a single entry (Kenji, 2026-10-21). A t·km input stays `additive`: it takes many entries, each with its own leg's sources, summed into one component. noma keeps that shape and does not follow Cula's paired inputs; #1020 brings production to it.
+- Paired mass and distance inputs on one component (the truck lines of both production templates): one entry or none. With an automatic figure the component takes no manual entries; without one it takes a single entry (Kenji, 2026-10-21). A t·km input stays `additive`: it takes many entries, each with its own leg's sources, summed into one component. noma keeps that shape and does not follow its paired inputs; #1020 brings production to it.
 - An unsupported shape shows "Needs setup".
 - The entry's `lineRule` column records the policy it was written under.
 
@@ -186,7 +186,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - an `entryPolicy`: `none`, `additive` or `single`.
 - `single` requires no automatic source.
 - Examples: startup diesel is operating, with run diesel as its automatic source and `additive` entries. Lab electricity is operating, with no automatic source and `additive` entries. A pyrolyzer line is operating, with no automatic source and a `single` entry.
-- **Bootstrap:** a checked-in mapping, keyed by component ID, for the three known templates: the sandbox "Dark Earth Carbon Template (15 Oct)" (the reference), Cula, and "Removal Template 2026-07-03". The diesel split and the two lab and sample lines are explicit there.
+- **Bootstrap:** a checked-in mapping, keyed by component ID, for the three known templates: the sandbox "Dark Earth Carbon Template (15 Oct)" (the reference), the production template, and "Removal Template 2026-07-03". The diesel split and the two lab and sample lines are explicit there.
 - **Carry forward:** a new observation of the same template keeps the assignments for surviving component IDs.
 - **New component IDs**, for example after the #1020 re-authoring: the change review asks an Owner or Admin to set each contract. The choices are limited to the catalog candidates for its blueprint and the entry policies its shape allows. Until then the line is `unassigned` and blocks. This is one assignment step inside the review, not a general binding editor (#894 stays closed).
 - Two lines may never share an automatic source. That is the existing `ambiguous` reason, now settled by component ID.
@@ -205,7 +205,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Also in this PR**
 - Split `certify-context-core.ts` before extending it.
 - Folds #639, #642 (drift tests over fingerprinted fixtures) and #626.
-- Fixtures in `tests/fixtures/isometric/`: the sandbox 15 Oct template (read over sandbox REST on 2026-10-15), a new Cula fixture captured through the MCP read, and the existing 2026-07-03 production fixture.
+- Fixtures in `tests/fixtures/isometric/`: the sandbox 15 Oct template (read over sandbox REST on 2026-10-15), a new production-template fixture captured through the MCP read, and the existing 2026-07-03 production fixture.
 
 ### 4.3 Line states and one preflight gate (PR 2)
 
@@ -389,7 +389,7 @@ The CLI uses the existing Platform Admin bootstrap seam (`ALLOW_DEV_BOOTSTRAP`),
 
 **Before the first real submission**
 - #1020 re-authoring is done, and the bootstrap mapping covers the new component IDs.
-- The Cula fixture is captured.
+- The production-template fixture is captured.
 - Production is read through a read-only key and matches the fixture.
 - `EMISSIONS_ENTRIES_ENABLED` is on in the sandbox and nightly environments.
 - A full rehearsal against the sandbox "Dark Earth Carbon Template (15 Oct)": entries with files, confirmed zeros, a follow-up Removal, and a correction after a statement fails verification.

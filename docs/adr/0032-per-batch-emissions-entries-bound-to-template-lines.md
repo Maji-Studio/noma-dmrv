@@ -6,7 +6,7 @@
 
 ADR 0018 keeps every emission that noma does not record on a production run out of Removals. It treats staff travel, lab electricity, sampling consumables and pyrolyzer direct emissions as project-scope tuples, and `PERIOD_INPUT_TUPLES` stops them reaching a Removal datapoint. #1020 (2026-10-14) would have moved those lines to project-level components in Isometric.
 
-The target production template, "LCA based template Cula" (`rvt_1M2QJGQS21S0A8H5`), puts them on every Removal instead. Isometric's own sources point the same way:
+The target production template, "LCA based template" (`rvt_1M2QJGQS21S0A8H5`), puts them on every Removal instead. Isometric's own sources point the same way:
 
 - Biochar v1.1, Net CDR Calculation > Calculation of CO2eOperations, RP: "CO2eOperations, RP emissions must be attributed to the Reporting Period in which they occur. Allocation may be permitted in certain instances, on a case by case basis, in agreement with Isometric." The protocol's operations table includes MRV sampling and lab analysis, staff travel and direct emissions.
 - docs.isometric.com, user-guides/certify/project-emissions: project-level components are for "Project establishment and end-of-life phases".
