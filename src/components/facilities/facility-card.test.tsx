@@ -31,6 +31,24 @@ const facility = {
   inventorySummary: { feedstockWetKg: 100 },
 } as FacilityWithRelations;
 
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join(" ");
+  return isValidElement<ElementProps>(node) ? textOf(node.props.children) : "";
+}
+
+describe("FacilityCard feedstock figure", () => {
+  it.each([
+    { feedstockWetKg: 0.3, text: "0.3 kg" },
+    { feedstockWetKg: 0.04, text: "Empty" },
+    { feedstockWetKg: 1500, text: "1.5 t" },
+  ])("reads $feedstockWetKg kg as $text", ({ feedstockWetKg, text }) => {
+    const view = FacilityCard({ facility: { ...facility, inventorySummary: { feedstockWetKg } } as FacilityWithRelations, onView: vi.fn(), onEdit: vi.fn(), onArchive: vi.fn(), onRestore: vi.fn() });
+    expect(textOf(view)).toContain(text);
+  });
+});
+
 describe("FacilityCard", () => {
   it("opens detail from the card body and exposes neutral edit/archive menu actions", () => {
     const onView = vi.fn();

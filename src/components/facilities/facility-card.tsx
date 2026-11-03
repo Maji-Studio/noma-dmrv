@@ -1,5 +1,6 @@
 "use client";
 
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { EMPTY_STOCK_LABEL, isMassEmpty } from "@/lib/stock-display";
 import {
   ArchiveIcon,
@@ -11,7 +12,7 @@ import {
 import { RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import { formatMass } from "@/lib/format-utils";
+import { formatMass, formatMassKg } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface FacilityCardProps {
@@ -88,7 +89,7 @@ export function FacilityCard({
               <p className="body-small text-[var(--color-text-tertiary)]">{EMPTY_STOCK_LABEL}</p>
             ) : (
               <p className="body-small text-[var(--color-text-primary)]">
-                {formatMass(facility.inventorySummary.feedstockWetKg)}
+                {facility.inventorySummary.feedstockWetKg >= KG_PER_TONNE ? formatMass(facility.inventorySummary.feedstockWetKg) : formatMassKg(facility.inventorySummary.feedstockWetKg)}
               </p>
             )}
           </div>

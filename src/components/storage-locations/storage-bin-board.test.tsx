@@ -32,29 +32,27 @@ afterEach(cleanup);
 describe("storage board lane figures", () => {
   it("always names the basis of a non-empty lane, on the rail and in the mobile select", () => {
     board();
-    expect(rail().getByText("458.4 t")).toBeTruthy();
-    expect(rail().getAllByText("wet mass")).toHaveLength(3);
+    expect(rail().getByText("458.4 t wet mass")).toBeTruthy();
+    expect(rail().getByText("250 kg wet mass")).toBeTruthy();
     expect(mobileOptions()).toContain("Product (250 kg wet mass)");
   });
 
   it("names a lane that fell back to dry biochar, at one decimal like its cards", () => {
     board({ laneSummary: lanes({ biochar_bin: { binCount: 1, onHandKg: 900.5, basis: "dry" } }) });
-    expect(rail().getAllByText("dry biochar")).toHaveLength(1);
-    expect(rail().getByText("900.5 kg")).toBeTruthy();
+    expect(rail().getByText("900.5 kg dry biochar")).toBeTruthy();
     expect(mobileOptions()).toContain("Biochar (900.5 kg dry biochar)");
   });
 
   it("shows a 0.3 kg feedstock lane as 0.3 kg, like its card, not Empty", () => {
     board({ laneSummary: lanes({ feedstock_bin: { binCount: 1, onHandKg: 0.3, basis: "wet" } }) });
-    expect(rail().getByText("0.3 kg")).toBeTruthy();
+    expect(rail().getByText("0.3 kg wet mass")).toBeTruthy();
     expect(mobileOptions()).toContain("Feedstock (0.3 kg wet mass)");
   });
 
   it("reads a lane whose total renders as zero at its precision as Empty, with no basis", () => {
     board({ laneSummary: lanes({ product_bin: { binCount: 2, onHandKg: 0.3, basis: "wet" }, biochar_bin: { binCount: 1, onHandKg: 0.04, basis: "dry" } }) });
     expect(rail().getAllByText("Empty")).toHaveLength(2);
-    expect(rail().getAllByText("wet mass")).toHaveLength(1);
-    expect(rail().queryByText("dry biochar")).toBeNull();
+    expect(rail().queryByText(/250 kg|dry biochar|0\.3 kg/)).toBeNull();
     expect(mobileOptions()).toContain("Product (Empty)");
   });
 

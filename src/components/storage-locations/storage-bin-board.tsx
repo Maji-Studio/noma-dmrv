@@ -21,7 +21,8 @@ import { useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass, formatMassKg } from "@/lib/format-utils";
 import { EMPTY_STOCK_LABEL, isMassEmpty, isWholeKgEmpty } from "@/lib/stock-display";
-import { massBasisLabel } from "./stock-preview-shared";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { formatWetEstimate, massBasisLabel } from "./stock-preview-shared";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -46,9 +47,6 @@ import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations"
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
 const LOADING_TILES = 8;
-
-/** Lane totals switch from kg to tonnes here, as `formatMass` does. */
-const KG_PER_TONNE = 1000;
 
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
@@ -119,8 +117,9 @@ function filterBinCount(
  * "all". Feedstock is dry mass and product is packed mass, so their sum is not
  * a certifiable quantity and is never shown as one.
  *
- * Facility roll-ups use auto-tonne `formatMass`; per-bin figures on the tiles
- * stay fixed kg.
+ * A lane switches to tonnes at one tonne, as `formatMass` does; under a tonne it
+ * reads at the precision of its cards (see `isLaneEmpty`), so the Empty judgement
+ * and the figure share one precision.
  */
 function filterFigure(
   summary: LaneSummary | undefined,
@@ -136,7 +135,9 @@ function filterFigure(
   const { onHandKg } = summary[filter];
   if (onHandKg == null) return null;
   if (isLaneEmpty(summary, filter)) return EMPTY_STOCK_LABEL;
-  return wholeKgLane(summary, filter) || onHandKg >= KG_PER_TONNE ? formatMass(onHandKg) : formatMassKg(onHandKg);
+  if (onHandKg >= KG_PER_TONNE) return formatMass(onHandKg);
+  // Under a tonne a lane reads like its cards: a wet-estimate lane in whole kg, the rest at one decimal.
+  return wholeKgLane(summary, filter) ? `${formatWetEstimate(onHandKg)} kg` : formatMassKg(onHandKg);
 }
 
 /** Wet-basis output lanes are whole kilograms, like their cards' wet estimates. */
@@ -472,8 +473,9 @@ function RailFilter({
         </span>
       </span>
       <span className="flex flex-col items-end">
-        {figure && <span className="body-caption font-semibold tabular-nums">{figure}</span>}
-        {figure && basis && <span className="body-caption text-[var(--color-text-tertiary)]">{basis}</span>}
+        {figure && (figure === EMPTY_STOCK_LABEL
+          ? <span className="body-caption text-[var(--color-text-tertiary)]">{figure}</span>
+          : <span className="body-caption whitespace-nowrap font-semibold tabular-nums">{basis ? `${figure} ${basis}` : figure}</span>)}
         {filter !== "all" && count != null && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {count} {count === 1 ? "bin" : "bins"}
