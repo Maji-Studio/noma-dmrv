@@ -170,9 +170,10 @@ export function TraceMapView({
             </div>
           </div>
         )}
-        {/* Left edge, clear of the panel and the controls on the right. */}
+        {/* Left edge, clear of the panel and the controls on the right; a long
+            stack scrolls inside the pane, never over the panel below it. */}
         {model.geo.warnings.length > 0 ? (
-          <div className={cn("absolute left-16 top-16 z-10 flex max-w-[calc(100%-96px)] flex-col gap-8", !column && "lg:max-w-[320px]")}>
+          <div className={cn("absolute left-16 top-16 z-10 flex max-h-[calc(100%-32px)] max-w-[calc(100%-96px)] flex-col gap-8 overflow-y-auto", !column && "lg:max-w-[320px]")}>
             {model.geo.warnings.map((warning) => (
               <Notice key={warning} tone="warning" className={MAP_NOTICE_CARD_CLASS}>{warning}</Notice>
             ))}
