@@ -65,8 +65,9 @@ function StateMarker({ state }: { state: CreditBatchMilestone["state"] }) {
 
 function StepTitle({ step }: { step: CreditBatchMilestone }) {
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-6 body-small", step.state === "todo" ? MUTED_TEXT : "font-medium")}>
-      {step.label}
+    <span className={cn("inline-flex flex-wrap items-center gap-6 body-small", step.state === "todo" ? MUTED_TEXT : "font-medium", step.state === "failed" && "text-[var(--st-bad)]")}>
+      {/* A failed step names what went wrong ("RM-26-001: Submission interrupted"), never the step it did not reach. */}
+      {step.state === "failed" && step.caption ? step.caption : step.label}
       {step.count != null && <CountBadge count={step.count} blocking label={todosLabel(step.count)} />}
     </span>
   );

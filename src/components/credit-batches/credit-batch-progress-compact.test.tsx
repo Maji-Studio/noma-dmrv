@@ -40,4 +40,13 @@ describe("CreditBatchProgressCompact", () => {
     // The four-step list mounts only while the popover is open.
     expect(container.querySelector("ol")).toBeNull();
   });
+
+  it("names what went wrong on a failed step, not the step it did not reach", () => {
+    const steps = missing.map((s, i) => (i === 1 ? { ...s, state: "failed" as const, caption: "RM-26-001: Submission interrupted" } : s));
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(<CreditBatchProgressCompact steps={steps} />);
+    const text = (container.querySelector('[data-testid="credit-batch-progress-trigger"]')?.textContent ?? "").replace(/\s+/g, " ").trim();
+    expect(text).toBe("RM-26-001: Submission interruptedStep 2 of 4");
+    expect(text).not.toContain("Removal submitted");
+  });
 });
