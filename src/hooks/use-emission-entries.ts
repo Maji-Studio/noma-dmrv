@@ -22,7 +22,7 @@ import { throwActionError } from "@/lib/stale-version";
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
 import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
 import type { ActionResult } from "@/types/actions";
-import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
+import { withoutRegistryCalculatedLines, type EmissionLineRecords, type EmissionRecordSource } from "@/lib/certification/emission-lines";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { energyKeys } from "./use-energy";
@@ -65,6 +65,8 @@ export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
     },
     retry: (failureCount, error) => !(error instanceof EmissionLinesBlockedError) && failureCount < EMISSION_LINES_RETRY_LIMIT,
     enabled: !!scope,
+    // Every display reads the lines without the one Isometric calculates.
+    select: withoutRegistryCalculatedLines,
     // Records come from runs, legs, deliveries and applications edited on
     // other pages; refetch on every visit rather than wiring all of them here.
     staleTime: 0,

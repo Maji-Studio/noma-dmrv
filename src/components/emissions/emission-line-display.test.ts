@@ -11,7 +11,6 @@ import {
   lineMatches,
   lineCounts,
   lineTotalText,
-  isTotalMissing,
   kgToTonnes,
   multiplyDecimals,
   tonnesToKg,
@@ -20,12 +19,11 @@ import {
   isRecordsGap,
   recordsHref,
   recordsText,
-  recordsSourceText,
   recordsFigureText,
 } from "./emission-line-display";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
-import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { deriveBatchEmissionLines, withoutRegistryCalculatedLines } from "@/lib/certification/emission-lines";
 import { validateEntryDate } from "@/schemas/emission-entry-form";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 
@@ -41,33 +39,27 @@ function sequestrationLine(applicationCount: number) {
 }
 
 describe("Isometric sequestration display", () => {
-  it.each([1, 15])("shows the registry calculation and %s applications without a records gap", (count) => {
-    const line = sequestrationLine(count);
-    const records = line.records!;
-    const applications = `${count} ${count === 1 ? "application" : "applications"}`;
-    expect(lineTotalText(line)).toBe("Calculated by Isometric");
-    expect(recordsFigureText(records)).toBe("Calculated by Isometric");
-    expect(isTotalMissing(line)).toBe(false);
-    expect(recordsChipText(records)).toBe(applications);
-    expect(recordsText(records)).toBe(applications);
-    expect(recordsSourceText(records)).toBe(applications);
-    expect(isRecordsGap(records)).toBe(false);
-    expect(lineMatches(line, "done")).toBe(true);
-    expect(lineMatches(line, "open")).toBe(false);
-    expect(lineMatches(line, "notRecorded")).toBe(false);
+  it.each([1, 15])("drops handled sequestration with %s applications from counts and filters", (count) => {
+    const sequestration = sequestrationLine(count);
+    const other = makeLine({ componentId: "other", state: "empty" });
+    const shown = withoutRegistryCalculatedLines([sequestration, other]);
+    expect(shown).toEqual([other]);
+    expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
+    expect(groupLines(shown).map((group) => group.key)).not.toContain(sequestration.groupKey);
   });
 
   it("keeps a batch without applications open and makes counts agree with filters", () => {
     const empty = sequestrationLine(0);
     expect(lineTotalText(empty)).toBe("Not recorded");
-    expect(isTotalMissing(empty)).toBe(true);
     expect(recordsChipText(empty.records!)).toBe("No applications yet");
     expect(recordsFigureText(empty.records!)).toBe("Not recorded");
     expect(isRecordsGap(empty.records)).toBe(true);
-    const lines = [empty, sequestrationLine(15)];
-    expect(lineCounts(lines)).toEqual({ all: 2, open: 1, missing: 0, review: 0, notRecorded: 1, done: 1 });
-    expect(lines.filter((line) => lineMatches(line, "open"))).toEqual([empty]);
-    expect(lines.filter((line) => lineMatches(line, "done"))).toEqual([lines[1]]);
+    const shown = withoutRegistryCalculatedLines([empty, sequestrationLine(15)]);
+    expect(shown).toEqual([empty]);
+    expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
+    expect(shown.filter((line) => lineMatches(line, "open"))).toEqual([empty]);
+    expect(shown.filter((line) => lineMatches(line, "done"))).toEqual([]);
+    expect(groupLines(shown).map((group) => group.key)).toContain(empty.groupKey);
   });
 });
 

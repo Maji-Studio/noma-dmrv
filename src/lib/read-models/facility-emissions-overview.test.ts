@@ -72,6 +72,35 @@ it("derives all six states, facility-month counts and last occurrence with bulk 
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
 });
 
+it.each([
+  { state: "handled", applications: 1, enrichmentComplete: true,
+    counts: { total: 0, open: 0, recorded: 0, notRecorded: 0, needsReview: 0 } },
+  { state: "empty", applications: 0, enrichmentComplete: true,
+    counts: { total: 1, open: 1, recorded: 0, notRecorded: 1, needsReview: 0 } },
+  { state: "needsReview", applications: 1, enrichmentComplete: false,
+    counts: { total: 1, open: 1, recorded: 0, notRecorded: 0, needsReview: 1 } },
+])("counts $state sequestration through the facility overview read model", async ({ applications, enrichmentComplete, counts }) => {
+  const storageObservation: EntryObservation & { id: string } = {
+    ...observation,
+    definition: { groups: [{ id: "storage", key: "co2-stored", displayName: "CO₂ stored", description: "", components: [{
+      id: "sequestration", displayName: "Sequestration", description: "",
+      blueprintKey: "biochar_sequestration_1000_year_f_durable_max",
+      inputs: [{ key: "product_mass", type: "monitored", quantityKind: "mass" }],
+    }] }] },
+    enrichment: enrichmentComplete ? { sequestration: { product_mass: { unit: "kg" } } } : {},
+    lineSources: { sequestration: { scope: "operating", origin: "reviewed", automaticSource: "sequestration", entryPolicy: "none" } },
+  };
+  vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "UTC", batches: [batch] } as never);
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([storageObservation] as never);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({
+    new: { automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: applications } },
+  });
+  const result = await loadFacilityEmissionsOverview(ctx, "facility");
+  expect(result.batches).toHaveLength(1);
+  expect(result.batches[0].lineCounts).toEqual({ ...counts, fileMissing: 0, needsSetup: 0 });
+});
+
 it("shows one setup item for an unpinned or unread template without failing other batches", async () => {
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([]);
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
