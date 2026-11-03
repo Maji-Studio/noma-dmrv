@@ -180,7 +180,7 @@ export function batchHealthFixLinkFor(
         label: "Review deliveries",
         href: `/deliveries?${query(
           creditBatchId ? { creditBatch: creditBatchId } : undefined,
-          false,
+          true,
         )}`,
       };
     case "sourceData":

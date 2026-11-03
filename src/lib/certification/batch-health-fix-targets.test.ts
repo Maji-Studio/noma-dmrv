@@ -235,7 +235,7 @@ describe("batchHealthFixLinkFor", () => {
     "routes merged %s gaps to the appropriate delivery destination",
     (kind) => {
       const proof = {
-        fact: "Missing proof", detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
+        kind: "deliveryProof" as const, instruction: "", fact: "Missing proof", detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
         record: { id: "delivery-1", code: "D-1" },
       };
       const facts: BatchHealthFacts = {
@@ -247,7 +247,7 @@ describe("batchHealthFixLinkFor", () => {
           proof,
           ...(kind === "same delivery proofs" ? [proof] : []),
           ...(kind === "multiple proofs" ? [{ ...proof, record: { id: "delivery-2", code: "D-2" } }] : []),
-          ...(kind === "distance" ? [{ fact: "Missing distance", detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
+          ...(kind === "distance" ? [{ kind: "deliveryDistance" as const, instruction: "", fact: "Missing distance", detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
         ],
         ...(kind === "production" ? { productionReadinessGap: {
           kind: "noApplications", detail: "Missing delivery", fixTarget: "deliveries",
@@ -258,7 +258,7 @@ describe("batchHealthFixLinkFor", () => {
       expect(batchHealthFixLinkFor(row, "facility-1", "batch-1").href)
         .toBe(kind === "same delivery proofs"
           ? "/deliveries?facility=facility-1&delivery=delivery-1&mode=edit&focus=transport-evidence"
-          : "/deliveries?facility=facility-1&creditBatch=batch-1");
+          : `/deliveries?facility=facility-1&creditBatch=batch-1&ids=${kind === "multiple proofs" ? "delivery-1%2Cdelivery-2" : "delivery-1"}`);
     },
   );
 });

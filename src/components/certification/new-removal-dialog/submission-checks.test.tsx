@@ -244,7 +244,7 @@ describe("SubmissionChecks", () => {
   it("keeps the location repair link on the single feedstock transport check", () => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={withUnmet("transport", { transportCategory: "feedstock", lineageIssues: [{
-        detail: "Missing transport distance", fact: "Missing transport distance", fixTarget: "feedstocks",
+        kind: "feedstockTransport", instruction: "", detail: "Missing transport distance", fact: "Missing transport distance", fixTarget: "feedstocks",
         record: { id: "feedstock-one", code: "FS-1", href: "/suppliers?location=location-one&mode=edit" },
       }] })} facilityId="facility-1"
     />);
@@ -255,7 +255,7 @@ describe("SubmissionChecks", () => {
   it("links missing proof to the delivery evidence section", () => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={withUnmet("entityReadiness", { lineageIssues: [{
-        detail: "Delivery D-0012 has no proof of delivery.", fact: "Delivery D-0012 has no proof of delivery.", fixTarget: "deliveryEvidence",
+        kind: "deliveryProof", instruction: "", detail: "Delivery D-0012 has no proof of delivery.", fact: "Delivery D-0012 has no proof of delivery.", fixTarget: "deliveryEvidence",
         record: { id: "delivery-1", code: "D-0012" },
       }] })} facilityId="facility-1"
     />);
@@ -265,7 +265,7 @@ describe("SubmissionChecks", () => {
 
   it("caps proof links and names each delivery", () => {
     const lineageIssues = Array.from({ length: ENTITY_READINESS_CHECK_DISPLAY_LIMIT + 1 }, (_, index) => ({
-      detail: "Missing proof", fact: "Missing proof", fixTarget: "deliveryEvidence" as const,
+      kind: "deliveryProof" as const, instruction: "", detail: "Missing proof", fact: "Missing proof", fixTarget: "deliveryEvidence" as const,
       record: { id: `delivery-${index}`, code: `D-${index}` },
     }));
     const html = renderToStaticMarkup(<SubmissionChecks

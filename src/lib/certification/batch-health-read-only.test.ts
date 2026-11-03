@@ -55,12 +55,14 @@ describe("read-only batch health facts", () => {
     expect(check.readOnlyDetail).toBe(fact);
     const editable = buildCreditBatchOpenItems({ ...pageContext, health });
     const id = `health:${check.key}:${check.issueKey ?? check.fixTarget}`;
-    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
+    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(target === "feedstocks" ? fact : detail);
+    if (target === "feedstocks") expect(editable.blocking.find((item) => item.id === id)?.instruction).toBe("Record a positive distance and load mass before submitting.");
     const item = readOnlyOpenItems({ ...editable, waiting: [] }).blocking.find((item) => item.id === id)!;
     expect(item.detail).toBe(fact);
     expect(item.instruction).toBeUndefined();
     expect(item.target).toEqual(target === "labSamples" ? { tab: "samples" } : null);
-    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
+    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(target === "feedstocks" ? fact : detail);
+    if (target === "feedstocks") expect(editable.blocking.find((item) => item.id === id)?.instruction).toBe("Record a positive distance and load mass before submitting.");
   });
 
   it("joins multiple producer facts like merged check text, each once", () => {
@@ -89,8 +91,8 @@ describe("read-only batch health facts", () => {
     const proof = deliveryProofMessage("DL-1");
     const distance = deliveryDistanceMessage("DL-1");
     const health = deriveBatchHealth({ ...healthy, submissionLineageBlockers: [
-      { detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } },
-      { detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: "delivery", code: "DL-1" } },
+      { kind: "deliveryProof", instruction: proof.instruction!, detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } },
+      { kind: "deliveryDistance", instruction: distance.instruction!, detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: "delivery", code: "DL-1" } },
     ] });
     const [check] = health.checks.filter((check) => check.status === "unmet");
     expect(check.detail).toBe(`${proof.message} · ${distance.message}`);
@@ -105,7 +107,7 @@ describe("read-only batch health facts", () => {
       productionReadinessGap: { kind: "noApplications", fixTarget: "deliveries", detail: "Production is missing. Record it.",
         ...(hasCopy ? { copy: { detail: "Production is missing.", instruction: "Record it." } } : {}),
       },
-      submissionLineageBlockers: [{ detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }],
+      submissionLineageBlockers: [{ kind: "deliveryProof", instruction: proof.instruction!, detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }],
     });
     const check = health.checks.find((check) => check.status === "unmet")!;
     expect(check.readOnlyDetail).toBe(hasCopy ? `Production is missing. · ${proof.fact}` : undefined);

@@ -259,7 +259,7 @@ describe("enrichWithTransportLegs", () => {
   });
 
   it("does not duplicate feedstock blockers when they carry a location fix link", () => {
-    const blocker = { fixTarget: "feedstocks", detail: "Missing distance", record: { id: "feedstock-one", href: "/suppliers?location=one" } };
+    const blocker = { kind: "feedstockTransport", instruction: "", fact: "Missing distance", fixTarget: "feedstocks", detail: "Missing distance", record: { id: "feedstock-one", code: "FS-1", href: "/suppliers?location=one" } };
     const facts = toRemovalReadinessFacts({
       submissionLineageBlockers: [blocker], latestSubmission: null,
       supportingDocuments: { total: 0, mirrored: 0 }, requiredTransportCategories: [],

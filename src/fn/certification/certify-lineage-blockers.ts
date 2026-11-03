@@ -21,6 +21,8 @@ export function buildSubmissionLineageBlockers(
     const label = code ? `Feedstock ${code}` : "A feedstock";
     const transport = feedstockTransportMessage(label);
     blockers.push({
+      kind: "feedstockTransport",
+      instruction: transport.instruction!,
       detail: transport.message,
       fact: transport.fact,
       fixTarget: "feedstocks",
@@ -32,13 +34,15 @@ export function buildSubmissionLineageBlockers(
       deliveryCode: delivery.code,
       proofOfDeliveryCount: delivery.proofOfDeliveryCount,
     });
-    if (proof) blockers.push({ detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: delivery.id, code: delivery.code } });
+    if (proof) blockers.push({ kind: "deliveryProof", instruction: proof.instruction!, detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: delivery.id, code: delivery.code } });
     const destination = applicationDestinationBlockerMessage({
       applicationCode: application.code,
       // The lineage projection resolves this from the order destination.
       customerLocationId: delivery.customerLocationId ?? null,
     });
     if (destination) blockers.push({
+      kind: "applicationDestination",
+      instruction: destination.instruction!,
       detail: destination.message,
       fact: destination.fact,
       fixTarget: order ? "orders" : "deliveries",
@@ -50,7 +54,7 @@ export function buildSubmissionLineageBlockers(
       distanceKmOverride: delivery.distanceKmOverride ?? null,
       recordedDistanceKm: delivery.recordedDistanceKm ?? null,
     }) : null;
-    if (distance) blockers.push({ detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: delivery.id, code: delivery.code } });
+    if (distance) blockers.push({ kind: "deliveryDistance", instruction: distance.instruction!, detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: delivery.id, code: delivery.code } });
   }
   return [...new Map(blockers.map((blocker) => [
     `${blocker.fixTarget}:${blocker.record.id}:${blocker.detail}`, blocker,

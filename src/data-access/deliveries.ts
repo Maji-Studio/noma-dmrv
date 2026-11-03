@@ -17,7 +17,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL } from "drizzle-orm";
 import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 export interface DeliveryWithRelations extends Delivery {
@@ -187,6 +187,7 @@ export async function getDeliveries(
     orderId,
     facilityId,
     creditBatchId,
+    ids,
     status,
     fromDate,
     toDate,
@@ -201,6 +202,10 @@ export async function getDeliveries(
     eq(deliveries.organizationId, ctx.organizationId),
     ...activeDeliveriesCondition(deliveryColumns),
   ];
+
+  if (ids?.length) {
+    conditions.push(inArray(deliveries.id, ids));
+  }
 
   if (search) {
     const searchPattern = `%${search}%`;

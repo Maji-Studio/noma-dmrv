@@ -20,7 +20,8 @@ import type { RemovalCorrection } from "./removal-entry-correction";
 import { templateLineFixTarget } from "./template-fix-targets";
 import type { BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
-import type { SubmissionLineageBlocker } from "./submission-readiness";
+import { submissionBlockerGroupFact, type SubmissionLineageBlocker } from "./submission-readiness";
+import { blockerMessage } from "./blocker-message";
 import type { TransportCategory } from "./readiness";
 import {
   defaultProductionReadinessGap,
@@ -520,18 +521,35 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
 }
 
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
-  const lineageChecks: BatchHealthCheckBase[] = (facts.submissionLineageBlockers ?? []).map((blocker) => ({
-    key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
-    issueKey: `submission-${blocker.fixTarget}`,
-    label: "Submission requirements complete",
-    requirementLabel: SUBMISSION_BLOCKERS_LABEL,
-    unmetLabel: SUBMISSION_BLOCKERS_LABEL,
-    status: "unmet",
-    detail: blocker.detail,
-    readOnlyDetail: blocker.fact,
-    fixTarget: blocker.fixTarget,
-    affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
-  }));
+  const groups = new Map<string, SubmissionLineageBlocker[]>();
+  for (const blocker of facts.submissionLineageBlockers ?? []) {
+    const groupKey = `${blocker.kind}:${blocker.fixTarget}`;
+    const group = groups.get(groupKey) ?? [];
+    group.push(blocker);
+    groups.set(groupKey, group);
+  }
+  const lineageChecks: BatchHealthCheckBase[] = [...groups.values()].map((group) => {
+    const blocker = group[0];
+    const fact = group.length === 1
+      ? blocker.fact
+      : submissionBlockerGroupFact(blocker.kind, group.length);
+    const instruction = blocker.instruction;
+    return {
+      key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+      issueKey: `submission-${blocker.kind}-${blocker.fixTarget}`,
+      label: "Submission requirements complete",
+      requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+      unmetLabel: SUBMISSION_BLOCKERS_LABEL,
+      status: "unmet",
+      detail: blockerMessage(fact, instruction).message,
+      copy: { detail: fact, instruction },
+      readOnlyDetail: fact,
+      fixTarget: blocker.fixTarget,
+      affectedRecords: mergeAffectedRecords(undefined, group.map((member) => ({
+        ...member.record, missing: [member.fact],
+      }))),
+    };
+  });
   const blockers = facts.durabilityConfigurationBlockers ?? [];
   if (blockers.length > 0) lineageChecks.push({
     key: "entityReadiness",

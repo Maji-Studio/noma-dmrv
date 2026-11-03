@@ -10,7 +10,8 @@ import {
 } from "@/lib/certification/durability-batch-summary";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { sampleDocumentWarningKeys } from "@/lib/certification/sample-document-warnings";
-import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
+import { deriveBatchHealth, type BatchHealthFixTarget } from "@/lib/certification/batch-health";
+import { deliveryProofMessage } from "@/lib/certification/submission-readiness";
 import {
   buildCreditBatchOpenItems as buildItems,
   CREDIT_BATCH_DETAILS_ROW,
@@ -673,4 +674,29 @@ it("links an interrupted Removal to Review & submit, but adds no submitted to-do
     instruction: "Open the Removal and finish Review & submit.",
     target: { href: "/removals?facility=facility&resume=interrupted" },
   }]);
+});
+
+it("states the grouped submission count without an instruction on a read-only batch", () => {
+  const blockedDeliveryCount = 11;
+  const health = deriveBatchHealth({
+    carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
+    entityReadinessGaps: [], hasSubmittableRuns: true, facilitySetupComplete: true, requiredTransport: [],
+    submissionLineageBlockers: Array.from({ length: blockedDeliveryCount }, (_, index) => {
+      const code = `DL-${index}`;
+      const message = deliveryProofMessage(code);
+      return {
+        kind: "deliveryProof", instruction: message.instruction!, fact: message.fact, detail: message.message,
+        fixTarget: "deliveryEvidence", record: { id: `delivery-${index}`, code },
+      };
+    }),
+  });
+  const editable = buildItems({ ...batchContext, health });
+  expect(editable.blocking).toHaveLength(1);
+  const [editableItem] = editable.blocking;
+  expect(editableItem.detail).toBe("11 deliveries have no proof of delivery.");
+  expect(editableItem.instruction).toBe(deliveryProofMessage("").instruction);
+  const [item] = readOnlyOpenItems({ ...editable, waiting: [] }).blocking;
+  expect(item.detail).toBe("11 deliveries have no proof of delivery.");
+  expect(item.instruction).toBeUndefined();
+  expect(openItemText(item)).toBe("11 deliveries have no proof of delivery.");
 });

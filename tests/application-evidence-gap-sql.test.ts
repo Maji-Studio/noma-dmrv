@@ -40,6 +40,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getApplications } from "@/data-access/applications";
+import { getDeliveries } from "@/data-access/deliveries";
 import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { applications } from "@/db/schema/application";
@@ -416,6 +417,34 @@ describe("getApplications exact-id read of an archived application (#1499)", () 
       expect(otherOrg.items).toHaveLength(0);
     } finally {
       await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, fixture.deliveryId));
+    }
+  });
+});
+
+describe("getDeliveries exact-id filter", () => {
+  it("narrows ids within the existing organization, facility and archive scope", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const targetId = fixture.deliveryId;
+    const exact = await getDeliveries(orgCtx, { ids: [targetId], facilityId: fixture.facilityId });
+    expect(exact.items.map((item) => item.id)).toEqual([targetId]);
+    expect(exact.total).toBe(1);
+    const otherIds = await getDeliveries(orgCtx, { ids: [crypto.randomUUID()] });
+    expect(otherIds.items).toEqual([]);
+    expect(otherIds.total).toBe(0);
+    const otherFacility = await getDeliveries(orgCtx, { ids: [targetId], facilityId: crypto.randomUUID() });
+    expect(otherFacility.items).toEqual([]);
+    const otherOrg = await getDeliveries({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [targetId] });
+    expect(otherOrg.items).toEqual([]);
+    await db.update(deliveries).set({ archivedAt: new Date() })
+      .where(eq(deliveries.id, targetId));
+    try {
+      expect((await getDeliveries(orgCtx, { ids: [targetId] })).items).toEqual([]);
+    } finally {
+      await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, targetId));
     }
   });
 });

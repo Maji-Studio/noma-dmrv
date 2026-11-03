@@ -11,13 +11,13 @@ it("uses a location shortcut only when all distance records share it", () => {
     .toEqual({ label: "Edit location distances", href: records[0].href });
   expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "deliveryDistances",
     affectedRecords: [records[0], { ...records[1], href: "/customers?location=two" }] }, "facility").href)
-    .toBe("/deliveries?facility=facility");
+    .toBe("/deliveries?facility=facility&ids=one%2Ctwo");
 });
 it("keeps evidence and merged-delivery links even when a record has a location href", () => {
   expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "deliveryEvidence",
     affectedRecords: [records[0]] }, "facility").href).toContain("focus=transport-evidence");
   expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "deliveries",
-    affectedRecords: records }, "facility")).toEqual({ label: "Review deliveries", href: "/deliveries?facility=facility" });
+    affectedRecords: records }, "facility")).toEqual({ label: "Review deliveries", href: "/deliveries?facility=facility&ids=one%2Ctwo" });
 });
 it("does not label generic hrefs as location repairs", () => {
   expect(batchHealthFixLinkFor({ key: "carbon", affectedRecords: records }, "facility").label).toBe("Fix 2 Samples");
@@ -28,4 +28,13 @@ it("keeps emissions evidence separate from emission estimates and opens the batc
   expect(batchHealthFixLinkFor({ key: "emissions" }, "facility-1", "batch-1")).toEqual({
     label: "Review emissions", href: "/credit-batches/batch-1?facility=facility-1&tab=emissions",
   });
+});
+
+it.each(["deliveries", "deliveryEvidence", "deliveryDistances"] as const)("links every affected id for %s", (fixTarget) => {
+  const affectedRecords = records.map(({ id, code, missing }) => ({ id, code, missing }));
+  const link = batchHealthFixLinkFor({ key: "entityReadiness", fixTarget, affectedRecords }, "facility", "batch");
+  const params = new URL(link.href, "https://noma.test").searchParams;
+  expect(params.get("ids")).toBe("one,two");
+  expect(params.get("facility")).toBe("facility");
+  expect(params.get("creditBatch")).toBe("batch");
 });

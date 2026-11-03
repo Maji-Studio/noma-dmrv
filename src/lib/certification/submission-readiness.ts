@@ -63,6 +63,15 @@ export const deliveryDistanceMessage = (code: string) => blockerMessage(
   "Set the customer location distance or a delivery distance override before submitting.",
 );
 
+export function submissionBlockerGroupFact(kind: SubmissionLineageBlocker["kind"], count: number): string {
+  switch (kind) {
+    case "feedstockTransport": return `${count} feedstocks have no usable transport leg.`;
+    case "deliveryProof": return `${count} deliveries have no proof of delivery.`;
+    case "applicationDestination": return `${count} applications have no customer location.`;
+    case "deliveryDistance": return `${count} deliveries have no positive transport distance.`;
+  }
+}
+
 export function applicationDestinationBlockerMessage(input: {
   applicationCode: string;
   customerLocationId: string | null;
@@ -120,6 +129,8 @@ export function missingFeedstockTransportIds(
 }
 
 export interface SubmissionLineageBlocker {
+  kind: "feedstockTransport" | "deliveryProof" | "applicationDestination" | "deliveryDistance";
+  instruction: string;
   fact: string;
   detail: string;
   fixTarget: "feedstocks" | "deliveryEvidence" | "deliveryDistances" | "orders" | "deliveries";
