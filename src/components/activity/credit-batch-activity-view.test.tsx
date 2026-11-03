@@ -32,14 +32,17 @@ const render = () => {
 describe("a feed whose loaded events are all hidden updates", () => {
   beforeEach(() => { state.items = [hiddenUpdate("a"), hiddenUpdate("b")]; state.hasNextPage = false; });
 
-  it("shows the empty state, not an empty list", () => {
+  it("shows the empty state, not an empty list, once nothing more can load", () => {
     const view = render();
     expect(view.textContent).toContain("No activity recorded yet");
     expect(view.querySelector('[data-testid="activity-list"]')).toBeNull();
   });
 
-  it("keeps Show older activity while older pages remain", () => {
+  it("offers Show older activity with a note, not a nothing-recorded claim, while older pages remain", () => {
     state.hasNextPage = true;
-    expect(render().textContent).toContain("Show older activity");
+    const text = render().textContent ?? "";
+    expect(text).toContain("Show older activity");
+    expect(text).toContain("No changes to show on this page.");
+    expect(text).not.toContain("No activity recorded yet");
   });
 });

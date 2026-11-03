@@ -115,7 +115,6 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   emission_entry: "Emissions entry",
   credit_batch: "Credit batch",
   removalAssignment: "Removal assignment",
-  productionClaimReservation: "Production claim reservation",
   productionClaim: "Production claim",
   removalTemplateId: "Removal template",
   // The shared mass and moisture names (docs/design-system.md, wet/dry mass).

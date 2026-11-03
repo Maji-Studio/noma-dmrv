@@ -466,7 +466,7 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
 
-    // Each Flow record shows its own code under its node.
+    // Each Flow record shows its own code under its node; the reactor shows its name.
     const expectedNodes = [
       ["feedstock", seededData.feedstock.id, seededData.feedstock.code],
       ["reactor", seededData.reactor.id, seededData.reactor.identifier],

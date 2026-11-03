@@ -26,6 +26,7 @@ import {
   activityHistoryStartNote,
   activityLoadedMessage,
   ACTIVITY_NO_NEW_CHANGES_MESSAGE,
+  ACTIVITY_NO_VISIBLE_CHANGES_NOTE,
   ACTIVITY_REPEATS_LOADED_MESSAGE,
 } from "./activity-copy";
 import { collapseRepeatedActivity, countActivityRows, describePageLoad, groupActivityByDay } from "./activity-day-groups";
@@ -159,6 +160,15 @@ export function CreditBatchActivityView({
     }
     if (activity.isPending || summary.isPending) {
       return <p role="status" className="body-small text-[var(--color-text-secondary)]">{ACTIVITY_LOADING}</p>;
+    }
+    // Older pages may hold the changes: no "nothing recorded" claim while more can load.
+    if (rowCount === 0 && activity.hasNextPage && !filtered) {
+      return (
+        <div className="flex flex-col items-start gap-12">
+          <p className="body-small text-[var(--color-text-secondary)]">{ACTIVITY_NO_VISIBLE_CHANGES_NOTE}</p>
+          {showOlderButton}
+        </div>
+      );
     }
     if (rowCount === 0 && filtered) {
       return (

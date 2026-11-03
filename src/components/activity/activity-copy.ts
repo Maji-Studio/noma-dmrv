@@ -51,3 +51,6 @@ export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to an e
 
 /** Older events loaded, but none of them is shown in the feed. */
 export const ACTIVITY_NO_NEW_CHANGES_MESSAGE = "No new changes were found.";
+
+/** Under "Show older activity" when the loaded pages hold no visible change. */
+export const ACTIVITY_NO_VISIBLE_CHANGES_NOTE = "No changes to show on this page.";
