@@ -201,7 +201,7 @@ export async function getCreditBatches(
     .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(creditBatches.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
-    .orderBy(desc(creditBatches.createdAt));
+    .orderBy(desc(creditBatches.createdAt), desc(creditBatches.code), desc(creditBatches.id));
 
   const batchIds = batches.map((b) => b.creditBatch.id);
 

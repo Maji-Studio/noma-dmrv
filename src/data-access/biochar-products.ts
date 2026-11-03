@@ -270,7 +270,7 @@ export async function getBiocharProducts(
       eq(allocationAggregate.biocharProductId, biocharProducts.id),
     )
     .where(whereClause)
-    .orderBy(orderFn(sortColumn), orderFn(biocharProducts.createdAt), asc(biocharProducts.id))
+    .orderBy(orderFn(sortColumn), orderFn(biocharProducts.code), orderFn(biocharProducts.id))
     .limit(pageSize)
     .offset(offset);
 

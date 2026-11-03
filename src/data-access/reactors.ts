@@ -144,7 +144,7 @@ export async function getReactors(
       ),
     )
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(reactors.code), orderFn(reactors.id))
     .limit(pageSize)
     .offset(offset);
 
