@@ -18,6 +18,13 @@ function batch(overrides: Partial<HoverCardBatch>): HoverCardBatch {
 }
 
 describe("HoverCardBody", () => {
+  it("badges an interrupted batch in the Removal badge's red, not Open's orange", () => {
+    const html = renderToStaticMarkup(<HoverCardBody batch={batch({ state: "interrupted" })} />);
+    expect(html).toContain("Submission interrupted");
+    expect(html).toContain("--st-bad");
+    expect(html).not.toContain("--st-wait");
+  });
+
   it("heads a named batch with its name and the code beneath", () => {
     const html = renderToStaticMarkup(<HoverCardBody batch={batch({ name: "September maize" })} />);
     expect(html.indexOf("September maize")).toBeGreaterThan(-1);

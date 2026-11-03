@@ -132,6 +132,18 @@ export const REMOVAL_INTERRUPTED_RECONCILE_REASON =
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 
+/**
+ * The batch-level Removal rule (#1528): a credit batch reads Submission
+ * interrupted while any Removal holding its slices is interrupted, whichever
+ * Removal is newest. The list, timeline, stepper, to-dos and dashboard all
+ * decide it here.
+ */
+export function findInterruptedRemoval<T extends { status: Pick<DerivedStatus, "kind"> }>(
+  removals: readonly T[] | undefined,
+): T | undefined {
+  return removals?.find((removal) => removal.status.kind === "interrupted");
+}
+
 export interface RemovalReportingWindowDates {
   startedOn: string | null;
   completedOn: string | null;

@@ -8,6 +8,13 @@ import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-me
 
 const mocks = vi.hoisted(() => ({ locked: false, lockArgs: [] as unknown[][] }));
 
+const recordLockMock = vi.hoisted(() => ({ lock: undefined as unknown, args: [] as unknown[][] }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLock: (...args: unknown[]) => {
+    recordLockMock.args.push(args);
+    return { lock: recordLockMock.lock, status: "ready", retry: () => {}, retrying: false };
+  },
+}));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);

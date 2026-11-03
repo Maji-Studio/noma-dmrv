@@ -28,7 +28,10 @@ import {
   useRemovalsForFacility,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
+  useDeleteRemoval,
+  useSubmitRemoval,
 } from "./use-certification";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 describe("certificationKeys", () => {
   it("keys removal enrichment by selected facility and removal id", () => {
@@ -77,6 +80,45 @@ describe("useSaveFacilityCertifierMapping", () => {
       expect(queryClient.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true);
     }
     queryClient.clear();
+  });
+});
+
+describe("useSubmitRemoval", () => {
+  it("refreshes the dashboard, batch to-dos and list states once an attempt settles", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useSubmitRemoval();
+
+    const [{ onSuccess, onError, onSettled }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      onSuccess: () => unknown;
+      onError: (error: Error) => unknown;
+      onSettled: () => unknown;
+    }];
+    for (const settle of [() => onSuccess(), () => onError(new Error("Submit failed"))]) {
+      invalidateQueries.mockClear();
+      await settle();
+      await onSettled();
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
+      // Health summaries and to-dos are certification keys.
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
+    }
+  });
+});
+
+describe("useDeleteRemoval", () => {
+  it("refreshes the dashboard once a Removal is deleted", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useDeleteRemoval();
+
+    const [{ onSuccess }] = reactQueryMocks.useMutation.mock.calls[0] as [{ onSuccess: () => unknown }];
+    await onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
   });
 });
 

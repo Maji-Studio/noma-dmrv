@@ -5,7 +5,7 @@
  */
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import type { DerivedStatusKind } from "@/lib/certification/status";
+import { findInterruptedRemoval, type DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "./open-items";
@@ -119,7 +119,18 @@ export interface CreditBatchMilestoneInput {
   pageModel: CreditBatchPageModel | undefined;
 }
 
+/** An interrupted holder leads; a submitted Removal keeps its code and date after it. */
 function removalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
+  const interrupted = findInterruptedRemoval(model.removals);
+  const sent = sentRemovalCaption(model, timeZone);
+  if (interrupted) {
+    const lead = `${interrupted.code}: ${interrupted.status.label}`;
+    return model.milestones.firstRemovalSubmittedAt && sent ? `${lead} · ${sent}` : lead;
+  }
+  return sent;
+}
+
+function sentRemovalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
   const { firstRemovalSubmittedAt, firstRemovalSubmittedCode } = model.milestones;
   if (!firstRemovalSubmittedAt) {
     const draft = model.removals.find((removal) => removal.phase === "draft");
@@ -144,7 +155,8 @@ function removalCaption(model: CreditBatchPageModel, timeZone: string): string |
 export function creditBatchMilestones({ blockingCount, openCount, pageModel, timeZone }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
   const missing = blockingCount != null && blockingCount > 0;
-  const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number }[] = [
+  const interruptedHolder = findInterruptedRemoval(pageModel?.removals);
+  const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number; keepCaption?: boolean }[] = [
     {
       key: "data",
       // Until the health answers, the step names itself without a verdict.
@@ -156,8 +168,11 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
     {
       key: "removal",
       label: "Removal submitted",
-      done: !!pageModel?.milestones.firstRemovalSubmittedAt,
+      // An interrupted holder fails the step in red, even beside a submitted one or while data still blocks (#1528).
+      done: !interruptedHolder && !!pageModel?.milestones.firstRemovalSubmittedAt,
+      failed: !!interruptedHolder,
       caption: pageModel ? removalCaption(pageModel, timeZone) : null,
+      keepCaption: !!interruptedHolder,
     },
     {
       key: "verified",
@@ -179,7 +194,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
     label: step.label,
     state: step.done ? "done" : step.failed ? "failed" : index === currentIndex ? "current" : "todo",
     // Later steps say nothing until the batch reaches them.
-    caption: step.done || index === currentIndex ? step.caption : null,
+    caption: step.done || index === currentIndex || step.keepCaption ? step.caption : null,
     ...(step.count != null ? { count: step.count } : {}),
   }));
 }

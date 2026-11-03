@@ -2,10 +2,17 @@
 import type { ReactNode } from "react";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RECORD_FILES_INTERRUPTED_MESSAGE, RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 
 const mocks = vi.hoisted(() => ({ remove: vi.fn(), visibility: vi.fn(), version: 7, role: "admin" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
 
+const recordLockMock = vi.hoisted(() => ({ lock: undefined as unknown, args: [] as unknown[][] }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLock: (...args: unknown[]) => {
+    recordLockMock.args.push(args);
+    return { lock: recordLockMock.lock, status: "ready", retry: () => {}, retrying: false };
+  },
+}));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);
@@ -58,6 +65,19 @@ describe("SampleDocumentsPanel certification lock", () => {
     mocks.platformAdmin = false;
     mocks.locked = false;
     mocks.lockArgs = [];
+    recordLockMock.lock = undefined;
+    recordLockMock.args = [];
+  });
+
+  it("words the files line as the sample header words an interrupted Removal", () => {
+    mocks.locked = true;
+    const holder = { kind: "removal", id: "removal-1", label: null };
+    recordLockMock.lock = { level: "sent", heldBy: [holder], usedBy: [], freeFields: [], howToFree: null, interruptedHolders: [holder] };
+    render(<SampleDocumentsPanel sampleId="sample-1" />);
+
+    expect(recordLockMock.args).toContainEqual(["sample", "sample-1"]);
+    expect(screen.getByText(RECORD_FILES_INTERRUPTED_MESSAGE)).toBeTruthy();
+    expect(screen.queryByText(RECORD_FILES_LOCKED_MESSAGE)).toBeNull();
   });
 
   it("keeps a locked sample's files downloadable and hides every change control", () => {

@@ -8,9 +8,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
-import { Notice } from "@/components/ui/notice";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationEvidenceMethod,
@@ -207,7 +206,7 @@ export function ApplicationEvidencePanel({
   return (
     <div className="flex flex-col gap-16">
       {locked && !hideLockNotice && (
-        <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>
+        <RecordFilesLockedNotice lockKind="application" lockId={applicationId} />
       )}
       {!readOnly && (
         <ChoiceCardGroup

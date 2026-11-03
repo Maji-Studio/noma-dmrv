@@ -303,3 +303,33 @@ it("states a Waiting item as a fact on a read-only batch", () => {
   expect(readOnly.detail).toBeUndefined();
   expect(readOnly.title).toBe("0.05 t produced and not applied");
 });
+
+it("names an interrupted Removal in the milestone instead of calling it a draft", () => {
+  const pageModel = model({ removals: [removal({
+    status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false },
+  })] });
+  const steps = creditBatchMilestones({ pageModel, blockingCount: 0, openCount: 1, timeZone: "UTC" });
+  expect(steps.find(step => step.key === "removal")?.caption).toBe(`${pageModel.removals[0].code}: Submission interrupted`);
+  // Blocking data keeps the first step current; the interrupted Removal is still named.
+  const blocked = creditBatchMilestones({ pageModel, blockingCount: 2, openCount: 3, timeZone: "UTC" });
+  expect(blocked.find(step => step.key === "removal")).toMatchObject({
+    state: "failed", caption: `${pageModel.removals[0].code}: Submission interrupted`,
+  });
+});
+
+it("fails the Removal step for an older interrupted holder beside a newer submitted one, keeping the sent code and date", () => {
+  const submittedAt = new Date("2026-10-12T12:00:00Z");
+  const pageModel = model({
+    removals: [
+      removal({ status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false } }),
+      removal({ id: "removal-2", code: "RM-26-002", phase: "submitted", submittedAt, dryKg: 800,
+        status: { kind: "submitted", label: "Submitted", value: "issued", isActionable: false, isTerminal: false } }),
+    ],
+    mass: { inSubmittedDryKg: 800 },
+    milestones: { firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: "RM-26-002" },
+  });
+  const steps = creditBatchMilestones({ pageModel, blockingCount: 0, openCount: 1, timeZone: "UTC" });
+  expect(steps.find(step => step.key === "removal")).toMatchObject({
+    state: "failed", caption: "RM-26-001: Submission interrupted · RM-26-002, Oct 12, 2026",
+  });
+});

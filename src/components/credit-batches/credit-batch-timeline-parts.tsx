@@ -1,5 +1,7 @@
 "use client";
 
+import { REMOVAL_SUBMISSION_INTERRUPTED_LABEL } from "@/lib/certification/status";
+
 /**
  * Pieces the credit batch timeline shares: the year switcher, month axis and
  * grid, the Today line and the state legend.
@@ -39,6 +41,7 @@ const INK_TONE: Tone = {
 const STATE_TITLE: Record<TimelineState, string> = {
   blocking: "Open",
   ready: "Ready",
+  interrupted: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
   submitted: "Submitted",
   issued: "Issued",
 };
@@ -49,10 +52,12 @@ export const UNKNOWN_TONE = TONE_BY_STATE_CLASS.neutral;
 /**
  * Solid, tint, edge and badge per state, for bars, hover cards and the legend.
  * The timeline keeps its own scale (Kenji, 2026-10-19) so each step of the
- * lifecycle has one color: Open orange, Ready purple, Submitted green, Issued
+ * lifecycle has one color: Open orange, Ready purple, Submission interrupted
+ * red (the Removal badge and lock chip's red, #1528), Submitted green, Issued
  * ink. Other screens keep the shared mapping in status-state.ts.
  */
 export const STATE_TONE: Record<TimelineState, Tone & { title: string }> = {
+  interrupted: { ...TONE_BY_STATE_CLASS.error, title: STATE_TITLE.interrupted },
   blocking: { ...TONE_BY_STATE_CLASS.warning, title: STATE_TITLE.blocking },
   ready: { ...TONE_BY_STATE_CLASS["in-progress"], title: STATE_TITLE.ready },
   submitted: { ...TONE_BY_STATE_CLASS.success, title: STATE_TITLE.submitted },
@@ -80,7 +85,7 @@ export function BlockingCount({ count, className, ...props }: { count: number } 
   );
 }
 
-export const STATE_ORDER: TimelineState[] = ["blocking", "ready", "submitted", "issued"];
+export const STATE_ORDER: TimelineState[] = ["blocking", "ready", "interrupted", "submitted", "issued"];
 
 export function YearSwitcher({
   year,
@@ -117,10 +122,11 @@ export function YearSwitcher({
   );
 }
 
-export function StateLegend() {
+/** The four lifecycle steps; Submission interrupted only while a bar in view shows it. */
+export function StateLegend({ interrupted }: { interrupted: boolean }) {
   return (
     <ul className={cn("flex flex-wrap items-center gap-x-16 gap-y-6 body-caption", MUTED)}>
-      {STATE_ORDER.map((state) => (
+      {STATE_ORDER.filter((state) => interrupted || state !== "interrupted").map((state) => (
         <li key={state} className="inline-flex items-center gap-6">
           <StateMark state={state} size={LEGEND_MARK_PX} />
           {STATE_TONE[state].title}

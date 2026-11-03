@@ -1,3 +1,4 @@
+import { REMOVAL_SUBMISSION_INTERRUPTED_LABEL } from "@/lib/certification/status";
 import { recordHref } from "@/lib/record-links";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
@@ -9,7 +10,7 @@ export const RECORD_LOCK_LEVEL_LABELS: Record<RecordLockView["level"], string> =
 };
 
 /** The Sent tag when sending every holding Removal was started and not finished (matches the Removal's own badge). */
-export const RECORD_LOCK_INTERRUPTED_LABEL = "Interrupted";
+export const RECORD_LOCK_INTERRUPTED_LABEL = REMOVAL_SUBMISSION_INTERRUPTED_LABEL;
 export const RECORD_LOCK_SENT_TITLE = "Sent to Isometric";
 export const RECORD_LOCK_INTERRUPTED_TITLE = "Sending to Isometric was started and not finished";
 

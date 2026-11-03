@@ -115,3 +115,25 @@ describe("deriveSubmissionStatus", () => {
     expect(derived.kind).toBe("interrupted");
   });
 });
+
+describe("persisted Removal display state", () => {
+  const window = { startedOn: "2026-06-01", completedOn: "2026-06-30" };
+  it.each([
+    ["draft", {}, "not-submitted"],
+    ["draft", { lastAttemptOutcome: "interrupted" }, "interrupted"],
+    ["submitted", { lastAttemptOutcome: "interrupted" }, "interrupted"],
+    ["submitted", {}, "submitted"],
+    ["accepted", {}, "submitted"],
+    ["rejected", {}, "rejected"],
+    ["superseded", {}, "not-submitted"],
+  ] as const)("maps %s and attempt metadata to %s", (status, metadata, kind) => {
+    expect(deriveSubmissionStatus({ status, metadata, payloadSnapshot: {} }, false, "removal", window).kind).toBe(kind);
+  });
+  it("keeps a missing or changed persisted reporting window interrupted", () => {
+    const latest = { status: "submitted" as const, metadata: {}, payloadSnapshot: {
+      semantic: { startedOn: "2026-05-01", completedOn: "2026-05-31" },
+    } };
+    expect(deriveSubmissionStatus(latest, false, "removal", window).kind).toBe("interrupted");
+    expect(deriveSubmissionStatus(latest, false, "removal", { startedOn: null, completedOn: null }).kind).toBe("interrupted");
+  });
+});
