@@ -9,7 +9,9 @@ import {
   entryValues,
   groupLines,
   lineMatches,
+  lineCounts,
   lineTotalText,
+  isTotalMissing,
   kgToTonnes,
   multiplyDecimals,
   tonnesToKg,
@@ -18,18 +20,65 @@ import {
   isRecordsGap,
   recordsHref,
   recordsText,
+  recordsSourceText,
+  recordsFigureText,
 } from "./emission-line-display";
+import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
+import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
+import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { validateEntryDate } from "@/schemas/emission-entry-form";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 
 const RUNS = { source: "productionRuns" as const, count: 22, figure: { magnitude: "120", unit: "L" } };
 
+function sequestrationLine(applicationCount: number) {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const line = deriveBatchEmissionLines({
+    definition, lineSources: resolveLineSources({ definition }), problems: [], enrichmentComplete: true,
+    automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: applicationCount }, entries: [],
+  }).find((line) => line.contract?.automaticSource === "sequestration")!;
+  return makeLine({ ...line, entries: [] });
+}
+
+describe("Isometric sequestration display", () => {
+  it.each([1, 15])("shows the registry calculation and %s applications without a records gap", (count) => {
+    const line = sequestrationLine(count);
+    const records = line.records!;
+    const applications = `${count} ${count === 1 ? "application" : "applications"}`;
+    expect(lineTotalText(line)).toBe("Calculated by Isometric");
+    expect(recordsFigureText(records)).toBe("Calculated by Isometric");
+    expect(isTotalMissing(line)).toBe(false);
+    expect(recordsChipText(records)).toBe(applications);
+    expect(recordsText(records)).toBe(applications);
+    expect(recordsSourceText(records)).toBe(applications);
+    expect(isRecordsGap(records)).toBe(false);
+    expect(lineMatches(line, "done")).toBe(true);
+    expect(lineMatches(line, "open")).toBe(false);
+    expect(lineMatches(line, "notRecorded")).toBe(false);
+  });
+
+  it("keeps a batch without applications open and makes counts agree with filters", () => {
+    const empty = sequestrationLine(0);
+    expect(lineTotalText(empty)).toBe("Not recorded");
+    expect(isTotalMissing(empty)).toBe(true);
+    expect(recordsChipText(empty.records!)).toBe("No applications yet");
+    expect(recordsFigureText(empty.records!)).toBe("Not recorded");
+    expect(isRecordsGap(empty.records)).toBe(true);
+    const lines = [empty, sequestrationLine(15)];
+    expect(lineCounts(lines)).toEqual({ all: 2, open: 1, missing: 0, review: 0, notRecorded: 1, done: 1 });
+    expect(lines.filter((line) => lineMatches(line, "open"))).toEqual([empty]);
+    expect(lines.filter((line) => lineMatches(line, "done"))).toEqual([lines[1]]);
+  });
+});
+
 describe("records copy", () => {
   it("names the figure, the gap and the empty source", () => {
     expect(recordsChipText(RUNS)).toBe("22 runs");
     expect(recordsText(RUNS)).toBe("120 L from 22 production runs");
+    expect(recordsFigureText(RUNS)).toBe("120 L");
     expect(recordsChipText({ ...RUNS, figure: null })).toBe("None on 22 runs");
     expect(recordsText({ ...RUNS, figure: null })).toBe("Not recorded on 22 production runs");
+    expect(recordsFigureText({ ...RUNS, figure: null })).toBe("Not recorded");
     expect(recordsChipText({ source: "deliveries", count: 0, figure: null })).toBe("No deliveries yet");
     expect(recordsChipText({ source: "transportLegs", count: 1, figure: { magnitude: "5", unit: "km * tonne" } })).toBe("1 leg");
   });
@@ -40,6 +89,7 @@ describe("records copy", () => {
     expect(recordsChipText(counted)).toBe("Counted on CB-26-001, CB-26-002");
     expect(recordsText(counted)).toBe("Counted on CB-26-001, CB-26-002");
     expect(isRecordsGap(counted)).toBe(false);
+    expect(recordsFigureText(counted)).toBe("0 t·km");
     expect(countedOnHref("a", "fac")).toBe("/credit-batches/a?facility=fac&tab=emissions");
     expect(recordsChipText({ ...counted, countedOn: undefined })).toBe("No transport legs yet");
   });
