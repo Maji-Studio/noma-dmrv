@@ -687,6 +687,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             />
           }
           valueLayout="breakdown"
+          description="Only applications marked Applied"
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
           isError={statsError}
