@@ -582,7 +582,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // An archived facility's delivery is not among the working facility's options:
   // its linked read serves the read-only view and never feeds the form.
   const archivedLink = linkedRecord.readOnly?.reason === "archived" && sideSheetEntity?.facilityId === linkedRecord.readOnly.facilityId;
-  const { data: archivedDelivery } = useLinkedApplicationDelivery(sideSheetEntity?.id ?? "", archivedLink);
+  const archivedDeliveryRead = useLinkedApplicationDelivery(sideSheetEntity?.id ?? "", archivedLink);
+  const archivedDelivery = archivedDeliveryRead.data;
   const sideSheetDelivery = sideSheetEntity
     ? archivedLink
       ? archivedDelivery ?? undefined
@@ -612,7 +613,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       editLabel="Edit application"
       readOnly={sheetReadOnly}
       size="wide"
-      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption, readOnly: !!sheetReadOnly }) : undefined}
+      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, deliveryRead: archivedLink ? archivedDeliveryRead : undefined, lock: applicationLock, durabilityOption, readOnly: !!sheetReadOnly }) : undefined}
     >
       <ApplicationForm
         key={sideSheetEntity?.id ?? "create"}

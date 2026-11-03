@@ -209,6 +209,8 @@ describe("missing production run detection (real DB)", () => {
       productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`,
       titleAfterCode: " is not in this credit batch yet",
+      readOnlyTitle: `${fitting.code} is not in this credit batch`,
+      readOnlyTitleAfterCode: " is not in this credit batch",
       detail: `Its emissions are not counted in ${holder.code}.`,
       target: { tab: "overview", rowId: "batch-details" },
     }]);
@@ -303,6 +305,7 @@ describe("missing production run detection (real DB)", () => {
     expect((await todos()).check).toEqual([{
       id: `missing-production-run:${fitting.id}`, productionRun: { id: fitting.id, code: fitting.code },
       title: `${fitting.code} is not in this credit batch yet`, titleAfterCode: " is not in this credit batch yet",
+      readOnlyTitle: `${fitting.code} is not in this credit batch`, readOnlyTitleAfterCode: " is not in this credit batch",
       detail: `Its emissions are not counted in ${holder.code}.`,
       instruction: "If the Emissions entry dated Jun 9, 2026 already records them, delete it when you add the run.",
       sameDayEntryDate: values.occurredOn,

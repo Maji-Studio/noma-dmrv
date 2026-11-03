@@ -41,5 +41,13 @@ export function collectFeedstockTypeMappingGaps(
 export function describeFeedstockTypeMappingGap(
   gap: FeedstockTypeMappingGap,
 ): string {
-  return `Credit batch ${gap.creditBatchCode} uses pyrolysis feedstock type ${gap.feedstockTypeName}, which is not linked to an Isometric feedstock type. Edit ${gap.feedstockTypeName} in Feedstock types.`;
+  const copy = feedstockTypeMappingGapCopy(gap);
+  return [copy.detail, copy.instruction].join(" ");
+}
+
+export function feedstockTypeMappingGapCopy(gap: FeedstockTypeMappingGap) {
+  return {
+    detail: `Credit batch ${gap.creditBatchCode} uses pyrolysis feedstock type ${gap.feedstockTypeName}, which is not linked to an Isometric feedstock type.`,
+    instruction: `Edit ${gap.feedstockTypeName} in Feedstock types.`,
+  };
 }

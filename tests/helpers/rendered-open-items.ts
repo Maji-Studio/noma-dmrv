@@ -9,6 +9,9 @@ export function renderedOpenItems<T extends { blocking: CreditBatchOpenItem[]; c
   const join = (item: CreditBatchOpenItem): CreditBatchOpenItem => {
     const joined: CreditBatchOpenItem = { ...item, detail: openItemText(item) };
     delete joined.instruction;
+    delete joined.readOnlyTitle;
+    delete joined.readOnlyTitleAfterCode;
+    delete joined.detailMayInstruct;
     return joined;
   };
   return { ...result, blocking: result.blocking.map(join), check: result.check.map(join) };

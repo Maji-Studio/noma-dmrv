@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CARRY_WAITING_REASONS } from "./emission-entry-carry";
-import { lateEntryView, waitingAction, waitingDetail, waitingEntryTitle, type LateEntryFacts } from "./late-entry-view";
+import { lateEntryView, waitingAction, waitingDetailCopy, waitingDetail, waitingEntryTitle, type LateEntryFacts } from "./late-entry-view";
 import { lateEntryRows } from "./late-entry-list";
 
 const AFTER = { removalId: "rm-9", removalCode: "RM-26-009" };
@@ -101,4 +101,13 @@ describe("lateEntryRows", () => {
     ], "f1");
     expect(rows.map((row) => row.id)).toEqual(["b"]);
   });
+});
+
+
+it.each([true, false])("keeps waiting copy unchanged when the viewer canManage=%s", (canManage) => {
+  for (const reason of ["noDraft", "templateUnknown", "incompatibleTemplate"] as const) {
+    const copy = waitingDetailCopy(reason, canManage);
+    expect([copy.detail, copy.instruction].filter(Boolean).join(" ")).toBe(waitingDetail(reason, canManage));
+    expect(copy.detail).not.toMatch(/Open the Removal|An Admin|in Settings/);
+  }
 });

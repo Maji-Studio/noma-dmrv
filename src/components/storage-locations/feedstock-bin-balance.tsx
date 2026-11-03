@@ -112,8 +112,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
   timeZone?: string;
 }) {
   const stock = useFeedstockBinStock(storageLocationId);
-  const clock = useFacilityClock(facilityId);
-  const zone = timeZone ?? clock.timeZone;
+  const { timeZone: zone } = useFacilityClock(facilityId, { timeZone });
   const points = feedstockStockPoints(stock.data?.entries ?? []);
   const currentWetKg = stock.data?.currentWetKg ?? 0;
   const estimatedDryKg = stock.data?.entries.at(-1)?.estimatedDryKg ?? (stock.data?.currentWetKg === 0 ? 0 : null);

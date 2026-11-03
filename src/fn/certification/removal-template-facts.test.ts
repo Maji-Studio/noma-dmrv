@@ -30,7 +30,7 @@ it.each(["missing observation", "incomplete enrichment"])("defers coverage to te
       facilityTimezone: "UTC",
       templatesById: { [template.id]: facts },
     } as unknown as FacilityCertifierFacts);
-    expect(resolved.templateBlockers[0]).toEqual({ code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead });
+    expect(resolved.templateBlockers[0]).toEqual({ code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead, copy: { detail: "Template not fully read.", instruction: "Try again." } });
   } finally { warn.mockRestore(); }
 });
 
