@@ -5,6 +5,20 @@ import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "./sankey"
 const RESIDUAL_TEST_INPUT_KG = 1_000;
 const ROUNDING_CONVERSION_KG = 0.4;
 const ROUNDING_DOWNSTREAM_KG = -0.3;
+const BLEND_KG = 2_000;
+const INGREDIENT_KG = 500;
+const BLENDED_DRY_KG = 1_200;
+const ALLOCATED_DRY_KG = 1_100;
+const APPLIED_KG = 1_000;
+const COMPOSITION = {
+  ingredients: [{
+    formulationIngredientId: "ingredient-line",
+    feedstockTypeId: "blend-feedstock",
+    feedstockTypeName: "Blend ingredient",
+    feedstockTypeCategory: "manure",
+    massKg: INGREDIENT_KG,
+  }],
+};
 
 function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
   return {
@@ -23,6 +37,27 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
 }
 
 describe("buildBatchSankey", () => {
+  it.each([
+    { moisture: 20, allocated: null, expectedKg: BLENDED_DRY_KG },
+    { moisture: null, allocated: null, expectedKg: BLEND_KG - INGREDIENT_KG },
+    { moisture: 20, allocated: ALLOCATED_DRY_KG, expectedKg: ALLOCATED_DRY_KG },
+    { moisture: null, allocated: 0, expectedKg: 0 },
+  ])("counts blended biochar with moisture=$moisture and allocation=$allocated", ({ moisture, allocated, expectedKg }) => {
+    const entry = lineage({
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(APPLIED_KG) },
+      biocharProduct: { id: "lot-1", massKg: BLEND_KG, moistureContentPercent: moisture, composition: COMPOSITION },
+    });
+    if (allocated != null) {
+      entry.sources = [{ productionRun: entry.productionRun!, feedstocks: entry.feedstocks, allocatedDryMassKg: allocated }];
+    }
+    const result = buildBatchSankey([entry]);
+
+    expect(result.columns.find((column) => column.key === "biocharLots")?.massKg).toBe(expectedKg);
+    if (expectedKg > APPLIED_KG) {
+      expect(result.exits).toContainEqual(expect.objectContaining({ key: "in_storage", massKg: expectedKg - APPLIED_KG }));
+    }
+  });
+
   it("builds the four columns with labeled exits for a single lineage", () => {
     const result = buildBatchSankey([
       lineage({
