@@ -315,7 +315,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   (`rvt_1KS4S43VPSBXA26X`, REST GET) had no component in
   `sampling-required-for-mrv`. Later that day the template was edited in place
   as "Dark Earth Carbon Template (15 Oct)" and now has two sample shipping lines
-  (EU, India), as the production template "LCA based template Cula" does. Sample
+  (EU, India), as the production template "LCA based template" does. Sample
   transport is present, but one source cannot fill two lines.
 - **Resolve after cleanup:** [PR 4 of the template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
   §4.5 makes both sample shipping lines entry-only in every environment. The

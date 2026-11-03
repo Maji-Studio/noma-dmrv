@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
+import lcaTemplate from "../../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.json";
 import { acceptAllProposals } from "./test-support";
@@ -10,7 +10,7 @@ import {
   type GhgEntryTemplate, type LineContract, type LineSources, type TemplateComponent,
 } from "./index";
 
-const definitions = [sandbox, cula, production, olderSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
+const definitions = [sandbox, lcaTemplate, production, olderSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
 const definition = definitions[0];
 const components = definition.groups.flatMap((group) => group.components);
 const component = (id: string) => components.find((line) => line.id === id)!;
