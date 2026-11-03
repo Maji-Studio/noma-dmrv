@@ -17,7 +17,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { NO_MOISTURE_READING } from "@/lib/copy-utils";
-import { EMPTY_STOCK_LABEL, isMassEmpty } from "@/lib/stock-display";
+import { isMassEmpty } from "@/lib/stock-display";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { ESTIMATED_WATER_LABEL, LOST_MASS_LABEL } from "@/lib/output-stock/labels";
@@ -141,10 +141,10 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {stock.isLoading && <p role="status" className="body-caption">Loading stock...</p>}
         {stock.error && <Notice tone="error">{stock.error.message}</Notice>}
       </>}
-      figure={stock.data && (empty ? EMPTY_STOCK_LABEL : <>
+      figure={stock.data && !empty && <>
         {formatMassKg(stock.data.currentWetKg)} wet mass
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
-      </>)}
+      </>}
       // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.
       caption={stock.data && !empty && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}

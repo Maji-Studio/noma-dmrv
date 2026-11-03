@@ -13,7 +13,7 @@ import { StockLevelChart } from "./stock-level-chart";
 import { estimateKg } from "./output-stock-history-days";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
-import { EMPTY_STOCK_LABEL, isOutputStockEmpty } from "@/lib/stock-display";
+import { isOutputStockEmpty } from "@/lib/stock-display";
 import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
 import { partFigure, partLabel, partRows } from "./sub-bin-card";
@@ -109,10 +109,10 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
-      figure={ready && (empty ? EMPTY_STOCK_LABEL : <>
+      figure={ready && !empty && <>
         {outputStockFigure(wetKg, dryKg ?? 0)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
-      </>)}
+      </>}
       caption={ready && !empty && wetKg !== null && dryKg !== null && <>
         <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />
         {basisCaption && <span className="block">{basisCaption}</span>}
