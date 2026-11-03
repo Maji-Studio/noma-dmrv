@@ -11,7 +11,7 @@ export type SheetReadOnly = {
   /** The whole sentence as plain text. */
   message: string;
   /** The facility the sentence opens with; the notice links its name. */
-  facility?: { name: string; href: string };
+  facility?: { name: string; href: string; rest: string };
   retry?: { run: () => void; running: boolean };
 };
 
@@ -29,10 +29,11 @@ export function linkedRecordReadOnly(
   const readOnly = linked.readOnly;
   if (!readOnly || !record?.facilityId || record.facilityId !== readOnly.facilityId) return undefined;
   if (readOnly.reason === "archived") {
+    const rest = ` is archived, so this ${subject} is read-only.`;
     return {
       tone: "info",
-      message: `${readOnly.facilityName} is archived, so this ${subject} is read-only.`,
-      facility: { name: readOnly.facilityName, href: archivedFacilityHref(readOnly.facilityId) },
+      message: readOnly.facilityName + rest,
+      facility: { name: readOnly.facilityName, href: archivedFacilityHref(readOnly.facilityId), rest },
     };
   }
   return {

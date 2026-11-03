@@ -20,10 +20,10 @@ export function ReadOnlyNotice({ readOnly }: { readOnly: SheetReadOnly }) {
         </Button>
       ) : undefined}
     >
-      {readOnly.facility && readOnly.message.startsWith(readOnly.facility.name) ? (
+      {readOnly.facility ? (
         <>
           <Link href={readOnly.facility.href} className={cn(RECORD_NAME_LINK, INLINE_HIT_AREA)}>{readOnly.facility.name}</Link>
-          {readOnly.message.slice(readOnly.facility.name.length)}
+          {readOnly.facility.rest}
         </>
       ) : readOnly.message}
     </Notice>
