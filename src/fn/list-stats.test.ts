@@ -56,7 +56,7 @@ const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
 const CTX = { organizationId: "stats-org", userId: "stats-user", orgRole: "admin", isPlatformAdmin: false };
 const ORDER_STATS = { totalOrders: 0, totalDeliveries: 0, totalQuantityKg: 0 };
 const PRODUCT_STATS = { totalProducts: 0, totalWetMassKg: null, totalDryBiocharMassKg: null };
-const APPLICATION_STATS = { totalApplications: 0, totalBiocharAppliedTons: 0 };
+const APPLICATION_STATS = { totalApplications: 0, totalBiocharAppliedTons: 0, totalBiocharAppliedDryTons: 0 };
 const CUSTOMER_STATS = { totalCustomers: 0, totalLocations: 0 };
 
 const FACILITY_STATS = { totalFacilities: 0, totalReactors: 0, totalStorageBins: 0, totalFeedstockWetKg: 0 };

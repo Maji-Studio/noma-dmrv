@@ -7,7 +7,10 @@ import { requireOrgScope } from "./utils";
 
 export interface ApplicationStats {
   totalApplications: number;
+  /** Wet product applied (biochar plus manure and water). */
   totalBiocharAppliedTons: number;
+  /** Dry biochar in that product; the figure the dashboard reports as applied to soil. */
+  totalBiocharAppliedDryTons: number;
 }
 
 export interface ApplicationStatsFilters {
@@ -27,6 +30,7 @@ export async function getApplicationStats(
   const [stats] = await db.select({
     totalApplications: count(),
     totalBiocharAppliedTons: sumNumeric(applications.biocharAppliedTons),
+    totalBiocharAppliedDryTons: sumNumeric(applications.biocharAppliedDryTons),
   })
     .from(applications)
     .innerJoin(deliveries, and(
@@ -38,5 +42,6 @@ export async function getApplicationStats(
   return {
     totalApplications: Number(stats.totalApplications),
     totalBiocharAppliedTons: stats.totalBiocharAppliedTons,
+    totalBiocharAppliedDryTons: stats.totalBiocharAppliedDryTons,
   };
 }

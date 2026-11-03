@@ -8,7 +8,9 @@ import { ApplicationList } from "./application-list";
 
 const TOTAL_APPLICATIONS = 37;
 const TOTAL_TONS = 12.5;
+const TOTAL_DRY_TONS = 9.6;
 const TOTAL_KG_TEXT = "12,500 kg";
+const TOTAL_DRY_KG_TEXT = "9,600 kg";
 
 const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: false },
@@ -78,22 +80,31 @@ function renderList() {
 
 describe("ApplicationList summary cards", () => {
   it("shows the server totals whatever the page size or search", () => {
-    state.stats = { data: { totalApplications: TOTAL_APPLICATIONS, totalBiocharAppliedTons: TOTAL_TONS }, isLoading: false, isError: false };
+    state.stats = { data: { totalApplications: TOTAL_APPLICATIONS, totalBiocharAppliedTons: TOTAL_TONS, totalBiocharAppliedDryTons: TOTAL_DRY_TONS }, isLoading: false, isError: false };
     for (const [search, pageSize] of [[null, 10], ["maize", 10], [null, 50]] as const) {
       state.search = search;
       state.pageSize = pageSize;
       const { unmount } = renderList();
       expect(screen.getByText(String(TOTAL_APPLICATIONS))).toBeTruthy();
       expect(screen.getByText(TOTAL_KG_TEXT)).toBeTruthy();
+      expect(screen.getByText(TOTAL_DRY_KG_TEXT)).toBeTruthy();
       unmount();
     }
   });
 
   it("states the scope in plain words and never says 'on this page'", () => {
-    state.stats = { data: { totalApplications: TOTAL_APPLICATIONS, totalBiocharAppliedTons: TOTAL_TONS }, isLoading: false, isError: false };
+    state.stats = { data: { totalApplications: TOTAL_APPLICATIONS, totalBiocharAppliedTons: TOTAL_TONS, totalBiocharAppliedDryTons: TOTAL_DRY_TONS }, isLoading: false, isError: false };
     const { container } = renderList();
     expect(container.textContent).not.toMatch(/on this page/i);
     expect(screen.getByText("All applications in this facility")).toBeTruthy();
+  });
+
+  it("labels the wet product first and the dry biochar second, never one unqualified total", () => {
+    state.stats = { data: { totalApplications: TOTAL_APPLICATIONS, totalBiocharAppliedTons: TOTAL_TONS, totalBiocharAppliedDryTons: TOTAL_DRY_TONS }, isLoading: false, isError: false };
+    const { container } = renderList();
+    const labels = Array.from(container.querySelectorAll("dt")).map((node) => node.textContent);
+    expect(labels).toEqual(["Wet product", "Dry biochar"]);
+    expect(container.textContent).not.toMatch(/total biochar applied/i);
   });
 
   it("shows the failure, not zeros, when the totals could not load", () => {
