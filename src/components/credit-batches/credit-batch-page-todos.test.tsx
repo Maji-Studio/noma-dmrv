@@ -101,35 +101,35 @@ describe("credit batch page to-dos", () => {
   it("shows the notice and Retry, and no to-do groups or counts, when the read fails", async () => {
     harness.loadTodos.mockResolvedValue({ success: false, error: "boom" });
     renderPage();
-    expect(await screen.findByText("Blocking items could not be checked. Retry to load them.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(await screen.findByText("Blocking items could not be checked. Try again to load them.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     for (const title of ["Blocking", "Check", "Waiting"]) expect(screen.queryByText(title)).toBeNull();
     expect(screen.queryByText(/produced but not applied yet/)).toBeNull();
     expect(screen.queryByText(/Nothing is open/)).toBeNull();
     expect(screen.queryByLabelText(/open to-do/)).toBeNull();
   });
 
-  it("reads again on Retry and shows the list once it answers", async () => {
+  it("reads again on Try again and shows the list once it answers", async () => {
     harness.loadTodos.mockResolvedValueOnce({ success: false, error: "boom" });
     harness.loadTodos.mockResolvedValue({ success: true, data: TODOS });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     expect(await screen.findByText("No lab Samples")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText(/could not be checked/)).toBeNull());
   });
 
-  it("shows the notice and no items or counts when a refetch fails after a good read, and Retry recovers", async () => {
+  it("shows the notice and no items or counts when a refetch fails after a good read, and Try again recovers", async () => {
     harness.loadTodos.mockResolvedValueOnce({ success: true, data: TODOS });
     const { client } = renderPage();
     expect(await screen.findByText("No lab Samples")).toBeTruthy();
     harness.loadTodos.mockResolvedValueOnce({ success: false, error: "boom" });
     await client.refetchQueries({ queryKey: certificationKeys.batchTodos("facility-1", "batch-1") });
-    expect(await screen.findByText("Blocking items could not be checked. Retry to load them.")).toBeTruthy();
+    expect(await screen.findByText("Blocking items could not be checked. Try again to load them.")).toBeTruthy();
     expect(screen.queryByText("No lab Samples")).toBeNull();
     for (const title of ["Blocking", "Check", "Waiting"]) expect(screen.queryByText(title)).toBeNull();
     expect(screen.queryByText(/produced but not applied yet/)).toBeNull();
     harness.loadTodos.mockResolvedValue({ success: true, data: TODOS });
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("No lab Samples")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText(/could not be checked/)).toBeNull());
   });

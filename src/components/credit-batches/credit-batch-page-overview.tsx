@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
+import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { Notice } from "@/components/ui/notice";
 import { InfoHint } from "@/components/ui/tooltip";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
@@ -187,9 +188,9 @@ function TodosUnavailable() {
   return (
     <Notice
       tone="warning"
-      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>Retry</Button>}
+      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>{RECORD_LOCK_RETRY_LABEL}</Button>}
     >
-      Blocking items could not be checked. Retry to load them.
+      Blocking items could not be checked. Try again to load them.
     </Notice>
   );
 }

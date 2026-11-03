@@ -7,6 +7,7 @@ import { FactoryIcon } from "@phosphor-icons/react/dist/ssr";
 import { CreditBatchActivityView } from "@/components/activity";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
+import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
@@ -50,9 +51,9 @@ export function CreditBatchProductionTab() {
     body = (
       <Notice
         tone="warning"
-        action={<Button variant="weak" size="small" busy={runsQuery.isFetching} onClick={() => void runsQuery.refetch()}>Retry</Button>}
+        action={<Button variant="weak" size="small" busy={runsQuery.isFetching} onClick={() => void runsQuery.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
       >
-        Production runs could not be loaded. Retry to load them.
+        Production runs could not be loaded. Try again to load them.
       </Notice>
     );
   } else if (runsQuery.isLoading) {

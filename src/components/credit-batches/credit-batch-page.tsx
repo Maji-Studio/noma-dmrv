@@ -60,7 +60,7 @@ import {
 } from "@/lib/credit-batches/open-items";
 import { ENTITY_DEEP_LINK_FOCUS_PARAM } from "@/lib/entity-deep-link";
 import { formatDateRange } from "@/lib/format-utils";
-import { isRecordEditable } from "@/lib/record-lock-view";
+import { isRecordEditable, RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { cn } from "@/lib/utils";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
@@ -149,7 +149,7 @@ function TabBody() {
     return (
       <ServerError
         message="The Removals for this credit batch could not be loaded."
-        action={<Button variant="weak" size="small" busy={retryingPageModel} onClick={retryPageModel}>Retry</Button>}
+        action={<Button variant="weak" size="small" busy={retryingPageModel} onClick={retryPageModel}>{RECORD_LOCK_RETRY_LABEL}</Button>}
       />
     );
   }
