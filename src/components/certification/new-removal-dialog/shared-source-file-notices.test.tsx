@@ -18,7 +18,7 @@ function candidate(overrides: {
   checksum?: string | null;
   fileName?: string;
   entity: { entityType: string; entityId: string; entityLabel: string };
-  binding?: { nomaRole: string; intendedTarget?: unknown } | null;
+  binding?: { nomaRole: string; intendedTarget?: unknown; carriedEntry?: { creditBatchCode: string; occurredOn: string } } | null;
   biocharApplicationId?: string | null;
   includedInSubmission?: boolean;
 }): SharedSourceFilesInput["candidates"][number] {
@@ -68,17 +68,18 @@ describe("SharedSourceFileNoticeList", () => {
     expect(within(items[1]).getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toBe(`/credit-batches/batch-3?facility=${FACILITY}&tab=emissions`);
   });
 
-  it("links an emissions entry missing from the lines to its credit batch, without the repeated name or date", () => {
-    const carried = candidate({
-      id: "d-carried",
-      entity: { entityType: "emission_entry", entityId: "entry-carried", entityLabel: "Emissions entry, Staff travel, 2026-08-03, CB-26-001" },
-      binding: { nomaRole: "emission_entry", creditBatchId: "batch-1", carriedEntry: { creditBatchCode: "CB-26-001", occurredOn: "2026-08-03" }, intendedTarget: { kind: "explicit", componentId: "c-travel", inputKey: "distance" } } as never,
+  it("shows an emissions entry missing from the lines as its credit batch, linked when the batch is known", () => {
+    const entry = (id: string, code: string) => candidate({
+      id,
+      entity: { entityType: "emission_entry", entityId: `entry-${id}`, entityLabel: `Emissions entry, Staff travel, 2026-08-03, ${code}` },
+      binding: { nomaRole: "emission_entry", carriedEntry: { creditBatchCode: code, occurredOn: "2026-08-03" }, intendedTarget: { kind: "explicit", componentId: "c-travel", inputKey: "distance" } },
     });
-    render(<SharedSourceFileNoticeList files={sharedSourceFiles(input([labReport("d1", "SAM-26-007"), carried]))} />);
+    render(<SharedSourceFileNoticeList files={sharedSourceFiles(input([labReport("d1", "SAM-26-007"), entry("d-known", "CB-26-003"), entry("d-other", "CB-26-001")]))} />);
 
-    const items = within(screen.getByRole("status")).getAllByRole("listitem");
-    expect(items[1].textContent).toBe("Staff travel:CB-26-001");
-    expect(within(items[1]).getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toBe(`/credit-batches/batch-1?facility=${FACILITY}&tab=emissions`);
+    const item = within(screen.getByRole("status")).getAllByRole("listitem")[1];
+    expect(item.textContent).toBe("Staff travel:CB-26-001CB-26-003");
+    expect(within(item).getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toBe(`/credit-batches/batch-3?facility=${FACILITY}&tab=emissions`);
+    expect(within(item).queryByRole("link", { name: "CB-26-001" })).toBeNull();
   });
 
   it("shows nothing when the file is reused within one kind", () => {

@@ -161,7 +161,6 @@ const explicitSourceTargetSchema = z.object({
 });
 const classifiedRemovalSourceSchema: z.ZodType<ClassifiedRemovalSource> =
   z.object({
-    creditBatchId: z.string().min(1).optional(),
     nomaRole: nomaEvidenceRoleSchema,
     nomaRoleLabel: z.string().min(1),
     lineage: removalSourceLineageSchema,

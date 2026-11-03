@@ -99,16 +99,19 @@ export function sharedSourceFiles(input: SharedSourceFilesInput): SharedSourceFi
           },
         }];
       }
-      const batchId = candidate.binding?.creditBatchId;
-      const batchCode = input.batches.find((batch) => batch.id === batchId)?.code ?? candidate.binding?.carriedEntry?.creditBatchCode ?? null;
+      const labelParts = lineageEntity.entityLabel.split(", ");
+      const batchCode = candidate.binding?.carriedEntry?.creditBatchCode
+        ?? input.batches.find((batch) => labelParts.includes(batch.code ?? ""))?.code ?? null;
+      const batch = batchCode ? input.batches.find((item) => item.code === batchCode) : undefined;
       const target = candidate.binding?.intendedTarget;
       const componentId = target?.kind === "explicit" ? target.componentId : null;
       return [{
         ...base,
         component: componentId ? { id: componentId, name: names.get(componentId) ?? null } : null,
-        record: batchId && batchCode
-          ? { label: batchCode, href: recordHref("creditBatch", batchId, { facilityId: input.facilityId, tab: "emissions" }) }
-          : { label: lineageEntity.entityLabel, href: null },
+        record: {
+          label: batchCode ?? lineageEntity.entityLabel,
+          href: batch ? recordHref("creditBatch", batch.id, { facilityId: input.facilityId, tab: "emissions" }) : null,
+        },
       }];
     }
 

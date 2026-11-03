@@ -37,7 +37,6 @@ export function emissionEntrySourceCandidates(
         } else {
           candidates.set(documentId, { documentId, binding: {
             ...(carried ? { carriedEntry: { creditBatchCode: carried.creditBatchCode, occurredOn: carried.occurredOn } } : {}),
-            creditBatchId: entry.creditBatchId,
             nomaRole: "emission_entry", nomaRoleLabel: "Emissions entry",
             lineage: { entityType: "emission_entry", entityId: entry.entryId, entityLabel: label },
             intendedTarget: target, mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
