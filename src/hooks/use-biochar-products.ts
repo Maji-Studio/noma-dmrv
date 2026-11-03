@@ -31,7 +31,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
-import { activityKeys } from "./activity-query-keys";
 import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 
 // ============================================
@@ -121,9 +120,8 @@ export function useCreateBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
+      // Also refreshes activity on the batches of the source runs.
       invalidateAfterFeedstockReplan(queryClient);
-      // Product writes record activity on the batches of their source runs.
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -230,9 +228,8 @@ export function useUpdateBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
+      // Also refreshes activity on the batches of the source runs.
       invalidateAfterFeedstockReplan(queryClient);
-      // Product writes record activity on the batches of their source runs.
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -338,9 +335,8 @@ export function useDeleteBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
+      // Also refreshes activity on the batches of the source runs.
       invalidateAfterFeedstockReplan(queryClient);
-      // Product writes record activity on the batches of their source runs.
-      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(undefined, variables);
     },
