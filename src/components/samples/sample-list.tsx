@@ -9,7 +9,7 @@ import { StaleVersionError, staleDeleteMessage, toDeleteErrorMessage } from "@/l
  */
 
 import { useEffect, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, Row } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import {
@@ -122,6 +122,7 @@ function createColumns(
   onEdit: (sample: SampleWithRelations) => void,
   onDelete: (sampleId: string) => void,
   locks: RecordLockViews,
+  showR0: boolean,
 ): ColumnDef<SampleWithRelations>[] {
   return [
     {
@@ -168,6 +169,12 @@ function createColumns(
       cell: ({ row }) =>
         row.original.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? MISSING_VALUE.notRecorded,
     },
+    // The 1000-year tier rests on R₀ reflectance, so its Samples show it beside H:C.
+    ...(showR0 ? [{
+      accessorKey: "randomReflectanceR0Percent",
+      header: "R₀ (%)",
+      cell: ({ row }: { row: Row<SampleWithRelations> }) => formatLabPercent(row.original.randomReflectanceR0Percent),
+    }] : []),
     {
       accessorKey: "labName",
       header: "Lab name",
@@ -566,7 +573,8 @@ export function SampleList({
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks);
+  const showR0 = samples.some((sample) => sample.durabilityOption === "1000_year");
+  const columns = createColumns(openEdit, handleDelete, sampleLocks.locks, showR0);
 
   const viewingEntity =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
