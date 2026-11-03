@@ -350,6 +350,11 @@ export function recordLegs(model: TraceModel, recordId: string): ChainGeoLeg[] {
 /** Kinds whose records happen at the facility: no position of their own is expected. */
 const FACILITY_KINDS: readonly LineageNodeKind[] = ["productionRun", "biocharProduct", "order"];
 
+/** Whether a kind's records happen at the facility (no position of their own expected). */
+export function happensAtFacility(kind: LineageNodeKind): boolean {
+  return FACILITY_KINDS.includes(kind);
+}
+
 /** Where a record with no position of its own is: at the facility, or nowhere recorded. */
 export function placeWithoutPosition(model: TraceModel, kind: LineageNodeKind): string {
   return FACILITY_KINDS.includes(kind) ? `At the facility, ${model.facilityName}` : "No location recorded";

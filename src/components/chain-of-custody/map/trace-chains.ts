@@ -143,3 +143,49 @@ export function chainStepLighting(
     currentNodeIds: stepIds,
   };
 }
+
+/** Where a chain walk stands: the chain (by its end), the step, and the record open inside it. */
+export interface ChainWalk {
+  endId: string;
+  /** Index into the chain's steps (one per stage). */
+  stepIndex: number;
+  /** The record opened in place inside a grouped step; null = none. */
+  openRecordId: string | null;
+}
+
+/** The walk's chain, steps and current step, or null when its end is not in the model. */
+export function resolveWalk(
+  model: TraceModel,
+  chains: TraceChain[],
+  walk: ChainWalk | null,
+): { chain: TraceChain; steps: ChainStep[]; stepIndex: number; step: ChainStep } | null {
+  if (!walk) return null;
+  const chain = chains.find((candidate) => candidate.end.id === walk.endId) ?? chainTo(model, walk.endId);
+  if (!chain) return null;
+  const steps = chainSteps(chain);
+  const stepIndex = Math.max(0, Math.min(walk.stepIndex, steps.length - 1));
+  const step = steps[stepIndex];
+  return step ? { chain, steps, stepIndex, step } : null;
+}
+
+/**
+ * Walk to a record (a marker, a list row or a Flow pick). Inside the current
+ * chain it moves to the record's step with the record open. Otherwise it
+ * starts the first chain through the record: a chain end starts at the
+ * supplier, any other record on its own stage's step with that record open.
+ * Null when no chain holds the record (the reactor, an unknown id).
+ */
+export function walkTo(
+  model: TraceModel,
+  chains: TraceChain[],
+  current: ChainWalk | null,
+  recordId: string,
+): ChainWalk | null {
+  const resolved = resolveWalk(model, chains, current);
+  const inChain = resolved ? stepIndexOf(resolved.steps, recordId) : -1;
+  if (resolved && inChain >= 0) return { endId: resolved.chain.end.id, stepIndex: inChain, openRecordId: recordId };
+  const next = chainFor(model, chains, recordId);
+  if (!next) return null;
+  if (next.end.id === recordId) return { endId: next.end.id, stepIndex: 0, openRecordId: null };
+  return { endId: next.end.id, stepIndex: Math.max(0, stepIndexOf(chainSteps(next), recordId)), openRecordId: recordId };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChains, chainFor, chainStepLighting, chainSteps, chainTo, stepIndexOf } from "./trace-chains";
+import { buildChains, chainFor, chainStepLighting, chainSteps, chainTo, resolveWalk, stepIndexOf, walkTo, type ChainWalk } from "./trace-chains";
 import { BATCH_EDGES, BATCH_NODES, FACILITY, FIELD_ONE, SUPPLIER_ONE, SUPPLIER_TWO, batchGeo, batchModel, edge, recordNode } from "./trace-fixtures";
 import { buildTraceModel } from "./trace-model";
 
@@ -128,5 +128,48 @@ describe("chainStepLighting", () => {
     const chain = chainTo(model, "application:ap1")!;
     expect(chain.distanceKm).toBe(0);
     expect(chainStepLighting(model, chain, chainSteps(chain)[0]!).points).toEqual([FACILITY]);
+  });
+});
+
+describe("walkTo", () => {
+  const fieldA: ChainWalk = { endId: "application:ap1", stepIndex: 0, openRecordId: null };
+
+  it("moves the walk to a record's step inside the current chain, with the record open", () => {
+    const model = batchModel();
+    expect(walkTo(model, buildChains(model), fieldA, "delivery:dl1")).toEqual({ endId: "application:ap1", stepIndex: 3, openRecordId: "delivery:dl1" });
+    expect(walkTo(model, buildChains(model), fieldA, "feedstock:fs2")).toEqual({ endId: "application:ap1", stepIndex: 0, openRecordId: "feedstock:fs2" });
+  });
+
+  it("starts a chain end at its first step and any other record on its own step", () => {
+    const model = batchModel();
+    expect(walkTo(model, buildChains(model), null, "application:ap2")).toEqual({ endId: "application:ap2", stepIndex: 0, openRecordId: null });
+    expect(walkTo(model, buildChains(model), null, "production-run:pr1")).toEqual({ endId: "application:ap1", stepIndex: 1, openRecordId: "production-run:pr1" });
+  });
+
+  it("starts another chain for a record outside the current one", () => {
+    const model = batchModel();
+    expect(walkTo(model, buildChains(model), fieldA, "application:ap2")!.endId).toBe("application:ap2");
+  });
+
+  it("leaves the walk alone for a record on no chain", () => {
+    const model = batchModel();
+    expect(walkTo(model, buildChains(model), fieldA, "reactor:r1")).toBeNull();
+  });
+});
+
+describe("resolveWalk", () => {
+  it("opens an application's own model on its chain without the batch's chain list", () => {
+    const model = batchModel();
+    const resolved = resolveWalk(model, [], { endId: "application:ap1", stepIndex: 9, openRecordId: null })!;
+    expect(resolved.chain.end.id).toBe("application:ap1");
+    // A step past the end clamps to the last one.
+    expect(resolved.stepIndex).toBe(4);
+    expect(resolved.step.kind).toBe("application");
+  });
+
+  it("is null for no walk or an end the model does not hold", () => {
+    const model = batchModel();
+    expect(resolveWalk(model, [], null)).toBeNull();
+    expect(resolveWalk(model, [], { endId: "application:missing", stepIndex: 0, openRecordId: null })).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+// The tile styles; the walk panel renders without the map canvas in a stacked Split.
+import "./trace-map.css";
 import type { CSSProperties } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -65,6 +67,13 @@ const SCROLL_MARGIN_PX = 8;
 const scrollListToMarker = (element: HTMLElement | null) => {
   const list = element?.closest("ol");
   if (!element || !list) return;
+  // A list that grows with its content (the stacked Split's walk, inside a
+  // scrolling page) never scrolls itself: bring the row into view instead.
+  if (list.scrollHeight <= list.clientHeight) {
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    element.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+    return;
+  }
   const offset = element.getBoundingClientRect().top - list.getBoundingClientRect().top;
   list.scrollTo({ top: list.scrollTop + offset - SCROLL_MARGIN_PX, behavior: "smooth" });
 };
