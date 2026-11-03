@@ -68,6 +68,7 @@ vi.mock("./component-table-model", () => ({
   buildComponentTable: () => ({ loading: false, batches: [], rows: [], groups: [] }),
 }));
 vi.mock("./source-records", () => ({ SourceRecords: () => null }));
+vi.mock("./shared-source-file-notices", () => ({ useSharedSourceFiles: () => [] }));
 
 vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
