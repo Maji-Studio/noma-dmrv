@@ -6,20 +6,26 @@ import { MOISTURE_BASIS_HINT } from "@/lib/mass-moisture";
 import { moistureReadingGuidance } from "@/lib/output-stock/moisture-guidance";
 import { useController, useWatch, type Control, type FieldValues } from "react-hook-form";
 
-/** Ingredient bins keep wet stock, so their estimate comes from the intakes still in the bin, not a reading. */
-const INGREDIENT_ESTIMATE_BASIS = "From the intakes still in this ingredient bin.";
+/** Ingredient bins keep wet stock, so their estimate comes from the deliveries the draw takes, not a reading. */
+const INGREDIENT_ESTIMATE_BASIS = "From the deliveries this draw takes.";
 
 /**
  * The measured moisture of the ingredient added. It starts empty: the bin's
  * weighted remaining estimate is a hint and a check, never the value.
  */
-export function IngredientMoistureField({ control, index, frozen, disabled }: { control: Control<FieldValues>; index: number; frozen: boolean; disabled: boolean }) {
+export function IngredientMoistureField({ control, index, frozen, disabled, productId }: { control: Control<FieldValues>; index: number; frozen: boolean; disabled: boolean; productId?: string }) {
   const prefix = `ingredientBins.${index}`;
   const binId = useWatch({ control, name: `${prefix}.storageLocationId` });
   const { field: { name, ref, onBlur, onChange, value }, fieldState } = useController({ control, name: `${prefix}.moistureContentPercent` });
   const massKg = useWatch({ control, name: `${prefix}.massKg` });
   const placedAt = useWatch({ control, name: "placedAt" });
-  const bin = useEntityById("storageLocation", frozen ? undefined : binId || undefined, placedAt ? { occurredAt: String(placedAt) } : undefined);
+  // The server estimates the draw the entered mass takes (by the bin's draw method), not the whole pile.
+  const requestedWetKg = Number(massKg);
+  const bin = useEntityById("storageLocation", frozen ? undefined : binId || undefined, {
+    ...(placedAt ? { occurredAt: String(placedAt) } : {}),
+    ...(requestedWetKg > 0 ? { drawWetKg: String(requestedWetKg) } : {}),
+    ...(requestedWetKg > 0 && productId ? { excludeProductId: productId } : {}),
+  });
   const estimatedMoisture = bin.data?.mass?.moisturePercent;
   const guidance = moistureReadingGuidance(
     typeof estimatedMoisture === "number" ? { moisturePercent: estimatedMoisture, basisText: INGREDIENT_ESTIMATE_BASIS } : null,

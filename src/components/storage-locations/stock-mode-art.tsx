@@ -191,7 +191,8 @@ export function MixPileArt() {
 /** Rows a delivery layer fills. */
 const LAYER_ROWS_PER_LAYER = LAYER_ROWS;
 /** The chip that marks the layer a draw empties first sits just above the bin. */
-const MARKER_Y = BIN_TOP - CHIP_HEIGHT - 3;
+const MARKER_GAP = 3;
+const MARKER_Y = BIN_TOP - CHIP_HEIGHT - MARKER_GAP;
 
 /**
  * One bin of stacked delivery layers (layer 0 is the oldest, at the bottom). The settled

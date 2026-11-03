@@ -117,13 +117,13 @@ export const FEEDSTOCK_STOCK_MODE_DESCRIPTIONS: Record<OutputStockMode, string> 
 };
 
 export const FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS: Record<OutputDrawOrder, string> = {
-  oldest_first: "Empty the earliest delivery first.",
-  newest_first: "Empty the latest delivery first.",
+  oldest_first: "By delivery date, earliest first.",
+  newest_first: "By delivery date, latest first.",
 };
 
 /** Hints behind the feedstock bin form's (i). */
 export const FEEDSTOCK_STOCK_MODE_HINT =
-  "The draw method sets how wet mass leaves this bin for production runs, product ingredients and lost mass, and so which deliveries a credit batch counts the transport of. Entries already saved keep their method.";
+  "Sets which deliveries each production run, product ingredient and lost mass takes from. A credit batch counts transport only for deliveries its runs took from. Entries already saved keep their method.";
 export const FEEDSTOCK_MERGE_TIME_HINT =
   "Set a time after the bin's last recorded movement.";
 

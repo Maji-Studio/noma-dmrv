@@ -34,6 +34,7 @@ import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 
 // ============================================
 // Query Keys
@@ -126,6 +127,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
+      invalidateAfterFeedstockReplan(queryClient);
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
@@ -160,6 +162,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
+      invalidateAfterFeedstockReplan(queryClient);
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
@@ -188,6 +191,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
+      invalidateAfterFeedstockReplan(queryClient);
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       // Feedstock writes resync the derived transport leg (distance/provenance),
