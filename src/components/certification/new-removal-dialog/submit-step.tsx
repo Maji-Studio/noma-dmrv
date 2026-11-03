@@ -63,7 +63,7 @@ import { ComponentTable } from "./component-table";
 import { CarriedEntriesPanel } from "../carried-entries";
 import { buildComponentTable } from "./component-table-model";
 import { SourceRecords } from "./source-records";
-import { SharedSourceFileNotices } from "./shared-source-file-notices";
+import { useSharedSourceFiles } from "./shared-source-file-notices";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -94,6 +94,8 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
+  // Advisory only: a file reused across kinds of evidence never gates Submit.
+  const sharedFiles = useSharedSourceFiles(removalId, facilityId, ctx);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -421,14 +423,12 @@ export function SubmitStep({
         compilationError={compilationQuery.error}
         checks={checklist}
         table={componentTable}
+        sharedFiles={sharedFiles}
         readiness={readiness}
         rejectionMessage={
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
       />
-
-      {/* Advisory only: a file reused across kinds of evidence never gates Submit. */}
-      <SharedSourceFileNotices removalId={removalId} facilityId={facilityId} ctx={ctx} />
 
       <ComponentTable table={componentTable} facilityId={facilityId} />
 

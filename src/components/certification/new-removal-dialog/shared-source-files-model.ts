@@ -24,6 +24,24 @@ export interface SharedSourceFilesInput {
   facilityId: string;
   batches: readonly Pick<MemberCreditBatch, "id" | "code">[];
   linesByBatchId: Record<string, readonly EntryLine[]> | undefined;
+  /** Entries of other credit batches this Removal carries, with their batch id and code. */
+  carriedEntries?: readonly CarriedPlace[];
+}
+
+type CarriedPlace = { entryId: string; creditBatchId: string; creditBatchCode: string; componentId: string; componentName?: string };
+
+/** The record noun that leads a lineage label, such as "Delivery DL-26-019". The row shows the code alone. */
+const LABEL_NOUN: Record<string, string> = {
+  application: "Application ",
+  delivery: "Delivery ",
+  feedstock: "Feedstock ",
+  credit_batch: "Credit batch ",
+  sample: "Sample ",
+};
+
+function codeOf(entityType: string, label: string): string {
+  const noun = LABEL_NOUN[entityType];
+  return noun && label.startsWith(noun) && label.length > noun.length ? label.slice(noun.length) : label;
 }
 
 const RECORD_KIND_BY_ENTITY: Record<Exclude<CandidateLineageEntityType, "emission_entry">, RecordKind> = {
@@ -79,6 +97,7 @@ function componentNames(input: SharedSourceFilesInput): Map<string, string> {
 export function sharedSourceFiles(input: SharedSourceFilesInput): SharedSourceFile[] {
   const places = entryPlaces(input);
   const names = componentNames(input);
+  const carriedById = new Map((input.carriedEntries ?? []).map((entry) => [entry.entryId, entry]));
   const uses = input.candidates.flatMap((candidate): SourceFileUse[] => {
     // A file left out of a saved attempt is not sent.
     if (candidate.includedInSubmission === false) return [];
@@ -99,25 +118,29 @@ export function sharedSourceFiles(input: SharedSourceFilesInput): SharedSourceFi
           },
         }];
       }
-      const labelParts = lineageEntity.entityLabel.split(", ");
-      const batchCode = candidate.binding?.carriedEntry?.creditBatchCode
-        ?? input.batches.find((batch) => labelParts.includes(batch.code ?? ""))?.code ?? null;
-      const batch = batchCode ? input.batches.find((item) => item.code === batchCode) : undefined;
+      const carried = carriedById.get(lineageEntity.entityId);
+      if (carried) {
+        return [{
+          ...base,
+          component: { id: carried.componentId, name: carried.componentName ?? names.get(carried.componentId) ?? null },
+          record: {
+            label: carried.creditBatchCode,
+            href: recordHref("creditBatch", carried.creditBatchId, { facilityId: input.facilityId, tab: "emissions" }),
+          },
+        }];
+      }
       const target = candidate.binding?.intendedTarget;
       const componentId = target?.kind === "explicit" ? target.componentId : null;
       return [{
         ...base,
         component: componentId ? { id: componentId, name: names.get(componentId) ?? null } : null,
-        record: {
-          label: batchCode ?? lineageEntity.entityLabel,
-          href: batch ? recordHref("creditBatch", batch.id, { facilityId: input.facilityId, tab: "emissions" }) : null,
-        },
+        record: { label: lineageEntity.entityLabel, href: null },
       }];
     }
 
     const kind = RECORD_KIND_BY_ENTITY[lineageEntity.entityType as keyof typeof RECORD_KIND_BY_ENTITY];
     const record: SourceFileRecord = {
-      label: lineageEntity.entityLabel,
+      label: codeOf(lineageEntity.entityType, lineageEntity.entityLabel),
       href: kind ? recordHref(kind, lineageEntity.entityId, { facilityId: input.facilityId }) : null,
     };
     return [{ ...base, record }];

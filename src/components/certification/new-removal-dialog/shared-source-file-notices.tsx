@@ -5,7 +5,6 @@
  */
 "use client";
 
-import { Notice } from "@/components/ui/notice";
 import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import type { SharedSourceFile } from "@/lib/certification/shared-source-files";
@@ -14,58 +13,50 @@ import { sharedSourceFiles } from "./shared-source-files-model";
 
 const NOTE_DETAIL = "A verifier who opens the Source for any kind below finds this same file. Check that it supports each one.";
 
-interface SharedSourceFileNoticesProps {
-  removalId: string;
-  facilityId: string;
-  ctx: Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId">;
-}
+type NoticeCtx = Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId" | "carriedEntries">;
 
-export function SharedSourceFileNotices({ removalId, facilityId, ctx }: SharedSourceFileNoticesProps) {
+/** The shared files for this Removal; empty until the candidate documents load. */
+export function useSharedSourceFiles(removalId: string, facilityId: string, ctx: NoticeCtx): SharedSourceFile[] {
   const query = useCandidateDocumentsForRemoval(removalId);
-  if (!query.data) return null;
-  const files = sharedSourceFiles({
+  if (!query.data) return [];
+  return sharedSourceFiles({
     candidates: query.data.candidates,
     facilityId,
     batches: ctx.memberBatches,
     linesByBatchId: ctx.emissionLinesByBatchId,
+    carriedEntries: ctx.carriedEntries,
   });
-  return <SharedSourceFileNoticeList files={files} />;
 }
 
-export function SharedSourceFileNoticeList({ files }: { files: readonly SharedSourceFile[] }) {
+/** Rows for the "Submission notes" Notice: the explanation once, then each file with its kinds. */
+export function SharedSourceFileNotes({ files }: { files: readonly SharedSourceFile[] }) {
   if (files.length === 0) return null;
   return (
-    <div className="flex flex-col gap-16">
+    <div className="flex flex-col gap-8">
+      <div>{NOTE_DETAIL}</div>
       {files.map((file) => (
-        <Notice
-          key={file.fileKey}
-          tone="warning"
-          title={
-            <>
-              <span className="break-all">{file.fileName}</span> is the file for {file.kinds.length} different kinds of evidence.
-            </>
-          }
-        >
-          <div className="flex flex-col gap-8">
-            <div>{NOTE_DETAIL}</div>
-            <ul role="list" className="flex flex-col gap-4">
-              {file.kinds.map((kind) => (
-                <li key={kind.key} className="flex flex-wrap items-center gap-x-8">
-                  <span className="text-[var(--color-text-primary)]">{kind.label}:</span>
-                  {kind.records.map((record) =>
-                    record.href ? (
-                      <NewTabLink key={`${record.label}:${record.href}`} href={record.href} tall>
-                        {record.label}
-                      </NewTabLink>
-                    ) : (
-                      <span key={record.label}>{record.label}</span>
-                    ),
-                  )}
-                </li>
-              ))}
-            </ul>
+        <div key={file.fileKey} className="flex flex-col gap-4">
+          <div>
+            <span className="break-all font-medium text-[var(--color-text-primary)]">{file.fileName}</span> is the file for {file.kinds.length}{" "}
+            different kinds of evidence.
           </div>
-        </Notice>
+          <ul role="list" className="flex flex-col gap-4">
+            {file.kinds.map((kind) => (
+              <li key={kind.key} className="flex flex-wrap items-center gap-x-8">
+                <span className="text-[var(--color-text-primary)]">{kind.label}:</span>
+                {kind.records.map((record) =>
+                  record.href ? (
+                    <NewTabLink key={`${record.label}:${record.href}`} href={record.href} mono tall>
+                      {record.label}
+                    </NewTabLink>
+                  ) : (
+                    <span key={record.label} className="font-mono">{record.label}</span>
+                  ),
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
     </div>
   );
