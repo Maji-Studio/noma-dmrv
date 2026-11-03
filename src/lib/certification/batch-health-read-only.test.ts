@@ -30,7 +30,7 @@ function loadedFacts() {
     id: batch.creditBatchId, code: batch.creditBatchCode,
     durabilityGateBlockers: carbon.blockersByBatchId[batch.creditBatchId],
     durabilityGateFacts: carbon.blockerFactsByBatchId[batch.creditBatchId],
-  }], [batch], soil);
+  }], [batch], soil.blockers);
   return toBatchHealthFacts({
     memberBatches: members, mapping: {}, removalTemplate: {},
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], hasSubmittableRuns: true,
@@ -43,7 +43,6 @@ function loadedFacts() {
 
 const checks = [
   { target: "labSamples", fact: "Credit batch CB-26-001 is marked as sampled but has no Samples.", detail: "Missing: Credit batch CB-26-001 is marked as sampled but has no Samples. Add at least 3 Samples before submitting." },
-  { target: "certificationEmissions", fact: "This facility has no reference soil temperature.", detail: "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal." },
   { target: "feedstocks", fact: "Feedstock FS-1 has no usable transport leg.", detail: "Feedstock FS-1 has no usable transport leg. Record a positive distance and load mass before submitting." },
   { target: "batchDetails", fact: "200-year Removals cannot be submitted yet.", detail: "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability." },
 ];
@@ -64,7 +63,7 @@ describe("read-only batch health facts", () => {
     expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
   });
 
-  it("joins multiple producer facts as full sentences", () => {
+  it("joins multiple producer facts like merged check text, each once", () => {
     const configuration = durabilityConfigurationBlockerDetails([
       { sampling: "unsampled", durabilityOption: "200_year" },
     ]);
@@ -73,16 +72,16 @@ describe("read-only batch health facts", () => {
       "Credit batch CB-1 fails biochar eligibility (H/C_org mean 0.800 ≥ 0.5), under module §3 Table 2.",
     ];
     const carbonMessages = [`${carbonFacts[0]} Add complete results to at least 3 Samples before submitting.`, carbonFacts[1]];
-    const health = deriveBatchHealth({ ...healthy, carbonMissingInputs: carbonMessages, carbonBlockerFacts: carbonFacts,
+    const health = deriveBatchHealth({ ...healthy, carbonMissingInputs: carbonMessages, carbonBlockerFacts: [...carbonFacts, carbonFacts[0]],
       durabilityConfigurationBlockers: configuration.map((copy) => copy.message),
       durabilityConfigurationFacts: configuration.map((copy) => copy.fact),
     });
     expect(health.checks.find((check) => check.key === "carbon")).toMatchObject({
-      detail: `Missing: ${carbonMessages.join(", ")}`, readOnlyDetail: carbonFacts.join(" "),
+      detail: `Missing: ${carbonMessages.join(", ")}`, readOnlyDetail: carbonFacts.join(" · "),
     });
     expect(health.checks.find((check) => check.fixTarget === "batchDetails")).toMatchObject({
       detail: configuration.map((copy) => copy.message).join(" · "),
-      readOnlyDetail: "Unsampled Method B Removals cannot be submitted yet. 200-year Removals cannot be submitted yet.",
+      readOnlyDetail: "Unsampled Method B Removals cannot be submitted yet. · 200-year Removals cannot be submitted yet.",
     });
   });
 
@@ -100,7 +99,7 @@ describe("read-only batch health facts", () => {
     expect(item.detail).toBe(check.readOnlyDetail);
   });
 
-  it.each([false, true])("merges a safe copy fact but never a bare detail (copy: %s)", (hasCopy) => {
+  it.each([false, true])("states every merged fact or none, never a bare detail (copy: %s)", (hasCopy) => {
     const proof = deliveryProofMessage("DL-1");
     const health = deriveBatchHealth({ ...healthy, hasSubmittableRuns: false,
       productionReadinessGap: { kind: "noApplications", fixTarget: "deliveries", detail: "Production is missing. Record it.",
@@ -109,8 +108,27 @@ describe("read-only batch health facts", () => {
       submissionLineageBlockers: [{ detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }],
     });
     const check = health.checks.find((check) => check.status === "unmet")!;
-    expect(check.readOnlyDetail).toBe(hasCopy ? `Production is missing. · ${proof.fact}` : proof.fact);
+    expect(check.readOnlyDetail).toBe(hasCopy ? `Production is missing. · ${proof.fact}` : undefined);
     expect(check.detail).toBe(`Production is missing. Record it. · ${proof.message}`);
+    const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
+    expect(item.detail).toBe(hasCopy ? check.readOnlyDetail : undefined);
+  });
+
+  it("shows only the soil temperature title, which states the fact", () => {
+    const health = deriveBatchHealth(loadedFacts());
+    const check = health.checks.find((check) => check.key === "facilityEmissions")!;
+    const editable = buildCreditBatchOpenItems({ ...pageContext, health });
+    const id = `health:${check.key}:${check.issueKey ?? check.fixTarget}`;
+    expect(editable.blocking.find((item) => item.id === id)?.detail).toContain("Set this facility's reference soil temperature");
+    const item = readOnlyOpenItems({ ...editable, waiting: [] }).blocking.find((item) => item.id === id)!;
+    expect(item.title).toBe("No reference soil temperature for the facility");
+    expect(item.detail).toBeUndefined();
+  });
+
+  it("keeps the unpinned fact when it merges with another template blocker", () => {
+    const health = deriveBatchHealth({ ...healthy, templateBlockers: [removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("missingFixedDatapoint")] });
+    const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
+    expect(item.detail).toBe("This credit batch has no Removal template. · Some fixed values are not set in the Isometric template.");
   });
 
   it("shows only the unpinned template title on the read-only Overview", () => {

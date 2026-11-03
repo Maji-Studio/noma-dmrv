@@ -229,7 +229,7 @@ export async function buildRemovalContext(
   const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
     memberBatchesWithDurability,
     batchesWithSamples,
-    soilTemperatureGate,
+    soilTemperatureGate.blockers,
   );
 
   // Nothing to submit when the removal carries no applications. Facility

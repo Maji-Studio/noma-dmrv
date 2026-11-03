@@ -89,7 +89,6 @@ export function toBatchHealthFacts(
     documentWarnings: batch ? sampleDocumentWarningKeys({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     carbonBlockerFacts: batch?.durabilityGateFacts,
-    facilityEmissionsFacts: batch?.facilityEmissionsGateFacts,
     durabilityConfigurationFacts: ctx.durabilityConfigurationFacts,
     facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete

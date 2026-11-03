@@ -18,20 +18,18 @@ describe("attributeSoilTemperatureBlockers", () => {
           { creditBatchId: "batch-200", durabilityOption: "200_year" },
           { creditBatchId: "batch-1000", durabilityOption: "1000_year" },
         ],
-        { blockers: [soilBlocker], blockerFacts: ["This facility has no reference soil temperature."] },
+        [soilBlocker],
       ),
     ).toEqual([
       {
         id: "batch-200",
         durabilityGateBlockers: ["Existing durability blocker"],
         facilityEmissionsGateBlockers: [soilBlocker],
-        facilityEmissionsGateFacts: ["This facility has no reference soil temperature."],
       },
       {
         id: "batch-1000",
         durabilityGateBlockers: [],
         facilityEmissionsGateBlockers: [],
-        facilityEmissionsGateFacts: [],
       },
     ]);
   });

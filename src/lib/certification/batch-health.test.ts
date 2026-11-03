@@ -69,10 +69,11 @@ describe("deriveBatchHealth", () => {
 
   it("carries the read-only template fact on the check, merged checks included", () => {
     const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
+    // Alone, the title "No Removal template chosen" states it.
     expect(unpinned.copy?.readOnlyDetail).toBeUndefined();
     expect(unpinned.copy?.detail).toBeUndefined();
     const merged = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("missingFixedDatapoint")] })), "templateSet");
-    expect(merged.copy?.readOnlyDetail).not.toContain("This credit batch has no Removal template.");
+    expect(merged.copy?.readOnlyDetail).toContain("This credit batch has no Removal template.");
     expect(merged.copy?.readOnlyDetail).toContain("Some fixed values are not set in the Isometric template.");
   });
 
@@ -530,12 +531,13 @@ describe("read-only batch health copy", () => {
     expect(openItemText(groups.blocking[0])).toBe(blocker.message);
     expect(health.checks.find((check) => check.status === "unmet")?.detail).toBe(blocker.message);
     const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
-    expect(readOnly.detail).toBe(blocker.copy?.detail ?? blocker.copy?.readOnlyDetail);
+    // Alone, the unpinned title "No Removal template chosen" is the fact.
+    expect(readOnly.detail).toBe(code === "unpinnedTemplate" ? undefined : blocker.copy?.detail ?? blocker.copy?.readOnlyDetail);
     expect(openItemText(readOnly) ?? "").not.toMatch(/Set a Removal template|Add a file|Check the manual entry|in Settings|An Admin|Upload|Try again/);
     expect(readOnly.instruction).toBeUndefined();
   });
 
-  it.each(["unpinnedTemplate", "missingFixedDatapoint"] as const)("states the %s fact to a member too", (code) => {
+  it.each(["missingFixedDatapoint"] as const)("states the %s fact to a member too", (code) => {
     const blocker = removalTemplateBlocker(code);
     const health = deriveBatchHealth(facts({ templateBlockers: [blocker] }));
     const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: false, health });

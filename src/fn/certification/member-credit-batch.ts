@@ -27,7 +27,6 @@ export interface MemberCreditBatch {
   durabilityGateBlockers?: string[];
   durabilityGateFacts?: string[];
   facilityEmissionsGateBlockers?: string[];
-  facilityEmissionsGateFacts?: string[];
 }
 
 export function toMemberCreditBatch(
@@ -75,6 +74,5 @@ export function toMemberCreditBatchView(
     durabilityGateBlockers: batch.durabilityGateBlockers,
     durabilityGateFacts: batch.durabilityGateFacts,
     facilityEmissionsGateBlockers: batch.facilityEmissionsGateBlockers,
-    facilityEmissionsGateFacts: batch.facilityEmissionsGateFacts,
   };
 }

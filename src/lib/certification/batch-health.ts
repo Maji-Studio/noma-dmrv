@@ -162,7 +162,6 @@ export interface BatchHealthFacts {
    * durability tier, such as a missing reference soil temperature.
    */
   facilityEmissionsBlockers: string[];
-  facilityEmissionsFacts?: string[];
   /** Declared pyrolysis feedstock types missing their Isometric registry id. */
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /**
@@ -225,6 +224,16 @@ const COMPLETE_FACILITY_INSTRUCTION = "Complete facility setup to evaluate trans
 /** One open item for lineage and configuration blockers found by the submit-time build. */
 const SUBMISSION_BLOCKERS_LABEL = "Submission blockers";
 
+/** Each producer fact once, joined like merged check text. */
+function uniqueFacts(facts: readonly string[] | undefined): string | undefined {
+  return [...new Set(facts?.filter(Boolean))].join(MERGED_CHECK_SEPARATOR) || undefined;
+}
+
+/** The fact a check states read only, the same precedence open items use. */
+function readOnlyFact(check: BatchHealthCheckBase): string | undefined {
+  return check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail;
+}
+
 function emissionCheckDetail(line: BatchEmissionLine): { message: string; copy?: BlockerCopy } {
   if (line.blocker?.code === "entryHasNoRemoval") return line.blocker;
   const instruction = line.blocker?.code === "entryMissingEvidence"
@@ -245,7 +254,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: CARBON_LABEL,
     status: "unmet",
     detail: `Missing: ${missingInputs.join(", ")}`,
-    readOnlyDetail: facts.carbonBlockerFacts?.join(" "),
+    readOnlyDetail: uniqueFacts(facts.carbonBlockerFacts),
     fixTarget: "labSamples",
   };
 }
@@ -262,7 +271,6 @@ function facilityEmissionsChecks(
     label: FACILITY_EMISSIONS_LABEL,
     status: "unmet",
     detail: blockers.join(" · "),
-    readOnlyDetail: facts.facilityEmissionsFacts?.join(" "),
     fixTarget: "certificationEmissions",
   }];
 }
@@ -448,11 +456,9 @@ function mergeUnmetChecksByDestination(
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
-      ...(existing.readOnlyDetail !== undefined || check.readOnlyDetail !== undefined ? {
-        readOnlyDetail: mergeCheckText(
-          existing.readOnlyDetail ?? existing.copy?.readOnlyDetail ?? existing.copy?.detail,
-          check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail,
-        ),
+      // Read only, a merged item states every side's fact or none: a bare detail may hold a repair step.
+      ...((existing.readOnlyDetail || check.readOnlyDetail) && readOnlyFact(existing) && readOnlyFact(check) ? {
+        readOnlyDetail: mergeCheckText(readOnlyFact(existing), readOnlyFact(check)),
       } : {}),
       copy: existing.copy && check.copy ? {
         detail: mergeCheckText(existing.copy.detail, check.copy.detail),
@@ -529,7 +535,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
-    readOnlyDetail: facts.durabilityConfigurationFacts?.join(" "),
+    readOnlyDetail: uniqueFacts(facts.durabilityConfigurationFacts),
     fixTarget: "batchDetails",
   });
   return lineageChecks;
@@ -575,7 +581,10 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
         const key = fixTarget === "templateSetup" ? "templateSet" : "templateLines";
         return {
           key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
-          detail: blocker.message, copy: blocker.copy, fixTarget,
+          detail: blocker.message, fixTarget,
+          // The title "No Removal template chosen" already states the unpinned fact.
+          copy: blocker.code === "unpinnedTemplate" && onlyUnpinned && blocker.copy
+            ? { instruction: blocker.copy.instruction } : blocker.copy,
           unmetLabel: key === "templateLines"
             ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
             : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,

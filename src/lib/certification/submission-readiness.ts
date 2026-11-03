@@ -63,35 +63,47 @@ export const deliveryDistanceMessage = (code: string) => blockerMessage(
   "Set the customer location distance or a delivery distance override before submitting.",
 );
 
-export function applicationDestinationBlocker(input: {
+export function applicationDestinationBlockerMessage(input: {
   applicationCode: string;
   customerLocationId: string | null;
-}): string | null {
+}): BlockerMessage | null {
   return input.customerLocationId
     ? null
-    : applicationDestinationMessage(input.applicationCode).message;
+    : applicationDestinationMessage(input.applicationCode);
 }
 
-export function deliveryProofBlocker(input: {
+export function applicationDestinationBlocker(input: Parameters<typeof applicationDestinationBlockerMessage>[0]): string | null {
+  return applicationDestinationBlockerMessage(input)?.message ?? null;
+}
+
+export function deliveryProofBlockerMessage(input: {
   deliveryCode: string;
   proofOfDeliveryCount: number;
-}): string | null {
+}): BlockerMessage | null {
   return input.proofOfDeliveryCount > 0
     ? null
-    : deliveryProofMessage(input.deliveryCode).message;
+    : deliveryProofMessage(input.deliveryCode);
 }
 
-export function deliveryDistanceBlocker(input: {
+export function deliveryProofBlocker(input: Parameters<typeof deliveryProofBlockerMessage>[0]): string | null {
+  return deliveryProofBlockerMessage(input)?.message ?? null;
+}
+
+export function deliveryDistanceBlockerMessage(input: {
   deliveryCode: string;
   deliveryStatus: string | null;
   distanceKmOverride: number | null;
   recordedDistanceKm: number | null;
-}): string | null {
+}): BlockerMessage | null {
   return input.deliveryStatus === "delivered" &&
     positiveOrNull(input.distanceKmOverride) == null &&
     positiveOrNull(input.recordedDistanceKm) == null
-    ? deliveryDistanceMessage(input.deliveryCode).message
+    ? deliveryDistanceMessage(input.deliveryCode)
     : null;
+}
+
+export function deliveryDistanceBlocker(input: Parameters<typeof deliveryDistanceBlockerMessage>[0]): string | null {
+  return deliveryDistanceBlockerMessage(input)?.message ?? null;
 }
 
 export function missingFeedstockTransportIds(

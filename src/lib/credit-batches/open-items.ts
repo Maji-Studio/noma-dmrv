@@ -357,7 +357,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       title: certCheckLabel(healthCheck),
       detail,
       ...(!copy ? { detailMayInstruct: true as const } : {}),
-      readOnlyDetail: copy?.readOnlyDetail ?? healthCheck.readOnlyDetail,
+      ...((healthCheck.readOnlyDetail ?? copy?.readOnlyDetail) ? { readOnlyDetail: healthCheck.readOnlyDetail ?? copy?.readOnlyDetail } : {}),
       ...(instruction ? { instruction } : {}),
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,

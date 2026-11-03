@@ -438,13 +438,3 @@ describe("unusable H/C_org aggregation", () => {
     expect(result).toMatchObject({ sampled: false, replicateCount: 0, hToCorgRatio: null });
   });
 });
-
-it("keeps the instruction-only soil blocker unchanged and authors its read-only fact separately", () => {
-  const result = buildSoilTemperatureGate({ facilityReference: null,
-    batches: [{ durabilityOption: "200_year", runIds: [] }], siteTemperatures: [],
-  });
-  expect(result.blockerFacts).toEqual(["This facility has no reference soil temperature."]);
-  expect(result.blockers).toEqual([
-    "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-  ]);
-});

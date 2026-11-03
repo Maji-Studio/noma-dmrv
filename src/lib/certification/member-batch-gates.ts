@@ -1,9 +1,6 @@
-import type { SoilTemperatureGate } from "@/lib/isometric/utils/durability-aggregation";
-
 interface MemberBatchGateFacts {
   id: string;
   facilityEmissionsGateBlockers?: string[];
-  facilityEmissionsGateFacts?: string[];
 }
 
 interface BatchDurabilityFacts {
@@ -16,7 +13,7 @@ export function attributeSoilTemperatureBlockers<
 >(
   members: readonly T[],
   batches: readonly BatchDurabilityFacts[],
-  soilTemperatureGate: Pick<SoilTemperatureGate, "blockers" | "blockerFacts">,
+  soilTemperatureBlockers: readonly string[],
 ): T[] {
   const affectedBatchIds = new Set(
     batches
@@ -26,13 +23,9 @@ export function attributeSoilTemperatureBlockers<
 
   return members.map((member) => ({
     ...member,
-    facilityEmissionsGateFacts: [
-      ...(member.facilityEmissionsGateFacts ?? []),
-      ...(affectedBatchIds.has(member.id) ? soilTemperatureGate.blockerFacts : []),
-    ],
     facilityEmissionsGateBlockers: [
       ...(member.facilityEmissionsGateBlockers ?? []),
-      ...(affectedBatchIds.has(member.id) ? soilTemperatureGate.blockers : []),
+      ...(affectedBatchIds.has(member.id) ? soilTemperatureBlockers : []),
     ],
   }));
 }

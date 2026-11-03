@@ -10,6 +10,7 @@ const SET_FIXED_DATAPOINTS = "Set each value in the Isometric template editor be
 const COMPONENTS_TO_DECIDE = "This Removal template has components to decide.";
 const ANSWER_IN_SETTINGS = "Answer them in Settings, Removal templates.";
 /** Facts a read-only batch states for blockers whose message is only a repair step. */
+const NO_REMOVAL_TEMPLATE = "This credit batch has no Removal template.";
 const FIXED_VALUES_NOT_SET = "Some fixed values are not set in the Isometric template.";
 
 export const REMOVAL_TEMPLATE_BLOCKERS = {
@@ -41,7 +42,7 @@ export interface BlockerCopy {
 }
 const TEMPLATE_BLOCKER_COPY: Partial<Record<RemovalTemplateBlockerCode, BlockerCopy>> = {
   notRemovalTemplate: { detail: NOT_REMOVAL_TEMPLATE, instruction: SET_REMOVAL_TEMPLATE },
-  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE },
+  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE, readOnlyDetail: NO_REMOVAL_TEMPLATE },
   templateNotFullyRead: { detail: TEMPLATE_NOT_FULLY_READ, instruction: TRY_AGAIN },
   missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS, readOnlyDetail: FIXED_VALUES_NOT_SET },
   templateLinesNeedReview: { detail: COMPONENTS_TO_DECIDE, instruction: ANSWER_IN_SETTINGS },
