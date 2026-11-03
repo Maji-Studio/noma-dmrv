@@ -13,10 +13,9 @@ import { PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, useEntryActions } from "./emission-line-body-parts";
-import { formatFigure, hasRecordsFigure, isCountedElsewhere, isRecordsGap, type EmissionEntry, type EmissionLine, type LineRecords } from "./emission-line-display";
+import { isCountedElsewhere, isRecordsGap, recordsFigureText, type EmissionEntry, type EmissionLine, type LineRecords } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
 import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
 import { LateEntryStatus } from "./late-entry-status";
@@ -50,7 +49,6 @@ interface SourcesTableProps {
 
 export function SourcesTable({ line, scope, model, readOnly = false, onForm, onDeleteEntry }: SourcesTableProps) {
   const { records } = model;
-  const shownFigure = records && (hasRecordsFigure(records) || isCountedElsewhere(records)) ? records.figure : null;
   const entryCount = model.values.length + model.stopped.length;
   const groupLabel = entryCount > 1 ? "Manual entries" : "Manual entry";
   return (
@@ -70,7 +68,7 @@ export function SourcesTable({ line, scope, model, readOnly = false, onForm, onD
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
           <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(rowRecords) && "text-[var(--color-text-tertiary)]")}>
-            {shownFigure ? formatFigure(shownFigure) : MISSING_VALUE.notRecorded}
+            {recordsFigureText(rowRecords)}
           </span>
         </div>
       ))}
