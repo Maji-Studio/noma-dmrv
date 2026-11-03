@@ -171,3 +171,10 @@ it("moves a controlled walk from outside, as a Flow pick does", () => {
   // The camera follows the walk.
   expect(canvas.props.at(-1)!.frameKey).toBe("chain|application:ap1|3");
 });
+
+it("heads the panel with the payload's warnings when there is no map", () => {
+  const model = batchModel({ warnings: ["One leg has no distance."] });
+  render(<View model={model} initialWalk={fieldAWalk} singleChain layout="panel" />);
+  expect(screen.queryByTestId("canvas")).toBeNull();
+  expect(within(panel()).getByText("One leg has no distance.")).toBeTruthy();
+});

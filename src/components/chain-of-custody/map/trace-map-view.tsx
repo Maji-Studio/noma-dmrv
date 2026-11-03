@@ -180,6 +180,10 @@ export function TraceMapView({
         style={{ width: stacked ? undefined : PANEL_WIDTH_PX }}
         aria-label={chain ? `Chain to ${chain.end.shortCode}` : "Custody stages"}
       >
+        {/* No map to carry the payload's warnings: they head the panel instead. */}
+        {layout === "panel" ? (
+          <MapWarningBanner warnings={model.geo.warnings} className="static max-w-none shrink-0 px-16 pt-12" />
+        ) : null}
         {current && walk ? (
           <TraceChainWalk
             model={model}
