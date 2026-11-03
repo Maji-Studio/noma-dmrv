@@ -25,7 +25,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso, formatFacilityDate, formatUtcDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
-import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { sourceBiocharDryMassKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -43,6 +43,7 @@ import {
 } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 import { getCo2eStoredPreviews } from "./credit-batches";
+import { sourceAllocationAggregate } from "./biochar-products";
 import {
   applicationEvidenceGapWhere,
   feedstocksMissingDataWhere,
@@ -161,6 +162,7 @@ export async function getDashboardOverview(
   range: DashboardRange,
 ): Promise<DashboardOverview> {
   requireOrgScope(ctx);
+  const allocationAggregate = sourceAllocationAggregate(ctx);
 
   const now = new Date();
   const [facility] = await db
@@ -242,8 +244,14 @@ export async function getDashboardOverview(
             productionDate: biocharProducts.productionDate,
             massKg: biocharProducts.massKg,
             moistureContentPercent: biocharProducts.moistureContentPercent,
+            composition: biocharProducts.composition,
+            sourceAllocatedDryMassKg: allocationAggregate.allocatedDryMassKg,
           })
           .from(biocharProducts)
+          .leftJoin(
+            allocationAggregate,
+            eq(allocationAggregate.biocharProductId, biocharProducts.id),
+          )
           .where(
             and(
               eq(biocharProducts.organizationId, ctx.organizationId),
@@ -413,6 +421,7 @@ export async function getDashboardOverview(
     {
       key: "co2eStored",
       label: "Estimated CO₂e stored",
+      hint: "Carbon stored in the credit batches' biochar, before project emissions are subtracted.",
       unit: "t",
       value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
@@ -421,7 +430,7 @@ export async function getDashboardOverview(
           : deltaPercent(storedCurrentTons, storedPreviousTons),
       detail:
         currentStoredBatches.length > 0
-          ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
+          ? `before project emissions, ${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
           : "no estimate in period",
     },
   ];
@@ -442,11 +451,11 @@ export async function getDashboardOverview(
       .map((p) => p.row.massDryKg),
   );
   const currentLots = lotPoints.filter((p) => inCurrentDayPeriod(p.day));
-  // Dry kg end to end: `massKg` is the lot's wet mass, so derive dry via the
-  // recorded moisture (biochar runs 1–2%); a lot without a moisture reading
-  // counts at wet mass rather than vanishing from the segment.
+  // Match the products list: source dry biochar excludes blend ingredients.
+  // Retain the wet-mass fallback when neither allocation nor moisture gives
+  // a dry figure, so a product without a reading still counts as before.
   const lotDryKg = (row: (typeof lotRows)[number]) =>
-    computeClampedDryMass(row.massKg, row.moistureContentPercent) ??
+    sourceBiocharDryMassKg(row) ??
     row.massKg ??
     0;
   const baggedKg = sum(currentLots.map((p) => lotDryKg(p.row)));
