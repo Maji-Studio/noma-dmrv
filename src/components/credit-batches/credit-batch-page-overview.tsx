@@ -34,10 +34,10 @@ import { durabilityLabel } from "./credit-batch-view";
 
 type GroupKey = "blocking" | "check" | "waiting";
 
-const GROUPS: Record<GroupKey, { title: string; help: string; dot: string }> = {
+const GROUPS: Record<GroupKey, { title: string; readOnlyTitle?: string; help: string; dot: string }> = {
   blocking: { title: "Blocking", help: "Fix these before the next Removal.", dot: TODO_TONE.blocking },
   check: { title: "Check", help: "Worth a look. These do not stop a Removal.", dot: TODO_TONE.check },
-  waiting: { title: "Waiting", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
+  waiting: { title: "Waiting", readOnlyTitle: "Status", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
 };
 
 const GROUP_ORDER: readonly GroupKey[] = ["blocking", "check", "waiting"];
@@ -151,7 +151,7 @@ function OpenItemGroups() {
           <div className="flex flex-col gap-2 border-b border-[var(--color-border-secondary)] pb-8">
             <h3 id={`open-items-${group}`} className="inline-flex items-center gap-8 body-small font-medium">
               <StatusDot tone={GROUPS[group].dot} />
-              {GROUPS[group].title}
+              {readOnly ? GROUPS[group].readOnlyTitle ?? GROUPS[group].title : GROUPS[group].title}
               <span className={cn("tabular-nums", MUTED_TEXT)}>{openItems[group].length}</span>
             </h3>
             {/* Each help line describes the work ahead; a read-only batch has none. */}
