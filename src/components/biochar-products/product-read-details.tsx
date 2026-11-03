@@ -122,10 +122,10 @@ function SourceRunLines({ runs, facilityId }: {
   facilityId: string;
 }) {
   return (
-    <ul className="flex flex-col gap-4" data-testid="product-source-runs">
+    <ul className="flex flex-col" data-testid="product-source-runs">
       {runs.map(run => (
-        <li key={run.id} className="flex min-w-0 items-baseline gap-8">
-          <Link href={recordHref("productionRun", run.id, { facilityId })} className={RECORD_CODE_LINK}>
+        <li key={run.id} className="flex min-h-44 min-w-0 items-center gap-8 md:min-h-0">
+          <Link href={recordHref("productionRun", run.id, { facilityId })} className={`${RECORD_CODE_LINK} inline-flex min-h-44 items-center md:min-h-0`}>
             {run.code}
           </Link>
           <span className="text-[var(--color-text-tertiary)]">{formatDayString(run.date)}</span>
