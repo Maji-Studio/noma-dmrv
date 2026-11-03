@@ -17,7 +17,7 @@ import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as ins
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { SWIFTSHADER_ARGS } from "./fixtures/swiftshader";
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
@@ -92,11 +92,23 @@ function observeRouteRequests(page: Page): RouteGeometriesRequest[] {
 const walkPanel = (page: Page) => page.getByRole("complementary", { name: /^Chain to / });
 const counter = (step: number) => new RegExp(`0${step} / 0${CHAIN_STEPS} · To `);
 
+/** Whether the painted map's bounds hold every point. */
+async function boundsCover(map: Locator, points: Array<{ lat: number; lng: number }>) {
+  const value = await map.getAttribute("data-map-bounds");
+  if (!value) return false;
+  const [[west, south], [east, north]] = JSON.parse(value) as number[][];
+  return points.every(({ lat, lng }) => lng >= west && lng <= east && lat >= south && lat <= north);
+}
+
 async function expectRenderedGeography(page: Page, applicationId: string, field: typeof FIELD_POINT, destination: typeof DAR_POINT) {
   const map = page.getByTestId("carbon-viewer-map");
   await expect(map).toHaveAttribute("data-map-state", "ready", { timeout: MAP_READY_TIMEOUT_MS });
-  // The walk opens on the supplier; the application's own step frames the
-  // facility, the field and the delivery's destination together.
+  // The walk opens on the supplier's step: the camera frames its inbound leg,
+  // from the supplier's origin to the facility.
+  await expect(walkPanel(page)).toContainText(counter(1));
+  await expect.poll(() => boundsCover(map, [DAR_POINT, FACILITY_POINT])).toBe(true);
+  // The application's own step frames the facility, the field and the
+  // delivery's destination together.
   await walkPanel(page).getByRole("button", { name: /^Application/ }).click();
   await expect(walkPanel(page)).toContainText(counter(CHAIN_STEPS));
   const marker = map.locator(`[data-node-id="application:${applicationId}"]`);
@@ -113,14 +125,7 @@ async function expectRenderedGeography(page: Page, applicationId: string, field:
       return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
     });
   })).toBe(true);
-  await expect.poll(async () => {
-    const value = await map.getAttribute("data-map-bounds");
-    if (!value) return false;
-    const [[west, south], [east, north]] = JSON.parse(value) as number[][];
-    return [FACILITY_POINT, field, destination].every(({ lat, lng }) =>
-      lng >= west && lng <= east && lat >= south && lat <= north,
-    );
-  }).toBe(true);
+  await expect.poll(() => boundsCover(map, [FACILITY_POINT, field, destination])).toBe(true);
   await expect.poll(async () => {
     const value = await map.getAttribute("data-rendered-legs");
     if (!value) return false;
