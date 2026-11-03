@@ -17,6 +17,7 @@
     "docker:clean": "docker compose down -v",
     "db:wait": "tsx src/lib/cli/wait-for-db.ts",
     "db:assert-local": "tsx src/lib/cli/assert-local-db.ts",
+    "feedstock:recalculate": "tsx src/lib/cli/recalculate-feedstock-allocations.ts",
     "db:generate": "drizzle-kit generate",
     "db:renumber": "tsx scripts/db-renumber.ts",
     "db:migrate": "drizzle-kit migrate",

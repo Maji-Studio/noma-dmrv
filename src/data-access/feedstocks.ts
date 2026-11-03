@@ -598,7 +598,7 @@ export async function createFeedstockInTransaction(
     },
   );
 
-  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate, change: { mutation: "create", subject: "feedstock" } }), {}, data);
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate, eventTie: items.map(row => ({ id: row.id, recordedAt: row.createdAt })).sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime() || a.id.localeCompare(b.id))[0], change: { mutation: "create", subject: "feedstock" } }), {}, data);
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -799,7 +799,7 @@ export async function updateFeedstockInTransaction(
   if (allocationChanged) {
     const earliestDeliveryDate = new Date(Math.min(locked.deliveryDate.getTime(), saved.deliveryDate.getTime()));
     await withIntakeAllocationIssues(() => reallocateRunsForBins(
-      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate, change: { mutation: "update", subject: "feedstock" } },
+      ctx, tx, [locked.storageLocationId, effectiveStorageLocationId], { earliestDeliveryDate, eventTie: { recordedAt: locked.createdAt, id: locked.id }, change: { mutation: "update", subject: "feedstock" } },
     ), previousFields, changedFields);
   }
 
@@ -835,6 +835,8 @@ export async function deleteFeedstockInTransaction(
       facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
+      deliveryDate: feedstocks.deliveryDate,
+      createdAt: feedstocks.createdAt,
       storageLocationId: feedstocks.storageLocationId,
     })
     .from(feedstocks)
@@ -905,6 +907,7 @@ export async function deleteFeedstockInTransaction(
       "delete",
     );
   }
+  await reallocateRunsForBins(ctx, tx, [locked.storageLocationId], { earliestDeliveryDate: locked.deliveryDate, eventTie: { recordedAt: locked.createdAt, id: locked.id }, change: { mutation: "delete", subject: "feedstock" } });
   await retireDocumentsForEntities(ctx, tx, [
     { entityType: "feedstock", entityId: feedstockId },
     ...transportLegDocuments,

@@ -25,7 +25,7 @@ async function fixture(tx: DbTransaction) {
   const [type] = await tx.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID,
     code: `CUT-${tag}`, name: `Cutoff test ${tag}`, category: "forestry", usage: "pyrolysis" }).returning();
   const bins = await tx.insert(storageLocations).values(["a", "b"].map(suffix => ({ organizationId: TEST_ORG_ID,
-    code: `CUT-${suffix}-${tag}`, name: `Cutoff test ${suffix}`, facilityId: facility.id, type: "feedstock_bin" as const, feedstockTypeId: type.id }))).returning();
+    code: `CUT-${suffix}-${tag}`, name: `Cutoff test ${suffix}`, facilityId: facility.id, type: "feedstock_bin" as const, stockMode: "mix" as const, feedstockTypeId: type.id }))).returning();
   const intakes = await tx.insert(feedstocks).values(await feedstockFixtureValues(tx,
     ["2026-03-01", "2026-03-15", "2026-04-01"].map((day, index) => ({ organizationId: TEST_ORG_ID,
       code: `CUT-${index}-${tag}`, facilityId: facility.id, feedstockTypeId: type.id, storageLocationId: bins[0].id,
@@ -53,11 +53,15 @@ beforeAll(() => ensureTestOrg());
 describe("facility-day feedstock allocations", () => {
   it("refuses a draw above the cutoff total even when current stock covers it", () => scenario(async (tx, f) => {
     const run = await f.run();
+    // Replacement IDs necessarily sort before this saved ID at the same
+    // transaction timestamp. The edited run must still be replanned.
+    await tx.update(productionRunFeedstockDraws).set({ id: 'ffffffff-ffff-4fff-bfff-ffffffffffff' }).where(and(
+      eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.productionRunId, run.id)));
     const before = await shares(tx, run.id);
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
       expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 25_000 }],
     }))).rejects.toMatchObject({ code: "insufficient_stock",
-      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].code} had received`),
+      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].code} held`),
       issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "storageLocationId"],
         meta: { storageLocationId: f.bins[0].id, availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } })],
     });
@@ -260,7 +264,7 @@ describe("facility-day feedstock allocations", () => {
   it("refuses a draw before any intake and rolls back an invalid start edit", () => scenario(async (tx, f) => {
     await expect(tx.transaction(savepoint => f.run(new Date("2026-02-20T08:00:00Z"), undefined, savepoint)))
       .rejects.toMatchObject({ code: "insufficient_stock",
-        message: `Bin ${f.bins[0].code} has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.`,
+        message: `Bin ${f.bins[0].code} held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.`,
       });
     const run = await f.run();
     const before = await shares(tx, run.id);
@@ -272,7 +276,7 @@ describe("facility-day feedstock allocations", () => {
     const otherCtx = { ...ctx, organizationId: crypto.randomUUID() };
     await expect(allocateFeedstockWetMass(otherCtx, tx, f.bins[0].id, DRAW_KG, "2026-02-20"))
       .rejects.toMatchObject({
-        message: "This bin has no complete intake with wet mass delivered by the run’s start day. Move the run’s start or correct the intake’s delivery date.",
+        message: "This bin held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.",
       });
   }));
   it("rolls back an intake edit that empties the qualifying basis", () => scenario(async (tx, f) => {
@@ -313,9 +317,19 @@ describe("facility-day feedstock allocations", () => {
         throw ROLLBACK;
       })).rejects.toBe(ROLLBACK);
       expect(await rows()).toEqual(before);
-      await expect(db.transaction(tx => createFeedstockInTransaction(ctx, tx, {
+      const newer = await db.transaction(tx => createFeedstockInTransaction(ctx, tx, {
         facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId, supplierId: original.supplierId!,
         deliveryDate: date("2026-03-01"), totalWetMassKg: INTAKE_KG, moisturePercent: 0,
+        allocations: [{ storageLocationId: f.feedstockBinId, allocatedWetMassKg: INTAKE_KG }],
+      }));
+      try {
+        expect(await rows()).toEqual(before);
+      } finally {
+        await db.delete(feedstocks).where(and(eq(feedstocks.organizationId, TEST_ORG_ID), inArray(feedstocks.id, newer.feedstocks.map(row => row.id))));
+      }
+      await expect(db.transaction(tx => createFeedstockInTransaction(ctx, tx, {
+        facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId, supplierId: original.supplierId!,
+        deliveryDate: date("2024-12-01"), totalWetMassKg: INTAKE_KG, moisturePercent: 0,
         allocations: [{ storageLocationId: f.feedstockBinId, allocatedWetMassKg: INTAKE_KG }],
       }))).rejects.toMatchObject({ code: "certification_locked", issues: expect.arrayContaining([
         expect.objectContaining({ path: ["deliveryDate"], code: "certification_locked" }),
@@ -334,7 +348,7 @@ describe("facility-day feedstock allocations", () => {
           feedstockTypeId: f.feedstockTypeId, storageLocationId: f.feedstockBinId, status: "complete",
           deliveryDate: date("2026-07-01"), massWetKg: INTAKE_KG, massDryKg: INTAKE_KG,
         })).returning();
-        await updateFeedstockInTransaction(ctx, tx, extra.id, { expectedVersion: extra.version, deliveryDate: date("2026-03-01") });
+        await updateFeedstockInTransaction(ctx, tx, extra.id, { expectedVersion: extra.version, deliveryDate: date("2024-12-01") });
       })).rejects.toMatchObject({ code: "certification_locked", issues: [expect.objectContaining({ path: ["deliveryDate"], code: "certification_locked" })] });
       expect(await savedRows()).toEqual(before);
       await db.transaction(tx => reallocateRunsForBins(ctx, tx, [f.feedstockBinId]));

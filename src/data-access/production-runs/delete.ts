@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from '../feedstock-run-allocations';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import type { ActivityEventInput } from "../activity-events";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
@@ -75,6 +76,7 @@ export async function deleteProductionRunInTransaction(
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
+      startTime: productionRuns.startTime,
       facilityId: productionRuns.facilityId,
       version: productionRuns.version,
       biocharOutputKg: productionRuns.biocharOutputKg,
@@ -110,12 +112,15 @@ export async function deleteProductionRunInTransaction(
     },
   );
 
+  const previousDraws = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
+    .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, productionRunId)));
+  const eventTie = previousDraws.sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime() || a.id.localeCompare(b.id))[0];
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
-    await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId] }),
+    await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], binIds: lockedFeedstockStorageLocationIds }),
     { mutation: "delete", subject: "production run" });
-  return freeze(async () => {
+  return freeze(async transportOwnershipFreeze => {
     await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -203,6 +208,7 @@ export async function deleteProductionRunInTransaction(
         activityScopes: [{ productionRunId }],
       })),
     ], source);
+    await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { earliestEventAt: locked.startTime, eventTie, transportOwnershipFreeze });
     return { facilityId: locked.facilityId };
   });
 }

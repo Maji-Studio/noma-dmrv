@@ -1,5 +1,6 @@
 import {
   and,
+  gt,
   desc,
   eq,
   gte,
@@ -189,7 +190,7 @@ async function readCreditBatchProductionRuns(ctx: OrgContext, rowFilter: SQL | u
           feedstocks,
           and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)),
         )
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
   const typesByRun = new Map<string, string[]>();
   for (const typeRow of typeRows) {

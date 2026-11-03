@@ -5,6 +5,7 @@
 
 import {
   and,
+  gt,
   asc,
   desc,
   eq,
@@ -216,7 +217,7 @@ export async function getProductionRuns(
         .from(productionRunFeedstocks)
         .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
         .orderBy(asc(productionRunFeedstocks.productionRunId), asc(feedstocks.code), asc(productionRunFeedstocks.id))
     : [];
   const allFeedstockDraws = runIds.length > 0
@@ -321,7 +322,7 @@ async function getProductionRunFeedstocks(
     .from(productionRunFeedstocks)
     .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     .orderBy(asc(feedstocks.code), asc(productionRunFeedstocks.id));
 
   return result;

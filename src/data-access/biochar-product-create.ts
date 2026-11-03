@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
@@ -187,6 +188,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     const sources = await writeTx.select().from(biocharProductSourceAllocations).where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.biocharProductId, product.id)));
     const ingredients = await writeTx.select().from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), eq(productIngredientSnapshots.biocharProductId, product.id)));
     options.capture?.(product.id, null, { ...product, sources, ingredients });
+    await reallocateRunsForBins(ctx, writeTx, ingredientFacts.flatMap(line => line.storageLocationId ? [line.storageLocationId] : []), { earliestEventAt: product.placedAt, eventTie: { recordedAt: product.createdAt, id: product.id } });
     return { product, basisFingerprint: productBasis.basisFingerprint };
   } }, { snapshotStock: options.snapshotStock, onReplay: options.onReplay });
 }

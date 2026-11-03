@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, isNotNull } from 'drizzle-orm';
@@ -67,6 +68,7 @@ export async function deleteBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const documents = await deleteTransportLegsForEntity(ctx, tx, 'biochar', productId, source);
   await retireDocumentsForEntities(ctx, tx, [...documents, { entityType: 'biochar_product', entityId: productId, activityScopes }], source);
   await tx.update(biocharProducts).set({ archivedAt: new Date(), updatedAt: new Date(), version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
+  await reallocateRunsForBins(ctx, tx, ingredients.map(row => row.sourceStorageLocationId), { earliestEventAt: product.placedAt, eventTie: { recordedAt: product.createdAt, id: product.id } });
   capture?.(productId, { ...product, ingredients, allocations }, null);
   return { product, activityScopes };
 }

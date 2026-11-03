@@ -5,10 +5,11 @@ import { OutputStockShortageError } from './output-stock-errors';
 
 const mocks = vi.hoisted(() => ({
   posting: vi.fn(), revalidate: vi.fn(), persist: vi.fn(), insert: vi.fn(), select: vi.fn(),
-  sourceAllocations: vi.fn(), validate: vi.fn(), assertStock: vi.fn(), transaction: vi.fn(),
+  reallocate: vi.fn(), sourceAllocations: vi.fn(), validate: vi.fn(), assertStock: vi.fn(), transaction: vi.fn(),
 }));
 const tx = { transaction: 'caller' };
 vi.mock('@/db', () => ({ db: { transaction: mocks.transaction } }));
+vi.mock('./feedstock-run-allocations', () => ({ reallocateRunsForBins: mocks.reallocate }));
 vi.mock('./utils', () => ({ requireOrgScope: vi.fn() }));
 vi.mock('./product-stock-preview', () => ({ revalidateProductStock: mocks.revalidate }));
 vi.mock('./biochar-product-composition', () => ({
@@ -28,6 +29,8 @@ const data = { code: 'BP-1', facilityId: 'facility', formulationId: 'recipe', pl
   idempotencyKey: 'request', basisFingerprint: 'aggregate', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination',
   massKg: 120, moistureContentPercent: 10, waterAddedKg: 0, composition: { ingredients: [{ ...recipeLine, formulationIngredientId: recipeLine.id, storageLocationId: 'ingredient', massKg: 20 }] } };
 
+const product = { id: 'product', placedAt: new Date(data.placedAt), createdAt: new Date('2026-09-14T12:00:01.000Z') };
+
 beforeEach(() => {
   vi.resetAllMocks();
   const rows = [[{ id: 'facility' }], [{ id: 'recipe', biocharRatio: 1 }], [{ id: 'destination', formulationId: 'recipe' }], [{ id: 'recipe' }], [recipeLine], [{ date: '2026-09-13' }], [{ productionRunId: 'run', wetMassKg: '100' }]];
@@ -36,7 +39,7 @@ beforeEach(() => {
     const query = { from: () => query, innerJoin: () => query, orderBy: () => query, where: () => query, for: async () => result, then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
     return query;
   });
-  mocks.insert.mockReturnValue({ values: () => ({ returning: async () => [{ id: 'product' }] }) });
+  mocks.insert.mockReturnValue({ values: () => ({ returning: async () => [product] }) });
   mocks.transaction.mockImplementation(async (run: (caller: unknown) => unknown) => run(tx));
   mocks.revalidate.mockResolvedValue({ basisFingerprint: 'product-basis', composition: { ingredients: [] }, source: {
     preview: { basisFingerprint: 'source-only', blockingMessage: null, allocations: [{ layerId: 'run', dryMassKg: 90 }] },
@@ -67,9 +70,12 @@ describe('locked product preview revalidation', () => {
       expect.objectContaining({ additionalBinIds: ['destination'] }), { snapshotStock: undefined });
   });
   it('checks the source plan against its own basis and records the product-wide basis', async () => {
-    await expect(createBiocharProduct(ctx, data)).resolves.toEqual({ id: 'product' });
+    await expect(createBiocharProduct(ctx, data)).resolves.toEqual(product);
     expect(mocks.revalidate.mock.invocationCallOrder[0]).toBeLessThan(mocks.insert.mock.invocationCallOrder[0]);
     expect(mocks.persist).toHaveBeenCalledWith({ targetBiocharProductId: 'product', basisFingerprint: 'source-only', recordedBasisFingerprint: 'product-basis' });
+    expect(mocks.reallocate).toHaveBeenCalledExactlyOnceWith(ctx, { select: mocks.select, insert: mocks.insert }, ['ingredient'], {
+      earliestEventAt: product.placedAt, eventTie: { recordedAt: product.createdAt, id: product.id },
+    });
   });
   it('refuses a short source with the planner message, typed as a shortage, before any writes', async () => {
     const message = 'Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.';
@@ -98,7 +104,7 @@ describe('creating inside a caller transaction', () => {
   const callerTx = { caller: true } as unknown as DbTransaction;
 
   it('posts on the caller transaction with its snapshot observer and returns the product basis', async () => {
-    await expect(createBiocharProductInTransaction(ctx, callerTx, data, { snapshotStock })).resolves.toEqual({ product: { id: 'product' }, basisFingerprint: 'product-basis' });
+    await expect(createBiocharProductInTransaction(ctx, callerTx, data, { snapshotStock })).resolves.toEqual({ product, basisFingerprint: 'product-basis' });
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.posting).toHaveBeenCalledWith(ctx, callerTx, expect.anything(), { snapshotStock });
   });

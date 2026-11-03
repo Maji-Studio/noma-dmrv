@@ -51,6 +51,7 @@ import {
 } from "@/schemas/credit-batches";
 import {
   and,
+  gt,
   asc,
   eq,
   inArray,
@@ -308,7 +309,7 @@ async function loadLineageWithExecutor(
         )
         .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
 
   const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), executor);

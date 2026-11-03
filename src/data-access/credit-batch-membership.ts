@@ -48,6 +48,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  */
 import {
   and,
+  gt,
   eq,
   gte,
   inArray,
@@ -497,7 +498,7 @@ export async function resolveSingleFeedstockType(
     )
     .where(and(
       inArray(productionRunFeedstocks.productionRunId, uniqueRunIds),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId),
     ));
 
   const mappedRunIds = new Set(
@@ -555,7 +556,7 @@ async function resolveSingleRunFeedstockTypeOrNull(
     .where(
       and(
         eq(productionRunFeedstocks.productionRunId, productionRunId),
-        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId),
       ),
     );
 

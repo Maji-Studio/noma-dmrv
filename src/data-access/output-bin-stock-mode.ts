@@ -130,7 +130,7 @@ async function readAllLayers(ctx: OrgContext, tx: DbTransaction, bin: StorageLoc
   return state.layers;
 }
 
-/** The mode a new bin starts in: output bins choose, every other bin is split. */
-export function initialStockMode(type: StorageLocationType, stockMode: OutputStockMode | undefined): OutputStockMode {
-  return isOutputBinType(type) ? stockMode ?? 'split' : 'split';
+/** Every bin starts in split unless a mixed pile is requested. */
+export function initialStockMode(_type: StorageLocationType, stockMode: OutputStockMode | undefined): OutputStockMode {
+  return stockMode ?? 'split';
 }

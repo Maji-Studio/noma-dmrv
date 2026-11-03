@@ -235,6 +235,9 @@ describe("credit batch span refusal with undeletable Removal holders", () => {
       const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID, facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId,
         storageLocationId: f.feedstockBinId, code: `FS-SPAN-${f.batchId}`, status: "complete",
+        // This earlier run must consume its own intake under Oldest first,
+        // leaving the consumed lineage run's 2025-01-01 intake unchanged.
+        deliveryDate: new Date("2024-12-31T00:00:00Z"),
         massWetKg: DRAW_WET_KG, massDryKg: DRAW_DRY_KG, moistureContentPercent: RUN_MOISTURE_PERCENT,
       })).returning();
       let runId: string | undefined;
@@ -250,6 +253,12 @@ describe("credit batch span refusal with undeletable Removal holders", () => {
           biocharMoisturePercent: RUN_MOISTURE_PERCENT,
         });
         runId = run.id;
+        expect(await db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
+          .from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id)))
+          .toEqual([{ feedstockId: intake.id, wetMassUsedKg: DRAW_WET_KG }]);
+        expect(await db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
+          .from(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, f.productionRunId)))
+          .toEqual([{ feedstockId: f.feedstockId, wetMassUsedKg: KG_PER_TONNE }]);
         expect(await db.select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
           .from(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id)))
           .toEqual([{ creditBatchId: f.batchId }]);

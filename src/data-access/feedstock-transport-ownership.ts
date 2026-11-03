@@ -4,7 +4,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { CountedOnBatch } from "@/lib/certification/emission-lines";
 import { feedstockTransportOwners } from "@/lib/certification/feedstock-transport-ownership";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, gt, eq, inArray, isNull } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
 async function loadEligibleDraws(
@@ -13,6 +13,7 @@ async function loadEligibleDraws(
   executor: Pick<DbTransaction, "select">,
   options: { includeArchived?: boolean } = {},
 ) {
+  requireOrgScope(ctx);
   return executor.select({
     feedstockId: productionRunFeedstocks.feedstockId,
     runId: productionRuns.id,
@@ -37,7 +38,7 @@ async function loadEligibleDraws(
       options.includeArchived ? undefined : isNull(creditBatches.archivedAt),
     ))
     .where(and(
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, ctx.organizationId),
       inArray(productionRunFeedstocks.feedstockId, ids),
     ));
 }

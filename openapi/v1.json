@@ -667,17 +667,18 @@
           "capacityKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Storage capacity in kilograms, or null when unspecified."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
-          "drawOrder": {"description": "Default draw order for split biochar and product bins. Ignored by mix and feedstock bins.", "enum": ["oldest_first", "newest_first"], "type": "string"},
+          "drawOrder": {"description": "Draw order for split bins, including feedstock deliveries. Ignored by mix bins.", "enum": ["oldest_first", "newest_first"], "type": "string"},
           "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "feedstockTypeId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Allowed feedstock type identifier, UUID, or null when unrestricted or inapplicable."},
           "formulationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Formulation claimed by a product bin, UUID; null for other bin types or an unclaimed product bin."},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
+          "stockMode": {"description": "Split draws deliveries in order in feedstock bins and keeps sub-bins apart in output bins. Mix draws remaining stock in proportion.", "enum": ["split", "mix"], "type": "string"},
           "type": {"description": "Material lane: feedstock, biochar, or product bin.", "enum": ["feedstock_bin", "biochar_bin", "product_bin"], "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "type", "drawOrder", "capacityKg", "formulationId", "feedstockTypeId"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "type", "stockMode", "drawOrder", "capacityKg", "formulationId", "feedstockTypeId"],
         "type": "object"
       },
       "supplier": {
@@ -3778,7 +3779,7 @@
     },
     "/storage-locations": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: storage-locations:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read storage bins with stockMode and drawOrder. Feedstock mix means Mass weighted over remaining deliveries; split means Oldest first or Newest first, without sub-bins. Required scope: storage-locations:read.",
         "operationId": "find_storage_locations",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
@@ -3803,7 +3804,7 @@
     },
     "/storage-locations/{idOrCode}": {
       "get": {
-        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: storage-locations:read.",
+        "description": "Read storage bins with stockMode and drawOrder. Feedstock mix means Mass weighted over remaining deliveries; split means Oldest first or Newest first, without sub-bins. Required scope: storage-locations:read.",
         "operationId": "get_storage_location",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/storage_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},

@@ -108,7 +108,6 @@ export function isOutputBinType(type: StorageLocationType | undefined | null): t
   return type === "biochar_bin" || type === "product_bin";
 }
 
-const MIX_OUTPUT_BIN_MESSAGE = "Only biochar and product bins can hold one mixed pile.";
 
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
 export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
@@ -170,9 +169,6 @@ export const storageLocationFormSchema = z.object({
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
   }
-  if (data.stockMode === "mix" && !isOutputBinType(data.type)) {
-    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
-  }
   if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
     ctx.addIssue({
       code: "custom",
@@ -223,9 +219,6 @@ export const updateStorageLocationSchema = z.object({
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
-  }
-  if (data.stockMode === "mix" && data.type && !isOutputBinType(data.type)) {
-    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
   }
   // Partial update: only flag an explicit clear (null). When feedstockTypeId is
   // omitted, the data-access layer validates the invariant against the merged

@@ -68,6 +68,7 @@ export const deliveryGuide = `## Deliveries
 - PATCH /deliveries/{id} requires deliveries:write and If-Match, UUID only. Only code, driverId, vehicleId and distance metadata can change. Omission preserves fields; null clears clearable fields. Use an optional Idempotency-Key to recover a lost response after later edits. PATCH adds no bill-of-lading warning. Mass, moisture and time corrections stay in the app. Deliveries cannot be deleted.
 - Read GET /storage-locations/{idOrCode}/stock-movements with biochar-products:read for the drawn products. Filter the returned rows by deliveryId.
 - MCP: find_deliveries and get_delivery use deliveries:read; record_delivery and update_delivery use deliveries:write. requestKey is required except on dry runs; update needs expectedVersion from get_delivery. Call find_orders, get_order_balance for remaining wet kg, find_storage_locations with type=product_bin and the order formulationId, then get_bin_stock for drawOrder and sub-bins. This is not log_feedstock_delivery. Never invent moisture readings; ask the operator. Top-level moisturePercent is ignored with sources. deliveredAt also accepts { date, time }. Read drawn products with find_output_stock_movements (biochar-products:read).
+- Feedstock bins expose stockMode and drawOrder: mix means Mass weighted over remaining deliveries; split draws oldest_first or newest_first. Feedstock bins have no sub-bins.
 - Bin stock exposes drawOrder: without sources, a split bin draws oldest_first or newest_first; mix bins return null. The sub-bin list stays oldest first.
 `;
 

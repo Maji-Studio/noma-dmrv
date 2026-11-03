@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
+import { and, gt, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
 import { applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -64,7 +64,7 @@ export function creditBatchRunFitConditions(organizationId: string, window: {
     ),
     feedstockLink: and(
       eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-      eq(productionRunFeedstocks.organizationId, organizationId),
+      gt(productionRunFeedstocks.wetMassUsedKg, 0), eq(productionRunFeedstocks.organizationId, organizationId),
     ),
     feedstock: and(
       eq(feedstocks.id, productionRunFeedstocks.feedstockId),
