@@ -92,4 +92,20 @@ describe("Product read view", () => {
     expect(shown).toContain("Water added 50.125 kg");
     expect(container.querySelectorAll('[role="img"]')).toHaveLength(0);
   });
+
+  it("lists each source run as a link with its own day, and none when no allocation was saved", () => {
+    const withRuns = { ...product, sourceRuns: [
+      { id: "run-a", code: "PR-26-012", date: "2026-04-18" },
+      { id: "run-b", code: "PR-26-040", date: "2026-04-21" },
+    ] } as unknown as BiocharProductWithRelations;
+    const { container, rerender } = render(<EntitySideSheetSections sections={productSheetSections(withRuns, "UTC")} />);
+    const lines = container.querySelectorAll('[data-testid="product-source-runs"] li');
+    expect(lines).toHaveLength(2);
+    expect(text(lines[0]).trim()).toBe("PR-26-012 Apr 18, 2026");
+    expect(text(lines[1]).trim()).toBe("PR-26-040 Apr 21, 2026");
+    expect(lines[0].querySelector("a")?.getAttribute("href")).toBe("/production-runs?facility=facility&run=run-a");
+    rerender(<EntitySideSheetSections sections={productSheetSections(product, "UTC")} />);
+    expect(container.querySelector('[data-testid="product-source-runs"]')).toBeNull();
+    expect(text(container)).not.toContain("Source production runs");
+  });
 });
