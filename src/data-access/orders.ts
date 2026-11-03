@@ -228,7 +228,7 @@ export async function getOrders(
 
   // Get orders with related entity names + delivery aggregate
   const orderList = await selectRows(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(orders.code), orderFn(orders.id))
     .limit(pageSize)
     .offset(offset);
 

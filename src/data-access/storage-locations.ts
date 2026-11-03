@@ -146,11 +146,9 @@ export async function getStorageLocations(
         : (sortOrder === "desc" ? desc : asc)(
             SORT_COLUMNS[sortBy] ?? storageLocations.code,
           );
-  // Code breaks every tie. Without it, rows sharing a sort value (every bin of
-  // one type, every bin with no activity) come back in whatever order the plan
-  // produced, and a row can repeat on page 2 after appearing on page 1.
-  const orderBy =
-    sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)];
+  // Break ties in the selected direction so equal dates page in code order.
+  const orderFn = sortOrder === "desc" ? desc : asc;
+  const orderBy = [primaryOrder, orderFn(storageLocations.code), orderFn(storageLocations.id)];
 
   // Count total for pagination
   // org-scope-ok: whereClause includes the active organization predicate.
