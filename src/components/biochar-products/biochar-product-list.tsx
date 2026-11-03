@@ -19,6 +19,7 @@ import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from 
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { MassPair } from "@/components/ui/mass-pair";
+import { DRY_BIOCHAR_LABEL, WET_PRODUCT_LABEL } from "./product-composition-components";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -74,9 +75,6 @@ import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { BiocharProductForm } from "./biochar-product-form";
 import { formatSavedMassKg, productSheetSections } from "./product-read-details";
 import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrations";
-
-const WET_PRODUCT_LABEL = "Wet product";
-const DRY_BIOCHAR_LABEL = "Dry biochar";
 
 function productEffectiveMoisturePercent(
   product: Pick<

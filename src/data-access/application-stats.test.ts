@@ -15,6 +15,7 @@ const APPLIED_DRY_TONS = 0.08;
 const FIELD_SIZE_HA = 3;
 const DELIVERY_WET_KG = 10_000;
 const FIXTURE_DATE = new Date("2026-09-12T12:00:00Z");
+const totalDryTons = (count: number) => count * APPLIED_DRY_TONS;
 const totalTons = (count: number) => count * APPLIED_MICROTONNES / MICROTONNES_PER_TONNE;
 type Fixture = Awaited<ReturnType<typeof seedOutputStockParents>>;
 
@@ -91,6 +92,7 @@ describe("getApplicationStats whole-facility totals", () => {
     const expected = {
       totalApplications: APPLICATION_COUNT,
       totalBiocharAppliedTons: totalTons(APPLICATION_COUNT),
+      totalBiocharAppliedDryTons: totalDryTons(APPLICATION_COUNT),
     };
     expect(await getApplicationStats(fixture.ctx, scope)).toEqual(expected);
     const page = await getApplications(fixture.ctx, { ...scope, page: 1, pageSize: PAGE_SIZE });
@@ -112,15 +114,55 @@ describe("getApplicationStats whole-facility totals", () => {
     expect(await getApplicationStats(fixture.ctx)).toEqual({
       totalApplications: APPLICATION_COUNT + 1,
       totalBiocharAppliedTons: totalTons(APPLICATION_COUNT + 1),
+      totalBiocharAppliedDryTons: totalDryTons(APPLICATION_COUNT + 1),
     });
     expect(await getApplicationStats(fixture.ctx, { facilityId: otherFacilityId })).toEqual({
-      totalApplications: 1, totalBiocharAppliedTons: APPLIED_TONS,
+      totalApplications: 1, totalBiocharAppliedTons: APPLIED_TONS, totalBiocharAppliedDryTons: APPLIED_DRY_TONS,
     });
     expect(await getApplicationStats(foreign.ctx)).toEqual({
-      totalApplications: 1, totalBiocharAppliedTons: APPLIED_TONS,
+      totalApplications: 1, totalBiocharAppliedTons: APPLIED_TONS, totalBiocharAppliedDryTons: APPLIED_DRY_TONS,
     });
     expect(await getApplicationStats(foreign.ctx, { facilityId: fixture.facility.id })).toEqual({
-      totalApplications: 0, totalBiocharAppliedTons: 0,
+      totalApplications: 0, totalBiocharAppliedTons: 0, totalBiocharAppliedDryTons: 0,
     });
+  });
+
+  it("counts only applied rows in both masses", async () => {
+    const [order] = await db.insert(orders).values({
+      organizationId: fixture.ctx.organizationId,
+      facilityId: fixture.facility.id,
+      code: `E2E-APPLICATION-STATUS-ORDER-${fixture.tag}`,
+      customerId: fixture.customer.id,
+      customerLocationId: fixture.location.id,
+      formulationId: fixture.recipe.id,
+      orderDate: FIXTURE_DATE,
+      quantityKg: DELIVERY_WET_KG,
+      packaging: "loose",
+    }).returning();
+    const [delivery] = await db.insert(deliveries).values({
+      organizationId: fixture.ctx.organizationId,
+      facilityId: fixture.facility.id,
+      orderId: order.id,
+      code: `E2E-APPLICATION-STATUS-DELIVERY-${fixture.tag}`,
+      deliveryDate: FIXTURE_DATE,
+      storageLocationId: fixture.bin.id,
+      deliveredWetMassKg: DELIVERY_WET_KG,
+    }).returning();
+    const row = (status: "applied" | "delivered") => ({
+      organizationId: delivery.organizationId,
+      deliveryId: delivery.id,
+      code: `E2E-APPLICATION-STATUS-${status}-${fixture.tag}`,
+      applicationDate: FIXTURE_DATE,
+      biocharAppliedTons: APPLIED_TONS,
+      biocharAppliedDryTons: APPLIED_DRY_TONS,
+      fieldSizeHa: FIELD_SIZE_HA,
+      status,
+    });
+    // org-scope-ok: fixture insert; the values helper sets organizationId from the delivery
+    await db.insert(applications).values([row("applied"), row("delivered")]);
+    const stats = await getApplicationStats(fixture.ctx, { facilityId: fixture.facility.id });
+    expect(stats.totalApplications).toBe(APPLICATION_COUNT + 2);
+    expect(stats.totalBiocharAppliedTons).toBeCloseTo(totalTons(APPLICATION_COUNT + 1));
+    expect(stats.totalBiocharAppliedDryTons).toBeCloseTo(totalDryTons(APPLICATION_COUNT + 1));
   });
 });
