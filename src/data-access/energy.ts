@@ -1,3 +1,4 @@
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { loadFacilityEmissionEntryFlows } from "./emission-entry-energy";
 import { effectiveDeliveryDistance } from "./delivery-distance-projections";
 /**
@@ -31,7 +32,6 @@ import {
   orders,
   outputStockAllocations,
   outputStockRunAllocations,
-  productionRunFeedstocks,
   productionRuns,
   reactors,
   transportLegs,
@@ -58,7 +58,6 @@ export interface EnergyFacilityInputs {
 const EMPTY_INPUTS: EnergyInputs = {
   runs: [],
   feedstocks: [],
-  feedstockDraws: [],
   deliveries: [],
   deliveryRunShares: [],
   applications: [],
@@ -108,7 +107,6 @@ export async function getEnergyInputs(
     batchRows,
     feedstockRows,
     legRows,
-    drawRows,
     deliveryRows,
     deliveryShareRows,
     applicationRows,
@@ -162,7 +160,6 @@ export async function getEnergyInputs(
         code: feedstocks.code,
         deliveryDate: feedstocks.deliveryDate,
         createdAt: feedstocks.createdAt,
-        wetMassKg: feedstocks.massWetKg,
       })
       .from(feedstocks)
       .where(
@@ -194,18 +191,6 @@ export async function getEnergyInputs(
           eq(transportLegs.entityType, FEEDSTOCK_LEG_ENTITY_TYPE),
         ),
       ),
-    db
-      .select({
-        runId: productionRunFeedstocks.productionRunId,
-        feedstockId: productionRunFeedstocks.feedstockId,
-        wetMassKg: productionRunFeedstocks.wetMassUsedKg,
-      })
-      .from(productionRunFeedstocks)
-      .innerJoin(
-        productionRuns,
-        and(eq(productionRuns.id, productionRunFeedstocks.productionRunId), facilityRuns),
-      )
-      .where(eq(productionRunFeedstocks.organizationId, orgId)),
     db
       .select({
         id: deliveries.id,
@@ -282,6 +267,8 @@ export async function getEnergyInputs(
       .groupBy(applicationOutputAllocations.applicationId, applicationOutputAllocations.productionRunId),
   ]);
 
+  const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id));
+
   const legsByFeedstock = new Map<string, EnergyFeedstockInput["legs"]>();
   for (const leg of legRows) {
     const legs = legsByFeedstock.get(leg.feedstockId) ?? [];
@@ -309,10 +296,9 @@ export async function getEnergyInputs(
         id: feedstock.id,
         code: feedstock.code,
         day: feedstock.deliveryDate ? formatUtcDate(feedstock.deliveryDate) : dayOf(feedstock.createdAt),
-        wetMassKg: feedstock.wetMassKg,
+        transportOwnerRunId: transportOwners.get(feedstock.id) ?? null,
         legs: legsByFeedstock.get(feedstock.id) ?? [],
       })),
-      feedstockDraws: drawRows,
       deliveries: deliveryRows.map((delivery) => ({
         id: delivery.id,
         code: delivery.code,
