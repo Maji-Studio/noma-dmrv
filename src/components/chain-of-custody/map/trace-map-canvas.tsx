@@ -60,6 +60,13 @@ const FIT_MAX_ZOOM = 9.5;
 const POINT_SPAN_M = 3000;
 const DIM_CLASS = "cvm-dim";
 const CURRENT_CLASS = "tm-current";
+/** Framed points compare at ~1 m: a refetch that moves a place refits, an identical one does not. */
+const POINT_KEY_DECIMALS = 5;
+
+/** A stable signature of the framed points, so a geo refresh that moves one refits. */
+function pointsKey(points: { lat: number; lng: number }[]): string {
+  return points.map((point) => `${point.lat.toFixed(POINT_KEY_DECIMALS)},${point.lng.toFixed(POINT_KEY_DECIMALS)}`).join("|");
+}
 
 export interface FramePadding {
   top: number;
@@ -410,12 +417,18 @@ export default function TraceMapCanvas({
     declutterLabels(map, markersRef.current);
   }, [geo, lighting, readyMap]);
 
-  // The camera follows the selection.
+  // The camera follows the selection, flying to a new one. The same selection
+  // whose places moved (the geo payload refetched after an edit) refits
+  // without the flight.
+  const framedPoints = pointsKey(lighting.points);
+  const lastFramed = useRef<{ map: maplibregl.Map; frameKey: string } | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!readyMap || readyMap !== map) return;
-    frame(map, latest.current.lighting.points, latest.current.padding, true);
-  }, [frameKey, readyMap]);
+    const animate = lastFramed.current?.map !== map || lastFramed.current.frameKey !== frameKey;
+    lastFramed.current = { map, frameKey };
+    frame(map, latest.current.lighting.points, latest.current.padding, animate);
+  }, [frameKey, framedPoints, readyMap]);
 
   const toggleSat = () => {
     const map = mapRef.current;
