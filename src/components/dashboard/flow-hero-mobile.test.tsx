@@ -24,6 +24,8 @@ describe("FlowHeroMobile", () => {
     });
     expect(html).toContain('data-testid="flow-hero-mobile-reasons-production"');
     expect(html).toContain('href="/credit-batches?facility=f1"');
+    // The plain reason is listed too, so the visible reasons add up to the badge.
+    expect(html).toContain(">2 runs missing mass data<");
     expect(html).not.toContain('data-testid="flow-hero-mobile-reasons-feedstock"');
   });
 

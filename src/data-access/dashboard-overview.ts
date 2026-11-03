@@ -172,7 +172,7 @@ export interface DashboardOverview extends DashboardStationsData {
   massFlow: DashboardMassFlowSegment[];
   /** Every open row: a record, or one grouped row per over-cap check. */
   attention: DashboardAttentionItem[];
-  /** Cross-cutting certification blockers, kept separate from station badges. */
+  /** Cross-cutting certification blockers: one grouped row each, also counted on the station whose form fixes them. */
   structuralGaps: DashboardStructuralGap[];
   /**
    * The "N open" figure: records, counted exactly. A single row is one, a

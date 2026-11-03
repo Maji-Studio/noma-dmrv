@@ -30,7 +30,7 @@ import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { SCENE_BG } from "./flow-hero-defs";
 import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
-import { hasHref, StationReasonLink } from "./station-reason-link";
+import { StationReasonRow } from "./station-reason-link";
 
 const VIEW_W = 1160;
 /** The art lives between y≈244 (smoke) and y≈482 — the viewBox is cropped to
@@ -660,18 +660,11 @@ export function FlowHeroScene({
             className="flex flex-col items-center gap-2 px-6 text-center text-[12px] font-light leading-[1.3]"
             style={{ gridColumnStart: BAY_CENTERS.indexOf(STATION_GEO[station.key].labelX) + 1 }}
           >
-            {station.reasons.map((reason) =>
-              hasHref(reason) ? (
-                <li key={reason.text}>
-                  <StationReasonLink reason={reason} className="justify-center" />
-                </li>
-              ) : (
-                // Plain reasons repeat the station link's label; linked ones are their own target.
-                <li key={reason.text} style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }} aria-hidden>
-                  {reason.text}
-                </li>
-              ),
-            )}
+            {station.reasons.map((reason) => (
+              <li key={reason.text}>
+                <StationReasonRow reason={reason} className="justify-center" />
+              </li>
+            ))}
           </ul>
         ))}
       </div>
