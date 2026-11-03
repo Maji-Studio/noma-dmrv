@@ -149,3 +149,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];
+
+/**
+ * Isometric calculates sequestration; the operator never records anything for it. Display
+ * surfaces (the Emissions tab, its counts, the facility overview) drop the line with this.
+ * Submission, readiness and payloads read the full list from deriveBatchEmissionLines.
+ */
+export function withoutRegistryCalculatedLines<T extends { contract?: { automaticSource?: string } | null }>(lines: readonly T[]): T[] {
+  return lines.filter((line) => line.contract?.automaticSource !== "sequestration");
+}

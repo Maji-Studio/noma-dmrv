@@ -21,7 +21,6 @@ import {
   addEntryRefusal,
   formatFigure,
   hasRecordsFigure,
-  isCalculatedByRegistry,
   isCountedElsewhere,
   isRecordsGap,
   lineRecords,
@@ -68,7 +67,7 @@ export function lineBodyModel(line: EmissionLine) {
     /** The Total repeats the one part when only one part counts, so it shows from two parts up. */
     showTotal: recordsCount + values.length > 1 && lineTotalText(line) !== null,
     totalText: lineTotalText(line),
-    totalMissing: !line.total && !isCalculatedByRegistry(line.records) && line.state !== "confirmedZero",
+    totalMissing: !line.total && line.state !== "confirmedZero",
     reviewWithoutEntries: line.state === "needsReview" && !stopped.length,
   };
 }
