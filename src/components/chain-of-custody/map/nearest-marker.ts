@@ -3,11 +3,10 @@
  * still has a 44px touch target without transparent pads that overlap and
  * steal taps from each other.
  */
+import { TOUCH_TARGET_PX } from "@/components/ui/touch-target";
 
-/** The minimum touch target (docs/design-system.md: 44px is on the spacing scale). */
-export const TOUCH_TARGET_PX = 44;
-/** A tap within this distance of a marker's centre counts as a tap on it. */
-export const TOUCH_PICK_RADIUS_PX = TOUCH_TARGET_PX / 2;
+/** A tap within this distance on each axis of a marker's centre (a 44px square) counts as a tap on it. */
+export const TOUCH_PICK_HALF_PX = TOUCH_TARGET_PX / 2;
 
 export interface PickPoint {
   nodeId: string;
@@ -16,19 +15,23 @@ export interface PickPoint {
 }
 
 /**
- * The id of the point nearest the tap within `radius` (inclusive), else null.
- * A tie goes to the earlier point in `points`, so the result is deterministic.
+ * The id of the point nearest the tap among those inside the square of
+ * half-size `half` around it (edges inclusive), else null. A tie goes to the
+ * earlier point in `points`, so the result is deterministic.
  */
 export function nearestPointWithin(
   points: readonly PickPoint[],
   tap: { x: number; y: number },
-  radius: number = TOUCH_PICK_RADIUS_PX,
+  half: number = TOUCH_PICK_HALF_PX,
 ): string | null {
   let best: string | null = null;
   let bestDistance = Infinity;
   for (const point of points) {
-    const distance = Math.hypot(point.x - tap.x, point.y - tap.y);
-    if (distance <= radius && distance < bestDistance) {
+    const dx = Math.abs(point.x - tap.x);
+    const dy = Math.abs(point.y - tap.y);
+    if (dx > half || dy > half) continue;
+    const distance = Math.hypot(dx, dy);
+    if (distance < bestDistance) {
       best = point.nodeId;
       bestDistance = distance;
     }
