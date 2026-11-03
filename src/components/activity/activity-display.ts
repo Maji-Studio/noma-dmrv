@@ -117,7 +117,6 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   removalAssignment: "Removal assignment",
   productionClaimReservation: "Production claim reservation",
   productionClaim: "Production claim",
-  uploadStatus: "Upload status",
   removalTemplateId: "Removal template",
   // The shared mass and moisture names (docs/design-system.md, wet/dry mass).
   massWetKg: WET_MASS_FIELD_LABEL,
@@ -138,8 +137,16 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   entityType: "Linked record type",
   entityId: "Linked record",
 };
-/** Bookkeeping fields every save touches; they say nothing to an operator. */
-const HIDDEN_FIELDS = new Set(["version", "expectedVersion", "facilityId", "organizationId"]);
+/**
+ * Bookkeeping fields every save touches, and system-written fields (file
+ * checksums, upload progress, send reservations); they say nothing to an
+ * operator, so a change to them is never listed.
+ */
+const HIDDEN_FIELDS = new Set([
+  "version", "expectedVersion", "facilityId", "organizationId",
+  "checksumSha256", "uploadStatus",
+  "sendReservedBySubmissionId", "productionEmissionsClaimReservedBySubmissionId", "productionClaimReservation",
+]);
 
 export function isHiddenActivityField(field: string): boolean {
   return HIDDEN_FIELDS.has(field);
@@ -227,6 +234,15 @@ export function activityRecordLabel(item: Pick<ActivityItem, "entityType" | "rea
     return reason ? documentTypeLabel(reason.documentType) : null;
   }
   return item.record.label;
+}
+
+/**
+ * The record as one phrase: its type, then its name when the name adds
+ * something. Records whose "name" is only their type ("Emissions entry") read once.
+ */
+export function activityRecordTitle(typeLabel: string, label: string | null): string {
+  if (!label || label.trim().toLowerCase() === typeLabel.trim().toLowerCase()) return typeLabel;
+  return `${typeLabel} ${label}`;
 }
 
 /** What membership and status events mean, in words. Null when the kind says it all. */

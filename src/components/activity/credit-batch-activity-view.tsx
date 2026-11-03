@@ -26,7 +26,7 @@ import {
   activityHistoryStartNote,
   activityLoadedMessage,
 } from "./activity-copy";
-import { groupActivityByDay } from "./activity-day-groups";
+import { collapseRepeatedActivity, groupActivityByDay } from "./activity-day-groups";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import {
@@ -173,13 +173,14 @@ export function CreditBatchActivityView({
             <li key={group.key} className="flex flex-col gap-12">
               <h3 className="body-small font-medium text-[var(--color-text-secondary)]">{group.label}</h3>
               <ol className="flex flex-col">
-                {group.items.map((item) => (
+                {collapseRepeatedActivity(group.items, timeZone).map(({ item, count, ids }) => (
                   <ActivityEntry
                     key={item.id}
                     item={item}
+                    count={count}
                     timeZone={timeZone}
                     creditBatchId={creditBatchId}
-                    focusRef={items.indexOf(item) === focusIndex ? focusFirstNew : undefined}
+                    focusRef={focusIndex !== null && ids.includes(items[focusIndex]?.id ?? "") ? focusFirstNew : undefined}
                   />
                 ))}
               </ol>

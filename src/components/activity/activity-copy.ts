@@ -40,3 +40,8 @@ export function activityChangeCount(count: number): string {
 export function activityLoadedMessage(count: number): string {
   return `${activityChangeCount(count)} loaded.`;
 }
+
+/** The tag on a row that stands for several identical events in a row: "10 times". */
+export function activityRepeatLabel(count: number): string {
+  return `${count} times`;
+}

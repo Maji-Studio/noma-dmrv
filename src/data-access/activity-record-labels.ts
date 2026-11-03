@@ -13,7 +13,6 @@ import { activityIds } from "./credit-batch-activity-members";
 import { requireOrgScope } from "./utils";
 import { documentOwnerActivityType, polymorphicOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 
-const SHORT_RECORD_ID_LENGTH = 8;
 /**
  * `facility` is where the record's side sheet lives today, which can differ
  * from the batch's facility (a detached run moved elsewhere). Null for records
@@ -49,7 +48,7 @@ const sources: Record<string, LabelSource> = {
     facility: sql<string | null>`(select ${deliveries.facilityId} from ${deliveries} where ${deliveries.id} = ${applications.deliveryId} and ${deliveries.organizationId} = ${applications.organizationId})` },
   document: { table: documents, id: documents.id, organizationId: documents.organizationId, label: sql<string>`'Document'`, facility: null },
   removal: { table: certifierRemovals, id: certifierRemovals.id, organizationId: certifierRemovals.organizationId,
-    label: sql<string>`left(${certifierRemovals.id}::text, ${SHORT_RECORD_ID_LENGTH})`, facility: certifierRemovals.facilityId },
+    label: certifierRemovals.code, facility: certifierRemovals.facilityId },
   ghg_statement: { table: certifierGhgStatements, id: certifierGhgStatements.id, organizationId: certifierGhgStatements.organizationId,
     label: certifierGhgStatements.reportingPeriodEndOn, facility: certifierGhgStatements.facilityId },
   transport_leg: { table: transportLegs, id: transportLegs.id, organizationId: transportLegs.organizationId,

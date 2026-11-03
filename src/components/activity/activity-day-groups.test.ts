@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityDayLabel, groupActivityByDay } from "./activity-day-groups";
+import { activityDayLabel, collapseRepeatedActivity, groupActivityByDay } from "./activity-day-groups";
 import type { ActivityItem } from "./activity-display";
 
 const at = (value: Date, actor = "u1") => ({ id: `${value.toISOString()}${actor}`, occurredAt: value, actor: { id: actor }, source: "form" }) as ActivityItem;
@@ -26,5 +26,39 @@ describe("activity day groups", () => {
     const groups = groupActivityByDay([first, second, third], TIME_ZONE, NOW);
     expect(groups.map((group) => group.items)).toEqual([[first, second], [third]]);
     expect(groups.map((group) => group.label)).toEqual(["Jan 5, 2026", "Jan 4, 2026"]);
+  });
+});
+
+describe("collapsing repeated activity", () => {
+  const event = (id: string, overrides: Partial<ActivityItem> = {}) => ({
+    id, action: "updated", entityType: "emission_entry", entityId: "entry-1", changedFields: ["sendReservedBySubmissionId"],
+    changes: {}, fromStatus: null, toStatus: null, fromRemote: null, toRemote: null, source: "form", reasonCode: null,
+    occurredAt: new Date("2026-01-05T15:00:00Z"), actor: { id: "u1", name: "Ada" },
+    record: { label: "Emissions entry", deleted: false, facilityId: "f1", facilityTimezone: null }, ...overrides,
+  }) as unknown as ActivityItem;
+
+  it("folds consecutive identical rows into the newest with a count", () => {
+    const runs = collapseRepeatedActivity(Array.from({ length: 10 }, (_, i) => event(`e${i}`)), TIME_ZONE);
+    expect(runs).toHaveLength(1);
+    expect(runs[0].item.id).toBe("e0");
+    expect(runs[0].count).toBe(10);
+    expect(runs[0].ids).toHaveLength(10);
+  });
+
+  it("treats a change to hidden bookkeeping fields as the same row as another one", () => {
+    const runs = collapseRepeatedActivity([event("a", { changedFields: ["checksumSha256"] }), event("b", { changedFields: ["uploadStatus"] })], TIME_ZONE);
+    expect(runs.map((run) => run.count)).toEqual([2]);
+  });
+
+  it("keeps rows apart when the actor, record, action or shown change differs, or they are not adjacent", () => {
+    const runs = collapseRepeatedActivity([
+      event("a"),
+      event("b", { actor: { id: "u2", name: "Bo" } }),
+      event("c", { entityId: "entry-2" }),
+      event("d", { action: "deleted" }),
+      event("e", { changedFields: ["note"] }),
+      event("f"),
+    ], TIME_ZONE);
+    expect(runs.map((run) => run.count)).toEqual([1, 1, 1, 1, 1, 1]);
   });
 });
