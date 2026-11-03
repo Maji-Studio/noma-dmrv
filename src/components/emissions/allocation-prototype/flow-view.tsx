@@ -10,6 +10,11 @@
  * SVG only draws; an HTML button sits over every node, so hover, keyboard
  * focus and tap go through one element. The page's own batch or Removal is
  * lit until another node is hovered, focused or tapped.
+ *
+ * Round 3: each feedstock delivery now flows whole into one batch, so every
+ * record has one band. The hints live in the list under the chart: the row
+ * marker of treatment A, and "Counted on" rows for deliveries a batch drew
+ * from but does not carry (both treatments).
  */
 "use client";
 
@@ -29,18 +34,21 @@ import {
   RECORDS,
   basisFor,
   batchOwners,
+  feedstockHint,
   formatDay,
   formatKg,
   formatValue,
   fractionFor,
   percentFor,
   removalOwners,
+  type FeedstockHint,
   type Focus,
   type Owner,
   type RemovalFixture,
   type SourceRecord,
   type Unit,
 } from "./fixture";
+import { HintMarker, type HintMode } from "./hints";
 import { MUTED, SegmentGroup } from "./parts";
 
 // ---------------------------------------------------------------------------
@@ -402,12 +410,13 @@ interface DetailRow {
   sub?: string;
   percent?: number;
   value: number;
+  hint?: FeedstockHint;
 }
 
 function detailRows(graph: Graph, node: GraphNode, stream: Stream): DetailRow[] {
   if (node.kind === "record" && node.record) {
     const record = node.record;
-    return [...graph.batches, NOT_YET_OWNER]
+    const carried = [...graph.batches, NOT_YET_OWNER]
       .map((owner) => ({ owner, fraction: fractionFor(record, owner) }))
       .filter((row) => row.fraction > 0)
       .map(({ owner, fraction }) => ({
@@ -417,23 +426,47 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream): DetailRow[] 
         percent: percentFor(record, owner, graph.batches),
         value: node.value * fraction,
       }));
+    // Batches whose runs drew from the delivery but carry none of it.
+    const countedElsewhere = graph.batches.flatMap((owner) => {
+      const hint = feedstockHint(record, owner);
+      if (hint?.kind !== "countedOn") return [];
+      return [{ key: owner.key, name: owner.label, sub: `Used ${formatKg(hint.usedKg)}. Counted on ${hint.countedOn}`, percent: 0, value: 0 }];
+    });
+    return [...carried, ...countedElsewhere];
   }
   const owner = node.kind === "notYet" ? NOT_YET_OWNER : node.owner;
   if (!owner) return [];
   const owners = node.kind === "removal" ? graph.removals : graph.batches;
-  return graph.nodes
-    .filter((candidate) => candidate.kind === "record" && candidate.record && fractionFor(candidate.record, owner) > 0)
-    .map((candidate) => ({
-      key: candidate.key,
-      name: candidate.label,
-      sub: `${formatDay(candidate.record!.date)}, ${candidate.record!.detail}`,
-      percent: percentFor(candidate.record!, owner, owners),
-      value: (stream.pick(candidate.record!) ?? 0) * fractionFor(candidate.record!, owner),
+  const records = graph.nodes.filter((candidate) => candidate.kind === "record" && candidate.record).map((candidate) => candidate.record!);
+  const carried = records
+    .filter((record) => fractionFor(record, owner) > 0)
+    .map((record) => ({
+      key: record.id,
+      name: record.code,
+      sub: `${formatDay(record.date)}, ${record.detail}`,
+      percent: percentFor(record, owner, owners),
+      value: (stream.pick(record) ?? 0) * fractionFor(record, owner),
+      hint: feedstockHint(record, owner) ?? undefined,
     }));
+  const countedElsewhere = records.flatMap((record) => {
+    const hint = feedstockHint(record, owner);
+    if (hint?.kind !== "countedOn") return [];
+    return [{ key: record.id, name: record.code, sub: `${formatDay(record.date)}, ${record.detail}`, percent: 0, value: 0, hint }];
+  });
+  return [...carried, ...countedElsewhere];
 }
 
-function DetailList({ graph, node, stream, onOpenTable }: { graph: Graph; node: GraphNode; stream: Stream; onOpenTable: () => void }) {
+function DetailList({ graph, node, stream, focus, hint, onOpenTable }: {
+  graph: Graph;
+  node: GraphNode;
+  stream: Stream;
+  focus: Focus;
+  hint: HintMode;
+  onOpenTable: () => void;
+}) {
   const rows = detailRows(graph, node, stream);
+  // A hint reads from the lit node's side ("Used 2,000 of 10,000 kg" for CB-26-002).
+  const hintFocus: Focus = node.owner && node.kind !== "notYet" ? { ...focus, owner: node.owner } : focus;
   const removal = node.kind === "batch" ? graph.removals.find((candidate) => candidate.batches.includes(node.key as never)) : undefined;
   const sub =
     node.kind === "record" && node.record ? `${formatDay(node.record.date)}, ${node.record.detail}` :
@@ -466,8 +499,17 @@ function DetailList({ graph, node, stream, onOpenTable }: { graph: Graph; node: 
               <th scope="row" className="py-6 pr-12 text-left font-normal">
                 <span className="block body-small">{row.name}</span>
                 {row.sub && <span className={cn("block body-caption", MUTED)}>{row.sub}</span>}
+                {row.hint && hint === "a" && <HintMarker hint={row.hint} focus={hintFocus} className="pt-2" />}
               </th>
-              <td className="py-6 pr-12 text-right body-small tabular-nums">{row.percent != null ? `${row.percent}%` : ""}</td>
+              <td className="py-6 pr-12 text-right align-top body-small tabular-nums">
+                {row.percent != null ? `${row.percent}%` : ""}
+                {row.hint?.kind === "countedOn" && (
+                  <span className={cn("block whitespace-nowrap body-caption", MUTED)}>Counted on</span>
+                )}
+                {row.hint?.kind === "countedOn" && (
+                  <span className="block whitespace-nowrap body-caption font-mono">{row.hint.countedOn}</span>
+                )}
+              </td>
               <td className="py-6 text-right body-small tabular-nums">{formatValue(row.value, stream.unit).replace(` ${stream.unit}`, "")}</td>
             </tr>
           ))}
@@ -488,10 +530,17 @@ function DetailList({ graph, node, stream, onOpenTable }: { graph: Graph; node: 
 // The view
 // ---------------------------------------------------------------------------
 
-export function FlowView({ focus, fixture, onOpenTable }: { focus: Focus; fixture: RemovalFixture; onOpenTable: () => void }) {
-  const [streamKey, setStreamKey] = useState<StreamKey>("feedstock");
+export function FlowView({ focus, fixture, hint, streamKey, onStream, pinned, onPin, onOpenTable }: {
+  focus: Focus;
+  fixture: RemovalFixture;
+  hint: HintMode;
+  streamKey: StreamKey;
+  onStream: (key: StreamKey) => void;
+  pinned: string | null;
+  onPin: (key: string | null) => void;
+  onOpenTable: () => void;
+}) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
   const stream = STREAMS.find((candidate) => candidate.key === streamKey) ?? STREAMS[0];
   const graph = buildGraph(stream, fixture);
   const exists = (key: string | null) => !!key && graph.nodes.some((node) => node.key === key);
@@ -499,15 +548,12 @@ export function FlowView({ focus, fixture, onOpenTable }: { focus: Focus; fixtur
   const activeKey = exists(hovered) ? hovered : exists(pinned) ? pinned : exists(focusKey) ? focusKey : null;
   const activeNode = graph.nodes.find((node) => node.key === activeKey);
   return (
-    <div className="flex min-w-0 flex-col gap-20 border border-[var(--color-border-secondary)] bg-[var(--paper)] p-16 sm:p-24">
+    <div data-allocation-flow-panel className="flex min-w-0 scroll-mt-16 flex-col gap-20 border border-[var(--color-border-secondary)] bg-[var(--paper)] p-16 sm:p-24">
       <SegmentGroup
         label="Quantity"
         options={STREAMS.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
         value={streamKey}
-        onChange={(value) => {
-          setStreamKey(value);
-          setPinned(null);
-        }}
+        onChange={onStream}
         stretch
         className="w-full sm:w-max"
       />
@@ -517,11 +563,11 @@ export function FlowView({ focus, fixture, onOpenTable }: { focus: Focus; fixtur
         focusKey={focusKey}
         activeKey={activeKey}
         onHover={setHovered}
-        onToggle={(key) => setPinned((current) => (current === key || key === focusKey ? null : key))}
+        onToggle={(key) => onPin(pinned === key || key === focusKey ? null : key)}
       />
       {activeNode && (
         <div className="border-t border-[var(--clr-dark-purple-10)] pt-16 lg:max-w-[640px]">
-          <DetailList graph={graph} node={activeNode} stream={stream} onOpenTable={onOpenTable} />
+          <DetailList graph={graph} node={activeNode} stream={stream} focus={focus} hint={hint} onOpenTable={onOpenTable} />
         </div>
       )}
     </div>

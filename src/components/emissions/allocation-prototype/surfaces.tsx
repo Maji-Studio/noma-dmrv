@@ -59,6 +59,7 @@ export function BatchSurface({ focus, children }: { focus: Focus; children: Reac
         </div>
         <div role="tabpanel" className="min-w-0">{children}</div>
       </div>
+      <div aria-hidden className="h-96 shrink-0" />
     </div>
   );
 }
@@ -106,6 +107,7 @@ export function RemovalSurface({ focus, fixture, open, children }: { focus: Focu
             </tbody>
           </table>
         </div>
+        <div aria-hidden className="h-96 shrink-0" />
       </div>
       <SlideOverPanel.Root open={open} onOpenChange={(next) => !next && openRemoval(null)} dismissOnClickOutside={false}>
         <SlideOverPanel.Content size="wide">
