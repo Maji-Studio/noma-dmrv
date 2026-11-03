@@ -66,6 +66,10 @@ describe("SharedSourceFileNotes", () => {
 
     const note = screen.getByRole("status");
     expect(note.textContent).toContain(`${FILE} is the file for 2 different kinds of evidence.`);
+    const explanation = "A verifier who opens the Source for any of these kinds finds the same file. Check that it supports each one.";
+    expect(note.textContent).toContain(explanation);
+    expect(note.textContent?.indexOf(explanation)).toBeGreaterThan(note.textContent?.indexOf(FILE) ?? Infinity);
+    expect(note.lastElementChild?.lastElementChild?.textContent).toBe(explanation);
     const items = within(note).getAllByRole("listitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "Lab report:SAM-26-007SAM-26-008",

@@ -11,7 +11,7 @@ import type { SharedSourceFile } from "@/lib/certification/shared-source-files";
 import { NewTabLink } from "./link-label";
 import { sharedSourceFiles } from "./shared-source-files-model";
 
-const NOTE_DETAIL = "A verifier who opens the Source for any kind below finds this same file. Check that it supports each one.";
+const NOTE_DETAIL = "A verifier who opens the Source for any of these kinds finds the same file. Check that it supports each one.";
 
 type NoticeCtx = Pick<RemovalCertifyContext, "memberBatches" | "emissionLinesByBatchId" | "carriedEntries">;
 
@@ -28,12 +28,11 @@ export function useSharedSourceFiles(removalId: string, facilityId: string, ctx:
   });
 }
 
-/** Rows for the "Submission notes" Notice: the explanation once, then each file with its kinds. */
+/** Rows for the "Submission notes" Notice: each file with its kinds, then the explanation once. */
 export function SharedSourceFileNotes({ files }: { files: readonly SharedSourceFile[] }) {
   if (files.length === 0) return null;
   return (
     <div className="flex flex-col gap-8">
-      <div>{NOTE_DETAIL}</div>
       {files.map((file) => (
         <div key={file.fileKey} className="flex flex-col gap-4">
           <div>
@@ -58,6 +57,7 @@ export function SharedSourceFileNotes({ files }: { files: readonly SharedSourceF
           </ul>
         </div>
       ))}
+      <div>{NOTE_DETAIL}</div>
     </div>
   );
 }
