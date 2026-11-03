@@ -107,9 +107,10 @@ describe("StorageLocationForm feedstock draw method", () => {
   it("asks for the merge time when an existing oldest-first bin becomes Mass weighted", () => {
     const bin = { id: "bin", name: "Bin 1", type: "feedstock_bin", facilityId: "facility-one", feedstockTypeId: "feedstock-one", stockMode: "split", drawOrder: "oldest_first", capacityKg: null, storageMethod: null, storageDescription: null, formulationId: null, version: 1 } as unknown as StorageLocation;
     render(<StorageLocationForm storageLocation={bin} onSubmit={vi.fn()} onCancel={vi.fn()} />);
-    expect(screen.queryByText("Merged at")).toBeNull();
+    expect(screen.queryByText(/Mass weighted from/)).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: /Mass weighted/ }));
-    expect(screen.getByText(/Merged at/)).toBeTruthy();
+    expect(screen.getByText(/Mass weighted from/)).toBeTruthy();
+    expect(screen.queryByText(/Merged at/)).toBeNull();
     expect(document.body.textContent).toContain("Draws from this time on are mass weighted");
   });
 });

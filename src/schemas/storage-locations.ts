@@ -124,7 +124,7 @@ export const FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS: Record<OutputDrawOrder, string> 
 /** Hints behind the feedstock bin form's (i). */
 export const FEEDSTOCK_STOCK_MODE_HINT =
   "The draw method sets how wet mass leaves this bin for production runs, product ingredients and lost mass, and so which deliveries a credit batch counts the transport of. Entries already saved keep their method.";
-export const FEEDSTOCK_DRAW_ORDER_HINT = "Which delivery a draw empties first.";
+export const FEEDSTOCK_DRAW_ORDER_HINT = "A change applies to draws recorded after it.";
 export const FEEDSTOCK_MERGE_TIME_HINT =
   "Draws from this time on are mass weighted.";
 
@@ -137,7 +137,43 @@ export function isOutputBinType(type: StorageLocationType | undefined | null): t
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
 export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
 /** Feedstock bins hold deliveries, not batches. */
-export const FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE = "Enter the time from which draws are mass weighted.";
+export const FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE = "Enter when mass weighted draws start.";
+/** The feedstock field name; the server refusals use the same words. */
+export const FEEDSTOCK_MERGE_TIME_LABEL = "Mass weighted from";
+/** Output bins keep their wording as on staging. */
+const OUTPUT_STOCK_MODE_HINT =
+  "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
+const OUTPUT_MERGE_TIME_HINT =
+  "Draws from this time on take every batch in proportion. Entries already saved keep their shares.";
+
+/** Form wording per lane: the feedstock Draw method, or the output bin Stock mode. */
+export const STOCK_MODE_FORM_COPY = {
+  feedstock: {
+    modeLabel: "Draw method",
+    modeHint: FEEDSTOCK_STOCK_MODE_HINT,
+    splitName: "In order",
+    unmixHelper: "Only an empty bin can switch to In order.",
+    mergedHelper: "Switching back to In order needs an empty bin.",
+    orderLabel: "Draw order",
+    orderHint: FEEDSTOCK_DRAW_ORDER_HINT,
+    mergeLabel: FEEDSTOCK_MERGE_TIME_LABEL,
+    mergeHint: FEEDSTOCK_MERGE_TIME_HINT,
+    mergeRequired: FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE,
+  },
+  output: {
+    modeLabel: "Stock mode",
+    modeHint: OUTPUT_STOCK_MODE_HINT,
+    splitName: "split",
+    unmixHelper: "Only an empty bin can switch to split.",
+    mergedHelper: "Switching back to split needs an empty bin.",
+    orderLabel: "Default draw order",
+    orderHint: "Which sub-bin a draw takes first. You can change the order for any draw.",
+    mergeLabel: "Merged at",
+    mergeHint: OUTPUT_MERGE_TIME_HINT,
+    mergeRequired: "Enter when the batches were merged.",
+  },
+} as const;
+
 const mergedAtSchema = stockEventInstantSchema(MERGE_TIME_REQUIRED_MESSAGE).or(z.literal("")).nullable().optional();
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =

@@ -21,11 +21,7 @@ import { SegmentedControl } from "@/components/forms/segmented-control";
 import { drawOrderOptions, feedstockDrawOrderOptions, stockModeOptions } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
-  FEEDSTOCK_DRAW_ORDER_HINT,
-  FEEDSTOCK_MERGE_TIME_HINT,
-  FEEDSTOCK_STOCK_MODE_HINT,
-  FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE,
-  MERGE_TIME_REQUIRED_MESSAGE,
+  STOCK_MODE_FORM_COPY,
   storageLocationFormSchema,
   storageLocationTypes,
   STORAGE_LOCATION_TYPE_SHORT_LABELS,
@@ -54,11 +50,6 @@ const resolveStorageLocation: Resolver<StorageLocationFormValues, unknown, Stora
 
 /** Native min, max and step for each number input, read from the schema. */
 const numberBounds = numberInputConstraintsFor(storageLocationFormSchema);
-
-const STOCK_MODE_HINT =
-  "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
-const MERGE_TIME_HINT =
-  "Draws from this time on take every batch in proportion. Entries already saved keep their shares.";
 
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;
@@ -154,6 +145,7 @@ export function StorageLocationForm({
   const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const watchedType = useWatch({ control, name: "type" });
   const showFeedstockType = isFeedstockBinType(watchedType);
+  const copy = showFeedstockType ? STOCK_MODE_FORM_COPY.feedstock : STOCK_MODE_FORM_COPY.output;
   const showFormulation = watchedType === "product_bin";
   // Output bins choose a stock mode; feedstock bins choose a draw method on the same fields.
   const showStockMode = showFeedstockType || isOutputBinType(watchedType);
@@ -188,7 +180,7 @@ export function StorageLocationForm({
     if (!isFeedstockBinType(normalized.type) && !isOutputBinType(normalized.type)) normalized.stockMode = "split";
     if (!merging) normalized.mergedAt = null;
     else if (!normalized.mergedAt) {
-      setError("mergedAt", { message: showFeedstockType ? FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE : MERGE_TIME_REQUIRED_MESSAGE });
+      setError("mergedAt", { message: copy.mergeRequired });
       return;
     }
     return onSubmit(normalized, refuseSave);
@@ -276,15 +268,15 @@ export function StorageLocationForm({
           <div className="md:col-span-2">
           <FormField
             id="stockMode"
-            label={showFeedstockType ? "Draw method" : "Stock mode"}
-            hint={showFeedstockType ? FEEDSTOCK_STOCK_MODE_HINT : STOCK_MODE_HINT}
+            label={copy.modeLabel}
+            hint={copy.modeHint}
             error={errors.stockMode?.message}
-            helperText={unmixing ? `Only an empty bin can switch to ${showFeedstockType ? "In order" : "split"}.` : merging ? `Switching back to ${showFeedstockType ? "In order" : "split"} needs an empty bin.` : undefined}
+            helperText={unmixing ? copy.unmixHelper : merging ? copy.mergedHelper : undefined}
             required
           >
             <ChoiceCardGroup
               id="stockMode"
-              legend={showFeedstockType ? "Draw method" : "Stock mode"}
+              legend={copy.modeLabel}
               required
               disabled={isSubmitting}
               error={!!errors.stockMode}
@@ -303,15 +295,15 @@ export function StorageLocationForm({
           </div>
           {watchedStockMode === "split" && (
             <div className="md:col-span-2">
-              <FormField id="drawOrder" label={showFeedstockType ? "Draw order" : "Default draw order"}
-                hint={showFeedstockType ? FEEDSTOCK_DRAW_ORDER_HINT : "Which sub-bin a draw takes first. You can change the order for any draw."} error={errors.drawOrder?.message} required>
-                <ChoiceCardGroup id="drawOrder" legend={showFeedstockType ? "Draw order" : "Default draw order"} required disabled={isSubmitting}
+              <FormField id="drawOrder" label={copy.orderLabel}
+                hint={copy.orderHint} error={errors.drawOrder?.message} required>
+                <ChoiceCardGroup id="drawOrder" legend={copy.orderLabel} required disabled={isSubmitting}
                   error={!!errors.drawOrder} stackArt options={showFeedstockType ? feedstockDrawOrderOptions : drawOrderOptions} {...register("drawOrder")} />
               </FormField>
             </div>
           )}
           {merging && (
-            <div className="md:col-span-2"><FormField id="mergedAt" label="Merged at" hint={showFeedstockType ? FEEDSTOCK_MERGE_TIME_HINT : MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
+            <div className="md:col-span-2"><FormField id="mergedAt" label={copy.mergeLabel} hint={copy.mergeHint} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
             </FormField></div>
           )}

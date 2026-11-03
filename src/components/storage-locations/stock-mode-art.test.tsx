@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DrawOrderArt, drawOrderOptions, feedstockDrawOrderOptions, stockModeOptions } from "./stock-mode-art";
+import { DrawOrderArt, FeedstockDrawOrderArt, InOrderBinArt, drawOrderOptions, feedstockDrawOrderOptions, stockModeOptions } from "./stock-mode-art";
 
 describe("stockModeOptions", () => {
   it("offers Split and Mix with a caption per bin type", () => {
@@ -52,4 +52,21 @@ it("offers Oldest first and Newest first for feedstock bins with delivery captio
     expect(option.description).toContain("delivery");
     expect(option.description).not.toMatch(/[–—]/);
   }
+});
+
+it("draws feedstock cards as one bin of stacked delivery layers, never sub-bins", () => {
+  const countBins = (markup: string) => (markup.match(/ V40 H/g) ?? []).length;
+  expect(countBins(renderToStaticMarkup(<InOrderBinArt />))).toBe(1);
+  for (const order of ["oldest_first", "newest_first"] as const) {
+    const markup = renderToStaticMarkup(<FeedstockDrawOrderArt order={order} />);
+    expect(countBins(markup)).toBe(1);
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup.match(/stock-draw-first/g)).toHaveLength(1);
+    const layers = [...markup.matchAll(/class="(stock-draw-first|stock-draw-waiting)"/g)].map(match => match[1]);
+    expect(layers[order === "oldest_first" ? 0 : 2]).toBe("stock-draw-first");
+    expect([...markup.matchAll(/>(\d+ Oct)<\/text>/g)].map(match => match[1])).toEqual(["01 Oct", "02 Oct", "03 Oct"]);
+  }
+  const optionArt = (options: { art: unknown }[]) => options.map(option => renderToStaticMarkup(option.art as never));
+  expect(optionArt(feedstockDrawOrderOptions).every(markup => countBins(markup) === 1)).toBe(true);
+  expect(countBins(optionArt(stockModeOptions("feedstock_bin"))[0])).toBe(1);
 });

@@ -4,7 +4,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { FeedstockDrawMethod } from '@/lib/feedstock-draw-replay';
 import { formatFacilityDateTime } from '@/lib/format-utils';
-import { FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE } from '@/schemas/storage-locations';
+import { FEEDSTOCK_MERGE_TIME_LABEL, FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE } from '@/schemas/storage-locations';
 import { getFeedstockBinStock } from './feedstock-bin-ledger';
 import { getFeedstockMethodChanges } from './feedstock-bin-method-history';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
@@ -26,9 +26,9 @@ export async function applyFeedstockMethodChange(ctx: OrgContext, tx: DbTransact
   if (target.stockMode === 'mix' && existing.stockMode === 'split') {
     if (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime())) throw new SafeError(FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE);
     effectiveAt = next.mergedAt;
-    if (effectiveAt > now) throw new SafeError('Merged at cannot be in the future.');
+    if (effectiveAt > now) throw new SafeError(`${FEEDSTOCK_MERGE_TIME_LABEL} cannot be in the future.`);
     if (last && effectiveAt.toISOString() <= last)
-      throw new SafeError(`Set Merged at later than the bin's last recorded movement (${await facilityTime(last)}). Movements already recorded keep their draw method.`);
+      throw new SafeError(`Set ${FEEDSTOCK_MERGE_TIME_LABEL} later than the bin's last recorded movement (${await facilityTime(last)}). Movements already recorded keep their draw method.`);
   } else {
     if (last && last > now.toISOString())
       throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last)}. Change its draw method after that time.`);

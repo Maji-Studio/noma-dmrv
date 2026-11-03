@@ -1,5 +1,7 @@
 /**
  * Drawings for the stock mode cards. Split: three small bins, one batch each.
+ * Feedstock bins have no sub-bins: their In order and Draw order cards draw one
+ * bin with stacked dated delivery layers.
  * Mix: one bin holding the same three batches blended. Decorative: the card
  * hides the art slot from assistive tech. The loop that plays on hover and focus
  * lives in globals.css under "Stock mode art" (class names here
@@ -61,6 +63,14 @@ const DRAW_DATE_SIZE = 6;
 const DRAW_FIRST_INDEX = 0;
 const DRAW_LAST_INDEX = SPLIT_TONES.length - 1;
 
+/** Feedstock: one bin, deliveries stacked as dated layers (oldest at the bottom). */
+const LAYER_BIN_X = 4;
+const LAYER_BIN_WIDTH = 68;
+const LAYER_COLUMNS = 15;
+const LAYER_ROWS = GRAIN_ROWS / SPLIT_TONES.length;
+const LAYER_LABEL_X = 76;
+const LAYER_LABEL_DROP = 2;
+
 type Tone = (typeof SPLIT_TONES)[number];
 
 function binPath(x: number, width: number): string {
@@ -78,6 +88,7 @@ function grainGrid(binX: number, binWidth: number, columns: number, toneAt: (col
       tone: toneAt(column, row),
       x: binX + inset + column * GRAIN_STEP_X,
       y: FILL_TOP + 1 + row * GRAIN_STEP_Y,
+      row,
       drawn: drawable && row < DRAWN_ROWS,
     };
   });
@@ -177,6 +188,38 @@ export function MixPileArt() {
   );
 }
 
+/** Layer 0 is the oldest delivery and sits at the bottom of the bin. */
+const layerOfRow = (row: number) => SPLIT_TONES.length - 1 - Math.floor(row / LAYER_ROWS);
+
+/** One bin of stacked delivery layers; `firstLayer` is the layer a draw empties first, empty in the settled picture. */
+function LayeredBinArt({ firstLayer, dated, binX, binWidth, columns }: { firstLayer: number; dated: boolean; binX: number; binWidth: number; columns: number }) {
+  const grains = grainGrid(binX, binWidth, columns, (_, row) => SPLIT_TONES[layerOfRow(row)], false);
+  return (
+    <StockArt mode="draw">
+      {SPLIT_TONES.map((tone, layer) => (
+        <g key={tone} className={layer === firstLayer ? "stock-draw-first" : "stock-draw-waiting"}>
+          <Grains grains={grains.filter((grain) => layerOfRow(grain.row) === layer)} />
+        </g>
+      ))}
+      <path d={binPath(binX, binWidth)} />
+      {dated && SPLIT_TONES.map((tone, layer) => (
+        <text key={tone} x={LAYER_LABEL_X} y={FILL_TOP + 1 + (SPLIT_TONES.length - 1 - layer + 0.5) * LAYER_ROWS * GRAIN_STEP_Y + LAYER_LABEL_DROP}
+          fontSize={DRAW_DATE_SIZE} fill="currentColor" stroke="none">{DRAW_DATES[layer]}</text>
+      ))}
+    </StockArt>
+  );
+}
+
+/** One feedstock bin, deliveries stacked; the oldest layer is the one a draw empties first. */
+export function InOrderBinArt() {
+  return <LayeredBinArt firstLayer={DRAW_FIRST_INDEX} dated={false} binX={MIX_BIN_X} binWidth={MIX_BIN_WIDTH} columns={MIX_COLUMNS} />;
+}
+
+/** One feedstock bin with dated delivery layers; the first layer drawn is empty in the settled picture. */
+export function FeedstockDrawOrderArt({ order }: { order: OutputDrawOrder }) {
+  return <LayeredBinArt firstLayer={order === "oldest_first" ? DRAW_FIRST_INDEX : DRAW_LAST_INDEX} dated binX={LAYER_BIN_X} binWidth={LAYER_BIN_WIDTH} columns={LAYER_COLUMNS} />;
+}
+
 const STOCK_MODE_CARD_ART: Record<OutputStockMode, { title: string; art: ReactNode }> = {
   split: { title: "Split", art: <SplitPilesArt /> },
   mix: { title: "Mix", art: <MixPileArt /> },
@@ -187,7 +230,7 @@ export function stockModeOptions(type: StorageLocationType | null | undefined) {
   return outputStockModes.map((mode) => {
     const art = STOCK_MODE_CARD_ART[mode];
     if (!isOutputBinType(type)) {
-      return { value: mode, art: art.art, title: FEEDSTOCK_STOCK_MODE_LABELS[mode], description: FEEDSTOCK_STOCK_MODE_DESCRIPTIONS[mode] };
+      return { value: mode, art: mode === "split" ? <InOrderBinArt /> : art.art, title: FEEDSTOCK_STOCK_MODE_LABELS[mode], description: FEEDSTOCK_STOCK_MODE_DESCRIPTIONS[mode] };
     }
     return { value: mode, ...art, description: OUTPUT_STOCK_MODE_DESCRIPTIONS[type][mode] };
   });
@@ -223,4 +266,5 @@ export const drawOrderOptions = OUTPUT_DRAW_ORDERS.map((order) => ({
 export const feedstockDrawOrderOptions = drawOrderOptions.map((option) => ({
   ...option,
   description: FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS[option.value],
+  art: <FeedstockDrawOrderArt order={option.value} />,
 }));
