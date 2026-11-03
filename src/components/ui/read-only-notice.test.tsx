@@ -8,6 +8,7 @@ vi.mock("@/components/ui/notice", () => ({
   Notice: ({ children, action }: { children: ReactNode; action?: ReactNode }) => <div>{children}{action}</div>,
 }));
 
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { ReadOnlyNotice } from "./read-only-notice";
 
 afterEach(cleanup);
@@ -22,6 +23,8 @@ describe("ReadOnlyNotice", () => {
     const { container } = render(<ReadOnlyNotice readOnly={readOnly} />);
     const link = screen.getByRole("link", { name: "Mafinga" });
     expect(link.getAttribute("href")).toBe("/facilities?archivedFacility=fac-1");
+    // A one-word name in running text still gets a 44px tap target on phones.
+    for (const token of INLINE_HIT_AREA.split(" ")) expect(link.classList.contains(token)).toBe(true);
     expect(container.textContent).toBe(readOnly.message);
   });
 

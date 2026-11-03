@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_NAME_LINK } from "@/components/ui/record-code-link";
-import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 
@@ -21,7 +22,7 @@ export function ReadOnlyNotice({ readOnly }: { readOnly: SheetReadOnly }) {
     >
       {readOnly.facility && readOnly.message.startsWith(readOnly.facility.name) ? (
         <>
-          <Link href={readOnly.facility.href} className={RECORD_NAME_LINK}>{readOnly.facility.name}</Link>
+          <Link href={readOnly.facility.href} className={cn(RECORD_NAME_LINK, INLINE_HIT_AREA)}>{readOnly.facility.name}</Link>
           {readOnly.message.slice(readOnly.facility.name.length)}
         </>
       ) : readOnly.message}
