@@ -40,3 +40,18 @@ export function activityChangeCount(count: number): string {
 export function activityLoadedMessage(count: number): string {
   return `${activityChangeCount(count)} loaded.`;
 }
+
+/** The tag on a row that stands for several identical events in a row: "10 times". */
+export function activityRepeatLabel(count: number): string {
+  return `${count} times`;
+}
+
+/** Older events loaded that read the same as an existing row, so only its count grew. */
+export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to an existing row.";
+
+/** Older events loaded, but none of them is shown in the feed. */
+export const ACTIVITY_NO_NEW_CHANGES_MESSAGE = "No new changes were found.";
+
+/** The empty card above "Show older activity" when the loaded activity holds no visible change. */
+export const ACTIVITY_NO_VISIBLE_CHANGES_TITLE = "No changes to show yet";
+export const ACTIVITY_NO_VISIBLE_CHANGES_DESCRIPTION = "Older activity may have some.";

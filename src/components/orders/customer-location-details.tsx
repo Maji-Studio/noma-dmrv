@@ -6,6 +6,7 @@
  * opens its map in a dialog when both ends have coordinates.
  */
 
+import { joinLocationParts } from "@/lib/location-display";
 import { TransportRoutePreview } from "@/components/transport-legs";
 
 export interface CustomerLocationDetailsLocation {
@@ -37,9 +38,7 @@ export function CustomerLocationDetails({
   facility,
 }: CustomerLocationDetailsProps) {
   const pair = location.facilityDistances.find(row => row.facilityId === facility?.id);
-  const localityLine = [location.city, location.stateRegion, location.country]
-    .filter(Boolean)
-    .join(", ");
+  const localityLine = joinLocationParts([location.city, location.stateRegion, location.country]) ?? "";
 
   return (
     // Unboxed like every other block in the form (layout contract).

@@ -123,7 +123,10 @@ inside batch context, with a "Batch roll-up" button back.
     to the record's side sheet where one exists (a document opens its owner),
     on the facility the record lives at now, which `resolveActivityRecords`
     reads with the label; deleted records are tombstones with no link. Field names only, never
-    values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
+    values. Consecutive identical events (same actor, source, record, action and
+    shown lines) fold into one row with a count, and updates that touch only
+    hidden system fields (checksums, upload status, send reservations) are left
+    out (`activity-day-groups.ts`). Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
     (`src/config/activity.ts`). The credit batch page's Activities tab mounts
     the same view in page flow (`inline`). Components:
     `src/components/activity/`.
@@ -173,7 +176,8 @@ theme.
 - **Records are small squares** in their kind's accent with its icon and the
   record's own code underneath (`shortCode`: run, product, order and delivery
   codes; an application's field identifier). The sheet keeps the longer
-  heading (`code`).
+  heading (`code`). The reactor is the exception: its node shows the reactor's
+  name (`identifier`), as every list does, with its code in the details.
 - **Groups**: a column with more than `FLOW_GROUP_THRESHOLD` records collapses
   into one stacked node ("34 feedstocks"); parallel edges into it merge. Wet
   and dry kg sum independently, each only when every member has it; the share

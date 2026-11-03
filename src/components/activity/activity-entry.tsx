@@ -18,6 +18,7 @@ import {
   activityChangeSummary,
   activityRecordHref,
   activityRecordLabel,
+  activityRecordTitle,
   activityRecordTypeLabel,
   activityStatusKey,
   type ActivityItem,
@@ -28,13 +29,14 @@ import {
   type ActivityFieldLine,
   type ActivityValueText,
 } from "./activity-change-lines";
-import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
+import { ACTIVITY_DELETED_RECORD_LABEL, activityRepeatLabel } from "./activity-copy";
 // By file, not the barrel: the chain-of-custody barrel imports this folder.
 import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-badge";
 
 const TAG_CLASS = "inline-flex h-[20px] shrink-0 items-center border px-6 body-caption-fit font-medium";
 const RECORD_ICON_PX = 16;
 const TOMBSTONE_TAG_CLASS = `${TAG_CLASS} border-dashed border-[var(--color-border-primary)] text-[var(--color-text-secondary)]`;
+const REPEAT_TAG_CLASS = `${TAG_CLASS} border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] tabular-nums`;
 const CHANGE_ARROW_PX = 12;
 const META_SEPARATOR = "·";
 type ChangeSide = "from" | "to";
@@ -124,7 +126,7 @@ function EntryMeta({ item, showDate, timeZone }: { item: ActivityItem; showDate:
   );
 }
 
-function EntryBody({ item, showDate, timeZone }: { item: ActivityItem; showDate: boolean; timeZone: string }) {
+function EntryBody({ item, showDate, timeZone, count }: { item: ActivityItem; showDate: boolean; timeZone: string; count: number }) {
   const typeLabel = activityRecordTypeLabel(item.entityType);
   const label = activityRecordLabel(item);
   const deleted = item.record.deleted;
@@ -147,10 +149,13 @@ function EntryBody({ item, showDate, timeZone }: { item: ActivityItem; showDate:
       <span className="flex min-w-0 flex-col gap-2 pt-6">
         <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
           <span className="min-w-0 body-small text-[var(--color-text-primary)]">
-            <span className="font-medium underline-offset-2 group-hover:underline">{label ? `${typeLabel} ${label}` : typeLabel}</span>
+            <span className="font-medium underline-offset-2 group-hover:underline">{activityRecordTitle(typeLabel, label)}</span>
             {" "}
             <span className="text-[var(--color-text-secondary)]">{ACTIVITY_KIND_LABELS[item.action].toLowerCase()}</span>
           </span>
+          {count > 1 ? (
+            <span className={REPEAT_TAG_CLASS} data-testid="activity-repeat-count">{activityRepeatLabel(count)}</span>
+          ) : null}
           {deleted ? (
             <span className={TOMBSTONE_TAG_CLASS} data-testid="activity-tombstone">{ACTIVITY_DELETED_RECORD_LABEL}</span>
           ) : null}
@@ -190,6 +195,7 @@ export function ActivityEntry({
   timeZone,
   focusRef,
   showDate = false,
+  count = 1,
 }: {
   item: ActivityItem;
   creditBatchId: string;
@@ -198,6 +204,8 @@ export function ActivityEntry({
   focusRef?: (node: HTMLElement | null) => void;
   /** Show the full date with the time, for a list with no day headings above it. */
   showDate?: boolean;
+  /** How many consecutive identical events this row stands for (see `collapseRepeatedActivity`). */
+  count?: number;
 }) {
   const href = activityRecordHref(item, { creditBatchId });
   return (
@@ -205,7 +213,7 @@ export function ActivityEntry({
       <span aria-hidden className={RAIL_CLASS} />
       {href ? (
         <Link ref={focusRef} href={href} className={cn(ROW_CLASS, "group")}>
-          <EntryBody item={item} showDate={showDate} timeZone={timeZone} />
+          <EntryBody item={item} showDate={showDate} timeZone={timeZone} count={count} />
         </Link>
       ) : (
         <div
@@ -215,7 +223,7 @@ export function ActivityEntry({
           tabIndex={-1}
           className={ROW_CLASS}
         >
-          <EntryBody item={item} showDate={showDate} timeZone={timeZone} />
+          <EntryBody item={item} showDate={showDate} timeZone={timeZone} count={count} />
         </div>
       )}
     </li>

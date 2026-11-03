@@ -12,6 +12,8 @@ import {
   activityFieldLabel,
   activityRecordHref,
   activityRecordLabel,
+  activityRecordTitle,
+  isHiddenActivityField,
   activityRecordTypeLabel,
   activityStatusKey,
   humanizeFieldName,
@@ -149,4 +151,30 @@ describe("record links", () => {
 
 it("labels emissions entries with the glossary name", () => {
   expect(ACTIVITY_RECORD_TYPE_LABELS.emission_entry).toBe("Emissions entry");
+});
+
+describe("record title", () => {
+  it("says the type once when the label only repeats it", () => {
+    expect(activityRecordTitle("Emissions entry", "Emissions entry")).toBe("Emissions entry");
+    expect(activityRecordTitle("Emissions entry", " emissions ENTRY ")).toBe("Emissions entry");
+  });
+
+  it("puts the record's code after its type", () => {
+    expect(activityRecordTitle("Removal", "RM-26-001")).toBe("Removal RM-26-001");
+    expect(activityRecordTitle("Removal", null)).toBe("Removal");
+  });
+});
+
+describe("fields an operator never sees", () => {
+  it("hides checksums, upload progress and send reservations", () => {
+    for (const field of ["checksumSha256", "uploadStatus", "sendReservedBySubmissionId", "productionEmissionsClaimReservedBySubmissionId"]) {
+      expect(isHiddenActivityField(field)).toBe(true);
+    }
+    expect(isHiddenActivityField("note")).toBe(false);
+  });
+
+  it("lists no line for an update that only touched them", () => {
+    const changed = item({ changedFields: ["checksumSha256", "uploadStatus", "sendReservedBySubmissionId"], changes: { uploadStatus: { from: "pending", to: "uploaded" } } });
+    expect(activityFieldLines(changed, VIEW_TIME_ZONE)).toEqual([]);
+  });
 });

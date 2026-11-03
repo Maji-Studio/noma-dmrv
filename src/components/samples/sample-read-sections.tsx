@@ -9,7 +9,7 @@ import { SampleDocumentsPanel } from "./sample-documents-panel";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { SampleWithRelations } from "@/data-access/samples";
 
-const LAB_PERCENT_FRACTION_DIGITS = 2;
+export const LAB_PERCENT_FRACTION_DIGITS = 2;
 /** Atomic ratios (H:C org, O:C org) read at four decimals. */
 export const RATIO_DIGITS = 4;
 

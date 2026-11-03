@@ -84,7 +84,7 @@ export function feedstockSheetSections(
     {
       title: "Bin allocations",
       fields: [
-        { label: "Storage bin", value: feedstock.storageLocationCode ?? feedstock.storageLocationName },
+        { label: "Storage bin", value: feedstock.storageLocationName ?? feedstock.storageLocationCode },
         { label: "Allocated wet mass (kg)", value: formatMassKg(feedstock.massWetKg) },
         { label: "Over-allocation justification", value: feedstock.overrideJustification },
       ],

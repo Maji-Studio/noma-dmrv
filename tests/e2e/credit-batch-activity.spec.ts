@@ -163,7 +163,9 @@ test.describe("credit batch activity", () => {
     await insertActivity(Array.from({ length: count }, (_, index) => ({
       organizationId: DEC_ORG_ID, facilityId: seededData.facility.id, creditBatchId: batch.id,
       entityType: "credit_batch" as const, entityId: batch.id, action: index === count - 1 ? "created" as const : "updated" as const,
-      source: "form" as const, actorUserId: testUsers.admin.id, changedFields: ["siteManagementNotes"],
+      source: "form" as const, actorUserId: testUsers.admin.id,
+      // Distinct fields keep each event its own row: identical neighbours fold into one.
+      changedFields: [`siteManagementNotes${index}`],
       occurredAt: new Date(now - index * MS_PER_MINUTE),
     })));
 

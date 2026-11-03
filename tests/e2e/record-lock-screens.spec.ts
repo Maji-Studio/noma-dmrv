@@ -60,8 +60,12 @@ test.describe("Record locks on screen", () => {
     const sampleId = crypto.randomUUID();
     const submissionId = crypto.randomUUID();
     const sampleCode = `E2E-SMP-LOCK-${tag}`;
+    let removalText = "";
     const { db, pool } = createDbConnection();
     try {
+      const [{ code: removalCode }] = await db.select({ code: schema.certifierRemovals.code }).from(schema.certifierRemovals)
+        .where(and(eq(schema.certifierRemovals.organizationId, DEC_ORG_ID), eq(schema.certifierRemovals.id, removal.removalId)));
+      removalText = `Removal ${removalCode}, Jan 1 to Mar 31, 2026`;
       await db.transaction(async (tx) => {
         await tx.update(schema.certifierRemovals)
           .set({ startedOn: "2026-01-01", completedOn: "2026-03-31" })
@@ -101,8 +105,8 @@ test.describe("Record locks on screen", () => {
       await waitForSideSheet(page);
       const sheet = page.getByRole("dialog");
       await expect(sheet.locator('[data-record-lock="sent"]')).toHaveText("Sent");
-      await expect(sheet.getByText("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.")).toBeVisible();
-      await expect(sheet.getByRole("link", { name: "Removal Jan 1 to Mar 31, 2026" }).first())
+      await expect(sheet.getByText(`Nothing can be changed, because this was sent to Isometric with ${removalText}.`)).toBeVisible();
+      await expect(sheet.getByRole("link", { name: removalText }).first())
         .toHaveAttribute("href", new RegExp(`removal=${removal.removalId}`));
       await expect(sheet.getByRole("button", { name: "Edit Sample" })).toHaveCount(0);
     } finally {
