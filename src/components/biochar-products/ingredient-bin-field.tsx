@@ -138,6 +138,8 @@ interface IngredientBinFieldProps {
   previews?: readonly AffectedStockPreview[];
   /** False while the projection refetches, failed or refuses any bin. */
   previewsAvailable?: boolean;
+  /** The saved product being edited; its own draw is left out of the moisture estimate. */
+  productId?: string;
 }
 
 /** This ingredient's bin in the projection, matched on the selected bin. */
@@ -163,6 +165,7 @@ export function IngredientBinField({
   allocationFrozen = false,
   previews,
   previewsAvailable = false,
+  productId,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
 
@@ -262,7 +265,7 @@ export function IngredientBinField({
           </FormField>
         )}
       />
-      <IngredientMoistureField control={control} index={row.index} frozen={allocationFrozen} disabled={isSubmitting} />
+      <IngredientMoistureField control={control} index={row.index} frozen={allocationFrozen} disabled={isSubmitting} productId={productId} />
       <div className="md:col-span-2">
         <IngredientMassSplit
           control={control}

@@ -1,3 +1,5 @@
+import { retryTransaction } from '@/lib/db/transaction-retry';
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { isPgUniqueViolation } from '@/db/errors';
@@ -40,7 +42,7 @@ export interface CorrectFeedstockLossInput {
 /** Restore exactly one recorded loss, optionally replacing it with a new loss. */
 export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedstockLossInput): Promise<BinMovement> {
   requireOrgScope(ctx);
-  return db.transaction(async tx => {
+  return retryTransaction(() => db.transaction(async tx => {
     if (input.replacement) {
       if (!input.replacement.occurredAt || !Number.isFinite(input.replacement.occurredAt.getTime())) {
         throw new SafeError('Enter the date and time.');
@@ -174,8 +176,10 @@ export async function correctFeedstockLoss(ctx: OrgContext, input: CorrectFeedst
       });
     }
     await assertFeedstockBinLanesNotNegative(ctx, tx, [input.storageLocationId], 'save');
+    await reallocateRunsForBins(ctx, tx, [input.storageLocationId], { earliestEventAt: new Date(Math.min(original.occurredAt!.getTime(), input.replacement?.occurredAt.getTime() ?? Infinity)), eventTie: input.replacement && input.replacement.occurredAt < original.occurredAt!
+      ? { recordedAt: saved.createdAt, id: saved.id } : { recordedAt: original.createdAt, id: original.id } });
     return saved;
-  }).catch(async (error: unknown) => {
+  })).catch(async (error: unknown) => {
     if (!isPgUniqueViolation(error, REQUEST_KEY_CONSTRAINT)) throw error;
     // The failed transaction has rolled back before this conflict lookup.
     const [bin] = await db.select({ code: storageLocations.code }).from(storageLocations).where(and(

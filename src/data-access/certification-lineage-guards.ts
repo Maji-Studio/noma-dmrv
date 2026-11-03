@@ -108,7 +108,7 @@ function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarge
 }
 
 /** Recomputed on each lineage read, including the read under artifact locks. */
-async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select">, target: CertifiedLineageTarget): Promise<SQL> {
+async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, target: CertifiedLineageTarget): Promise<SQL> {
   if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
   const owner = (await getFeedstockTransportOwners(ctx, [target.entityId], tx)).get(target.entityId);
   return transportTargetCondition(ctx, target, owner);

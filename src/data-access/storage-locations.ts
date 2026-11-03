@@ -1,3 +1,5 @@
+import { applyFeedstockMethodChange } from './feedstock-bin-method';
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
@@ -13,6 +15,7 @@ import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
+  feedstockBinMethodChanges,
   facilities,
   feedstockTypes,
   biocharProducts,
@@ -47,6 +50,7 @@ import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
+  FEEDSTOCK_METHOD_HISTORY_BLOCKER,
 } from "./storage-location-references";
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 import type {
@@ -608,7 +612,13 @@ export async function updateStorageLocation(
     }
 
     assertRecordLockFields(recordLock, existing, data);
-    const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
+    const feedstockMethod = effectiveType === 'feedstock_bin' && existing.type === 'feedstock_bin'
+      ? await applyFeedstockMethodChange(ctx, tx, existing, data) : undefined;
+    const stockMode = effectiveType === 'feedstock_bin'
+      ? existing.type === 'feedstock_bin'
+        ? feedstockMethod!.stockMode
+        : initialStockMode('feedstock_bin', data.stockMode)
+      : await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
     const dataWithoutNormalized: Partial<typeof data> = { ...data };
     delete dataWithoutNormalized.expectedVersion;
@@ -648,6 +658,9 @@ export async function updateStorageLocation(
       );
     }
 
+    if (feedstockMethod?.effectiveAt) {
+      await reallocateRunsForBins(ctx, tx, [storageLocationId], { earliestEventAt: feedstockMethod.effectiveAt });
+    }
     return updated;
   });
 }
@@ -828,7 +841,7 @@ export async function deleteStorageLocation(
     assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
     const blockers = storageLocationBlockers(
-      await countStorageLocationReferences(ctx, tx, storageLocationId),
+      (await countStorageLocationReferences(ctx, tx, storageLocationId)).filter(reference => reference.blocker !== FEEDSTOCK_METHOD_HISTORY_BLOCKER),
     );
 
     if (blockers.length > 0) {
@@ -837,6 +850,9 @@ export async function deleteStorageLocation(
       );
     }
 
+    await tx.delete(feedstockBinMethodChanges).where(and(
+      eq(feedstockBinMethodChanges.organizationId, ctx.organizationId), eq(feedstockBinMethodChanges.storageLocationId, storageLocationId),
+    ));
     await tx
       .delete(storageLocations)
       .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));

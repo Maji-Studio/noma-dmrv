@@ -48,6 +48,7 @@ const STORED_ROW = {
   id: FEEDSTOCK_ID,
   version: 1,
   status: "available",
+  createdAt: new Date("2026-01-01T00:00:00Z"),
   deliveryDate: new Date("2026-03-01T00:00:00Z"),
   storageLocationId: "bin",
   facilityId: "facility",
@@ -126,7 +127,7 @@ describe("updateFeedstockInTransaction", () => {
       updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual({ ...ENRICHED_ROW, hasUsableTransportLeg: false, transportLegDistanceSource: null });
     expect(tx.update).toHaveBeenCalled();
-    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], { earliestDeliveryDate: STORED_ROW.deliveryDate, change: { mutation: "update", subject: "feedstock" } });
+    expect(reallocateRunsForBins).toHaveBeenCalledWith(ctx, tx, ["bin", "bin"], { earliestDeliveryDate: STORED_ROW.deliveryDate, eventTie: { recordedAt: STORED_ROW.createdAt, id: STORED_ROW.id }, change: { mutation: "update", subject: "feedstock" } });
     // Every read, including the locked existence check, stays on tx.
     expect(globalRead).not.toHaveBeenCalled();
   });

@@ -103,15 +103,74 @@ export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<OutputBinType, Record<Output
   },
 };
 
-/** Only biochar and product bins choose a stock mode. */
+/** Feedstock bin draw method, in the operator's words: Mass weighted is the mix mode; Oldest and Newest first are the split orders. */
+export const FEEDSTOCK_MASS_WEIGHTED_LABEL = "Mass weighted";
+export const FEEDSTOCK_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
+  split: "In order",
+  mix: FEEDSTOCK_MASS_WEIGHTED_LABEL,
+};
+
+/** Draw method card captions for a feedstock bin: what stays apart or blends, and what a draw takes. */
+export const FEEDSTOCK_STOCK_MODE_DESCRIPTIONS: Record<OutputStockMode, string> = {
+  split: "A draw empties one delivery before it starts the next.",
+  mix: "All deliveries count as one pile. A draw takes from each delivery in proportion to what it still holds.",
+};
+
+export const FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS: Record<OutputDrawOrder, string> = {
+  oldest_first: "By delivery date, earliest first.",
+  newest_first: "By delivery date, latest first.",
+};
+
+/** Hints behind the feedstock bin form's (i). */
+export const FEEDSTOCK_STOCK_MODE_HINT =
+  "Sets which deliveries each production run, product ingredient and lost mass takes from. A credit batch counts transport only for deliveries its runs took from. Entries already saved keep their method.";
+export const FEEDSTOCK_MERGE_TIME_HINT =
+  "Set a time after the bin's last recorded movement.";
+
+/** Biochar and product bins use the output Stock mode; feedstock bins have their own Draw method. */
 export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
   return type === "biochar_bin" || type === "product_bin";
 }
 
-const MIX_OUTPUT_BIN_MESSAGE = "Only biochar and product bins can hold one mixed pile.";
 
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
 export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
+/** Feedstock bins hold deliveries, not batches. */
+export const FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE = "Enter when mass weighted draws start.";
+/** The feedstock field name; the server refusals use the same words. */
+export const FEEDSTOCK_MERGE_TIME_LABEL = "Mass weighted from";
+/** Output bins keep their wording as on staging. */
+const OUTPUT_STOCK_MODE_HINT =
+  "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
+const OUTPUT_MERGE_TIME_HINT =
+  "Draws from this time on take every batch in proportion. Entries already saved keep their shares.";
+
+/** Form wording per lane: the feedstock Draw method, or the output bin Stock mode. */
+export const STOCK_MODE_FORM_COPY = {
+  feedstock: {
+    modeLabel: "Draw method",
+    modeHint: FEEDSTOCK_STOCK_MODE_HINT,
+    unmixHelper: "Only an empty bin can switch to In order.",
+    mergedHelper: "Switching back to In order needs an empty bin.",
+    orderLabel: "Draw order",
+    orderHint: undefined,
+    mergeLabel: FEEDSTOCK_MERGE_TIME_LABEL,
+    mergeHint: FEEDSTOCK_MERGE_TIME_HINT,
+    mergeRequired: FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE,
+  },
+  output: {
+    modeLabel: "Stock mode",
+    modeHint: OUTPUT_STOCK_MODE_HINT,
+    unmixHelper: "Only an empty bin can switch to split.",
+    mergedHelper: "Switching back to split needs an empty bin.",
+    orderLabel: "Default draw order",
+    orderHint: "Which sub-bin a draw takes first. You can change the order for any draw.",
+    mergeLabel: "Merged at",
+    mergeHint: OUTPUT_MERGE_TIME_HINT,
+    mergeRequired: MERGE_TIME_REQUIRED_MESSAGE,
+  },
+} as const;
+
 const mergedAtSchema = stockEventInstantSchema(MERGE_TIME_REQUIRED_MESSAGE).or(z.literal("")).nullable().optional();
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
@@ -170,9 +229,6 @@ export const storageLocationFormSchema = z.object({
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
   }
-  if (data.stockMode === "mix" && !isOutputBinType(data.type)) {
-    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
-  }
   if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
     ctx.addIssue({
       code: "custom",
@@ -223,9 +279,6 @@ export const updateStorageLocationSchema = z.object({
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
-  }
-  if (data.stockMode === "mix" && data.type && !isOutputBinType(data.type)) {
-    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
   }
   // Partial update: only flag an explicit clear (null). When feedstockTypeId is
   // omitted, the data-access layer validates the invariant against the merged

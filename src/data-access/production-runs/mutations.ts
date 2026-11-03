@@ -784,10 +784,11 @@ export async function updateProductionRunInTransaction(
           productionRunId,
           facilityId: lockedTargetFacilityId,
           draws: normalizedFeedstockDraws,
+          earliestEventAt: new Date(Math.min(locked.startTime.getTime(), lockedTargetStartTime.getTime())),
           transportOwnershipFreeze,
         });
-      } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId) {
-        await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId, transportOwnershipFreeze });
+      } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId || lockedTargetStatus !== locked.status) {
+        await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId, earliestEventAt: new Date(Math.min(locked.startTime.getTime(), lockedTargetStartTime.getTime())), transportOwnershipFreeze });
       }
 
       const savedDraws = feedstockDrawsChanged

@@ -45,6 +45,7 @@ export function useEntityOptions(params: UseEntityOptionsParams) {
 export function useEntityById(
   entityType: EntityType,
   id: string | undefined,
+  // Ingredient estimates accept occurredAt, drawWetKg (string kg), and excludeProductId.
   // Per-caller derivation params (e.g. biocharProduct's excludeOrderId);
   // part of the query key so two callers with different exclusions never
   // share a cached figure.

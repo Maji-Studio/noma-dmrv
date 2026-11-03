@@ -26,6 +26,7 @@ import type {
 } from "@/schemas/bin-movements";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 import { unwrap } from "@/hooks/types";
 
 /** Client-side carrier for a structured loss action field error. */
@@ -102,6 +103,7 @@ function useInvalidateAfterMovement() {
       queryKey: stockAvailabilityKeys.all,
     });
     invalidateStockEntityQueries(queryClient, "binMovement");
+    invalidateAfterFeedstockReplan(queryClient);
   };
 }
 

@@ -182,7 +182,7 @@ export async function getEntityById(
   id: string,
   // Same idea as getEntities' filterBy; only adapters that derive
   // per-caller figures (biocharProduct's remaining stock) consume it.
-  filterBy?: { excludeOrderId?: string; occurredAt?: string },
+  filterBy?: { excludeOrderId?: string; occurredAt?: string; excludeProductId?: string; drawWetKg?: number },
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   switch (entityType) {
@@ -201,7 +201,7 @@ export async function getEntityById(
     case "operator":
       return getOperatorById(ctx, id);
     case "storageLocation":
-      return getStorageLocationById(ctx, id, undefined, filterBy?.occurredAt);
+      return getStorageLocationById(ctx, id, undefined, filterBy?.occurredAt, filterBy);
     case "vehicle":
       return getVehicleById(ctx, id);
     case "feedstockType":

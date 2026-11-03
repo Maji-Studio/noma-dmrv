@@ -27,13 +27,11 @@ import {
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
-import { productionRunKeys } from "./use-production-runs";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
-import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 
 // ============================================
 // Query Keys
@@ -123,14 +121,11 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -157,14 +152,11 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.all });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -188,11 +180,9 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {

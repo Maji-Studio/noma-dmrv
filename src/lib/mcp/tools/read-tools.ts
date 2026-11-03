@@ -80,7 +80,7 @@ const guidance: Record<ResourcePath, string> = {
   facilities: "Call whoami first for the credential's active facilities and local dates.",
   suppliers: `${readDescriptions.suppliers} Use the supplier id with find_supplier_locations.`,
   "feedstock-types": "Use the feedstock type id to identify the delivered material.",
-  "storage-locations": "Call whoami first for a facility id to pass as facilityId. Capacity is in kilograms.",
+  "storage-locations": `${readDescriptions.storageLocations} Call whoami first for a facility id to pass as facilityId. Capacity is in kilograms.`,
   vehicles: "Use the vehicle id to identify the intake vehicle.",
   drivers: "Use the driver id to identify the driver.",
   feedstocks: `Call whoami first for facility ids. ${FEEDSTOCK_UNITS} ${FEEDSTOCK_DATES}`,

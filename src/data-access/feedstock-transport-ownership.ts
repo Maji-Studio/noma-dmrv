@@ -10,9 +10,10 @@ import { requireOrgScope } from "./utils";
 async function loadEligibleDraws(
   ctx: OrgContext,
   ids: string[],
-  executor: Pick<DbTransaction, "select">,
+  executor: Pick<DbTransaction, "select" | "selectDistinct">,
   options: { includeArchived?: boolean } = {},
 ) {
+  requireOrgScope(ctx);
   return executor.select({
     feedstockId: productionRunFeedstocks.feedstockId,
     runId: productionRuns.id,
@@ -46,7 +47,7 @@ async function loadEligibleDraws(
 export async function getFeedstockTransportOwners(
   ctx: OrgContext,
   feedstockIds: string[],
-  executor: Pick<DbTransaction, "select"> = db,
+  executor: Pick<DbTransaction, "select" | "selectDistinct"> = db,
   options: { includeArchived?: boolean } = {},
 ): Promise<Map<string, string>> {
   requireOrgScope(ctx);
@@ -59,7 +60,7 @@ export async function getFeedstockTransportOwners(
 export async function getFeedstockTransportOwnerBatches(
   ctx: OrgContext,
   feedstockIds: string[],
-  executor: Pick<DbTransaction, "select"> = db,
+  executor: Pick<DbTransaction, "select" | "selectDistinct"> = db,
   options: { includeArchived?: boolean } = {},
 ): Promise<Map<string, CountedOnBatch[]>> {
   requireOrgScope(ctx);

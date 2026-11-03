@@ -41,6 +41,7 @@ import { addLabSampleWritePaths } from "./lab-sample-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"], { list: string; get: string }>> = {
+  "storage-locations": { list: `${readDescriptions.list} ${readDescriptions.storageLocations}`, get: readDescriptions.storageLocations },
   formulations: { list: `${readDescriptions.list} ${readDescriptions.formulations}`, get: readDescriptions.formulations },
   applications: { list: `${readDescriptions.list} ${readDescriptions.applications}`, get: readDescriptions.applications },
   deliveries: { list: `${readDescriptions.list} ${readDescriptions.deliveries}`, get: readDescriptions.deliveries },

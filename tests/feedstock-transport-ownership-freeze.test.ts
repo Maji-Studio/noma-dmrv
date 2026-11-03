@@ -198,8 +198,26 @@ it.each(MODES)("provenance reallocation removes the old feedstock id: %s", async
     await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
     await db.update(feedstocks).set({ deliveryDate: new Date("2027-01-01T00:00:00Z") }).where(eq(feedstocks.id, a.feedstockId));
     try {
-      await expectFreeze(mode, db.transaction(tx => reallocateRunsForBins(ctx, tx, [a.feedstockBinId], { onlyRunId: a.productionRunId })),
-        a, mode === "sent-moves" ? a.productionRunId : b.productionRunId);
+      const savedShares = () => db.select().from(productionRunFeedstocks).where(and(
+        eq(productionRunFeedstocks.organizationId, TEST_ORG_ID),
+        sql`${productionRunFeedstocks.productionRunId} in (${a.productionRunId}, ${b.productionRunId})`,
+      )).orderBy(productionRunFeedstocks.id);
+      const before = await savedShares();
+      const replan = db.transaction(tx => reallocateRunsForBins(ctx, tx, [a.feedstockBinId], { onlyRunId: a.productionRunId }));
+      if (mode === 'sent-moves') {
+        // Replanning B hits its Sent lineage guard before ownership can be checked.
+        await expect(replan).rejects.toMatchObject({ code: 'certification_locked' });
+        expect(await savedShares()).toEqual(before);
+        expect(await owner(a)).toBe(a.productionRunId);
+        expect((await getFeedstockTransportOwners(ctx, [replacementId])).has(replacementId)).toBe(false);
+      } else if (mode === 'unsent-moves') {
+        await replan;
+        expect(await owner(a)).toBeUndefined();
+        expect((await getFeedstockTransportOwners(ctx, [replacementId])).get(replacementId)).toBe(a.productionRunId);
+        expect((await savedShares()).filter(row => row.feedstockId === a.feedstockId)).toEqual([]);
+      } else {
+        await expectFreeze(mode, replan, a, b.productionRunId);
+      }
     } finally {
       await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, replacementId));
       await db.delete(feedstocks).where(eq(feedstocks.id, replacementId));
@@ -635,6 +653,8 @@ it("allows a same-batch owner handoff without acquiring the Sent lineage artifac
 
 it.each([false, true])("intake rebuild compares all runs together, batch changes=%s", async changesBatch => {
   await withPair("sent-moves", async (a, b) => withExtraRun(a, async id => {
+    // This owner-handoff scenario needs both deliveries touched; FIFO may leave one untouched.
+    await db.update(storageLocations).set({ stockMode: "mix" }).where(eq(storageLocations.id, a.feedstockBinId));
     const [stock] = await db.select().from(feedstocks).where(eq(feedstocks.id, a.feedstockId));
     const replacementId = crypto.randomUUID();
     await db.insert(feedstocks).values({ ...stock, id: replacementId, code: `E2E-FREEZE-${replacementId}` });
