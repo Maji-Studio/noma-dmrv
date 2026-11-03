@@ -1,4 +1,5 @@
 import type { LinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { archivedFacilityHref } from "@/lib/record-links";
 
 /**
  * A sheet whose record cannot change here at all (`EntitySideSheet`'s
@@ -7,7 +8,10 @@ import type { LinkedRecordFacility } from "@/hooks/use-linked-record-facility";
  */
 export type SheetReadOnly = {
   tone: "info" | "warning";
+  /** The whole sentence as plain text. */
   message: string;
+  /** The facility the sentence opens with; the notice links its name. */
+  facility?: { name: string; href: string };
   retry?: { run: () => void; running: boolean };
 };
 
@@ -25,7 +29,11 @@ export function linkedRecordReadOnly(
   const readOnly = linked.readOnly;
   if (!readOnly || !record?.facilityId || record.facilityId !== readOnly.facilityId) return undefined;
   if (readOnly.reason === "archived") {
-    return { tone: "info", message: `${readOnly.facilityName} is archived, so this ${subject} is read-only.` };
+    return {
+      tone: "info",
+      message: `${readOnly.facilityName} is archived, so this ${subject} is read-only.`,
+      facility: { name: readOnly.facilityName, href: archivedFacilityHref(readOnly.facilityId) },
+    };
   }
   return {
     tone: "warning",

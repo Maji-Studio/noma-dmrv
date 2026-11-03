@@ -99,7 +99,7 @@ describe("emission lines on a read-only batch", () => {
         />
       </QueryClientProvider>,
     );
-    expect(screen.getByText(/Waiting for a Removal\./)).toBeTruthy();
+    expect(screen.getByText(readOnly ? /Not in any Removal\./ : /Waiting for a Removal\./)).toBeTruthy();
     expect(!!screen.queryByRole("link", { name: "New Removal" })).toBe(linked);
     cleanup();
   });

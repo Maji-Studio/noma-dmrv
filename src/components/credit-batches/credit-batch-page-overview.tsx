@@ -134,7 +134,7 @@ function OpenItemRow({ item }: { item: CreditBatchOpenItem }) {
 }
 
 function OpenItemGroups() {
-  const { openItems, blockingCount, todosError } = useCreditBatchPage();
+  const { openItems, blockingCount, todosError, readOnly } = useCreditBatchPage();
   const shown = GROUP_ORDER.filter((group) => openItems[group].length > 0);
   if (shown.length === 0) {
     // Until the to-do read answers, "nothing open" would be a guess. A
@@ -154,7 +154,8 @@ function OpenItemGroups() {
               {GROUPS[group].title}
               <span className={cn("tabular-nums", MUTED_TEXT)}>{openItems[group].length}</span>
             </h3>
-            <span className={cn("body-caption", MUTED_TEXT)}>{GROUPS[group].help}</span>
+            {/* Each help line describes the work ahead; a read-only batch has none. */}
+            {!readOnly && <span className={cn("body-caption", MUTED_TEXT)}>{GROUPS[group].help}</span>}
           </div>
           <ul className="flex flex-col">
             {openItems[group].map((item) => (

@@ -11,13 +11,13 @@ import { Fragment } from "react";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import Link from "next/link";
 import { ArrowBendDownRightIcon, CheckIcon, ClockIcon } from "@phosphor-icons/react/dist/ssr";
-import { lateEntryView, waitingDetailCopy, type LateEntryDestination, type LateEntryFacts } from "@/lib/certification/late-entry-view";
+import { READ_ONLY_CARRY_DETAILS, READ_ONLY_WAITING_LEAD } from "@/lib/certification/emission-entry-carry";
+import { lateEntryView, type LateEntryDestination, type LateEntryFacts } from "@/lib/certification/late-entry-view";
 import { cn } from "@/lib/utils";
 import { useCanManageTemplates } from "./template-permission";
 
 const ICON = 14;
 const ACTION_LINK = "inline-flex min-h-44 items-center font-medium md:min-h-24 text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current";
-const WAITING_LEAD = "Waiting for a Removal.";
 const LINE = "flex items-start gap-x-4 body-caption";
 
 /** Rows are click targets; a link inside must not also open the row. */
@@ -53,7 +53,7 @@ export function LateEntryDestinationLine({ destination, className, withAction = 
   readOnly?: boolean;
 }) {
   if (destination.kind === "waiting") {
-    const text = readOnly ? `${WAITING_LEAD} ${waitingDetailCopy(destination.reason).detail}` : destination.text;
+    const text = readOnly ? `${READ_ONLY_WAITING_LEAD} ${READ_ONLY_CARRY_DETAILS[destination.reason]}` : destination.text;
     return (
       <span className={cn(LINE, "flex-col gap-y-2 text-[var(--st-wait)]", className)}>
         <span className="flex items-start gap-x-4">

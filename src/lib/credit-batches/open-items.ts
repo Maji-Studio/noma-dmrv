@@ -29,7 +29,7 @@ import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
 import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
-import { lateEntryView, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
+import { lateEntryView, readOnlyWaitingDetail, readOnlyWaitingEntryTitle, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
@@ -54,6 +54,8 @@ export interface CreditBatchOpenItem {
   titleAfterCode?: string;
   /** What is the case. A read-only batch shows this alone. */
   detail?: string;
+  /** The fact a read-only batch shows instead of `detail` (a to-do whose editable text is only a repair step, or whose wording differs). */
+  readOnlyDetail?: string;
   /** Unsplit source text may include repair steps; hide it on a read-only batch. */
   detailMayInstruct?: true;
   /** What to do about it; dropped on a read-only batch. Shown after `detail`. */
@@ -312,7 +314,9 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       check.push({
         id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
         title: waitingEntryTitle(line.displayName, entry.occurredOn),
+        readOnlyTitle: readOnlyWaitingEntryTitle(line.displayName, entry.occurredOn),
         detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason.detail}` : reason.detail,
+        readOnlyDetail: readOnlyWaitingDetail(view.destination.reason, view.recordedAfter?.removalCode),
         ...(reason.instruction ? { instruction: reason.instruction } : {}),
         target: view.destination.action ? { href: view.destination.action.href } : null,
       });
@@ -351,6 +355,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       title: certCheckLabel(healthCheck),
       detail,
       ...(!copy ? { detailMayInstruct: true as const } : {}),
+      ...(copy?.readOnlyDetail ? { readOnlyDetail: copy.readOnlyDetail } : {}),
       ...(instruction ? { instruction } : {}),
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,
@@ -397,6 +402,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         id: `emission:${line.componentId}`,
         title: `${line.displayName}: ${EMISSION_LINE_STATE_LABELS.needsReview}`,
         ...(!copy ? { detailMayInstruct: true as const } : {}),
+        ...(copy?.readOnlyDetail ? { readOnlyDetail: copy.readOnlyDetail } : {}),
         detail: memberText ? undefined : copy ? copy.detail : line.blocker?.message,
         ...((memberText ?? copy?.instruction) ? { instruction: memberText ?? copy?.instruction } : {}),
         target,
@@ -426,7 +432,10 @@ export function buildCreditBatchWaitingItems(pageModel: CreditBatchPageModel | u
     waiting.push({
       id: "not-applied",
       title: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced but not applied yet`,
+      readOnlyTitle: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced and not applied`,
       detail: "It can join a Removal once its application is recorded.",
+      // A future action: a read-only batch states no such thing.
+      detailMayInstruct: true,
       target: { tab: "removals" },
     });
   }

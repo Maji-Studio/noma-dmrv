@@ -68,6 +68,16 @@ export function recordHref(
   return `${path}${query ? `?${query}` : ""}`;
 }
 
+/**
+ * The Facilities page on the Archived view with one archived facility's sheet
+ * open. The `facility` param cannot carry it: the facility provider rewrites
+ * it to a working (active) facility, and an archived one never is.
+ */
+export const ARCHIVED_FACILITY_PARAM = "archivedFacility";
+export function archivedFacilityHref(id: string): string {
+  return `${RECORD_LINKS.facility.path}?${new URLSearchParams({ [ARCHIVED_FACILITY_PARAM]: id })}`;
+}
+
 // Aliases kept for existing query readers; the table owns their values.
 export const APPLICATION_DEEP_LINK_PARAM = RECORD_LINKS.application.param;
 export const BIOCHAR_PRODUCT_DEEP_LINK_PARAM = RECORD_LINKS.biocharProduct.param;
