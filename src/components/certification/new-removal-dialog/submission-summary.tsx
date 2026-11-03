@@ -30,6 +30,8 @@ import {
   type SubmissionFactsInput,
   type SubmitState,
 } from "./submission-facts";
+import { SharedSourceFileNotes } from "./shared-source-file-notices";
+import type { SharedSourceFile } from "@/lib/certification/shared-source-files";
 import { SubmissionChecks } from "./submission-checks";
 import { Notice } from "@/components/ui/notice";
 
@@ -40,6 +42,8 @@ type SubmissionSummaryProps = SubmissionFactsInput & {
   facilityName: string;
   /** The component table's rows, to name each blocked component in the Notice. */
   table: ComponentTable;
+  /** Files that back evidence of different kinds (#1531); advisory, shown under Submission notes. */
+  sharedFiles?: readonly SharedSourceFile[];
 };
 
 function StateIcon({ state }: { state: SubmitState }) {
@@ -82,6 +86,7 @@ export function SubmissionSummary({
   facilityId,
   facilityName,
   table,
+  sharedFiles = [],
   ...factsInput
 }: SubmissionSummaryProps) {
   const facts = buildSubmissionFacts(factsInput);
@@ -209,11 +214,12 @@ export function SubmissionSummary({
         <Notice key={advisory} tone="warning">{advisory}</Notice>
       ))}
 
-      {(facts.advisories.length > 0 || facts.warnings.length > 0) && (
+      {(facts.advisories.length > 0 || facts.warnings.length > 0 || sharedFiles.length > 0) && (
         <Notice tone="warning" title="Submission notes">
           <div className="flex flex-col gap-8">
             <RemovalAdvisoryList advisories={facts.advisories} facilityId={facilityId} memberBatchIds={memberBatchIds} />
             <CompilationWarnings warnings={facts.warnings} />
+            <SharedSourceFileNotes files={sharedFiles} />
           </div>
         </Notice>
       )}
