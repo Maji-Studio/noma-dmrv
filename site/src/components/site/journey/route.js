@@ -2,6 +2,8 @@
 // shared link opens the same card whether it was picked on the chain, in a branch, or on the map/graph:
 //   #[graph]-[low|full]-[summary]-<chain name>    a record on the main chain, e.g. #graph-field
 //   #[graph]-[low|full]-[summary]-r.<record id>   any other record, e.g. #r.PR-26-008 (the id is last)
+//   #[graph]-[low|full]-[summary]-<chain name>-r.<record id>   the same, opened from a chain card other
+//       than the default one, e.g. #run-r.PR-26-008, so the trail and the way back keep that card
 // Older links also hold a branch token (b1, b0x3); they are read as the record they pointed at.
 import { CHAIN, HASH, HOME, R } from "./model.js";
 
@@ -9,14 +11,21 @@ const REC_PREFIX = "r.";
 const REC_PATTERN = /(?:^|-)r\.(.+)$/;
 const BRANCH_PATTERN = /^b(\d+)(?:x(\d+))?$/;
 
-/** Hash for the view flags and the selected record. `snap` is "" when the sheet snap is not recorded. */
-export function buildHash({ mode, snap, summary, recordId }) {
+const isRecord = (id) => Object.hasOwn(R, id); // R is a plain object: "constructor" is not a record
+
+/** Hash for the view flags and the selected record. `snap` is "" when the sheet snap is not recorded;
+ *  `rootIdx` is the chain card the selection was opened from. */
+export function buildHash({ mode, snap, summary, recordId, rootIdx = HOME }) {
   const t = [];
   if (mode === "graph") t.push("graph");
   if (snap && snap !== "mid") t.push(snap);
   if (summary) t.push("summary");
   const ci = CHAIN.indexOf(recordId);
-  t.push(ci >= 0 ? HASH[ci] : R[recordId] ? `${REC_PREFIX}${recordId}` : HASH[HOME]);
+  if (ci >= 0) t.push(HASH[ci]);
+  else if (isRecord(recordId)) {
+    if (rootIdx !== HOME && HASH[rootIdx]) t.push(HASH[rootIdx]);
+    t.push(`${REC_PREFIX}${recordId}`);
+  } else t.push(HASH[HOME]);
   return `#${t.join("-")}`;
 }
 
@@ -38,6 +47,6 @@ export function parseHash(hash) {
     snap: t.includes("full") ? "full" : t.includes("low") ? "low" : "mid",
     summary: t.includes("summary") || t.includes("batch"), // "batch" was a chain step before
     chainIdx,
-    recordId: ci < 0 && R[selected] ? selected : null,
+    recordId: ci < 0 && isRecord(selected) ? selected : null,
   };
 }

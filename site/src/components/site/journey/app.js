@@ -59,7 +59,7 @@ function setMode(m, quiet) {
 /* ---------- hash routes: #graph-full-summary-field, #r.PR-26-008 (see route.js) ---------- */
 function setHash() {
   if (st.booting) return;
-  const hash = buildHash({ mode: st.mode, snap: desk() ? "" : st.snap, summary: !$("sum").hidden, recordId: lvl().items[st.ai] });
+  const hash = buildHash({ mode: st.mode, snap: desk() ? "" : st.snap, summary: !$("sum").hidden, recordId: lvl().items[st.ai], rootIdx: st.levels[0].idx });
   try { history.replaceState(null, "", hash); } catch { /* a sandboxed frame may refuse */ }
 }
 function route(h) {

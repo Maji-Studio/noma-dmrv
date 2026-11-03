@@ -34,6 +34,15 @@ describe("journey hash round trip", () => {
     expect(restored(hash)).toBe(OFF_CHAIN_RUN);
   });
 
+  it("keeps the chain card an off-chain record was opened from", () => {
+    const rootIdx = HASH.indexOf("run");
+    const hash = buildHash({ ...FIELD_FLAGS, recordId: OFF_CHAIN_RUN, rootIdx });
+    expect(hash).toBe("#run-r.PR-26-008");
+    expect(parseHash(hash)).toMatchObject({ chainIdx: rootIdx, recordId: OFF_CHAIN_RUN });
+    expect(buildHash({ ...FIELD_FLAGS, recordId: OFF_CHAIN_RUN, rootIdx: HOME })).toBe("#r.PR-26-008");
+    expect(parseHash("#r.PR-26-008")).toMatchObject({ chainIdx: HOME, recordId: OFF_CHAIN_RUN });
+  });
+
   it("restores a record picked more than two levels deep", () => {
     // The hash carries the record, not the path of branches that led to it.
     const hash = buildHash({ mode: "graph", snap: "full", summary: true, recordId: DEEP_RECORD });
@@ -59,14 +68,12 @@ describe("journey hash compatibility", () => {
   it("reads the old branch tokens as the record they pointed at", () => {
     const si = HASH.indexOf("run");
     const br = R[CHAIN[si]].br[0];
-    const withoutIndex = parseHash(`#${HASH[si]}-b0`) as Parsed;
-    expect(withoutIndex.recordId ?? CHAIN[withoutIndex.chainIdx]).toBe(br.ids[0]);
-    const withIndex = parseHash(`#${HASH[si]}-b0x1`) as Parsed;
-    expect(withIndex.recordId ?? CHAIN[withIndex.chainIdx]).toBe(br.ids[1]);
+    expect(restored(`#${HASH[si]}-b0`)).toBe(br.ids[0]);
+    expect(restored(`#${HASH[si]}-b0x1`)).toBe(br.ids[1]);
   });
 
   it("opens the default view for no hash, a map hash and unknown ids", () => {
-    for (const h of ["", "#", "#map", "#r.NOPE-1", "#nonsense", "#b9x9", "#r."]) {
+    for (const h of ["", "#", "#map", "#r.NOPE-1", "#r.constructor", "#r.__proto__", "#r.toString", "#nonsense", "#b9x9", "#r."]) {
       expect(parseHash(h)).toMatchObject({ chainIdx: HOME, recordId: null });
     }
     expect((parseHash("#graph-r.NOPE-1") as Parsed).mode).toBe("graph");
