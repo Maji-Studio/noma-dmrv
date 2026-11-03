@@ -4,19 +4,25 @@ import { expect, it } from "vitest";
 import { TABLE_LOCK_BARRIER_FILES } from "./helpers/table-lock-barrier-files";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const TEST_FILE = /\.test\.tsx?$/;
+// Vitest's default include, over the directories it collects from here.
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+const SCANNED_DIRECTORIES = ["src", "tests", "scripts"];
+// Playwright specs; Vitest excludes them.
+const PLAYWRIGHT_DIRECTORIES = new Set(["tests/e2e", "tests/visual"]);
 const TABLE_LOCK = /\block\s+table\b/i;
 
 function testFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return testFiles(path);
+    if (entry.isDirectory()) {
+      return PLAYWRIGHT_DIRECTORIES.has(relative(ROOT, path)) ? [] : testFiles(path);
+    }
     return entry.isFile() && TEST_FILE.test(path) ? [path] : [];
   });
 }
 
 const filesWithTableLocks = new Set(
-  ["src", "tests"].flatMap(directory => testFiles(join(ROOT, directory)))
+  SCANNED_DIRECTORIES.flatMap(directory => testFiles(join(ROOT, directory)))
     .filter(path => TABLE_LOCK.test(readFileSync(path, "utf8")))
     .map(path => relative(ROOT, path).replaceAll("\\", "/")),
 );
