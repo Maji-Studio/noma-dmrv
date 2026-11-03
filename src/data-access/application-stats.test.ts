@@ -126,4 +126,43 @@ describe("getApplicationStats whole-facility totals", () => {
       totalApplications: 0, totalBiocharAppliedTons: 0, totalBiocharAppliedDryTons: 0,
     });
   });
+
+  it("counts only applied rows in both masses", async () => {
+    const [order] = await db.insert(orders).values({
+      organizationId: fixture.ctx.organizationId,
+      facilityId: fixture.facility.id,
+      code: `E2E-APPLICATION-STATUS-ORDER-${fixture.tag}`,
+      customerId: fixture.customer.id,
+      customerLocationId: fixture.location.id,
+      formulationId: fixture.recipe.id,
+      orderDate: FIXTURE_DATE,
+      quantityKg: DELIVERY_WET_KG,
+      packaging: "loose",
+    }).returning();
+    const [delivery] = await db.insert(deliveries).values({
+      organizationId: fixture.ctx.organizationId,
+      facilityId: fixture.facility.id,
+      orderId: order.id,
+      code: `E2E-APPLICATION-STATUS-DELIVERY-${fixture.tag}`,
+      deliveryDate: FIXTURE_DATE,
+      storageLocationId: fixture.bin.id,
+      deliveredWetMassKg: DELIVERY_WET_KG,
+    }).returning();
+    const row = (status: "applied" | "delivered") => ({
+      organizationId: delivery.organizationId,
+      deliveryId: delivery.id,
+      code: `E2E-APPLICATION-STATUS-${status}-${fixture.tag}`,
+      applicationDate: FIXTURE_DATE,
+      biocharAppliedTons: APPLIED_TONS,
+      biocharAppliedDryTons: APPLIED_DRY_TONS,
+      fieldSizeHa: FIELD_SIZE_HA,
+      status,
+    });
+    // org-scope-ok: fixture insert; the values helper sets organizationId from the delivery
+    await db.insert(applications).values([row("applied"), row("delivered")]);
+    const stats = await getApplicationStats(fixture.ctx, { facilityId: fixture.facility.id });
+    expect(stats.totalApplications).toBe(APPLICATION_COUNT + 2);
+    expect(stats.totalBiocharAppliedTons).toBeCloseTo(totalTons(APPLICATION_COUNT + 1));
+    expect(stats.totalBiocharAppliedDryTons).toBeCloseTo(totalDryTons(APPLICATION_COUNT + 1));
+  });
 });

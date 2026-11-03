@@ -680,8 +680,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           title="Applied mass"
           value={
             <MassPair
-              wetKg={applicationTonsToKg(statsData?.totalBiocharAppliedTons ?? 0)}
-              dryKg={applicationTonsToKg(statsData?.totalBiocharAppliedDryTons ?? 0)}
+              wetKg={applicationTonsToKg(statsData?.totalBiocharAppliedTons)}
+              dryKg={applicationTonsToKg(statsData?.totalBiocharAppliedDryTons)}
               wetLabel={WET_PRODUCT_LABEL}
               dryLabel={DRY_BIOCHAR_LABEL}
             />

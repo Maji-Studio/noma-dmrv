@@ -7,7 +7,7 @@ import { requireOrgScope } from "./utils";
 
 export interface ApplicationStats {
   totalApplications: number;
-  /** Wet product applied (biochar plus manure and water). */
+  /** Wet product applied (biochar plus blend ingredients and water). */
   totalBiocharAppliedTons: number;
   /** Dry biochar in that product; the figure the dashboard reports as applied to soil. */
   totalBiocharAppliedDryTons: number;
@@ -27,10 +27,13 @@ export async function getApplicationStats(
     conditions.push(eq(deliveries.facilityId, filters.facilityId));
   }
 
+  // Same predicate as the dashboard's "Applied to soil": delivered rows are not yet on the soil.
+  const appliedOnly = eq(applications.status, "applied");
+
   const [stats] = await db.select({
     totalApplications: count(),
-    totalBiocharAppliedTons: sumNumeric(applications.biocharAppliedTons),
-    totalBiocharAppliedDryTons: sumNumeric(applications.biocharAppliedDryTons),
+    totalBiocharAppliedTons: sumNumeric(applications.biocharAppliedTons, appliedOnly),
+    totalBiocharAppliedDryTons: sumNumeric(applications.biocharAppliedDryTons, appliedOnly),
   })
     .from(applications)
     .innerJoin(deliveries, and(
