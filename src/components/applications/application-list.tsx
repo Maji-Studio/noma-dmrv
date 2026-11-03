@@ -21,7 +21,9 @@ import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
+import { DRY_BIOCHAR_LABEL, WET_PRODUCT_LABEL } from "@/components/biochar-products/product-composition-components";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -66,7 +68,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
-import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
+import { applicationTonsToKg, formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
 
 /** Record details an operator can add from the Columns menu. */
 const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
@@ -675,9 +677,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           isError={statsError}
         />
         <StatCard
-          title="Total biochar applied"
-          value={formatApplicationKgFromTons(statsData?.totalBiocharAppliedTons)}
-          description="Across all applications in this facility"
+          title="Applied mass"
+          value={
+            <MassPair
+              wetKg={applicationTonsToKg(statsData?.totalBiocharAppliedTons)}
+              dryKg={applicationTonsToKg(statsData?.totalBiocharAppliedDryTons)}
+              wetLabel={WET_PRODUCT_LABEL}
+              dryLabel={DRY_BIOCHAR_LABEL}
+            />
+          }
+          valueLayout="breakdown"
+          description="Only applications marked Applied"
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
           isError={statsError}

@@ -13,6 +13,7 @@ import { MASS_MOISTURE_LABELS, splitWetMass } from "@/lib/mass-moisture";
 
 export type CompositionComponent = ProductCompositionPart;
 
+export const WET_PRODUCT_LABEL = "Wet product";
 export const DRY_BIOCHAR_LABEL = "Dry biochar";
 /** The biochar input in the product's mass flow. */
 export const BIOCHAR_SOURCE_LABEL = "Biochar";
