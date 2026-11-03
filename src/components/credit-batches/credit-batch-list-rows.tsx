@@ -177,9 +177,9 @@ export function CreditBatchListRow({
       onClick={() => onOpen(creditBatch)}
     >
       <div className="flex min-w-0 flex-col gap-4 xl:contents">
-        {/* On a phone the code sets the wrap point: the feedstock name truncates first, and a state that still does not fit wraps below instead of running under the code. */}
+        {/* On a phone the code sets the wrap point: the feedstock name truncates first, and a state that still does not fit wraps below instead of running under the code. A named batch keeps min-w-0 so its name truncates instead. */}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-12 gap-y-4 xl:contents">
-          <div className="flex flex-1 items-baseline gap-8 xl:contents">
+          <div className={cn("flex flex-1 items-baseline gap-8 xl:contents", named && "min-w-0")}>
             <Link
               href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
               // The link navigates itself; the row's own click must not push a second time.
