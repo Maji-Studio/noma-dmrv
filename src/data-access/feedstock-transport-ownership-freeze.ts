@@ -64,8 +64,13 @@ export async function prepareFeedstockTransportOwnershipFreeze(
   feedstockIds: readonly string[],
   change: TransportOwnershipChange,
   enclosingScope?: TransportOwnershipFreezeScope,
+  options: { allowSentRewrite?: boolean } = {},
 ) {
   requireOrgScope(ctx);
+  if (options.allowSentRewrite) {
+    if (process.env.NODE_ENV === 'production') throw new DomainError('forbidden', 'Sent allocations cannot be rewritten in production.');
+    return async <T>(write: (scope: TransportOwnershipFreezeScope) => Promise<T>): Promise<T> => write(ENCLOSING_FREEZE);
+  }
   if (enclosingScope) return async <T>(write: (scope: TransportOwnershipFreezeScope) => Promise<T>): Promise<T> => write(enclosingScope);
   const ids = [...new Set(feedstockIds)].sort();
   // Serialize ownership writers before their snapshot. Joined scopes reuse the
@@ -99,7 +104,8 @@ export async function prepareFeedstockTransportOwnershipFreeze(
       throw new DomainError("certification_locked", withRecordLockGuidance(
         `Cannot ${change.mutation} this ${change.subject} because it would change which credit batch counts the transport legs of ${await feedstockLabel(ctx, tx, target.entityId)}, and a Removal that uses this feedstock is already sent.`,
         lock,
-      ));
+      ), { issues: [{ path: [], code: 'certification_locked', message: 'Sent transport ownership prevents this change.',
+        meta: { feedstockId: target.entityId, removalIds: lock.heldBy.map(holder => holder.id) } }] });
     }
     return result;
   };

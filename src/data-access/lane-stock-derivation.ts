@@ -1,3 +1,4 @@
+import { replayFeedstockBinStock } from './feedstock-bin-ledger';
 import { deletedProductIds } from './output-stock-active-movements';
 /**
  * Shared per-location stock derivation for the feedstock lane, plus the
@@ -15,6 +16,7 @@ import {
   biocharProducts,
   biocharProductSourceAllocations,
   feedstocks,
+  storageLocations,
   productionRunFeedstockDraws,
   productionRuns,
 } from "@/db/schema";
@@ -271,14 +273,16 @@ export async function deriveLaneStock(
       stock.feedstockIntakeWetKg -
       stock.feedstockConsumedWetKg +
       stock.feedstockMovementDeltaKg;
-    stock.feedstockEstimatedDryKg =
-      stock.feedstockStockWetKg === 0
-        ? 0
-        : stock.feedstockIntakeWetKg > 0
-          ? stock.feedstockStockWetKg *
-            (stock.feedstockIntakeDryKg / stock.feedstockIntakeWetKg)
-          : null;
   }
+  const bins = await executor.select({ id: storageLocations.id }).from(storageLocations)
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.type, 'feedstock_bin'),
+      inArray(storageLocations.id, options.storageLocationIds)));
+  await Promise.all(bins.map(async bin => {
+    const replay = await replayFeedstockBinStock(ctx, bin.id, executor, {
+      excludeProductId: options.excludeProductId, excludeRunId: options.excludeRunId,
+    });
+    byLocation.get(bin.id)!.feedstockEstimatedDryKg = replay.remainingDryKg;
+  }));
 
   return [...byLocation.values()];
 }

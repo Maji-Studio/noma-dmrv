@@ -254,3 +254,11 @@ with set null. Signing out does not disconnect an app. Revocation changes only
 the generation and consent; token rows survive until expiry cleanup. Grant
 creation explicitly uses the same instant for `created_at` and `last_used_at`;
 the database defaults also share the transaction timestamp.
+
+## Feedstock bin method history
+
+`feedstock_bin_method_changes` records each timed change of `stock_mode` and
+`draw_order`, with its previous pair, effective instant, actor and creation time.
+The composite `(storage_location_id, organization_id)` foreign key enforces bin
+ownership. Feedstock history does not use output-lane movements. Before the first
+change the previous pair applies; later events use the latest effective change.

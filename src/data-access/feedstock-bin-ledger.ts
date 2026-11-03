@@ -1,12 +1,14 @@
+import { assertFeedstockEmptyAtSwitch } from './feedstock-intake-boundary';
 import { deletedProductIds } from './output-stock-active-movements';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
-import { feedstockPileTimeline } from '@/lib/feedstock-pile';
+import { drawShares, feedstockMethodAt, replayFeedstockDraws, type FeedstockDrawShare } from '@/lib/feedstock-draw-replay';
+import { getFeedstockMethodChanges } from './feedstock-bin-method-history';
 import { findFeedstockLossBlocker, formatFeedstockLossLockReason } from '@/lib/feedstock-loss-lock';
 import { requireOrgScope } from './utils';
 import { formatUtcDate, startOfFacilityDay } from '@/lib/date-utils';
@@ -23,12 +25,12 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * stock-takes, each with the wet stock before and after it.
  *
  * Wet mass is the bin's stock currency. Saved run shares are subtracted from
- * their own batches. Draws without batch records are estimated pro rata over
- * stock present at each entry; dry composition uses each intake's dry-to-wet ratio.
+ * their own batches. Every other withdrawal follows the method in force at
+ * its instant; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db): Promise<FeedstockBinStock> {
+export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { historyRunId?: string; replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
   requireOrgScope(ctx);
-  const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId }).from(storageLocations)
+  const [bin] = await reader.select({ code: storageLocations.code, type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   if (bin.type !== 'feedstock_bin') throw new SafeError('This bin does not hold feedstock');
@@ -45,7 +47,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       .from(productionRunFeedstockDraws)
       .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstockDraws.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
       .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId),
-        ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS))),
+        or(ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS), options.historyRunId ? eq(productionRuns.id, options.historyRunId) : undefined))),
     reader.select({ id: biocharProducts.id, code: biocharProducts.code, placedAt: biocharProducts.placedAt, createdAt: biocharProducts.createdAt,
       composition: biocharProducts.composition })
       .from(biocharProducts)
@@ -97,24 +99,41 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
           wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
           moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT };
       }),
-  ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
+  ].filter(entry => (!options.occurredAt || entry.occurredAt <= options.occurredAt) &&
+    !(entry.kind === 'ingredient_draw' && entry.sourceId === options.excludeProductId) &&
+    !(entry.kind === 'run_draw' && entry.sourceId === options.excludeRunId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
-  const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: Number(batch.dryKg) }]));
+  const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
   const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
   for (const draw of batchDraws) {
     const shares = drawsByRun.get(draw.productionRunId) ?? [];
     shares.push({ feedstockId: draw.feedstockId, wetKg: Number(draw.wetKg) });
     drawsByRun.set(draw.productionRunId, shares);
   }
-  const replay = feedstockPileTimeline(drafts.map(draft => ({ wetDeltaKg: draft.reversed ? 0 : draft.wetDeltaKg,
-    intake: draft.kind === 'intake' ? intakeById.get(draft.id) : undefined,
-    draws: draft.kind === 'run_draw' && draft.sourceId ? drawsByRun.get(draft.sourceId) : undefined,
-  })));
+  const changes = await getFeedstockMethodChanges(ctx, storageLocationId, reader);
+  const isHistory = (draft: Draft) => draft.kind === 'run_draw' && draft.sourceId === options.historyRunId;
+  const replay = replayFeedstockDraws(drafts.map(draft => ({ ...draft,
+    historyOnly: isHistory(draft),
+    savedShares: draft.kind === 'run_draw' && draft.sourceId && !isHistory(draft) && !options.replanRunIds?.has(draft.sourceId)
+      ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
+  })), bin, changes, options.boundary);
+  if (options.boundary) assertFeedstockEmptyAtSwitch(drafts, replay.wetTotals, changes, timezone, bin.code);
+  const dryAt = (holdings: Map<string, number> | undefined) => {
+    if (!holdings) return null;
+    let dryGrams = 0;
+    for (const [batchId, wet] of holdings) {
+      const basis = intakeById.get(batchId);
+      if (wet > 0 && (!basis || basis.dryKg === null)) return null;
+      if (basis && basis.wetKg > 0) dryGrams += Math.round(wet * MASS_DECIMALS)
+        * (Math.round((basis.dryKg ?? 0) * MASS_DECIMALS) / Math.round(basis.wetKg * MASS_DECIMALS));
+    }
+    return dryGrams / MASS_DECIMALS;
+  };
   let wetKg = 0;
-  const entries = drafts.map((draft, index): FeedstockLedgerEntry => {
+  const entries = drafts.map((draft): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
-    wetKg += draft.reversed ? 0 : draft.wetDeltaKg ?? 0;
-    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: replay.points[index].dryKg };
+    wetKg += draft.reversed || isHistory(draft) ? 0 : draft.wetDeltaKg ?? 0;
+    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: dryAt(replay.points.get(draft.id)) };
   });
 
   const currentWetKg = round(wetKg);
@@ -123,13 +142,26 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
     const blocker = findFeedstockLossBlocker(entries, entry.id);
     entry.editLockedReason = blocker ? formatFeedstockLossLockReason(blocker, timezone) : null;
   }
-  const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg) > 0)
     .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime()
       || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
     .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
-      wetKg: shares.get(b.id)?.wetKg ?? 0,
-      intakeWetKg: Number(b.wetKg), dryKg: shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
-  if (entries.length) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
-  return { currentWetKg, entries, batches: pile };
+      wetKg: replay.remaining.get(b.id) ?? 0,
+      intakeWetKg: Number(b.wetKg), dryKg: b.dryKg === null ? null : round((replay.remaining.get(b.id) ?? 0) * Number(b.dryKg) / Number(b.wetKg)), moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
+  const drawWetKg = options.drawWetKg ?? 0;
+  const available = [...replay.remaining].map(([id, wet]) => ({ id, units: BigInt(Math.round(wet * MASS_DECIMALS)) }));
+  const availableWet = [...replay.remaining.values()].reduce((sum, wet) => sum + wet, 0);
+  const estimatedDrawDryKg = drawWetKg > availableWet || drawWetKg < 0 ? null : dryAt(new Map(
+    [...drawShares(BigInt(Math.round(drawWetKg * MASS_DECIMALS)), available,
+      feedstockMethodAt(bin, changes, options.occurredAt ?? new Date().toISOString()))]
+      .map(([id, units]) => [id, Number(units) / MASS_DECIMALS]),
+  ));
+  return { currentWetKg, entries, batches: pile, estimatedDrawDryKg, withdrawals: replay.withdrawals, remainingDryKg: currentWetKg < 0 || replay.unattributedWetKg > 0 ? null : dryAt(replay.remaining) };
+}
+
+/** Public stock read omits the internal withdrawal index. */
+export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db): Promise<FeedstockBinStock> {
+  requireOrgScope(ctx);
+  const { currentWetKg, entries, batches } = await replayFeedstockBinStock(ctx, storageLocationId, reader);
+  return { currentWetKg, entries, batches };
 }

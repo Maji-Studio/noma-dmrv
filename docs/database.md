@@ -258,15 +258,49 @@ revision. Feedstock edits change bin stock and their own version, but do not
 rewrite the run's measured moisture or draws and do not bump
 the run version. A change to the run itself bumps its version.
 
-Run draws are allocated proportionally across complete intakes delivered on or
-before the run’s facility-local start day, including same-day deliveries. Run
-start/facility changes, facility timezone changes and intake date, bin, mass or
-status changes rebuild the allocations transactionally. Intake discovery excludes
-runs starting before the earliest affected delivery day minus one UTC day, before
-locking runs; the per-run facility-day cutoff remains exact. Timezone edits hold
-the facility row, then source bins, then runs in ID order. Provenance rebuilds
-allow archived historical source bins; stock writers still require active bins.
-An empty qualifying basis or a change to Sent lineage refuses the edit.
+Feedstock draws replay each bin's remaining deliveries using its Draw method:
+Mass weighted takes proportional wet shares; In order empties deliveries Oldest
+first or Newest first. Complete intakes become available at the start of their
+facility-local delivery day. Stock edits re-plan runs from the earliest affected
+instant, with recorded time at millisecond precision then event ID breaking ties.
+Earlier runs keep saved shares.
+Later withdrawals that exceed available stock refuse the edit. Rebuilds are
+transactional and refuse changes to Sent lineage. Timezone edits lock the facility,
+source bins, then runs in ID order. Rebuilds allow archived historical bins;
+stock writers require active bins. Historical withdrawals beyond available stock
+carry debt that later intakes and positive counts repay before creating holdings;
+saved run shares remain unchanged. Every transactional replan checks that wet
+stock is zero to gram precision at each Mass weighted to In order switch. This
+covers intake edits, loss corrections, run cancellation/deletion/draw changes and
+product deletion; dry-only corrections pass when wet stock remains zero.
+
+Every saved run share has positive wet mass. Migration 0173 deletes nonpositive
+rows before adding the normal validated CHECK. Ownership is the earliest completed,
+non-archived run in a non-archived credit batch with a share row for the feedstock
+record; submission status never changes the candidate set.
+
+`pnpm feedstock:recalculate` rebuilds allocations per bin and reports rewritten
+runs and owned transport legs before/after per credit batch code. `--dry-run`
+rolls back each bin after planning. Without `--include-sent`, each bin starts just
+after its last Sent run draw, ordered by run time, draw recorded time and draw ID;
+without Sent runs it starts at the first event. The report warns about kept Sent
+runs separately from refused runs. Certification refusals identify the blocking
+run and Removal codes when the guard supplies them, or the blocked feedstock for
+a transport ownership refusal.
+
+For the one-off pre-production staging rebuild, run
+`pnpm feedstock:recalculate --include-sent --dry-run`, review the per-bin report,
+then `pnpm feedstock:recalculate --include-sent`. This explicitly rebuilds from each
+bin's first event, including shares under sent RM-26-001. The report lists rewritten
+Sent runs with their Removal codes. Only this CLI path may opt out of the Sent
+lineage refusal and transport ownership freeze. The option is rejected when
+`NODE_ENV=production`; ordinary writes, including facility timezone edits, retain
+both guards. The command rebuilds local shares, not registry submission snapshots.
+
+A failed bin rolls back independently; other bins continue and the command exits
+unsuccessfully. The CLI uses a short-lived `Pool(getPgPoolConfig(...))` and Drizzle
+reader for inventory, identity checks and transactions, and ends the pool in
+`finally`; the app pool's lock timeout does not apply.
 
 Application writers use `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,

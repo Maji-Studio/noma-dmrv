@@ -585,6 +585,7 @@ export function BiocharProductForm({
               allocationFrozen={hasFrozenSourceAllocation}
               previews={productStockPreview.data}
               previewsAvailable={productPreviewsAvailable}
+              productId={product?.id}
             />
             <FormError id="ingredientBins-error" message={errors.ingredientBins?.message} />
           </div>

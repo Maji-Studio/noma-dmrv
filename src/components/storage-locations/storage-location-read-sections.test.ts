@@ -15,3 +15,15 @@ it("says the product bin's lifetime biochar is dry, as the applied mass beside i
   expect(labels).toContain("Applied, dry");
   expect(labels).not.toContain("Biochar received, all time");
 });
+
+it("lists a feedstock bin's draw method as two rows for In order, one for Mass weighted, with no output-bin stock mode rows", () => {
+  const feedstockBin = { ...productBin, type: "feedstock_bin", stockMode: "mix", feedstockTypeName: "Maize cobs", feedstockInventory: { currentWetMassKg: 900, pendingWetMassKg: 0, pendingBatchCount: 0, estimatedDryMassKg: 700, estimatedMoisturePercent: 22, feedstockTypes: ["Maize cobs"] } } as unknown as StorageLocationWithFacility;
+  const labels = (bin: StorageLocationWithFacility) => storageLocationSheetSections(bin, vi.fn()).flatMap(section => section.fields ?? []);
+  expect(labels(feedstockBin).find(field => field.label === "Draw method")?.value).toBe("Mass weighted");
+  const newest = { ...feedstockBin, stockMode: "split", drawOrder: "newest_first" } as unknown as StorageLocationWithFacility;
+  expect(labels(newest).find(field => field.label === "Draw method")?.value).toBe("In order");
+  expect(labels(newest).find(field => field.label === "Draw order")?.value).toBe("Newest first");
+  expect(labels(feedstockBin).map(field => field.label)).not.toContain("Draw order");
+  expect(labels(newest).map(field => field.label)).not.toContain("Stock mode");
+  expect(labels(productBin).map(field => field.label)).not.toContain("Draw method");
+});

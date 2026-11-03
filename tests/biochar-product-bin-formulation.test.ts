@@ -104,7 +104,7 @@ describe("posted product bin and formulation contract", () => {
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureEstimate: { moisturePercent: 20, wetMassKg: 100, dryMassKg: 80 } });
+    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureEstimate: { moisturePercent: 20, wetMassKg: 50, dryMassKg: 40 } });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
   });
   it("keeps posted ingredient moisture unchanged after a later dry intake", async () => {
@@ -118,10 +118,10 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
     const product = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 12 }) });
-    // The remaining-bin estimate is pro-rata over all eligible intakes:
-    // 200 kg wet / 180 kg dry keeps a 90% solids ratio after wet withdrawals.
-    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 108 });
-    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "26.400", moisturePercentUsed: 12, moistureEstimate: { moisturePercent: 10 } });
+    // Oldest first takes both draws (50 + 30) from intake 1, leaving 20 wet / 16 dry.
+    // Intake 2 retains 100 wet / 100 dry; B takes 30 wet / 24 dry at 20% moisture.
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 116 });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "26.400", moisturePercentUsed: 12, moistureEstimate: { moisturePercent: 20, wetMassKg: 30, dryMassKg: 24 } });
   });
   it("rejects changing a posted ingredient draw even when later stock is available", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 60, bin.id) });

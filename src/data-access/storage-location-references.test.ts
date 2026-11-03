@@ -44,6 +44,7 @@ describe("countStorageLocationReferences", () => {
     );
 
     expect(storageLocationBlockers(references)).toEqual([
+      "feedstock draw method history",
       "feedstock batches",
       "production runs using it as a feedstock bin",
       "production runs using it as a biochar bin",

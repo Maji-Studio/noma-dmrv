@@ -61,17 +61,17 @@ describe("updateStorageLocationSchema", () => {
 
 describe("stock mode", () => {
   const base = { name: "Pile", facilityId: FACILITY_ID };
-  it("lets only biochar and product bins hold one mixed pile", () => {
+  it("lets all bin types hold a mixed pile", () => {
     expect(storageLocationFormSchema.safeParse({ ...base, type: "biochar_bin", stockMode: "mix" }).success).toBe(true);
     expect(storageLocationFormSchema.safeParse({ ...base, type: "product_bin", stockMode: "mix" }).success).toBe(true);
     const feedstock = storageLocationFormSchema.safeParse({ ...base, type: "feedstock_bin", feedstockTypeId: FACILITY_ID, stockMode: "mix" });
-    expect(feedstock.success).toBe(false);
-    expect(feedstock.error?.issues.map(issue => issue.path.join("."))).toContain("stockMode");
+    expect(feedstock.success).toBe(true);
+    expect(feedstock.data?.stockMode).toBe("mix");
   });
 
   it("does not flag an update that leaves the type out", () => {
     expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, stockMode: "mix" }).success).toBe(true);
-    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
+    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(true);
   });
 });
 

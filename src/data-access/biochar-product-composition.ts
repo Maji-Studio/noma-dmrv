@@ -273,7 +273,8 @@ export async function resolveCompositionIngredientMassBasis(
   ];
 
   const basisByBin = new Map(await Promise.all(storageLocationIds.map(async id =>
-    [id, await getIngredientMoistureBasis(ctx, id, occurredAt, tx, excludeProductId)] as const,
+    [id, await getIngredientMoistureBasis(ctx, id, occurredAt, tx, excludeProductId,
+      positiveRefs.filter(ref => ref.storageLocationId === id).reduce((sum, ref) => sum + ref.massKg, 0))] as const,
   )));
 
   return {
