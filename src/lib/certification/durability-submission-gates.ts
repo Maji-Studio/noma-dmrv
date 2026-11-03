@@ -53,7 +53,7 @@ import type { CreditBatchSampling } from "@/schemas/credit-batches";
  * The unpaired-H/C_org explanation shared by blocker (d) and the readiness
  * chip, so both surfaces name the same Samples in the same order and words.
  */
-export function unpairedHToCSamplesCopy(sampleCodes: string[]): BlockerMessage {
+export function unpairedHToCSamplesMessage(sampleCodes: string[]): BlockerMessage {
   const count = sampleCodes.length;
   const sorted = [...sampleCodes].sort((left, right) =>
     left.localeCompare(right),
@@ -65,7 +65,7 @@ export function unpairedHToCSamplesCopy(sampleCodes: string[]): BlockerMessage {
 }
 
 export function describeUnpairedHToCSamples(sampleCodes: string[]): string {
-  return unpairedHToCSamplesCopy(sampleCodes).message;
+  return unpairedHToCSamplesMessage(sampleCodes).message;
 }
 
 /**
@@ -195,7 +195,7 @@ export function evaluateDurabilitySubmissionGates(
       (index) => batch.replicateProvenance[index].sampleCode,
     );
     if (unpairedSampleCodes.length > 0) {
-      const copy = unpairedHToCSamplesCopy(unpairedSampleCodes);
+      const copy = unpairedHToCSamplesMessage(unpairedSampleCodes);
       blockerDetails.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} has ${copy.fact}`, copy.instruction,
       ));

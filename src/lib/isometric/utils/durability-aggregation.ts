@@ -457,11 +457,13 @@ export function resolveSoilTemperatureScope(
 }
 
 const MISSING_REFERENCE_SOIL_TEMPERATURE_INSTRUCTION = "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.";
-export const MISSING_REFERENCE_SOIL_TEMPERATURE_FACT = "This facility has no reference soil temperature.";
+const MISSING_REFERENCE_SOIL_TEMPERATURE_FACT = "This facility has no reference soil temperature.";
 
 export interface SoilTemperatureGate {
   /** Fail-closed blocker(s): an unset reference for a 200-year removal. */
   blockers: string[];
+  /** The same blockers as facts, for read-only surfaces. */
+  blockerFacts: string[];
   /** Non-blocking over-crediting advisory(s). */
   warnings: string[];
 }
@@ -484,19 +486,21 @@ export function buildSoilTemperatureGate(args: {
   }>;
 }): SoilTemperatureGate {
   const scope = resolveSoilTemperatureScope(args.batches);
-  if (!scope.applies) return { blockers: [], warnings: [] };
+  if (!scope.applies) return { blockers: [], blockerFacts: [], warnings: [] };
 
   if (args.facilityReference == null) {
     return {
       blockers: [
         MISSING_REFERENCE_SOIL_TEMPERATURE_INSTRUCTION,
       ],
+      blockerFacts: [MISSING_REFERENCE_SOIL_TEMPERATURE_FACT],
       warnings: [],
     };
   }
 
   return {
     blockers: [],
+    blockerFacts: [],
     warnings: buildSoilTemperatureReconciliationWarnings({
       facilityReference: args.facilityReference,
       applicationSoilTemperaturesC: args.siteTemperatures

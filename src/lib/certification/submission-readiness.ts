@@ -46,15 +46,19 @@ export function durabilityConfigurationBlockers(
   return durabilityConfigurationBlockerDetails(batches).map((item) => item.message);
 }
 
-export const applicationDestinationCopy = (code: string) => blockerMessage(
+export const feedstockTransportMessage = (label: string) => blockerMessage(
+  `${label} has no usable transport leg.`,
+  "Record a positive distance and load mass before submitting.",
+);
+export const applicationDestinationMessage = (code: string) => blockerMessage(
   `Application ${code} has no customer location.`,
   "Select a customer location on the order before submitting.",
 );
-export const deliveryProofCopy = (code: string) => blockerMessage(
+export const deliveryProofMessage = (code: string) => blockerMessage(
   `Delivery ${code} has no proof of delivery.`,
   "Attach a delivery receipt, bill of lading or delivery photo before submitting.",
 );
-export const deliveryDistanceCopy = (code: string) => blockerMessage(
+export const deliveryDistanceMessage = (code: string) => blockerMessage(
   `Delivery ${code} has no positive transport distance.`,
   "Set the customer location distance or a delivery distance override before submitting.",
 );
@@ -65,7 +69,7 @@ export function applicationDestinationBlocker(input: {
 }): string | null {
   return input.customerLocationId
     ? null
-    : applicationDestinationCopy(input.applicationCode).message;
+    : applicationDestinationMessage(input.applicationCode).message;
 }
 
 export function deliveryProofBlocker(input: {
@@ -74,7 +78,7 @@ export function deliveryProofBlocker(input: {
 }): string | null {
   return input.proofOfDeliveryCount > 0
     ? null
-    : deliveryProofCopy(input.deliveryCode).message;
+    : deliveryProofMessage(input.deliveryCode).message;
 }
 
 export function deliveryDistanceBlocker(input: {
@@ -86,7 +90,7 @@ export function deliveryDistanceBlocker(input: {
   return input.deliveryStatus === "delivered" &&
     positiveOrNull(input.distanceKmOverride) == null &&
     positiveOrNull(input.recordedDistanceKm) == null
-    ? deliveryDistanceCopy(input.deliveryCode).message
+    ? deliveryDistanceMessage(input.deliveryCode).message
     : null;
 }
 

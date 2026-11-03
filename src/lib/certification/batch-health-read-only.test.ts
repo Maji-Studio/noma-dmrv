@@ -8,7 +8,7 @@ import { buildSoilTemperatureGate } from "@/lib/isometric/utils/durability-aggre
 import { deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 import { toBatchHealthFacts } from "./batch-health-facts";
 import { attributeSoilTemperatureBlockers } from "./member-batch-gates";
-import { deliveryProofCopy, deliveryDistanceCopy, durabilityConfigurationBlockerDetails } from "./submission-readiness";
+import { deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerDetails } from "./submission-readiness";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 
 const healthy: BatchHealthFacts = {
@@ -30,7 +30,7 @@ function loadedFacts() {
     id: batch.creditBatchId, code: batch.creditBatchCode,
     durabilityGateBlockers: carbon.blockersByBatchId[batch.creditBatchId],
     durabilityGateFacts: carbon.blockerFactsByBatchId[batch.creditBatchId],
-  }], [batch], soil.blockers);
+  }], [batch], soil);
   return toBatchHealthFacts({
     memberBatches: members, mapping: {}, removalTemplate: {},
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], hasSubmittableRuns: true,
@@ -57,7 +57,7 @@ describe("read-only batch health facts", () => {
     const editable = buildCreditBatchOpenItems({ ...pageContext, health });
     const id = `health:${check.key}:${check.issueKey ?? check.fixTarget}`;
     expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
-    const item = readOnlyOpenItems(editable).blocking.find((item) => item.id === id)!;
+    const item = readOnlyOpenItems({ ...editable, waiting: [] }).blocking.find((item) => item.id === id)!;
     expect(item.detail).toBe(fact);
     expect(item.instruction).toBeUndefined();
     expect(item.target).toEqual(target === "labSamples" ? { tab: "samples" } : null);
@@ -87,8 +87,8 @@ describe("read-only batch health facts", () => {
   });
 
   it("merges lineage facts for one destination without their repair steps", () => {
-    const proof = deliveryProofCopy("DL-1");
-    const distance = deliveryDistanceCopy("DL-1");
+    const proof = deliveryProofMessage("DL-1");
+    const distance = deliveryDistanceMessage("DL-1");
     const health = deriveBatchHealth({ ...healthy, submissionLineageBlockers: [
       { detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } },
       { detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: "delivery", code: "DL-1" } },
@@ -96,12 +96,12 @@ describe("read-only batch health facts", () => {
     const [check] = health.checks.filter((check) => check.status === "unmet");
     expect(check.detail).toBe(`${proof.message} · ${distance.message}`);
     expect(check.readOnlyDetail).toBe(`${proof.fact} · ${distance.fact}`);
-    const [item] = readOnlyOpenItems(buildCreditBatchOpenItems({ ...pageContext, health })).blocking;
+    const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
     expect(item.detail).toBe(check.readOnlyDetail);
   });
 
   it.each([false, true])("merges a safe copy fact but never a bare detail (copy: %s)", (hasCopy) => {
-    const proof = deliveryProofCopy("DL-1");
+    const proof = deliveryProofMessage("DL-1");
     const health = deriveBatchHealth({ ...healthy, hasSubmittableRuns: false,
       productionReadinessGap: { kind: "noApplications", fixTarget: "deliveries", detail: "Production is missing. Record it.",
         ...(hasCopy ? { copy: { detail: "Production is missing.", instruction: "Record it." } } : {}),
@@ -117,7 +117,7 @@ describe("read-only batch health facts", () => {
     const health = deriveBatchHealth({ ...healthy, templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] });
     const editable = buildCreditBatchOpenItems({ ...pageContext, health });
     expect(openItemText(editable.blocking[0])).toBe("Set a Removal template in Settings, Removal templates.");
-    const [item] = readOnlyOpenItems(editable).blocking;
+    const [item] = readOnlyOpenItems({ ...editable, waiting: [] }).blocking;
     expect(item.title).toBe("No Removal template chosen");
     expect(item.detail).toBeUndefined();
     expect(item.instruction).toBeUndefined();

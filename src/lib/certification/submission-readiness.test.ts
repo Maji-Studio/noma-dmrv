@@ -1,4 +1,4 @@
-import { applicationDestinationCopy, deliveryProofCopy, deliveryDistanceCopy, durabilityConfigurationBlockerDetails } from "./submission-readiness";
+import { applicationDestinationMessage, deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerDetails } from "./submission-readiness";
 import { describe, expect, it } from "vitest";
 import { deliveryProofBlocker, hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
 
@@ -68,10 +68,10 @@ it("joins producer-authored facts and repair steps without changing messages", (
     "200-year Removals cannot be submitted yet.",
     "A 1000-year Removal can contain one credit batch.",
   ]);
-  expect(applicationDestinationCopy("AP-1").fact).toBe("Application AP-1 has no customer location.");
-  expect(deliveryProofCopy("DL-1").fact).toBe("Delivery DL-1 has no proof of delivery.");
-  expect(deliveryDistanceCopy("DL-1").fact).toBe("Delivery DL-1 has no positive transport distance.");
-  for (const copy of [...configuration, applicationDestinationCopy("AP-1"), deliveryProofCopy("DL-1"), deliveryDistanceCopy("DL-1")]) {
+  expect(applicationDestinationMessage("AP-1").fact).toBe("Application AP-1 has no customer location.");
+  expect(deliveryProofMessage("DL-1").fact).toBe("Delivery DL-1 has no proof of delivery.");
+  expect(deliveryDistanceMessage("DL-1").fact).toBe("Delivery DL-1 has no positive transport distance.");
+  for (const copy of [...configuration, applicationDestinationMessage("AP-1"), deliveryProofMessage("DL-1"), deliveryDistanceMessage("DL-1")]) {
     expect(copy.message).toBe(`${copy.fact} ${copy.instruction}`);
     expect(copy.fact).not.toMatch(/Wait |Split |Select |Attach |Set /);
   }

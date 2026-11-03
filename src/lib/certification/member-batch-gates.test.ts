@@ -18,7 +18,7 @@ describe("attributeSoilTemperatureBlockers", () => {
           { creditBatchId: "batch-200", durabilityOption: "200_year" },
           { creditBatchId: "batch-1000", durabilityOption: "1000_year" },
         ],
-        [soilBlocker],
+        { blockers: [soilBlocker], blockerFacts: ["This facility has no reference soil temperature."] },
       ),
     ).toEqual([
       {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { feedstockTransportCopy, buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { feedstockTransportMessage } from "@/lib/certification/submission-readiness";
 
 const lineage = {
   application: { id: "app-1", code: "AP-1" },
@@ -49,7 +50,7 @@ describe("submission lineage blockers", () => {
 });
 
 it.each(["A feedstock", "Feedstock FS-1"])("joins the transport fact and instruction for %s", (label) => {
-  const copy = feedstockTransportCopy(label);
+  const copy = feedstockTransportMessage(label);
   expect(copy.fact).toBe(`${label} has no usable transport leg.`);
   expect(copy.message).toBe(`${copy.fact} ${copy.instruction}`);
 });

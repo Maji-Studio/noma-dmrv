@@ -1,4 +1,4 @@
-import { MISSING_REFERENCE_SOIL_TEMPERATURE_FACT } from "@/lib/isometric/utils/durability-aggregation";
+import type { SoilTemperatureGate } from "@/lib/isometric/utils/durability-aggregation";
 
 interface MemberBatchGateFacts {
   id: string;
@@ -16,7 +16,7 @@ export function attributeSoilTemperatureBlockers<
 >(
   members: readonly T[],
   batches: readonly BatchDurabilityFacts[],
-  soilTemperatureBlockers: readonly string[],
+  soilTemperatureGate: Pick<SoilTemperatureGate, "blockers" | "blockerFacts">,
 ): T[] {
   const affectedBatchIds = new Set(
     batches
@@ -28,11 +28,11 @@ export function attributeSoilTemperatureBlockers<
     ...member,
     facilityEmissionsGateFacts: [
       ...(member.facilityEmissionsGateFacts ?? []),
-      ...(affectedBatchIds.has(member.id) && soilTemperatureBlockers.length > 0 ? [MISSING_REFERENCE_SOIL_TEMPERATURE_FACT] : []),
+      ...(affectedBatchIds.has(member.id) ? soilTemperatureGate.blockerFacts : []),
     ],
     facilityEmissionsGateBlockers: [
       ...(member.facilityEmissionsGateBlockers ?? []),
-      ...(affectedBatchIds.has(member.id) ? soilTemperatureBlockers : []),
+      ...(affectedBatchIds.has(member.id) ? soilTemperatureGate.blockers : []),
     ],
   }));
 }

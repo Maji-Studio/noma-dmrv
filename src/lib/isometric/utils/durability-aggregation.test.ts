@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import {
-  MISSING_REFERENCE_SOIL_TEMPERATURE_FACT,
   buildPerBatchDurabilityData,
   buildSoilTemperatureReconciliationWarnings,
   buildSoilTemperatureGate,
@@ -444,7 +443,7 @@ it("keeps the instruction-only soil blocker unchanged and authors its read-only 
   const result = buildSoilTemperatureGate({ facilityReference: null,
     batches: [{ durabilityOption: "200_year", runIds: [] }], siteTemperatures: [],
   });
-  expect(MISSING_REFERENCE_SOIL_TEMPERATURE_FACT).toBe("This facility has no reference soil temperature.");
+  expect(result.blockerFacts).toEqual(["This facility has no reference soil temperature."]);
   expect(result.blockers).toEqual([
     "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
   ]);
