@@ -222,14 +222,18 @@ describe("needs attention rows", () => {
   it("keeps a batch whose submitted Removal came back, and leaves out one awaiting verification", async () => {
     const submittedBatch = (id: string, removalId: string) => ({
       kind: "batch-pending", id, code: id.toUpperCase(), dateDay: "2026-09-30", dateMs: null, ord: 1, total: 2, allIds: [],
-      removals: [{ id: removalId, code: `RM-${removalId}`, status: { kind: "submitted" }, phase: "submitted" }],
+      removals: [{ id: removalId, code: `RM-${removalId}`, ghgStatementId: `gs-${removalId}`, status: { kind: "submitted" }, phase: "submitted" }],
     });
     mocks.union.mockResolvedValue([submittedBatch("cb-back", "rm-back"), submittedBatch("cb-wait", "rm-wait")]);
     mocks.returned.mockResolvedValue(new Set(["rm-back"]));
 
     const { items, batches } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
 
-    expect(mocks.returned).toHaveBeenCalledWith(CTX, ["cb-back", "cb-wait"]);
+    // The Removals the attention query read go straight to the lineage read.
+    expect(mocks.returned).toHaveBeenCalledWith(CTX, [
+      { removalId: "rm-back", ghgStatementId: "gs-rm-back" },
+      { removalId: "rm-wait", ghgStatementId: "gs-rm-wait" },
+    ]);
     expect(items.map(({ entityCode, title }) => ({ entityCode, title }))).toEqual([
       { entityCode: "CB-BACK", title: "Returned by Isometric" },
     ]);

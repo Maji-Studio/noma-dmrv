@@ -745,14 +745,12 @@ export async function getDashboardAttentionItems(
 
   const batchRows = rows.filter((row) => row.kind === "batch-pending")
     .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
-  // Only a submitted period can have come back from the verifier, so only
-  // those batches pay for the lineage read (none, no extra round trip).
-  const submittedIds = batchRows
+  // Only a submitted period can have come back from the verifier, so only its
+  // Removals (already read above) pay for the lineage read; none, no extra trip.
+  const submittedHolders = batchRows
     .filter(({ row, removals }) => creditBatchAttention({ endDate: row.dateDay }, removals, todayStr).period === "submitted")
-    .map(({ row }) => row.id);
-  const returnedRemovalIds = submittedIds.length > 0
-    ? await loadReturnedRemovalIds(ctx, submittedIds)
-    : new Set<string>();
+    .flatMap(({ row }) => row.removals.map((removal) => ({ removalId: removal.id, ghgStatementId: removal.ghgStatementId })));
+  const returnedRemovalIds = await loadReturnedRemovalIds(ctx, submittedHolders);
 
   const interrupted = new Map<string, DashboardAttentionItem>();
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.

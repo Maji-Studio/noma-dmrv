@@ -1,6 +1,8 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { countQueries } from "./helpers/query-counter";
+import { cleanupLineageFixture } from "./helpers/certification-lineage-fixture";
+import { createSubmittedRemovalFixture } from "./helpers/submitted-removal-fixture";
 /**
  * Round-trip budget for the dashboard's startup reads. Each number below is
  * a ceiling, not a target: the assertion fails when a change adds a query,
@@ -36,6 +38,14 @@ import { TEST_SITE_POSITION,
  * Includes the facility timezone read that sets local-day bounds (#1175).
  */
 const OVERVIEW_QUERY_BUDGET = 19;
+/**
+ * The same read on a facility whose ended credit batch holds a submitted
+ * Removal (#1532): the returned-Removal branch adds the persisted lineage read
+ * (three statements), taken only when a submitted period exists. Measured on
+ * the certification lineage fixture, whose richer chain already costs 21
+ * without the branch.
+ */
+const OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET = 24;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;
@@ -229,6 +239,24 @@ describe("dashboard query budget", () => {
       expect(again.queries).toBe(queries);
     } finally {
       await db.delete(creditBatches).where(eq(creditBatches.id, extra.id));
+    }
+  });
+
+  // #1532: an ended batch holding a submitted Removal takes the returned-Removal
+  // branch (the persisted lineage read), the overview's costliest path.
+  it("reads the overview within budget when an ended batch holds a submitted Removal", async () => {
+    if (!dbReachable) return;
+    const lineage = await createSubmittedRemovalFixture();
+    try {
+      const { result, queries } = await countQueries(() =>
+        getDashboardOverview(makeTestOrgContext(), lineage.facilityId, "all"),
+      );
+      // Submitted and not returned: it waits on the verifier, so no row.
+      expect(result.attention.map((item) => item.title)).not.toContain("Period ended · not submitted yet");
+      expect(result.attention.map((item) => item.title)).not.toContain("Returned by Isometric");
+      expect(queries).toBeLessThanOrEqual(OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET);
+    } finally {
+      await cleanupLineageFixture(lineage);
     }
   });
 
