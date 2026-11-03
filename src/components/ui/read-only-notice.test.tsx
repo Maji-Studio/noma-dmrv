@@ -18,7 +18,7 @@ describe("ReadOnlyNotice", () => {
     const readOnly: SheetReadOnly = {
       tone: "info",
       message: "Mafinga is archived, so this production run is read-only.",
-      facility: { name: "Mafinga", href: "/facilities?archivedFacility=fac-1" },
+      facility: { name: "Mafinga", href: "/facilities?archivedFacility=fac-1", rest: " is archived, so this production run is read-only." },
     };
     const { container } = render(<ReadOnlyNotice readOnly={readOnly} />);
     const link = screen.getByRole("link", { name: "Mafinga" });

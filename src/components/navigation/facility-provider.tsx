@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
 import { useOrganizationDefaults } from "@/hooks/use-organization-settings";
@@ -18,6 +18,14 @@ import {
 } from "@/hooks/use-facility-context";
 
 const EMPTY_FACILITIES: FacilityContextValue["facilities"] = [];
+const storedFacilityListeners = new Set<() => void>();
+
+function subscribeToStoredFacilityId(listener: () => void) {
+  storedFacilityListeners.add(listener);
+  return () => {
+    storedFacilityListeners.delete(listener);
+  };
+}
 
 function readStoredFacilityId(): string | null {
   if (typeof window === "undefined") {
@@ -39,12 +47,15 @@ function writeStoredFacilityId(facilityId: string | null) {
   try {
     if (!facilityId) {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-      return;
+    } else {
+      window.localStorage.setItem(FACILITY_STORAGE_KEY, facilityId);
     }
-
-    window.localStorage.setItem(FACILITY_STORAGE_KEY, facilityId);
   } catch {
     // Ignore storage failures (e.g. private mode or blocked storage).
+  }
+
+  for (const listener of storedFacilityListeners) {
+    listener();
   }
 }
 
@@ -70,6 +81,11 @@ export function FacilityProvider({
    */
   initialOrganizationId?: string | null;
 }) {
+  const storedFacilityId = useSyncExternalStore(
+    subscribeToStoredFacilityId,
+    readStoredFacilityId,
+    () => null,
+  );
   const { data: sessionData, isPending: isSessionPending } =
     authClient.useSession();
   const clientActiveOrganizationId =
@@ -103,22 +119,27 @@ export function FacilityProvider({
   } = useFacilities({ pageSize: 100 }, activeOrganizationId);
   const isLoading = isSessionPending || isFacilitiesLoading;
   const facilities = facilitiesData?.items ?? EMPTY_FACILITIES;
-  const hasFacilityInList = facilityId
-    ? facilities.some((facility) => facility.id === facilityId)
+  const facilityIdToVerify = facilityId ?? storedFacilityId;
+  const hasFacilityToVerifyInList = facilityIdToVerify
+    ? facilities.some((facility) => facility.id === facilityIdToVerify)
     : false;
+  const hasFacilityInList = Boolean(facilityId && hasFacilityToVerifyInList);
+  const canVerifySelection = Boolean(facilityId) || facilities.length > 0;
   const shouldLoadSelectedFacility = Boolean(
-    facilityId && !hasFacilityInList && !isLoading
+    facilityIdToVerify && !hasFacilityToVerifyInList && !isLoading &&
+      canVerifySelection
   );
   const {
     data: selectedFacilityById,
     isLoading: isSelectedFacilityLoading,
   } = useFacility(
-    facilityId ?? "",
+    facilityIdToVerify ?? "",
     shouldLoadSelectedFacility,
     activeOrganizationId,
   );
   const selectedFacilityFromLookup =
-    selectedFacilityById && selectedFacilityById.archivedAt == null
+    selectedFacilityById && canVerifySelection &&
+      selectedFacilityById.archivedAt == null
       ? selectedFacilityById
       : undefined;
 
@@ -142,7 +163,8 @@ export function FacilityProvider({
 
   // Resolve facility selection from URL -> localStorage -> first facility.
   useEffect(() => {
-    if (isLoading) {
+    // Wait for the client snapshot, including storage cleared by the org-change effect.
+    if (isLoading || storedFacilityId !== readStoredFacilityId()) {
       return;
     }
 
@@ -161,13 +183,16 @@ export function FacilityProvider({
       return;
     }
 
-    if (facilityId && !hasFacilityInList) {
+    if (facilityIdToVerify && !hasFacilityToVerifyInList) {
       if (isSelectedFacilityLoading) {
         return;
       }
 
       if (selectedFacilityFromLookup) {
-        writeStoredFacilityId(facilityId);
+        if (!facilityId) {
+          void setFacilityId(facilityIdToVerify);
+        }
+        writeStoredFacilityId(facilityIdToVerify);
         return;
       }
     }
@@ -175,7 +200,6 @@ export function FacilityProvider({
     let nextFacilityId = hasFacilityInList ? facilityId : null;
 
     if (!nextFacilityId) {
-      const storedFacilityId = readStoredFacilityId();
       const hasStoredFacility = storedFacilityId
         ? facilities.some((facility) => facility.id === storedFacilityId)
         : false;
@@ -189,9 +213,12 @@ export function FacilityProvider({
 
     writeStoredFacilityId(nextFacilityId);
   }, [
+    storedFacilityId,
     isLoading,
     facilities,
     facilityId,
+    facilityIdToVerify,
+    hasFacilityToVerifyInList,
     hasFacilityInList,
     isSelectedFacilityLoading,
     selectedFacilityFromLookup,
@@ -199,33 +226,28 @@ export function FacilityProvider({
   ]);
 
   const hasSelectedFacility =
-    hasFacilityInList || Boolean(facilityId && selectedFacilityFromLookup);
-  const resolvedFacilityId = facilityId
-    ? hasSelectedFacility
-      ? facilityId
-      : null
-    : facilities[0]?.id ?? null;
+    hasFacilityToVerifyInList || Boolean(facilityIdToVerify && selectedFacilityFromLookup);
+
+  // URL and stored selections both need confirmation against the org before
+  // the shell can choose between its loading and no-selection states.
+  const isResolving = Boolean(
+    facilityIdToVerify &&
+      !hasSelectedFacility &&
+      (isLoading || isSelectedFacilityLoading)
+  );
+  const resolvedFacilityId = hasSelectedFacility
+    ? facilityIdToVerify
+    : facilityId || isResolving
+      ? null
+      : facilities[0]?.id ?? null;
   const selectedFacility = resolvedFacilityId
     ? facilities.find((f) => f.id === resolvedFacilityId) ??
       selectedFacilityFromLookup
     : undefined;
   const availableFacilities =
-    selectedFacilityFromLookup && !hasFacilityInList
+    selectedFacilityFromLookup && !hasFacilityToVerifyInList
       ? [selectedFacilityFromLookup, ...facilities]
       : facilities;
-
-  // A deep-linked `?facility=` is still being resolved when it isn't yet
-  // confirmed against the org (not in the sidebar list and not verified by id)
-  // while a query that could confirm it is in flight. During this window the
-  // shell shows a loading state instead of the misleading "Select a facility"
-  // gate, and never canonicalizes the param away. Fail-closed: once every
-  // query settles without confirming membership, this is false and the genuine
-  // no-selection gate renders.
-  const isResolving = Boolean(
-    facilityId &&
-      !hasSelectedFacility &&
-      (isLoading || isSelectedFacilityLoading)
-  );
 
   const value: FacilityContextValue = {
     activeOrganizationId,

@@ -70,4 +70,20 @@ describe("CreditBatchOverview to-do groups", () => {
     expect(screen.getByText("Blocking item")).toBeTruthy();
     for (const help of HELP) expect(screen.queryByText(help)).toBeNull();
   });
+
+  it("heads the waiting group Waiting on an editable batch", () => {
+    harness.readOnly = false;
+    harness.withItems = true;
+    render(<CreditBatchOverview />);
+    expect(screen.getByRole("heading", { name: /^Waiting/ })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /^Status/ })).toBeNull();
+  });
+
+  it("heads the waiting group Status on a read-only batch, since its items are statuses", () => {
+    harness.readOnly = true;
+    harness.withItems = true;
+    render(<CreditBatchOverview />);
+    expect(screen.getByRole("heading", { name: /^Status/ })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /^Waiting/ })).toBeNull();
+  });
 });

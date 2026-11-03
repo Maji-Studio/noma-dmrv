@@ -67,7 +67,7 @@ describe("read-only sheet sections", () => {
     expect(field?.value).toBeNull();
   });
 
-  it("states a failed archived delivery read once, with Retry in a notice", () => {
+  it("states a failed archived delivery read once, with Try again in a notice", () => {
     const refetch = vi.fn();
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
@@ -76,9 +76,9 @@ describe("read-only sheet sections", () => {
     expect(field?.value).toBe("Could not load");
     // The field states the failure; the notice gives only the step.
     render(<>{sections[0].content}</>);
-    expect(screen.getByRole("status").textContent).toContain("Retry to load the delivery source.");
+    expect(screen.getByRole("status").textContent).toContain("Try again to load the delivery source.");
     expect(screen.queryByText(/could not be loaded/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
@@ -91,6 +91,6 @@ describe("read-only sheet sections", () => {
     expect(sections[0].content).toBeUndefined();
     render(<>{field?.value}</>);
     expect(screen.queryByText("Could not load")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });

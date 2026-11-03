@@ -4,7 +4,7 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { LOAD_FAILED } from "@/lib/copy-utils";
+import { LOAD_FAILED, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -17,8 +17,7 @@ import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import { Notice } from "@/components/ui/notice";
 
-const DELIVERY_RETRY_LABEL = "Retry";
-const DELIVERY_RETRY_TEXT = "Retry to load the delivery source.";
+const DELIVERY_RETRY_TEXT = "Try again to load the delivery source.";
 
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {
@@ -81,7 +80,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
             // The field states the failure; the notice carries only the step.
             <Notice
               tone="warning"
-              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{DELIVERY_RETRY_LABEL}</Button>}
+              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{TRY_AGAIN_LABEL}</Button>}
             >
               {DELIVERY_RETRY_TEXT}
             </Notice>
@@ -147,7 +146,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           {context.lock.error && !context.readOnly && (
             <div className="flex flex-col gap-8">
               <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
-              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>Retry certification check</Button>
+              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>{TRY_AGAIN_LABEL}</Button>
             </div>
           )}
           <ApplicationSupportingEvidencePanel applicationId={application.id} readOnly={context.readOnly} />

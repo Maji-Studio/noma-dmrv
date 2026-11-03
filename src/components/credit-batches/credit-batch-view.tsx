@@ -26,7 +26,7 @@ import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "@/components/ui/sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { APPLIED_DRY_LABEL } from "@/lib/credit-batches/batch-page";
-import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
 import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
@@ -211,11 +211,11 @@ function CreditBatchRunsContent({
             busy={isRetryingRuns}
             onClick={onRetryRuns}
           >
-            Retry
+            {TRY_AGAIN_LABEL}
           </Button>
         }
       >
-        Production runs unavailable. Retry to load the linked runs.
+        Production runs unavailable. Try again to load the linked runs.
       </Notice>
     );
   }
