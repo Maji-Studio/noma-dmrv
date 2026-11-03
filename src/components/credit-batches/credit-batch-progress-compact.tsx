@@ -34,11 +34,14 @@ const STATE_TEXT: Record<CreditBatchMilestone["state"], string> = {
 };
 
 /**
- * The step the row names: the current or failed one; once every step is done,
- * the last; before anything starts, the first.
+ * The step the row names: a failed one first (an interrupted Removal stays in
+ * view while data still blocks), else the current one; once every step is
+ * done, the last; before anything starts, the first.
  */
 export function progressFocusIndex(steps: readonly CreditBatchMilestone[]): number {
-  const active = steps.findIndex((step) => step.state === "current" || step.state === "failed");
+  const failed = steps.findIndex((step) => step.state === "failed");
+  if (failed >= 0) return failed;
+  const active = steps.findIndex((step) => step.state === "current");
   if (active >= 0) return active;
   const lastDone = steps.findLastIndex((step) => step.state === "done");
   return lastDone >= 0 ? lastDone : 0;

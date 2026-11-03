@@ -22,6 +22,9 @@ describe("progressFocusIndex", () => {
     expect(progressFocusIndex(missing.map((s) => ({ ...s, state: "done" as const })))).toBe(3);
     expect(progressFocusIndex(missing.map((s) => ({ ...s, state: "todo" as const })))).toBe(0);
   });
+  it("stays on a failed step even while an earlier step is current", () => {
+    expect(progressFocusIndex(missing.map((s, i) => (i === 1 ? { ...s, state: "failed" as const } : s)))).toBe(1);
+  });
 });
 
 describe("CreditBatchProgressCompact", () => {

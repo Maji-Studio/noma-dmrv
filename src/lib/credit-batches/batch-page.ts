@@ -119,9 +119,18 @@ export interface CreditBatchMilestoneInput {
   pageModel: CreditBatchPageModel | undefined;
 }
 
+/** An interrupted holder leads; a submitted Removal keeps its code and date after it. */
 function removalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
   const interrupted = findInterruptedRemoval(model.removals);
-  if (interrupted) return `${interrupted.code}: ${interrupted.status.label}`;
+  const sent = sentRemovalCaption(model, timeZone);
+  if (interrupted) {
+    const lead = `${interrupted.code}: ${interrupted.status.label}`;
+    return model.milestones.firstRemovalSubmittedAt && sent ? `${lead} · ${sent}` : lead;
+  }
+  return sent;
+}
+
+function sentRemovalCaption(model: CreditBatchPageModel, timeZone: string): string | null {
   const { firstRemovalSubmittedAt, firstRemovalSubmittedCode } = model.milestones;
   if (!firstRemovalSubmittedAt) {
     const draft = model.removals.find((removal) => removal.phase === "draft");
@@ -146,6 +155,7 @@ function removalCaption(model: CreditBatchPageModel, timeZone: string): string |
 export function creditBatchMilestones({ blockingCount, openCount, pageModel, timeZone }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
   const missing = blockingCount != null && blockingCount > 0;
+  const interruptedHolder = findInterruptedRemoval(pageModel?.removals);
   const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number; keepCaption?: boolean }[] = [
     {
       key: "data",
@@ -158,10 +168,11 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
     {
       key: "removal",
       label: "Removal submitted",
-      done: !!pageModel?.milestones.firstRemovalSubmittedAt,
+      // An interrupted holder fails the step in red, even beside a submitted one or while data still blocks (#1528).
+      done: !interruptedHolder && !!pageModel?.milestones.firstRemovalSubmittedAt,
+      failed: !!interruptedHolder,
       caption: pageModel ? removalCaption(pageModel, timeZone) : null,
-      // An interrupted Removal is named even while data is still blocking (#1528).
-      keepCaption: !!findInterruptedRemoval(pageModel?.removals),
+      keepCaption: !!interruptedHolder,
     },
     {
       key: "verified",
