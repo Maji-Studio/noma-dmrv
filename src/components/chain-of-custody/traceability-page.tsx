@@ -231,7 +231,8 @@ export function TraceabilityPage() {
       // In split view, record clicks move the map's walk instead of
       // navigating; links stay live in Flow view.
       disableLinks: applicationView === "split",
-      highlightedNodeId: selectedNodeId,
+      // Split lights the walk's step instead; a Flow-view ring would linger.
+      highlightedNodeId: applicationView === "split" ? null : selectedNodeId,
       timeZone,
     }
   );
