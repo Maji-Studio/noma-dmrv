@@ -99,6 +99,7 @@ const KIND_ACCENTS: Record<EndpointCard["kind"], MapAccent> = {
   supplier: "orange",
   facility: "purple",
   field: "pink",
+  customer: "pink",
 };
 
 // What the line between the markers is, so the dash pattern is never the only cue.
