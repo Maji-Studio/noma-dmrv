@@ -45,3 +45,6 @@ export function activityLoadedMessage(count: number): string {
 export function activityRepeatLabel(count: number): string {
   return `${count} times`;
 }
+
+/** Older events loaded that read the same as the last row, so only its count grew. */
+export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to the last row.";

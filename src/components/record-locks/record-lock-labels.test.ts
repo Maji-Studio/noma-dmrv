@@ -13,9 +13,10 @@ describe("Removal links", () => {
     expect(recordLockLinkText(removal())).toBe("Removal RM-26-001");
   });
 
-  it("keep the period wording in sentences and fall back when no code is known", () => {
+  it("lead with the code in sentences too, and fall back to the period or the bare noun", () => {
     const period = { startedOn: "2026-01-01", completedOn: "2026-03-31" };
-    expect(recordLockLinkText(removal({ period }))).toBe("Removal Jan 1 to Mar 31, 2026");
+    expect(recordLockLinkText(removal({ period }))).toBe("Removal RM-26-001, Jan 1 to Mar 31, 2026");
+    expect(recordLockLinkText(removal({ period, label: null }))).toBe("Removal Jan 1 to Mar 31, 2026");
     expect(recordLockLinkTitle(removal({ label: null }))).toBe("Removal");
   });
 });

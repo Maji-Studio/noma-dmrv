@@ -16,7 +16,8 @@
 
 import Link from "next/link";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
-import { ExplanationInfo } from "@/components/ui/explanation-info";
+import { DetailField } from "@/components/ui/detail-panel";
+import { RawIdentifiers } from "./removal-template-mapping-view";
 import { LOAD_FAILED, MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { EnvBanner } from "./env-banner";
@@ -106,34 +107,38 @@ function SummaryBody({
         </span>
       </Field>
 
-      <Field label="Removal template">
-        {mapping.removalTemplateId ? (
-          <RemovalTemplateName projectId={mapping.externalProjectId} templateId={mapping.removalTemplateId} />
-        ) : (
+      {mapping.removalTemplateId ? (
+        <RemovalTemplateField projectId={mapping.externalProjectId} templateId={mapping.removalTemplateId} />
+      ) : (
+        <Field label="Removal template">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {MISSING_VALUE.notSet}
           </span>
-        )}
-      </Field>
+        </Field>
+      )}
     </div>
   );
 }
 
-/** The template's display name, with its registry id behind the (i). */
-function RemovalTemplateName({ projectId, templateId }: { projectId: string; templateId: string }) {
+/**
+ * The template's display name as a detail field: a skeleton while the project's
+ * templates load, a settled reason when the name cannot be read. The registry
+ * id stays in the technical details.
+ */
+function RemovalTemplateField({ projectId, templateId }: { projectId: string; templateId: string }) {
   const templates = useIsometricProjectTemplates(projectId);
   const name = templates.data?.find((template) => template.id === templateId)?.display_name;
-  const text = name ?? (
-    templates.isError ? LOAD_FAILED
-      : templates.isSuccess ? NOT_FOUND_ON_ISOMETRIC
-        : "Loading name…"
-  );
+  const reason = name ? null : templates.isError ? LOAD_FAILED : templates.isSuccess ? NOT_FOUND_ON_ISOMETRIC : null;
   return (
-    <span className="inline-flex items-center gap-4 body-small text-[var(--color-text-primary)]">
-      <span className={name ? undefined : "text-[var(--color-text-tertiary)]"}>{text}</span>
-      <ExplanationInfo title="Removal template" hint="The template this facility's Removals are built from. Its registry id is shown below.">
-        <span className="body-small font-mono break-all text-[var(--color-text-primary)]">{templateId}</span>
-      </ExplanationInfo>
-    </span>
+    <div className="flex flex-col gap-8">
+      <DetailField
+        label="Removal template"
+        value={name ?? reason}
+        emptySituation="notSet"
+        valuePresent={reason ? false : undefined}
+        pending={!name && !reason}
+      />
+      <RawIdentifiers summary="Technical details" entries={[["Template", templateId]]} />
+    </div>
   );
 }

@@ -72,6 +72,9 @@ import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
 
+/** R₀ reads at two decimals, as on the sample sheet. */
+const R0_DIGITS = 2;
+
 /** The average carbon card when the stats read settled and no Sample has a total carbon result. */
 const NO_TOTAL_CARBON_RESULTS = "No total carbon results";
 
@@ -173,7 +176,8 @@ function createColumns(
     ...(showR0 ? [{
       accessorKey: "randomReflectanceR0Percent",
       header: "R₀ (%)",
-      cell: ({ row }: { row: Row<SampleWithRelations> }) => formatLabPercent(row.original.randomReflectanceR0Percent),
+      cell: ({ row }: { row: Row<SampleWithRelations> }) =>
+        row.original.randomReflectanceR0Percent?.toFixed(R0_DIGITS) ?? MISSING_VALUE.notRecorded,
     }] : []),
     {
       accessorKey: "labName",

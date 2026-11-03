@@ -25,8 +25,9 @@ import {
   activityEmptyDescription,
   activityHistoryStartNote,
   activityLoadedMessage,
+  ACTIVITY_REPEATS_LOADED_MESSAGE,
 } from "./activity-copy";
-import { collapseRepeatedActivity, groupActivityByDay } from "./activity-day-groups";
+import { collapseRepeatedActivity, countActivityRows, groupActivityByDay } from "./activity-day-groups";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import {
@@ -120,11 +121,14 @@ export function CreditBatchActivityView({
   };
   const showMore = async () => {
     const before = items.length;
+    const rowsBefore = countActivityRows(items, timeZone);
     const result = await activity.fetchNextPage();
-    const after = result.data?.pages.flatMap((page) => page.items).length ?? before;
-    if (after > before) {
+    const loaded = result.data?.pages.flatMap((page) => page.items) ?? items;
+    if (loaded.length > before) {
+      // Count rows, not events: repeats fold into one row, and older events can join the last row.
+      const added = countActivityRows(loaded, timeZone) - rowsBefore;
       setFocusIndex(before);
-      setAnnouncement(activityLoadedMessage(after - before));
+      setAnnouncement(added > 0 ? activityLoadedMessage(added) : ACTIVITY_REPEATS_LOADED_MESSAGE);
     }
   };
   const focusFirstNew = (node: HTMLElement | null) => {
@@ -169,11 +173,13 @@ export function CreditBatchActivityView({
           className="flex flex-col gap-24"
           data-testid="activity-list"
         >
-          {dayGroups.map((group) => (
+          {dayGroups.flatMap((group) => {
+            const runs = collapseRepeatedActivity(group.items, timeZone);
+            return runs.length === 0 ? [] : [(
             <li key={group.key} className="flex flex-col gap-12">
               <h3 className="body-small font-medium text-[var(--color-text-secondary)]">{group.label}</h3>
               <ol className="flex flex-col">
-                {collapseRepeatedActivity(group.items, timeZone).map(({ item, count, ids }) => (
+                {runs.map(({ item, count, ids }) => (
                   <ActivityEntry
                     key={item.id}
                     item={item}
@@ -185,7 +191,8 @@ export function CreditBatchActivityView({
                 ))}
               </ol>
             </li>
-          ))}
+            )];
+          })}
         </ol>
         {activity.hasNextPage ? (
           <Button

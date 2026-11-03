@@ -2,7 +2,7 @@
 import { addDaysIso, facilityToday, formatFacilityDate } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { activityFieldLines } from "./activity-change-lines";
-import { activityChangeSummary, type ActivityItem } from "./activity-display";
+import { activityChangeSummary, isHiddenActivityField, type ActivityItem } from "./activity-display";
 
 const YESTERDAY_OFFSET_DAYS = -1;
 
@@ -46,10 +46,26 @@ export interface ActivityRun {
 /** What makes two events read the same: who, which record, what happened and the lines shown. */
 function activityReadingKey(item: ActivityItem, timeZone: string): string {
   return JSON.stringify([
-    item.actor?.id ?? item.source, item.entityType, item.entityId, item.action, item.reasonCode,
+    item.actor?.id ?? null, item.source, item.entityType, item.entityId, item.action, item.reasonCode,
     item.fromStatus, item.toStatus, item.fromRemote, item.toRemote,
     activityChangeSummary(item), activityFieldLines(item, timeZone),
   ]);
+}
+
+/**
+ * An update whose every changed field is internal bookkeeping (checksums,
+ * upload progress, send reservations) says nothing to an operator, so the feed
+ * leaves it out rather than show an empty "updated" row.
+ */
+export function isEmptyUpdate(item: ActivityItem): boolean {
+  if (item.action !== "updated" || activityChangeSummary(item) !== null) return false;
+  const fields = [...new Set([...item.changedFields, ...Object.keys(item.changes ?? {})])];
+  return fields.length > 0 && fields.every(isHiddenActivityField);
+}
+
+/** How many rows the feed draws for these events (after leaving out empty updates and folding repeats). */
+export function countActivityRows(items: readonly ActivityItem[], timeZone: string): number {
+  return groupActivityByDay(items, timeZone).reduce((total, group) => total + collapseRepeatedActivity(group.items, timeZone).length, 0);
 }
 
 /**
@@ -61,6 +77,7 @@ export function collapseRepeatedActivity(items: readonly ActivityItem[], timeZon
   const runs: ActivityRun[] = [];
   let lastKey: string | null = null;
   for (const item of items) {
+    if (isEmptyUpdate(item)) continue;
     const key = activityReadingKey(item, timeZone);
     const last = runs.at(-1);
     if (last && key === lastKey) {
