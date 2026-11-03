@@ -1,7 +1,8 @@
 // Journey page: boot, selection lighting, view mode, hash routes and keyboard. The page is one
 // screen: a map (or graph) with a record carousel over it. Which module does what is in README.md
 // of this folder's siblings; they reach each other through ctx (state.js).
-import { CHAIN, HASH, HOME, LATER_RUNS, R } from "./model.js";
+import { CHAIN, LATER_RUNS, R } from "./model.js";
+import { buildHash, parseHash } from "./route.js";
 import { mount as mountCamera, insets, invalidate, startBlend, linked, onMapMove, onMapUser } from "./camera.js";
 import { mount as mountDeck } from "./deck.js";
 import { mount as mountGraph } from "./graph.js";
@@ -55,37 +56,19 @@ function setMode(m, quiet) {
   ctx.dirty(); setHash();
 }
 
-/* ---------- hash routes: #graph-full-summary-run-b1x2 ---------- */
+/* ---------- hash routes: #graph-full-summary-field, #r.PR-26-008 (see route.js) ---------- */
 function setHash() {
   if (st.booting) return;
-  const t = [];
-  if (st.mode === "graph") t.push("graph");
-  if (st.snap !== "mid" && !desk()) t.push(st.snap);
-  if (!$("sum").hidden) t.push("summary");
-  const ri = st.levels.length === 1 ? st.ai : st.levels[0].idx;
-  t.push(HASH[ri] || "field");
-  if (st.levels.length === 2) {
-    const bi = R[CHAIN[ri]].br.findIndex((b) => b.label === lvl().label);
-    if (bi >= 0) t.push(`b${bi}${st.ai ? `x${st.ai}` : ""}`);
-  }
-  try { history.replaceState(null, "", `#${t.join("-")}`); } catch { /* a sandboxed frame may refuse */ }
+  const hash = buildHash({ mode: st.mode, snap: desk() ? "" : st.snap, summary: !$("sum").hidden, recordId: lvl().items[st.ai] });
+  try { history.replaceState(null, "", hash); } catch { /* a sandboxed frame may refuse */ }
 }
 function route(h) {
-  const t = h.replace(/^#/, "").split("-").filter(Boolean);
-  const mode = t.includes("graph") ? "graph" : "map";
-  const snap = t.includes("full") ? "full" : t.includes("low") ? "low" : "mid";
-  let si = HOME;
-  t.forEach((x) => { const i = HASH.indexOf(x); if (i >= 0) si = i; });
-  const bt = t.find((x) => /^b\d/.test(x));
-  st.levels = [{ items: CHAIN, idx: si, label: "Chain" }];
+  const want = parseHash(h);
+  st.levels = [{ items: CHAIN, idx: want.chainIdx, label: "Chain" }];
   ctx.enterLevel(0);
-  if (bt) {
-    const [, bi, xi] = bt.match(/^b(\d+)(?:x(\d+))?/);
-    const br = R[CHAIN[si]].br[+bi];
-    if (br) { ctx.openBranch(CHAIN[si], br); if (xi) ctx.scrollToIdx(+xi, false); }
-  }
-  st.snap = snap; ctx.applySnap(false); setMode(mode, true);
-  if (t.includes("summary") || t.includes("batch")) ctx.openSum(true); // "batch" was a chain step before
+  if (want.recordId) ctx.goRecord(want.recordId);
+  st.snap = want.snap; ctx.applySnap(false); setMode(want.mode, true);
+  if (want.summary) ctx.openSum(true);
 }
 
 /* ---------- controls ---------- */
