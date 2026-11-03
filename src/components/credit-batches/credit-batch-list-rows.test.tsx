@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { RecordLockView } from "@/lib/record-lock-view";
+import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import {
   appliedDryLabel,
   creditBatchRowActions,
@@ -57,6 +58,17 @@ function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> 
 }
 
 describe("CreditBatchListRow", () => {
+  it("keeps the interrupted status and the batch page's open to-do count together", () => {
+    const view = creditBatchStateOf({
+      state: "incomplete", issueCount: 2, checkCount: 1, linesToDecide: 0,
+      removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true,
+      productionEmissionsClaimedByRemovalCode: null, ghgStatementId: null, ghgStatementStatus: null,
+    });
+    const { row } = renderRow({ view });
+    expect(within(row).getByText("Submission interrupted")).toBeTruthy();
+    expect(within(row).getByLabelText("3 open to-dos").textContent).toBe("3");
+  });
+
   it("shows code, feedstock, dates, the timeline state and the dry applied figure", () => {
     const { row } = renderRow();
     for (const text of ["Chicken manure", "Open to-dos", "Applied (dry)", "0.32 t"]) {

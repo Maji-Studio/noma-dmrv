@@ -10,6 +10,7 @@ vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
 import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emissions-overview";
+import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
@@ -40,6 +41,7 @@ function entry(componentId: string, overrides = {}) {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
+  vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.useFakeTimers();
   // It is still October in Los Angeles, even though UTC has crossed into November.
   vi.setSystemTime(new Date("2026-11-01T03:00:00Z"));
@@ -70,16 +72,19 @@ it("derives all six states, facility-month counts and last occurrence with bulk 
   expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["missing"]);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
+  expect(listEmissionLineCommentsForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
 });
 
 it.each([
   { state: "handled", applications: 1, enrichmentComplete: true,
     counts: { total: 0, open: 0, recorded: 0, notRecorded: 0, needsReview: 0 } },
+  { state: "handled with comment", applications: 1, enrichmentComplete: true, comment: true,
+    counts: { total: 1, open: 0, recorded: 1, notRecorded: 0, needsReview: 0 } },
   { state: "empty", applications: 0, enrichmentComplete: true,
     counts: { total: 1, open: 1, recorded: 0, notRecorded: 1, needsReview: 0 } },
   { state: "needsReview", applications: 1, enrichmentComplete: false,
     counts: { total: 1, open: 1, recorded: 0, notRecorded: 0, needsReview: 1 } },
-])("counts $state sequestration through the facility overview read model", async ({ applications, enrichmentComplete, counts }) => {
+])("counts $state sequestration through the facility overview read model", async ({ applications, enrichmentComplete, counts, comment }) => {
   const storageObservation: EntryObservation & { id: string } = {
     ...observation,
     definition: { groups: [{ id: "storage", key: "co2-stored", displayName: "CO₂ stored", description: "", components: [{
@@ -93,6 +98,11 @@ it.each([
   vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "UTC", batches: [batch] } as never);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([storageObservation] as never);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
+  vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue(comment ? [{
+    id: "comment", organizationId: ctx.organizationId, creditBatchId: batch.id,
+    componentId: "sequestration", body: "Check this application", version: 1,
+    createdAt: new Date(), updatedAt: new Date(), createdBy: ctx.userId, updatedBy: ctx.userId,
+  }] : []);
   vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({
     new: { automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: applications } },
   });

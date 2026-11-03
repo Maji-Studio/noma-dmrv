@@ -384,7 +384,14 @@ it("reads interrupted on the list and timeline when an older holder is interrupt
       const summary = result.data[lineage.batchId];
       // The newest holder alone would read Submitted; the batch-level rule reads every holder.
       expect(summary).toMatchObject({ removalId: newer.id, removalStatus: { kind: "submitted" }, removalInterrupted: true });
-      expect(creditBatchStateOf(summary)).toEqual({ state: "interrupted", blockingCount: 0, openTodoCount: 0 });
+      const pageTodos = (await loadCreditBatchTodos(lineageCtx, lineage.facilityId, [
+        { id: lineage.batchId, removalTemplateId: null },
+      ])).get(lineage.batchId)!;
+      expect(pageTodos.check.some(item => item.id === `interrupted:${lineage.removalId}`)).toBe(true);
+      const view = creditBatchStateOf(summary);
+      expect(view).toEqual({ state: "interrupted", blockingCount: pageTodos.blocking.length,
+        openTodoCount: pageTodos.blocking.length + pageTodos.check.length });
+      expect(view.openTodoCount).toBeGreaterThan(0);
     } finally {
       await db.delete(certificationSubmissions).where(eq(certificationSubmissions.localEntityId, newer.id));
       await db.delete(creditBatchApplications).where(eq(creditBatchApplications.applicationId, application.id));
