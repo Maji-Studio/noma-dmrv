@@ -18,6 +18,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { BiocharProductFilterData } from "@/schemas/biochar-products";
 import { and, asc, count, desc, eq, ilike, isNull, or, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { getBiocharProductSourceRuns, type BiocharProductSourceRun } from "./biochar-product-source-allocations";
 import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 
 const sourceBiocharStorageLocations = alias(
@@ -46,6 +47,8 @@ export interface BiocharProductWithRelations extends BiocharProduct {
     code: string;
     name: string;
   } | null;
+  /** Runs drawn from at save, oldest first; their dates read in the sheet. */
+  sourceRuns?: BiocharProductSourceRun[];
   linkedProductionRun?: {
     id: string;
     code: string;
@@ -274,6 +277,8 @@ export async function getBiocharProducts(
     .limit(pageSize)
     .offset(offset);
 
+  const sourceRuns = await getBiocharProductSourceRuns(ctx, productList.map(row => row.id));
+
   // Transform to BiocharProductWithRelations
   const items: BiocharProductWithRelations[] = productList.map((row) => ({
     version: row.version,
@@ -290,6 +295,7 @@ export async function getBiocharProducts(
     sourceBiocharStorageLocationId:
       row.sourceBiocharStorageLocationId,
     sourceAllocatedDryMassKg: row.sourceAllocatedDryMassKg,
+    sourceRuns: sourceRuns.get(row.id) ?? [],
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
@@ -442,6 +448,8 @@ export async function getBiocharProductById(
     throw new SafeError("Biochar product not found");
   }
 
+  const sourceRuns = await getBiocharProductSourceRuns(ctx, [row.id]);
+
   return {
     version: row.version,
     id: row.id,
@@ -457,6 +465,7 @@ export async function getBiocharProductById(
     sourceBiocharStorageLocationId:
       row.sourceBiocharStorageLocationId,
     sourceAllocatedDryMassKg: row.sourceAllocatedDryMassKg,
+    sourceRuns: sourceRuns.get(row.id) ?? [],
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,

@@ -16,9 +16,11 @@
  */
 "use client";
 
+import Link from "next/link";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
@@ -28,13 +30,14 @@ import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatDayString, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
 } from "@/lib/mass-moisture";
 import { sumNullable } from "@/lib/nullable-sum";
+import { recordHref } from "@/lib/record-links";
 import {
   ingredientComponents,
   productCompositionComponents,
@@ -113,6 +116,25 @@ function SavedProductComposition({ product, composition }: {
   );
 }
 
+/** One line per source run: its linked code, then the day it was made. */
+function SourceRunLines({ runs, facilityId }: {
+  runs: NonNullable<BiocharProductWithRelations["sourceRuns"]>;
+  facilityId: string;
+}) {
+  return (
+    <ul className="flex flex-col gap-4" data-testid="product-source-runs">
+      {runs.map(run => (
+        <li key={run.id} className="flex min-w-0 items-baseline gap-8">
+          <Link href={recordHref("productionRun", run.id, { facilityId })} className={RECORD_CODE_LINK}>
+            {run.code}
+          </Link>
+          <span className="text-[var(--color-text-tertiary)]">{formatDayString(run.date)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** `timeZone` is the product's facility zone; stock event times read on the facility clock. */
 export function productSheetSections(product: BiocharProductWithRelations, timeZone: string): DetailPanelSection[] {
   const composition = savedProductComposition(product);
@@ -125,6 +147,12 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
           label: "Source biochar bin",
           value: product.sourceBiocharStorageLocation?.name ?? product.linkedProductionRun?.biocharStorageLocationName,
         },
+        ...(product.sourceRuns?.length
+          ? [{
+              label: "Source production runs",
+              value: <SourceRunLines runs={product.sourceRuns} facilityId={product.facilityId} />,
+            }]
+          : []),
         {
           label: "Source biochar wet mass (kg)",
           value: formatSavedMassKg(composition.sourceWetKg),
