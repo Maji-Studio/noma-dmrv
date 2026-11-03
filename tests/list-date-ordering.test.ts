@@ -7,9 +7,9 @@ import {
   cleanupLabSampleFixture,
   createLabSampleFixture,
   type LabSampleFixture,
-} from "../../tests/helpers/lab-sample-fixture";
-import { getFeedstocks } from "./feedstocks";
-import { getSamples } from "./samples";
+} from "./helpers/lab-sample-fixture";
+import { getFeedstocks } from "@/data-access/feedstocks";
+import { getSamples } from "@/data-access/samples";
 
 const PAGE_SIZE = 2;
 const SAME_DATE = new Date("2026-09-15T12:00:00.000Z");
