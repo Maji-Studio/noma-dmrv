@@ -138,6 +138,7 @@ export function TraceMapView({
             padding={stacked ? PHONE_PADDING : DESKTOP_PADDING}
             onMarkerClick={onMarker}
             onBackgroundClick={chain ? undefined : () => selectStage(null)}
+            nearestMarkerTaps={stacked}
             controlsClassName={cn("left-auto top-auto bottom-32 right-16", CONTROLS_RIGHT_CLASS, PHONE_CONTROL_SIZE_CLASS)}
           />
         ) : (

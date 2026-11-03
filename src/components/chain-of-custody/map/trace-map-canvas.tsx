@@ -37,6 +37,7 @@ import {
   SAT_LAYER_ID,
   SAT_SOURCE_ID,
 } from "./viewer-constants";
+import { resolveMapTap } from "./nearest-marker";
 import { createSiteMarkerElement } from "./viewer-elements";
 import { chipAnchor, legLineCoordinates } from "./viewer-utils";
 import { litKmRange, type DrawnLeg, type MapLighting } from "./trace-model";
@@ -80,6 +81,8 @@ export interface TraceMapCanvasProps {
   padding: FramePadding;
   onMarkerClick?: (nodeId: string) => void;
   onBackgroundClick?: () => void;
+  /** Phone layout: a tap on the map picks the nearest marker within the 44px touch radius. */
+  nearestMarkerTaps?: boolean;
   controlsClassName?: string;
 }
 
@@ -241,19 +244,20 @@ export default function TraceMapCanvas({
   padding,
   onMarkerClick,
   onBackgroundClick,
+  nearestMarkerTaps,
   controlsClassName,
 }: TraceMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const chipsRef = useRef<ChipEntry[]>([]);
-  const latest = useRef({ lighting, padding, onMarkerClick, onBackgroundClick });
+  const latest = useRef({ lighting, padding, onMarkerClick, onBackgroundClick, nearestMarkerTaps });
   const [readyMap, setReadyMap] = useState<maplibregl.Map | null>(null);
   const [satOn, setSatOn] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    latest.current = { lighting, padding, onMarkerClick, onBackgroundClick };
+    latest.current = { lighting, padding, onMarkerClick, onBackgroundClick, nearestMarkerTaps };
   });
 
   // Map lifecycle: the imperative-DOM exception.
@@ -301,7 +305,15 @@ export default function TraceMapCanvas({
     }, ANTS_INTERVAL_MS);
     const resize = new ResizeObserver(() => map.resize());
     resize.observe(container);
-    map.on("click", () => latest.current.onBackgroundClick?.());
+    map.on("click", (event) => {
+      const points = markersRef.current.map((marker) => {
+        const point = map.project(marker.getLngLat());
+        return { nodeId: marker.getElement().dataset.nodeId ?? "", x: point.x, y: point.y };
+      });
+      const result = resolveMapTap({ nearestMarkerTaps: !!latest.current.nearestMarkerTaps, markers: points, tap: event.point });
+      if (result.kind === "marker") latest.current.onMarkerClick?.(result.nodeId);
+      else latest.current.onBackgroundClick?.();
+    });
     map.on("zoom", () => syncChipVisibility(map, chipsRef.current));
     map.on("zoomend", () => declutterLabels(map, markersRef.current));
     return () => {
