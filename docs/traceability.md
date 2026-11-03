@@ -307,8 +307,10 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`,
   `trace-model.test.ts`, `trace-chains.test.ts` (chains, steps, `walkTo`),
-  `trace-map-view.test.tsx`, `application-trace-map.test.tsx` (opens on its own
-  chain, a Flow pick moves the walk), `trace-record-values.test.tsx`
+  `trace-map-view.test.tsx`, `trace-map-canvas.test.tsx` (the camera flies to a
+  new selection, refits without a flight when framed places move),
+  `application-trace-map.test.tsx` (opens on its own chain, a Flow pick moves
+  the walk), `trace-record-values.test.tsx`
 
 ## Saved delivery and application provenance
 

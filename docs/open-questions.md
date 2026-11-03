@@ -35,6 +35,7 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 - Bin history (#1004): wet mass always, dry when available, the rest in the table, top to bottom on phones are settled; the layout pick is open.
 - Switch-template warning (#1144): how the warning leads to the template's line review.
 - Row links (#1130): the user wants the full row clickable.
+- Application Split layouts (#1486): Flow beside map-over-walk from 1280px, Flow stacked over the walk panel below it and on phones; awaiting Kenji's pick (`src/components/chain-of-custody/map/application-trace-map.tsx:ApplicationTraceMap`).
 
 ## Open-item problem wording
 
