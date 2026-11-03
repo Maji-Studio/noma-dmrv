@@ -8,7 +8,17 @@
 
 import type { ReactNode } from "react";
 import { OUTPUT_DRAW_ORDERS, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
-import { OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_DESCRIPTIONS, outputStockModes, type OutputBinType } from "@/schemas/storage-locations";
+import {
+  FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS,
+  FEEDSTOCK_STOCK_MODE_DESCRIPTIONS,
+  FEEDSTOCK_STOCK_MODE_LABELS,
+  isOutputBinType,
+  OUTPUT_DRAW_ORDER_LABELS,
+  OUTPUT_STOCK_MODE_DESCRIPTIONS,
+  outputStockModes,
+  type OutputBinType,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
 
 const ART_WIDTH = 112;
 const ART_HEIGHT = 44;
@@ -173,12 +183,14 @@ const STOCK_MODE_CARD_ART: Record<OutputStockMode, { title: string; art: ReactNo
 };
 
 /** Cards for the chosen bin type; the caption says what a draw takes from that kind of bin. */
-export function stockModeOptions(type: OutputBinType) {
-  return outputStockModes.map((mode) => ({
-    value: mode,
-    ...STOCK_MODE_CARD_ART[mode],
-    description: OUTPUT_STOCK_MODE_DESCRIPTIONS[type][mode],
-  }));
+export function stockModeOptions(type: StorageLocationType | null | undefined) {
+  return outputStockModes.map((mode) => {
+    const art = STOCK_MODE_CARD_ART[mode];
+    if (!isOutputBinType(type)) {
+      return { value: mode, art: art.art, title: FEEDSTOCK_STOCK_MODE_LABELS[mode], description: FEEDSTOCK_STOCK_MODE_DESCRIPTIONS[mode] };
+    }
+    return { value: mode, ...art, description: OUTPUT_STOCK_MODE_DESCRIPTIONS[type][mode] };
+  });
 }
 
 /** Dated bays stay chronological; the first bay drawn is empty in the settled picture. */
@@ -205,4 +217,10 @@ export const drawOrderOptions = OUTPUT_DRAW_ORDERS.map((order) => ({
   title: OUTPUT_DRAW_ORDER_LABELS[order],
   description: order === "oldest_first" ? "Empty the earliest batch first." : "Empty the latest batch first.",
   art: <DrawOrderArt order={order} />,
+}));
+
+/** The same cards for a feedstock bin, whose layers are deliveries. */
+export const feedstockDrawOrderOptions = drawOrderOptions.map((option) => ({
+  ...option,
+  description: FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS[option.value],
 }));

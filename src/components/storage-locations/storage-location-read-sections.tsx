@@ -1,6 +1,6 @@
 /** Storage bin side-sheet view mode: the sections config for EntitySideSheet. */
 import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
-import { formatStorageLocationType, OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
+import { feedstockDrawMethodLabel, formatStorageLocationType, OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputBinBalance } from "./output-bin-balance";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
@@ -136,6 +136,9 @@ export function storageLocationSheetSections(
           : []),
         ...(bin.type === "product_bin"
           ? [{ label: "Formulation", value: bin.formulationName }]
+          : []),
+        ...(bin.type === "feedstock_bin"
+          ? [{ label: "Draw method", value: feedstockDrawMethodLabel(bin.stockMode, bin.drawOrder) }]
           : []),
         ...(bin.type !== "feedstock_bin"
           ? [{ label: "Stock mode", value: OUTPUT_STOCK_MODE_LABELS[bin.stockMode] }]
