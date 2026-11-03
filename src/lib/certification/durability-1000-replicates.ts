@@ -25,7 +25,7 @@ export interface Complete1000YearReplicate {
 export interface Sampled1000YearReplicateEvaluation {
   replicates: Complete1000YearReplicate[];
   blockers: string[];
-  blockerDetails: BlockerMessage[];
+  blockerMessages: BlockerMessage[];
 }
 
 function isUsableNumber(value: number | null): value is number {
@@ -106,7 +106,7 @@ export function evaluateSampled1000YearReplicates(args: {
   const orderedSamples = [...args.samples].sort((left, right) =>
     left.id.localeCompare(right.id),
   );
-  const blockerDetails = SAMPLED_1000_YEAR_MEASUREMENTS.map(({ field, measurement }) =>
+  const blockerMessages = SAMPLED_1000_YEAR_MEASUREMENTS.map(({ field, measurement }) =>
     missingMeasurementBlocker({
       creditBatchCode: args.creditBatchCode,
       labels: sampleLabels(orderedSamples, (sample) => !isUsableNumber(sample[field])),
@@ -121,7 +121,7 @@ export function evaluateSampled1000YearReplicates(args: {
       sample.inorganicCarbonPercent < 0,
   );
   if (invalidInorganicLabels.length > 0) {
-    blockerDetails.push(blockerMessage(
+    blockerMessages.push(blockerMessage(
       `Credit batch ${args.creditBatchCode} has negative inorganic carbon on ${invalidInorganicLabels.join(", ")}.`,
       `Correct the measured value before submitting.`,
     ));
@@ -136,7 +136,7 @@ export function evaluateSampled1000YearReplicates(args: {
         CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS,
   );
   if (excessiveInorganicLabels.length > 0) {
-    blockerDetails.push(blockerMessage(
+    blockerMessages.push(blockerMessage(
       `Credit batch ${args.creditBatchCode} has inorganic carbon above total carbon beyond the ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS}-percentage-point tolerance on ${excessiveInorganicLabels.join(", ")}.`,
       `Correct the carbon measurements before submitting.`,
     ));
@@ -149,7 +149,7 @@ export function evaluateSampled1000YearReplicates(args: {
       !isUnitFraction(sample.sReflectanceFraction),
   );
   if (invalidSFractionLabels.length > 0) {
-    blockerDetails.push(blockerMessage(
+    blockerMessages.push(blockerMessage(
       `Credit batch ${args.creditBatchCode} has an R₀ fraction outside 0 to 1 on ${invalidSFractionLabels.join(", ")}.`,
       `Correct the measured value before submitting.`,
     ));
@@ -183,11 +183,11 @@ export function evaluateSampled1000YearReplicates(args: {
   });
 
   if (replicates.length < MINIMUM_REPLICATES_PER_BATCH) {
-    blockerDetails.push(blockerMessage(
+    blockerMessages.push(blockerMessage(
       `Credit batch ${args.creditBatchCode} has ${replicates.length} complete 1,000-year ${pluralize(replicates.length, "replicate")}.`,
       `Record total carbon, measured inorganic carbon, and the R₀ fraction on at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
     ));
   }
 
-  return { replicates, blockers: blockerDetails.map((item) => item.message), blockerDetails };
+  return { replicates, blockers: blockerMessages.map((item) => item.message), blockerMessages };
 }

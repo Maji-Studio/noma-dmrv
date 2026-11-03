@@ -101,7 +101,7 @@ export interface DurabilitySubmissionGateResult {
   ok: boolean;
   /** One human-readable blocker line per failed gate, ready to join into a SafeError. */
   blockers: string[];
-  blockerDetails: BlockerMessage[];
+  blockerMessages: BlockerMessage[];
   /** Non-blocking advisories: currently the after-window sampling warning. */
   warnings: string[];
 }
@@ -114,7 +114,7 @@ export interface DurabilitySubmissionGateResult {
 export function evaluateDurabilitySubmissionGates(
   batches: BatchGateFacts[],
 ): DurabilitySubmissionGateResult {
-  const blockerDetails: BlockerMessage[] = [];
+  const blockerMessages: BlockerMessage[] = [];
   const warnings: string[] = [];
 
   for (const batch of batches) {
@@ -124,7 +124,7 @@ export function evaluateDurabilitySubmissionGates(
       for (const sample of batch.replicateProvenance) {
         if (sample.samplingDay == null) continue;
         if (sample.samplingDay < batch.startDate) {
-          blockerDetails.push(blockerMessage(
+          blockerMessages.push(blockerMessage(
             `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}.`,
             `Correct the Sample date before submitting (§8.3.1).`,
           ));
@@ -142,7 +142,7 @@ export function evaluateDurabilitySubmissionGates(
 
     // (b) A batch explicitly created as sampled must carry sample evidence.
     if (sampleRowCount === 0) {
-      blockerDetails.push(blockerMessage(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} is marked as sampled but has no Samples.`,
         `Add at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
       ));
@@ -159,7 +159,7 @@ export function evaluateDurabilitySubmissionGates(
       eligibility.usableReplicateCount,
     );
     if (!replicateCheck.meetsMinimum) {
-      blockerDetails.push(blockerMessage(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} ${pluralize(eligibility.usableReplicateCount, "Sample")} with complete H/C_org and O/C_org results.`,
         `Add complete results to at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
       ));
@@ -178,11 +178,11 @@ export function evaluateDurabilitySubmissionGates(
           `O/C_org mean ${eligibility.meanOToCOrgRatio?.toFixed(3)} ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}`,
         );
       }
-      blockerDetails.push(blockerMessage(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} fails biochar eligibility (${parts.join("; ")}), under module §3 Table 2.`,
       ));
     } else if (eligibility.eligible === null) {
-      blockerDetails.push(blockerMessage(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} is missing H/C_org or O/C_org chemistry, so its eligibility under module §3 Table 2 cannot be confirmed.`,
         `Record both values before submitting.`,
       ));
@@ -196,11 +196,11 @@ export function evaluateDurabilitySubmissionGates(
     );
     if (unpairedSampleCodes.length > 0) {
       const copy = unpairedHToCSamplesMessage(unpairedSampleCodes);
-      blockerDetails.push(blockerMessage(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} has ${copy.fact}`, copy.instruction,
       ));
     }
   }
 
-  return { ok: blockerDetails.length === 0, blockers: blockerDetails.map((item) => item.message), blockerDetails, warnings };
+  return { ok: blockerMessages.length === 0, blockers: blockerMessages.map((item) => item.message), blockerMessages, warnings };
 }

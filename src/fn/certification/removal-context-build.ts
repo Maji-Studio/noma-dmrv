@@ -21,7 +21,7 @@ import { productionReadinessGapForScope } from "@/lib/certification/production-r
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
-import { durabilityConfigurationBlockerDetails, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
+import { durabilityConfigurationBlockerMessages, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import {
   buildSoilTemperatureGate,
@@ -218,7 +218,7 @@ export async function buildRemovalContext(
           })),
   });
   const durabilityConfigBlockers = hasDurabilityMeasurementComponents(templateFacts.removalTemplate)
-    ? durabilityConfigurationBlockerDetails(batchesWithSamples) : [];
+    ? durabilityConfigurationBlockerMessages(batchesWithSamples) : [];
   const templateTierBlocker = templateFacts.removalTemplate
     ? removalTemplateTierCompatibilityBlocker({ batchesWithSamples }, templateFacts.removalTemplate)
     : null;

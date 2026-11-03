@@ -1,4 +1,4 @@
-import { applicationDestinationMessage, deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerDetails } from "./submission-readiness";
+import { applicationDestinationMessage, deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerMessages } from "./submission-readiness";
 import { describe, expect, it } from "vitest";
 import { deliveryProofBlocker, hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlockerMessage, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
 
@@ -58,7 +58,7 @@ describe("delivery proof readiness", () => {
 });
 
 it("joins producer-authored facts and repair steps without changing messages", () => {
-  const configuration = durabilityConfigurationBlockerDetails([
+  const configuration = durabilityConfigurationBlockerMessages([
     { sampling: "unsampled", durabilityOption: "200_year" },
     { sampling: "sampled", durabilityOption: "1000_year" },
     { sampling: "sampled", durabilityOption: "1000_year" },

@@ -119,12 +119,12 @@ export function buildDurabilityGates(
       ? evaluateSampled1000YearReplicates({
           creditBatchCode: batch.creditBatchCode,
           samples: batch.samples,
-        }).blockerDetails
+        }).blockerMessages
       : [],
   );
   return {
     blockers: [...result.blockers, ...sampled1000YearBlockers.map((item) => item.message)],
-    blockerFacts: [...result.blockerDetails, ...sampled1000YearBlockers].map((item) => item.fact),
+    blockerFacts: [...result.blockerMessages, ...sampled1000YearBlockers].map((item) => item.fact),
     warnings: result.warnings,
   };
 }

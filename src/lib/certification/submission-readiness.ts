@@ -15,7 +15,7 @@ export function hasDurabilityMeasurementComponents(
   ) ?? false;
 }
 
-export function durabilityConfigurationBlockerDetails(
+export function durabilityConfigurationBlockerMessages(
   batches: readonly { sampling: string; durabilityOption: string }[],
 ): BlockerMessage[] {
   const blockers: BlockerMessage[] = [];
@@ -43,7 +43,7 @@ export function durabilityConfigurationBlockerDetails(
 export function durabilityConfigurationBlockers(
   batches: readonly { sampling: string; durabilityOption: string }[],
 ): string[] {
-  return durabilityConfigurationBlockerDetails(batches).map((item) => item.message);
+  return durabilityConfigurationBlockerMessages(batches).map((item) => item.message);
 }
 
 export const feedstockTransportMessage = (label: string) => blockerMessage(

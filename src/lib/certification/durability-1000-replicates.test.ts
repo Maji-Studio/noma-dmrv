@@ -128,10 +128,10 @@ it("builds the original messages from facts and instructions for every failed me
     sample({ id: "negative", inorganic: -1 }),
     sample({ id: "excessive", inorganic: 99, sFraction: 2 }),
   ] });
-  expect(result.blockerDetails).toHaveLength(7);
-  for (const copy of result.blockerDetails) {
+  expect(result.blockerMessages).toHaveLength(7);
+  for (const copy of result.blockerMessages) {
     expect(copy.message).toBe(`${copy.fact} ${copy.instruction}`);
     expect(copy.fact).not.toMatch(/Record |Correct /);
   }
-  expect(result.blockers).toEqual(result.blockerDetails.map((copy) => copy.message));
+  expect(result.blockers).toEqual(result.blockerMessages.map((copy) => copy.message));
 });

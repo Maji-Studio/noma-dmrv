@@ -8,7 +8,7 @@ import { buildSoilTemperatureGate } from "@/lib/isometric/utils/durability-aggre
 import { deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 import { toBatchHealthFacts } from "./batch-health-facts";
 import { attributeSoilTemperatureBlockers } from "./member-batch-gates";
-import { deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerDetails } from "./submission-readiness";
+import { deliveryProofMessage, deliveryDistanceMessage, durabilityConfigurationBlockerMessages } from "./submission-readiness";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 
 const healthy: BatchHealthFacts = {
@@ -25,7 +25,7 @@ function loadedFacts() {
   };
   const carbon = buildDurabilityBatchGates([batch]);
   const soil = buildSoilTemperatureGate({ facilityReference: null, batches: [{ durabilityOption: "200_year", runIds: [] }], siteTemperatures: [] });
-  const configuration = durabilityConfigurationBlockerDetails([batch]);
+  const configuration = durabilityConfigurationBlockerMessages([batch]);
   const members = attributeSoilTemperatureBlockers([{
     id: batch.creditBatchId, code: batch.creditBatchCode,
     durabilityGateBlockers: carbon.blockersByBatchId[batch.creditBatchId],
@@ -64,7 +64,7 @@ describe("read-only batch health facts", () => {
   });
 
   it("joins multiple producer facts like merged check text, each once", () => {
-    const configuration = durabilityConfigurationBlockerDetails([
+    const configuration = durabilityConfigurationBlockerMessages([
       { sampling: "unsampled", durabilityOption: "200_year" },
     ]);
     const carbonFacts = [
