@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
+import productionFixture from "../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate, type LineSources } from "@/lib/isometric/template-observations";
@@ -11,7 +11,7 @@ import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages"
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
-const cula = culaFixture as GhgEntryTemplate;
+const production = productionFixture as GhgEntryTemplate;
 
 const agg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 70, weightedHToCorgRatio: null, weightedOToCorgRatio: null,
@@ -21,7 +21,7 @@ const agg: AggregatedProductionData = {
   earliestStartTime: new Date("2026-10-01"), latestEndTime: new Date("2026-10-01"), sourceProductionRunIds: ["run-1"], warnings: [],
 };
 const blueprintsByKey = new Map((enrichment.blueprints as IsometricComponentBlueprint[]).map((blueprint) => [blueprint.key, blueprint]));
-// The enrichment fixture omits Cula's legacy blueprint. Supply its catalog wire
+// The enrichment fixture omits the production template's legacy blueprint. Supply its catalog wire
 // contract as mock registry metadata; template identity and inputs remain untouched.
 blueprintsByKey.set("carbon_rich_substance_sequestration", {
   key: "carbon_rich_substance_sequestration",
@@ -47,7 +47,7 @@ it("keeps the shared Isometric-editor guidance for an unset fixed value during c
   expect(() => compile(changed, lineSources)).toThrow(REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
 });
 
-it.each([["sandbox 15 Oct", sandbox], ["Cula", cula]] as const)("compiles supported automatic lines from %s", (_, fixture) => {
+it.each([["sandbox 15 Oct", sandbox], ["production template", production]] as const)("compiles supported automatic lines from %s", (_, fixture) => {
   const definition = normalizeTemplateDefinition(fixture);
   const lineSources = resolveLineSources({ definition });
   const findings = findUnbindableTemplateInputs(fixture, { lineSources });
@@ -67,7 +67,7 @@ it.each([["sandbox 15 Oct", sandbox], ["Cula", cula]] as const)("compiles suppor
     { magnitude: agg.totalStartupDieselLitres, unit: "l" }, { magnitude: agg.totalGensetDieselLitres, unit: "l" },
   ]);
   expect(result.monitored.every((input) => automaticIds.includes(input.removalTemplateComponentId))).toBe(true);
-  if (fixture.id === cula.id) {
+  if (fixture.id === production.id) {
     expect(result.monitored).toContainEqual(expect.objectContaining({ inputKey: "product_mass", quantity: { magnitude: agg.totalBiocharDryMassKg, unit: "kg" } }));
     expect(result.monitored).toContainEqual(expect.objectContaining({ inputKey: "carbon_content", quantity: { magnitude: 0.7, unit: "dimensionless" } }));
   } else {
@@ -97,7 +97,7 @@ it("compiles a carried component moved between compatible group instances withou
 });
 
 it("refuses stored inputs whose reviewed contract has no automatic source", () => {
-  const template = structuredClone(cula);
+  const template = structuredClone(production);
   template.groups = template.groups.filter((group) => group.key === "co2-stored");
   const sources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
   expect(compile(template, sources).monitored.map((input) => input.inputKey).sort()).toEqual(["carbon_content", "product_mass"]);
@@ -125,7 +125,7 @@ blueprintsByKey.set("metered_energy_based_ci_emissions", {
   ],
 } as IsometricComponentBlueprint);
 function compileEntries(blueprintKey: string, paired = false, followup = false, zero = false) {
-  const template = structuredClone(blueprintKey === "metered_energy_based_ci_emissions" ? cula : sandbox);
+  const template = structuredClone(blueprintKey === "metered_energy_based_ci_emissions" ? production : sandbox);
   const group = template.groups.find((group) => group.components.some((component) => component.blueprint_key === blueprintKey))!;
   const component = group.components.find((component) => component.blueprint_key === blueprintKey)!;
   template.groups = [{ ...group, components: [component] }];
