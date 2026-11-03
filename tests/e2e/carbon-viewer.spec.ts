@@ -36,6 +36,12 @@ const EDITED_CUSTOMER_POINT = { lat: -8.5, lng: 37.5 };
 const MAP_READY_TIMEOUT_MS = 45_000;
 const COORDINATE_TOLERANCE_DEGREES = 0.001;
 const MAX_BACK_STEPS = 6;
+/**
+ * The default camera (zoom 5 on the facility) spans about 23 degrees of
+ * longitude at the suite's 1040px map pane; the walk's first step framed on
+ * the supplier and the facility spans about 9. Only real framing gets under this.
+ */
+const FRAMED_MAX_LNG_SPAN_DEGREES = 15;
 
 test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 
@@ -92,21 +98,26 @@ function observeRouteRequests(page: Page): RouteGeometriesRequest[] {
 const walkPanel = (page: Page) => page.getByRole("complementary", { name: /^Chain to / });
 const counter = (step: number) => new RegExp(`0${step} / 0${CHAIN_STEPS} · To `);
 
-/** Whether the painted map's bounds hold every point. */
-async function boundsCover(map: Locator, points: Array<{ lat: number; lng: number }>) {
+/** Whether the painted map's bounds hold every point, optionally within a longitude span. */
+async function boundsCover(
+  map: Locator,
+  points: Array<{ lat: number; lng: number }>,
+  maxLngSpanDegrees = Infinity,
+) {
   const value = await map.getAttribute("data-map-bounds");
   if (!value) return false;
   const [[west, south], [east, north]] = JSON.parse(value) as number[][];
-  return points.every(({ lat, lng }) => lng >= west && lng <= east && lat >= south && lat <= north);
+  return east - west < maxLngSpanDegrees &&
+    points.every(({ lat, lng }) => lng >= west && lng <= east && lat >= south && lat <= north);
 }
 
 async function expectRenderedGeography(page: Page, applicationId: string, field: typeof FIELD_POINT, destination: typeof DAR_POINT) {
   const map = page.getByTestId("carbon-viewer-map");
   await expect(map).toHaveAttribute("data-map-state", "ready", { timeout: MAP_READY_TIMEOUT_MS });
   // The walk opens on the supplier's step: the camera frames its inbound leg,
-  // from the supplier's origin to the facility.
+  // from the supplier's origin to the facility, closer than the default view.
   await expect(walkPanel(page)).toContainText(counter(1));
-  await expect.poll(() => boundsCover(map, [DAR_POINT, FACILITY_POINT])).toBe(true);
+  await expect.poll(() => boundsCover(map, [DAR_POINT, FACILITY_POINT], FRAMED_MAX_LNG_SPAN_DEGREES)).toBe(true);
   // The application's own step frames the facility, the field and the
   // delivery's destination together.
   await walkPanel(page).getByRole("button", { name: /^Application/ }).click();
