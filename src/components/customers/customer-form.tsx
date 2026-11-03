@@ -4,6 +4,7 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { joinLocationParts } from "@/lib/location-display";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -49,11 +50,7 @@ function formatPendingLocationSummary({
   stateRegion,
   country,
 }: Pick<PendingLocation, "city" | "stateRegion" | "country">): string | null {
-  const parts = [city, stateRegion, country]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
-
-  return parts.length > 0 ? parts.join(", ") : null;
+  return joinLocationParts([city, stateRegion, country]);
 }
 
 // ============================================

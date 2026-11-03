@@ -11,6 +11,7 @@
  * longer carries a single GPS position.
  */
 "use client";
+import { joinLocationParts } from "@/lib/location-display";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useLocationEditIntent } from "@/hooks/use-location-edit-intent";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
@@ -97,11 +98,7 @@ function formatPendingLocationSummary({
   stateRegion,
   country,
 }: Pick<PendingSupplierLocation, "city" | "stateRegion" | "country">): string | null {
-  const parts = [city, stateRegion, country]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
-
-  return parts.length > 0 ? parts.join(", ") : null;
+  return joinLocationParts([city, stateRegion, country]);
 }
 
 // ============================================

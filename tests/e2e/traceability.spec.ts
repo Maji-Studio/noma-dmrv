@@ -466,10 +466,10 @@ test.describe("Traceability Visualization", () => {
       timeout: 15000,
     });
 
-    // Each Flow record shows its own code under its node.
+    // Each Flow record shows its own code under its node; the reactor shows its name.
     const expectedNodes = [
       ["feedstock", seededData.feedstock.id, seededData.feedstock.code],
-      ["reactor", seededData.reactor.id, seededData.reactor.code],
+      ["reactor", seededData.reactor.id, seededData.reactor.identifier],
       ["production-run", lineage.productionRun.id, lineage.productionRun.code],
       [
         "biochar-product",
@@ -546,7 +546,7 @@ test.describe("Traceability Visualization", () => {
     );
     await expect(reactorNode).toBeVisible({ timeout: 10000 });
     const sheet = adminPage.locator('[role="dialog"]').first();
-    const sheetHeading = sheet.getByRole("heading", { name: seededData.reactor.code });
+    const sheetHeading = sheet.getByRole("heading", { name: seededData.reactor.identifier });
     // Keyboard: Enter on a focused record opens it like a click.
     await reactorNode.focus();
     await adminPage.keyboard.press("Enter");

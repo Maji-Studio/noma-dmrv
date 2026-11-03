@@ -549,7 +549,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             // Fixed kg: the sheet body and the table columns below are all kg,
             // and auto-tonne would print a rounded "1.5 t" over a "1,530 kg" row.
             formatMassKg(sideSheetEntity.massDryKg),
-            sideSheetEntity.storageLocationCode,
+            sideSheetEntity.storageLocationName ?? sideSheetEntity.storageLocationCode,
           ].filter(Boolean).join(" · ") || "Feedstock"
         : undefined;
 

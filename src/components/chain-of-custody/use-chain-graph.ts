@@ -129,14 +129,15 @@ function buildSourceNodes(
     const reactor = source.reactor;
     if (!reactor || seenNodeIds.has(`reactor:${reactor.id}`)) continue;
     const details: LineageDetailRow[] = [];
-    addRow(details, "Unit", reactor.identifier);
+    addRow(details, "Code", reactor.code);
     addRow(details, "Type", reactor.reactorType ?? MISSING_VALUE.notSet);
 
     nodes.push({
       id: `reactor:${reactor.id}`,
       kind: "reactor",
-      code: reactor.code,
-      shortCode: reactor.code,
+      // The reactor's name, as every list and sheet calls it; its code is in the details.
+      code: reactor.identifier,
+      shortCode: reactor.identifier,
       href: reactor.href,
       date: null,
       details,

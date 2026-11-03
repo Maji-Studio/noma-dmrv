@@ -47,7 +47,11 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
         { label: "Facility name", value: facility.name },
         { label: "Country", value: facility.country },
         { label: "Timezone", value: formatTimezoneLabel(facility.timezone) },
-        { label: "Location", value: facility.location },
+        // The position fields below already list the coordinates, so a facility with
+        // no place text leaves this row out rather than say "Not recorded".
+        ...(facility.location || facility.gpsLatitude == null || facility.gpsLongitude == null
+          ? [{ label: "Location", value: facility.location }]
+          : []),
         { label: "Address", value: facility.address },
         { label: "Facility position latitude", value: facility.gpsLatitude },
         { label: "Facility position longitude", value: facility.gpsLongitude },
