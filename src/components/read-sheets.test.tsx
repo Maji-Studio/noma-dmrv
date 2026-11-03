@@ -237,12 +237,13 @@ describe("read sheets", () => {
     }
   });
 
-  it("shows a feedstock bin's draw method on one line in the operator's words", () => {
-    const cases = [["mix", "oldest_first", "Mass weighted"], ["split", "oldest_first", "Oldest first"], ["split", "newest_first", "Newest first"]] as const;
-    for (const [mode, order, label] of cases) {
+  it("shows a feedstock bin's draw method and order in the operator's words", () => {
+    const cases = [["mix", "oldest_first", "Mass weighted", undefined], ["split", "oldest_first", "In order", "Oldest first"], ["split", "newest_first", "In order", "Newest first"]] as const;
+    for (const [mode, order, label, orderLabel] of cases) {
       const bin = { ...storageBin("feedstock_bin", mode), drawOrder: order };
       const fields = storageLocationSheetSections(bin, noop).flatMap(section => section.fields ?? []);
       expect(fields.find(field => field.label === "Draw method")?.value).toBe(label);
+      expect(fields.find(field => field.label === "Draw order")?.value).toBe(orderLabel);
       expect(fields.find(field => field.label === "Stock mode")).toBeUndefined();
     }
   });

@@ -23,6 +23,7 @@ describe("stockModeOptions", () => {
       expect(option.description).toContain("deliver");
       expect(option.description).not.toMatch(/sub-bin|batch|run/);
     }
+    expect(feedstock[0].description).not.toMatch(/apart/);
   });
 
   it("uses no en or em dashes", () => {

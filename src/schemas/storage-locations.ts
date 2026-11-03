@@ -112,7 +112,7 @@ export const FEEDSTOCK_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
 
 /** Draw method card captions for a feedstock bin: what stays apart or blends, and what a draw takes. */
 export const FEEDSTOCK_STOCK_MODE_DESCRIPTIONS: Record<OutputStockMode, string> = {
-  split: "Each delivery stays apart. A draw empties one delivery before it starts the next.",
+  split: "A draw empties one delivery before it starts the next.",
   mix: "All deliveries count as one pile. A draw takes from each delivery in proportion to what it still holds.",
 };
 
@@ -126,12 +126,7 @@ export const FEEDSTOCK_STOCK_MODE_HINT =
   "The draw method sets how wet mass leaves this bin for production runs, product ingredients and lost mass, and so which deliveries a credit batch counts the transport of. Entries already saved keep their method.";
 export const FEEDSTOCK_DRAW_ORDER_HINT = "Which delivery a draw empties first.";
 export const FEEDSTOCK_MERGE_TIME_HINT =
-  "Draws from this time on take every delivery in proportion. Entries already saved keep their method.";
-
-/** The one line a feedstock bin's read view shows for its draw method. */
-export function feedstockDrawMethodLabel(stockMode: OutputStockMode, drawOrder: OutputDrawOrder): string {
-  return stockMode === "mix" ? FEEDSTOCK_MASS_WEIGHTED_LABEL : OUTPUT_DRAW_ORDER_LABELS[drawOrder];
-}
+  "Draws from this time on are mass weighted.";
 
 /** Only biochar and product bins choose a stock mode. */
 export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
@@ -141,6 +136,8 @@ export function isOutputBinType(type: StorageLocationType | undefined | null): t
 
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
 export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
+/** Feedstock bins hold deliveries, not batches. */
+export const FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE = "Enter the time from which draws are mass weighted.";
 const mergedAtSchema = stockEventInstantSchema(MERGE_TIME_REQUIRED_MESSAGE).or(z.literal("")).nullable().optional();
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =

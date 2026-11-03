@@ -33,7 +33,7 @@ import { MixPileBay, type PileBand } from "./sub-bin-bays";
 const ICON_PX = 16;
 const EMPTY_ICON_PX = 32;
 const PERCENT = 100;
-const CARD_HINT = "Wet stock is what was received, minus production runs, product ingredients and lost mass. Run draws keep their saved batch shares. Other draws take from the batches by the bin's draw method. Dry solids are an estimate from the batches' intake moisture.";
+const CARD_HINT = "Wet stock is what was received, minus production runs, product ingredients and lost mass. Run draws keep their saved batch shares. Other draws take from the deliveries by the bin's draw method. Dry solids are an estimate from the deliveries' intake moisture.";
 const HISTORY_HINT = "Every entry that moved feedstock in or out of this bin, with the wet stock left after it.";
 
 /** The bin's level after each entry: estimated dry solids, with the rest of the wet stock as water. */

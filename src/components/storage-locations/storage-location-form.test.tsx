@@ -110,6 +110,6 @@ describe("StorageLocationForm feedstock draw method", () => {
     expect(screen.queryByText("Merged at")).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: /Mass weighted/ }));
     expect(screen.getByText(/Merged at/)).toBeTruthy();
-    expect(document.body.textContent).toContain("Draws from this time on take every delivery");
+    expect(document.body.textContent).toContain("Draws from this time on are mass weighted");
   });
 });

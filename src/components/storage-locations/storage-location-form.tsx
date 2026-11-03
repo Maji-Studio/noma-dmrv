@@ -24,6 +24,7 @@ import {
   FEEDSTOCK_DRAW_ORDER_HINT,
   FEEDSTOCK_MERGE_TIME_HINT,
   FEEDSTOCK_STOCK_MODE_HINT,
+  FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE,
   MERGE_TIME_REQUIRED_MESSAGE,
   storageLocationFormSchema,
   storageLocationTypes,
@@ -187,7 +188,7 @@ export function StorageLocationForm({
     if (!isFeedstockBinType(normalized.type) && !isOutputBinType(normalized.type)) normalized.stockMode = "split";
     if (!merging) normalized.mergedAt = null;
     else if (!normalized.mergedAt) {
-      setError("mergedAt", { message: MERGE_TIME_REQUIRED_MESSAGE });
+      setError("mergedAt", { message: showFeedstockType ? FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE : MERGE_TIME_REQUIRED_MESSAGE });
       return;
     }
     return onSubmit(normalized, refuseSave);
@@ -278,7 +279,7 @@ export function StorageLocationForm({
             label={showFeedstockType ? "Draw method" : "Stock mode"}
             hint={showFeedstockType ? FEEDSTOCK_STOCK_MODE_HINT : STOCK_MODE_HINT}
             error={errors.stockMode?.message}
-            helperText={unmixing ? `Only an empty bin can switch to ${showFeedstockType ? "in order" : "split"}.` : merging ? `Switching back to ${showFeedstockType ? "in order" : "split"} needs an empty bin.` : undefined}
+            helperText={unmixing ? `Only an empty bin can switch to ${showFeedstockType ? "In order" : "split"}.` : merging ? `Switching back to ${showFeedstockType ? "In order" : "split"} needs an empty bin.` : undefined}
             required
           >
             <ChoiceCardGroup

@@ -4,7 +4,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { FeedstockDrawMethod } from '@/lib/feedstock-draw-replay';
 import { formatFacilityDateTime } from '@/lib/format-utils';
-import { MERGE_TIME_REQUIRED_MESSAGE } from '@/schemas/storage-locations';
+import { FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE } from '@/schemas/storage-locations';
 import { getFeedstockBinStock } from './feedstock-bin-ledger';
 import { getFeedstockMethodChanges } from './feedstock-bin-method-history';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
@@ -24,7 +24,7 @@ export async function applyFeedstockMethodChange(ctx: OrgContext, tx: DbTransact
   let effectiveAt = now;
   const facilityTime = async (at: string) => formatFacilityDateTime(new Date(at), await getOutputStockFacilityTimezone(ctx, existing.facilityId, tx));
   if (target.stockMode === 'mix' && existing.stockMode === 'split') {
-    if (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime())) throw new SafeError(MERGE_TIME_REQUIRED_MESSAGE);
+    if (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime())) throw new SafeError(FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE);
     effectiveAt = next.mergedAt;
     if (effectiveAt > now) throw new SafeError('Merged at cannot be in the future.');
     if (last && effectiveAt.toISOString() <= last)
@@ -33,7 +33,7 @@ export async function applyFeedstockMethodChange(ctx: OrgContext, tx: DbTransact
     if (last && last > now.toISOString())
       throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last)}. Change its draw method after that time.`);
     if (existing.stockMode === 'mix' && target.stockMode === 'split' && stock.currentWetKg > 0)
-      throw new SafeError('Empty this bin before switching it to split. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into deliveries.');
+      throw new SafeError('Empty this bin before switching it to In order. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into deliveries.');
   }
   await tx.insert(feedstockBinMethodChanges).values({ organizationId: ctx.organizationId, storageLocationId: existing.id,
     ...target, previousStockMode: existing.stockMode, previousDrawOrder: existing.drawOrder, effectiveAt, createdBy: ctx.userId });
