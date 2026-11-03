@@ -56,6 +56,12 @@ const SCROLL_MARGIN_PX = 8;
  * Ref for a marker that appears with the open stage or current step: scrolls
  * the list around it (and only it, never the page) so the row sits at the top.
  */
+/**
+ * The "01 / 04 · …" step counter. A `<span>` with utilities alone: a type class
+ * or a bare `<p>` is unlayered and would beat `font-mono` and `tracking-*`.
+ */
+export const TRACE_COUNTER_CLASS = "block font-mono text-[12px] leading-[1.4] uppercase tracking-[0.06em] text-[var(--color-text-secondary)]";
+
 const scrollListToMarker = (element: HTMLElement | null) => {
   const list = element?.closest("ol");
   if (!element || !list) return;
