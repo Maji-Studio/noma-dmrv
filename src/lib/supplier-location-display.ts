@@ -1,3 +1,5 @@
+import { joinLocationParts } from "@/lib/location-display";
+
 export interface SupplierLocationDisplayParts {
   name?: string | null;
   city?: string | null;
@@ -11,15 +13,7 @@ export function formatSupplierLocationDisplay(
   location: SupplierLocationDisplayParts | null | undefined,
 ): string | null {
   if (!location) return null;
-  const parts = [
-    location.name,
-    location.city,
-    location.stateRegion,
-    location.country,
-  ]
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(", ") : null;
+  return joinLocationParts([location.name, location.city, location.stateRegion, location.country]);
 }
 
 /** Resolve already-formatted legacy and nested labels for compact list cells. */

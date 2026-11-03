@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatMass } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatFacilityLocation } from "@/lib/location-display";
 
 interface FacilityCardProps {
   facility: FacilityWithRelations;
@@ -29,6 +30,7 @@ export function FacilityCard({
   onRestore,
 }: FacilityCardProps) {
   const isArchived = facility.archivedAt != null;
+  const location = formatFacilityLocation(facility);
   return (
     <article
       className="flex flex-col bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors hover:[border-color:var(--edge-soft)] cursor-pointer"
@@ -63,10 +65,10 @@ export function FacilityCard({
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
             {facility.name?.trim() || facility.code}
           </h3>
-          {facility.location && (
+          {location && (
             <p className="mt-6 flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
               <MapPinIcon size={12} />
-              {facility.location}
+              {location}
             </p>
           )}
         </div>

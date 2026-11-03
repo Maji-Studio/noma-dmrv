@@ -37,7 +37,8 @@ export function recordLockLinkText(link: RecordLockLink): string {
   if (link.kind === "binReference") return `${capitalize(link.label ?? "")} (${link.count ?? 0})`;
   const noun = KIND_NOUNS[link.kind] ?? "record";
   if (link.kind === "removal") {
-    return link.period ? `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}` : noun;
+    if (link.period) return `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}`;
+    return link.label ? `${noun} ${link.label}` : noun;
   }
   if (link.kind === "ghgStatement") {
     if (link.period) return `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}`;
@@ -47,8 +48,16 @@ export function recordLockLinkText(link: RecordLockLink): string {
   return link.label ? `${noun} ${link.label}` : noun;
 }
 
-/** The same text, starting a line ("Used by" rows). */
+/**
+ * The same text, starting a line ("Used by" rows). A Removal names itself by
+ * its code first ("Removal RM-26-001, Jan 1 to Mar 31, 2026"): the period alone
+ * does not say which Removal to open.
+ */
 export function recordLockLinkTitle(link: RecordLockLink): string {
+  if (link.kind === "removal" && link.label) {
+    const period = link.period ? `, ${formatDateRange(link.period.startedOn, link.period.completedOn)}` : "";
+    return `${KIND_NOUNS.removal} ${link.label}${period}`;
+  }
   return capitalize(recordLockLinkText(link));
 }
 

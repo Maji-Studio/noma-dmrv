@@ -1,5 +1,6 @@
 /** Facility side-sheet view mode: the sections config for EntitySideSheet. */
 import { formatCount, LOAD_FAILED } from "@/lib/copy-utils";
+import { formatFacilityLocation } from "@/lib/location-display";
 import { formatMassKg } from "@/lib/format-utils";
 import { FacilityCertifierSummary } from "@/components/certification";
 import { formatTimezoneLabel } from "@/lib/date-utils";
@@ -47,7 +48,7 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
         { label: "Facility name", value: facility.name },
         { label: "Country", value: facility.country },
         { label: "Timezone", value: formatTimezoneLabel(facility.timezone) },
-        { label: "Location", value: facility.location },
+        { label: "Location", value: formatFacilityLocation(facility) },
         { label: "Address", value: facility.address },
         { label: "Facility position latitude", value: facility.gpsLatitude },
         { label: "Facility position longitude", value: facility.gpsLongitude },

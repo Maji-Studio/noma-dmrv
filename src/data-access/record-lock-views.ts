@@ -251,10 +251,10 @@ export async function resolveRecordLockLinks(ctx: OrgContext, holders: readonly 
     (async () => {
       const wanted = ids("removal");
       if (!wanted.length) return;
-      const rows = await db.select({ id: certifierRemovals.id, facilityId: certifierRemovals.facilityId, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
+      const rows = await db.select({ id: certifierRemovals.id, code: certifierRemovals.code, facilityId: certifierRemovals.facilityId, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
         .from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, org), inArray(certifierRemovals.id, wanted)));
       for (const row of rows) {
-        put(`removal:${row.id}`, { kind: "removal", id: row.id, label: null, facilityId: row.facilityId,
+        put(`removal:${row.id}`, { kind: "removal", id: row.id, label: row.code, facilityId: row.facilityId,
           period: row.startedOn && row.completedOn ? { startedOn: row.startedOn, completedOn: row.completedOn } : null });
       }
     })(),
