@@ -1,6 +1,6 @@
 import { assertFeedstockEmptyAtSwitch } from './feedstock-intake-boundary';
 import { deletedProductIds } from './output-stock-active-movements';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -28,7 +28,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * their own batches. Every other withdrawal follows the method in force at
  * its instant; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
+export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { historyRunId?: string; replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
@@ -47,7 +47,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
       .from(productionRunFeedstockDraws)
       .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstockDraws.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
       .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId),
-        ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS))),
+        or(ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS), options.historyRunId ? eq(productionRuns.id, options.historyRunId) : undefined))),
     reader.select({ id: biocharProducts.id, code: biocharProducts.code, placedAt: biocharProducts.placedAt, createdAt: biocharProducts.createdAt,
       composition: biocharProducts.composition })
       .from(biocharProducts)
@@ -111,8 +111,10 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     drawsByRun.set(draw.productionRunId, shares);
   }
   const changes = await getFeedstockMethodChanges(ctx, storageLocationId, reader);
+  const isHistory = (draft: Draft) => draft.kind === 'run_draw' && draft.sourceId === options.historyRunId;
   const replay = replayFeedstockDraws(drafts.map(draft => ({ ...draft,
-    savedShares: draft.kind === 'run_draw' && draft.sourceId && !options.replanRunIds?.has(draft.sourceId)
+    historyOnly: isHistory(draft),
+    savedShares: draft.kind === 'run_draw' && draft.sourceId && !isHistory(draft) && !options.replanRunIds?.has(draft.sourceId)
       ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
   })), bin, changes, options.boundary);
   if (options.boundary) assertFeedstockEmptyAtSwitch(drafts, replay.wetTotals, changes, timezone);
@@ -130,7 +132,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
   let wetKg = 0;
   const entries = drafts.map((draft): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
-    wetKg += draft.reversed ? 0 : draft.wetDeltaKg ?? 0;
+    wetKg += draft.reversed || isHistory(draft) ? 0 : draft.wetDeltaKg ?? 0;
     return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: dryAt(replay.points.get(draft.id)) };
   });
 

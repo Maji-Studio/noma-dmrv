@@ -1,4 +1,3 @@
-import { touchedRunFeedstock } from './touched-run-feedstock';
 import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from "./output-stock-active-movements";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -11,7 +10,7 @@ import { requireOrgScope } from "./utils";
 
 type Reader = Pick<DbTransaction, "select">;
 
-/** Numeric consumers only. Merely sharing a bin does not establish a dependency. */
+/** Saved lineage, including legacy zero-share feedstock links, determines freezes. Sharing a bin alone does not. */
 export async function readRecordDependents(ctx: OrgContext, tx: Reader, target: CertifiedLineageTarget): Promise<RecordLockHolder[]> {
   requireOrgScope(ctx);
   return (await readRecordDependentsBatch(ctx, tx, target.entityType, [target.entityId])).get(target.entityId) ?? [];
@@ -34,7 +33,7 @@ export async function readRecordDependentsBatch(
   switch (entityType) {
     case "feedstock": {
       const rows = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, id: productionRunFeedstocks.productionRunId }).from(productionRunFeedstocks)
-        .where(and(eq(productionRunFeedstocks.organizationId, org), touchedRunFeedstock(), inArray(productionRunFeedstocks.feedstockId, wanted)));
+        .where(and(eq(productionRunFeedstocks.organizationId, org), inArray(productionRunFeedstocks.feedstockId, wanted)));
       for (const row of rows) push(row.feedstockId, { kind: "productionRun", id: row.id });
       return result;
     }

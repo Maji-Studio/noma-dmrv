@@ -60,7 +60,8 @@ it("keeps transport views and BoL writes open until the owner Removal is sent, a
       const ids = [owner.feedstockId, later.feedstockId];
       const lineageQueries = vi.spyOn(db, "selectDistinct");
       const views = await getRecordLockViews(ctx, "feedstock", ids);
-      expect(lineageQueries).toHaveBeenCalledTimes(2);
+      // Includes the legacy zero-share lookup needed to preserve Sent transport ownership.
+      expect(lineageQueries).toHaveBeenCalledTimes(3);
       lineageQueries.mockRestore();
       expect(views[owner.feedstockId]).toMatchObject({ level: "sent", transport: { level: "open", heldBy: [] } });
       expect(views[later.feedstockId].transport).toMatchObject({ level: "sent", heldBy: [{ kind: "removal", id: later.removalId }] });

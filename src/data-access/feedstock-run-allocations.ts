@@ -103,7 +103,7 @@ export async function reallocateRunsForBins(
   for (const binId of [...new Set([...ids, ...draws.map(draw => draw.storageLocationId)])]) {
     let ledger: Awaited<ReturnType<typeof replayFeedstockBinStock>>;
     try {
-      ledger = await replayFeedstockBinStock(ctx, binId, tx, { replanRunIds: new Set(ids.includes(binId) ? runIds : []),
+      ledger = await replayFeedstockBinStock(ctx, binId, tx, { historyRunId: edited?.status === CANCELLED_PRODUCTION_RUN_STATUS ? onlyRunId : undefined, replanRunIds: new Set(ids.includes(binId) ? runIds : []),
         boundary: ids.includes(binId) ? { occurredAt: earliestStart?.toISOString() ?? '', recordedAt: tie?.recordedAt.toISOString(), id: tie?.id, exclusive: options.boundaryExclusive } : undefined });
     } catch (error) {
       if (!(error instanceof FeedstockReplayOverdrawError)) throw error;
@@ -171,13 +171,9 @@ export async function reallocateRunsForBins(
 /** Caller holds the facility FOR UPDATE through the timezone write and rebuild. */
 export async function reallocateRunsForFacility(ctx: OrgContext, tx: DbTransaction, facilityId: string, change?: TransportOwnershipChange): Promise<void> {
   requireOrgScope(ctx);
-  const draws = await tx.select({ binId: productionRunFeedstockDraws.storageLocationId })
-    .from(productionRunFeedstockDraws).innerJoin(productionRuns, and(
-      eq(productionRuns.id, productionRunFeedstockDraws.productionRunId),
-      eq(productionRuns.organizationId, ctx.organizationId),
-    )).where(and(
-      eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
-      eq(productionRuns.facilityId, facilityId),
-    ));
-  await reallocateRunsForBins(ctx, tx, draws.map(draw => draw.binId), { facilityId, change });
+  const bins = await tx.select({ binId: storageLocations.id }).from(storageLocations).where(and(
+    eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, facilityId),
+    eq(storageLocations.type, 'feedstock_bin'),
+  ));
+  await reallocateRunsForBins(ctx, tx, bins.map(bin => bin.binId), { facilityId, change });
 }

@@ -22,3 +22,12 @@ it('records a new method when only method history remains', async () => {
   await applyFeedstockMethodChange(ctx, { insert: () => ({ values }) } as unknown as DbTransaction, bin, { drawOrder: 'newest_first' });
   expect(values).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'org', storageLocationId: 'bin', drawOrder: 'newest_first' }));
 });
+
+it.each([-1, 1])('refuses mixed-to-ordered switching with nonzero stock %s', async currentWetKg => {
+  mocks.stock.mockResolvedValue({ entries: [], currentWetKg });
+  mocks.history.mockResolvedValue([{ effectiveAt: '2026-01-01T00:00:00.000Z' }]);
+  const insert = vi.fn();
+  await expect(applyFeedstockMethodChange(ctx, { insert } as unknown as DbTransaction,
+    { ...bin, stockMode: 'mix' }, { stockMode: 'split' })).rejects.toThrow('Empty this bin before switching it to In order');
+  expect(insert).not.toHaveBeenCalled();
+});

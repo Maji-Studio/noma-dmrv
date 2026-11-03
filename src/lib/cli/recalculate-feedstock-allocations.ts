@@ -39,6 +39,7 @@ async function main() {
         try {
           await recalculate();
           console.log(JSON.stringify({ organizationId: ctx.organizationId, dryRun: values['dry-run'], ...summary }));
+          if (summary?.keptSentRuns.length) console.warn(`Bin ${bin.code}: kept Sent runs ${summary.keptSentRuns.map(run => run.code).join(', ')} (Removals ${[...new Set(summary.keptSentRuns.flatMap(run => run.removalCodes))].join(', ')}). Their credit batches keep the old allocation until the Removal is returned.`);
           if (summary?.runsRefused) process.exitCode = 1;
         } catch (error) {
           console.log(JSON.stringify({ organizationId: ctx.organizationId, code: bin.code, dryRun: values['dry-run'],

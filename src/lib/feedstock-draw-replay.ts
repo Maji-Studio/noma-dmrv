@@ -22,6 +22,8 @@ export interface FeedstockReplayEvent {
   reversed?: boolean;
   /** Present only for runs before the replanning boundary. An empty array is authoritative. */
   savedShares?: readonly FeedstockDrawShare[];
+  /** An explicitly saved cancelled run records provenance without consuming stock. */
+  historyOnly?: boolean;
 }
 export class FeedstockReplayOverdrawError extends SafeError {
   constructor(readonly event: FeedstockReplayEvent, readonly availableWetKg: number, readonly requestedWetKg: number) {
@@ -113,6 +115,12 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
         shares = new Map(event.savedShares.filter(row => row.wetKg > 0).map(row => [row.feedstockId, grams(row.wetKg)]));
       } else {
         shares = drawShares(amount, present, feedstockMethodAt(current, changes, event.occurredAt));
+      }
+      if (event.historyOnly) {
+        withdrawals.set(event.id, [...shares].filter(([, units]) => units > 0).map(([feedstockId, units]) => ({ feedstockId, wetKg: kg(units) })));
+        points.set(event.id, new Map([...holdings].map(([id, units]) => [id, kg(units)])));
+        wetTotals.set(event.id, kg(total + unattributed));
+        continue;
       }
       let deficit = requested;
       for (const [id, units] of shares) {

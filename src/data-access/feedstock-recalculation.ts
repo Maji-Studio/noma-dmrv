@@ -44,6 +44,10 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     { id: a.drawId, occurredAt: a.startTime.toISOString(), recordedAt: a.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
     { id: b.drawId, occurredAt: b.startTime.toISOString(), recordedAt: b.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
   )).at(-1);
+  const removalIds = locks.flatMap(lock => lock.heldBy.map(holder => holder.id));
+  const removals = removalIds.length ? await tx.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, removalIds),
+  )) : [];
   let rewrittenRunIds: string[] = [];
   const refused: { runId: string; code: string; removalCodes: string[] }[] = [];
   try {
@@ -52,14 +56,11 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     } : {}));
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    const removalIds = locks.flatMap(lock => lock.heldBy.map(holder => holder.id));
-    const removals = removalIds.length ? await tx.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals).where(and(
-      eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, removalIds),
-    )) : [];
     for (const [index, lock] of locks.entries()) if (lock.level === 'sent') refused.push({ runId: runs[index].id, code: runs[index].code,
       removalCodes: removals.filter(row => lock.heldBy.some(holder => holder.id === row.id)).map(row => row.code) });
     if (!refused.length) throw error;
   }
-  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, keptSentRuns: kept.map(run => ({ runId: run.id, code: run.code })), rewrittenRunIds, refused, ownedLegsBefore: before,
+  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, keptSentRuns: kept.map(run => ({ runId: run.id, code: run.code,
+    removalCodes: removals.filter(row => locks[runs.indexOf(run)].heldBy.some(holder => holder.id === row.id)).map(row => row.code) })), rewrittenRunIds, refused, ownedLegsBefore: before,
     ownedLegsAfter: await ownedLegCounts(ctx, tx, storageLocationId) };
 }

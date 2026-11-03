@@ -172,3 +172,17 @@ it('preserves the exact exclusive history boundary and validates the next tied e
   expect(() => replayFeedstockDraws([...history, event('next', 2, -1, 'loss')], oldest, [], boundary))
     .toThrow(FeedstockReplayOverdrawError);
 });
+
+it.each([
+  [oldest, [{ feedstockId: 'a', wetKg: 10 }, { feedstockId: 'b', wetKg: 2 }]],
+  [newest, [{ feedstockId: 'b', wetKg: 12 }]],
+  [mix, [{ feedstockId: 'a', wetKg: 4 }, { feedstockId: 'b', wetKg: 8 }]],
+])('records cancelled history using the current method without consuming stock: %j', (method, expected) => {
+  const result = replayFeedstockDraws([event('a', 1, 10), event('b', 2, 20),
+    { ...event('cancelled', 3, -12, 'run_draw'), historyOnly: true }, event('live', 4, -30, 'run_draw')], method);
+  expect(result.withdrawals.get('cancelled')).toEqual(expected);
+  expect(result.wetTotals.get('cancelled')).toBe(30);
+  expect(result.withdrawals.get('live')).toEqual([{ feedstockId: method.drawOrder === 'newest_first' ? 'b' : 'a', wetKg: method.drawOrder === 'newest_first' ? 20 : 10 },
+    { feedstockId: method.drawOrder === 'newest_first' ? 'a' : 'b', wetKg: method.drawOrder === 'newest_first' ? 10 : 20 }]);
+  expect([...result.remaining.values()]).toEqual([0, 0]);
+});
