@@ -19,9 +19,19 @@ export const MIX_BIN_REMOVALS_CREDITABLE = false;
 export const STOCK_PART_MIN_KG = 0.05;
 
 /**
- * A bin whose stock is below this reads "Empty" on every storage surface (bin
- * card, lane total, facility sheet). Display precision is whole kilograms, so
- * a residue under half a kilogram would render as "0 kg wet mass" next to a
- * dry figure. Display only: the stored stock is never trimmed.
+ * Wet estimates are whole kilograms. They are computed at an entered moisture,
+ * not weighed, so a decimal would claim a precision the figure does not have.
  */
-export const STOCK_DISPLAY_MIN_KG = 0.5;
+export const WET_ESTIMATE_DIGITS = 0;
+
+/** Half of the last displayed digit: below it, a figure rounds to nothing. */
+const HALF_UNIT = 1 / 2;
+
+/**
+ * A bin whose wet estimate (or a lane total, shown in whole kilograms) is below
+ * this reads "Empty": it would render as "0 kg". Derived from the figure's own
+ * precision. Figures shown at one decimal (feedstock wet mass, dry biochar)
+ * follow the formatter's rounds-to-zero rule instead (`isMassEmpty`). Display
+ * only: the stored stock is never trimmed.
+ */
+export const WET_ESTIMATE_DISPLAY_MIN_KG = HALF_UNIT * 10 ** -WET_ESTIMATE_DIGITS;

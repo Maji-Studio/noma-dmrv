@@ -1,20 +1,29 @@
-import { STOCK_DISPLAY_MIN_KG } from "@/config/output-stock";
+import { WET_ESTIMATE_DISPLAY_MIN_KG } from "@/config/output-stock";
+import { massKgRoundsToZero } from "@/lib/format-utils";
 
 /** Label an empty bin carries wherever its stock is shown. */
 export const EMPTY_STOCK_LABEL = "Empty";
 
+/** What a stock figure measures: wet mass, or dry biochar where no wet estimate exists. */
+export type MassBasis = "wet" | "dry";
+
 /**
- * The mass a bin is judged by: its wet mass, the figure operators find on
- * site, or the dry biochar when no wet figure exists. Null while unknown.
+ * Whether a mass shown at one decimal (feedstock wet mass, dry biochar) renders
+ * as zero. A negative stock is not empty: it is the reconcile signal.
  */
-export function stockBasisKg(wetKg: number | null | undefined, dryKg: number | null | undefined): number | null {
-  return wetKg ?? dryKg ?? null;
+export function isMassEmpty(kg: number | null | undefined): boolean {
+  return kg != null && kg >= 0 && massKgRoundsToZero(kg);
+}
+
+/** Whether a whole-kilogram figure (a wet estimate, a lane total) renders as zero. */
+export function isWholeKgEmpty(kg: number | null | undefined): boolean {
+  return kg != null && kg >= 0 && kg < WET_ESTIMATE_DISPLAY_MIN_KG;
 }
 
 /**
- * Whether a known stock is too small to show: nothing, or a residue under the
- * display minimum. A negative stock is not empty: it is the reconcile signal.
+ * Whether an output bin reads Empty. The bin leads with its wet estimate, so
+ * that figure's precision decides; without one, the dry biochar it leads with.
  */
-export function isStockBelowDisplay(kg: number | null | undefined): boolean {
-  return kg != null && kg >= 0 && kg < STOCK_DISPLAY_MIN_KG;
+export function isOutputStockEmpty(wetKg: number | null | undefined, dryKg: number | null | undefined): boolean {
+  return wetKg != null ? isWholeKgEmpty(wetKg) : isMassEmpty(dryKg);
 }

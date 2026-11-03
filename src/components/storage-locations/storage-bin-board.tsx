@@ -20,6 +20,8 @@ import type { StorageLocationWithFacility } from "@/data-access/storage-location
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass } from "@/lib/format-utils";
+import { EMPTY_STOCK_LABEL, isWholeKgEmpty } from "@/lib/stock-display";
+import { massBasisLabel } from "./stock-preview-shared";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -129,13 +131,20 @@ function filterFigure(
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
   const onHandKg = summary[filter].onHandKg;
-  return onHandKg == null ? null : formatMass(onHandKg);
+  if (onHandKg == null) return null;
+  return isWholeKgEmpty(onHandKg) ? EMPTY_STOCK_LABEL : formatMass(onHandKg);
 }
 
-/** What a lane total measures: wet mass on every lane, dry biochar where a bin has no wet estimate. */
-function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter): string | null {
-  if (!summary || filter === "all" || summary[filter].onHandKg == null) return null;
-  return summary[filter].basis === "wet" ? "wet mass" : "dry biochar";
+/**
+ * The basis a lane total measures, written out only where it differs from the
+ * tiles' wet-mass headline (a lane that fell back to dry biochar), or inline
+ * where there is no caption slot (`inline`). An empty lane has no basis to name.
+ */
+function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter, inline = false): string | null {
+  if (!summary || filter === "all") return null;
+  const { onHandKg, basis } = summary[filter];
+  if (onHandKg == null || isWholeKgEmpty(onHandKg)) return null;
+  return basis === "dry" || inline ? massBasisLabel(basis) : null;
 }
 
 /** A select option names the type, and its figure in parentheses when there is one. */
@@ -238,7 +247,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         >
           {BIN_TYPE_FILTER_ORDER.map((filter) => (
             <option key={filter} value={filter}>
-              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter))}
+              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter, true))}
             </option>
           ))}
         </select>

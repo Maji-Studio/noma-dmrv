@@ -4,7 +4,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { StorageLocationType } from "@/schemas/storage-locations";
-import { isStockBelowDisplay, stockBasisKg } from "@/lib/stock-display";
+import { isMassEmpty, isOutputStockEmpty, type MassBasis } from "@/lib/stock-display";
 import { and, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { getOutputBinStocks, type OutputBinStock } from "./output-stock";
@@ -19,15 +19,15 @@ import { requireOrgScope } from "./utils";
  */
 export type StorageLocationLaneSummary = Record<
   StorageLocationType,
-  { binCount: number; onHandKg: number | null; basis: LaneMassBasis }
+  { binCount: number; onHandKg: number | null; basis: MassBasis }
 >;
 
 /**
- * What a lane total measures, matching the bin cards of that lane: wet mass,
- * or dry biochar when an output bin has no wet estimate to lead with. Bins
- * whose stock is below the display minimum read "Empty" and add nothing.
+ * `basis` is what the lane total measures, matching the bin cards of that lane:
+ * wet mass, or dry biochar when an output bin has no wet estimate to lead with.
+ * Bins that read "Empty" add nothing. An archived output lane has no stock read,
+ * so its total is null.
  */
-export type LaneMassBasis = "wet" | "dry biochar";
 
 export async function getStorageLocationLaneSummary(
   ctx: OrgContext,
@@ -64,7 +64,8 @@ export async function getStorageLocationLaneSummary(
   const outputUnresolved = { biochar_bin: false, product_bin: false };
   const outputWithoutWet = { biochar_bin: false, product_bin: false };
 
-  // All-layers balance: the lane total conserves receipts placed later too.
+  // Layers placed by now, the figures the bin cards lead with. The all-layers
+  // balance only decides whether a bin's stock resolves at all.
   const outputStocks: Map<string, OutputBinStock> = options.archived
     ? new Map()
     : await getOutputBinStocks(
@@ -77,27 +78,30 @@ export async function getStorageLocationLaneSummary(
     lane.binCount += 1;
     if (bin.type === "feedstock_bin") {
       const wetKg = stock?.feedstockStockWetKg ?? 0;
-      if (!isStockBelowDisplay(wetKg)) lane.onHandKg = (lane.onHandKg ?? 0) + wetKg;
+      if (!isMassEmpty(wetKg)) lane.onHandKg = (lane.onHandKg ?? 0) + wetKg;
     } else if (!options.archived) {
       const output = outputStocks.get(bin.id);
-      const dryKg = output?.allLayersDryKg ?? null;
-      if (dryKg == null) {
+      const dryKg = output?.availableDryKg ?? null;
+      if (output?.allLayersDryKg == null || dryKg == null) {
         outputUnresolved[bin.type] = true;
         continue;
       }
       const wetKg = output?.estimatedWetMassKg ?? null;
-      if (isStockBelowDisplay(stockBasisKg(wetKg, dryKg))) continue;
+      if (isOutputStockEmpty(wetKg, dryKg)) continue;
       outputDryKg[bin.type] += dryKg;
       if (wetKg == null) outputWithoutWet[bin.type] = true;
       else outputWetKg[bin.type] += wetKg;
     }
   }
   for (const type of ["biochar_bin", "product_bin"] as const) {
-    if (options.archived) continue;
     const lane = summary[type];
+    if (options.archived) {
+      lane.onHandKg = null;
+      continue;
+    }
     // A bin without a wet estimate leads its card with dry biochar, so the
     // lane falls back to the dry sum rather than mixing the two bases.
-    lane.basis = outputWithoutWet[type] ? "dry biochar" : "wet";
+    lane.basis = outputWithoutWet[type] ? "dry" : "wet";
     lane.onHandKg = outputUnresolved[type] ? null : lane.basis === "wet" ? outputWetKg[type] : outputDryKg[type];
   }
 

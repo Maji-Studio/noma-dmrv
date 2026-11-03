@@ -12,7 +12,7 @@ vi.mock("./utils", () => ({ requireOrgScope: () => undefined }));
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 
 const ctx = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false } as OrgContext;
-const output = (dry: number | null, wet: number | null) => ({ allLayersDryKg: dry, availableDryKg: dry, estimatedWetMassKg: wet, estimatedMoisturePercent: null });
+const output = (dry: number | null, wet: number | null, allLayers: number | null = dry) => ({ allLayersDryKg: allLayers, availableDryKg: dry, estimatedWetMassKg: wet, estimatedMoisturePercent: null });
 
 function stage(bins: { id: string; type: string }[], feedstockWet: Record<string, number>, stocks: Record<string, ReturnType<typeof output>>) {
   rows.bins = bins;
@@ -38,7 +38,7 @@ describe("lane summary basis and residues", () => {
   it("leaves residues below the display minimum out of the total, while still counting the bin", async () => {
     stage(
       [{ id: "p1", type: "product_bin" }, { id: "p2", type: "product_bin" }, { id: "f1", type: "feedstock_bin" }, { id: "f2", type: "feedstock_bin" }],
-      { f1: 0.3, f2: 12 },
+      { f1: 0.04, f2: 12 },
       { p1: output(0.2, 0.2), p2: output(250, 250) },
     );
     const summary = await getStorageLocationLaneSummary(ctx, { archived: false });
@@ -55,12 +55,26 @@ describe("lane summary basis and residues", () => {
   it("falls back to dry biochar for a lane where a bin has no wet estimate", async () => {
     stage([{ id: "p1", type: "product_bin" }, { id: "p2", type: "product_bin" }], {}, { p1: output(100, 120), p2: output(80, null) });
     const summary = await getStorageLocationLaneSummary(ctx, { archived: false });
-    expect(summary.product_bin).toEqual({ binCount: 2, onHandKg: 180, basis: "dry biochar" });
+    expect(summary.product_bin).toEqual({ binCount: 2, onHandKg: 180, basis: "dry" });
   });
 
   it("keeps a lane total unknown while one bin's stock is unresolved", async () => {
     stage([{ id: "p1", type: "product_bin" }, { id: "p2", type: "product_bin" }], {}, { p1: output(100, 120), p2: output(null, null) });
     const summary = await getStorageLocationLaneSummary(ctx, { archived: false });
     expect(summary.product_bin.onHandKg).toBeNull();
+  });
+
+  it("sums the layers placed by now, the figures the cards lead with, not the all-layers balance", async () => {
+    stage([{ id: "p1", type: "product_bin" }, { id: "p2", type: "product_bin" }], {}, { p1: output(100, null, 160), p2: output(0.2, 0.2, 40) });
+    const summary = await getStorageLocationLaneSummary(ctx, { archived: false });
+    expect(summary.product_bin).toEqual({ binCount: 2, onHandKg: 100, basis: "dry" });
+  });
+
+  it("gives an archived output lane no total, since archived bins have no stock read", async () => {
+    stage([{ id: "f1", type: "feedstock_bin" }, { id: "p1", type: "product_bin" }, { id: "b1", type: "biochar_bin" }], { f1: 40 }, {});
+    const summary = await getStorageLocationLaneSummary(ctx, { archived: true });
+    expect(summary.feedstock_bin).toEqual({ binCount: 1, onHandKg: 40, basis: "wet" });
+    expect(summary.product_bin.onHandKg).toBeNull();
+    expect(summary.biochar_bin.onHandKg).toBeNull();
   });
 });

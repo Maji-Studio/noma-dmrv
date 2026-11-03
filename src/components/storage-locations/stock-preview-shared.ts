@@ -4,7 +4,9 @@
  */
 import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
+import { WET_ESTIMATE_DIGITS } from "@/config/output-stock";
 import { formatMassKg } from "@/lib/format-utils";
+import type { MassBasis } from "@/lib/stock-display";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
 /**
@@ -18,12 +20,6 @@ import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/
 export function splitDryLabel(preview: Pick<Preview, "lane">): string {
   return preview.lane === "biochar" ? "Dry biochar" : "Dry solids";
 }
-
-/**
- * Wet estimates are whole kilograms. They are computed at an entered moisture,
- * not weighed, so a decimal would claim a precision the figure does not have.
- */
-const WET_ESTIMATE_DIGITS = 0;
 
 /**
  * Batch layers as bar segments, each in its own accent.
@@ -60,7 +56,12 @@ export function formatWetEstimate(kg: number): string {
  * board's tile and the stock history all read a bin this way.
  */
 export function outputStockFigure(wetKg: number | null, dryKg: number): string {
-  return wetKg !== null ? `${formatWetEstimate(wetKg)} kg wet mass` : `${formatMassKg(dryKg)} dry biochar`;
+  return wetKg !== null ? `${formatWetEstimate(wetKg)} kg ${massBasisLabel("wet")}` : `${formatMassKg(dryKg)} ${massBasisLabel("dry")}`;
+}
+
+/** The words a stock figure uses for its basis, on tiles, sheets and the board rail. */
+export function massBasisLabel(basis: MassBasis): string {
+  return basis === "wet" ? "wet mass" : "dry biochar";
 }
 
 /**

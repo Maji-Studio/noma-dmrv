@@ -7,7 +7,7 @@ import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { DetailPanelField, DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import type { FacilityOutputStock, FacilityOutputStockGroup } from "@/data-access/facility-output-stock";
-import { EMPTY_STOCK_LABEL, isStockBelowDisplay, stockBasisKg } from "@/lib/stock-display";
+import { EMPTY_STOCK_LABEL, isMassEmpty, isOutputStockEmpty } from "@/lib/stock-display";
 import { outputStockFigure } from "@/components/storage-locations/stock-preview-shared";
 
 /** The facility's output-bin stock query, as the sheet needs it. */
@@ -18,6 +18,8 @@ export interface FacilityStockState {
 }
 
 
+const EMPTY_HINT = "Empty means these bins hold only a trace, too little to show.";
+
 /**
  * One output-bin row. A row is left out once the read settled without a
  * derivable figure; while there is no data it loads or says why it failed.
@@ -27,9 +29,10 @@ function stockRow(label: string, scope: string, group: FacilityOutputStockGroup 
     ? `Estimated wet mass at each batch's moisture. Sum of this facility's ${scope}, archived bins included.`
     : `A bin here has no wet estimate, so this is the dry biochar sum of this facility's ${scope}, archived bins included.`;
   if (group) {
+    const empty = isOutputStockEmpty(group.wetKg, group.dryBiocharKg);
     return [{
-      label, hint: hint(group.wetKg !== null), value: isStockBelowDisplay(stockBasisKg(group.wetKg, group.dryBiocharKg)) ? EMPTY_STOCK_LABEL : outputStockFigure(group.wetKg, group.dryBiocharKg),
-      secondary: group.wetKg === null || isStockBelowDisplay(group.wetKg) ? undefined : { label: "Dry biochar", value: formatMassKg(group.dryBiocharKg) },
+      label, hint: empty ? EMPTY_HINT : hint(group.wetKg !== null), value: empty ? EMPTY_STOCK_LABEL : outputStockFigure(group.wetKg, group.dryBiocharKg),
+      secondary: empty || group.wetKg === null ? undefined : { label: "Dry biochar", value: formatMassKg(group.dryBiocharKg) },
     }];
   }
   const loadingHint = hint(true);
@@ -92,7 +95,9 @@ export function facilitySheetSections(facility: FacilityWithRelations, stock?: F
       fields: [
         {
           label: "Feedstock in bins",
-          value: `${formatMassKg(facility.inventorySummary.feedstockWetKg)} wet mass`,
+          value: isMassEmpty(facility.inventorySummary.feedstockWetKg)
+            ? EMPTY_STOCK_LABEL
+            : `${formatMassKg(facility.inventorySummary.feedstockWetKg)} wet mass`,
         },
         ...biochar,
         ...product,

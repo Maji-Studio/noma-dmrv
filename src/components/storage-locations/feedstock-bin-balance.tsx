@@ -17,6 +17,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { useFeedstockBinStock } from "@/hooks/use-bin-movements";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { NO_MOISTURE_READING } from "@/lib/copy-utils";
+import { EMPTY_STOCK_LABEL, isMassEmpty } from "@/lib/stock-display";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { ESTIMATED_WATER_LABEL, LOST_MASS_LABEL } from "@/lib/output-stock/labels";
@@ -130,6 +131,8 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
     { label: ESTIMATED_WATER_LABEL, value: formatMassKg(waterKg) },
     { label: "Moisture", value: formatMoisturePercent(estimatedMoisturePercent) },
   ] });
+  // The headline reads Empty on the same rule as the bin card.
+  const empty = !!stock.data && isMassEmpty(stock.data.currentWetKg);
   return <div className="flex flex-col gap-16">
     <StockCard
       title="Stock"
@@ -138,12 +141,12 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
         {stock.isLoading && <p role="status" className="body-caption">Loading stock...</p>}
         {stock.error && <Notice tone="error">{stock.error.message}</Notice>}
       </>}
-      figure={stock.data && <>
+      figure={stock.data && (empty ? EMPTY_STOCK_LABEL : <>
         {formatMassKg(stock.data.currentWetKg)} wet mass
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
-      </>}
+      </>)}
       // Dry solids only when the batches' moisture gives them; the moisture itself is in the water band's details.
-      caption={stock.data && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
+      caption={stock.data && !empty && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}
     >
       {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}

@@ -53,6 +53,7 @@ describe('archived storage board tile', () => {
   it.each([
     { name: 'a product bin whose wet estimate rounds to zero', type: 'product_bin', stock: { beforeDryKg: 0.2, beforeEstimatedWetKg: 0.2 } },
     { name: 'a biochar bin with a sub-display residue', type: 'biochar_bin', stock: { beforeDryKg: 0.2, beforeEstimatedWetKg: 0.3 } },
+    { name: 'a dry-only bin whose biochar rounds to zero at one decimal', type: 'biochar_bin', stock: { beforeDryKg: 0.04, beforeEstimatedWetKg: null } },
     { name: 'a truly empty bin', type: 'product_bin', stock: { beforeDryKg: 0, beforeEstimatedWetKg: 0 } },
   ])('reads Empty for $name, with no wet or dry figure', async ({ type, stock }) => {
     preview.mockReturnValue({ data: stock, error: undefined } as never);
@@ -67,9 +68,17 @@ describe('archived storage board tile', () => {
     await act(async () => renderer.unmount());
     preview.mockReturnValue({ data: undefined, error: undefined });
   });
-  it('reads a feedstock bin with a sub-display residue as Empty, like its siblings', async () => {
+  it('keeps a feedstock residue the one-decimal figure can show, like the lane total does', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 0.3, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('0.3 kg wet mass');
+    expect(text).not.toContain('Empty');
+    await act(async () => renderer.unmount());
+  });
+  it('reads a feedstock bin with a sub-display residue as Empty, like its siblings', async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 0.04, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain('Empty');
     expect(text).not.toContain('wet mass');

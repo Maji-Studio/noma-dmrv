@@ -40,8 +40,8 @@ import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { LOAD_FAILED } from "@/lib/copy-utils";
 import { formatFacilityDay, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
-import { EMPTY_STOCK_LABEL, isStockBelowDisplay, stockBasisKg } from "@/lib/stock-display";
-import { outputStockFigure } from "./stock-preview-shared";
+import { EMPTY_STOCK_LABEL, isMassEmpty, isOutputStockEmpty } from "@/lib/stock-display";
+import { massBasisLabel, outputStockFigure } from "./stock-preview-shared";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   BIN_TYPE_META,
@@ -82,9 +82,9 @@ export function StorageBinTile({
   const wetEstimateKg = bin.type === "feedstock_bin" || bin.archivedAt != null ? null : output.data?.beforeEstimatedWetKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
-  // Empty is judged on the wet figure the tile leads with, so a residue the
-  // figure would round to "0 kg wet mass" reads Empty, as the lane total and the facility sheet do.
-  const isEmpty = isStockBelowDisplay(bin.type === "feedstock_bin" ? massKg : stockBasisKg(wetEstimateKg, massKg));
+  // Empty is judged on the figure the tile leads with, at its own precision, so
+  // a residue that would read "0 kg wet mass" reads Empty, as the lane total and the facility sheet do.
+  const isEmpty = bin.type === "feedstock_bin" ? isMassEmpty(massKg) : isOutputStockEmpty(wetEstimateKg, massKg);
   // An active output bin's figures arrive with its stock read; until then the slot stays blank.
   const loading = bin.type !== "feedstock_bin" && bin.archivedAt == null && !output.data && !output.error;
   const isArchived = bin.archivedAt != null;
@@ -206,7 +206,7 @@ export function StorageBinTile({
  * The tile's one figure. A feedstock bin's stock is its wet mass. An output
  * bin leads with its wet estimate. A wet estimate at or above the display
  * minimum wins over a dry biochar that rounds to nothing, so the tile never says
- * Empty over wet stock the sheet shows; below the minimum the bin is Empty. An archived bin has no stock read, so the dry biochar it
+ * Empty over wet stock the sheet shows; a figure that rounds to zero is Empty. An archived bin has no stock read, so the dry biochar it
  * holds is its one figure. A failed stock read says so; a stock figure the
  * bin does not carry is a derived balance, so the slot stays empty.
  */
@@ -214,7 +214,7 @@ function TileFigure({ feedstock, empty, massKg, wetEstimateKg, readFailed }: { f
   if (empty) return EMPTY_STOCK_LABEL;
   if (!feedstock && wetEstimateKg != null && wetEstimateKg > 0) return outputStockFigure(wetEstimateKg, 0);
   if (massKg == null) return readFailed ? LOAD_FAILED : null;
-  if (feedstock) return `${formatMassKg(massKg)} wet mass`;
+  if (feedstock) return `${formatMassKg(massKg)} ${massBasisLabel("wet")}`;
   return outputStockFigure(wetEstimateKg, massKg);
 }
 

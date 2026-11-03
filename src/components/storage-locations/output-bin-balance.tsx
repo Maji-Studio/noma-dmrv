@@ -13,6 +13,7 @@ import { StockLevelChart } from "./stock-level-chart";
 import { estimateKg } from "./output-stock-history-days";
 import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
+import { EMPTY_STOCK_LABEL, isOutputStockEmpty } from "@/lib/stock-display";
 import { outputStockFigure } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
 import { partFigure, partLabel, partRows } from "./sub-bin-card";
@@ -93,6 +94,8 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const basisCaption = moistureDrawCaption(drawMoistureBasis([preview.data?.moistureEstimate?.basis, ...layers.map((layer) => layer.basis)]), zone);
   const mixMoisture = mode === "mix" ? preview.data?.moistureEstimate?.moisturePercent ?? null : null;
   const ready = !!preview.data && !subBins.isLoading;
+  // The headline reads Empty on the same rule as the bin card.
+  const empty = ready && isOutputStockEmpty(wetKg, dryKg);
   // Shares the history modal's query, so opening it shows the same data at once.
   const history = useOutputStockHistory(storageLocationId);
   const series = history.data ? buildStockLevelSeries(history.data) : null;
@@ -106,11 +109,11 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
         {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
         {subBins.error && <Notice tone="error">{subBins.error.message}</Notice>}
       </>}
-      figure={ready && <>
+      figure={ready && (empty ? EMPTY_STOCK_LABEL : <>
         {outputStockFigure(wetKg, dryKg ?? 0)}
         {capacityKg != null && <span className="body-small text-[var(--color-text-tertiary)]"> of {formatMassKg(capacityKg)}</span>}
-      </>}
-      caption={ready && wetKg !== null && dryKg !== null && <>
+      </>)}
+      caption={ready && !empty && wetKg !== null && dryKg !== null && <>
         <SecondaryFigure label={DRY_BIOCHAR_LABEL} value={formatMassKg(dryKg)} />
         {basisCaption && <span className="block">{basisCaption}</span>}
       </>}
