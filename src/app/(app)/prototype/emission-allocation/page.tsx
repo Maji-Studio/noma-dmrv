@@ -5,7 +5,7 @@ import { AllocationPrototype } from "@/components/emissions/allocation-prototype
 export default async function EmissionAllocationPrototypePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; surface?: string; focus?: string; removals?: string }>;
+  searchParams: Promise<{ view?: string; surface?: string; focus?: string; removals?: string; hint?: string }>;
 }) {
   if (process.env.NODE_ENV === "production") notFound();
   const params = await searchParams;

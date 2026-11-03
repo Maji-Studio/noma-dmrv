@@ -2,8 +2,11 @@
  * PROTOTYPE (branch prototype/emission-allocation, never merge). Fixture that
  * mirrors staging facility TZ001: Pine Off-cuts, three credit batches, three
  * Removals. Every share is computed here from draws and loads, so each record
- * adds up to 100% (with "Not yet allocated" while feedstock is still in a bin).
- * No CO2e anywhere: Isometric computes it (ADR 0031).
+ * adds up to 100%. Round 3 keeps today's rule (Kenji, 2026-11-03): a feedstock
+ * delivery's whole transport goes to the credit batch of the earliest
+ * completed run that draws from it; mass that leaves a bin without any run
+ * puts it on the batch whose production period holds that date; otherwise it
+ * is not yet allocated. No CO2e anywhere: Isometric computes it (ADR 0031).
  */
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 
@@ -60,15 +63,44 @@ export interface SourceRecord {
   parts: Part[];
   /** What the shares are measured in: "wet mass drawn", "biochar on the load". */
   basisWord: string;
-  /** Today's rule for feedstock transport: the whole leg on the batch of its first run. */
-  todayOwner?: BatchCode;
+  /** Feedstock deliveries only: where the wet mass went and why one batch carries the leg. */
+  feedstock?: FeedstockUse;
+}
+
+/** Wet mass one credit batch's runs drew from a delivery. */
+export interface BatchUse {
+  batch: BatchCode;
+  kg: number;
+  runs: string[];
+}
+
+/** Mass that left a bin without a completed run. */
+export interface MassOut {
+  kind: "lost" | "withdrawn" | "failedRun";
+  date: string;
+  kg: number;
+}
+
+export interface FeedstockUse {
+  bin: string;
+  wetKg: number;
+  /** Transport of the whole delivery, round trip. */
+  tonneKm: number;
+  used: BatchUse[];
+  out: MassOut[];
+  stillKg: number;
+  /** The earliest completed run that drew from it. */
+  firstRun?: { code: string; date: string; batch: BatchCode };
+  /** The batch that carries the whole leg, or null while not yet allocated. */
+  owner: BatchCode | null;
+  reason: "firstRun" | "leftInPeriod" | "notYet";
 }
 
 export const GROUPS: { key: GroupKey; title: string; rule: string }[] = [
   {
     key: "feedstockTransport",
     title: "Feedstock transport",
-    rule: "A feedstock delivery is split by the wet mass each credit batch's production runs drew from it. What is still in the bin is not yet allocated.",
+    rule: "A feedstock delivery's whole transport goes to the credit batch whose production run drew from it first. Other batches that draw from it show Counted on. If mass leaves the bin without a run, the batch whose production period holds that date carries it.",
   },
   {
     key: "production",
@@ -102,9 +134,9 @@ const RUNS: { code: string; date: string; batch: BatchCode; dieselL: number; ele
   { code: "PR-26-008", date: "2026-04-15", batch: "CB-26-003", dieselL: 20, electricityKwh: 169 },
 ];
 
-const RUN_BATCH = new Map(RUNS.map((run) => [run.code, run.batch]));
+const RUN_BY_CODE = new Map(RUNS.map((run) => [run.code, run]));
 
-/** Feedstock deliveries and the wet mass each run drew from them, in the bin's draw order. */
+/** Feedstock deliveries, the wet mass each run drew from them (bin FIFO), and mass that left without a run. */
 const FEEDSTOCKS: {
   code: string;
   date: string;
@@ -113,6 +145,7 @@ const FEEDSTOCKS: {
   wetKg: number;
   oneWayKm: number;
   draws: { run: string; kg: number }[];
+  out?: MassOut[];
 }[] = [
   {
     code: "FS-26-001", date: "2026-02-02", bin: "North bay", supplier: "Mufindi Sawmill", wetKg: 10_000, oneWayKm: 42,
@@ -133,6 +166,15 @@ const FEEDSTOCKS: {
   {
     code: "FS-26-005", date: "2026-04-10", bin: "North bay", supplier: "Mufindi Sawmill", wetKg: 11_000, oneWayKm: 42,
     draws: [{ run: "PR-26-008", kg: 2_500 }],
+  },
+  {
+    code: "FS-26-006", date: "2026-03-14", bin: "East bay", supplier: "Iringa Timber", wetKg: 4_000, oneWayKm: 65,
+    draws: [],
+    out: [{ kind: "lost", date: "2026-03-27", kg: 1_000 }],
+  },
+  {
+    code: "FS-26-007", date: "2026-04-24", bin: "East bay", supplier: "Iringa Timber", wetKg: 5_000, oneWayKm: 65,
+    draws: [],
   },
 ];
 
@@ -158,36 +200,98 @@ function tonneKm(kg: number, oneWayKm: number): number {
 const kgFormat = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
 
 // ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
+
+const quantityFormat = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+
+export function formatValue(value: number, unit: Unit): string {
+  return `${quantityFormat.format(value)} ${unit}`;
+}
+
+export function formatQuantity(quantity: Quantity): string {
+  return formatValue(quantity.value, quantity.unit);
+}
+
+export function formatQuantities(quantities: Quantity[], fraction = 1): string {
+  return quantities.map((quantity) => formatValue(quantity.value * fraction, quantity.unit)).join(", ");
+}
+
+export function formatKg(kg: number): string {
+  return `${kgFormat.format(kg)} kg`;
+}
+
+const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+export function formatDay(date: string): string {
+  return dayFormat.format(new Date(`${date}T00:00:00Z`));
+}
+
+export function ownerName(owner: Owner): string {
+  return owner.notYet ? NOT_YET_LABEL : owner.label;
+}
+
+// ---------------------------------------------------------------------------
 // Build the records
 // ---------------------------------------------------------------------------
 
+/** The credit batch whose production period holds a date (the first, if periods overlap). */
+export function batchOn(date: string): Batch | undefined {
+  return BATCHES.find((batch) => batch.startDate <= date && date <= batch.endDate);
+}
+
+function feedstockUse(feedstock: (typeof FEEDSTOCKS)[number]): FeedstockUse {
+  const used: BatchUse[] = [];
+  for (const draw of feedstock.draws) {
+    const run = RUN_BY_CODE.get(draw.run);
+    if (!run) throw new Error(`Run ${draw.run} is missing`);
+    const entry = used.find((candidate) => candidate.batch === run.batch);
+    if (entry) {
+      entry.kg += draw.kg;
+      if (!entry.runs.includes(run.code)) entry.runs.push(run.code);
+    } else used.push({ batch: run.batch, kg: draw.kg, runs: [run.code] });
+  }
+  const out = feedstock.out ?? [];
+  const goneKg = [...feedstock.draws, ...out].reduce((sum, item) => sum + item.kg, 0);
+  const first = feedstock.draws.map((draw) => RUN_BY_CODE.get(draw.run)!).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const firstOut = [...out].sort((a, b) => a.date.localeCompare(b.date))[0];
+  const periodBatch = firstOut ? batchOn(firstOut.date) : undefined;
+  const base = { bin: feedstock.bin, wetKg: feedstock.wetKg, tonneKm: tonneKm(feedstock.wetKg, feedstock.oneWayKm), used, out, stillKg: feedstock.wetKg - goneKg };
+  if (first) return { ...base, firstRun: { code: first.code, date: first.date, batch: first.batch }, owner: first.batch, reason: "firstRun" };
+  if (periodBatch) return { ...base, owner: periodBatch.code, reason: "leftInPeriod" };
+  return { ...base, owner: null, reason: "notYet" };
+}
+
+export const OUT_WORDS: Record<MassOut["kind"], string> = {
+  lost: "lost",
+  withdrawn: "withdrawn",
+  failedRun: "drawn by a failed run",
+};
+
 function feedstockRecords(): SourceRecord[] {
   return FEEDSTOCKS.map((feedstock) => {
-    const byBatch = new Map<BatchCode, PartBasis[]>();
-    for (const draw of feedstock.draws) {
-      const batch = RUN_BATCH.get(draw.run);
-      if (!batch) throw new Error(`Run ${draw.run} has no batch`);
-      byBatch.set(batch, [...(byBatch.get(batch) ?? []), { label: draw.run, kg: draw.kg }]);
-    }
-    const drawnKg = feedstock.draws.reduce((sum, draw) => sum + draw.kg, 0);
-    const parts: Part[] = [...byBatch].map(([key, basis]) => ({
-      key,
-      fraction: basis.reduce((sum, b) => sum + (b.kg ?? 0), 0) / feedstock.wetKg,
-      basis,
-    }));
-    const leftKg = feedstock.wetKg - drawnKg;
-    if (leftKg > 0) parts.push({ key: NOT_YET, fraction: leftKg / feedstock.wetKg, basis: [{ label: `Still in ${feedstock.bin}`, kg: leftKg }] });
-    const firstRun = feedstock.draws[0]?.run;
+    const use = feedstockUse(feedstock);
+    const parts: Part[] = use.owner
+      ? [{
+          key: use.owner,
+          fraction: 1,
+          basis: [
+            use.firstRun
+              ? { label: `${use.firstRun.code} drew first`, kg: null }
+              : { label: `${formatKg(use.out[0].kg)} ${OUT_WORDS[use.out[0].kind]} ${formatDay(use.out[0].date)}`, kg: null },
+          ],
+        }]
+      : [{ key: NOT_YET, fraction: 1, basis: [{ label: `Still in ${feedstock.bin}`, kg: feedstock.wetKg }] }];
     return {
       id: feedstock.code,
       code: feedstock.code,
       group: "feedstockTransport",
       date: feedstock.date,
       detail: `${feedstock.bin}, ${kgFormat.format(feedstock.wetKg)} kg wet, ${feedstock.oneWayKm} km`,
-      quantities: [{ value: tonneKm(feedstock.wetKg, feedstock.oneWayKm), unit: "t·km", label: "Transport" }],
+      quantities: [{ value: use.tonneKm, unit: "t·km", label: "Transport" }],
       parts,
-      basisWord: "wet mass drawn",
-      todayOwner: firstRun ? RUN_BATCH.get(firstRun) : undefined,
+      basisWord: "the first run that drew from it",
+      feedstock: use,
     };
   });
 }
@@ -292,7 +396,7 @@ export interface Focus {
 
 export const NOT_YET_LABEL = "Not yet allocated";
 
-export const NOT_YET_OWNER: Owner = { key: NOT_YET, label: NOT_YET_LABEL, sub: "Still in the bin", batches: [], notYet: true };
+export const NOT_YET_OWNER: Owner = { key: NOT_YET, label: NOT_YET_LABEL, sub: "Nothing used yet", batches: [], notYet: true };
 
 export function batchOwners(): Owner[] {
   return BATCHES.map((batch) => ({ key: batch.code, label: batch.code, sub: batch.month, batches: [batch.code] }));
@@ -381,33 +485,46 @@ export function groupTotals(group: GroupKey): Quantity[] {
 }
 
 // ---------------------------------------------------------------------------
-// Formatting
+// Hints: why a page carries a whole delivery, or none of one it drew from
 // ---------------------------------------------------------------------------
 
-const quantityFormat = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+/** Where the rest of a delivery went, seen from one page. */
+export type RestPart =
+  | { kind: "batch"; batch: BatchCode; kg: number }
+  | { kind: "out"; out: MassOut }
+  | { kind: "still"; bin: string; kg: number };
 
-export function formatValue(value: number, unit: Unit): string {
-  return `${quantityFormat.format(value)} ${unit}`;
+export type FeedstockHint =
+  /** (a) Carries the whole leg, but its runs drew only part of the delivery. */
+  | { kind: "partly"; record: SourceRecord; use: FeedstockUse; usedKg: number; rest: RestPart[] }
+  /** (b) Carries the whole leg though no run drew from it: mass left the bin in its period. */
+  | { kind: "noRun"; record: SourceRecord; use: FeedstockUse; out: MassOut }
+  /** Receiving side: its runs drew from the delivery, another batch carries it. */
+  | { kind: "countedOn"; record: SourceRecord; use: FeedstockUse; usedKg: number; countedOn: BatchCode };
+
+export function usedBy(use: FeedstockUse, owner: Owner): number {
+  return use.used.filter((entry) => owner.batches.includes(entry.batch)).reduce((sum, entry) => sum + entry.kg, 0);
 }
 
-export function formatQuantity(quantity: Quantity): string {
-  return formatValue(quantity.value, quantity.unit);
+export function feedstockHint(record: SourceRecord, owner: Owner): FeedstockHint | null {
+  const use = record.feedstock;
+  if (!use || owner.notYet) return null;
+  const usedKg = usedBy(use, owner);
+  const carries = !!use.owner && owner.batches.includes(use.owner);
+  if (!carries) return use.owner && usedKg > 0 ? { kind: "countedOn", record, use, usedKg, countedOn: use.owner } : null;
+  if (use.reason === "leftInPeriod") return { kind: "noRun", record, use, out: use.out[0] };
+  if (usedKg >= use.wetKg) return null;
+  const rest: RestPart[] = [
+    ...use.used.filter((entry) => !owner.batches.includes(entry.batch)).map((entry) => ({ kind: "batch" as const, batch: entry.batch, kg: entry.kg })),
+    ...use.out.map((out) => ({ kind: "out" as const, out })),
+    ...(use.stillKg > 0 ? [{ kind: "still" as const, bin: use.bin, kg: use.stillKg }] : []),
+  ];
+  return { kind: "partly", record, use, usedKg, rest };
 }
 
-export function formatQuantities(quantities: Quantity[], fraction = 1): string {
-  return quantities.map((quantity) => formatValue(quantity.value * fraction, quantity.unit)).join(", ");
-}
-
-export function formatKg(kg: number): string {
-  return `${kgFormat.format(kg)} kg`;
-}
-
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-
-export function formatDay(date: string): string {
-  return dayFormat.format(new Date(`${date}T00:00:00Z`));
-}
-
-export function ownerName(owner: Owner): string {
-  return owner.notYet ? NOT_YET_LABEL : owner.label;
+/** Every feedstock hint for one page, in record order. */
+export function feedstockHints(owner: Owner): FeedstockHint[] {
+  return recordsOf("feedstockTransport")
+    .map((record) => feedstockHint(record, owner))
+    .filter((hint): hint is FeedstockHint => hint != null);
 }
