@@ -63,6 +63,7 @@ import { ComponentTable } from "./component-table";
 import { CarriedEntriesPanel } from "../carried-entries";
 import { buildComponentTable } from "./component-table-model";
 import { SourceRecords } from "./source-records";
+import { SharedSourceFileNotices } from "./shared-source-file-notices";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
@@ -425,6 +426,9 @@ export function SubmitStep({
           rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
         }
       />
+
+      {/* Advisory only: a file reused across kinds of evidence never gates Submit. */}
+      <SharedSourceFileNotices removalId={removalId} facilityId={facilityId} ctx={ctx} />
 
       <ComponentTable table={componentTable} facilityId={facilityId} />
 
