@@ -47,3 +47,17 @@ describe("capOrGroup", () => {
     expect(capOrGroup(rows(ATTENTION_PER_CHECK), total, () => `group of ${total}`)).toEqual([`group of ${total}`]);
   });
 });
+
+// #1532 light pass: a submitted Removal the verifier sent back is operator work again.
+describe("creditBatchAttention with a returned Removal", () => {
+  const submitted = { id: "rm-1", status: { kind: "submitted" as const }, phase: "submitted" as const };
+
+  it("reads returned when a submitted holder reads as returned", () => {
+    expect(creditBatchAttention(ENDED, [submitted], TODAY, new Set(["rm-1"])).period).toBe("returned");
+  });
+
+  it("keeps awaiting verification when no holder was returned", () => {
+    expect(creditBatchAttention(ENDED, [submitted], TODAY, new Set(["other"])).period).toBe("submitted");
+    expect(creditBatchAttention(ENDED, [submitted], TODAY).period).toBe("submitted");
+  });
+});

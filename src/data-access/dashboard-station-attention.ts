@@ -12,7 +12,7 @@
  *
  * These reasons carry their own href, since the fix is not on the station's
  * list page. A batch awaiting verification waits on the verifier, not the
- * operator, so it never gets here.
+ * operator, so it never gets here; one the verifier sent back does.
  *
  * Pure, so the mapping is unit-tested without a database.
  */
@@ -31,6 +31,8 @@ export interface DashboardBatchAttentionCounts {
   interrupted: number;
   /** Batches whose period ended with no submitted Removal. */
   notSubmitted: number;
+  /** Batches whose submitted Removal the verifier sent back for correction. */
+  returned: number;
 }
 
 const REASON_ORDER: DashboardStationReason["state"][] = ["error", "warning", "in-progress"];
@@ -53,6 +55,13 @@ function batchReasons(counts: DashboardBatchAttentionCounts, facilityId: string)
           href: facilityListHref(RECORD_LINKS.creditBatch.path, facilityId),
         }]
       : []),
+    ...(counts.returned > 0
+      ? [{
+          state: "warning" as const,
+          text: `${plural(counts.returned, "credit batch", "credit batches")} returned by Isometric`,
+          href: facilityListHref(RECORD_LINKS.creditBatch.path, facilityId),
+        }]
+      : []),
   ];
 }
 
@@ -71,7 +80,7 @@ export function withCrossCuttingAttention(
     add(gap.station, gap.count, [{ state: "warning", text: gap.stationReason, href: gap.href }]);
   }
   const reasons = batchReasons(batches, facilityId);
-  if (reasons.length > 0) add(BATCH_ATTENTION_STATION, batches.interrupted + batches.notSubmitted, reasons);
+  if (reasons.length > 0) add(BATCH_ATTENTION_STATION, batches.interrupted + batches.notSubmitted + batches.returned, reasons);
 
   return stations.map((station) => {
     const added = extra.get(station.key);

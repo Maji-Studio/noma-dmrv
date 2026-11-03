@@ -273,7 +273,9 @@ export function FlowHeroScene({
   return (
     <>
     <div
-      className="relative hidden w-full overflow-hidden md:block"
+      // No overflow clip: the SVG clips its own art, and a station tooltip
+      // with several reasons must run past the cropped scene, not lose its link.
+      className="relative hidden w-full md:block"
       style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, background: SCENE_BG }}
       data-testid="flow-hero-scene"
     >

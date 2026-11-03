@@ -61,6 +61,8 @@ import {
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { facilityListHref } from "@/lib/dashboard-links";
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import { loadReturnedRemovalIds } from "./dashboard-returned-removals";
 import {
   withCrossCuttingAttention,
   type DashboardBatchAttentionCounts,
@@ -741,13 +743,23 @@ export async function getDashboardAttentionItems(
       .orderBy(asc(creditBatches.endDate)),
   );
 
+  const batchRows = rows.filter((row) => row.kind === "batch-pending")
+    .map((row) => ({ row, removals: row.removals.map(removalDisplayFromFacts) }));
+  // Only a submitted period can have come back from the verifier, so only
+  // those batches pay for the lineage read (none, no extra round trip).
+  const submittedIds = batchRows
+    .filter(({ row, removals }) => creditBatchAttention({ endDate: row.dateDay }, removals, todayStr).period === "submitted")
+    .map(({ row }) => row.id);
+  const returnedRemovalIds = submittedIds.length > 0
+    ? await loadReturnedRemovalIds(ctx, submittedIds)
+    : new Set<string>();
+
   const interrupted = new Map<string, DashboardAttentionItem>();
-  // Only periods still waiting on the operator; a submitted batch waits on the verifier.
+  // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
-  for (const row of rows) {
-    if (row.kind !== "batch-pending") continue;
-    const removals = row.removals.map(removalDisplayFromFacts);
-    const attention = creditBatchAttention({ endDate: row.dateDay }, removals, todayStr);
+  const returned: DashboardAttentionItem[] = [];
+  for (const { row, removals } of batchRows) {
+    const attention = creditBatchAttention({ endDate: row.dateDay }, removals, todayStr, returnedRemovalIds);
     for (const removal of removals) {
       if (removal.status.kind !== "interrupted") continue;
       // A Removal holding slices of several batches is one row naming them all.
@@ -760,14 +772,15 @@ export async function getDashboardAttentionItems(
         href: removalResubmitHref(removal.id, facilityId),
       });
     }
-    if (attention.period !== "notSubmitted") continue;
-    notSubmitted.push({
-      id: `batch-pending-${row.id}`,
-      entityCode: row.code,
-      date: row.dateDay,
-      title: PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-      href: attentionHref(row.kind, row.id, facilityId),
-    });
+    if (attention.period === "notSubmitted" || attention.period === "returned") {
+      (attention.period === "returned" ? returned : notSubmitted).push({
+        id: `batch-pending-${row.id}`,
+        entityCode: row.code,
+        date: row.dateDay,
+        title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
+        href: attentionHref(row.kind, row.id, facilityId),
+      });
+    }
   }
   const interruptedRows = [...interrupted.values()];
   const removalsList = facilityListHref(RECORD_LINKS.removal.path, facilityId);
@@ -795,9 +808,11 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(interruptedRows, interruptedRows.length, () =>
         groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
       ...flags,
+      ...capOrGroup(returned, returned.length, () =>
+        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList)),
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
         groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
     ],
-    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length },
+    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length, returned: returned.length },
   };
 }

@@ -116,7 +116,7 @@ describe("credit batch page model", () => {
       // A submitted batch waits on the verifier, not the operator: it leaves Needs attention (#1532).
       expect(submittedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
       expect(submittedAttention.items.some(item => item.title === "Submission interrupted")).toBe(false);
-      expect(submittedAttention.batches).toEqual({ interrupted: 0, notSubmitted: 0 });
+      expect(submittedAttention.batches).toEqual({ interrupted: 0, notSubmitted: 0, returned: 0 });
       const submittedTodos = buildCreditBatchOpenItems({
         facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
         removals: completedModel.removals,

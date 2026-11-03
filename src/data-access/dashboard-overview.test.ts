@@ -10,6 +10,13 @@ const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
+  returned: vi.fn(async (): Promise<Set<string>> => new Set()),
+}));
+vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
+// Batch rows carry already-derived Removal displays in these tests.
+vi.mock("./credit-batch-removal-display", () => ({
+  batchRemovalDisplayFactsSql: () => sql`'[]'::jsonb`,
+  removalDisplayFromFacts: (removal: unknown) => removal,
 }));
 
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
@@ -70,6 +77,7 @@ let rowsByTable: Record<string, Row[]>;
 
 beforeEach(() => {
   mocks.union.mockResolvedValue([]);
+  mocks.returned.mockResolvedValue(new Set());
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
   mocks.previews.mockResolvedValue({});
   // Project only selected columns, so omitting composition or the allocation
@@ -208,7 +216,24 @@ describe("needs attention rows", () => {
         href: `/credit-batches?facility=${FACILITY_ID}`,
       },
     ]);
-    expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1 });
+    expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1, returned: 0 });
+  });
+
+  it("keeps a batch whose submitted Removal came back, and leaves out one awaiting verification", async () => {
+    const submittedBatch = (id: string, removalId: string) => ({
+      kind: "batch-pending", id, code: id.toUpperCase(), dateDay: "2026-09-30", dateMs: null, ord: 1, total: 2, allIds: [],
+      removals: [{ id: removalId, code: `RM-${removalId}`, status: { kind: "submitted" }, phase: "submitted" }],
+    });
+    mocks.union.mockResolvedValue([submittedBatch("cb-back", "rm-back"), submittedBatch("cb-wait", "rm-wait")]);
+    mocks.returned.mockResolvedValue(new Set(["rm-back"]));
+
+    const { items, batches } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+
+    expect(mocks.returned).toHaveBeenCalledWith(CTX, ["cb-back", "cb-wait"]);
+    expect(items.map(({ entityCode, title }) => ({ entityCode, title }))).toEqual([
+      { entityCode: "CB-BACK", title: "Returned by Isometric" },
+    ]);
+    expect(batches).toEqual({ interrupted: 0, notSubmitted: 0, returned: 1 });
   });
 
   it("opens the plain list when the group has more records than the id filter takes", async () => {

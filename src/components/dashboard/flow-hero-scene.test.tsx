@@ -37,4 +37,11 @@ describe("FlowHeroScene", () => {
     expect(html).toContain('href="/credit-batches?facility=f1"');
     expect(render(stations("production", {}), "attention")).not.toContain("flow-hero-reasons");
   });
+
+  it("lets a long station tooltip overflow the cropped scene instead of clipping its list link", () => {
+    const html = render(stations("production", {}), "overview");
+    const scene = html.match(/<div class="([^"]*)"[^>]*data-testid="flow-hero-scene"/)?.[1] ?? "";
+    expect(scene).toContain("relative");
+    expect(scene).not.toContain("overflow-hidden");
+  });
 });

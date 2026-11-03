@@ -5,7 +5,7 @@ import { withCrossCuttingAttention } from "./dashboard-station-attention";
 
 const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
 const KEYS: DashboardStationKey[] = ["suppliers", "feedstock", "production", "products", "deliveries", "applications"];
-const NO_BATCHES = { interrupted: 0, notSubmitted: 0 };
+const NO_BATCHES = { interrupted: 0, notSubmitted: 0, returned: 0 };
 
 function stations(overrides: Partial<Record<DashboardStationKey, Partial<DashboardStation>>> = {}): DashboardStation[] {
   return KEYS.map((key) => ({
@@ -48,16 +48,17 @@ describe("withCrossCuttingAttention", () => {
         },
       }),
       [],
-      { interrupted: 1, notSubmitted: 3 },
+      { interrupted: 1, notSubmitted: 3, returned: 2 },
       FACILITY_ID,
     ));
 
     const batches = `/credit-batches?facility=${FACILITY_ID}`;
-    expect(result.production?.attention).toBe(6);
+    expect(result.production?.attention).toBe(8);
     expect(result.production?.reasons).toEqual([
       { state: "error", text: "1 submission interrupted", href: `/removals?facility=${FACILITY_ID}` },
       { state: "warning", text: "2 runs missing mass data" },
       { state: "warning", text: "3 credit batches not submitted", href: batches },
+      { state: "warning", text: "2 credit batches returned by Isometric", href: batches },
       { state: "in-progress", text: "1 running now", source: "runningRuns" },
     ]);
   });
