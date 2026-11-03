@@ -3,7 +3,7 @@
  * sheet) into file uses for the shared-file note on Review & submit (#1531).
  * The grouping itself lives in `@/lib/certification/shared-source-files`.
  */
-import type { CandidateDocument } from "@/fn/certification/source-candidates";
+import type { CandidateDocument, CandidateLineageEntityType } from "@/fn/certification/source-candidates";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import {
@@ -26,7 +26,7 @@ export interface SharedSourceFilesInput {
   linesByBatchId: Record<string, readonly EntryLine[]> | undefined;
 }
 
-const RECORD_KIND_BY_ENTITY: Partial<Record<string, RecordKind>> = {
+const RECORD_KIND_BY_ENTITY: Record<Exclude<CandidateLineageEntityType, "emission_entry">, RecordKind> = {
   application: "application",
   delivery: "delivery",
   feedstock: "feedstock",
@@ -99,16 +99,20 @@ export function sharedSourceFiles(input: SharedSourceFilesInput): SharedSourceFi
           },
         }];
       }
+      const batchId = candidate.binding?.creditBatchId;
+      const batchCode = input.batches.find((batch) => batch.id === batchId)?.code ?? candidate.binding?.carriedEntry?.creditBatchCode ?? null;
       const target = candidate.binding?.intendedTarget;
       const componentId = target?.kind === "explicit" ? target.componentId : null;
       return [{
         ...base,
         component: componentId ? { id: componentId, name: names.get(componentId) ?? null } : null,
-        record: { label: lineageEntity.entityLabel, href: null },
+        record: batchId && batchCode
+          ? { label: batchCode, href: recordHref("creditBatch", batchId, { facilityId: input.facilityId, tab: "emissions" }) }
+          : { label: lineageEntity.entityLabel, href: null },
       }];
     }
 
-    const kind = RECORD_KIND_BY_ENTITY[lineageEntity.entityType];
+    const kind = RECORD_KIND_BY_ENTITY[lineageEntity.entityType as keyof typeof RECORD_KIND_BY_ENTITY];
     const record: SourceFileRecord = {
       label: lineageEntity.entityLabel,
       href: kind ? recordHref(kind, lineageEntity.entityId, { facilityId: input.facilityId }) : null,

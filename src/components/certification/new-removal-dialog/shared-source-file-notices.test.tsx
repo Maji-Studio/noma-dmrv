@@ -68,6 +68,19 @@ describe("SharedSourceFileNoticeList", () => {
     expect(within(items[1]).getByRole("link", { name: "CB-26-003" }).getAttribute("href")).toBe(`/credit-batches/batch-3?facility=${FACILITY}&tab=emissions`);
   });
 
+  it("links an emissions entry missing from the lines to its credit batch, without the repeated name or date", () => {
+    const carried = candidate({
+      id: "d-carried",
+      entity: { entityType: "emission_entry", entityId: "entry-carried", entityLabel: "Emissions entry, Staff travel, 2026-08-03, CB-26-001" },
+      binding: { nomaRole: "emission_entry", creditBatchId: "batch-1", carriedEntry: { creditBatchCode: "CB-26-001", occurredOn: "2026-08-03" }, intendedTarget: { kind: "explicit", componentId: "c-travel", inputKey: "distance" } } as never,
+    });
+    render(<SharedSourceFileNoticeList files={sharedSourceFiles(input([labReport("d1", "SAM-26-007"), carried]))} />);
+
+    const items = within(screen.getByRole("status")).getAllByRole("listitem");
+    expect(items[1].textContent).toBe("Staff travel:CB-26-001");
+    expect(within(items[1]).getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toBe(`/credit-batches/batch-1?facility=${FACILITY}&tab=emissions`);
+  });
+
   it("shows nothing when the file is reused within one kind", () => {
     const { container } = render(<SharedSourceFileNoticeList files={sharedSourceFiles(input([labReport("d1", "SAM-26-007"), labReport("d2", "SAM-26-008")]))} />);
     expect(container.innerHTML).toBe("");

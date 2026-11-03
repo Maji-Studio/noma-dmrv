@@ -45,6 +45,8 @@ export type RemovalSourceIntendedTarget = EvidenceIntendedTarget | {
 
 export interface ClassifiedRemovalSource {
   carriedEntry?: Pick<CarriedEntryNote, "creditBatchCode" | "occurredOn">;
+  /** Emissions entries only: the credit batch the entry is recorded on. */
+  creditBatchId?: string;
   nomaRole: NomaEvidenceRole;
   nomaRoleLabel: string;
   lineage: RemovalSourceLineage;
