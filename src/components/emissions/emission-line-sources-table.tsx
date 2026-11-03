@@ -100,7 +100,7 @@ export function SourcesTable({ line, scope, model, readOnly = false, onForm, onD
       {model.showTotal && (
         <div role="row" className={cn(TABLE_ROW, "[border-top:var(--hair-2)]")}>
           <span role="rowheader" className={cn(CELL_Y, NAME_INSET, "col-start-1 row-start-1 body-small font-medium md:col-start-3 md:pl-0 md:text-right")}>Total</span>
-          <span role="cell" className={cn(AMOUNT_CELL, model.totalMissing ? "text-[var(--color-text-tertiary)]" : isCalculatedByRegistry(line.records) ? QUIET_REASON : "font-medium")}>{model.totalText}</span>
+          <span role="cell" className={cn(AMOUNT_CELL, model.totalMissing ? "text-[var(--color-text-tertiary)]" : !line.total && isCalculatedByRegistry(line.records) ? QUIET_REASON : "font-medium")}>{model.totalText}</span>
         </div>
       )}
     </div>
