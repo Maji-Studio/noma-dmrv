@@ -49,7 +49,7 @@ export interface HoverCardBatch {
   startDate: string;
   endDate: string;
   state: TimelineState | null;
-  /** Blocking + Check items while Open, the same count as the batch page's Overview badge. */
+  /** Blocking + Check items while Open or interrupted, the same count as the batch page's Overview badge. */
   todoCount: number;
   facts: CreditBatchTimelineFacts | undefined;
   /** Whether `facts` is still loading or could not be loaded, so a gap is not read as a missing measurement. */
