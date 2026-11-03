@@ -2,8 +2,8 @@
  * The credit batch's Removal template, read-only, in its view sheet. Removals of
  * the batch compile against it, so a batch with no template (or one Isometric
  * no longer lists) cannot be submitted until an Admin sets the facility's
- * Removal template in Settings. Nothing is changed here: the link goes to the
- * setup, which switches every credit batch whose Removal is not sent.
+ * Removal template in Settings. Nothing is changed here, and there is no link
+ * to Settings: the template reads as a plain Batch details row.
  *
  * Readiness blockers deep-link to this block (`?focus=removal-template`), and
  * the shared focus target scrolls to it. The block says why the operator landed
@@ -28,15 +28,15 @@ import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { DECIDE_LINES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { linesDecidedByAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
+import { DetailRow } from "./credit-batch-page-parts";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
 
 export interface CreditBatchRemovalTemplateProps {
   creditBatch: Pick<CreditBatchWithRelations, "id" | "code" | "facilityId" | "version" | "removalTemplateId">;
   /** Admin. Everyone else reads the template. */
   canManage: boolean;
-  /** A submitted Removal holds the batch, so its definition is locked. */
-  locked: boolean;
   /** The deep-link focus target, when this sheet was opened by one. */
   activeFocusTarget?: string | null;
   /**
@@ -48,6 +48,8 @@ export interface CreditBatchRemovalTemplateProps {
   inRemoval?: boolean;
   /** A read-only batch states the fact alone, with no instruction to fix it. */
   readOnly?: boolean;
+  /** The template name is already shown as a Batch details row (`CreditBatchRemovalTemplateRow`): render the notices only. */
+  fieldShown?: boolean;
 }
 
 /** Why a credit batch with components to decide can't go into a Removal, and who decides them. */
@@ -57,17 +59,8 @@ export function linesToDecideNoticeText(count: number, canManage: boolean, inRem
   return `${lead} ${linesDecidedByAdmin(count)}`;
 }
 
-const CHANGE_IN_SETTINGS_LABEL = "Change in Settings";
-
-export function CreditBatchRemovalTemplate({
-  creditBatch: snapshot,
-  canManage,
-  locked,
-  activeFocusTarget,
-  linesToDecide: undecidedLines,
-  inRemoval = false,
-  readOnly = false,
-}: CreditBatchRemovalTemplateProps) {
+/** The batch's pinned template, its name (or why the name cannot be read) and whether the name is still loading. */
+function useRemovalTemplateName(snapshot: Pick<CreditBatchWithRelations, "id" | "facilityId" | "removalTemplateId">) {
   // The sheet holds a snapshot; the template comes from the live record
   // so a change made in Settings shows without reopening the sheet.
   const live = useCreditBatch(snapshot.id);
@@ -75,9 +68,6 @@ export function CreditBatchRemovalTemplate({
   const pinnedId = batch.removalTemplateId;
   const summary = useFacilityCertifierSummary(batch.facilityId);
   const projectId = summary.data?.mapping?.externalProjectId ?? null;
-  // Answering in Settings makes the picked template the facility's and switches every
-  // open batch, so a kept batch on an older template gets text, not that link.
-  const pinIsFacilityTemplate = summary.data?.mapping?.removalTemplateId === pinnedId;
   const templates = useIsometricProjectTemplates(pinnedId ? projectId : null);
 
   const pinned = pinnedId ? templates.data?.find((template) => template.id === pinnedId) : undefined;
@@ -95,7 +85,28 @@ export function CreditBatchRemovalTemplate({
         : summary.isSuccess && !projectId
           ? "No Isometric project linked"
           : null;
-  const value = pinned?.display_name ?? reason;
+  return { batch, pinnedId, summary, pinned, pinnedMissing, namePending, reason, value: pinned?.display_name ?? reason };
+}
+
+/** The Removal template as a Batch details row, inside the page's `<dl>`: the template's full name, "Not set" when none is pinned. */
+export function CreditBatchRemovalTemplateRow({ creditBatch }: { creditBatch: Pick<CreditBatchWithRelations, "id" | "facilityId" | "removalTemplateId"> }) {
+  const { value, namePending } = useRemovalTemplateName(creditBatch);
+  return <DetailRow label="Removal template" value={value} pending={namePending} emptyText={MISSING_VALUE.notSet} />;
+}
+
+export function CreditBatchRemovalTemplate({
+  creditBatch: snapshot,
+  canManage,
+  activeFocusTarget,
+  linesToDecide: undecidedLines,
+  inRemoval = false,
+  readOnly = false,
+  fieldShown = false,
+}: CreditBatchRemovalTemplateProps) {
+  const { batch, pinnedId, summary, pinnedMissing, namePending, reason, value } = useRemovalTemplateName(snapshot);
+  // Answering in Settings makes the picked template the facility's and switches every
+  // open batch, so a kept batch on an older template gets text, not that link.
+  const pinIsFacilityTemplate = summary.data?.mapping?.removalTemplateId === pinnedId;
   const linesToDecide = pinnedId && !pinnedMissing ? undecidedLines : 0;
 
   // The two Notices below already say why an unpinned or vanished pin needs
@@ -109,7 +120,7 @@ export function CreditBatchRemovalTemplate({
       actionLabel={landingLabel}
       className="flex flex-col gap-12"
     >
-      <div className="flex flex-wrap items-start justify-between gap-12">
+      {!fieldShown && (
         <DetailField
           label="Removal template"
           value={value}
@@ -118,15 +129,7 @@ export function CreditBatchRemovalTemplate({
           pending={namePending}
           className="min-w-0 flex-1"
         />
-        {canManage && !locked && (
-          <Link
-            href={removalTemplateSetupHref(batch.facilityId)}
-            className="inline-flex min-h-44 items-center body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-          >
-            {CHANGE_IN_SETTINGS_LABEL}
-          </Link>
-        )}
-      </div>
+      )}
 
       {pinnedMissing && (
         <Notice tone="warning">

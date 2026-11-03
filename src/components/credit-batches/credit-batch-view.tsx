@@ -267,7 +267,7 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   isHealthLoading: boolean;
   /** Admin: may switch the batch's Removal template. */
   canManage?: boolean;
-  /** A submitted Removal holds the batch, so its definition is locked. */
+  /** Kept for callers; the Removal template section no longer reads it (no link to Settings). */
   locked?: boolean;
   /** The deep-link focus target the sheet was opened with. */
   activeFocusTarget?: string | null;
@@ -295,7 +295,6 @@ export function creditBatchSheetSections({
   healthSummary,
   isHealthLoading,
   canManage = false,
-  locked = false,
   activeFocusTarget,
   inRemoval = false,
   appliedDryKg,
@@ -347,7 +346,6 @@ export function creditBatchSheetSections({
         <CreditBatchRemovalTemplate
           creditBatch={creditBatch}
           canManage={canManage}
-          locked={locked}
           activeFocusTarget={activeFocusTarget}
           linesToDecide={healthSummary?.linesToDecide ?? 0}
           inRemoval={inRemoval}

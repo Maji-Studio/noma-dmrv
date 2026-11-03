@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
+import { CreditBatchRemovalTemplate, CreditBatchRemovalTemplateRow } from "./credit-batch-removal-template";
 
 const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0, facilityTemplate: "rvt_new" as string | null }));
 vi.mock("@/hooks/use-credit-batches", () => ({
@@ -19,12 +19,11 @@ vi.mock("@/hooks/use-certification", () => ({
   }),
 }));
 
-function mount(canManage: boolean, locked = false, activeFocusTarget?: string, inRemoval = false, readOnly = false) {
+function mount(canManage: boolean, activeFocusTarget?: string, inRemoval = false, readOnly = false) {
   render(
     <CreditBatchRemovalTemplate
       creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: mocks.pin }}
       canManage={canManage}
-      locked={locked}
       activeFocusTarget={activeFocusTarget}
       linesToDecide={mocks.linesToDecide}
       inRemoval={inRemoval}
@@ -46,25 +45,41 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("CreditBatchRemovalTemplate", () => {
-  it("names the template read-only and links Admins to the setup in Settings", () => {
-    mount(true);
-    expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
-    expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByRole("link", { name: "Change in Settings" }).getAttribute("href")).toBe("/settings/removal-templates?facility=facility-1&setup=template");
+  it("names the template read-only, with no link to Settings for anyone", () => {
+    for (const canManage of [true, false]) {
+      mount(canManage);
+      expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
+      cleanup();
+    }
   });
 
-  it("is read-only for members and while a Removal locks the batch", () => {
-    mount(false);
-    expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
+  it("shows the name as a Batch details row, and the notices alone when the row is shown", () => {
+    render(
+      <dl>
+        <CreditBatchRemovalTemplateRow creditBatch={{ id: "batch-1", facilityId: "facility-1", removalTemplateId: "rvt_new" }} />
+      </dl>,
+    );
+    expect(screen.getByText("Removal template").tagName).toBe("DT");
+    expect(screen.getByText("Dark Earth Carbon Template").closest("dd")).not.toBeNull();
     cleanup();
-    mount(true, true);
-    expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
+    mocks.pin = null;
+    render(
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: null }}
+        canManage
+        linesToDecide={0}
+        fieldShown
+      />,
+    );
+    expect(screen.queryByText("Removal template")).toBeNull();
+    expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
   });
 
   it("says an unset batch has no template and who can set one", () => {
     mocks.pin = null;
     mount(true);
-    expect(screen.getByRole("link", { name: "Change in Settings" })).toBeTruthy();
     expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
     cleanup();
     mount(false);
@@ -101,11 +116,11 @@ describe("CreditBatchRemovalTemplate", () => {
 
     it("says another Removal once a Removal holds the batch", () => {
       mocks.linesToDecide = 1;
-      mount(false, true, undefined, true);
+      mount(false, undefined, true);
       expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin answers it in Settings, Removal templates.")).toBeTruthy();
       cleanup();
       mocks.linesToDecide = 17;
-      mount(true, false, undefined, true);
+      mount(true, undefined, true);
       expect(screen.getByText("17 components to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
     });
 
@@ -127,7 +142,7 @@ describe("CreditBatchRemovalTemplate", () => {
 
     it("says an unpinned batch needs a template once", () => {
       mocks.pin = null;
-      mount(true, false, FOCUS);
+      mount(true, FOCUS);
       expect(screen.getAllByText(/Set a Removal template/)).toHaveLength(1);
       expect(screen.getByText(UNPINNED_COPY)).toBeTruthy();
       expect(landingLine()).toBeNull();
@@ -135,7 +150,7 @@ describe("CreditBatchRemovalTemplate", () => {
 
     it("lands on the not-found notice, not on a request to choose a template", () => {
       mocks.listed = [];
-      mount(true, false, FOCUS);
+      mount(true, FOCUS);
       expect(screen.getAllByText(/Template no longer exists/)).toHaveLength(1);
       expect(screen.getByText(MISSING_COPY)).toBeTruthy();
       expect(screen.queryByText(/Set a Removal template/)).toBeNull();
@@ -143,7 +158,7 @@ describe("CreditBatchRemovalTemplate", () => {
     });
 
     it("shows one neutral line when the pin is listed and a blocker still sent the operator here", () => {
-      mount(true, false, FOCUS);
+      mount(true, FOCUS);
       expect(landingLine()?.textContent).toBe(REMOVAL_TEMPLATE_LANDING_LINE);
       expect(screen.queryByText(/Set a Removal template/)).toBeNull();
     });
@@ -156,7 +171,7 @@ describe("CreditBatchRemovalTemplate", () => {
 
   it("states the missing template as a fact alone on a read-only batch", () => {
     mocks.pin = null;
-    mount(false, false, undefined, false, true);
+    mount(false, undefined, false, true);
     expect(screen.getByText("This credit batch has no Removal template.")).toBeTruthy();
     expect(screen.queryByText(/Ask an Admin|Set a Removal template/)).toBeNull();
     expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
