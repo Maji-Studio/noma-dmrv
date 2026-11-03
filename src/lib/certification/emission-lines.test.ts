@@ -187,6 +187,7 @@ it.each([
   ["other automatic source", { contract: { scope: "operating", origin: "reviewed", automaticSource: "run-electricity", entryPolicy: "additive" } }, true],
   ["no contract", { contract: undefined }, true],
   ["with an entry", { entries: [{ id: "entry-1" } as BatchEmissionLine["entries"][number]] }, true],
+  ["with a comment", { comment: { id: "comment-1" } } as Partial<BatchEmissionLine>, true],
 ] satisfies Array<[string, Partial<BatchEmissionLine>, boolean]>)("keeps only actionable or other components visible: %s", (_name, overrides, visible) => {
   const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
   const handled = deriveBatchEmissionLines({ definition, lineSources: resolveLineSources({ definition }),

@@ -161,9 +161,10 @@ export function withoutRegistryCalculatedLines<T extends {
   state: EmissionLineState;
   blocker?: RemovalBlocker | null;
   entries?: readonly unknown[];
+  comment?: unknown;
 }>(lines: readonly T[]): T[] {
-  // A line with entries stays visible so the operator can still see and edit them.
+  // A line with entries or a comment stays visible so the operator can still see and edit them.
   return lines.filter((line) => !(line.contract?.automaticSource === "sequestration"
     && line.records?.calculatedBy === "isometric" && line.state === "filled" && !line.blocker
-    && !line.entries?.length));
+    && !line.entries?.length && !line.comment));
 }
