@@ -1,3 +1,5 @@
+// The tile styles; the walk panel renders without the map canvas in a stacked Split.
+import "./trace-map.css";
 import type { CSSProperties } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";

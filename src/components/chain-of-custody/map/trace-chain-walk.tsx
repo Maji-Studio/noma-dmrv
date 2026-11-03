@@ -6,7 +6,7 @@
  * is a plain step; a stage where several records converge (intakes, runs,
  * products) is one step that lists them, each opening in place. Back / Next
  * step stage to stage (the map follows), and "Whole batch" returns to the
- * stage list.
+ * stage list (absent on an application's own map: it is the only chain).
  */
 
 import { ArrowLeftIcon, CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
@@ -38,8 +38,10 @@ export function TraceChainWalk({
   openRecordId: string | null;
   onStep: (index: number) => void;
   onOpenRecord: (recordId: string | null) => void;
-  onLeave: () => void;
-  onTrace: (recordId: string) => void;
+  /** "Whole batch": back to the stage list. Absent = no way back (one chain). */
+  onLeave?: () => void;
+  /** "Trace rollback" on an application. Absent = no such action. */
+  onTrace?: (recordId: string) => void;
 }) {
   const last = steps.length - 1;
   const current = steps[stepIndex];
@@ -51,11 +53,13 @@ export function TraceChainWalk({
     <>
       <div className="flex shrink-0 flex-col gap-8 border-b border-[var(--clr-dark-purple-10)] px-16 py-10">
         <div className="flex items-center justify-between gap-12">
-          <Button variant="noOutline" size="small" className="-ml-12 min-h-44 md:min-h-0" onClick={onLeave}>
-            <ArrowLeftIcon size={12} weight="bold" />
-            Whole batch
-          </Button>
-          <div className="flex shrink-0 gap-8">
+          {onLeave ? (
+            <Button variant="noOutline" size="small" className="-ml-12 min-h-44 md:min-h-0" onClick={onLeave}>
+              <ArrowLeftIcon size={12} weight="bold" />
+              Whole batch
+            </Button>
+          ) : null}
+          <div className="ml-auto flex shrink-0 gap-8">
             {stepIndex > 0 ? (
               <Button variant="weak" size="small" className="min-h-44 md:min-h-0" onClick={() => onStep(stepIndex - 1)}>
                 <CaretLeftIcon size={12} weight="bold" />

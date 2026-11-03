@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The batch Traceability Map's canvas: a lean sibling of carbon-transit-map.tsx
- * driven by one `lighting` prop. Lit records and legs stay full strength, the
+ * The Traceability Map's canvas (batch and application), driven by one
+ * `lighting` prop. Lit records and legs stay full strength, the
  * rest dims, and only lit legs carry a km label (one per drawn road, never all
  * at once). The camera flies to `lighting.points` whenever `frameKey` changes.
  * Loaded with next/dynamic (ssr: false).
@@ -291,7 +291,18 @@ export default function TraceMapCanvas({
       setReadyMap(map);
     });
     map.on("render", () => {
-      if (map.getLayer(BASE_LAYER) && !map.isMoving()) container.dataset.mapState = "ready";
+      if (!map.getLayer(BASE_LAYER) || map.isMoving()) return;
+      // Opt-in read-only observations for the renderer E2E checks, so ordinary
+      // views never query or serialize painted features.
+      if (document.documentElement.dataset.observeCarbonMap === "true") {
+        container.dataset.mapBounds = JSON.stringify(map.getBounds().toArray());
+        container.dataset.renderedLegs = JSON.stringify(
+          map.queryRenderedFeatures({ layers: [BASE_LAYER, FALLBACK_LAYER] })
+            .filter((feature) => feature.geometry.type === "LineString")
+            .map((feature) => ({ id: feature.properties.legId, geometry: feature.geometry })),
+        );
+      }
+      container.dataset.mapState = "ready";
     });
     let step = 0;
     const ants = setInterval(() => {

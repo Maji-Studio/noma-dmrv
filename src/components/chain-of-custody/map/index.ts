@@ -1,4 +1,4 @@
-export { CarbonTransitPanel, type CarbonTransitPanelProps } from "./carbon-transit-panel";
+export { ApplicationTraceMap, type ApplicationTraceMapProps } from "./application-trace-map";
 export { TraceMap, type TraceMapProps } from "./trace-map";
 // The popup card, shared with the transport route map's endpoint cards.
 export { createPopupCardElement, type PopupCardInput } from "./viewer-elements";
