@@ -31,7 +31,7 @@ it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("names
   const tx = reader(batches);
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 100, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock",
-      message: "Bin SL-26-001 held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.",
+      message: "At the run’s start bin SL-26-001 held no wet feedstock. Move the run’s start or correct the intake’s delivery date.",
       issues: [{ path,
       meta: { storageLocationId: "bin", availableWetKg: 0, requestedWetKg: 100, unit: "kg" } }] });
 });
@@ -39,7 +39,7 @@ it.each([{ batches: [] }, { batches: [{ id: "intake", massWetKg: 0 }] }])("names
 it("falls back when the bin row is unavailable", async () => {
   await expect(allocateFeedstockWetMass(ctx, reader([], null), "bin", 100, "2026-03-20"))
     .rejects.toMatchObject({
-      message: "This bin held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.",
+      message: "At the run’s start this bin held no wet feedstock. Move the run’s start or correct the intake’s delivery date.",
     });
 });
 
@@ -48,7 +48,7 @@ it("refuses a draw above the qualifying intake total with stock metadata", async
   const tx = reader(batches);
   await expect(withProductionRunErrors(() => allocateFeedstockWetMass(ctx, tx, "bin", 25_000, "2026-03-20"), path))
     .rejects.toMatchObject({ code: "insufficient_stock",
-      message: "By the run’s start day bin SL-26-001 held 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run’s start.",
+      message: "At the run’s start bin SL-26-001 held 20,000 kg, less than the 25,000 kg drawn. Lower the draw or move the run’s start.",
       issues: [{ path, meta: { storageLocationId: "bin", availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } }],
     });
 });
@@ -57,7 +57,7 @@ it("falls back when an overdrawn bin row is unavailable", async () => {
   const batches = [{ id: "intake", massWetKg: 50 }];
   await expect(allocateFeedstockWetMass(ctx, reader(batches, null), "bin", 100, "2026-03-20"))
     .rejects.toMatchObject({
-      message: "By the run’s start day this bin held 50 kg, less than the 100 kg drawn. Lower the draw or move the run’s start.",
+      message: "At the run’s start this bin held 50 kg, less than the 100 kg drawn. Lower the draw or move the run’s start.",
     });
 });
 

@@ -61,9 +61,12 @@ it("draws feedstock cards as one bin of stacked delivery layers, never sub-bins"
     const markup = renderToStaticMarkup(<FeedstockDrawOrderArt order={order} />);
     expect(countBins(markup)).toBe(1);
     expect(markup).toContain('aria-hidden="true"');
-    expect(markup.match(/stock-draw-first/g)).toHaveLength(1);
-    const layers = [...markup.matchAll(/class="(stock-draw-first|stock-draw-waiting)"/g)].map(match => match[1]);
-    expect(layers[order === "oldest_first" ? 0 : 2]).toBe("stock-draw-first");
+    expect(markup.match(/stock-draw-marker/g)).toHaveLength(1);
+    const first = order === "oldest_first" ? "a" : "c";
+    expect(markup).toMatch(new RegExp(`class="stock-draw-marker"[^>]*var\\(--stock-batch-${first}\\)`));
+    // The drawn layer is gone from the pile: the other two sit from the floor up, leaving the top rows empty.
+    expect(markup).not.toContain(`stock-grain-${first}`);
+    expect(markup.match(/stock-grain-[abc]/g)).toHaveLength(4 * 15);
     expect([...markup.matchAll(/>(\d+ Oct)<\/text>/g)].map(match => match[1])).toEqual(["01 Oct", "02 Oct", "03 Oct"]);
   }
   const optionArt = (options: { art: unknown }[]) => options.map(option => renderToStaticMarkup(option.art as never));

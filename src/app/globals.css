@@ -560,7 +560,15 @@ body {
   0%, 44% { opacity: 1; transform: scaleY(1); }
   74%, 100% { opacity: 0; transform: scaleY(0); }
 }
+/* Feedstock layered bin: the chip over the bin marks the layer drawn first; on hover it lifts away. */
+@keyframes stock-draw-marker-lift {
+  0%, 40% { opacity: 1; transform: translateY(0); }
+  80%, 100% { opacity: 0; transform: translateY(var(--stock-chip-lift)); }
+}
 @media (prefers-reduced-motion: no-preference) {
+  :is(label:hover, label:has(input:focus-visible)):not(:has(input:disabled)) .stock-draw-marker {
+    animation: stock-draw-marker-lift var(--stock-loop) ease-in-out infinite;
+  }
   :is(label:hover, label:has(input:focus-visible)):not(:has(input:disabled)) .stock-art-draw .stock-grain {
     animation: none;
   }

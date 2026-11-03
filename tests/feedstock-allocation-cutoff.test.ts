@@ -61,7 +61,7 @@ describe("facility-day feedstock allocations", () => {
     await expect(tx.transaction(savepoint => updateProductionRunInTransaction(ctx, savepoint, run.id, {
       expectedVersion: run.version, feedstockDraws: [{ storageLocationId: f.bins[0].id, wetMassKg: 25_000 }],
     }))).rejects.toMatchObject({ code: "insufficient_stock",
-      message: expect.stringContaining(`By the run’s start day bin ${f.bins[0].code} held`),
+      message: expect.stringContaining(`At the run’s start bin ${f.bins[0].code} held`),
       issues: [expect.objectContaining({ path: ["feedstockDraws", 0, "storageLocationId"],
         meta: { storageLocationId: f.bins[0].id, availableWetKg: 20_000, requestedWetKg: 25_000, unit: "kg" } })],
     });
@@ -264,7 +264,7 @@ describe("facility-day feedstock allocations", () => {
   it("refuses a draw before any intake and rolls back an invalid start edit", () => scenario(async (tx, f) => {
     await expect(tx.transaction(savepoint => f.run(new Date("2026-02-20T08:00:00Z"), undefined, savepoint)))
       .rejects.toMatchObject({ code: "insufficient_stock",
-        message: `Bin ${f.bins[0].code} held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.`,
+        message: `At the run’s start bin ${f.bins[0].code} held no wet feedstock. Move the run’s start or correct the intake’s delivery date.`,
       });
     const run = await f.run();
     const before = await shares(tx, run.id);
@@ -276,7 +276,7 @@ describe("facility-day feedstock allocations", () => {
     const otherCtx = { ...ctx, organizationId: crypto.randomUUID() };
     await expect(allocateFeedstockWetMass(otherCtx, tx, f.bins[0].id, DRAW_KG, "2026-02-20"))
       .rejects.toMatchObject({
-        message: "This bin held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.",
+        message: "At the run’s start this bin held no wet feedstock. Move the run’s start or correct the intake’s delivery date.",
       });
   }));
   it("rolls back an intake edit that empties the qualifying basis", () => scenario(async (tx, f) => {

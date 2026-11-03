@@ -188,24 +188,39 @@ export function MixPileArt() {
   );
 }
 
-/** Layer 0 is the oldest delivery and sits at the bottom of the bin. */
-const layerOfRow = (row: number) => SPLIT_TONES.length - 1 - Math.floor(row / LAYER_ROWS);
+/** Rows a delivery layer fills. */
+const LAYER_ROWS_PER_LAYER = LAYER_ROWS;
+/** The chip that marks the layer a draw empties first sits just above the bin. */
+const MARKER_Y = BIN_TOP - CHIP_HEIGHT - 3;
 
-/** One bin of stacked delivery layers; `firstLayer` is the layer a draw empties first, empty in the settled picture. */
+/**
+ * One bin of stacked delivery layers (layer 0 is the oldest, at the bottom). The settled
+ * picture is the bin after `firstLayer` was drawn: the other layers sit from the floor up,
+ * and a chip above the bin carries the drawn layer's tone (and date) to say which goes first.
+ */
 function LayeredBinArt({ firstLayer, dated, binX, binWidth, columns }: { firstLayer: number; dated: boolean; binX: number; binWidth: number; columns: number }) {
-  const grains = grainGrid(binX, binWidth, columns, (_, row) => SPLIT_TONES[layerOfRow(row)], false);
+  const remaining = SPLIT_TONES.map((_, layer) => layer).filter((layer) => layer !== firstLayer);
+  const emptyRows = GRAIN_ROWS - remaining.length * LAYER_ROWS_PER_LAYER;
+  const layerAtRow = (row: number) => remaining[Math.floor((GRAIN_ROWS - 1 - row) / LAYER_ROWS_PER_LAYER)];
+  const grains = grainGrid(binX, binWidth, columns, (_, row) => SPLIT_TONES[layerAtRow(row)], false).filter((grain) => grain.row >= emptyRows);
   return (
     <StockArt mode="draw">
-      {SPLIT_TONES.map((tone, layer) => (
-        <g key={tone} className={layer === firstLayer ? "stock-draw-first" : "stock-draw-waiting"}>
-          <Grains grains={grains.filter((grain) => layerOfRow(grain.row) === layer)} />
-        </g>
-      ))}
+      <Grains grains={grains} />
       <path d={binPath(binX, binWidth)} />
-      {dated && SPLIT_TONES.map((tone, layer) => (
-        <text key={tone} x={LAYER_LABEL_X} y={FILL_TOP + 1 + (SPLIT_TONES.length - 1 - layer + 0.5) * LAYER_ROWS * GRAIN_STEP_Y + LAYER_LABEL_DROP}
-          fontSize={DRAW_DATE_SIZE} fill="currentColor" stroke="none">{DRAW_DATES[layer]}</text>
-      ))}
+      <rect
+        className="stock-draw-marker"
+        x={binX + (binWidth - CHIP_WIDTH) / 2}
+        y={MARKER_Y}
+        width={CHIP_WIDTH}
+        height={CHIP_HEIGHT}
+        stroke="none"
+        style={{ fill: `var(--stock-batch-${SPLIT_TONES[firstLayer]})` }}
+      />
+      {dated && SPLIT_TONES.map((tone, layer) => {
+        const slot = remaining.indexOf(layer);
+        const y = slot < 0 ? MARKER_Y + CHIP_HEIGHT : FILL_TOP + 1 + (GRAIN_ROWS - (slot + 0.5) * LAYER_ROWS_PER_LAYER) * GRAIN_STEP_Y + LAYER_LABEL_DROP;
+        return <text key={tone} x={LAYER_LABEL_X} y={y} fontSize={DRAW_DATE_SIZE} fill="currentColor" stroke="none">{DRAW_DATES[layer]}</text>;
+      })}
     </StockArt>
   );
 }
@@ -215,7 +230,7 @@ export function InOrderBinArt() {
   return <LayeredBinArt firstLayer={DRAW_FIRST_INDEX} dated={false} binX={MIX_BIN_X} binWidth={MIX_BIN_WIDTH} columns={MIX_COLUMNS} />;
 }
 
-/** One feedstock bin with dated delivery layers; the first layer drawn is empty in the settled picture. */
+/** One feedstock bin with dated delivery layers; the layer drawn first is marked above the bin. */
 export function FeedstockDrawOrderArt({ order }: { order: OutputDrawOrder }) {
   return <LayeredBinArt firstLayer={order === "oldest_first" ? DRAW_FIRST_INDEX : DRAW_LAST_INDEX} dated binX={LAYER_BIN_X} binWidth={LAYER_BIN_WIDTH} columns={LAYER_COLUMNS} />;
 }

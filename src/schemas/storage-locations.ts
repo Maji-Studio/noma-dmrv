@@ -124,11 +124,10 @@ export const FEEDSTOCK_DRAW_ORDER_DESCRIPTIONS: Record<OutputDrawOrder, string> 
 /** Hints behind the feedstock bin form's (i). */
 export const FEEDSTOCK_STOCK_MODE_HINT =
   "The draw method sets how wet mass leaves this bin for production runs, product ingredients and lost mass, and so which deliveries a credit batch counts the transport of. Entries already saved keep their method.";
-export const FEEDSTOCK_DRAW_ORDER_HINT = "A change applies to draws recorded after it.";
 export const FEEDSTOCK_MERGE_TIME_HINT =
-  "Draws from this time on are mass weighted.";
+  "Set a time after the bin's last recorded movement.";
 
-/** Only biochar and product bins choose a stock mode. */
+/** Biochar and product bins use the output Stock mode; feedstock bins have their own Draw method. */
 export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
   return type === "biochar_bin" || type === "product_bin";
 }
@@ -151,11 +150,10 @@ export const STOCK_MODE_FORM_COPY = {
   feedstock: {
     modeLabel: "Draw method",
     modeHint: FEEDSTOCK_STOCK_MODE_HINT,
-    splitName: "In order",
     unmixHelper: "Only an empty bin can switch to In order.",
     mergedHelper: "Switching back to In order needs an empty bin.",
     orderLabel: "Draw order",
-    orderHint: FEEDSTOCK_DRAW_ORDER_HINT,
+    orderHint: undefined,
     mergeLabel: FEEDSTOCK_MERGE_TIME_LABEL,
     mergeHint: FEEDSTOCK_MERGE_TIME_HINT,
     mergeRequired: FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE,
@@ -163,14 +161,13 @@ export const STOCK_MODE_FORM_COPY = {
   output: {
     modeLabel: "Stock mode",
     modeHint: OUTPUT_STOCK_MODE_HINT,
-    splitName: "split",
     unmixHelper: "Only an empty bin can switch to split.",
     mergedHelper: "Switching back to split needs an empty bin.",
     orderLabel: "Default draw order",
     orderHint: "Which sub-bin a draw takes first. You can change the order for any draw.",
     mergeLabel: "Merged at",
     mergeHint: OUTPUT_MERGE_TIME_HINT,
-    mergeRequired: "Enter when the batches were merged.",
+    mergeRequired: MERGE_TIME_REQUIRED_MESSAGE,
   },
 } as const;
 

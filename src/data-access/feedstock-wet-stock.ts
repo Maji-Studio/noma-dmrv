@@ -17,7 +17,7 @@ import { requireOrgScope } from "./utils";
 type FeedstockStockReader = Pick<typeof db, "select">;
 
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "held no wet feedstock at the run’s start. Move the run’s start or correct the intake’s delivery date.";
+  "held no wet feedstock. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -98,8 +98,8 @@ export async function throwFeedstockReplayOverdraw(ctx: OrgContext, executor: Fe
     throw new StockOverdrawError(`${kind}${error.event.code ? ` ${error.event.code}` : ''} at ${when}: ${label} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Correct the withdrawal or the earlier stock change.`,
       { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
   }
-  const message = error.availableWetKg === 0 ? `${label} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`
-    : `By the run’s start day ${code === undefined ? 'this bin' : `bin ${code}`} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Lower the draw or move the run’s start.`;
+  const message = error.availableWetKg === 0 ? `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`
+    : `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Lower the draw or move the run’s start.`;
   throw new StockOverdrawError(message, { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
 }
 
@@ -110,7 +110,7 @@ export async function allocateFeedstockWetMass(ctx: OrgContext, executor: Feedst
   const [bin] = await executor.select().from(storageLocations).where(and(
     eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
   ));
-  if (!bin) throw new StockOverdrawError(`This bin ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+  if (!bin) throw new StockOverdrawError(`At the run’s start this bin ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
   const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, executor);
   const end = startOfFacilityDay(addDaysIso(cutoffDay, 1), timezone).getTime() - 1;
   const at = new Date(end).toISOString();

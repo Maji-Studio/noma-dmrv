@@ -30,7 +30,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  */
 export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { historyRunId?: string; replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
   requireOrgScope(ctx);
-  const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
+  const [bin] = await reader.select({ code: storageLocations.code, type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   if (bin.type !== 'feedstock_bin') throw new SafeError('This bin does not hold feedstock');
@@ -117,7 +117,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     savedShares: draft.kind === 'run_draw' && draft.sourceId && !isHistory(draft) && !options.replanRunIds?.has(draft.sourceId)
       ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
   })), bin, changes, options.boundary);
-  if (options.boundary) assertFeedstockEmptyAtSwitch(drafts, replay.wetTotals, changes, timezone);
+  if (options.boundary) assertFeedstockEmptyAtSwitch(drafts, replay.wetTotals, changes, timezone, bin.code);
   const dryAt = (holdings: Map<string, number> | undefined) => {
     if (!holdings) return null;
     let dryGrams = 0;
