@@ -1,4 +1,5 @@
 import type { RecordLock } from "./record-lock";
+import { TRY_AGAIN_LABEL } from "./copy-utils";
 
 /** Record kinds a screen can ask about: every lineage kind plus storage bins. */
 export const RECORD_LOCK_VIEW_KINDS = [
@@ -107,7 +108,7 @@ export const RECORD_LOCK_ERROR_MESSAGE = "Couldn't check whether this record can
 /** Above a list whose batched lock read failed: its rows hide Edit and Delete. */
 export const RECORD_LOCK_LIST_ERROR_MESSAGE = "Couldn't check which records can change, so Edit and Delete are hidden.";
 export const RECORD_LOCK_SENT_SAVE_MESSAGE = "This record was sent with its Removal, so it cannot be saved.";
-export const RECORD_LOCK_RETRY_LABEL = "Try again";
+export const RECORD_LOCK_RETRY_LABEL = TRY_AGAIN_LABEL;
 
 /** Why an open edit form cannot save, and whether its fields go read-only. */
 export interface RecordLockSaveBlock {

@@ -1,8 +1,9 @@
 "use client";
 
-/** The one load failure for Activity reads: what failed, and a Retry that refetches every read. */
+/** The one load failure for Activity reads: what failed, and an action that refetches every read. */
 import { Button } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { ACTIVITY_LOAD_ERROR } from "./activity-copy";
 
 type Refetchable = { isFetching: boolean; refetch: () => unknown };
@@ -21,7 +22,7 @@ export function ActivityLoadError({ queries }: { queries: readonly Refetchable[]
             for (const query of queries) void query.refetch();
           }}
         >
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       }
     >

@@ -4,9 +4,8 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { LOAD_FAILED } from "@/lib/copy-utils";
+import { LOAD_FAILED, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
@@ -81,7 +80,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
             // The field states the failure; the notice carries only the step.
             <Notice
               tone="warning"
-              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{TRY_AGAIN_LABEL}</Button>}
             >
               {DELIVERY_RETRY_TEXT}
             </Notice>
@@ -147,7 +146,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           {context.lock.error && !context.readOnly && (
             <div className="flex flex-col gap-8">
               <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
-              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>
+              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>{TRY_AGAIN_LABEL}</Button>
             </div>
           )}
           <ApplicationSupportingEvidencePanel applicationId={application.id} readOnly={context.readOnly} />

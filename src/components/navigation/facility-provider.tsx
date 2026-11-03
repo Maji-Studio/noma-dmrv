@@ -22,10 +22,8 @@ const storedFacilityListeners = new Set<() => void>();
 
 function subscribeToStoredFacilityId(listener: () => void) {
   storedFacilityListeners.add(listener);
-  window.addEventListener("storage", listener);
   return () => {
     storedFacilityListeners.delete(listener);
-    window.removeEventListener("storage", listener);
   };
 }
 
@@ -202,7 +200,6 @@ export function FacilityProvider({
     let nextFacilityId = hasFacilityInList ? facilityId : null;
 
     if (!nextFacilityId) {
-      const storedFacilityId = readStoredFacilityId();
       const hasStoredFacility = storedFacilityId
         ? facilities.some((facility) => facility.id === storedFacilityId)
         : false;

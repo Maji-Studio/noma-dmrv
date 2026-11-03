@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The page reads its to-dos in one server call. When that read fails it says
- * so once, with Retry, and shows no list and no counts built from the failure.
+ * so once, with Try again, and shows no list and no counts built from the failure.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -98,7 +98,7 @@ describe("credit batch page to-dos", () => {
     expect(screen.queryByRole("button", { name: "Add in Edit" })).toBeNull();
   });
 
-  it("shows the notice and Retry, and no to-do groups or counts, when the read fails", async () => {
+  it("shows the notice and Try again, and no to-do groups or counts, when the read fails", async () => {
     harness.loadTodos.mockResolvedValue({ success: false, error: "boom" });
     renderPage();
     expect(await screen.findByText("Blocking items could not be checked. Try again to load them.")).toBeTruthy();

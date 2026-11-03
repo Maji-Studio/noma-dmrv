@@ -10,8 +10,8 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SectionLabel } from "@/components/forms/section-label";
 import { Notice } from "@/components/ui/notice";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 // By file, not the emissions barrel: the batch sheet needs only these.
 import { EmissionLineBadge } from "@/components/emissions/emission-line-badge";
 import { isOpen } from "@/components/emissions/emission-line-display";
@@ -68,7 +68,7 @@ export function CreditBatchEmissionsPanel({
       <PanelSection>
         <Notice
           tone="warning"
-          action={<Button variant="weak" size="small" busy={isRefetching} onClick={() => void refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+          action={<Button variant="weak" size="small" busy={isRefetching} onClick={() => void refetch()}>{TRY_AGAIN_LABEL}</Button>}
         >
           Emissions lines unavailable. Try again to load them.
         </Notice>

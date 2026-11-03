@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { renderToString } from "react-dom/server";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -75,6 +75,34 @@ afterEach(() => {
 });
 
 describe("FacilityProvider stored selection", () => {
+  it("keeps the URL selection without rewriting storage after another tab changes it", async () => {
+    state.facilities = [FIRST, STORED];
+    const { result, onUrlUpdate } = renderProvider(`?facility=${FIRST.id}`);
+
+    await waitFor(() => {
+      expect(result.current.facilityId).toBe(FIRST.id);
+      expect(result.current.isResolving).toBe(false);
+      expect(localStorage.getItem(FACILITY_STORAGE_KEY)).toBe(FIRST.id);
+    });
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    localStorage.setItem(FACILITY_STORAGE_KEY, STORED.id);
+    setItem.mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: FACILITY_STORAGE_KEY,
+        newValue: STORED.id,
+      }));
+    });
+
+    expect(result.current.facilityId).toBe(FIRST.id);
+    expect(result.current.selectedFacility).toBe(FIRST);
+    expect(result.current.isResolving).toBe(false);
+    expect(onUrlUpdate).not.toHaveBeenCalled();
+    expect(setItem).not.toHaveBeenCalled();
+    expect(localStorage.getItem(FACILITY_STORAGE_KEY)).toBe(STORED.id);
+  });
+
   it("does not read storage or resolve the stored facility during server rendering", () => {
     const getItem = vi.spyOn(Storage.prototype, "getItem");
 

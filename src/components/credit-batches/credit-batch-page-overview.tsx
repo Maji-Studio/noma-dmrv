@@ -9,13 +9,12 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon, LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { Notice } from "@/components/ui/notice";
 import { InfoHint } from "@/components/ui/tooltip";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { recordHref } from "@/lib/record-links";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
   LATE_PRODUCTION_RUN_ITEM_PREFIX,
@@ -188,7 +187,7 @@ function TodosUnavailable() {
   return (
     <Notice
       tone="warning"
-      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>{TRY_AGAIN_LABEL}</Button>}
     >
       Blocking items could not be checked. Try again to load them.
     </Notice>

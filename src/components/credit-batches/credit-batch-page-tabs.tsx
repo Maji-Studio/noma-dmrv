@@ -7,13 +7,12 @@ import { FactoryIcon } from "@phosphor-icons/react/dist/ssr";
 import { CreditBatchActivityView } from "@/components/activity";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { useLinkedCreditBatchMembers } from "@/hooks/use-linked-credit-batch-members";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
@@ -51,7 +50,7 @@ export function CreditBatchProductionTab() {
     body = (
       <Notice
         tone="warning"
-        action={<Button variant="weak" size="small" busy={runsQuery.isFetching} onClick={() => void runsQuery.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
+        action={<Button variant="weak" size="small" busy={runsQuery.isFetching} onClick={() => void runsQuery.refetch()}>{TRY_AGAIN_LABEL}</Button>}
       >
         Production runs could not be loaded. Try again to load them.
       </Notice>
