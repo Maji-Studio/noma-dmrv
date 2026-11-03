@@ -535,6 +535,10 @@ Check here before chasing a red E2E as a branch regression. Rerun the single spe
 - Popover Escape did not return focus to its trigger after a press inside the popup
   (`certification-workspace.spec.ts` "closes it with Escape"): fixed in the shared
   `Popover`, which now focuses the trigger on Escape and Close. Issue #1283.
+- Merge queue, shard 2: `facility-archive.spec.ts` opened the row menu before the debounced
+  search refetch swapped the card for a skeleton, and `organization-rename.spec.ts` typed into
+  the name before hydration wrote the saved name in. Both now wait for that state first.
+  Issue #1379.
 - Local only, under a multi-spec run (pass alone): `production-runs.spec.ts` and
   `full-chain-ui` "Create Sample" (the side sheet does not close after submit);
   `feedstock-types.spec.ts` (the row's Archive menu item detaches after an edit). No issue.

@@ -8,7 +8,7 @@ import { TABLE_LOCK_BARRIER_FILES } from "./tests/helpers/table-lock-barrier-fil
 process.env.TZ = "America/Los_Angeles";
 
 const DEFAULT_LOCAL_MAX_WORKERS = 2;
-const UNIT_GROUP_ORDER = 0;
+const PARALLEL_GROUP_ORDER = 0;
 const TABLE_LOCK_BARRIER_GROUP_ORDER = 1;
 // One file at a time: Vitest sizes a group from its project's maxWorkers, not
 // fileParallelism. Vitest's own VITEST_MAX_WORKERS env overrides every project,
@@ -44,10 +44,10 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "unit",
+          name: "parallel",
           // Project excludes extend the inherited root exclude list.
           exclude: TABLE_LOCK_BARRIER_FILES,
-          sequence: { groupOrder: UNIT_GROUP_ORDER },
+          sequence: { groupOrder: PARALLEL_GROUP_ORDER },
         },
       },
       {
