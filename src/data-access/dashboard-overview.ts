@@ -56,11 +56,11 @@ import {
   capOrGroup,
   creditBatchAttention,
   feedstocksMissingDataWhere,
-  PERIOD_ATTENTION_TITLES,
+  PERIOD_ENDED_NOT_SUBMITTED_TITLE,
   pendingBatchesWhere,
   runsMissingMassWhere,
-  type CreditBatchPeriodAttention,
 } from "./dashboard-attention";
+import { facilityListHref } from "@/lib/dashboard-links";
 import {
   withCrossCuttingAttention,
   type DashboardBatchAttentionCounts,
@@ -170,13 +170,13 @@ export interface DashboardOverview extends DashboardStationsData {
   kpis: DashboardKpi[];
   /** Chain segments in flow order, supplier → application. */
   massFlow: DashboardMassFlowSegment[];
-  /** Every open row: records, or one grouped row per over-cap check. */
+  /** Every open row: a record, or one grouped row per over-cap check. */
   attention: DashboardAttentionItem[];
   /** Cross-cutting certification blockers, kept separate from station badges. */
   structuralGaps: DashboardStructuralGap[];
   /**
-   * Exact uncapped count of the card's rows: record rows, credit batch rows
-   * and one per structural gap. The "N open" figure.
+   * The "N open" figure: records, counted exactly. A single row is one, a
+   * grouped row its count, a structural gap its affected records.
    */
   attentionTotal: number;
 }
@@ -499,14 +499,16 @@ export async function getDashboardOverview(
     { key: "applied", tonnes: tonnesToKg(appliedCurrentTons) / 1000 },
   ];
 
-  // "N open" counts the card's rows (#1532 F5): every record row or grouped
-  // row, plus one per structural gap, which groups every record one form
-  // section fixes. Station badges count records instead.
+  // "N open" counts records (#1532 F5): a single row is one, a grouped row
+  // its count, a structural gap its affected records. Every counted record is
+  // reachable from one of the card's rows.
   const structuralGaps = buildDashboardStructuralGaps(
     structuralGapCounts,
     facilityId,
   );
-  const attentionTotal = attentionItems.length + structuralGaps.length;
+  const attentionTotal =
+    attentionItems.reduce((total, item) => total + (item.count ?? 1), 0) +
+    structuralGaps.reduce((total, gap) => total + gap.count, 0);
   const stations = withCrossCuttingAttention(
     stationsData.stations,
     structuralGaps,
@@ -579,32 +581,26 @@ function branchIds(id: SQLWrapper): SQL<string[]> {
   return sql<string[]>`array_agg(${id}::text) over ()`;
 }
 
-function listHref(path: string, facilityId: string, ids?: readonly string[]): string {
-  const params = new URLSearchParams({ facility: facilityId });
-  if (ids && ids.length > 0) params.set("ids", ids.join(","));
-  return `${path}?${params.toString()}`;
-}
-
 /**
  * The grouped row an over-cap check folds into. Runs and applications lists
- * filter to exact ids; the feedstock list has no such filter, so its row
- * opens the plain list.
+ * filter to exact ids (within the filter's limit); the feedstock list has no
+ * such filter, so its row opens the plain list.
  */
 const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facilityId: string, ids: string[]) => string }> = {
   "run-mass": {
     title: "Complete runs missing mass data",
     list: "Production runs",
-    href: (facilityId, ids) => listHref(RECORD_LINKS.productionRun.path, facilityId, ids),
+    href: (facilityId, ids) => facilityListHref(RECORD_LINKS.productionRun.path, facilityId, ids),
   },
   "feedstock-missing": {
     title: "Feedstock records missing data",
     list: "Feedstock intake",
-    href: (facilityId) => listHref(RECORD_LINKS.feedstock.path, facilityId),
+    href: (facilityId) => facilityListHref(RECORD_LINKS.feedstock.path, facilityId),
   },
   "application-evidence": {
     title: "Applications missing evidence",
     list: "Applications",
-    href: (facilityId, ids) => listHref(RECORD_LINKS.application.path, facilityId, ids),
+    href: (facilityId, ids) => facilityListHref(RECORD_LINKS.application.path, facilityId, ids),
   },
 };
 
@@ -650,9 +646,10 @@ function attentionHref(
  * grouped row (`capOrGroup`). An item disappears the moment the underlying
  * record is fixed (no independent lifecycle). Pending batches are read
  * uncapped with their Removals' display facts (correlated subqueries, no
- * extra round trip): an interrupted Removal is one row per Removal, a closed
- * period one row per batch (`creditBatchAttention`), each kind grouped past
- * the cap the same way, and `batches` counts them for the Production station.
+ * extra round trip): an interrupted Removal is one row per Removal, a period
+ * closed without a submission one row per batch (`creditBatchAttention`),
+ * each kind grouped past the cap the same way, and `batches` counts them for
+ * the Production station.
  */
 export async function getDashboardAttentionItems(
   ctx: OrgContext,
@@ -745,7 +742,8 @@ export async function getDashboardAttentionItems(
   );
 
   const interrupted = new Map<string, DashboardAttentionItem>();
-  const periods: Record<CreditBatchPeriodAttention, DashboardAttentionItem[]> = { notSubmitted: [], submitted: [] };
+  // Only periods still waiting on the operator; a submitted batch waits on the verifier.
+  const notSubmitted: DashboardAttentionItem[] = [];
   for (const row of rows) {
     if (row.kind !== "batch-pending") continue;
     const removals = row.removals.map(removalDisplayFromFacts);
@@ -762,18 +760,18 @@ export async function getDashboardAttentionItems(
         href: removalResubmitHref(removal.id, facilityId),
       });
     }
-    if (!attention.period) continue;
-    periods[attention.period].push({
+    if (attention.period !== "notSubmitted") continue;
+    notSubmitted.push({
       id: `batch-pending-${row.id}`,
       entityCode: row.code,
       date: row.dateDay,
-      title: PERIOD_ATTENTION_TITLES[attention.period],
+      title: PERIOD_ENDED_NOT_SUBMITTED_TITLE,
       href: attentionHref(row.kind, row.id, facilityId),
     });
   }
   const interruptedRows = [...interrupted.values()];
-  const removalsList = listHref(RECORD_LINKS.removal.path, facilityId);
-  const batchList = listHref(RECORD_LINKS.creditBatch.path, facilityId);
+  const removalsList = facilityListHref(RECORD_LINKS.removal.path, facilityId);
+  const batchList = facilityListHref(RECORD_LINKS.creditBatch.path, facilityId);
   const flags = FLAG_ORDER.flatMap((kind) => {
     const kindRows = rows.filter((row) => row.kind === kind).sort((a, b) => a.ord - b.ord);
     const first = kindRows[0];
@@ -791,22 +789,15 @@ export async function getDashboardAttentionItems(
       () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds)),
     );
   });
-  const periodRows = (period: CreditBatchPeriodAttention) =>
-    capOrGroup(periods[period], periods[period].length, () =>
-      groupedRow(`batch-${period}`, "Credit batches", PERIOD_ATTENTION_TITLES[period], periods[period].length, batchList));
   return {
     // An interrupted submission leads: it blocks the Removal until resumed.
     items: [
       ...capOrGroup(interruptedRows, interruptedRows.length, () =>
         groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
       ...flags,
-      ...periodRows("notSubmitted"),
-      ...periodRows("submitted"),
+      ...capOrGroup(notSubmitted, notSubmitted.length, () =>
+        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
     ],
-    batches: {
-      interrupted: interrupted.size,
-      notSubmitted: periods.notSubmitted.length,
-      awaitingVerification: periods.submitted.length,
-    },
+    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length },
   };
 }

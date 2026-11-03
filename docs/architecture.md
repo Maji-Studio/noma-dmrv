@@ -816,12 +816,12 @@ Facility-scoped operations dashboard at `/dashboard`
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
   gaps and credit batch rows on their flow station (batches on Production).
-- The Attention panel's "N open" counts rows: one per record while a check
-  fits its cap of four, else one grouped row with its count (linking to the
-  list filtered to those records where an `ids` filter exists), and one per
-  GPS gap, which groups every record one form section fixes. Station badges
-  count records the operator can act on; a batch awaiting verification shows
-  as an in-progress reason only.
+- The Attention panel lists each check's records while there are at most two,
+  else one grouped "N affected" row (linking to the list filtered by `ids`
+  where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row
+  per GPS gap. "N open" counts records: single rows, grouped counts and gap
+  counts, so every counted record is reachable from a row. A batch whose
+  Removal is submitted waits on the verifier and is left out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).

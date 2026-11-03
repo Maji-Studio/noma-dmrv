@@ -4,6 +4,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { OrgContext } from "@/lib/auth/server";
 import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
 import { ATTENTION_PER_CHECK } from "./dashboard-attention";
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
@@ -169,40 +170,37 @@ describe("dashboard display totals", () => {
   });
 });
 
-// #1532 F5 round 1: "N open" counts rows, so a check past its cap must fold
-// into one grouped row rather than drop the records it cannot show.
+// #1532 F5: a check past its cap folds into one grouped row, and "N open"
+// counts records, so every counted record is reachable from a row.
 describe("needs attention rows", () => {
   const TODAY = "2026-11-03";
-  const runIds = Array.from({ length: ATTENTION_PER_CHECK + 2 }, (_, index) => `run-${index}`);
-  const runRow = (id: string, ord: number) => ({
-    kind: "run-mass", id, code: `PR-${ord}`, dateDay: DAY, dateMs: null, ord,
-    total: runIds.length, allIds: runIds, removals: [],
-  });
-  const feedstockRow = (ord: number) => ({
-    kind: "feedstock-missing", id: `fs-${ord}`, code: `FS-${ord}`, dateDay: null, dateMs: 0, ord,
-    total: 2, allIds: ["fs-1", "fs-2"], removals: [],
-  });
-  const batchRow = (ord: number) => ({
-    kind: "batch-pending", id: `cb-${ord}`, code: `CB-${ord}`, dateDay: "2026-09-30", dateMs: null, ord,
-    total: ATTENTION_PER_CHECK + 1, allIds: [], removals: [],
-  });
+  const idsOf = (n: number) => Array.from({ length: n }, (_, index) => `run-${index}`);
+  const runRows = (ids: string[]) => ids.slice(0, ATTENTION_PER_CHECK).map((id, index) => ({
+    kind: "run-mass", id, code: `PR-${index}`, dateDay: DAY, dateMs: null, ord: index + 1,
+    // The branch is capped in SQL; its window count and id list carry the rest.
+    total: ids.length, allIds: ids, removals: [],
+  }));
+  const feedstockRows = Array.from({ length: ATTENTION_PER_CHECK }, (_, index) => ({
+    kind: "feedstock-missing", id: `fs-${index}`, code: `FS-${index}`, dateDay: null, dateMs: 0, ord: index + 1,
+    total: ATTENTION_PER_CHECK, allIds: [], removals: [],
+  }));
+  const batchRows = (n: number) => Array.from({ length: n }, (_, index) => ({
+    kind: "batch-pending", id: `cb-${index}`, code: `CB-${index}`, dateDay: "2026-09-30", dateMs: null, ord: index + 1,
+    total: n, allIds: [], removals: [],
+  }));
 
   it("groups an over-cap check into one row linking to its filtered list", async () => {
-    mocks.union.mockResolvedValue([
-      // The branch is capped in SQL; its window count and id list carry the rest.
-      ...runIds.slice(0, ATTENTION_PER_CHECK).map((id, index) => runRow(id, index + 1)),
-      feedstockRow(1),
-      feedstockRow(2),
-      ...Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => batchRow(index + 1)),
-    ]);
+    const runIds = idsOf(ATTENTION_PER_CHECK + 1);
+    mocks.union.mockResolvedValue([...runRows(runIds), ...feedstockRows, ...batchRows(ATTENTION_PER_CHECK + 1)]);
 
     const { items, batches } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
 
     const runs = new URLSearchParams({ facility: FACILITY_ID, ids: runIds.join(",") });
     expect(items.map(({ entityCode, count, title, href }) => ({ entityCode, count, title, href }))).toEqual([
       { entityCode: "Production runs", count: runIds.length, title: "Complete runs missing mass data", href: `/production-runs?${runs.toString()}` },
-      { entityCode: "FS-1", count: undefined, title: "Feedstock record missing data", href: expect.stringContaining("feedstock=fs-1") },
-      { entityCode: "FS-2", count: undefined, title: "Feedstock record missing data", href: expect.stringContaining("feedstock=fs-2") },
+      ...feedstockRows.map((row) => ({
+        entityCode: row.code, count: undefined, title: "Feedstock record missing data", href: expect.stringContaining(`feedstock=${row.id}`),
+      })),
       {
         entityCode: "Credit batches",
         count: ATTENTION_PER_CHECK + 1,
@@ -210,17 +208,20 @@ describe("needs attention rows", () => {
         href: `/credit-batches?facility=${FACILITY_ID}`,
       },
     ]);
-    expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1, awaitingVerification: 0 });
+    expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1 });
   });
 
-  it("counts the card's rows as N open", async () => {
-    mocks.union.mockResolvedValue([
-      ...runIds.slice(0, ATTENTION_PER_CHECK).map((id, index) => runRow(id, index + 1)),
-      feedstockRow(1),
-      feedstockRow(2),
-    ]);
+  it("opens the plain list when the group has more records than the id filter takes", async () => {
+    mocks.union.mockResolvedValue(runRows(idsOf(EXACT_ID_FILTER_MAX + 1)));
+    const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(items).toEqual([expect.objectContaining({ count: EXACT_ID_FILTER_MAX + 1, href: `/production-runs?facility=${FACILITY_ID}` })]);
+  });
+
+  it("counts records as N open: single rows, grouped counts and GPS gaps", async () => {
+    const runIds = idsOf(ATTENTION_PER_CHECK + 3);
+    mocks.union.mockResolvedValue([...runRows(runIds), ...feedstockRows]);
     const overview = await getDashboardOverview(CTX, FACILITY_ID, "month");
-    expect(overview.attention).toHaveLength(3);
-    expect(overview.attentionTotal).toBe(overview.attention.length);
+    expect(overview.attention).toHaveLength(1 + ATTENTION_PER_CHECK);
+    expect(overview.attentionTotal).toBe(runIds.length + ATTENTION_PER_CHECK);
   });
 });

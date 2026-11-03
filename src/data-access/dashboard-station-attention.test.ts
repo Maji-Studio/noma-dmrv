@@ -5,7 +5,7 @@ import { withCrossCuttingAttention } from "./dashboard-station-attention";
 
 const FACILITY_ID = "00000000-0000-4000-8000-000000000001";
 const KEYS: DashboardStationKey[] = ["suppliers", "feedstock", "production", "products", "deliveries", "applications"];
-const NO_BATCHES = { interrupted: 0, notSubmitted: 0, awaitingVerification: 0 };
+const NO_BATCHES = { interrupted: 0, notSubmitted: 0 };
 
 function stations(overrides: Partial<Record<DashboardStationKey, Partial<DashboardStation>>> = {}): DashboardStation[] {
   return KEYS.map((key) => ({
@@ -36,7 +36,7 @@ describe("withCrossCuttingAttention", () => {
     expect(result.deliveries?.attention).toBe(0);
   });
 
-  it("puts credit batch rows on Production, counting only what the operator can act on", () => {
+  it("puts credit batch rows on Production after its own problems and before running runs", () => {
     const result = byKey(withCrossCuttingAttention(
       stations({
         production: {
@@ -48,28 +48,18 @@ describe("withCrossCuttingAttention", () => {
         },
       }),
       [],
-      { interrupted: 1, notSubmitted: 3, awaitingVerification: 1 },
+      { interrupted: 1, notSubmitted: 3 },
       FACILITY_ID,
     ));
 
     const batches = `/credit-batches?facility=${FACILITY_ID}`;
-    // 2 runs + 1 interrupted + 3 not submitted; awaiting verification waits on the verifier.
     expect(result.production?.attention).toBe(6);
     expect(result.production?.reasons).toEqual([
       { state: "error", text: "1 submission interrupted", href: `/removals?facility=${FACILITY_ID}` },
       { state: "warning", text: "2 runs missing mass data" },
       { state: "warning", text: "3 credit batches not submitted", href: batches },
       { state: "in-progress", text: "1 running now", source: "runningRuns" },
-      { state: "in-progress", text: "1 credit batch awaiting verification", href: batches },
     ]);
-  });
-
-  it("shows a batch awaiting verification without counting it", () => {
-    const result = byKey(withCrossCuttingAttention(stations(), [], { ...NO_BATCHES, awaitingVerification: 2 }, FACILITY_ID));
-    expect(result.production).toMatchObject({
-      attention: 0,
-      reasons: [{ state: "in-progress", text: "2 credit batches awaiting verification" }],
-    });
   });
 
   it("leaves stations untouched when nothing cross-cutting is open", () => {

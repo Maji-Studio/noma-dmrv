@@ -15,6 +15,7 @@ import type {
 import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
 import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { formatTonnes } from "./flow-hero-scene";
+import { hasHref, StationReasonLink } from "./station-reason-link";
 
 /** Compact glyph per station, referencing the shared defs. */
 const STATION_GLYPH: Record<
@@ -155,6 +156,16 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 →
               </span>
             </Link>
+            {/* Reasons fixed off the station's list link there, as on desktop. */}
+            {station.reasons.some(hasHref) && (
+              <ul className="body-caption flex flex-col pl-12" data-testid={`flow-hero-mobile-reasons-${station.key}`}>
+                {station.reasons.filter(hasHref).map((reason) => (
+                  <li key={reason.text}>
+                    <StationReasonLink reason={reason} />
+                  </li>
+                ))}
+              </ul>
+            )}
             {segment && (
               <div className="flex items-center gap-8 py-4 pl-32">
                 <span

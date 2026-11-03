@@ -199,8 +199,10 @@ describe("dashboard query budget", () => {
     const feedstockDate = result.attention[0]?.date;
     expect(feedstockDate).toBeInstanceOf(Date);
     expect((feedstockDate as Date).toISOString()).toBe("2026-06-20T00:00:00.000Z");
-    // "N open" counts rows: the feedstock record, the batch, one per gap.
-    expect(result.attentionTotal).toBe(1 + 1 + result.structuralGaps.length);
+    // "N open" counts records: the feedstock record, the batch, each gap's affected records.
+    expect(result.attentionTotal).toBe(
+      1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
+    );
     // The overdue batch lights Production, where the attention view shows it (#1532 F5).
     expect(result.stations.find((s) => s.key === "production")).toMatchObject({
       attention: 1,

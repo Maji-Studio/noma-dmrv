@@ -7,7 +7,8 @@
  * Suppliers, feedstock routes on Feedstock, biochar distribution routes on
  * Biochar, whose product form holds them (#1532 F5).
  */
-import { recordHref } from "@/lib/record-links";
+import { facilityListHref, plural } from "@/lib/dashboard-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import {
   and,
   count,
@@ -49,7 +50,7 @@ export interface DashboardStructuralGapCounts {
 export type DashboardStructuralGapKey =
   | "supplierGps"
   | "feedstockRouteGps"
-  | "deliveryRouteGps";
+  | "biocharRouteGps";
 
 export interface DashboardStructuralGap {
   key: DashboardStructuralGapKey;
@@ -87,10 +88,9 @@ function routeEditorHref(
   targetId: string | null,
   focus: EntityFocusTarget,
 ): string {
-  const params = new URLSearchParams({ facility: facilityId });
   if (!targetId) {
-    const listPath = entityType === "feedstock" ? "/feedstock-intake" : "/biochar-products";
-    return `${listPath}?${params.toString()}`;
+    const list = entityType === "feedstock" ? RECORD_LINKS.feedstock : RECORD_LINKS.biocharProduct;
+    return facilityListHref(list.path, facilityId);
   }
   return recordHref(entityType === "feedstock" ? "feedstock" : "biocharProduct", targetId, { facilityId, mode: "edit", focus });
 }
@@ -103,19 +103,13 @@ function structuralGapMetadata(
   return `${form} · ${section} · ${count} affected`;
 }
 
-function plural(n: number, singular: string): string {
-  return `${n} ${n === 1 ? singular : `${singular}s`}`;
-}
-
 export function buildDashboardStructuralGaps(
   counts: DashboardStructuralGapCounts,
   facilityId: string,
 ): DashboardStructuralGap[] {
-  const facilityParams = new URLSearchParams({ facility: facilityId });
-  const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
     ? recordHref("supplier", counts.missingFeedstockGpsSupplierId, { facilityId, mode: "edit" })
-    : `/suppliers${facilityQuery}`;
+    : facilityListHref(RECORD_LINKS.supplier.path, facilityId);
   const gaps: DashboardStructuralGap[] = [
     {
       key: "supplierGps",
@@ -136,8 +130,8 @@ export function buildDashboardStructuralGaps(
       stationReason: `${plural(counts.feedstockRouteGpsGaps, "route")} missing GPS`,
     },
     {
-      key: "deliveryRouteGps",
-      label: "Delivery route GPS missing",
+      key: "biocharRouteGps",
+      label: "Biochar route GPS missing",
       metadata: structuralGapMetadata("Biochar product form", "Transport route", counts.biocharRouteGpsGaps),
       count: counts.biocharRouteGpsGaps,
       href: routeEditorHref(facilityId, "biochar", counts.biocharRouteGpsTargetId, ENTITY_FOCUS_TARGETS.transportRoute),

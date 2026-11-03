@@ -10,6 +10,7 @@
  * aggregates for every count, one `union all` for the newest rows per entity;
  * the merge sort and labelling happen in JS.
  */
+import { facilityListHref, plural } from "@/lib/dashboard-links";
 import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
@@ -132,13 +133,6 @@ export interface DashboardStationsData {
   certification: DashboardCertification;
 }
 
-function facilityHref(path: string, facilityId: string): string {
-  return `${path}?facility=${encodeURIComponent(facilityId)}`;
-}
-
-function plural(n: number, singular: string, pluralWord?: string): string {
-  return `${n} ${n === 1 ? singular : (pluralWord ?? `${singular}s`)}`;
-}
 
 /**
  * Milliseconds since the epoch for a `timestamp` column: the one shape that
@@ -539,7 +533,7 @@ export async function getDashboardStations(
       totalLabel: plural(supplierCount, "supplier"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/suppliers", facilityId),
+      href: facilityListHref("/suppliers", facilityId),
     },
     {
       key: "feedstock",
@@ -551,7 +545,7 @@ export async function getDashboardStations(
         feedstockMissing > 0
           ? [{ state: "warning", text: `${plural(feedstockMissing, "record")} missing data` }]
           : [],
-      href: facilityHref("/feedstock-intake", facilityId),
+      href: facilityListHref("/feedstock-intake", facilityId),
     },
     {
       key: "production",
@@ -567,7 +561,7 @@ export async function getDashboardStations(
           ? [{ state: "in-progress" as const, text: `${runningRuns} running now`, source: "runningRuns" as const }]
           : []),
       ],
-      href: facilityHref("/production-runs", facilityId),
+      href: facilityListHref("/production-runs", facilityId),
     },
     {
       key: "products",
@@ -576,7 +570,7 @@ export async function getDashboardStations(
       totalLabel: plural(productTotal, "product"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/biochar-products", facilityId),
+      href: facilityListHref("/biochar-products", facilityId),
     },
     {
       key: "deliveries",
@@ -585,7 +579,7 @@ export async function getDashboardStations(
       totalLabel: plural(deliveryTotal, "delivery", "deliveries"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/deliveries", facilityId),
+      href: facilityListHref("/deliveries", facilityId),
     },
     {
       key: "applications",
@@ -597,7 +591,7 @@ export async function getDashboardStations(
         evidenceGaps > 0
           ? [{ state: "warning", text: `${plural(evidenceGaps, "evidence gap")}` }]
           : [],
-      href: facilityHref("/applications", facilityId),
+      href: facilityListHref("/applications", facilityId),
     },
   ];
 

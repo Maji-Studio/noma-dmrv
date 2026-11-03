@@ -4,7 +4,8 @@
  * surfaces build their queries from these so they can never disagree:
  *
  *   - station badges (uncapped counts, `dashboard-stations.ts`)
- *   - the needs-attention list (capped sample rows, `dashboard-overview.ts`)
+ *   - the needs-attention list (`dashboard-overview.ts`): each check's records
+ *     while they fit `ATTENTION_PER_CHECK`, else one grouped row with the count
  *
  * Credit batches are the exception: their rows depend on the Removal display
  * state, so the overview reads every pending batch and `creditBatchAttention`
@@ -71,19 +72,17 @@ export function pendingBatchesWhere(
   );
 }
 
-export const PERIOD_ENDED_SUBMITTED_TITLE = "Period ended · awaiting verification";
 export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted yet";
 
-/** A closed period either waits on the verifier or on the operator's submission. */
+/**
+ * A closed period waits either on the verifier ("submitted") or on the
+ * operator's submission ("notSubmitted"). Only the second is operator work,
+ * so only it reaches Needs attention.
+ */
 export type CreditBatchPeriodAttention = "submitted" | "notSubmitted";
 
-export const PERIOD_ATTENTION_TITLES: Record<CreditBatchPeriodAttention, string> = {
-  submitted: PERIOD_ENDED_SUBMITTED_TITLE,
-  notSubmitted: PERIOD_ENDED_NOT_SUBMITTED_TITLE,
-};
-
-/** Rows one check shows before it folds into a single grouped row. */
-export const ATTENTION_PER_CHECK = 4;
+/** Rows one check shows before it folds into a single "N affected" row. */
+export const ATTENTION_PER_CHECK = 2;
 
 /**
  * One check's rows for Needs attention: its records while they fit the cap,

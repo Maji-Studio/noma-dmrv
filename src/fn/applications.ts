@@ -5,6 +5,7 @@ import { withCreate } from "./with-create";
 
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 import type { ActionResult } from "@/types/actions";
 import { type Application } from "@/db/schema/application";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -31,7 +32,7 @@ const getApplicationsOptionsSchema = z.object({
   pageSize: z.number().int().min(1).max(MAX_APPLICATION_LIST_SIZE).optional(),
   facilityId: z.string().uuid().optional(),
   creditBatchId: z.string().uuid().optional(),
-  ids: z.array(z.uuid()).max(MAX_APPLICATION_LIST_SIZE).optional(),
+  ids: z.array(z.uuid()).max(EXACT_ID_FILTER_MAX).optional(),
   search: z.string().max(255).optional(),
   status: z.enum(applicationStatuses).optional(),
   evidenceMethod: z.enum(applicationEvidenceMethods).optional(),

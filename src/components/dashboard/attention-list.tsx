@@ -21,8 +21,8 @@ interface AttentionListProps {
   attention: DashboardAttentionItem[];
   structuralGaps: DashboardStructuralGap[];
   /**
-   * "N open": every row the card shows. A check over its cap and a structural
-   * gap are each one grouped row whose "N affected" says how many records.
+   * "N open": records, counted exactly. A grouped row and a structural gap
+   * each stand for the records their "N affected" names.
    */
   total: number;
 }

@@ -19,7 +19,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   DashboardMassFlowSegment,
@@ -31,6 +30,7 @@ import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { SCENE_BG } from "./flow-hero-defs";
 import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
+import { hasHref, StationReasonLink } from "./station-reason-link";
 
 const VIEW_W = 1160;
 /** The art lives between y≈244 (smoke) and y≈482 — the viewBox is cropped to
@@ -124,6 +124,16 @@ const STATION_GEO: Record<DashboardStationKey, StationGeometry> = {
     badge: { x: 1098, y: 330 },
     tip: { x: 1104, y: 340 },
   },
+};
+
+/** The list each station opens, named in its tooltip (sidebar labels). */
+const STATION_LIST_LABEL: Record<DashboardStationKey, string> = {
+  suppliers: "Suppliers",
+  feedstock: "Feedstock intake",
+  production: "Production runs",
+  products: "Biochar products",
+  deliveries: "Deliveries",
+  applications: "Applications",
 };
 
 /** Running-runs chip — stacked above the production badge, never beside it. */
@@ -629,7 +639,7 @@ export function FlowHeroScene({
             </div>
           )}
           <div className="mt-10 text-[10.5px]">
-            View all →
+            {STATION_LIST_LABEL[hoveredStation.key]} →
           </div>
         </div>
       )}
@@ -650,22 +660,18 @@ export function FlowHeroScene({
             className="flex flex-col items-center gap-2 px-6 text-center text-[12px] font-light leading-[1.3]"
             style={{ gridColumnStart: BAY_CENTERS.indexOf(STATION_GEO[station.key].labelX) + 1 }}
           >
-            {station.reasons.map((reason) => (
-              <li
-                key={reason.text}
-                style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }}
+            {station.reasons.map((reason) =>
+              hasHref(reason) ? (
+                <li key={reason.text}>
+                  <StationReasonLink reason={reason} className="justify-center" />
+                </li>
+              ) : (
                 // Plain reasons repeat the station link's label; linked ones are their own target.
-                aria-hidden={reason.href ? undefined : true}
-              >
-                {reason.href ? (
-                  <Link href={reason.href} className="underline underline-offset-2">
-                    {reason.text}
-                  </Link>
-                ) : (
-                  reason.text
-                )}
-              </li>
-            ))}
+                <li key={reason.text} style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }} aria-hidden>
+                  {reason.text}
+                </li>
+              ),
+            )}
           </ul>
         ))}
       </div>
