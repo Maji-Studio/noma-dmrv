@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
-import { RECORD_LINKS } from "@/lib/record-links";
+import { ARCHIVED_FACILITY_PARAM, RECORD_LINKS } from "@/lib/record-links";
 import {
   ArchiveIcon,
   FactoryIcon,
@@ -68,7 +68,9 @@ const LOADING_CARD_COUNT = 3;
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState<string>("");
-  const [showArchived, setShowArchived] = useState(false);
+  // An archived facility link (`?archivedFacility=`) opens the Archived view.
+  const [archivedParam] = useQueryState(ARCHIVED_FACILITY_PARAM, parseAsString);
+  const [showArchived, setShowArchived] = useState(archivedParam != null);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
     useListPagination(showArchived ? "archived" : "active");
   const debouncedSearch = useDebounce(
@@ -83,7 +85,7 @@ export function FacilityList() {
   // The record param is the working-facility param, which the provider also
   // writes on a plain visit. Only the value the page was entered with is a link.
   const [facilityParam] = useQueryState(RECORD_LINKS.facility.param, parseAsString);
-  const [linkedFacilityId, setLinkedFacilityId] = useState<string | null>(facilityParam);
+  const [linkedFacilityId, setLinkedFacilityId] = useState<string | null>(archivedParam ?? facilityParam);
   const [archivingFacility, setArchivingFacility] = useState<{
     version: number;
     id: string;

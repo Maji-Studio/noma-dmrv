@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
 import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "@/lib/credit-batches/open-items";
+import { archivedFacilityHref } from "@/lib/record-links";
 import { CreditBatchPage } from "./credit-batch-page";
 
 const harness = vi.hoisted(() => ({
@@ -79,7 +80,9 @@ describe("credit batch page in an archived facility", () => {
     harness.linked = { ready: true, readOnly: { reason: "archived", facilityId: "facility-1", facilityName: "Mafinga", timezone: "UTC" } };
     render(<ToastProvider><CreditBatchPage creditBatchId="batch-1" canManage /></ToastProvider>);
     expect(screen.queryByText("Credit batch not found")).toBeNull();
-    expect(screen.getByText("Mafinga is archived, so this credit batch is read-only.")).toBeTruthy();
+    const notice = document.querySelector("[data-read-only-notice]");
+    expect(notice?.textContent).toBe("Mafinga is archived, so this credit batch is read-only.");
+    expect(screen.getByRole("link", { name: "Mafinga" }).getAttribute("href")).toBe(archivedFacilityHref("facility-1"));
     expect(screen.getByTestId("header").textContent).toBe("manage:false edit:false primary:false");
   });
 

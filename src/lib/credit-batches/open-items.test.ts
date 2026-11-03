@@ -546,6 +546,7 @@ describe("entries recorded after the Removal was sent", () => {
     ["incompatibleTemplate", "The next draft's template cannot take this component.", "/settings/removal-templates?facility=facility"],
     ["templateUnknown", "noma has not read the next draft's template yet. Open the Removal to load it.", "/removals?facility=facility&removal=rm-11"],
   ])("adds a Check for a waiting entry: %s", (reason, text, href) => {
+    const readOnlyText = reason === "templateUnknown" ? "noma has not read the next draft's template." : text;
     const { blocking, check } = buildCreditBatchOpenItems({ ...batchContext, emissionLines: [line(waiting(reason))] });
     expect(blocking).toEqual([]);
     expect(check).toEqual([{
@@ -554,6 +555,12 @@ describe("entries recorded after the Removal was sent", () => {
       detail: `Recorded after RM-26-009 was sent. ${text}`,
       target: { href },
     }]);
+    const [readOnly] = readOnlyOpenItems({ ...buildItems({ ...batchContext, emissionLines: [line(waiting(reason))] }), waiting: [] }).check;
+    expect(readOnly.title).toBe("Diesel use of Sep 14, 2026 is not in any Removal");
+    expect(readOnly.detail).toBe(`Recorded after RM-26-009 was sent. ${readOnlyText}`);
+    expect(`${readOnly.title} ${readOnly.detail}`).not.toMatch(/waiting|\byet\b|\bonce\b/i);
+    expect(readOnly.instruction).toBeUndefined();
+    expect(readOnly.target).toBeNull();
   });
 
   it("places a waiting entry immediately after late production runs and keeps the list non-blocking", () => {

@@ -44,7 +44,9 @@ describe("buildCreditBatchWaitingItems", () => {
       {
         id: "not-applied",
         title: "0.05 t produced but not applied yet",
+        readOnlyTitle: "0.05 t produced and not applied",
         detail: "It can join a Removal once its application is recorded.",
+        detailMayInstruct: true,
         target: { tab: "removals" },
       },
     ]);
@@ -71,7 +73,9 @@ describe("buildCreditBatchWaitingItems", () => {
     expect(buildCreditBatchWaitingItems(model)).toEqual([{
       id: "not-applied",
       title: "0.01 t produced but not applied yet",
+      readOnlyTitle: "0.01 t produced and not applied",
       detail: "It can join a Removal once its application is recorded.",
+      detailMayInstruct: true,
       target: { tab: "removals" },
     }]);
   });

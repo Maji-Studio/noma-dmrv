@@ -110,11 +110,12 @@ A pick moves into [design-decisions.md](./design-decisions.md) and the owning do
 ## Records in archived facilities (#1502)
 
 Production runs, credit batches (sheet and routed page) and storage bins now open
-read only like the other kinds (`src/lib/linked-record-read-only.ts`). Still open:
+read only like the other kinds (`src/lib/linked-record-read-only.ts`). The
+read-only line links the archived facility's name to
+`/facilities?archivedFacility=<id>` (Archived view, that facility's sheet; Kenji's
+pick, #1512). `?facility=` cannot carry it: the provider rewrites it to an active
+working facility. Still open:
 
-- The read-only line names the archived facility without a link: the Facilities
-  page has no archived-view URL; `?facility=` is also the working-facility param,
-  which the provider rewrites for an archived facility.
 - The read-only gating is still written out in each list page; a shared helper
   would not remove the copies cleanly because each page builds its sheet state
   differently.

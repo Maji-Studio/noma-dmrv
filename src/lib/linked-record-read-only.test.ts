@@ -8,7 +8,11 @@ const UNCHECKED = { ready: true, readOnly: { reason: "unchecked" as const, facil
 describe("linkedRecordReadOnly", () => {
   it("names the archived facility as information", () => {
     expect(linkedRecordReadOnly(ARCHIVED, { facilityId: "facility-x" }, "order"))
-      .toEqual({ tone: "info", message: "Mafinga is archived, so this order is read-only." });
+      .toEqual({
+        tone: "info",
+        message: "Mafinga is archived, so this order is read-only.",
+        facility: { name: "Mafinga", href: "/facilities?archivedFacility=facility-x" },
+      });
   });
 
   it("fails closed as a warning with a retry on the facility read", () => {
@@ -17,6 +21,10 @@ describe("linkedRecordReadOnly", () => {
       message: "This order's facility could not be checked, so it is read-only.",
       retry: { run: retry, running: false },
     });
+  });
+
+  it("gives the unchecked warning no facility link", () => {
+    expect(linkedRecordReadOnly(UNCHECKED, { facilityId: "facility-x" }, "order")?.facility).toBeUndefined();
   });
 
   it("gives a record in another facility nothing", () => {

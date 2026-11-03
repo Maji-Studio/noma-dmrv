@@ -61,6 +61,7 @@ vi.mock("@/lib/log", () => ({
 
 import type { DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { POST as activitySummaryRoute } from "./credit-batches/activity/summary/route";
 import { POST as activityRoute } from "./credit-batches/activity/route";
 import { POST as creditBatchesRoute } from "./credit-batches/route";
@@ -400,10 +401,10 @@ describe("startup read contracts", () => {
   });
 
   it("preserves the scoped facility lookup's missing-row response", async () => {
-    mocks.getFacilityById.mockRejectedValueOnce(new SafeError("Facility not found"));
+    mocks.getFacilityById.mockRejectedValueOnce(new DomainError("not_found", "Facility not found"));
     const response = await facilityRoute(post("/api/reads/facilities"), facilityParams(FOREIGN_FACILITY_ID));
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ success: false, error: "Facility was not found." });
+    await expect(response.json()).resolves.toEqual({ success: false, error: "Facility was not found.", code: "not_found" });
     expect(mocks.getFacilityById).toHaveBeenCalledWith(ORG_CONTEXT, FOREIGN_FACILITY_ID);
   });
 

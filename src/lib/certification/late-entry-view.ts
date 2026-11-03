@@ -13,6 +13,7 @@ import { formatDayString } from "@/lib/format-utils";
 import {
   CARRY_WAITING_REASONS,
   CARRY_WAITING_DETAILS,
+  READ_ONLY_CARRY_DETAILS,
   TEMPLATE_UNKNOWN_COPY,
   type CarryWaitingReason,
   type EntryCarryDestination,
@@ -76,10 +77,10 @@ export function waitingDetailCopy(reason: CarryWaitingReason, canManage = true):
   };
 }
 
-/** The reason without its "Waiting for a Removal." lead, for places that already say so. */
-export function waitingDetail(reason: CarryWaitingReason, canManage = true): string {
-  const detail = CARRY_WAITING_DETAILS[reason];
-  return reason === "incompatibleTemplate" && !canManage ? `${detail} ${MEMBER_TEMPLATE_TEXT}` : detail;
+/** The reason on a read-only batch, as a fact: "Recorded after RM-26-009 was sent. No later draft is available at this facility." */
+export function readOnlyWaitingDetail(reason: CarryWaitingReason, recordedAfterCode?: string): string {
+  const detail = READ_ONLY_CARRY_DETAILS[reason];
+  return recordedAfterCode ? `Recorded after ${recordedAfterCode} was sent. ${detail}` : detail;
 }
 
 /**
@@ -117,4 +118,9 @@ export function lateEntryView(entry: LateEntryFacts, facilityId: string, options
 /** "Diesel use of Sep 14, 2026 is waiting for a Removal". */
 export function waitingEntryTitle(componentName: string, occurredOn: string): string {
   return `${componentName} of ${formatDayString(occurredOn)} is waiting for a Removal`;
+}
+
+/** "Diesel use of Sep 14, 2026 is not in any Removal": the read-only fact, no wait. */
+export function readOnlyWaitingEntryTitle(componentName: string, occurredOn: string): string {
+  return `${componentName} of ${formatDayString(occurredOn)} is not in any Removal`;
 }
