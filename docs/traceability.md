@@ -193,8 +193,8 @@ theme.
   lineages that only meet inside it, and hovering a group lights the union of
   its members' lineages. That lineage stays lit, lit edges draw on top,
   everything else dims. A click lights the record and opens
-  its sheet; a click on the empty canvas clears the focus. Split view keeps the
-  map cross-link instead of the sheet.
+  its sheet; a click on the empty canvas clears the focus. Split view moves the
+  map's walk instead of opening the sheet.
 - **Mass labels only on lit edges**: the kg / % toggle labels the edges of the
   current hover or selection, nothing at rest. A merged edge only partly on
   the lineage draws lit but carries no chip, since its mass would include
@@ -228,7 +228,10 @@ theme.
 ## Carbon Viewer — "Geography: carbon in transit"
 
 The Flow chart is the *logical lineage* tool; the MapLibre map is the *geography*
-tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
+tool. One view, `TraceMapView`, serves the batch Map and the application's Map
+and Split; its walk is controlled (`walk`, `onWalkChange`, pure `walkTo` /
+`resolveWalk` in `trace-chains.ts`), and the geo payload's helpers live in
+`viewer-utils.ts`:
 
 - **Batch Map** (`TraceMap`, `trace-map*.tsx`): the map takes the full width and
   one panel on the right (below the map on a phone) holds two states. At rest it
@@ -255,14 +258,17 @@ tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
   location at all shows an empty state instead of the map and keeps the list.
   The model is pure and tested: `trace-model.ts` (stages, lighting, one drawn
   leg per road), `trace-chains.ts` (chains, walk lighting).
-- **Application Map and Split** (`CarbonTransitPanel`): `view="map"` pairs the
-  custody stages rail (`custody-stages-rail.tsx`: three milestones — feedstock in
-  / pyrolysis / application out — on a dashed thread, transport legs as sub-rows,
-  a "Not on the map" cluster for anything unplottable) with the map, and docks a
-  clicked record's details over the map's left edge (`record-detail-panel.tsx`,
-  closed by its own X or a basemap click, never by re-clicking the rail row — the
-  row is a selection, not a toggle). `view="split"` is the compact half beside the
-  Flow chart and keeps the legend plus the collapsed not-geolocated chip box.
+- **Application Map and Split** (`ApplicationTraceMap`,
+  `application-trace-map.tsx`, [#1486](https://github.com/Maji-Studio/noma-dmrv/issues/1486)):
+  the same view on the application's own lineage (`useChainOfCustodyGeo`, the
+  model from its own graph and `lineageIdsByApplication([chainData])`). An
+  application is one chain, so it opens on that chain's walk at its first step
+  (`singleChain`): no stage list, no "Whole batch", no "Trace rollback"; "View
+  full record" stays. Map is the batch layout (panel right, below the map under
+  1024px). Split is the Flow chart beside a column of map over walk
+  (`layout="column"`); below 1280px, phones included, the Flow stacks over the
+  walk panel alone (`layout="panel"`, the map's warnings at its top) at a fixed
+  share of the viewport height, and the page scrolls.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
@@ -272,15 +278,17 @@ tool. Two components share the geo payload and its helpers (`viewer-utils.ts`):
   [ADR 0009](adr/0009-provider-agnostic-server-proxied-geo.md). Legs without
   geometry draw a dashed bowed arc. **The polyline is illustrative — distance chips
   always show the leg's stored `distanceKm`, never the polyline length.**
-- **Cross-linking** — split-view Flow record clicks locate the record on the map (links
-  disabled there); marker / rail / chip clicks ring-highlight the Flow record.
+- **Cross-linking** (application Split): a Flow record click moves the walk to that
+  record's step with the record open, and the camera frames it (links disabled
+  there); the Flow lights the records of the walk's current step and dims the
+  rest. A record on no step (the reactor) leaves the walk where it is.
 - **Degradation** depends on two independent env vars, both declared in
   `src/config/env.ts` (see [docs/security.md](security.md)): no
   `NEXT_PUBLIC_MAPTILER_KEY` → blank style over a sea-tinted dotted field, markers
   and legs still plotted (the satellite raster is key-independent, so SAT keeps
   working) with a "basemap unavailable" note; no `OPENROUTESERVICE_API_KEY` → all
   legs draw as dashed arcs and address search is disabled. No WebGL context → an
-  explicit "map unavailable" notice with the rails still rendered.
+  explicit "map unavailable" notice with the stage list or walk still rendered.
 
 Map components live in `src/components/chain-of-custody/map/`; the shared
 brand-recolored basemap treatment is `src/components/map/` (also used by
@@ -298,8 +306,11 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`,
-  `trace-model.test.ts`, `trace-chains.test.ts`, `trace-map-view.test.tsx`,
-  `trace-record-values.test.tsx`
+  `trace-model.test.ts`, `trace-chains.test.ts` (chains, steps, `walkTo`),
+  `trace-map-view.test.tsx`, `trace-map-canvas.test.tsx` (the camera flies to a
+  new selection, refits without a flight when framed places move),
+  `application-trace-map.test.tsx` (opens on its own chain, a Flow pick moves
+  the walk), `trace-record-values.test.tsx`
 
 ## Saved delivery and application provenance
 

@@ -6,7 +6,7 @@
  * is a plain step; a stage where several records converge (intakes, runs,
  * products) is one step that lists them, each opening in place. Back / Next
  * step stage to stage (the map follows), and "Whole batch" returns to the
- * stage list.
+ * stage list (absent on an application's own map: it is the only chain).
  */
 
 import { ArrowLeftIcon, CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
@@ -38,8 +38,10 @@ export function TraceChainWalk({
   openRecordId: string | null;
   onStep: (index: number) => void;
   onOpenRecord: (recordId: string | null) => void;
-  onLeave: () => void;
-  onTrace: (recordId: string) => void;
+  /** "Whole batch": back to the stage list. Absent = no way back (one chain). */
+  onLeave?: () => void;
+  /** "Trace rollback" on an application. Absent = no such action. */
+  onTrace?: (recordId: string) => void;
 }) {
   const last = steps.length - 1;
   const current = steps[stepIndex];
@@ -47,15 +49,30 @@ export function TraceChainWalk({
   const values = (record: TraceRecord, inset: number) => (
     <RecordValues model={model} record={record} onTrace={onTrace} className="pb-16" style={{ marginLeft: inset }} />
   );
+  const counter = (
+    <span className={cn(TRACE_COUNTER_CLASS, "min-w-0 truncate")}>
+      {pad(stepIndex + 1)} / {pad(steps.length)} · To {chain.end.shortCode}
+    </span>
+  );
   return (
     <>
+      {/*
+        One chain alone: counter left, Back / Next right, the stage list's
+        header row. With "Whole batch" the row is Whole batch and Back / Next,
+        and the counter runs full width under it: beside all three it would be
+        cut to a few characters on a phone.
+      */}
       <div className="flex shrink-0 flex-col gap-8 border-b border-[var(--clr-dark-purple-10)] px-16 py-10">
         <div className="flex items-center justify-between gap-12">
-          <Button variant="noOutline" size="small" className="-ml-12 min-h-44 md:min-h-0" onClick={onLeave}>
-            <ArrowLeftIcon size={12} weight="bold" />
-            Whole batch
-          </Button>
-          <div className="flex shrink-0 gap-8">
+          {onLeave ? (
+            <Button variant="noOutline" size="small" className="-ml-12 min-h-44 md:min-h-0" onClick={onLeave}>
+              <ArrowLeftIcon size={12} weight="bold" />
+              Whole batch
+            </Button>
+          ) : (
+            counter
+          )}
+          <div className="ml-auto flex shrink-0 gap-8">
             {stepIndex > 0 ? (
               <Button variant="weak" size="small" className="min-h-44 md:min-h-0" onClick={() => onStep(stepIndex - 1)}>
                 <CaretLeftIcon size={12} weight="bold" />
@@ -70,9 +87,7 @@ export function TraceChainWalk({
             ) : null}
           </div>
         </div>
-        <span className={TRACE_COUNTER_CLASS}>
-          {pad(stepIndex + 1)} / {pad(steps.length)} · To {chain.end.shortCode}
-        </span>
+        {onLeave ? counter : null}
       </div>
       <ol className="min-h-0 flex-1 overflow-y-auto px-16 py-12">
         {steps.map((step, index) => {

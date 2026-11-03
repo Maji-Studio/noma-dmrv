@@ -1,24 +1,18 @@
 /**
- * Carbon Viewer ("Geography — carbon in transit") constants, per the concept
+ * Carbon Viewer ("Geography: carbon in transit") constants, per the concept
  * build distilled in docs/archive/plans/2026-06-10-map-integration.md → Design
- * reference. Marker geometry, layer ids, arc shaping, and animation timing
- * live here so the map component carries no magic numbers.
+ * reference. Layer ids, arc shaping, and animation timing live here so the
+ * map component carries no magic numbers.
  */
 
 // Direct module import (not the barrel) keeps this file free of React
 // component imports — viewer-utils + unit tests stay pure.
 import { OWN_LAYER_PREFIX } from "@/components/map/map-theme";
-import type { ChainGeoNodeKind } from "@/data-access/chain-of-custody-geo";
 
 // ---------------------------------------------------------------------------
 // Sources & layers (all prefixed so applyBrandRecolor never touches them)
 // ---------------------------------------------------------------------------
 
-export const LEGS_SOURCE_ID = `${OWN_LAYER_PREFIX}cv-legs`;
-export const LEGS_BASE_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-base`;
-export const LEGS_DASH_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-dash`;
-/** Transparent wide line on top of the legs — the hover hit-target. */
-export const LEGS_HIT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-hit`;
 export const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}cv-sat`;
 export const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-sat-layer`;
 
@@ -28,21 +22,6 @@ export const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-sat-layer`;
 
 /** Marker family per plotted node kind. */
 export type ViewerMarkerKind = "supplier" | "facility" | "field";
-
-/**
- * Rail/chip accent per chain node kind. On the map, distribution uses PINK
- * (not the rose accent — rose fails contrast on white; see plan token mapping).
- */
-export const NODE_ACCENT_VAR: Record<ChainGeoNodeKind, string> = {
-  facility: "var(--clr-purple)",
-  reactor: "var(--clr-purple)",
-  feedstock: "var(--clr-orange)",
-  productionRun: "var(--clr-orange)",
-  biocharProduct: "var(--clr-orange)",
-  order: "var(--clr-pink)",
-  delivery: "var(--clr-pink)",
-  application: "var(--clr-pink)",
-};
 
 // ---------------------------------------------------------------------------
 // Route lines ("carbon in transit")
@@ -56,18 +35,6 @@ export const ARC_MAX_BOW = 0.045;
 export const ARC_BOW_FACTOR = 0.22;
 
 export const LEG_LINE_WIDTH = 1.6;
-/**
- * Resting leg-line opacity — deliberately soft so overlapping arcs read as a
- * weave rather than a tangle. Hover isolation (below) lifts the active leg out
- * of the wash and pushes the rest back.
- */
-export const LEG_LINE_OPACITY = 0.5;
-/** Hovered leg (line + chip) on top of everything. */
-export const LEG_HOVER_OPACITY = 0.95;
-/** Every other leg while one is hovered — present but ghosted. */
-export const LEG_HOVER_DIM_OPACITY = 0.08;
-/** Invisible hover hit-target width (px) — far wider than the visible line. */
-export const LEG_HIT_WIDTH = 14;
 export const DASH_LINE_WIDTH = 1.5;
 
 /**
@@ -95,7 +62,7 @@ export const ANTS_INTERVAL_MS = 90;
 /** Dasharray for the straight fallback when no road geometry resolved. */
 export const FALLBACK_DASHARRAY = [2, 2];
 
-// Distance chips sit at a staggered point along each line so neighbouring
+// km labels sit at a staggered point along each line so neighbouring
 // arcs don't collide: fraction = CHIP_BASE_FRACTION + (i % CHIP_STAGGER_STEPS)
 // * CHIP_STAGGER_FRACTION along the polyline.
 export const CHIP_BASE_FRACTION = 0.32;
@@ -106,28 +73,9 @@ export const CHIP_STAGGER_STEPS = 3;
 // View behaviour
 // ---------------------------------------------------------------------------
 
-export const FIT_PADDING = { top: 96, bottom: 70, left: 110, right: 130 } as const;
-/** Gutter every overlay keeps from the map pane's edges (and from each other). */
-export const MAP_OVERLAY_GUTTER_PX = 16;
-export const FIT_MAX_ZOOM = 10.4;
 export const FIT_DURATION_MS = 700;
-export const HIGHLIGHT_EASE_DURATION_MS = 650;
-/** How long a cross-link highlight ring stays on a marker. */
-export const HIGHLIGHT_HOLD_MS = 2600;
 
-export const POPUP_WIDTH_PX = 246;
+const POPUP_WIDTH_PX = 246;
 /** MapLibre's popup max-width: the card plus room for its 1.5px/3px borders. */
 export const POPUP_MAX_WIDTH_PX = POPUP_WIDTH_PX + 8;
 export const POPUP_OFFSET_PX = 20;
-
-// ---------------------------------------------------------------------------
-// Cross-surface focus dimming
-// ---------------------------------------------------------------------------
-
-/**
- * Opacity for out-of-focus elements when a focus is active — rail cards, map
- * markers, distance chips, and leg lines all dim to this so the focused
- * sub-chain reads as the figure. Mirrored as the `.cvm-dim` literal in
- * carbon-viewer.css for the imperatively-managed marker/chip DOM.
- */
-export const FOCUS_DIM_OPACITY = 0.28;

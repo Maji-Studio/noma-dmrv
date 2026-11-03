@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The batch Traceability Map's canvas: a lean sibling of carbon-transit-map.tsx
- * driven by one `lighting` prop. Lit records and legs stay full strength, the
+ * The Traceability Map's canvas (batch and application), driven by one
+ * `lighting` prop. Lit records and legs stay full strength, the
  * rest dims, and only lit legs carry a km label (one per drawn road, never all
  * at once). The camera flies to `lighting.points` whenever `frameKey` changes.
  * Loaded with next/dynamic (ssr: false).
@@ -61,6 +61,13 @@ const FIT_MAX_ZOOM = 9.5;
 const POINT_SPAN_M = 3000;
 const DIM_CLASS = "cvm-dim";
 const CURRENT_CLASS = "tm-current";
+/** Framed points compare at ~1 m: a refetch that moves a place refits, an identical one does not. */
+const POINT_KEY_DECIMALS = 5;
+
+/** A stable signature of the framed points, so a geo refresh that moves one refits. */
+function pointsKey(points: { lat: number; lng: number }[]): string {
+  return points.map((point) => `${point.lat.toFixed(POINT_KEY_DECIMALS)},${point.lng.toFixed(POINT_KEY_DECIMALS)}`).join("|");
+}
 
 export interface FramePadding {
   top: number;
@@ -295,7 +302,18 @@ export default function TraceMapCanvas({
       setReadyMap(map);
     });
     map.on("render", () => {
-      if (map.getLayer(BASE_LAYER) && !map.isMoving()) container.dataset.mapState = "ready";
+      if (!map.getLayer(BASE_LAYER) || map.isMoving()) return;
+      // Opt-in read-only observations for the renderer E2E checks, so ordinary
+      // views never query or serialize painted features.
+      if (document.documentElement.dataset.observeCarbonMap === "true") {
+        container.dataset.mapBounds = JSON.stringify(map.getBounds().toArray());
+        container.dataset.renderedLegs = JSON.stringify(
+          map.queryRenderedFeatures({ layers: [BASE_LAYER, FALLBACK_LAYER] })
+            .filter((feature) => feature.geometry.type === "LineString")
+            .map((feature) => ({ id: feature.properties.legId, geometry: feature.geometry })),
+        );
+      }
+      container.dataset.mapState = "ready";
     });
     let step = 0;
     const ants = setInterval(() => {
@@ -411,12 +429,18 @@ export default function TraceMapCanvas({
     declutterLabels(map, markersRef.current);
   }, [geo, lighting, readyMap]);
 
-  // The camera follows the selection.
+  // The camera follows the selection, flying to a new one. The same selection
+  // whose places moved (the geo payload refetched after an edit) refits
+  // without the flight.
+  const framedPoints = pointsKey(lighting.points);
+  const lastFramed = useRef<{ map: maplibregl.Map; frameKey: string } | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!readyMap || readyMap !== map) return;
-    frame(map, latest.current.lighting.points, latest.current.padding, true);
-  }, [frameKey, readyMap]);
+    const animate = lastFramed.current?.map !== map || lastFramed.current.frameKey !== frameKey;
+    lastFramed.current = { map, frameKey };
+    frame(map, latest.current.lighting.points, latest.current.padding, animate);
+  }, [frameKey, framedPoints, readyMap]);
 
   const toggleSat = () => {
     const map = mapRef.current;
@@ -432,7 +456,7 @@ export default function TraceMapCanvas({
           <EmptyState
             icon={<MapTrifoldIcon size={40} weight="thin" />}
             title="The map could not start"
-            description="This browser could not start the map renderer. Reload the page or try another browser. The stages are still listed."
+            description="This browser could not start the map renderer. Reload the page or try another browser. The records are still listed."
             padding="md"
           />
         </div>
