@@ -209,9 +209,12 @@ describe("FacilityProvider stored selection", () => {
     state.organizationId = "org-2";
     state.facilities = [other];
     state.lookupLoading = false;
+    state.lookup = STORED;
     rerender();
 
     await waitFor(() => expect(result.current.facilityId).toBe(other.id));
+    expect(result.current.activeOrganizationId).toBe("org-2");
+    expect(result.current.selectedFacility).toBe(other);
     expect(localStorage.getItem(FACILITY_STORAGE_KEY)).toBe(other.id);
     expect(onUrlUpdate.mock.lastCall![0].searchParams.get("facility")).toBe(other.id);
   });

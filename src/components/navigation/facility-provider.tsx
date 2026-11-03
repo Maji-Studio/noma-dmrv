@@ -18,7 +18,16 @@ import {
 } from "@/hooks/use-facility-context";
 
 const EMPTY_FACILITIES: FacilityContextValue["facilities"] = [];
-const subscribeNever = () => () => {};
+const storedFacilityListeners = new Set<() => void>();
+
+function subscribeToStoredFacilityId(listener: () => void) {
+  storedFacilityListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    storedFacilityListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
 
 function readStoredFacilityId(): string | null {
   if (typeof window === "undefined") {
@@ -40,12 +49,15 @@ function writeStoredFacilityId(facilityId: string | null) {
   try {
     if (!facilityId) {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-      return;
+    } else {
+      window.localStorage.setItem(FACILITY_STORAGE_KEY, facilityId);
     }
-
-    window.localStorage.setItem(FACILITY_STORAGE_KEY, facilityId);
   } catch {
     // Ignore storage failures (e.g. private mode or blocked storage).
+  }
+
+  for (const listener of storedFacilityListeners) {
+    listener();
   }
 }
 
@@ -71,7 +83,11 @@ export function FacilityProvider({
    */
   initialOrganizationId?: string | null;
 }) {
-  const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false);
+  const storedFacilityId = useSyncExternalStore(
+    subscribeToStoredFacilityId,
+    readStoredFacilityId,
+    () => null,
+  );
   const { data: sessionData, isPending: isSessionPending } =
     authClient.useSession();
   const clientActiveOrganizationId =
@@ -105,14 +121,15 @@ export function FacilityProvider({
   } = useFacilities({ pageSize: 100 }, activeOrganizationId);
   const isLoading = isSessionPending || isFacilitiesLoading;
   const facilities = facilitiesData?.items ?? EMPTY_FACILITIES;
-  const facilityIdToVerify = facilityId ?? (hydrated ? readStoredFacilityId() : null);
+  const facilityIdToVerify = facilityId ?? storedFacilityId;
   const hasFacilityToVerifyInList = facilityIdToVerify
     ? facilities.some((facility) => facility.id === facilityIdToVerify)
     : false;
   const hasFacilityInList = Boolean(facilityId && hasFacilityToVerifyInList);
+  const canVerifySelection = Boolean(facilityId) || facilities.length > 0;
   const shouldLoadSelectedFacility = Boolean(
     facilityIdToVerify && !hasFacilityToVerifyInList && !isLoading &&
-      (facilityId || facilities.length > 0)
+      canVerifySelection
   );
   const {
     data: selectedFacilityById,
@@ -123,7 +140,7 @@ export function FacilityProvider({
     activeOrganizationId,
   );
   const selectedFacilityFromLookup =
-    selectedFacilityById && (facilityId || facilities.length > 0) &&
+    selectedFacilityById && canVerifySelection &&
       selectedFacilityById.archivedAt == null
       ? selectedFacilityById
       : undefined;
@@ -148,7 +165,8 @@ export function FacilityProvider({
 
   // Resolve facility selection from URL -> localStorage -> first facility.
   useEffect(() => {
-    if (!hydrated || isLoading) {
+    // Wait for the client snapshot, including storage cleared by the org-change effect.
+    if (isLoading || storedFacilityId !== readStoredFacilityId()) {
       return;
     }
 
@@ -172,9 +190,7 @@ export function FacilityProvider({
         return;
       }
 
-      // The org-change effect above may have cleared storage in this commit.
-      if (selectedFacilityFromLookup &&
-        (facilityId || facilityIdToVerify === readStoredFacilityId())) {
+      if (selectedFacilityFromLookup) {
         if (!facilityId) {
           void setFacilityId(facilityIdToVerify);
         }
@@ -200,7 +216,7 @@ export function FacilityProvider({
 
     writeStoredFacilityId(nextFacilityId);
   }, [
-    hydrated,
+    storedFacilityId,
     isLoading,
     facilities,
     facilityId,
