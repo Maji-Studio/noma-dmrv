@@ -176,6 +176,13 @@ describe("RecordLockNotice", () => {
     expect(screen.getByRole("link").getAttribute("href")).toBe(`/removals?facility=${FACILITY}&removal=removal-1`);
   });
 
+  it("leads with the Removal's code when it is known, then the period", () => {
+    render(<RecordLockNotice lock={view("sent", [{ ...REMOVAL, label: "RM-26-001" }])} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because this was sent to Isometric with Removal RM-26-001, Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
+    );
+  });
+
   it("says sending was started and not finished for an interrupted Removal", () => {
     const interrupted = { ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], howToFree: INTERRUPTED_HOW_TO_FREE_ONE };
     render(<RecordLockNotice lock={interrupted} />);

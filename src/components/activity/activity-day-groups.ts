@@ -88,3 +88,35 @@ export function collapseRepeatedActivity(items: readonly ActivityItem[], timeZon
   }
   return runs;
 }
+
+/** Every row the feed draws for these events, in order, across day headings. */
+function allRuns(items: readonly ActivityItem[], timeZone: string): ActivityRun[] {
+  return groupActivityByDay(items, timeZone).flatMap((group) => collapseRepeatedActivity(group.items, timeZone));
+}
+
+export interface ActivityPageLoad {
+  /** Rows the page added. */
+  addedRows: number;
+  /** An existing row's count grew: older repeats joined it. */
+  grew: boolean;
+  /** The row holding the first newly loaded visible event, or null when the page added none. */
+  focusId: string | null;
+  /** The last row after loading, for focus when nothing new can take it. */
+  lastId: string | null;
+}
+
+/** What a "Show older activity" press changed, in rows rather than events. */
+export function describePageLoad(before: readonly ActivityItem[], after: readonly ActivityItem[], timeZone: string): ActivityPageLoad {
+  const beforeRuns = allRuns(before, timeZone);
+  const afterRuns = allRuns(after, timeZone);
+  const known = new Set(before.map((item) => item.id));
+  const focusRun = afterRuns.find((run) => run.ids.some((id) => !known.has(id)));
+  const afterById = new Map(afterRuns.map((run) => [run.item.id, run]));
+  const grew = beforeRuns.some((run) => (afterById.get(run.item.id)?.count ?? run.count) > run.count);
+  return {
+    addedRows: afterRuns.length - beforeRuns.length,
+    grew,
+    focusId: focusRun?.item.id ?? null,
+    lastId: afterRuns.at(-1)?.item.id ?? null,
+  };
+}

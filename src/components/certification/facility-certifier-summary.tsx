@@ -10,13 +10,13 @@
  * management payload (available projects, link hints), which a non-managing
  * viewer must not pull. The project shows as its persisted id. The removal
  * template reads by its display name, looked up in the project's template list
- * (as the credit batch does); its registry id stays behind the (i).
+ * (as the credit batch does); its registry id sits in the "Technical details" disclosure.
  */
 "use client";
 
 import Link from "next/link";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
-import { DetailField } from "@/components/ui/detail-panel";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { RawIdentifiers } from "./removal-template-mapping-view";
 import { LOAD_FAILED, MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
@@ -121,24 +121,22 @@ function SummaryBody({
 }
 
 /**
- * The template's display name as a detail field: a skeleton while the project's
- * templates load, a settled reason when the name cannot be read. The registry
- * id stays in the technical details.
+ * The template's display name, styled like the Project row above it: a skeleton
+ * while the project's templates load, a settled reason when the name cannot be
+ * read. The registry id stays in the technical details.
  */
 function RemovalTemplateField({ projectId, templateId }: { projectId: string; templateId: string }) {
   const templates = useIsometricProjectTemplates(projectId);
   const name = templates.data?.find((template) => template.id === templateId)?.display_name;
   const reason = name ? null : templates.isError ? LOAD_FAILED : templates.isSuccess ? NOT_FOUND_ON_ISOMETRIC : null;
   return (
-    <div className="flex flex-col gap-8">
-      <DetailField
-        label="Removal template"
-        value={name ?? reason}
-        emptySituation="notSet"
-        valuePresent={reason ? false : undefined}
-        pending={!name && !reason}
-      />
+    <Field label="Removal template">
+      {name || reason ? (
+        <span className={`body-small ${name ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)]"}`}>{name ?? reason}</span>
+      ) : (
+        <Skeleton className="h-16 w-96" />
+      )}
       <RawIdentifiers summary="Technical details" entries={[["Template", templateId]]} />
-    </div>
+    </Field>
   );
 }

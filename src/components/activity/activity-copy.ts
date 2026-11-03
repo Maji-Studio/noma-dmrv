@@ -46,5 +46,8 @@ export function activityRepeatLabel(count: number): string {
   return `${count} times`;
 }
 
-/** Older events loaded that read the same as the last row, so only its count grew. */
-export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to the last row.";
+/** Older events loaded that read the same as an existing row, so only its count grew. */
+export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to an existing row.";
+
+/** Older events loaded, but none of them is shown in the feed. */
+export const ACTIVITY_NO_NEW_CHANGES_MESSAGE = "No new changes were found.";

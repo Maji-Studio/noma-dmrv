@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityDayLabel, collapseRepeatedActivity, countActivityRows, groupActivityByDay } from "./activity-day-groups";
+import { activityDayLabel, collapseRepeatedActivity, countActivityRows, describePageLoad, groupActivityByDay } from "./activity-day-groups";
 import type { ActivityItem } from "./activity-display";
 
 const at = (value: Date, actor = "u1") => ({ id: `${value.toISOString()}${actor}`, occurredAt: value, actor: { id: actor }, source: "form" }) as ActivityItem;
@@ -72,5 +72,27 @@ describe("collapsing repeated activity", () => {
     const page = Array.from({ length: 5 }, (_, i) => event(`n${i}`));
     expect(countActivityRows(page, TIME_ZONE)).toBe(1);
     expect(countActivityRows([...page, event("other", { entityId: "entry-2" })], TIME_ZONE)).toBe(2);
+  });
+
+  describe("describePageLoad", () => {
+    const hidden = (id: string) => event(id, { changedFields: ["checksumSha256"] });
+
+    it("focuses the row of the first newly loaded visible event, found by id", () => {
+      const before = [event("a", { entityId: "x" })];
+      const after = [...before, hidden("h"), event("b", { entityId: "y" }), event("c", { entityId: "z" })];
+      expect(describePageLoad(before, after, TIME_ZONE)).toMatchObject({ addedRows: 2, grew: false, focusId: "b", lastId: "c" });
+    });
+
+    it("reports a grown row when only older repeats load, and focuses it", () => {
+      const before = [event("a"), event("b")];
+      const after = [...before, event("c")];
+      expect(describePageLoad(before, after, TIME_ZONE)).toMatchObject({ addedRows: 0, grew: true, focusId: "a", lastId: "a" });
+    });
+
+    it("finds nothing to focus when the page added only hidden updates", () => {
+      const before = [event("a")];
+      const after = [...before, hidden("h1"), hidden("h2")];
+      expect(describePageLoad(before, after, TIME_ZONE)).toEqual({ addedRows: 0, grew: false, focusId: null, lastId: "a" });
+    });
   });
 });

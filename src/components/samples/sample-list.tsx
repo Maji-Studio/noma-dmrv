@@ -62,7 +62,7 @@ import {
 import type { SampleWithRelations } from "@/data-access/samples";
 import { useDocumentsCertStatus } from "@/components/forms/use-documents-cert-status";
 import { isLabReportDocument } from "@/lib/certification/lab-report";
-import { formatLabPercent, formatSamplingTime, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
+import { formatLabPercent, formatSamplingTime, LAB_PERCENT_FRACTION_DIGITS, RATIO_DIGITS, sampleSheetSections } from "./sample-read-sections";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
@@ -71,9 +71,6 @@ import {
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
-
-/** R₀ reads at two decimals, as on the sample sheet. */
-const R0_DIGITS = 2;
 
 /** The average carbon card when the stats read settled and no Sample has a total carbon result. */
 const NO_TOTAL_CARBON_RESULTS = "No total carbon results";
@@ -176,8 +173,10 @@ function createColumns(
     ...(showR0 ? [{
       accessorKey: "randomReflectanceR0Percent",
       header: "R₀ (%)",
-      cell: ({ row }: { row: Row<SampleWithRelations> }) =>
-        row.original.randomReflectanceR0Percent?.toFixed(R0_DIGITS) ?? MISSING_VALUE.notRecorded,
+      // Only 1000-year Samples carry R₀; a 200-year Sample on the page has none to record.
+      cell: ({ row }: { row: Row<SampleWithRelations> }) => row.original.durabilityOption === "1000_year"
+        ? row.original.randomReflectanceR0Percent?.toFixed(LAB_PERCENT_FRACTION_DIGITS) ?? MISSING_VALUE.notRecorded
+        : MISSING_VALUE.notApplicable,
     }] : []),
     {
       accessorKey: "labName",

@@ -25,9 +25,10 @@ import {
   activityEmptyDescription,
   activityHistoryStartNote,
   activityLoadedMessage,
+  ACTIVITY_NO_NEW_CHANGES_MESSAGE,
   ACTIVITY_REPEATS_LOADED_MESSAGE,
 } from "./activity-copy";
-import { collapseRepeatedActivity, countActivityRows, groupActivityByDay } from "./activity-day-groups";
+import { collapseRepeatedActivity, countActivityRows, describePageLoad, groupActivityByDay } from "./activity-day-groups";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import {
@@ -104,8 +105,8 @@ export function CreditBatchActivityView({
 }) {
   const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
   const [filters, setFilters] = useState<ActivityFilters>({});
-  // Index of the first row a "Show older activity" press added; that row takes focus once.
-  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  // The row a "Show older activity" press added (or grew); it takes focus once.
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const headingId = useId();
   const summary = useCreditBatchActivitySummary(creditBatchId);
@@ -114,28 +115,43 @@ export function CreditBatchActivityView({
   const dayGroups = groupActivityByDay(items, timeZone);
   const counts = summary.data?.counts ?? [];
   const filtered = hasActivityFilters(filters);
+  // Rows the feed draws: hidden updates and folded repeats do not count.
+  const rowCount = countActivityRows(items, timeZone);
 
   const setFilter = (next: ActivityFilters) => {
-    setFocusIndex(null);
+    setFocusId(null);
     setFilters(next);
   };
   const showMore = async () => {
-    const before = items.length;
-    const rowsBefore = countActivityRows(items, timeZone);
+    const before = items;
     const result = await activity.fetchNextPage();
-    const loaded = result.data?.pages.flatMap((page) => page.items) ?? items;
-    if (loaded.length > before) {
-      // Count rows, not events: repeats fold into one row, and older events can join the last row.
-      const added = countActivityRows(loaded, timeZone) - rowsBefore;
-      setFocusIndex(before);
-      setAnnouncement(added > 0 ? activityLoadedMessage(added) : ACTIVITY_REPEATS_LOADED_MESSAGE);
-    }
+    const loaded = result.data?.pages.flatMap((page) => page.items) ?? before;
+    if (loaded.length <= before.length) return;
+    // Rows, not events: repeats fold into one row, and hidden updates draw nothing.
+    const page = describePageLoad(before, loaded, timeZone);
+    // With no new row the button keeps focus; once it unmounts the last row takes it.
+    setFocusId(page.focusId ?? (result.hasNextPage ? null : page.lastId));
+    setAnnouncement(
+      page.addedRows > 0 ? activityLoadedMessage(page.addedRows)
+        : page.grew ? ACTIVITY_REPEATS_LOADED_MESSAGE : ACTIVITY_NO_NEW_CHANGES_MESSAGE,
+    );
   };
   const focusFirstNew = (node: HTMLElement | null) => {
     if (!node) return;
     node.focus();
-    setFocusIndex(null);
+    setFocusId(null);
   };
+
+  const showOlderButton = activity.hasNextPage ? (
+    <Button
+      variant="weak"
+      className="min-h-44 w-full sm:w-auto sm:self-start"
+      busy={activity.isFetchingNextPage}
+      onClick={() => void showMore()}
+    >
+      {ACTIVITY_SHOW_MORE_LABEL}
+    </Button>
+  ) : null;
 
   const body = (() => {
     if (activity.isError || summary.isError) {
@@ -144,8 +160,9 @@ export function CreditBatchActivityView({
     if (activity.isPending || summary.isPending) {
       return <p role="status" className="body-small text-[var(--color-text-secondary)]">{ACTIVITY_LOADING}</p>;
     }
-    if (items.length === 0 && filtered) {
+    if (rowCount === 0 && filtered) {
       return (
+        <>
         <EmptyState
           padding="md"
           icon={<FunnelSimpleIcon size={FILTERED_ICON_PX} weight="thin" />}
@@ -154,16 +171,21 @@ export function CreditBatchActivityView({
           // The card's action wrapper sets a 40px floor; the touch target needs 44px.
           action={<Button variant="weak" className="!min-h-44" onClick={() => setFilter({})}>{ACTIVITY_CLEAR_FILTERS_LABEL}</Button>}
         />
+        {showOlderButton}
+        </>
       );
     }
-    if (items.length === 0) {
+    if (rowCount === 0) {
       return (
+        <>
         <EmptyState
           padding="lg"
           icon={<ClockCounterClockwiseIcon size={EMPTY_ICON_PX} weight="thin" />}
           title={ACTIVITY_EMPTY_TITLE}
           description={activityEmptyDescription(timeZone)}
         />
+        {showOlderButton}
+        </>
       );
     }
     return (
@@ -179,14 +201,14 @@ export function CreditBatchActivityView({
             <li key={group.key} className="flex flex-col gap-12">
               <h3 className="body-small font-medium text-[var(--color-text-secondary)]">{group.label}</h3>
               <ol className="flex flex-col">
-                {runs.map(({ item, count, ids }) => (
+                {runs.map(({ item, count }) => (
                   <ActivityEntry
                     key={item.id}
                     item={item}
                     count={count}
                     timeZone={timeZone}
                     creditBatchId={creditBatchId}
-                    focusRef={focusIndex !== null && ids.includes(items[focusIndex]?.id ?? "") ? focusFirstNew : undefined}
+                    focusRef={item.id === focusId ? focusFirstNew : undefined}
                   />
                 ))}
               </ol>
@@ -195,14 +217,7 @@ export function CreditBatchActivityView({
           })}
         </ol>
         {activity.hasNextPage ? (
-          <Button
-            variant="weak"
-            className="min-h-44 w-full sm:w-auto sm:self-start"
-            busy={activity.isFetchingNextPage}
-            onClick={() => void showMore()}
-          >
-            {ACTIVITY_SHOW_MORE_LABEL}
-          </Button>
+          showOlderButton
         ) : (
           // The rail's far end: a dashed run from the last node to a hollow
           // marker where recording began, as nothing earlier is listed.
@@ -243,7 +258,7 @@ export function CreditBatchActivityView({
               testId="activity-record-type-filter"
             />
             {/* The filtered-empty card carries its own clear action; one is enough. */}
-            {filtered && items.length > 0 ? (
+            {filtered && rowCount > 0 ? (
               <Button variant="noOutline" size="small" className="min-h-44" onClick={() => setFilter({})}>
                 {ACTIVITY_CLEAR_FILTERS_LABEL}
               </Button>
