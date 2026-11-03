@@ -113,8 +113,10 @@ describe("credit batch page model", () => {
       const completedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(completedModel.removals[0].phase).toBe("submitted");
       const submittedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
-      expect(submittedAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · awaiting verification" }));
+      // A submitted batch waits on the verifier, not the operator: it leaves Needs attention (#1532).
+      expect(submittedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
       expect(submittedAttention.items.some(item => item.title === "Submission interrupted")).toBe(false);
+      expect(submittedAttention.batches).toEqual({ interrupted: 0, notSubmitted: 0, returned: 0 });
       const submittedTodos = buildCreditBatchOpenItems({
         facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
         removals: completedModel.removals,
@@ -135,14 +137,12 @@ describe("credit batch page model", () => {
       const correctedDisplays = await loadCreditBatchRemovalDisplays(makeTestOrgContext(), [fixture.batchId]);
       expect(correctedDisplays.get(fixture.batchId)?.[0]).toMatchObject({ phase: "submitted", status: { kind: "not-submitted" } });
       const correctedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
-      expect(correctedAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · awaiting verification" }));
-      expect(correctedAttention.items.some(item => item.title === "Period ended · not submitted yet")).toBe(false);
+      expect(correctedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
 
       await db.update(certificationSubmissions).set({ status: "draft", metadata: {}, lockedAt: null })
         .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
       const draftAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
       expect(draftAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · not submitted yet" }));
-      expect(draftAttention.items.some(item => item.title === "Period ended · awaiting verification")).toBe(false);
 
     } finally {
       await cleanupLineageFixture(fixture);

@@ -30,10 +30,11 @@ import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { SCENE_BG } from "./flow-hero-defs";
 import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
+import { StationReasonRow } from "./station-reason-link";
 
 const VIEW_W = 1160;
-/** The art lives between y≈244 (smoke) and y≈482 (attention reasons) — the
-    viewBox is cropped to it so the hero carries no dead sky. */
+/** The art lives between y≈244 (smoke) and y≈482 — the viewBox is cropped to
+    it so the hero carries no dead sky. Attention reasons sit below it. */
 const VIEW_Y0 = 235;
 const VIEW_H = 265;
 
@@ -51,7 +52,9 @@ const BAY_EDGES = BAY_CENTERS.slice(0, -1).map(
 /** The straight mass-flow rail carrying the chips and the flow ribbons. */
 const RAIL_Y = 446;
 const LABEL_Y = 464;
-const REASON_Y = 482;
+/** Scene x outside the first and last bays, for the reasons strip's grid. */
+const BAY_LEFT_INSET = BAY_FIRST_X - BAY_PITCH / 2;
+const BAY_RIGHT_INSET = VIEW_W - (BAY_CENTERS[BAY_CENTERS.length - 1]! + BAY_PITCH / 2);
 
 /** Ribbon stroke width range in flow view (px, min → min+span, scaled by tonnes/max). */
 const RIBBON_MIN_WIDTH = 5;
@@ -69,8 +72,8 @@ interface StationGeometry {
   index: string;
   color: string;
   labelX: number;
-  /** Attention badge anchor (absent = station never badges). */
-  badge?: { x: number; y: number };
+  /** Attention badge anchor, top right of the station's drawn mass. */
+  badge: { x: number; y: number };
   /** Tooltip anchor. */
   tip: { x: number; y: number };
 }
@@ -83,6 +86,7 @@ const STATION_GEO: Record<DashboardStationKey, StationGeometry> = {
     index: "01",
     color: ZONE.prod,
     labelX: BAY_CENTERS[0]!,
+    badge: { x: 196, y: 338 },
     tip: { x: 200, y: 352 },
   },
   feedstock: {
@@ -120,6 +124,16 @@ const STATION_GEO: Record<DashboardStationKey, StationGeometry> = {
     badge: { x: 1098, y: 330 },
     tip: { x: 1104, y: 340 },
   },
+};
+
+/** The list each station opens, named in its tooltip (sidebar labels). */
+const STATION_LIST_LABEL: Record<DashboardStationKey, string> = {
+  suppliers: "Suppliers",
+  feedstock: "Feedstock intake",
+  production: "Production runs",
+  products: "Biochar products",
+  deliveries: "Deliveries",
+  applications: "Applications",
 };
 
 /** Running-runs chip — stacked above the production badge, never beside it. */
@@ -218,6 +232,9 @@ export function FlowHeroScene({
   const showChips = interactive && view !== "attention";
   const showBadges = interactive && view !== "flow";
   const showReasons = interactive && view === "attention";
+  const reasonStations = showReasons
+    ? stations.filter((station) => station.attention > 0 && station.reasons.length > 0)
+    : [];
   const showRibbons = interactive && view === "flow" && maxTonnes > 0;
   const showSmoke = interactive && view === "overview";
 
@@ -254,8 +271,11 @@ export function FlowHeroScene({
   };
 
   return (
+    <>
     <div
-      className="relative hidden w-full overflow-hidden md:block"
+      // No overflow clip: the SVG clips its own art, and a station tooltip
+      // with several reasons must run past the cropped scene, not lose its link.
+      className="relative hidden w-full md:block"
       style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, background: SCENE_BG }}
       data-testid="flow-hero-scene"
     >
@@ -516,32 +536,6 @@ export function FlowHeroScene({
         );
       })}
 
-      {/* Attention reasons under the labels (attention view only). */}
-      {showReasons &&
-        stations
-          .filter((station) => station.attention > 0 && station.reasons.length > 0)
-          .map((station) => (
-            <div
-              key={`reason-${station.key}`}
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[12px] font-light"
-              style={{
-                left: pctX(STATION_GEO[station.key].labelX),
-                top: pctY(REASON_Y),
-              }}
-              aria-hidden
-            >
-              {station.reasons.map((reason, index) => (
-                <span
-                  key={reason.text}
-                  style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }}
-                >
-                  {index > 0 ? " · " : ""}
-                  {reason.text}
-                </span>
-              ))}
-            </div>
-          ))}
-
       {/* Mass chips between stations. */}
       {showChips &&
         CHIP_POS.map((pos, index) => {
@@ -566,9 +560,9 @@ export function FlowHeroScene({
       {/* Attention badges. */}
       {showBadges &&
         stations
-          .filter((station) => station.attention > 0 && STATION_GEO[station.key].badge)
+          .filter((station) => station.attention > 0)
           .map((station) => {
-            const badge = STATION_GEO[station.key].badge!;
+            const badge = STATION_GEO[station.key].badge;
             const emphasized = view === "attention";
             const stationState = deriveWorstDashboardState(
               station.reasons.map((reason) => reason.state),
@@ -576,6 +570,7 @@ export function FlowHeroScene({
             return (
               <div
                 key={`badge-${station.key}`}
+                data-testid={`flow-hero-badge-${station.key}`}
                 className={[
                   "pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full font-[family-name:var(--font-mono)] font-medium leading-none text-white transition-all",
                   emphasized ? "px-10 py-6 text-[13px]" : "px-8 py-4 text-[10.5px]",
@@ -646,10 +641,36 @@ export function FlowHeroScene({
             </div>
           )}
           <div className="mt-10 text-[10.5px]">
-            View all →
+            {STATION_LIST_LABEL[hoveredStation.key]} →
           </div>
         </div>
       )}
     </div>
+    {/* Attention reasons (attention view only), below the art in each
+        station's bay so several reasons per station stack instead of
+        running into the neighbours or past the scene's bottom edge. A reason
+        fixed somewhere other than the station's list links there. */}
+    {reasonStations.length > 0 && (
+      <div
+        className="hidden grid-cols-6 pb-12 md:grid"
+        style={{ background: SCENE_BG, paddingLeft: pctX(BAY_LEFT_INSET), paddingRight: pctX(BAY_RIGHT_INSET) }}
+        data-testid="flow-hero-reasons"
+      >
+        {reasonStations.map((station) => (
+          <ul
+            key={`reason-${station.key}`}
+            className="flex flex-col items-center gap-2 px-6 text-center text-[12px] font-light leading-[1.3]"
+            style={{ gridColumnStart: BAY_CENTERS.indexOf(STATION_GEO[station.key].labelX) + 1 }}
+          >
+            {station.reasons.map((reason) => (
+              <li key={reason.text}>
+                <StationReasonRow reason={reason} className="justify-center" />
+              </li>
+            ))}
+          </ul>
+        ))}
+      </div>
+    )}
+    </>
   );
 }

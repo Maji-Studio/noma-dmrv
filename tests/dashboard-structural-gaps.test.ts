@@ -497,57 +497,62 @@ describe("dashboard structural certification gaps", () => {
 
     expect(counts).toEqual({
       missingFeedstockGps: 1,
-      transportEndpointGpsGaps: 1,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
-      transportEndpointGpsTarget: {
-        entityType: "biochar",
-        entityId: fixture.activeBiocharProductId,
-      },
+      feedstockRouteGpsGaps: 0,
+      feedstockRouteGpsTargetId: null,
+      biocharRouteGpsGaps: 1,
+      biocharRouteGpsTargetId: fixture.activeBiocharProductId,
     });
     expect(
       buildDashboardStructuralGaps(counts, fixture.gapFacilityId).map(
-        ({ key, metadata, count, href }) => ({ key, metadata, count, href }),
+        ({ key, metadata, count, href, station }) => ({ key, metadata, count, href, station }),
       ),
     ).toEqual([
       {
-        key: "feedstockGps",
+        key: "supplierGps",
         metadata: "Supplier form · Location · 1 affected",
         count: 1,
         href: `/suppliers?facility=${fixture.gapFacilityId}&supplier=${fixture.missingGpsSupplierId}&mode=edit`,
+        station: "suppliers",
       },
       {
-        key: "transportEndpointGps",
+        key: "biocharRouteGps",
         metadata: "Biochar product form · Transport route · 1 affected",
         count: 1,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
+        station: "products",
       },
     ]);
   });
 
-  it.each([
-    ["feedstock", "Feedstock form"],
-    ["biochar", "Biochar product form"],
-  ] as const)(
-    "names the %s destination form for transport gaps",
-    (entityType, formName) => {
-      const gaps = buildDashboardStructuralGaps(
-        {
-          missingFeedstockGps: 0,
-          transportEndpointGpsGaps: 2,
-          missingFeedstockGpsSupplierId: null,
-          transportEndpointGpsTarget: {
-            entityType,
-            entityId: `${entityType}-route`,
-          },
-        },
-        "00000000-0000-4000-8000-000000000001",
-      );
+  it("splits route gaps by the form and station that own them", () => {
+    const gaps = buildDashboardStructuralGaps(
+      {
+        missingFeedstockGps: 0,
+        missingFeedstockGpsSupplierId: null,
+        feedstockRouteGpsGaps: 2,
+        feedstockRouteGpsTargetId: "feedstock-route",
+        biocharRouteGpsGaps: 3,
+        biocharRouteGpsTargetId: "biochar-route",
+      },
+      "00000000-0000-4000-8000-000000000001",
+    );
 
-      expect(gaps.map(({ metadata }) => metadata)).toEqual([
-        `${formName} · Transport route · 2 affected`,
-      ]);
-    },
-  );
+    expect(gaps.map(({ key, label, metadata, station }) => ({ key, label, metadata, station }))).toEqual([
+      {
+        key: "feedstockRouteGps",
+        label: "Feedstock route GPS missing",
+        metadata: "Feedstock form · Transport route · 2 affected",
+        station: "feedstock",
+      },
+      {
+        key: "biocharRouteGps",
+        label: "Biochar route GPS missing",
+        metadata: "Biochar product form · Transport route · 3 affected",
+        station: "products",
+      },
+    ]);
+  });
 
   it("returns no structural blockers for a complete empty facility", async (ctx) => {
     if (!dbReachable || !fixture) {
@@ -562,9 +567,11 @@ describe("dashboard structural certification gaps", () => {
 
     expect(counts).toEqual({
       missingFeedstockGps: 0,
-      transportEndpointGpsGaps: 0,
       missingFeedstockGpsSupplierId: null,
-      transportEndpointGpsTarget: null,
+      feedstockRouteGpsGaps: 0,
+      feedstockRouteGpsTargetId: null,
+      biocharRouteGpsGaps: 0,
+      biocharRouteGpsTargetId: null,
     });
     expect(buildDashboardStructuralGaps(counts, fixture.clearFacilityId)).toEqual([]);
   });
@@ -573,5 +580,5 @@ describe("dashboard structural certification gaps", () => {
 it("excludes legacy sample GPS gaps only after retirement", async (ctx) => {
   if (!dbReachable || !fixture) { ctx.skip(); return; }
   const counts = await loadDashboardStructuralGapCounts(makeTestOrgContext(TEST_USER_ID), fixture.gapFacilityId);
-  expect(counts.transportEndpointGpsGaps).toBe(1);
+  expect(counts.feedstockRouteGpsGaps + counts.biocharRouteGpsGaps).toBe(1);
 });

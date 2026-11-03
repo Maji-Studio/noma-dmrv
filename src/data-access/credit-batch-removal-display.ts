@@ -30,6 +30,8 @@ export interface BatchRemovalDisplayFacts {
   code: string;
   startedOn: string | null;
   completedOn: string | null;
+  /** The Removal's current GHG Statement, for the dashboard's returned-Removal lineage read. */
+  ghgStatementId: string | null;
   submission: RemovalDisplaySubmission | null;
   /** Every submitted or accepted version, for the phase the batch page reads. */
   submittedVersions: SubmissionDisplayFacts[];
@@ -101,6 +103,7 @@ export function batchRemovalDisplayFactsSql(ctx: OrgContext) {
     value: sql<BatchRemovalDisplayFacts[]>`coalesce(jsonb_agg(distinct jsonb_build_object(
       'id', ${certifierRemovals.id}, 'code', ${certifierRemovals.code},
       'startedOn', ${certifierRemovals.startedOn}, 'completedOn', ${certifierRemovals.completedOn},
+      'ghgStatementId', ${certifierRemovals.ghgStatementId},
       'submission', (${latest}),
       'submittedVersions', (${submittedVersions})
     )), '[]'::jsonb)`,
