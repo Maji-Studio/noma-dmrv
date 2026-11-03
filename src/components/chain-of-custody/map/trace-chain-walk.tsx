@@ -49,8 +49,19 @@ export function TraceChainWalk({
   const values = (record: TraceRecord, inset: number) => (
     <RecordValues model={model} record={record} onTrace={onTrace} className="pb-16" style={{ marginLeft: inset }} />
   );
+  const counter = (
+    <span className={cn(TRACE_COUNTER_CLASS, "min-w-0 truncate")}>
+      {pad(stepIndex + 1)} / {pad(steps.length)} · To {chain.end.shortCode}
+    </span>
+  );
   return (
     <>
+      {/*
+        One chain alone: counter left, Back / Next right, the stage list's
+        header row. With "Whole batch" the row is Whole batch and Back / Next,
+        and the counter runs full width under it: beside all three it would be
+        cut to a few characters on a phone.
+      */}
       <div className="flex shrink-0 flex-col gap-8 border-b border-[var(--clr-dark-purple-10)] px-16 py-10">
         <div className="flex items-center justify-between gap-12">
           {onLeave ? (
@@ -58,7 +69,9 @@ export function TraceChainWalk({
               <ArrowLeftIcon size={12} weight="bold" />
               Whole batch
             </Button>
-          ) : null}
+          ) : (
+            counter
+          )}
           <div className="ml-auto flex shrink-0 gap-8">
             {stepIndex > 0 ? (
               <Button variant="weak" size="small" className="min-h-44 md:min-h-0" onClick={() => onStep(stepIndex - 1)}>
@@ -74,9 +87,7 @@ export function TraceChainWalk({
             ) : null}
           </div>
         </div>
-        <span className={TRACE_COUNTER_CLASS}>
-          {pad(stepIndex + 1)} / {pad(steps.length)} · To {chain.end.shortCode}
-        </span>
+        {onLeave ? counter : null}
       </div>
       <ol className="min-h-0 flex-1 overflow-y-auto px-16 py-12">
         {steps.map((step, index) => {
