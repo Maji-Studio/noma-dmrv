@@ -145,7 +145,7 @@ export async function getSamples(
     .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(samples.sampleCode), orderFn(samples.id))
     .limit(pageSize)
     .offset(offset);
 

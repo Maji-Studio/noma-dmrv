@@ -213,7 +213,7 @@ export async function getApplications(
       ),
     )
     .where(whereClause)
-    .orderBy(desc(applications.applicationDate))
+    .orderBy(desc(applications.applicationDate), desc(applications.code), desc(applications.id))
     .limit(pageSize)
     .offset(offset);
 

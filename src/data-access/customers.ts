@@ -144,7 +144,7 @@ export async function getCustomers(
     })
     .from(customers)
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(customers.code), orderFn(customers.id))
     .limit(pageSize)
     .offset(offset);
 

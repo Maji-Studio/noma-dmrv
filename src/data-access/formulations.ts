@@ -105,7 +105,7 @@ export async function getFormulations(
       .where(whereClause),
     db.query.formulations.findMany({
       where: whereClause,
-      orderBy: [orderFn(sortColumn)],
+      orderBy: [orderFn(sortColumn), orderFn(formulations.code), orderFn(formulations.id)],
       limit: pageSize,
       offset,
       with: {

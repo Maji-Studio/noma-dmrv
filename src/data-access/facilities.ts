@@ -173,7 +173,7 @@ export async function getFacilities(
     })
     .from(facilities)
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(facilities.code), orderFn(facilities.id))
     .limit(pageSize)
     .offset(offset);
 
