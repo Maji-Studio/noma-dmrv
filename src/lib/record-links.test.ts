@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RECORD_LINKS, recordHref, type RecordKind } from "./record-links";
+import { archivedFacilityHref, RECORD_LINKS, recordHref, type RecordKind } from "./record-links";
 import { ENTITY_FOCUS_TARGETS } from "./entity-deep-link";
 
 // Literal expected routes catch drift in both the table and its query readers.
@@ -75,5 +75,12 @@ describe("recordHref", () => {
   it.each(["supplier", "customer"] as const)("preserves the %s list's location edit intent", (kind) => {
     expect(recordHref(kind, "party/1", { facilityId: "f 1", mode: "edit", locationId: "loc/1" }))
       .toBe(`${RECORD_LINKS[kind].path}?facility=f+1&${kind}=party%2F1&mode=edit&location=loc%2F1`);
+  });
+});
+
+describe("archivedFacilityHref", () => {
+  it("opens the Facilities page on a distinct param the facility provider does not rewrite", () => {
+    expect(archivedFacilityHref("fac-1")).toBe("/facilities?archivedFacility=fac-1");
+    expect(archivedFacilityHref("fac/1")).toBe("/facilities?archivedFacility=fac%2F1");
   });
 });

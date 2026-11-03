@@ -26,6 +26,8 @@ export interface EmissionLineRecords {
   source: EmissionRecordSource;
   count: number;
   figure: EmissionFigure | null;
+  /** Sequestration uses application and lab data; noma has no scalar figure to display. */
+  calculatedBy?: "isometric";
   /** A recorded zero whose legs another credit batch counts: those batches, linked in place of the count. */
   countedOn?: readonly CountedOnBatch[];
 }
@@ -98,10 +100,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const calculatedByIsometric = contract?.automaticSource === "sequestration" && (facts.automaticRecordCounts?.sequestration ?? 0) > 0;
     const records: EmissionLineRecords | null = contract?.automaticSource ? {
       source: RECORD_SOURCES[contract.automaticSource],
       count: facts.automaticRecordCounts?.[contract.automaticSource] ?? 0,
       figure: automaticFigure,
+      ...(calculatedByIsometric ? { calculatedBy: "isometric" as const } : {}),
       ...(contract.automaticSource === "feedstock-transport" && facts.feedstockTransportCountedOn?.length
         ? { countedOn: facts.feedstockTransportCountedOn } : {}),
     } : null;
@@ -113,6 +117,8 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
       blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
+    // Display completeness only: preserve the binding decision's submission blocker.
+    else if (calculatedByIsometric) state = "filled";
     else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
     else { state = "empty"; blocker = decision?.blocker;
       if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {

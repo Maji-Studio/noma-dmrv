@@ -7,7 +7,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const harness = vi.hoisted(() => ({ readOnly: false }));
+const harness = vi.hoisted(() => ({ readOnly: false, withItems: false }));
 
 vi.mock("./credit-batch-page-context", () => ({
   useCreditBatchPage: () => ({
@@ -19,7 +19,9 @@ vi.mock("./credit-batch-page-context", () => ({
     readOnly: harness.readOnly ? { message: "read only" } : undefined,
     pageModel: null,
     blockingCount: 0,
-    openItems: { blocking: [], check: [], waiting: [] },
+    openItems: harness.withItems
+      ? { blocking: [{ id: "b", title: "Blocking item", target: null }], check: [{ id: "c", title: "Check item", target: null }], waiting: [{ id: "w", title: "Waiting item", target: null }] }
+      : { blocking: [], check: [], waiting: [] },
   }),
 }));
 vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => null }));
@@ -48,5 +50,24 @@ describe("CreditBatchOverview membership lock", () => {
     render(<CreditBatchOverview />);
     expect(screen.queryByText("(locked)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Why fields are locked" })).toBeNull();
+  });
+});
+
+describe("CreditBatchOverview to-do groups", () => {
+  const HELP = [/Fix these before the next Removal\./, /Worth a look\./, /Nothing to do yet\./];
+
+  it("explains each group on an editable batch", () => {
+    harness.readOnly = false;
+    harness.withItems = true;
+    render(<CreditBatchOverview />);
+    for (const help of HELP) expect(screen.getByText(help)).toBeTruthy();
+  });
+
+  it("drops the group help on a read-only batch, where no work lies ahead", () => {
+    harness.readOnly = true;
+    harness.withItems = true;
+    render(<CreditBatchOverview />);
+    expect(screen.getByText("Blocking item")).toBeTruthy();
+    for (const help of HELP) expect(screen.queryByText(help)).toBeNull();
   });
 });

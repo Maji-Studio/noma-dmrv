@@ -1,4 +1,4 @@
-import { deriveSourceBiocharDryMassKg, fromCompositionJsonb } from "@/lib/biochar-composition/composition";
+import { deriveSourceBiocharDryMassKg, deriveSourceBiocharMassKg, fromCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 
 interface BiocharProductMassInput {
@@ -23,6 +23,16 @@ export function sourceBiocharDryMassKg(
     product.moistureContentPercent,
     fromCompositionJsonb(product.composition),
   );
+}
+
+/** Mass-flow displays prefer dry biochar, falling back to wet biochar without ingredients. */
+export function sourceBiocharMassFlowKg(
+  product: Parameters<typeof sourceBiocharDryMassKg>[0],
+): number {
+  return sourceBiocharDryMassKg(product) ?? deriveSourceBiocharMassKg(
+    product.massKg,
+    fromCompositionJsonb(product.composition),
+  ) ?? 0;
 }
 
 export function finalWetProductMassKg(

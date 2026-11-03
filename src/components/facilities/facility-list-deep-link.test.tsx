@@ -10,6 +10,7 @@ const harness = vi.hoisted(() => ({
   toastError: vi.fn(),
   setFacilityId: vi.fn(),
   lookups: [] as Array<{ id?: string } | undefined>,
+  listFilters: [] as Array<{ archived?: boolean }>,
   linked: { data: undefined as unknown, isError: false, isSuccess: false },
 }));
 
@@ -17,12 +18,13 @@ vi.mock("nuqs", async () => (await import("../../../tests/helpers/linked-sheet-m
 vi.mock("@/hooks/use-facilities", () => {
   const mutation = () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false });
   return {
-    useFacilities: (filters?: { id?: string }, organizationId?: string | null) => {
+    useFacilities: (filters?: { id?: string; archived?: boolean }, organizationId?: string | null) => {
       // The lookup for a linked facility passes an id; the list never does.
       if (filters?.id || organizationId === null) {
         harness.lookups.push(filters);
         return organizationId === null ? { data: undefined, isError: false, isSuccess: false } : harness.linked;
       }
+      harness.listFilters.push(filters ?? {});
       return { data: { items: [FACILITY, ARCHIVED], total: 2, totalPages: 1 }, isLoading: false, error: null };
     },
     useFacilityCountries: () => ({ data: [] }),
@@ -78,6 +80,7 @@ beforeEach(() => {
   harness.toastError.mockReset();
   harness.setFacilityId.mockReset();
   harness.lookups = [];
+  harness.listFilters = [];
   harness.linked = { data: undefined, isError: false, isSuccess: false };
 });
 afterEach(cleanup);
@@ -89,6 +92,26 @@ describe("FacilityList record link", () => {
     render(<FacilityList />);
     expect(harness.lookups.at(-1)).toEqual({ id: FACILITY.id, pageSize: 1 });
     expect(screen.getByRole("dialog", { name: "FAC-001" })).toBeTruthy();
+  });
+
+  it("opens the Archived view with the sheet for an archivedFacility link, never the working facility", () => {
+    linkedSheet.params.archivedFacility = ARCHIVED.id;
+    harness.linked = { data: { items: [ARCHIVED] }, isError: false, isSuccess: true };
+    render(<FacilityList />);
+    expect(harness.lookups.at(-1)).toEqual({ id: ARCHIVED.id, pageSize: 1 });
+    expect(harness.listFilters.at(-1)).toMatchObject({ archived: true });
+    expect(screen.getByRole("dialog", { name: "FAC-002" })).toBeTruthy();
+    expect(harness.setFacilityId).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close sheet" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+    expect(harness.listFilters.at(-1)).toMatchObject({ archived: false });
+  });
+
+  it("lists Active facilities for a plain visit", () => {
+    render(<FacilityList />);
+    expect(harness.listFilters.at(-1)).toMatchObject({ archived: false });
   });
 
   it("opens a plain visit with no sheet, even once the provider writes the working facility", () => {

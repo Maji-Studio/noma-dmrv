@@ -67,6 +67,15 @@ describe("deriveBatchHealth", () => {
     expect(lines.unmetLabel).toBe("Template components not ready");
   });
 
+  it("carries the read-only template fact on the check, merged checks included", () => {
+    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
+    expect(unpinned.copy?.readOnlyDetail).toBe("This credit batch has no Removal template.");
+    expect(unpinned.copy?.detail).toBeUndefined();
+    const merged = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("missingFixedDatapoint")] })), "templateSet");
+    expect(merged.copy?.readOnlyDetail).toContain("This credit batch has no Removal template.");
+    expect(merged.copy?.readOnlyDetail).toContain("Some fixed values are not set in the Isometric template.");
+  });
+
   it.each([
     { ids: ["one"], label: "1 component to decide" },
     { ids: ["one", "two"], label: "2 components to decide" },
@@ -521,8 +530,17 @@ describe("read-only batch health copy", () => {
     expect(openItemText(groups.blocking[0])).toBe(blocker.message);
     expect(health.checks.find((check) => check.status === "unmet")?.detail).toBe(blocker.message);
     const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
-    expect(readOnly.detail).toBe(blocker.copy?.detail);
+    expect(readOnly.detail).toBe(blocker.copy?.detail ?? blocker.copy?.readOnlyDetail);
     expect(openItemText(readOnly) ?? "").not.toMatch(/Set a Removal template|Add a file|Check the manual entry|in Settings|An Admin|Upload|Try again/);
+    expect(readOnly.instruction).toBeUndefined();
+  });
+
+  it.each(["unpinnedTemplate", "missingFixedDatapoint"] as const)("states the %s fact to a member too", (code) => {
+    const blocker = removalTemplateBlocker(code);
+    const health = deriveBatchHealth(facts({ templateBlockers: [blocker] }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: false, health });
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(readOnly.detail).toBe(blocker.copy?.readOnlyDetail);
     expect(readOnly.instruction).toBeUndefined();
   });
 
@@ -532,7 +550,7 @@ describe("read-only batch health copy", () => {
     const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
     expect(openItemText(groups.blocking[0])).toBe("This template is not a Removal template. Set a Removal template in Settings, Removal templates. · Set each value in the Isometric template editor before submitting.");
     const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
-    expect(openItemText(readOnly)).toBe("This template is not a Removal template.");
+    expect(openItemText(readOnly)).toBe("This template is not a Removal template. · Some fixed values are not set in the Isometric template.");
   });
 
   it("keeps Add a file health instructions on editable batches only", () => {

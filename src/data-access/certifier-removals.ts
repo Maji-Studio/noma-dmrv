@@ -218,7 +218,7 @@ export async function listRemovalsForFacility(
     .select()
     .from(certifierRemovals)
     .where(and(eq(certifierRemovals.facilityId, facilityId), eq(certifierRemovals.organizationId, ctx.organizationId)))
-    .orderBy(desc(certifierRemovals.createdAt));
+    .orderBy(desc(certifierRemovals.createdAt), desc(certifierRemovals.code), desc(certifierRemovals.id));
 }
 
 // A credit batch row with its durability tier join-derived from the facility

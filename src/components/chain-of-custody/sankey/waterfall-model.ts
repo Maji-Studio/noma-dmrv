@@ -9,7 +9,7 @@
  * runs' dry feedstock), otherwise dry. Steps: the lib's exits in flow order.
  * End column: the dry biochar applied, lit.
  */
-import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import {
@@ -174,7 +174,7 @@ function collect(lineages: readonly WaterfallLineage[]) {
   const feedstocks = new Map<string, WaterfallRecord>();
   const products = new Map<
     string,
-    { record: WaterfallRecord; appliedKg: number; allocatedKg: number | null; lotKg: number | null }
+    { record: WaterfallRecord; appliedKg: number; allocatedKg: number | null; product: NonNullable<WaterfallLineage["biocharProduct"]> }
   >();
   const applications = new Map<string, WaterfallRecord>();
   for (const lineage of lineages) {
@@ -225,10 +225,10 @@ function collect(lineages: readonly WaterfallLineage[]) {
         record: { id: product.id, kind: "biocharProduct" as const, code: product.code, name: product.formulationName, massKg: null },
         appliedKg: 0,
         allocatedKg: null as number | null,
-        lotKg: computeClampedDryMass(product.massKg, product.moistureContentPercent) ?? product.massKg ?? null,
+        product,
       };
       entry.appliedKg += dryKg;
-      // Same precedence as the lib: the allocated dry mass, else the lot's dry mass.
+      // Sum the product's source allocations before applying the shared mass rule.
       if (lineage.sources?.every((source) => source.allocatedDryMassKg != null)) {
         entry.allocatedKg =
           (entry.allocatedKg ?? 0) + lineage.sources.reduce((sum, source) => sum + (source.allocatedDryMassKg ?? 0), 0);
@@ -293,8 +293,13 @@ export function buildWaterfall(
   const runRecords = (figure: (run: RunFacts) => number | null, words: RowWords) =>
     facts.runs.map((run) => withNote(runRecord(run, null), figure(run), words)).sort(byCode);
   const productRecords = facts.products
-    .map(({ record, appliedKg, allocatedKg, lotKg }) => {
-      const stored = allocatedKg ?? lotKg;
+    .map(({ record, appliedKg, allocatedKg, product }) => {
+      // A product with neither a measured mass nor an allocation has no stored figure.
+      const stored = product.massKg == null && allocatedKg == null ? null : sourceBiocharMassFlowKg({
+        ...product,
+        composition: product.composition,
+        sourceAllocatedDryMassKg: allocatedKg,
+      });
       return withNote(record, stored == null ? null : stored - appliedKg, ROW_WORDS.in_storage);
     })
     .sort(byCode);

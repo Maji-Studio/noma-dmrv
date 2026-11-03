@@ -114,7 +114,7 @@ export async function listGhgStatementsForFacility(
     .select()
     .from(certifierGhgStatements)
     .where(and(eq(certifierGhgStatements.facilityId, facilityId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
-    .orderBy(desc(certifierGhgStatements.createdAt));
+    .orderBy(desc(certifierGhgStatements.createdAt), desc(certifierGhgStatements.id));
 }
 
 export async function listFacilityIdsForExternalRemovals(

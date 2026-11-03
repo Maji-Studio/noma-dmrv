@@ -169,8 +169,8 @@ export const biocharProductFormSchema = z.object({
   idempotencyKey: z.string().min(1),
   basisFingerprint: z.string().min(1),
 
-  // No productionDate here: it is derived server-side from the oldest
-  // production-run lot allocated from the selected source bin.
+  // No productionDate here: the server uses the facility-local mixing day
+  // for blends, and the oldest allocated production-run day for pure products.
 
   // Status field
   status: z.enum(biocharProductStatusValues).default("testing"),

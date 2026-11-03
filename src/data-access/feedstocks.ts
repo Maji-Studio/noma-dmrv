@@ -384,7 +384,7 @@ export async function getFeedstocks(
 
   const items = await feedstockBaseQuery(ctx)
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(feedstocks.code), orderFn(feedstocks.id))
     .limit(pageSize)
     .offset(offset);
 

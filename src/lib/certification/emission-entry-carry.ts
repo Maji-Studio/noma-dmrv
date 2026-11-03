@@ -23,8 +23,18 @@ export const CARRY_WAITING_DETAILS = {
   incompatibleTemplate: "The next draft's template cannot take this component.",
 } as const;
 export type CarryWaitingReason = keyof typeof CARRY_WAITING_DETAILS;
+/** The editable lead of a late entry that no Removal takes yet. */
+export const WAITING_LEAD = "Waiting for a Removal.";
+/** Read-only counterpart: the entry is not in any Removal, and no Removal can start. */
+export const READ_ONLY_WAITING_LEAD = "Not in any Removal.";
+/** Read-only reasons: facts only, no "yet" and no step. */
+export const READ_ONLY_CARRY_DETAILS = {
+  noDraft: CARRY_WAITING_DETAILS.noDraft,
+  templateUnknown: "noma has not read the next draft's template.",
+  incompatibleTemplate: CARRY_WAITING_DETAILS.incompatibleTemplate,
+} as const satisfies Record<keyof typeof CARRY_WAITING_DETAILS, string>;
 export const CARRY_WAITING_REASONS = Object.fromEntries(
-  Object.entries(CARRY_WAITING_DETAILS).map(([reason, detail]) => [reason, `Waiting for a Removal. ${detail}`]),
+  Object.entries(CARRY_WAITING_DETAILS).map(([reason, detail]) => [reason, `${WAITING_LEAD} ${detail}`]),
 ) as Record<CarryWaitingReason, string>;
 export interface EntryCarryDestination {
   removalId: string;

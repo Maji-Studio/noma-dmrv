@@ -100,12 +100,10 @@ export interface ChainBiocharProductLineage {
   status: string | null;
   productionDate: string;
   massKg: number | null;
-  /**
-   * Recorded moisture (%) of the lot's wet `massKg`. Lets the Sankey convert
-   * the lot to a dry basis so it balances against the runs' dry output
-   * (issue #361 F14).
-   */
+  /** Recorded moisture (%) used to derive dry source biochar without an allocation. */
   moistureContentPercent: number | null;
+  /** Recorded ingredients, excluded from the source biochar mass. */
+  composition?: unknown;
   /** Blend name (formulations.name); null = pure biochar (no formulation). */
   formulationName: string | null;
   linkedProductionRunId: string | null;
@@ -394,6 +392,7 @@ async function getBiocharProductLineage(
       productionDate: biocharProducts.productionDate,
       massKg: biocharProducts.massKg,
       moistureContentPercent: biocharProducts.moistureContentPercent,
+      composition: biocharProducts.composition,
       formulationName: formulations.name,
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
     })

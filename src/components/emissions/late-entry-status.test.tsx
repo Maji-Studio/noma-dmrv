@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { CARRY_WAITING_REASONS } from "@/lib/certification/emission-entry-carry";
+import { CARRY_WAITING_REASONS, READ_ONLY_CARRY_DETAILS, READ_ONLY_WAITING_LEAD } from "@/lib/certification/emission-entry-carry";
 import { LateEntryStatus } from "./late-entry-status";
 import { TemplatePermissionProvider } from "./template-permission";
 
@@ -73,7 +73,8 @@ describe("LateEntryStatus", () => {
         <LateEntryStatus entry={{ recordedAfter: AFTER, carry: { receiver: null, waitingReason: reason } }} facilityId="f1" readOnly />
       </TemplatePermissionProvider>,
     );
-    expect(container.textContent).toContain("Waiting for a Removal.");
+    expect(container.textContent).toContain(`${READ_ONLY_WAITING_LEAD} ${READ_ONLY_CARRY_DETAILS[reason]}`);
+    expect(container.textContent).not.toMatch(/Waiting|\byet\b|\bonce\b/);
     expect(container.textContent).not.toContain("Open the Removal to load it.");
     expect(container.textContent).not.toContain("Admin");
     expect(screen.queryByRole("link", { name: /Removal(s| templates)?$/ })).toBeNull();

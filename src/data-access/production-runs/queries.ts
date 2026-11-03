@@ -198,7 +198,7 @@ export async function getProductionRuns(
     .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
     .leftJoin(biocharStorage, and(eq(productionRuns.biocharStorageLocationId, biocharStorage.id), eq(biocharStorage.organizationId, ctx.organizationId)))
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(productionRuns.code), orderFn(productionRuns.id))
     .limit(pageSize)
     .offset(offset);
 

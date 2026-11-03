@@ -444,6 +444,9 @@ function mergeUnmetChecksByDestination(
       copy: existing.copy && check.copy ? {
         detail: mergeCheckText(existing.copy.detail, check.copy.detail),
         instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),
+        // A side with only a repair step contributes its fact; one with a detail already is one.
+        ...(existing.copy.readOnlyDetail || check.copy.readOnlyDetail ? { readOnlyDetail: mergeCheckText(
+          existing.copy.readOnlyDetail ?? existing.copy.detail, check.copy.readOnlyDetail ?? check.copy.detail) } : {}),
       } : undefined,
       affectedRecords: mergeAffectedRecords(
         existing.affectedRecords,

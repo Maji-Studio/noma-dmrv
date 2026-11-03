@@ -297,7 +297,10 @@ unexpected is logged value-free with the operation and request ids, a domain
 refusal is not. The fallback never claims an idempotency key.
 
 Biochar product representation revision 3 returns `productionDate` as the
-oldest drawn lot's production-run calendar day (`YYYY-MM-DD`, OpenAPI `date`).
+facility-local mixing day for blends and the oldest drawn lot's production-run
+calendar day for pure biochar (`YYYY-MM-DD`, OpenAPI `date`). A blend has at
+least one positive-mass ingredient in its saved composition; an unused recipe
+line or added water alone does not make a blend.
 Clients must preserve it as a day instead of parsing it as an instant. `placedAt`
 remains the actual mixing and placement instant. Earlier representation ETags
 must be refreshed before PATCH.

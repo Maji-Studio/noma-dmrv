@@ -43,7 +43,7 @@ export function readOnlyOpenItems(items: CreditBatchOpenItemGroups): CreditBatch
     const writes = item.target && ("href" in item.target || item.target.rowId === CREDIT_BATCH_DETAILS_ROW || item.target.tab === "emissions");
     return {
       ...item,
-      ...(item.detailMayInstruct ? { detail: undefined } : {}),
+      ...(item.readOnlyDetail ? { detail: item.readOnlyDetail } : item.detailMayInstruct ? { detail: undefined } : {}),
       title: item.readOnlyTitle ?? item.title,
       titleAfterCode: item.readOnlyTitleAfterCode ?? item.titleAfterCode,
       ...(writes ? { target: null } : {}), instruction: undefined,

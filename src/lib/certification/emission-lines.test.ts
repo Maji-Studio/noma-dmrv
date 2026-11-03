@@ -152,7 +152,23 @@ it("reports catalog transport and stored sources using their record kinds", () =
   expect(lines.find((line) => line.contract?.automaticSource === "delivery-transport")?.records)
     .toEqual({ source: "deliveries", count: 4, figure: null });
   expect(lines.find((line) => line.contract?.automaticSource === "sequestration")?.records)
-    .toEqual({ source: "applications", count: 5, figure: null });
+    .toEqual({ source: "applications", count: 5, figure: null, calculatedBy: "isometric" });
+});
+
+it.each([0, 1, 15])("counts sequestration as filled only with applications (count=%s)", (count) => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const facts: BatchEmissionLineFacts = {
+    definition, lineSources: resolveLineSources({ definition }), problems: [], enrichmentComplete: true,
+    automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: count }, entries: [],
+  };
+  const line = deriveBatchEmissionLines(facts).find((line) => line.contract?.automaticSource === "sequestration")!;
+  expect(line.state).toBe(count > 0 ? "filled" : "empty");
+  expect(line.total).toBeNull();
+  expect(line.automaticFigure).toBeNull();
+  expect(line.blocker).toBeUndefined();
+  expect(line.records).toMatchObject({ source: "applications", count, figure: null });
+  facts.enrichmentComplete = false;
+  expect(deriveBatchEmissionLines(facts).find((candidate) => candidate.componentId === line.componentId)?.state).toBe("needsReview");
 });
 
 it("permits counted entry-only values and zeros, but keeps the Removal's empty line blocker", () => {

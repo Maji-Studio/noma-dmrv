@@ -301,7 +301,7 @@ export async function getDeliveries(
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(deliveries.code), orderFn(deliveries.id))
     .limit(pageSize)
     .offset(offset);
 
