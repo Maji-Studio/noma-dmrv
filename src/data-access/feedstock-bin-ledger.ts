@@ -1,3 +1,4 @@
+import { assertFeedstockEmptyAtSwitch } from './feedstock-intake-boundary';
 import { deletedProductIds } from './output-stock-active-movements';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/db';
@@ -27,7 +28,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * their own batches. Every other withdrawal follows the method in force at
  * its instant; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
+export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
@@ -114,6 +115,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     savedShares: draft.kind === 'run_draw' && draft.sourceId && !options.replanRunIds?.has(draft.sourceId)
       ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
   })), bin, changes, options.boundary);
+  if (options.boundary) assertFeedstockEmptyAtSwitch(drafts, replay.wetTotals, changes, timezone);
   const dryAt = (holdings: Map<string, number> | undefined) => {
     if (!holdings) return null;
     let dryGrams = 0;

@@ -3779,7 +3779,7 @@
     },
     "/storage-locations": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read storage bins with stockMode and drawOrder. Feedstock mix means Mass weighted over remaining deliveries; split means Oldest first or Newest first, without sub-bins. Required scope: storage-locations:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read storage bins with stockMode and drawOrder. Feedstock bins expose stockMode and drawOrder: mix means Mass weighted over remaining deliveries; split draws oldest_first or newest_first. Feedstock bins have no sub-bins. Required scope: storage-locations:read.",
         "operationId": "find_storage_locations",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
@@ -3804,7 +3804,7 @@
     },
     "/storage-locations/{idOrCode}": {
       "get": {
-        "description": "Read storage bins with stockMode and drawOrder. Feedstock mix means Mass weighted over remaining deliveries; split means Oldest first or Newest first, without sub-bins. Required scope: storage-locations:read.",
+        "description": "Read storage bins with stockMode and drawOrder. Feedstock bins expose stockMode and drawOrder: mix means Mass weighted over remaining deliveries; split draws oldest_first or newest_first. Feedstock bins have no sub-bins. Required scope: storage-locations:read.",
         "operationId": "get_storage_location",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/storage_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},

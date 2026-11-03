@@ -1,18 +1,26 @@
-import { expect, it, vi } from 'vitest';
-import type { DbTransaction } from '@/db';
-import type { OrgContext } from '@/lib/auth/server';
-const mocks = vi.hoisted(() => ({ history: vi.fn() }));
-vi.mock('@/db', () => ({ db: {} }));
-vi.mock('./feedstock-bin-method-history', () => ({ getFeedstockMethodChanges: mocks.history }));
-vi.mock('./output-stock-dates', () => ({ getOutputStockFacilityTimezone: async () => 'Africa/Dar_es_Salaam' }));
-import { assertFeedstockAdditionAfterSplit } from './feedstock-intake-boundary';
-it('compares delivery day start in the facility zone to the split instant', async () => {
-  mocks.history.mockResolvedValue([{ previousStockMode: 'mix', stockMode: 'split', effectiveAt: '2026-01-01T22:00:00.000Z' }]);
-  const ctx = { organizationId: 'org', userId: 'user' } as OrgContext;
-  const tx = {} as DbTransaction;
-  const bin = { id: 'bin', facilityId: 'facility' };
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, bin, new Date('2026-01-02T00:00:00Z'))).rejects.toThrow(/In order.*Jan 2, 2026/);
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, bin, new Date('2026-01-03T00:00:00Z'))).resolves.toBeUndefined();
-  mocks.history.mockResolvedValue([{ previousStockMode: 'split', stockMode: 'split', effectiveAt: '2026-01-10T22:00:00.000Z' }]);
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, bin, new Date('2026-01-02T00:00:00Z'))).resolves.toBeUndefined();
+import { expect, it } from 'vitest';
+import { replayFeedstockDraws, type FeedstockReplayEvent, type FeedstockMethodChange } from '@/lib/feedstock-draw-replay';
+import { assertFeedstockEmptyAtSwitch } from './feedstock-intake-boundary';
+
+const changes: FeedstockMethodChange[] = [{ id: 'switch', previousStockMode: 'mix', stockMode: 'split',
+  previousDrawOrder: 'oldest_first', drawOrder: 'oldest_first', effectiveAt: '2026-01-01T22:00:00.000Z', createdAt: '2026-01-01T22:00:00.000Z' }];
+const intake: FeedstockReplayEvent = { id: 'intake', kind: 'intake', wetDeltaKg: 10,
+  occurredAt: '2026-01-01T00:00:00.000Z', recordedAt: '2026-01-01T00:00:00.000Z' };
+const draw: FeedstockReplayEvent = { ...intake, id: 'draw', kind: 'run_draw', wetDeltaKg: -10, occurredAt: '2026-01-01T01:00:00.000Z' };
+function check(events: FeedstockReplayEvent[]) {
+  const replay = replayFeedstockDraws(events, { stockMode: 'split', drawOrder: 'oldest_first' }, changes);
+  assertFeedstockEmptyAtSwitch(events, replay.wetTotals, changes, 'Africa/Dar_es_Salaam');
+}
+it.each(['loss', 'run_draw', 'ingredient_draw'] as const)('refuses deleting the %s that emptied the mixed bin', kind => {
+  expect(() => check([intake, { ...draw, kind }])).not.toThrow();
+  expect(() => check([intake, { ...draw, kind, reversed: true }])).toThrow(/In order.*Jan 2, 2026/);
+  expect(() => check([intake])).toThrow(/In order/);
+});
+it('allows an intake moisture correction because wet deltas are unchanged', () => {
+  const corrected = { ...intake, moisturePercent: 35, dryKg: 6.5 };
+  expect(() => check([corrected, draw])).not.toThrow();
+});
+it('ignores later additions and accepts sub-gram rounding to zero', () => {
+  expect(() => check([{ ...intake, wetDeltaKg: 10.0004 }, draw,
+    { ...intake, id: 'later', occurredAt: '2026-01-03T00:00:00.000Z' }])).not.toThrow();
 });

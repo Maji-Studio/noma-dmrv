@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { emissionEntries } from "@/db/schema/emission-entries";
 import type { ActivitySnapshot } from "@/lib/activity-changes";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
@@ -65,7 +66,7 @@ export async function resolveWriteActivityScopes(
     runIds = rows.map(row => row.id);
   } else if (entityType === "feedstock") {
     const rows = await tx.selectDistinct({ id: productionRunFeedstocks.productionRunId }).from(productionRunFeedstocks)
-      .where(and(eq(productionRunFeedstocks.feedstockId, entityId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+      .where(and(eq(productionRunFeedstocks.feedstockId, entityId), eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock()));
     runIds = rows.map(row => row.id);
   } else {
     return [{}];

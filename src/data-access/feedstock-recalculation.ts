@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import { certifierRemovals, feedstocks, productionRunFeedstockDraws, productionRuns, storageLocations, transportLegs } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
+import { compareFeedstockEvents } from '@/lib/feedstock-draw-replay';
 import { DomainError } from '@/lib/domain-errors';
 import { getRecordLocks } from './certification-lineage-guards';
 import { reallocateRunsForBins } from './feedstock-run-allocations';
@@ -33,16 +34,24 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
   ));
   const before = await ownedLegCounts(ctx, tx, storageLocationId);
+  const runs = await tx.select({ id: productionRuns.id, code: productionRuns.code, startTime: productionRuns.startTime,
+    recordedAt: productionRunFeedstockDraws.createdAt, drawId: productionRunFeedstockDraws.id }).from(productionRunFeedstockDraws)
+    .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunFeedstockDraws.productionRunId)))
+    .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId)));
+  const locks = await getRecordLocks(ctx, tx, runs.map(run => ({ entityType: 'productionRun', entityId: run.id })), { sentOnly: true });
+  const kept = runs.filter((_, index) => locks[index].level === 'sent');
+  const last = [...kept].sort((a, b) => compareFeedstockEvents(
+    { id: a.drawId, occurredAt: a.startTime.toISOString(), recordedAt: a.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
+    { id: b.drawId, occurredAt: b.startTime.toISOString(), recordedAt: b.recordedAt.toISOString(), kind: 'run_draw', wetDeltaKg: null },
+  )).at(-1);
   let rewrittenRunIds: string[] = [];
   const refused: { runId: string; code: string; removalCodes: string[] }[] = [];
   try {
-    rewrittenRunIds = await tx.transaction(savepoint => reallocateRunsForBins(ctx, savepoint, [storageLocationId]));
+    rewrittenRunIds = await tx.transaction(savepoint => reallocateRunsForBins(ctx, savepoint, [storageLocationId], last ? {
+      earliestEventAt: last.startTime, eventTie: { recordedAt: last.recordedAt, id: last.drawId }, boundaryExclusive: true,
+    } : {}));
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    const runs = await tx.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRunFeedstockDraws)
-      .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunFeedstockDraws.productionRunId)))
-      .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId)));
-    const locks = await getRecordLocks(ctx, tx, runs.map(run => ({ entityType: 'productionRun', entityId: run.id })), { sentOnly: true });
     const removalIds = locks.flatMap(lock => lock.heldBy.map(holder => holder.id));
     const removals = removalIds.length ? await tx.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals).where(and(
       eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, removalIds),
@@ -51,6 +60,6 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
       removalCodes: removals.filter(row => lock.heldBy.some(holder => holder.id === row.id)).map(row => row.code) });
     if (!refused.length) throw error;
   }
-  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, rewrittenRunIds, refused, ownedLegsBefore: before,
+  return { storageLocationId, code: bin.code, runsRewritten: rewrittenRunIds.length, runsRefused: refused.length, keptSentRuns: kept.map(run => ({ runId: run.id, code: run.code })), rewrittenRunIds, refused, ownedLegsBefore: before,
     ownedLegsAfter: await ownedLegCounts(ctx, tx, storageLocationId) };
 }

@@ -5,12 +5,13 @@ import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
-import { BIOCHAR_PRODUCT_MASS, OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
+import { BIOCHAR_PRODUCT_MASS, OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES, FEEDSTOCK_UNITS, FEEDSTOCK_DRAW_METHOD, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 export const oauthGuide = `OAuth connects one member in one organization. Read first; reauthorize with the challenged scopes on 403 insufficient_scope. No delete. Disconnect in Settings, Connected apps. Attach chat files in noma.`;
 
 export const domainGuide = `## Feedstock intake
 
+- ${FEEDSTOCK_DRAW_METHOD}
 - Operators weigh wet mass as received. Dry mass is derived from wet mass and moisture, not weighed for bin stock. ${FEEDSTOCK_UNITS}
 - A feedstock record is material received into one feedstock bin, with its feedstock type, supplier, wet mass, moisture and delivery date. One delivery logged into several bins creates one record per receiving bin.
 - Business dates are the facility's local YYYY-MM-DD. Use its today and IANA timeZone from whoami or /me, never the device or model clock.
@@ -68,7 +69,6 @@ export const deliveryGuide = `## Deliveries
 - PATCH /deliveries/{id} requires deliveries:write and If-Match, UUID only. Only code, driverId, vehicleId and distance metadata can change. Omission preserves fields; null clears clearable fields. Use an optional Idempotency-Key to recover a lost response after later edits. PATCH adds no bill-of-lading warning. Mass, moisture and time corrections stay in the app. Deliveries cannot be deleted.
 - Read GET /storage-locations/{idOrCode}/stock-movements with biochar-products:read for the drawn products. Filter the returned rows by deliveryId.
 - MCP: find_deliveries and get_delivery use deliveries:read; record_delivery and update_delivery use deliveries:write. requestKey is required except on dry runs; update needs expectedVersion from get_delivery. Call find_orders, get_order_balance for remaining wet kg, find_storage_locations with type=product_bin and the order formulationId, then get_bin_stock for drawOrder and sub-bins. This is not log_feedstock_delivery. Never invent moisture readings; ask the operator. Top-level moisturePercent is ignored with sources. deliveredAt also accepts { date, time }. Read drawn products with find_output_stock_movements (biochar-products:read).
-- Feedstock bins expose stockMode and drawOrder: mix means Mass weighted over remaining deliveries; split draws oldest_first or newest_first. Feedstock bins have no sub-bins.
 - Bin stock exposes drawOrder: without sources, a split bin draws oldest_first or newest_first; mix bins return null. The sub-bin list stays oldest first.
 `;
 

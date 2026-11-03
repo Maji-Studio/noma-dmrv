@@ -267,12 +267,32 @@ Earlier runs keep saved shares, including legacy shares under Sent Removals.
 Later withdrawals that exceed available stock refuse the edit. Rebuilds are
 transactional and refuse changes to Sent lineage. Timezone edits lock the facility,
 source bins, then runs in ID order. Rebuilds allow archived historical bins;
-stock writers require active bins. Saved run shares must have positive wet mass.
+stock writers require active bins. Historical withdrawals beyond available stock
+carry debt that later intakes and positive counts repay before creating holdings;
+saved run shares remain unchanged. Every transactional replan checks that wet
+stock is zero to gram precision at each Mass weighted to In order switch. This
+covers intake edits, loss corrections, run cancellation/deletion/draw changes and
+product deletion; dry-only corrections pass when wet stock remains zero.
+
+New saved run shares must have positive wet mass. Migration 0173 adds the CHECK
+as `NOT VALID`, without deleting legacy rows or changing Sent lineage. Touched
+readers ignore nonpositive shares. Transport ownership retains legacy zero rows
+for deliveries linked to Sent runs because the old earliest-owner rule counted them.
+This also retains an earlier unsent zero owner when removing it would newly charge
+a later Sent run.
+Raw saved replay history and transport-freeze candidate discovery retain all rows.
 
 `pnpm feedstock:recalculate` rebuilds allocations per bin and reports rewritten
 runs and transport ownership counts. `--dry-run` rolls back each bin after planning.
-Changes to bins under Sent Removals are refused with run and Removal codes. A failed bin
-rolls back independently; other bins continue and the command exits unsuccessfully.
+Each bin starts just after its last run draw under a Sent Removal, ordered by
+run time, draw recorded time and draw ID; without Sent runs it starts at the first
+event. The report names kept Sent runs. Later runs are rewritten, deleting their
+old shares (including zero rows) and inserting positive shares. A later rewrite
+that would change Sent lineage is still refused with run and Removal codes.
+A failed bin rolls back independently; other bins continue and the command exits
+unsuccessfully. The CLI uses a short-lived `Pool(getPgPoolConfig(...))` and Drizzle
+reader for inventory, identity checks and transactions, and ends the pool in
+`finally`; the app pool's lock timeout does not apply.
 
 Application writers use `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,

@@ -15,6 +15,7 @@ import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
+  feedstockBinMethodChanges,
   facilities,
   feedstockTypes,
   biocharProducts,
@@ -49,6 +50,7 @@ import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
+  FEEDSTOCK_METHOD_HISTORY_BLOCKER,
 } from "./storage-location-references";
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 import type {
@@ -839,7 +841,7 @@ export async function deleteStorageLocation(
     assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
     const blockers = storageLocationBlockers(
-      await countStorageLocationReferences(ctx, tx, storageLocationId),
+      (await countStorageLocationReferences(ctx, tx, storageLocationId)).filter(reference => reference.blocker !== FEEDSTOCK_METHOD_HISTORY_BLOCKER),
     );
 
     if (blockers.length > 0) {
@@ -848,6 +850,9 @@ export async function deleteStorageLocation(
       );
     }
 
+    await tx.delete(feedstockBinMethodChanges).where(and(
+      eq(feedstockBinMethodChanges.organizationId, ctx.organizationId), eq(feedstockBinMethodChanges.storageLocationId, storageLocationId),
+    ));
     await tx
       .delete(storageLocations)
       .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));

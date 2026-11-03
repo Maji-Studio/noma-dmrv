@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import type { DbTransaction } from "@/db";
 import { certifierRemovals, creditBatchProductionRuns, feedstocks, feedstockTypes, productionRunFeedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -57,7 +58,7 @@ export async function getFeedstockTypeLinkLock(
       eq(feedstocks.organizationId, ctx.organizationId),
     ))
     .where(and(
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
       eq(feedstocks.feedstockTypeId, feedstockTypeId),
     ))
     .orderBy(productionRunFeedstocks.productionRunId);
@@ -97,7 +98,7 @@ export async function getLockedFeedstockTypeLinkLock(
     .from(creditBatchProductionRuns)
     .innerJoin(productionRunFeedstocks, and(
       eq(productionRunFeedstocks.productionRunId, creditBatchProductionRuns.productionRunId),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
     ))
     .innerJoin(feedstocks, and(
       eq(feedstocks.id, productionRunFeedstocks.feedstockId),

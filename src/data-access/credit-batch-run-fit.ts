@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { and, eq, gte, inArray, isNotNull, isNull, lte, type AnyColumn } from "drizzle-orm";
 import { applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -64,7 +65,7 @@ export function creditBatchRunFitConditions(organizationId: string, window: {
     ),
     feedstockLink: and(
       eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-      eq(productionRunFeedstocks.organizationId, organizationId),
+      eq(productionRunFeedstocks.organizationId, organizationId), touchedRunFeedstock(),
     ),
     feedstock: and(
       eq(feedstocks.id, productionRunFeedstocks.feedstockId),

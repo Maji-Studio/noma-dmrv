@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 /**
  * Vehicles Data Access Layer: list, read, edit and delete.
  *
@@ -171,7 +172,7 @@ async function unsubmittedFeedstocks(
     .where(and(
       inArray(productionRunFeedstocks.feedstockId, [...feedstockIds]),
       inArray(creditBatchProductionRuns.creditBatchId, [...submittedBatchIds]),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
     ));
   const submitted = new Set(held.map((row) => row.feedstockId));
   return feedstockIds.filter((id) => !submitted.has(id));

@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 /**
  * Chain of custody data access
@@ -500,6 +501,7 @@ async function getFeedstocksForRuns(
       deliveryDate: feedstocks.deliveryDate,
       massDryKg: feedstocks.massDryKg,
       wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
+      touched: touchedRunFeedstock(),
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
     })
@@ -522,7 +524,8 @@ async function getFeedstocksForRuns(
 
   const transportOwners = await getFeedstockTransportOwners(ctx, rows.map((row) => row.id));
   const byRun = new Map<string, ChainFeedstockLineage[]>();
-  for (const { productionRunId, ...row } of rows) {
+  for (const { productionRunId, touched, ...row } of rows) {
+    if (!touched && transportOwners.get(row.id) !== productionRunId) continue;
     const feedstocksForRun = byRun.get(productionRunId) ?? [];
     feedstocksForRun.push({
       ...row,

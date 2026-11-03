@@ -1,4 +1,4 @@
-import { assertFeedstockAdditionAfterSplit } from './feedstock-intake-boundary';
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { FEEDSTOCK_TRANSPORT_FIELDS } from "@/lib/record-lock-view";
 import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
@@ -528,9 +528,6 @@ export async function createFeedstockInTransaction(
     (index) => ["allocations", index, "storageLocationId"],
   );
 
-  for (const id of binIds) {
-    await assertFeedstockAdditionAfterSplit(ctx, tx, { id, facilityId: data.facilityId }, data.deliveryDate);
-  }
   await snapshotStock?.(tx, binIds);
 
   const items = await withAutoCodes(
@@ -774,10 +771,6 @@ export async function updateFeedstockInTransaction(
     );
   }
 
-  if (allocationChanged && status === 'complete' && effectiveStorageLocationId) {
-    await assertFeedstockAdditionAfterSplit(ctx, tx, { id: effectiveStorageLocationId, facilityId: effectiveFacilityId }, feedstockData.deliveryDate ?? locked.deliveryDate);
-  }
-
   await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
 
   const [saved] = await tx
@@ -878,7 +871,7 @@ export async function deleteFeedstockInTransaction(
   const [usageCount] = await tx
     .select({ count: count() })
     .from(productionRunFeedstocks)
-    .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+    .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock()));
 
   if (Number(usageCount.count) > 0) {
     throw inUseDeleteRefusal(
@@ -901,6 +894,11 @@ export async function deleteFeedstockInTransaction(
     feedstockId,
     source,
   );
+  // The lineage guard above protects Sent evidence. Remaining legacy zero links
+  // are not usage, but must be removed before the delivery's restrictive FK.
+  await tx.delete(productionRunFeedstocks).where(and(
+    eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(productionRunFeedstocks.feedstockId, feedstockId),
+  ));
   const result = await tx
     .delete(feedstocks)
     .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));

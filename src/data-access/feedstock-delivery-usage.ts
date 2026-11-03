@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/db';
 import { creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstocks, productionRuns } from '@/db/schema';
@@ -11,12 +12,12 @@ import { requireOrgScope } from './utils';
 
 /** Saved run shares and the same physical replay used by the bin card. */
 export async function getFeedstockDeliveryUsage(ctx: OrgContext, input: { feedstockIds: readonly string[] } | { creditBatchId: string },
-  reader: Pick<typeof db, 'select'> = db): Promise<FeedstockDeliveryUsage[]> {
+  reader: Pick<typeof db, 'select' | 'selectDistinct'> = db): Promise<FeedstockDeliveryUsage[]> {
   requireOrgScope(ctx);
   const links = 'creditBatchId' in input ? await reader.select({ feedstockId: productionRunFeedstocks.feedstockId })
     .from(productionRunFeedstocks).innerJoin(creditBatchProductionRuns, and(
       eq(creditBatchProductionRuns.organizationId, ctx.organizationId), eq(creditBatchProductionRuns.productionRunId, productionRunFeedstocks.productionRunId),
-    )).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId),       eq(creditBatchProductionRuns.creditBatchId, input.creditBatchId))) : input.feedstockIds.map(feedstockId => ({ feedstockId }));
+    )).where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(), eq(creditBatchProductionRuns.creditBatchId, input.creditBatchId))) : input.feedstockIds.map(feedstockId => ({ feedstockId }));
   const ids = [...new Set(links.map(row => row.feedstockId))];
   if (!ids.length) return [];
   const deliveries = await reader.select().from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, ids)));
@@ -25,7 +26,7 @@ export async function getFeedstockDeliveryUsage(ctx: OrgContext, input: { feedst
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunFeedstocks.productionRunId), ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS)))
     .leftJoin(creditBatchProductionRuns, and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), eq(creditBatchProductionRuns.productionRunId, productionRuns.id)))
     .leftJoin(creditBatches, and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchProductionRuns.creditBatchId)))
-    .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.feedstockId, ids)));
+    .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(), inArray(productionRunFeedstocks.feedstockId, ids)));
   const owners = await getFeedstockTransportOwnerBatches(ctx, ids, reader);
   const result = new Map(deliveries.map((delivery): [string, FeedstockDeliveryUsage] => [delivery.id, {
     id: delivery.id, code: delivery.code, intakeWetKg: Number(delivery.massWetKg), stillInBinWetKg: 0, lostWetKg: 0, countWetKg: 0, ingredientWetKg: 0,

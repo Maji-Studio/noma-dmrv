@@ -140,3 +140,35 @@ it.each([
   expect([...result.remaining.values()]).toEqual(remaining);
   expect(result.unattributedWetKg).toBe(0);
 });
+
+it.each(['intake', 'count'] as const)('repays historical withdrawal debt before a later %s becomes stock', kind => {
+  const savedShares = [{ feedstockId: 'a', wetKg: 5 }];
+  const events = [event('a', 1, 10), { ...event('saved', 2, -5, 'run_draw'), savedShares },
+    event('loss', 3, -10, 'loss'), event('b', 4, 10, kind), event('run', 5, -5, 'run_draw')];
+  const result = replayFeedstockDraws(events, oldest, [], { occurredAt: at(5) });
+  expect([...result.wetTotals.values()]).toEqual([10, 5, -5, 5, 0]);
+  expect(result.withdrawals.get('saved')).toEqual(savedShares);
+  expect(result.withdrawals.get('run')).toEqual(kind === 'intake' ? [{ feedstockId: 'b', wetKg: 5 }] : []);
+  expect([...result.remaining.values()].reduce((sum, wet) => sum + wet, result.unattributedWetKg)).toBe(0);
+  for (let length = 1; length <= events.length; length++) {
+    const prefix = events.slice(0, length);
+    const replay = replayFeedstockDraws(prefix, oldest, [], { occurredAt: at(5) });
+    expect([...replay.remaining.values()].reduce((sum, wet) => sum + wet, replay.unattributedWetKg))
+      .toBe(prefix.reduce((sum, row) => sum + row.wetDeltaKg!, 0));
+  }
+  expect(() => replayFeedstockDraws([...events, event('overdraw', 6, -0.001, 'run_draw')], oldest))
+    .toThrow(FeedstockReplayOverdrawError);
+});
+
+it('keeps totals equal to the ledger when saved provenance names a future intake', () => {
+  const events = [{ ...event('saved', 1, -4, 'run_draw'), savedShares: [{ feedstockId: 'a', wetKg: 4 }] }, event('a', 2, 10)];
+  expect([...replayFeedstockDraws(events, oldest).wetTotals.values()]).toEqual([-4, 6]);
+});
+
+it('preserves the exact exclusive history boundary and validates the next tied event', () => {
+  const boundary = { occurredAt: at(2), recordedAt: at(2), id: 'loss', exclusive: true };
+  const history = [event('a', 1, 1), event('loss', 2, -2, 'loss')];
+  expect(() => replayFeedstockDraws(history, oldest, [], boundary)).not.toThrow();
+  expect(() => replayFeedstockDraws([...history, event('next', 2, -1, 'loss')], oldest, [], boundary))
+    .toThrow(FeedstockReplayOverdrawError);
+});

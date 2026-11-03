@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from "./output-stock-active-movements";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -33,7 +34,7 @@ export async function readRecordDependentsBatch(
   switch (entityType) {
     case "feedstock": {
       const rows = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, id: productionRunFeedstocks.productionRunId }).from(productionRunFeedstocks)
-        .where(and(eq(productionRunFeedstocks.organizationId, org), inArray(productionRunFeedstocks.feedstockId, wanted)));
+        .where(and(eq(productionRunFeedstocks.organizationId, org), touchedRunFeedstock(), inArray(productionRunFeedstocks.feedstockId, wanted)));
       for (const row of rows) push(row.feedstockId, { kind: "productionRun", id: row.id });
       return result;
     }

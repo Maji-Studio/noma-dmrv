@@ -161,3 +161,13 @@ describe("CLI organization context", () => {
     });
   });
 });
+
+it('uses the supplied CLI reader for every identity check', async () => {
+  rows.clear();
+  const limits = vi.fn().mockResolvedValue([{ id: 'cli-identity' }]);
+  const reader = { select: () => ({ from: () => ({ where: () => ({ limit: limits }) }) }) } as unknown as typeof import('@/db').db;
+  const identity = await resolveCliAdminIdentity('cli-org', reader);
+  const ctx = await runWithCliOrgContext(identity, async () => resolveOrgContext(), reader);
+  expect(ctx).toMatchObject({ ok: true, ctx: { userId: 'cli-identity', organizationId: 'cli-identity', isPlatformAdmin: true } });
+  expect(limits).toHaveBeenCalledTimes(4);
+});

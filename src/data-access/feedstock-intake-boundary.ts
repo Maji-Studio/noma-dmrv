@@ -1,21 +1,17 @@
-import type { DbTransaction } from '@/db';
-import type { OrgContext } from '@/lib/auth/server';
-import { formatUtcDate, startOfFacilityDay } from '@/lib/date-utils';
+import type { FeedstockMethodChange, FeedstockReplayEvent } from '@/lib/feedstock-draw-replay';
+import { compareFeedstockEvents } from '@/lib/feedstock-draw-replay';
 import { SafeError } from '@/lib/errors';
 import { formatFacilityDateTime } from '@/lib/format-utils';
-import { getFeedstockMethodChanges } from './feedstock-bin-method-history';
-import { getOutputStockFacilityTimezone } from './output-stock-dates';
-import { requireOrgScope } from './utils';
 
-/** Caller holds the bin lock. Delivery days become available at facility-local day start. */
-export async function assertFeedstockAdditionAfterSplit(ctx: OrgContext, tx: DbTransaction,
-  bin: { id: string; facilityId: string }, deliveryDate: Date): Promise<void> {
-  requireOrgScope(ctx);
-  const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, tx);
-  const at = startOfFacilityDay(formatUtcDate(deliveryDate), timezone).toISOString();
-  const split = (await getFeedstockMethodChanges(ctx, bin.id, tx)).filter(change =>
-    change.previousStockMode === 'mix' && change.stockMode === 'split' && change.effectiveAt > at).sort((a, b) => a.effectiveAt.localeCompare(b.effectiveAt)).at(-1);
-  if (!split) return;
-  const when = formatFacilityDateTime(new Date(split.effectiveAt), timezone);
-  throw new SafeError(`This bin was switched to In order at ${when}, after this delivery day started. Choose a delivery day starting at or after ${when}.`);
+/** Every transactional replan must preserve the empty mixed pile at each In order switch. */
+export function assertFeedstockEmptyAtSwitch(events: readonly FeedstockReplayEvent[],
+  wetTotals: ReadonlyMap<string, number>, changes: readonly FeedstockMethodChange[], timezone: string): void {
+  const ordered = [...events].sort(compareFeedstockEvents);
+  for (const change of changes) {
+    if (change.previousStockMode !== 'mix' || change.stockMode !== 'split') continue;
+    const last = ordered.filter(event => event.occurredAt <= change.effectiveAt).at(-1);
+    if (!last || wetTotals.get(last.id) === 0) continue;
+    const when = formatFacilityDateTime(new Date(change.effectiveAt), timezone);
+    throw new SafeError(`This bin was switched to In order at ${when}. This change would leave stock in the bin at that time. Empty the bin before switching to In order.`);
+  }
 }

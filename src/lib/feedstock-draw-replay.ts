@@ -73,26 +73,29 @@ export function drawShares(amount: bigint, present: { id: string; units: bigint 
 
 /** One wet-stock ledger, shared by planning and read models. Validate withdrawals from the edit boundary. */
 export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], current: FeedstockDrawMethod,
-  changes: readonly FeedstockMethodChange[] = [], boundary?: { occurredAt: string; recordedAt?: string; id?: string }) {
+  changes: readonly FeedstockMethodChange[] = [], boundary?: { occurredAt: string; recordedAt?: string; id?: string; exclusive?: boolean }) {
   const holdings = new Map<string, bigint>();
-  const pendingShares = new Map<string, bigint>();
   const withdrawals = new Map<string, FeedstockDrawShare[]>();
   const points = new Map<string, Map<string, number>>();
+  // A negative balance is unpaid historical withdrawal debt. Additions repay it first.
   let unattributed = BigInt(0);
+  const wetTotals = new Map<string, number>();
   for (const event of [...events].sort(compareFeedstockEvents)) {
     if (event.reversed) {
       points.set(event.id, new Map([...holdings].map(([id, units]) => [id, kg(units)])));
+      wetTotals.set(event.id, kg([...holdings.values()].reduce((sum, units) => sum + units, unattributed)));
       continue;
     }
     const delta = grams(event.wetDeltaKg ?? 0);
+    const repaid = delta > 0 && unattributed < 0 ? minimum(delta, -unattributed) : BigInt(0);
+    unattributed += repaid;
+    const addition = delta - repaid;
     if (event.kind === 'intake' && delta > 0) {
-      const remaining = (holdings.get(event.id) ?? BigInt(0)) + delta - (pendingShares.get(event.id) ?? BigInt(0));
-      holdings.set(event.id, remaining > 0 ? remaining : BigInt(0));
-      pendingShares.delete(event.id);
+      holdings.set(event.id, (holdings.get(event.id) ?? BigInt(0)) + addition);
     }
     else if (delta > 0) {
-      const gains = proportional(delta, [...holdings].filter(([, units]) => units > 0).map(([id, units]) => ({ id, units })));
-      if (!gains.size) unattributed += delta;
+      const gains = proportional(addition, [...holdings].filter(([, units]) => units > 0).map(([id, units]) => ({ id, units })));
+      if (!gains.size) unattributed += addition;
       for (const [id, units] of gains) holdings.set(id, holdings.get(id)! + units);
       if (event.kind === 'count') withdrawals.set(event.id, [...gains].map(([feedstockId, units]) => ({ feedstockId, wetKg: -kg(units) })));
     } else if (delta < 0) {
@@ -101,7 +104,7 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
       const requested = -delta;
       const affected = boundary !== undefined && (event.occurredAt > boundary.occurredAt ||
         (event.occurredAt === boundary.occurredAt && (!boundary.recordedAt || event.recordedAt > boundary.recordedAt ||
-          (event.recordedAt === boundary.recordedAt && (!boundary.id || event.id >= boundary.id)))));
+          (event.recordedAt === boundary.recordedAt && (!boundary.id || (boundary.exclusive ? event.id > boundary.id : event.id >= boundary.id))))));
       if (((event.kind === 'run_draw' && event.savedShares === undefined) || (event.kind !== 'run_draw' && affected)) && requested > total + unattributed)
         throw new FeedstockReplayOverdrawError(event, kg(total + unattributed), kg(requested));
       const amount = minimum(requested, total);
@@ -111,32 +114,24 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
       } else {
         shares = drawShares(amount, present, feedstockMethodAt(current, changes, event.occurredAt));
       }
-      let attributed = BigInt(0);
-      let deficit = BigInt(0);
+      let deficit = requested;
       for (const [id, units] of shares) {
-        attributed += units;
-        if (!holdings.has(id)) {
-          pendingShares.set(id, (pendingShares.get(id) ?? BigInt(0)) + units);
-          continue;
-        }
-        // Saved history is immutable, including over-allocation from the former allocator.
-        const remaining = (holdings.get(id) ?? BigInt(0)) - units;
-        holdings.set(id, remaining > 0 ? remaining : BigInt(0));
-        if (remaining < 0) deficit -= remaining;
+        // Saved provenance is immutable; only available physical mass is charged.
+        const taken = minimum(minimum(holdings.get(id) ?? BigInt(0), units), deficit);
+        if (holdings.has(id)) holdings.set(id, holdings.get(id)! - taken);
+        deficit -= taken;
       }
-      // Preserve saved provenance, but charge uncovered mass and excess to physical stock.
-      deficit += requested > attributed ? requested - attributed : BigInt(0);
       const remainingHoldings = [...holdings].filter(([, units]) => units > 0).map(([id, units]) => ({ id, units }));
       const remainingTotal = remainingHoldings.reduce((sum, row) => sum + row.units, BigInt(0));
       for (const [id, units] of drawShares(minimum(deficit, remainingTotal), remainingHoldings, feedstockMethodAt(current, changes, event.occurredAt))) {
         holdings.set(id, holdings.get(id)! - units);
         deficit -= units;
       }
-      const unassigned = deficit;
-      unattributed -= minimum(unattributed, unassigned);
+      unattributed -= deficit;
       withdrawals.set(event.id, [...shares].filter(([, units]) => units > 0).map(([feedstockId, units]) => ({ feedstockId, wetKg: kg(units) })));
     }
     points.set(event.id, new Map([...holdings].map(([id, units]) => [id, kg(units)])));
+    wetTotals.set(event.id, kg([...holdings.values()].reduce((sum, units) => sum + units, unattributed)));
   }
-  return { withdrawals, remaining: new Map([...holdings].map(([id, units]) => [id, kg(units)])), unattributedWetKg: kg(unattributed), points };
+  return { withdrawals, remaining: new Map([...holdings].map(([id, units]) => [id, kg(units)])), unattributedWetKg: kg(unattributed), points, wetTotals };
 }

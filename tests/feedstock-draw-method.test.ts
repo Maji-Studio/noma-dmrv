@@ -188,12 +188,17 @@ it('records a method change on a bin with history but no stock events', () => sc
 
 it('refuses a backdated intake before a recorded Mass weighted to In order switch', () => scenario(async (tx, f) => {
   const { feedstockBinMethodChanges } = await import('@/db/schema');
-  const { assertFeedstockAdditionAfterSplit } = await import('@/data-access/feedstock-intake-boundary');
-  await tx.insert(feedstockBinMethodChanges).values({ organizationId: TEST_ORG_ID, storageLocationId: f.bin.id,
+  const [empty] = await tx.insert(storageLocations).values({ ...f.bin, id: crypto.randomUUID(), code: `DM-SWITCH-${crypto.randomUUID()}`, name: crypto.randomUUID() }).returning();
+  await tx.insert(feedstockBinMethodChanges).values({ organizationId: TEST_ORG_ID, storageLocationId: empty.id,
     previousStockMode: 'mix', stockMode: 'split', previousDrawOrder: 'oldest_first', drawOrder: 'oldest_first', effectiveAt: day(8), createdBy: ctx.userId });
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(7))).rejects.toThrow(/switched to In order at/);
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(8))).rejects.toThrow(/delivery day started/);
-  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(9))).resolves.toBeUndefined();
+  const addAndReplay = (deliveryDate: Date) => tx.transaction(async savepoint => {
+    await savepoint.insert(feedstocks).values({ ...f.deliveries[0], id: crypto.randomUUID(), code: `DM-BACKDATED-${crypto.randomUUID()}`,
+      storageLocationId: empty.id, deliveryDate });
+    await reallocateRunsForBins(ctx, savepoint, [empty.id], { earliestDeliveryDate: deliveryDate });
+  });
+  await expect(addAndReplay(day(7))).rejects.toThrow(/switched to In order at/);
+  await expect(addAndReplay(day(8))).rejects.toThrow(/switched to In order at/);
+  await expect(addAndReplay(day(9))).resolves.toBeUndefined();
 }));
 
 it('indexes submitted [A, B] when a run previously used B and A overdraws at its start', () => scenario(async (tx, f) => {

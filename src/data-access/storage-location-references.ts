@@ -42,8 +42,10 @@ export interface StorageLocationReference {
  * Both the single-bin guard count and the batched screen read walk this one
  * list, so a table added here reaches both.
  */
+export const FEEDSTOCK_METHOD_HISTORY_BLOCKER = "feedstock draw method history";
+
 const REFERENCE_SOURCES = [
-  { blocker: "feedstock draw method history", table: feedstockBinMethodChanges, bin: feedstockBinMethodChanges.storageLocationId, org: feedstockBinMethodChanges.organizationId },
+  { blocker: FEEDSTOCK_METHOD_HISTORY_BLOCKER, table: feedstockBinMethodChanges, bin: feedstockBinMethodChanges.storageLocationId, org: feedstockBinMethodChanges.organizationId },
   { blocker: "feedstock batches", table: feedstocks, bin: feedstocks.storageLocationId, org: feedstocks.organizationId },
   { blocker: "production runs using it as a feedstock bin", table: productionRunFeedstockDraws, bin: productionRunFeedstockDraws.storageLocationId, org: productionRunFeedstockDraws.organizationId },
   { blocker: "production runs using it as a biochar bin", table: productionRuns, bin: productionRuns.biocharStorageLocationId, org: productionRuns.organizationId },

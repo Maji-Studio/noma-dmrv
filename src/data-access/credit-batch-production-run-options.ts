@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import {
   and,
   desc,
@@ -189,7 +190,7 @@ async function readCreditBatchProductionRuns(ctx: OrgContext, rowFilter: SQL | u
           feedstocks,
           and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)),
         )
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock()))
     : [];
   const typesByRun = new Map<string, string[]>();
   for (const typeRow of typeRows) {

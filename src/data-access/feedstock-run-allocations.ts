@@ -34,14 +34,14 @@ export async function reallocateRunsForBins(
   ctx: OrgContext,
   tx: DbTransaction,
   binIds: readonly (string | null)[],
-  options: { onlyRunId?: string; earliestDeliveryDate?: Date; earliestEventAt?: Date; eventTie?: { recordedAt: Date; id: string }; facilityId?: string; transportOwnershipFreeze?: TransportOwnershipFreezeScope; change?: TransportOwnershipChange } = {},
+  options: { onlyRunId?: string; boundaryExclusive?: boolean; earliestDeliveryDate?: Date; earliestEventAt?: Date; eventTie?: { recordedAt: Date; id: string }; facilityId?: string; transportOwnershipFreeze?: TransportOwnershipFreezeScope; change?: TransportOwnershipChange } = {},
 ): Promise<string[]> {
   requireOrgScope(ctx);
   const { onlyRunId } = options;
   const ids = [...new Set(binIds.filter((id): id is string => id !== null))];
   if (!ids.length) return [];
   await lockBinStocks(ctx, tx, ids, { allowArchived: true });
-  const [edited] = onlyRunId ? await tx.select({ startTime: productionRuns.startTime }).from(productionRuns).where(and(
+  const [edited] = onlyRunId ? await tx.select({ startTime: productionRuns.startTime, status: productionRuns.status }).from(productionRuns).where(and(
     eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, onlyRunId),
   )) : [];
   let earliestStart = options.earliestEventAt ?? edited?.startTime;
@@ -65,7 +65,7 @@ export async function reallocateRunsForBins(
     .filter((value): value is { recordedAt: Date; id: string } => value !== undefined);
   const tie = earliestFeedstockEventTie(ties);
   const afterBoundary = earliestStart && tie ? or(gt(productionRuns.startTime, earliestStart), and(eq(productionRuns.startTime, earliestStart),
-    or(gt(recordedAt, tie.recordedAt.toISOString()), and(eq(recordedAt, tie.recordedAt.toISOString()), gte(productionRunFeedstockDraws.id, tie.id)))))
+    or(gt(recordedAt, tie.recordedAt.toISOString()), and(eq(recordedAt, tie.recordedAt.toISOString()), (options.boundaryExclusive ? gt : gte)(productionRunFeedstockDraws.id, tie.id)))))
     : earliestStart ? gte(productionRuns.startTime, earliestStart) : undefined;
   const affected = await tx.select({ runId: productionRunFeedstockDraws.productionRunId })
     .from(productionRunFeedstockDraws)
@@ -78,11 +78,13 @@ export async function reallocateRunsForBins(
       inArray(productionRunFeedstockDraws.storageLocationId, ids),
       // Cancelled runs keep their history and consume no stock, so another
       // edit never rebuilds their saved provenance.
-      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+      or(ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS), onlyRunId ? eq(productionRuns.id, onlyRunId) : undefined),
       afterBoundary,
       options.facilityId ? eq(productionRuns.facilityId, options.facilityId) : undefined,
     ));
-  const runIds = [...new Set(affected.map(row => row.runId))].sort();
+  const runIds = [...new Set([...affected.map(row => row.runId),
+    ...(onlyRunId && edited?.status === CANCELLED_PRODUCTION_RUN_STATUS ? [onlyRunId] : []),
+  ])].sort();
 
   const readDrawSnapshot = () => tx.select().from(productionRunFeedstockDraws).where(and(
     eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
@@ -102,7 +104,7 @@ export async function reallocateRunsForBins(
     let ledger: Awaited<ReturnType<typeof replayFeedstockBinStock>>;
     try {
       ledger = await replayFeedstockBinStock(ctx, binId, tx, { replanRunIds: new Set(ids.includes(binId) ? runIds : []),
-        boundary: ids.includes(binId) ? { occurredAt: earliestStart?.toISOString() ?? '', recordedAt: tie?.recordedAt.toISOString(), id: tie?.id } : undefined });
+        boundary: ids.includes(binId) ? { occurredAt: earliestStart?.toISOString() ?? '', recordedAt: tie?.recordedAt.toISOString(), id: tie?.id, exclusive: options.boundaryExclusive } : undefined });
     } catch (error) {
       if (!(error instanceof FeedstockReplayOverdrawError)) throw error;
       if (error.event.kind !== 'run_draw') await throwFeedstockReplayOverdraw(ctx, tx, binId, error);
@@ -128,7 +130,7 @@ export async function reallocateRunsForBins(
   }
   const rewrites: { run: typeof runs[number]; saved: { feedstockId: string }[]; proposed: FeedstockWetAllocation[] }[] = [];
   for (const run of runs) {
-    if (run.status === CANCELLED_PRODUCTION_RUN_STATUS) continue;
+    if (run.status === CANCELLED_PRODUCTION_RUN_STATUS && run.id !== onlyRunId) continue;
     const proposed = plans.get(run.id) ?? [];
     const saved = await tx.select({ feedstockId: productionRunFeedstocks.feedstockId, wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg })
       .from(productionRunFeedstocks).where(and(

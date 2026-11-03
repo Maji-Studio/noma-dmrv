@@ -1,3 +1,4 @@
+import { touchedRunFeedstock } from './touched-run-feedstock';
 import { and, eq, isNotNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -76,7 +77,7 @@ export async function getRecordCreditBatches(
 
   const runs = await db.selectDistinct({ id: productionRunFeedstocks.productionRunId })
     .from(productionRunFeedstocks).where(and(
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId), touchedRunFeedstock(),
       eq(productionRunFeedstocks.feedstockId, input.id),
     ));
   const { batches } = await getCreditBatchesForSourceRuns(ctx, runs.map(run => run.id));
