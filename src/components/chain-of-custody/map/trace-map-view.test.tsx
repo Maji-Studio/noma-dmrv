@@ -40,7 +40,7 @@ it("starts a chain walk at the supplier from a field and leaves with Whole batch
   expect(counter).toBeTruthy();
   // Type classes and bare <p> are unlayered and beat font-mono and tracking utilities.
   expect(counter.tagName).not.toBe("P");
-  expect(counter.className).not.toMatch(/\bbody-/);
+  expect(counter.className).not.toMatch(/(^|\s)body-/);
   expect(counter.className).toContain("font-mono");
   fireEvent.click(within(panel()).getByRole("button", { name: /Next/ }));
   expect(within(panel()).getByText(/02 \/ 05/)).toBeTruthy();

@@ -81,8 +81,9 @@
   transition: opacity 160ms ease;
 }
 /* phones: a transparent 44px square centred on the anchor is the touch target;
-   the drawn shape and the anchor stay as they are. 639px = just below Tailwind sm. */
-@media (max-width: 639px) {
+   the drawn shape and the anchor stay as they are. 64rem = the map view's own
+   phone breakpoint (trace-map-view stacks the panel below Tailwind lg). */
+@media (width < 64rem) {
   .cvm-mk::before {
     content: "";
     position: absolute;
