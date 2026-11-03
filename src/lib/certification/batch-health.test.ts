@@ -69,10 +69,10 @@ describe("deriveBatchHealth", () => {
 
   it("carries the read-only template fact on the check, merged checks included", () => {
     const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
-    expect(unpinned.copy?.readOnlyDetail).toBe("This credit batch has no Removal template.");
+    expect(unpinned.copy?.readOnlyDetail).toBeUndefined();
     expect(unpinned.copy?.detail).toBeUndefined();
     const merged = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("missingFixedDatapoint")] })), "templateSet");
-    expect(merged.copy?.readOnlyDetail).toContain("This credit batch has no Removal template.");
+    expect(merged.copy?.readOnlyDetail).not.toContain("This credit batch has no Removal template.");
     expect(merged.copy?.readOnlyDetail).toContain("Some fixed values are not set in the Isometric template.");
   });
 

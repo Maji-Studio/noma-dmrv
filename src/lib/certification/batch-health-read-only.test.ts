@@ -1,0 +1,125 @@
+import { describe, expect, it } from "vitest";
+import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { buildDurabilityBatchGates } from "@/fn/certification/durability-readiness";
+import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
+import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
+import { buildSoilTemperatureGate } from "@/lib/isometric/utils/durability-aggregation";
+import { deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
+import { toBatchHealthFacts } from "./batch-health-facts";
+import { attributeSoilTemperatureBlockers } from "./member-batch-gates";
+import { deliveryProofCopy, deliveryDistanceCopy, durabilityConfigurationBlockerDetails } from "./submission-readiness";
+import { removalTemplateBlocker } from "./removal-template-blockers";
+
+const healthy: BatchHealthFacts = {
+  carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
+  entityReadinessGaps: [], hasSubmittableRuns: true, facilitySetupComplete: true, requiredTransport: [],
+};
+const pageContext = { facilityId: "facility", creditBatchId: "batch-1", canManage: true };
+
+function loadedFacts() {
+  const batch = {
+    creditBatchId: "batch-1", creditBatchCode: "CB-26-001", sampling: "sampled" as const,
+    durabilityOption: "200_year" as const, samples: [], runs: [],
+    startDate: "2026-02-01", endDate: "2026-02-28", facilityTimezone: "UTC",
+  };
+  const carbon = buildDurabilityBatchGates([batch]);
+  const soil = buildSoilTemperatureGate({ facilityReference: null, batches: [{ durabilityOption: "200_year", runIds: [] }], siteTemperatures: [] });
+  const configuration = durabilityConfigurationBlockerDetails([batch]);
+  const members = attributeSoilTemperatureBlockers([{
+    id: batch.creditBatchId, code: batch.creditBatchCode,
+    durabilityGateBlockers: carbon.blockersByBatchId[batch.creditBatchId],
+    durabilityGateFacts: carbon.blockerFactsByBatchId[batch.creditBatchId],
+  }], [batch], soil.blockers);
+  return toBatchHealthFacts({
+    memberBatches: members, mapping: {}, removalTemplate: {},
+    unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], hasSubmittableRuns: true,
+    requiredTransportCategories: [], entityReadinessGaps: [],
+    submissionLineageBlockers: buildSubmissionLineageBlockers([], ["fs-1"], { "fs-1": "FS-1" }, ["feedstock"]),
+    durabilityConfigurationBlockers: configuration.map((copy) => copy.message),
+    durabilityConfigurationFacts: configuration.map((copy) => copy.fact),
+  } as unknown as RemovalCertifyContext, batch.creditBatchId);
+}
+
+const checks = [
+  { target: "labSamples", fact: "Credit batch CB-26-001 is marked as sampled but has no Samples.", detail: "Missing: Credit batch CB-26-001 is marked as sampled but has no Samples. Add at least 3 Samples before submitting." },
+  { target: "certificationEmissions", fact: "This facility has no reference soil temperature.", detail: "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal." },
+  { target: "feedstocks", fact: "Feedstock FS-1 has no usable transport leg.", detail: "Feedstock FS-1 has no usable transport leg. Record a positive distance and load mass before submitting." },
+  { target: "batchDetails", fact: "200-year Removals cannot be submitted yet.", detail: "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability." },
+];
+
+describe("read-only batch health facts", () => {
+  it.each(checks)("preserves editable $target copy and shows only its fact read only", ({ target, fact, detail }) => {
+    const health = deriveBatchHealth(loadedFacts());
+    const check = health.checks.find((check) => check.fixTarget === target)!;
+    expect(check.detail).toBe(detail);
+    expect(check.readOnlyDetail).toBe(fact);
+    const editable = buildCreditBatchOpenItems({ ...pageContext, health });
+    const id = `health:${check.key}:${check.issueKey ?? check.fixTarget}`;
+    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
+    const item = readOnlyOpenItems(editable).blocking.find((item) => item.id === id)!;
+    expect(item.detail).toBe(fact);
+    expect(item.instruction).toBeUndefined();
+    expect(item.target).toEqual(target === "labSamples" ? { tab: "samples" } : null);
+    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
+  });
+
+  it("joins multiple producer facts as full sentences", () => {
+    const configuration = durabilityConfigurationBlockerDetails([
+      { sampling: "unsampled", durabilityOption: "200_year" },
+    ]);
+    const carbonFacts = [
+      "Credit batch CB-1 has 1 Sample with complete H/C_org and O/C_org results.",
+      "Credit batch CB-1 fails biochar eligibility (H/C_org mean 0.800 ≥ 0.5), under module §3 Table 2.",
+    ];
+    const carbonMessages = [`${carbonFacts[0]} Add complete results to at least 3 Samples before submitting.`, carbonFacts[1]];
+    const health = deriveBatchHealth({ ...healthy, carbonMissingInputs: carbonMessages, carbonBlockerFacts: carbonFacts,
+      durabilityConfigurationBlockers: configuration.map((copy) => copy.message),
+      durabilityConfigurationFacts: configuration.map((copy) => copy.fact),
+    });
+    expect(health.checks.find((check) => check.key === "carbon")).toMatchObject({
+      detail: `Missing: ${carbonMessages.join(", ")}`, readOnlyDetail: carbonFacts.join(" "),
+    });
+    expect(health.checks.find((check) => check.fixTarget === "batchDetails")).toMatchObject({
+      detail: configuration.map((copy) => copy.message).join(" · "),
+      readOnlyDetail: "Unsampled Method B Removals cannot be submitted yet. 200-year Removals cannot be submitted yet.",
+    });
+  });
+
+  it("merges lineage facts for one destination without their repair steps", () => {
+    const proof = deliveryProofCopy("DL-1");
+    const distance = deliveryDistanceCopy("DL-1");
+    const health = deriveBatchHealth({ ...healthy, submissionLineageBlockers: [
+      { detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } },
+      { detail: distance.message, fact: distance.fact, fixTarget: "deliveryDistances", record: { id: "delivery", code: "DL-1" } },
+    ] });
+    const [check] = health.checks.filter((check) => check.status === "unmet");
+    expect(check.detail).toBe(`${proof.message} · ${distance.message}`);
+    expect(check.readOnlyDetail).toBe(`${proof.fact} · ${distance.fact}`);
+    const [item] = readOnlyOpenItems(buildCreditBatchOpenItems({ ...pageContext, health })).blocking;
+    expect(item.detail).toBe(check.readOnlyDetail);
+  });
+
+  it.each([false, true])("merges a safe copy fact but never a bare detail (copy: %s)", (hasCopy) => {
+    const proof = deliveryProofCopy("DL-1");
+    const health = deriveBatchHealth({ ...healthy, hasSubmittableRuns: false,
+      productionReadinessGap: { kind: "noApplications", fixTarget: "deliveries", detail: "Production is missing. Record it.",
+        ...(hasCopy ? { copy: { detail: "Production is missing.", instruction: "Record it." } } : {}),
+      },
+      submissionLineageBlockers: [{ detail: proof.message, fact: proof.fact, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }],
+    });
+    const check = health.checks.find((check) => check.status === "unmet")!;
+    expect(check.readOnlyDetail).toBe(hasCopy ? `Production is missing. · ${proof.fact}` : proof.fact);
+    expect(check.detail).toBe(`Production is missing. Record it. · ${proof.message}`);
+  });
+
+  it("shows only the unpinned template title on the read-only Overview", () => {
+    const health = deriveBatchHealth({ ...healthy, templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] });
+    const editable = buildCreditBatchOpenItems({ ...pageContext, health });
+    expect(openItemText(editable.blocking[0])).toBe("Set a Removal template in Settings, Removal templates.");
+    const [item] = readOnlyOpenItems(editable).blocking;
+    expect(item.title).toBe("No Removal template chosen");
+    expect(item.detail).toBeUndefined();
+    expect(item.instruction).toBeUndefined();
+  });
+});

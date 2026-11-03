@@ -99,6 +99,8 @@ export interface BatchHealthCheck {
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
+  /** The facts alone, for read-only surfaces, when detail mixes facts with repair steps. */
+  readOnlyDetail?: string;
   /** Fact/instruction split; detail above preserves the full copy for existing consumers. */
   copy?: BlockerCopy;
   /** UI hint for the most specific workflow that resolves an unmet check. */
@@ -154,11 +156,13 @@ export interface BatchHealthFacts {
    * No local CO₂e preview is involved; empty means the raw gates are complete.
    */
   carbonMissingInputs: string[];
+  carbonBlockerFacts?: string[];
   /**
    * Facility-level emission-estimate blockers that apply to this batch's
    * durability tier, such as a missing reference soil temperature.
    */
   facilityEmissionsBlockers: string[];
+  facilityEmissionsFacts?: string[];
   /** Declared pyrolysis feedstock types missing their Isometric registry id. */
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /**
@@ -171,6 +175,7 @@ export interface BatchHealthFacts {
   entityReadinessGaps: string[];
   submissionLineageBlockers?: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers?: string[];
+  durabilityConfigurationFacts?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
@@ -240,6 +245,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: CARBON_LABEL,
     status: "unmet",
     detail: `Missing: ${missingInputs.join(", ")}`,
+    readOnlyDetail: facts.carbonBlockerFacts?.join(" "),
     fixTarget: "labSamples",
   };
 }
@@ -256,6 +262,7 @@ function facilityEmissionsChecks(
     label: FACILITY_EMISSIONS_LABEL,
     status: "unmet",
     detail: blockers.join(" · "),
+    readOnlyDetail: facts.facilityEmissionsFacts?.join(" "),
     fixTarget: "certificationEmissions",
   }];
 }
@@ -441,6 +448,12 @@ function mergeUnmetChecksByDestination(
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
+      ...(existing.readOnlyDetail !== undefined || check.readOnlyDetail !== undefined ? {
+        readOnlyDetail: mergeCheckText(
+          existing.readOnlyDetail ?? existing.copy?.readOnlyDetail ?? existing.copy?.detail,
+          check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail,
+        ),
+      } : {}),
       copy: existing.copy && check.copy ? {
         detail: mergeCheckText(existing.copy.detail, check.copy.detail),
         instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),
@@ -503,6 +516,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: blocker.detail,
+    readOnlyDetail: blocker.fact,
     fixTarget: blocker.fixTarget,
     affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
   }));
@@ -515,6 +529,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
+    readOnlyDetail: facts.durabilityConfigurationFacts?.join(" "),
     fixTarget: "batchDetails",
   });
   return lineageChecks;

@@ -1,7 +1,12 @@
+import { blockerMessage } from "@/lib/certification/blocker-message";
 import type { BatchLineageRunFact } from "@/data-access/credit-batch-lineage-types";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { applicationDestinationBlocker, deliveryDistanceBlocker, deliveryProofBlocker, type SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
+import { applicationDestinationCopy, deliveryDistanceCopy, deliveryProofCopy, applicationDestinationBlocker, deliveryDistanceBlocker, deliveryProofBlocker, type SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import type { TransportCategory } from "./certify-transport-coverage";
+
+export function feedstockTransportCopy(label: string) {
+  return blockerMessage(`${label} has no usable transport leg.`, "Record a positive distance and load mass before submitting.");
+}
 
 export function collectFeedstockCodes(runs: readonly BatchLineageRunFact[]): Record<string, string> {
   return Object.fromEntries(runs.flatMap((run) =>
@@ -19,8 +24,10 @@ export function buildSubmissionLineageBlockers(
   for (const id of requiredTransportCategories.includes("feedstock") ? missingFeedstockIds : []) {
     const code = feedstockCodes[id];
     const label = code ? `Feedstock ${code}` : "A feedstock";
+    const copy = feedstockTransportCopy(label);
     blockers.push({
-      detail: `${label} has no usable transport leg. Record a positive distance and load mass before submitting.`,
+      detail: copy.message,
+      fact: copy.fact,
       fixTarget: "feedstocks",
       record: { id, code: code ?? "Feedstock" },
     });
@@ -30,7 +37,7 @@ export function buildSubmissionLineageBlockers(
       deliveryCode: delivery.code,
       proofOfDeliveryCount: delivery.proofOfDeliveryCount,
     });
-    if (proof) blockers.push({ detail: proof, fixTarget: "deliveryEvidence", record: { id: delivery.id, code: delivery.code } });
+    if (proof) blockers.push({ detail: proof, fact: deliveryProofCopy(delivery.code).fact, fixTarget: "deliveryEvidence", record: { id: delivery.id, code: delivery.code } });
     const destination = applicationDestinationBlocker({
       applicationCode: application.code,
       // The lineage projection resolves this from the order destination.
@@ -38,6 +45,7 @@ export function buildSubmissionLineageBlockers(
     });
     if (destination) blockers.push({
       detail: destination,
+      fact: applicationDestinationCopy(application.code).fact,
       fixTarget: order ? "orders" : "deliveries",
       record: { id: (order ?? delivery).id, code: (order ?? delivery).code },
     });
@@ -47,7 +55,7 @@ export function buildSubmissionLineageBlockers(
       distanceKmOverride: delivery.distanceKmOverride ?? null,
       recordedDistanceKm: delivery.recordedDistanceKm ?? null,
     }) : null;
-    if (distance) blockers.push({ detail: distance, fixTarget: "deliveryDistances", record: { id: delivery.id, code: delivery.code } });
+    if (distance) blockers.push({ detail: distance, fact: deliveryDistanceCopy(delivery.code).fact, fixTarget: "deliveryDistances", record: { id: delivery.id, code: delivery.code } });
   }
   return [...new Map(blockers.map((blocker) => [
     `${blocker.fixTarget}:${blocker.record.id}:${blocker.detail}`, blocker,

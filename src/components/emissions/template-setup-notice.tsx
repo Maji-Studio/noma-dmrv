@@ -12,11 +12,13 @@ import {
   type RemovalTemplateBlocker,
 } from "@/lib/certification/removal-template-blockers";
 
+const NO_REMOVAL_TEMPLATE = "This credit batch has no Removal template.";
 const SET_TEMPLATE_LABEL = "Set template";
 
 /** The notice text: the full message, or on a read-only batch only the fact. */
 export function templateSetupNoticeText(blocker: RemovalTemplateBlocker, readOnly: boolean): string {
   if (!readOnly) return blocker.message;
+  if (blocker.code === "unpinnedTemplate") return NO_REMOVAL_TEMPLATE;
   return blocker.copy?.readOnlyDetail ?? blocker.copy?.detail ?? blocker.message;
 }
 

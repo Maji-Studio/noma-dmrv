@@ -456,6 +456,9 @@ export function resolveSoilTemperatureScope(
   };
 }
 
+const MISSING_REFERENCE_SOIL_TEMPERATURE_INSTRUCTION = "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.";
+export const MISSING_REFERENCE_SOIL_TEMPERATURE_FACT = "This facility has no reference soil temperature.";
+
 export interface SoilTemperatureGate {
   /** Fail-closed blocker(s): an unset reference for a 200-year removal. */
   blockers: string[];
@@ -486,7 +489,7 @@ export function buildSoilTemperatureGate(args: {
   if (args.facilityReference == null) {
     return {
       blockers: [
-        "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
+        MISSING_REFERENCE_SOIL_TEMPERATURE_INSTRUCTION,
       ],
       warnings: [],
     };

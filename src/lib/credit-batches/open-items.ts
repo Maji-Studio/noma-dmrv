@@ -30,7 +30,7 @@ import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { formatCalendarDate, formatTonnes } from "@/lib/format-utils";
 import { lateRunEntryDate } from "./late-run-entry-date";
 import { RESUBMIT_NEEDED_LABEL, changedComponentNames, correctionStatementLabel, joinWithAnd, joinWithOr, removalResubmitHref, returnedStatementPhrase, comparisonUnavailableClause } from "@/lib/removal-correction-copy";
-import { lateEntryView, readOnlyWaitingDetail, readOnlyWaitingEntryTitle, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
+import { recordedAfterSentence, lateEntryView, readOnlyWaitingDetail, readOnlyWaitingEntryTitle, waitingDetailCopy, waitingEntryTitle } from "@/lib/certification/late-entry-view";
 import { ghgStatementPeriodLabel } from "./ghg-statement-period-label";
 
 // Five kg rounds up to the smallest visible amount at two-decimal tonne precision.
@@ -317,7 +317,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         id: `late-entry:${entry.id ?? `${line.componentId}:${entry.occurredOn}`}`,
         title: waitingEntryTitle(line.displayName, entry.occurredOn),
         readOnlyTitle: readOnlyWaitingEntryTitle(line.displayName, entry.occurredOn),
-        detail: view.recordedAfter ? `Recorded after ${view.recordedAfter.removalCode} was sent. ${reason.detail}` : reason.detail,
+        detail: view.recordedAfter ? `${recordedAfterSentence(view.recordedAfter.removalCode)} ${reason.detail}` : reason.detail,
         readOnlyDetail: readOnlyWaitingDetail(view.destination.reason, view.recordedAfter?.removalCode),
         ...(reason.instruction ? { instruction: reason.instruction } : {}),
         target: view.destination.action ? { href: view.destination.action.href } : null,
@@ -357,7 +357,7 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
       title: certCheckLabel(healthCheck),
       detail,
       ...(!copy ? { detailMayInstruct: true as const } : {}),
-      ...(copy?.readOnlyDetail ? { readOnlyDetail: copy.readOnlyDetail } : {}),
+      readOnlyDetail: copy?.readOnlyDetail ?? healthCheck.readOnlyDetail,
       ...(instruction ? { instruction } : {}),
       ...(healthCheck.whyDetail ? { why: healthCheck.whyDetail } : {}),
       target,

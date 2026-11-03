@@ -121,3 +121,17 @@ describe("evaluateSampled1000YearReplicates", () => {
     },
   );
 });
+
+it("builds the original messages from facts and instructions for every failed measurement", () => {
+  const result = evaluateSampled1000YearReplicates({ creditBatchCode: "CB-1", samples: [
+    sample({ id: "missing", total: null, inorganic: null, sFraction: null }),
+    sample({ id: "negative", inorganic: -1 }),
+    sample({ id: "excessive", inorganic: 99, sFraction: 2 }),
+  ] });
+  expect(result.blockerDetails).toHaveLength(7);
+  for (const copy of result.blockerDetails) {
+    expect(copy.message).toBe(`${copy.fact} ${copy.instruction}`);
+    expect(copy.fact).not.toMatch(/Record |Correct /);
+  }
+  expect(result.blockers).toEqual(result.blockerDetails.map((copy) => copy.message));
+});

@@ -1,3 +1,4 @@
+import { blockerMessage, type BlockerMessage } from "./blocker-message";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { isSequestrationBlueprintKey } from "@/lib/isometric/storage-blueprints";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
@@ -14,18 +15,18 @@ export function hasDurabilityMeasurementComponents(
   ) ?? false;
 }
 
-export function durabilityConfigurationBlockers(
+export function durabilityConfigurationBlockerDetails(
   batches: readonly { sampling: string; durabilityOption: string }[],
-): string[] {
-  const blockers: string[] = [];
+): BlockerMessage[] {
+  const blockers: BlockerMessage[] = [];
   if (batches.some((batch) => batch.sampling !== "sampled")) {
     blockers.push(
-      "Unsampled Method B Removals cannot be submitted yet. Wait for support to confirm registry availability.",
+      blockerMessage("Unsampled Method B Removals cannot be submitted yet.", "Wait for support to confirm registry availability."),
     );
   }
   if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
     blockers.push(
-      "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability.",
+      blockerMessage("200-year Removals cannot be submitted yet.", "Wait for support to confirm registry availability."),
     );
   }
   const thousandYearCount = batches.filter(
@@ -33,11 +34,30 @@ export function durabilityConfigurationBlockers(
   ).length;
   if (thousandYearCount > MAX_1000_YEAR_CREDIT_BATCHES) {
     blockers.push(
-      "A 1000-year Removal can contain one credit batch. Split these credit batches into separate Removals.",
+      blockerMessage("A 1000-year Removal can contain one credit batch.", "Split these credit batches into separate Removals."),
     );
   }
   return blockers;
 }
+
+export function durabilityConfigurationBlockers(
+  batches: readonly { sampling: string; durabilityOption: string }[],
+): string[] {
+  return durabilityConfigurationBlockerDetails(batches).map((item) => item.message);
+}
+
+export const applicationDestinationCopy = (code: string) => blockerMessage(
+  `Application ${code} has no customer location.`,
+  "Select a customer location on the order before submitting.",
+);
+export const deliveryProofCopy = (code: string) => blockerMessage(
+  `Delivery ${code} has no proof of delivery.`,
+  "Attach a delivery receipt, bill of lading or delivery photo before submitting.",
+);
+export const deliveryDistanceCopy = (code: string) => blockerMessage(
+  `Delivery ${code} has no positive transport distance.`,
+  "Set the customer location distance or a delivery distance override before submitting.",
+);
 
 export function applicationDestinationBlocker(input: {
   applicationCode: string;
@@ -45,7 +65,7 @@ export function applicationDestinationBlocker(input: {
 }): string | null {
   return input.customerLocationId
     ? null
-    : `Application ${input.applicationCode} has no customer location. Select a customer location on the order before submitting.`;
+    : applicationDestinationCopy(input.applicationCode).message;
 }
 
 export function deliveryProofBlocker(input: {
@@ -54,7 +74,7 @@ export function deliveryProofBlocker(input: {
 }): string | null {
   return input.proofOfDeliveryCount > 0
     ? null
-    : `Delivery ${input.deliveryCode} has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.`;
+    : deliveryProofCopy(input.deliveryCode).message;
 }
 
 export function deliveryDistanceBlocker(input: {
@@ -66,7 +86,7 @@ export function deliveryDistanceBlocker(input: {
   return input.deliveryStatus === "delivered" &&
     positiveOrNull(input.distanceKmOverride) == null &&
     positiveOrNull(input.recordedDistanceKm) == null
-    ? `Delivery ${input.deliveryCode} has no positive transport distance. Set the customer location distance or a delivery distance override before submitting.`
+    ? deliveryDistanceCopy(input.deliveryCode).message
     : null;
 }
 
@@ -88,6 +108,7 @@ export function missingFeedstockTransportIds(
 }
 
 export interface SubmissionLineageBlocker {
+  fact: string;
   detail: string;
   fixTarget: "feedstocks" | "deliveryEvidence" | "deliveryDistances" | "orders" | "deliveries";
   record: { id: string; code: string; href?: string };

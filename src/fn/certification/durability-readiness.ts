@@ -13,6 +13,7 @@ import { evaluateSampled1000YearReplicates } from "@/lib/certification/durabilit
 export interface DurabilityGateResult {
   /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
   blockers: string[];
+  blockerFacts: string[];
   /** Non-blocking §8.3.1 representative-sampling advisories. */
   warnings: string[];
 }
@@ -22,6 +23,7 @@ export interface DurabilityBatchData extends DurabilityGateResult {
   batchesWithSamples: CreditBatchWithSamples[];
   /** Exact submission-gate blockers keyed to the batch that produced them. */
   blockersByBatchId: Record<string, string[]>;
+  blockerFactsByBatchId: Record<string, string[]>;
 }
 
 /**
@@ -49,13 +51,15 @@ export async function loadDurabilityBatchData(
 
 export function buildDurabilityBatchGates(
   batchesWithSamples: CreditBatchWithSamples[],
-): DurabilityGateResult & Pick<DurabilityBatchData, "blockersByBatchId"> {
+): DurabilityGateResult & Pick<DurabilityBatchData, "blockersByBatchId" | "blockerFactsByBatchId"> {
   const perBatchGates = batchesWithSamples.map((batch) => ({
     creditBatchId: batch.creditBatchId,
     gates: buildDurabilityGates([batch]),
   }));
   return {
     blockers: perBatchGates.flatMap(({ gates }) => gates.blockers),
+    blockerFacts: perBatchGates.flatMap(({ gates }) => gates.blockerFacts),
+    blockerFactsByBatchId: Object.fromEntries(perBatchGates.map(({ creditBatchId, gates }) => [creditBatchId, gates.blockerFacts])),
     warnings: perBatchGates.flatMap(({ gates }) => gates.warnings),
     blockersByBatchId: Object.fromEntries(
       perBatchGates.map(({ creditBatchId, gates }) => [
@@ -89,7 +93,7 @@ function isoSamplingDay(
 export function buildDurabilityGates(
   batches: CreditBatchWithSamples[],
 ): DurabilityGateResult {
-  if (batches.length === 0) return { blockers: [], warnings: [] };
+  if (batches.length === 0) return { blockers: [], blockerFacts: [], warnings: [] };
   const facts: BatchGateFacts[] = batches.map((batch) => ({
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.creditBatchCode,
@@ -111,11 +115,12 @@ export function buildDurabilityGates(
       ? evaluateSampled1000YearReplicates({
           creditBatchCode: batch.creditBatchCode,
           samples: batch.samples,
-        }).blockers
+        }).blockerDetails
       : [],
   );
   return {
-    blockers: [...result.blockers, ...sampled1000YearBlockers],
+    blockers: [...result.blockers, ...sampled1000YearBlockers.map((item) => item.message)],
+    blockerFacts: [...result.blockerDetails, ...sampled1000YearBlockers].map((item) => item.fact),
     warnings: result.warnings,
   };
 }

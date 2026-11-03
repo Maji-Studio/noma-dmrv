@@ -25,7 +25,9 @@ export interface MemberCreditBatch {
   applicationCount: number;
   /** Exact submission blockers, separated by their remediation workflow. */
   durabilityGateBlockers?: string[];
+  durabilityGateFacts?: string[];
   facilityEmissionsGateBlockers?: string[];
+  facilityEmissionsGateFacts?: string[];
 }
 
 export function toMemberCreditBatch(
@@ -71,6 +73,8 @@ export function toMemberCreditBatchView(
     productionRunCount: batch.productionRunCount,
     applicationCount: batch.applicationCount,
     durabilityGateBlockers: batch.durabilityGateBlockers,
+    durabilityGateFacts: batch.durabilityGateFacts,
     facilityEmissionsGateBlockers: batch.facilityEmissionsGateBlockers,
+    facilityEmissionsGateFacts: batch.facilityEmissionsGateFacts,
   };
 }

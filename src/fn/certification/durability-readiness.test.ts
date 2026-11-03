@@ -108,3 +108,13 @@ describe("load-ready gate attribution", () => {
     expect(result.blockers).toEqual(result.blockersByBatchId["batch-1"]);
   });
 });
+
+it("carries carbon facts alongside the unchanged per-batch messages", () => {
+  const result = buildDurabilityBatchGates([batch("UTC", [])]);
+  expect(result.blockerFactsByBatchId["batch-1"]).toEqual([
+    "Credit batch CB-1 is marked as sampled but has no Samples.",
+  ]);
+  expect(result.blockersByBatchId["batch-1"]).toEqual([
+    `${result.blockerFactsByBatchId["batch-1"][0]} Add at least 3 Samples before submitting.`,
+  ]);
+});

@@ -797,7 +797,7 @@ describe("readiness matches submission refusals", () => {
     [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders"],
     [deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!, "deliveryDistances"],
   ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget) => {
-    const facts = ready({ submissionLineageIssues: [{ detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
+    const facts = ready({ submissionLineageIssues: [{ fact: "Lineage evidence is missing.", detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: [reason] });
     expect(buildRemovalRequirementsChecklist(facts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: reason }));
   });

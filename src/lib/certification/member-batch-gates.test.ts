@@ -25,11 +25,13 @@ describe("attributeSoilTemperatureBlockers", () => {
         id: "batch-200",
         durabilityGateBlockers: ["Existing durability blocker"],
         facilityEmissionsGateBlockers: [soilBlocker],
+        facilityEmissionsGateFacts: ["This facility has no reference soil temperature."],
       },
       {
         id: "batch-1000",
         durabilityGateBlockers: [],
         facilityEmissionsGateBlockers: [],
+        facilityEmissionsGateFacts: [],
       },
     ]);
   });

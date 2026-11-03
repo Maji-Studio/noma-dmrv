@@ -1,6 +1,9 @@
+import { MISSING_REFERENCE_SOIL_TEMPERATURE_FACT } from "@/lib/isometric/utils/durability-aggregation";
+
 interface MemberBatchGateFacts {
   id: string;
   facilityEmissionsGateBlockers?: string[];
+  facilityEmissionsGateFacts?: string[];
 }
 
 interface BatchDurabilityFacts {
@@ -23,6 +26,10 @@ export function attributeSoilTemperatureBlockers<
 
   return members.map((member) => ({
     ...member,
+    facilityEmissionsGateFacts: [
+      ...(member.facilityEmissionsGateFacts ?? []),
+      ...(affectedBatchIds.has(member.id) && soilTemperatureBlockers.length > 0 ? [MISSING_REFERENCE_SOIL_TEMPERATURE_FACT] : []),
+    ],
     facilityEmissionsGateBlockers: [
       ...(member.facilityEmissionsGateBlockers ?? []),
       ...(affectedBatchIds.has(member.id) ? soilTemperatureBlockers : []),
