@@ -39,27 +39,27 @@ describe("CreditBatchEmissionsPanel", () => {
     expect(screen.getByRole("link", { name: /Open emissions/ }).getAttribute("href")).toBe("/credit-batches/cb-1?facility=f-1&tab=emissions");
   });
 
-  it("explains an unpinned template and links to the Set template setup in Settings, without Retry", () => {
+  it("explains an unpinned template and links to the Set template setup in Settings, without Try again", () => {
     query.error = new EmissionLinesBlockedError(removalTemplateBlocker("unpinnedTemplate"));
     render_();
     expect(screen.getByText("Set a Removal template in Settings, Removal templates.")).toBeTruthy();
     const link = screen.getByRole("link", { name: "Set template" });
     expect(link.getAttribute("href")).toBe("/settings/removal-templates?facility=f-1&setup=template");
     expect(link.getAttribute("href")).toContain("facility=f-1");
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("shows Retry for a template that is still being read", () => {
+  it("shows Try again for a template that is still being read", () => {
     query.error = new Error(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     render_();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
 
-  it("keeps Retry for a real load failure", () => {
+  it("keeps Try again for a real load failure", () => {
     query.error = new Error("Network down");
     render_();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
 

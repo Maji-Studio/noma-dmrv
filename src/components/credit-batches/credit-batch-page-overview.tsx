@@ -14,7 +14,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { recordHref } from "@/lib/record-links";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
   LATE_PRODUCTION_RUN_ITEM_PREFIX,
@@ -34,10 +34,10 @@ import { durabilityLabel } from "./credit-batch-view";
 
 type GroupKey = "blocking" | "check" | "waiting";
 
-const GROUPS: Record<GroupKey, { title: string; help: string; dot: string }> = {
+const GROUPS: Record<GroupKey, { title: string; readOnlyTitle?: string; help: string; dot: string }> = {
   blocking: { title: "Blocking", help: "Fix these before the next Removal.", dot: TODO_TONE.blocking },
   check: { title: "Check", help: "Worth a look. These do not stop a Removal.", dot: TODO_TONE.check },
-  waiting: { title: "Waiting", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
+  waiting: { title: "Waiting", readOnlyTitle: "Status", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
 };
 
 const GROUP_ORDER: readonly GroupKey[] = ["blocking", "check", "waiting"];
@@ -151,7 +151,7 @@ function OpenItemGroups() {
           <div className="flex flex-col gap-2 border-b border-[var(--color-border-secondary)] pb-8">
             <h3 id={`open-items-${group}`} className="inline-flex items-center gap-8 body-small font-medium">
               <StatusDot tone={GROUPS[group].dot} />
-              {GROUPS[group].title}
+              {readOnly ? GROUPS[group].readOnlyTitle ?? GROUPS[group].title : GROUPS[group].title}
               <span className={cn("tabular-nums", MUTED_TEXT)}>{openItems[group].length}</span>
             </h3>
             {/* Each help line describes the work ahead; a read-only batch has none. */}
@@ -187,9 +187,9 @@ function TodosUnavailable() {
   return (
     <Notice
       tone="warning"
-      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>Retry</Button>}
+      action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>{TRY_AGAIN_LABEL}</Button>}
     >
-      Blocking items could not be checked. Retry to load them.
+      Blocking items could not be checked. Try again to load them.
     </Notice>
   );
 }

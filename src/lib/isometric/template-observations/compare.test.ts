@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import cula from "../../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
+import production from "../../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import {
   compareTemplateObservations, isEntryCompatible, normalizeTemplateDefinition,
   resolveLineSources, validateLineSources,
@@ -76,7 +76,7 @@ describe("template observation drift", () => {
 
   it("compares two facilities on different templates without leaking contracts or enrichment", () => {
     const first = observation();
-    const second = observation(cula as GhgEntryTemplate);
+    const second = observation(production as GhgEntryTemplate);
     const firstSources = resolveLineSources({ definition: first.definition });
     const secondSources = resolveLineSources({ definition: second.definition });
     firstSources[GENSET].scope = "forbidden";

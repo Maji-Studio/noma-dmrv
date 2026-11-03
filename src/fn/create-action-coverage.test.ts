@@ -9,6 +9,9 @@ const TEST_FILE = /\.(test|spec)\.tsx?$/;
 const NON_CREATE_VERBS = /^(get|list|search|fetch|load|preview|can|is|has|update|delete|archive|restore|unarchive|revoke|remove|set|change)(?=[A-Z]|$)/;
 const API_KEY_ACTION = "api-keys#createApiKeyFn";
 const WRAPPER_FILE = join(FN_ROOT, "with-create.ts");
+// Parsing every hook and component file takes ~1 s locally but went over the
+// 5 s default on a loaded merge-queue runner (#1379), so it gets its own.
+const CLIENT_SCAN_TIMEOUT_MS = 30_000;
 
 const KEYED = [
   "samples#createSampleFn",
@@ -342,7 +345,7 @@ it("detects separate parse points and intent options passed through local aliase
 it("requires retry keys at every imported KEYED client call site", () => {
   const clients = [...sourceFiles(join(ROOT, "src/hooks")), ...sourceFiles(join(ROOT, "src/components"))];
   expect(clients.flatMap(clientErrors)).toEqual([]);
-});
+}, CLIENT_SCAN_TIMEOUT_MS);
 
 it("recognizes directive prologues, quote styles, and exported function forms", () => {
   const source = ts.createSourceFile("fixture.ts", `/* comment */ 'use strict'; 'use server';

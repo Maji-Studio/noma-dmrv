@@ -11,7 +11,7 @@ describe("linkedRecordReadOnly", () => {
       .toEqual({
         tone: "info",
         message: "Mafinga is archived, so this order is read-only.",
-        facility: { name: "Mafinga", href: "/facilities?archivedFacility=facility-x" },
+        facility: { name: "Mafinga", href: "/facilities?archivedFacility=facility-x", rest: " is archived, so this order is read-only." },
       });
   });
 

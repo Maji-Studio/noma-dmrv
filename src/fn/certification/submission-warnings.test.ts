@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
+import productionFixture from "../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { buildSubmissionWarnings } from "./submission-warnings";
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
-const cula = culaFixture as GhgEntryTemplate;
+const production = productionFixture as GhgEntryTemplate;
 
 const GENSET = "rtc_1KWHFRM4GSBX5Y7A";
 const STARTUP = "rtc_1KWP4Y13JSBXV8FB";
@@ -34,7 +34,7 @@ describe("dropped recorded automatic sources", () => {
     expect(warnings(template, { dieselGensetLiters: 0, preprocessingFuelLiters: 3, dieselOperationLiters: 0, electricityKwh: 0 })).toEqual([expect.stringContaining("Genset diesel")]);
   });
   it("does not treat an entry-only meter as an automatic electricity source", () => {
-    expect(warnings(cula)).toEqual([expect.stringContaining("Electricity is recorded")]);
+    expect(warnings(production)).toEqual([expect.stringContaining("Electricity is recorded")]);
   });
   it("ignores zero and absent records, and preserves the month advisory", () => {
     expect(warnings(sandbox, { dieselGensetLiters: 0, preprocessingFuelLiters: 0, dieselOperationLiters: 0, electricityKwh: 0 })).toEqual([]);
@@ -63,7 +63,7 @@ it("classifies every automatic source as covered or deliberately excluded", asyn
 });
 it("exposes dropped facts as nonblocking advisories with the same message", async () => {
   const { buildSubmissionAdvisories } = await import("./submission-warnings");
-  const args = { removalTemplate: cula, lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(cula) }),
+  const args = { removalTemplate: production, lineSources: resolveLineSources({ definition: normalizeTemplateDefinition(production) }),
     runs: [{ electricityKwh: 10, startTime: new Date("2026-10-01") } as ProductionRunForCertification], lineages: [], facilityTimezone: "UTC" };
   expect(buildSubmissionAdvisories(args)).toEqual([{ code: "droppedRecordedFact", fixTarget: "templateLines", message: buildSubmissionWarnings(args)[0] }]);
 });

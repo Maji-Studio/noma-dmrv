@@ -22,6 +22,11 @@ collects only `tests/e2e/`; `playwright.visual.config.ts` collects only
 `tests/visual/`. A Playwright spec outside those two folders, or a Vitest spec
 inside them, is **silently never run**. Put it in the right directory.
 
+Tests that take a table-level lock must be listed in
+`tests/helpers/table-lock-barrier-files.ts` so Vitest runs them after all other
+suites, one file at a time (#1379). `tests/table-lock-barrier-isolation.test.ts`
+enforces the list and rejects stale entries.
+
 - `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
   `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
   put pure module, component, schema, hook, and route-handler tests beside the
@@ -530,6 +535,10 @@ Check here before chasing a red E2E as a branch regression. Rerun the single spe
 - Popover Escape did not return focus to its trigger after a press inside the popup
   (`certification-workspace.spec.ts` "closes it with Escape"): fixed in the shared
   `Popover`, which now focuses the trigger on Escape and Close. Issue #1283.
+- Merge queue, shard 2: `facility-archive.spec.ts` opened the row menu before the debounced
+  search refetch swapped the card for a skeleton, and `organization-rename.spec.ts` typed into
+  the name before hydration wrote the saved name in. Both now wait for that state first.
+  Issue #1379.
 - Local only, under a multi-spec run (pass alone): `production-runs.spec.ts` and
   `full-chain-ui` "Create Sample" (the side sheet does not close after submit);
   `feedstock-types.spec.ts` (the row's Archive menu item detaches after an edit). No issue.
