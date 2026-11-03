@@ -15,9 +15,9 @@ import { Button } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { cn } from "@/lib/utils";
 import { EntryEvidence, ICON, RecordsSourceLink, entryAmount, lineBodyModel, useEntryActions } from "./emission-line-body-parts";
-import { isCountedElsewhere, isRecordsGap, recordsFigureText, type EmissionEntry, type EmissionLine, type LineRecords } from "./emission-line-display";
+import { isCalculatedByRegistry, isCountedElsewhere, isRecordsGap, recordsFigureText, type EmissionEntry, type EmissionLine, type LineRecords } from "./emission-line-display";
 import { EntryMenu, entryDateText, stoppedEntryMessage, useStoppedEntry } from "./emission-ledger-entries";
-import { MENU_PULL, NAME_INSET, TABLE_ROW } from "./emission-line-grid";
+import { MENU_PULL, NAME_INSET, QUIET_REASON, TABLE_ROW } from "./emission-line-grid";
 import { LateEntryStatus } from "./late-entry-status";
 import type { EntryFormMode } from "./manual-entry-form";
 
@@ -67,7 +67,7 @@ export function SourcesTable({ line, scope, model, readOnly = false, onForm, onD
             <span className="body-small text-[var(--color-text-secondary)] md:hidden">{RECORDS_DATE}</span>
           </span>
           <span role="cell" className={DATE_CELL}>{RECORDS_DATE}</span>
-          <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(rowRecords) && "text-[var(--color-text-tertiary)]")}>
+          <span role="cell" className={cn(AMOUNT_CELL, isRecordsGap(rowRecords) && "text-[var(--color-text-tertiary)]", isCalculatedByRegistry(rowRecords) && QUIET_REASON)}>
             {recordsFigureText(rowRecords)}
           </span>
         </div>
@@ -100,7 +100,7 @@ export function SourcesTable({ line, scope, model, readOnly = false, onForm, onD
       {model.showTotal && (
         <div role="row" className={cn(TABLE_ROW, "[border-top:var(--hair-2)]")}>
           <span role="rowheader" className={cn(CELL_Y, NAME_INSET, "col-start-1 row-start-1 body-small font-medium md:col-start-3 md:pl-0 md:text-right")}>Total</span>
-          <span role="cell" className={cn(AMOUNT_CELL, model.totalMissing ? "text-[var(--color-text-tertiary)]" : "font-medium")}>{model.totalText}</span>
+          <span role="cell" className={cn(AMOUNT_CELL, model.totalMissing ? "text-[var(--color-text-tertiary)]" : isCalculatedByRegistry(line.records) ? QUIET_REASON : "font-medium")}>{model.totalText}</span>
         </div>
       )}
     </div>

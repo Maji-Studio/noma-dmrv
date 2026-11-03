@@ -151,9 +151,14 @@ export function countedOnText(records: LineRecords & { countedOn: NonNullable<Li
   return `${COUNTED_ON_PREFIX} ${records.countedOn.map((batch) => batch.code).join(", ")}`;
 }
 
+/** The registry calculates this line, so the records hold no figure of their own. */
+export function isCalculatedByRegistry(records: LineRecords | null | undefined): boolean {
+  return records?.calculatedBy === "isometric" && !hasRecordsFigure(records);
+}
+
 /** The source exists but holds nothing for this line. */
 export function isRecordsGap(records: LineRecords | null): boolean {
-  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records) && records.calculatedBy !== "isometric";
+  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records) && !isCalculatedByRegistry(records);
 }
 
 function countWords(count: number, one: string, many: string): string {
@@ -168,7 +173,7 @@ export function openSourceLabel(source: RecordsSource): string {
 export function recordsChipText(records: LineRecords): string {
   if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
-  if (hasRecordsFigure(records) || records.calculatedBy === "isometric") return countWords(records.count, words.shortOne, words.shortMany);
+  if (hasRecordsFigure(records) || isCalculatedByRegistry(records)) return countWords(records.count, words.shortOne, words.shortMany);
   if (records.count > 0) return `None on ${countWords(records.count, words.shortOne, words.shortMany)}`;
   return `No ${words.many} yet`;
 }
@@ -178,7 +183,7 @@ export function recordsText(records: LineRecords): string {
   if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   const counted = countWords(records.count, words.one, words.many);
-  if (records.calculatedBy === "isometric") return counted;
+  if (isCalculatedByRegistry(records)) return counted;
   if (hasRecordsFigure(records)) return `${formatFigure(records.figure)} from ${counted}`;
   if (records.count === 0) return `No ${words.many} yet`;
   return `Not recorded on ${counted}`;
@@ -186,7 +191,7 @@ export function recordsText(records: LineRecords): string {
 
 /** The records row's amount, including figures calculated by the registry. */
 export function recordsFigureText(records: LineRecords): string {
-  if (records.calculatedBy === "isometric" && !records.figure) return CALCULATED_BY_ISOMETRIC;
+  if (isCalculatedByRegistry(records)) return CALCULATED_BY_ISOMETRIC;
   return hasRecordsFigure(records) || isCountedElsewhere(records) ? formatFigure(records.figure) : MISSING_VALUE.notRecorded;
 }
 
@@ -245,7 +250,7 @@ function entryFigureText(entry: EmissionEntry): string {
 export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
-  if (line.records?.calculatedBy === "isometric") return CALCULATED_BY_ISOMETRIC;
+  if (isCalculatedByRegistry(line.records)) return CALCULATED_BY_ISOMETRIC;
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
@@ -255,7 +260,7 @@ export function lineTotalText(line: EmissionLine): string | null {
 
 /** The Total is a missing token, not a figure: phones drop it, since the state already says so. */
 export function isTotalMissing(line: EmissionLine): boolean {
-  return !line.total && line.records?.calculatedBy !== "isometric" && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
+  return !line.total && !isCalculatedByRegistry(line.records) && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
 }
 
 /* ---------- what the operator may do ---------- */

@@ -23,3 +23,6 @@ export const TABLE_ROW = cn("grid items-baseline px-16", PHONE_COLUMNS, ROW_COLU
 /** Text in the open row starts where the line name does: after the row caret (14px) and its gap (6px). */
 export const NAME_INSET = "pl-20";
 
+
+/** A reason standing where a figure would (Calculated by Isometric): quiet, not missing. */
+export const QUIET_REASON = "font-normal text-[var(--color-text-secondary)]";
