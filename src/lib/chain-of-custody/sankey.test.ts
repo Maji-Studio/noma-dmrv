@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { formatMassKg } from "@/lib/format-utils";
 import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "./sankey";
 
 const RESIDUAL_TEST_INPUT_KG = 1_000;
@@ -37,6 +38,32 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
 }
 
 describe("buildBatchSankey", () => {
+  it("closes every displayed column using the same precision as the mass labels", () => {
+    // Independently rounded raw differences would read 40, 20, 20 and fail
+    // to connect the displayed columns 100 -> 60.1 -> 40 -> 20.1.
+    const result = buildBatchSankey([lineage({
+      productionRun: { id: "run-1", feedstockMassDryKg: 100.04, biocharDryMassKg: 60.06 },
+      biocharProduct: { id: "lot-1", massKg: 40.04, moistureContentPercent: null },
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(20.06) },
+    })]);
+
+    expect(result.columns.map(({ massKg }) => formatMassKg(massKg))).toEqual([
+      "100 kg", "60.1 kg", "40 kg", "20.1 kg",
+    ]);
+    expect(result.exits.map(({ massKg }) => formatMassKg(massKg))).toEqual([
+      "39.9 kg", "20.1 kg", "19.9 kg",
+    ]);
+    // Compare integer tenths parsed from the actual labels, avoiding binary
+    // floating-point subtraction in the displayed-figures assertion.
+    const displayedTenths = (massKg: number) => Math.round(Number(formatMassKg(massKg).replace(/[^\d.-]/g, "")) * 10);
+    result.exits.forEach((exit, index) => {
+      expect(displayedTenths(result.columns[index].massKg) - displayedTenths(exit.massKg))
+        .toBe(displayedTenths(result.columns[index + 1].massKg));
+    });
+    expect(result.omittedResidualKg).toBe(0);
+    expect(result.warnings).toEqual([]);
+  });
+
   it.each([
     { moisture: 20, allocated: null, expectedKg: BLENDED_DRY_KG },
     { moisture: null, allocated: null, expectedKg: BLEND_KG - INGREDIENT_KG },
@@ -97,8 +124,25 @@ describe("buildBatchSankey", () => {
     expect(result.omittedResidualKg).toBe(0);
   });
 
+  it("shows a 0.3 kg middle residual so displayed exits telescope", () => {
+    const result = buildBatchSankey([lineage({
+      productionRun: { id: "run-1", feedstockMassDryKg: 100.04, biocharDryMassKg: 60.06 },
+      biocharProduct: { id: "lot-1", massKg: 59.76, moistureContentPercent: null },
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(20.06) },
+    })]);
+    const displayedTenths = (kg: number) => Math.round(Number(formatMassKg(kg).replace(/[^\d.-]/g, "")) * 10);
+
+    expect(result.exits.map(({ massKg }) => formatMassKg(massKg))).toEqual([
+      "39.9 kg", "0.3 kg", "39.7 kg",
+    ]);
+    expect(displayedTenths(result.columns[0].massKg) - result.exits.reduce((sum, exit) => sum + displayedTenths(exit.massKg), 0))
+      .toBe(displayedTenths(result.columns[3].massKg));
+    expect(result.omittedResidualKg).toBe(0);
+    expect(result.warnings).toEqual([]);
+  });
+
   it.each([EXIT_EPSILON_KG / 2, EXIT_EPSILON_KG])(
-    "retains omitted residuals of %s kg for the closing balance",
+    "shows positive displayed residuals even at %s kg raw",
     (residualKg) => {
       const runOutputKg = RESIDUAL_TEST_INPUT_KG - residualKg;
       const lotKg = runOutputKg - residualKg;
@@ -109,9 +153,11 @@ describe("buildBatchSankey", () => {
         application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(appliedKg) },
       })]);
 
-      expect(result.exits).toEqual([]);
-      expect(result.omittedResidualKg).toBeCloseTo(RESIDUAL_TEST_INPUT_KG - appliedKg);
-      expect(result.omittedResidualKg).toBeGreaterThan(EXIT_EPSILON_KG);
+      expect(result.exits.map((exit) => exit.key)).toEqual(["conversion_loss", "unallocated_output", "in_storage"]);
+      expect(result.exits.reduce((sum, exit) => sum + exit.massKg, 0)).toBeCloseTo(
+        Number(formatMassKg(RESIDUAL_TEST_INPUT_KG).replace(/[^\d.-]/g, "")) - Number(formatMassKg(appliedKg).replace(/[^\d.-]/g, "")),
+      );
+      expect(result.omittedResidualKg).toBe(0);
       expect(result.warnings).toEqual([]);
     },
   );
@@ -126,10 +172,23 @@ describe("buildBatchSankey", () => {
       application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(appliedKg) },
     })]);
 
-    expect(result.exits).toEqual([]);
+    expect(result.exits).toEqual([expect.objectContaining({ key: "conversion_loss", massKg: ROUNDING_CONVERSION_KG })]);
     expect(result.warnings).toEqual([]);
-    expect(result.omittedResidualKg).toBeCloseTo(ROUNDING_CONVERSION_KG + ROUNDING_DOWNSTREAM_KG + ROUNDING_DOWNSTREAM_KG);
-    expect(result.columns[0].massKg - result.omittedResidualKg).toBeCloseTo(result.columns[3].massKg);
+    expect(result.omittedResidualKg).toBeCloseTo(ROUNDING_DOWNSTREAM_KG + ROUNDING_DOWNSTREAM_KG);
+    expect(result.columns[0].massKg - ROUNDING_CONVERSION_KG - result.omittedResidualKg).toBeCloseTo(result.columns[3].massKg);
+  });
+
+  it("retains raw positive residuals whose displayed columns are equal", () => {
+    const result = buildBatchSankey([lineage({
+      productionRun: { id: "run-1", feedstockMassDryKg: 100.04, biocharDryMassKg: 100.03 },
+      biocharProduct: { id: "lot-1", massKg: 100.02, moistureContentPercent: null },
+      application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(100.01) },
+    })]);
+
+    expect(result.exits).toEqual([]);
+    expect(result.omittedResidualKg).toBeCloseTo(0.03);
+    expect(result.columns.map((column) => column.massKg)).toEqual([100.04, 100.03, 100.02, 100.01]);
+    expect(result.warnings).toEqual([]);
   });
 
   it("dedupes runs, lots, and feedstocks shared across member applications", () => {

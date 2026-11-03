@@ -8,10 +8,14 @@
  * carry a wet mass (then "Water driven off" is the first step: wet less the
  * runs' dry feedstock), otherwise dry. Steps: the lib's exits in flow order.
  * End column: the dry biochar applied, lit.
+ * Step masses and their record masses are display-rounded differences of
+ * display-rounded inputs, like the lib's exits; start, end and the balance
+ * check stay raw.
  */
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { displayedDifferenceKg } from "@/lib/mass-precision";
 import {
   EXIT_EPSILON_KG,
   type CreditBatchSankeyData,
@@ -37,7 +41,10 @@ export interface WaterfallRecord {
   code: string;
   /** One quiet name after the code: feedstock type, field, blend. */
   name: string | null;
-  /** This record's part of the column, in kg, on the column's basis. */
+  /**
+   * This record's part of the column, in kg, on the column's basis;
+   * step records use display-rounded differences of display-rounded inputs.
+   */
   massKg: number | null;
   /** Short line on the row: why there is no figure, or that it is out of balance. */
   note?: string;
@@ -257,9 +264,10 @@ export function buildWaterfall(
   // The lib counts a run with no recorded dry input as 0, so wet less dry
   // would invent water: only start wet when every run's dry input is known.
   const dryInputKnown = facts.runs.length > 0 && facts.runs.every((run) => run.dryInKg != null);
-  const waterKg = wetFeedstockKg == null || !dryInputKnown ? null : wetFeedstockKg - dryFeedstockKg;
-  const wetBelowDry = waterKg != null && waterKg < -EPSILON_KG;
-  const startsWet = waterKg != null && !wetBelowDry;
+  const rawWaterKg = wetFeedstockKg == null || !dryInputKnown ? null : wetFeedstockKg - dryFeedstockKg;
+  const wetBelowDry = rawWaterKg != null && rawWaterKg < -EPSILON_KG;
+  const startsWet = rawWaterKg != null && !wetBelowDry;
+  const waterKg = rawWaterKg == null || wetFeedstockKg == null ? null : displayedDifferenceKg(wetFeedstockKg, dryFeedstockKg);
   const startBasis = startsWet ? "wet" : "dry";
   const dryStartReason: DryStartReason | null = startsWet
     ? null
@@ -268,7 +276,7 @@ export function buildWaterfall(
       : wetFeedstockKg == null
         ? "wet-missing"
         : "wet-below-dry";
-  const hasWater = startsWet && waterKg != null && waterKg > EPSILON_KG;
+  const hasWater = startsWet && waterKg != null && waterKg > 0;
   const startKg = startsWet ? (wetFeedstockKg ?? dryFeedstockKg) : dryFeedstockKg;
 
   const runRecord = (run: RunFacts, massKg: number | null): WaterfallRecord => ({
@@ -281,17 +289,19 @@ export function buildWaterfall(
   // Each record keeps its own signed figure: the lib clamps only the total,
   // so a negative one is shown as it is and named in the warnings. A figure
   // that cannot be derived says what is missing instead of "Not recorded".
-  const withNote = (record: WaterfallRecord, massKg: number | null, words: RowWords): WaterfallRecord => {
-    if (massKg == null) return { ...record, massKg, note: words.missing };
-    if (massKg < -EPSILON_KG) {
+  const withNote = (record: WaterfallRecord, upstreamKg: number | null, downstreamKg: number | null, words: RowWords): WaterfallRecord => {
+    if (upstreamKg == null || downstreamKg == null) return { ...record, massKg: null, note: words.missing };
+    const raw = upstreamKg - downstreamKg;
+    const massKg = displayedDifferenceKg(upstreamKg, downstreamKg);
+    if (raw < -EPSILON_KG) {
       warnings.push(words.warning(record.code));
       return { ...record, massKg, note: words.negative };
     }
     // Below the threshold it is rounding noise, not a negative figure.
     return { ...record, massKg: Math.max(0, massKg) };
   };
-  const runRecords = (figure: (run: RunFacts) => number | null, words: RowWords) =>
-    facts.runs.map((run) => withNote(runRecord(run, null), figure(run), words)).sort(byCode);
+  const runRecords = (figures: (run: RunFacts) => [number | null, number | null], words: RowWords) =>
+    facts.runs.map((run) => withNote(runRecord(run, null), ...figures(run), words)).sort(byCode);
   const productRecords = facts.products
     .map(({ record, appliedKg, allocatedKg, product }) => {
       // A product with neither a measured mass nor an allocation has no stored figure.
@@ -300,7 +310,7 @@ export function buildWaterfall(
         composition: product.composition,
         sourceAllocatedDryMassKg: allocatedKg,
       });
-      return withNote(record, stored == null ? null : stored - appliedKg, ROW_WORDS.in_storage);
+      return withNote(record, stored, appliedKg, ROW_WORDS.in_storage);
     })
     .sort(byCode);
 
@@ -319,18 +329,18 @@ export function buildWaterfall(
   };
   if (hasWater && waterKg != null) {
     pushStep("water_driven_off", "Water driven off", waterKg, "productionRuns", "productionRun",
-      runRecords((run) => run.wetInKg == null || run.dryInKg == null ? null : run.wetInKg - run.dryInKg,
+      runRecords((run) => [run.wetInKg, run.dryInKg],
         ROW_WORDS.water_driven_off));
   }
   for (const exit of sankey.exits) {
     const stage = STAGE_OF_COLUMN[exit.fromColumn] ?? "productionRuns";
     if (exit.key === "conversion_loss") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
-        runRecords((run) => run.dryInKg == null || run.dryOutKg == null ? null : run.dryInKg - run.dryOutKg,
+        runRecords((run) => [run.dryInKg, run.dryOutKg],
         ROW_WORDS.conversion_loss));
     } else if (exit.key === "unallocated_output") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
-        runRecords((run) => run.dryOutKg == null || run.allocatedKg == null ? null : run.dryOutKg - run.allocatedKg,
+        runRecords((run) => [run.dryOutKg, run.allocatedKg],
         ROW_WORDS.unallocated_output));
     } else {
       pushStep(exit.key, exit.label, exit.massKg, stage, "biocharProduct", productRecords);
@@ -343,7 +353,7 @@ export function buildWaterfall(
   });
 
   // Hidden residuals keep their signs; their sum can exceed one tolerance.
-  const omittedWaterKg = startsWet && !hasWater ? (waterKg ?? 0) : 0;
+  const omittedWaterKg = startsWet && !hasWater ? (rawWaterKg ?? 0) : 0;
   const closingLevel = level - sankey.omittedResidualKg - omittedWaterKg;
   // A floating step would invent a level when the records cannot close.
   const balanced = closingLevel >= -EPSILON_KG && Math.abs(closingLevel - endKg) <= EPSILON_KG;

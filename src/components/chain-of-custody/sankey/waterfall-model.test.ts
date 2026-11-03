@@ -66,6 +66,36 @@ function build(wetKg: (number | null)[]) {
 
 describe("buildWaterfall", () => {
   it.each([
+    { wetKg: 120.04, displayedWater: "19.9 kg" },
+    { wetKg: 100.36, displayedWater: "0.3 kg" },
+  ])("closes a $wetKg kg wet start on Applied using the displayed fractional masses", ({ wetKg, displayedWater }) => {
+    const entry = lineage([wetKg], {
+      id: "app-1", code: "AP-26-001", dryT: kgToTonnes(20.04), wetT: kgToTonnes(25.06),
+    });
+    entry.productionRun = { ...entry.productionRun!, feedstockMassDryKg: 100.06, biocharDryMassKg: 60.04 };
+    entry.biocharProduct = { ...entry.biocharProduct!, massKg: 40.06 };
+    entry.sources = [{
+      productionRun: entry.productionRun!, reactor: null, feedstocks: entry.feedstocks,
+      allocatedWetMassKg: 40.06, allocatedDryMassKg: 40.06,
+    }];
+    const model = buildWaterfall(buildBatchSankey([entry]), [entry]);
+    const displayedTenths = (kg: number) => Math.round(Number(formatMassKg(kg).replace(/[^\d.-]/g, "")) * 10);
+    const steps = model.items.filter((item) => item.kind === "step");
+
+    expect(model.startBasis).toBe("wet");
+    expect(steps.map((item) => formatMassKg(item.massKg))).toEqual([
+      displayedWater, "40.1 kg", "19.9 kg", "20.1 kg",
+    ]);
+    expect(displayedTenths(model.startKg) - steps.reduce((sum, item) => sum + displayedTenths(item.massKg), 0))
+      .toBe(displayedTenths(model.endKg));
+    expect(model.balanced).toBe(true);
+    for (const step of steps) {
+      expect(step.records).toHaveLength(1);
+      expect(formatMassKg(step.records[0].massKg)).toBe(formatMassKg(step.massKg));
+    }
+  });
+
+  it.each([
     { moisture: 20, allocated: null, expectedKg: BLENDED_DRY_KG },
     { moisture: null, allocated: null, expectedKg: BLEND_KG - INGREDIENT_KG },
     { moisture: 20, allocated: ALLOCATED_DRY_KG, expectedKg: ALLOCATED_DRY_KG },
@@ -214,9 +244,12 @@ describe("buildWaterfall", () => {
     expect(summarySentence(model)).toContain(`${formatMassKg(RUN_DRY_IN_KG)} of dry feedstock went in.`);
   });
 
-  it.each([EXIT_EPSILON_KG / 2, EXIT_EPSILON_KG])(
-    "balances omitted residuals of %s kg without displaying them as steps",
-    (residualKg) => {
+  it.each([
+    { residualKg: EXIT_EPSILON_KG / 2, removedKg: 1 },
+    { residualKg: EXIT_EPSILON_KG, removedKg: 2 },
+  ])(
+    "balances displayed dry residuals of $residualKg kg alongside displayed water",
+    ({ residualKg, removedKg }) => {
       const runOutputKg = RUN_DRY_IN_KG - residualKg;
       const lotKg = runOutputKg - residualKg;
       const entry = lineage([RUN_DRY_IN_KG + residualKg], {
@@ -228,9 +261,11 @@ describe("buildWaterfall", () => {
       const model = buildWaterfall(buildBatchSankey(lineages), lineages);
 
       expect(model.startKg - model.endKg).toBeGreaterThan(EXIT_EPSILON_KG);
-      expect(model.items.map((item) => item.key)).toEqual(["feedstock", "applied"]);
-      expect(model.stepCount).toBe(0);
-      expect(model.removedKg).toBe(0);
+      expect(model.items.map((item) => item.key)).toEqual([
+        "feedstock", "water_driven_off", "conversion_loss", "unallocated_output", "in_storage", "applied",
+      ]);
+      expect(model.stepCount).toBe(4);
+      expect(model.removedKg).toBeCloseTo(removedKg);
       expect(model.warnings).toEqual([]);
       expect(model.balanced).toBe(true);
     },
@@ -248,7 +283,7 @@ describe("buildWaterfall", () => {
     const model = buildWaterfall(buildBatchSankey(lineages), lineages);
 
     expect(model.startBasis).toBe("wet");
-    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "applied"]);
+    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "conversion_loss", "applied"]);
     expect(model.warnings).toEqual([]);
     expect(model.balanced).toBe(true);
   });
@@ -264,12 +299,12 @@ describe("buildWaterfall", () => {
     const lineages = [entry];
     const model = buildWaterfall(buildBatchSankey(lineages), lineages);
 
-    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "applied"]);
+    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "water_driven_off", "conversion_loss", "in_storage", "applied"]);
     expect(model.warnings).not.toEqual([]);
     expect(model.balanced).toBe(false);
   });
 
-  it("includes omitted water alongside an omitted dry residual", () => {
+  it("includes displayed water alongside a displayed dry residual", () => {
     const residualKg = EXIT_EPSILON_KG * 0.75;
     const entry = lineage([RUN_DRY_IN_KG + residualKg], {
       id: "app-1", code: "AP-26-001", dryT: kgToTonnes(RUN_DRY_OUT_KG - residualKg), wetT: APPLIED_WET_T,
@@ -277,8 +312,8 @@ describe("buildWaterfall", () => {
     const lineages = [entry];
     const model = buildWaterfall(buildBatchSankey(lineages), lineages);
 
-    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "conversion_loss", "applied"]);
-    expect(model.startKg - model.removedKg - model.endKg).toBeGreaterThan(EXIT_EPSILON_KG);
+    expect(model.items.map((item) => item.key)).toEqual(["feedstock", "water_driven_off", "conversion_loss", "in_storage", "applied"]);
+    expect(model.startKg - model.removedKg - model.endKg).toBeCloseTo(-0.05);
     expect(model.balanced).toBe(true);
   });
 

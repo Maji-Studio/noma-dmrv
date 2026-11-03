@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
+import { roundDisplayedMassKg } from "./mass-precision";
 import {
   formatCo2e,
   formatCalendarDate,
@@ -191,6 +192,13 @@ describe("formatPercent", () => {
 });
 
 describe("formatMassKg explicit storage precision", () => {
+  it.each([0, 0.04, 0.05, 1.05, 1.15, 125.125, 1_234.55, -0.04, -0.05, -1.15])(
+    "agrees with displayed mass-balance rounding for %s kg",
+    (kg) => {
+      expect(formatMassKg(roundDisplayedMassKg(kg))).toBe(formatMassKg(kg));
+    },
+  );
+
   it("retains gram precision without changing the default display", () => {
     expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
     expect(formatMassKg(125.125)).toBe("125.1 kg");

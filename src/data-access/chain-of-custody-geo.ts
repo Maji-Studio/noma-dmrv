@@ -145,10 +145,11 @@ export async function projectChainOfCustodyGeoData(
   requireOrgScope(ctx);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
-  const [facilityGps, applicationGps, feedstockLegs] = await Promise.all([
+  const [facilityGps, applicationGps, feedstockLegs, deliveryGps] = await Promise.all([
     getFacilityGps(ctx, chain.facility.id),
     getApplicationGps(ctx, chain.application.id),
     getFeedstockLegs(ctx, feedstockIds),
+    getDeliveryGps(ctx, [chain.delivery.id]),
   ]);
   const products = chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : []);
   const outboundLegs = (await Promise.all(products.map(product => getApplicationBiocharLeg(ctx, {
@@ -161,6 +162,7 @@ export async function projectChainOfCustodyGeoData(
   const nodes = buildGeoNodes(chain, {
     facilityGps,
     applicationGps,
+    deliveryGps: deliveryGps.get(chain.delivery.id),
     legs,
   });
   const warnings = geoWarnings(facilityGps, chain.feedstocks.length, nodes);
@@ -199,9 +201,13 @@ export async function projectRunRollForwardGeoData(
     ).values(),
   ];
   const feedstockIds = feedstocks.map((feedstock) => feedstock.id);
-  const [facilityGps, feedstockLegs] = await Promise.all([
+  const deliveryIds = [...new Set(rollForwards.flatMap(({ products }) =>
+    products.flatMap(({ deliveries: shipped }) => shipped.map(({ delivery }) => delivery.id)),
+  ))];
+  const [facilityGps, feedstockLegs, deliveryGps] = await Promise.all([
     getFacilityGps(ctx, facility.id),
     getFeedstockLegs(ctx, feedstockIds),
+    getDeliveryGps(ctx, deliveryIds),
   ]);
   const legs = feedstockLegs.map((leg) => enrichInboundLeg(leg, feedstocks));
   const resolve = geoNodeResolver(facilityGps);
@@ -235,7 +241,7 @@ export async function projectRunRollForwardGeoData(
     for (const { product, deliveries: shipped } of products) {
       add(resolve("biocharProduct", product.id, product.code, null));
       for (const { delivery } of shipped) {
-        add(resolve("delivery", delivery.id, delivery.code, null));
+        add(resolve("delivery", delivery.id, delivery.code, null, deliveryGps.get(delivery.id)));
       }
     }
   }
@@ -323,6 +329,7 @@ function enrichLegs(
 interface GeoNodeInputs {
   facilityGps: GpsPair;
   applicationGps: GpsPair;
+  deliveryGps?: GpsPair;
   legs: ChainGeoLeg[];
 }
 
@@ -330,7 +337,7 @@ function buildGeoNodes(
   chain: ChainOfCustodyData,
   inputs: GeoNodeInputs
 ): ChainGeoNode[] {
-  const { facilityGps, applicationGps, legs } = inputs;
+  const { facilityGps, applicationGps, deliveryGps, legs } = inputs;
   const nodes: ChainGeoNode[] = [];
   const sources = resolveChainSources(chain);
   const resolve = geoNodeResolver(facilityGps);
@@ -374,7 +381,7 @@ function buildGeoNodes(
     nodes.push(resolve("order", chain.order.id, chain.order.code, null));
   }
 
-  nodes.push(resolve("delivery", chain.delivery.id, chain.delivery.code, null));
+  nodes.push(resolve("delivery", chain.delivery.id, chain.delivery.code, null, deliveryGps));
   nodes.push(
     resolve(
       "application",
@@ -458,6 +465,19 @@ async function getApplicationGps(ctx: OrgContext, applicationId: string): Promis
     .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? { lat: null, lng: null };
+}
+
+/** Destination GPS is independent of whether a transport distance was recorded. */
+async function getDeliveryGps(ctx: OrgContext, deliveryIds: string[]): Promise<Map<string, GpsPair>> {
+  requireOrgScope(ctx);
+  if (deliveryIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: deliveries.id, lat: customerLocations.gpsLatitude, lng: customerLocations.gpsLongitude })
+    .from(deliveries)
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .where(and(inArray(deliveries.id, deliveryIds), eq(deliveries.organizationId, ctx.organizationId)));
+  return new Map(rows.map(({ id, lat, lng }) => [id, { lat, lng }]));
 }
 
 function positiveOrNull(value: number | null): number | null {

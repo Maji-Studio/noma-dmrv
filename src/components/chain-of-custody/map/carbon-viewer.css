@@ -27,6 +27,7 @@
 .cvm-mk--supplier { --cvm-acc: var(--acc-prod); }
 .cvm-mk--facility { --cvm-acc: var(--acc-infra); }
 .cvm-mk--field { --cvm-acc: var(--acc-dist); }
+.cvm-mk--customer { --cvm-acc: var(--acc-dist); }
 
 .cvm-mk .cvm-shape {
   position: absolute;
