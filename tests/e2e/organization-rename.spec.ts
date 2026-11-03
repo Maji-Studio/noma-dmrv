@@ -21,7 +21,11 @@ test.describe("Organization rename", () => {
       const rename = page.getByRole("button", { name: "Rename organization" });
       await expect(rename).toHaveCount(0);
       const newName = `E2E Renamed ${Date.now()}`;
-      await page.getByRole("textbox", { name: "Name" }).fill(newName);
+      const nameInput = page.getByRole("textbox", { name: "Name" });
+      // The form writes the saved name in on hydration. Typing before that
+      // appends to it instead of replacing it (#1379).
+      await expect(nameInput).toHaveValue(fixture.organizationName);
+      await nameInput.fill(newName);
       await rename.click();
 
       await expect(page.getByText(`Organization renamed to ${newName}.`)).toBeVisible();
