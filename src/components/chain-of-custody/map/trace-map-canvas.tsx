@@ -444,7 +444,7 @@ export default function TraceMapCanvas({
           <EmptyState
             icon={<MapTrifoldIcon size={40} weight="thin" />}
             title="The map could not start"
-            description="This browser could not start the map renderer. Reload the page or try another browser. The stages are still listed."
+            description="This browser could not start the map renderer. Reload the page or try another browser. The records are still listed."
             padding="md"
           />
         </div>
