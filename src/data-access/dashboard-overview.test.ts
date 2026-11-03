@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { OrgContext } from "@/lib/auth/server";
-import { getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
+import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
+import { ATTENTION_PER_CHECK } from "./dashboard-attention";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   previews: vi.fn(),
+  union: vi.fn(async (): Promise<unknown[]> => []),
 }));
 
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
@@ -19,7 +21,7 @@ vi.mock("./biochar-products", () => ({
 }));
 vi.mock("drizzle-orm/pg-core", async (importOriginal) => ({
   ...await importOriginal<typeof import("drizzle-orm/pg-core")>(),
-  unionAll: async () => [],
+  unionAll: () => mocks.union(),
 }));
 vi.mock("./dashboard-stations", () => ({
   epochMs: () => sql`0`,
@@ -66,6 +68,7 @@ type Row = Record<string, unknown>;
 let rowsByTable: Record<string, Row[]>;
 
 beforeEach(() => {
+  mocks.union.mockResolvedValue([]);
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
   mocks.previews.mockResolvedValue({});
   // Project only selected columns, so omitting composition or the allocation
@@ -163,5 +166,61 @@ describe("dashboard display totals", () => {
     expect(hints.biocharProduced).toContain("counted on the day each run started");
     expect(hints.appliedToSoil).toContain("counted on the application date");
     expect(hints.co2eStored).toContain("Counted on the day each batch's period ends");
+  });
+});
+
+// #1532 F5 round 1: "N open" counts rows, so a check past its cap must fold
+// into one grouped row rather than drop the records it cannot show.
+describe("needs attention rows", () => {
+  const TODAY = "2026-11-03";
+  const runIds = Array.from({ length: ATTENTION_PER_CHECK + 2 }, (_, index) => `run-${index}`);
+  const runRow = (id: string, ord: number) => ({
+    kind: "run-mass", id, code: `PR-${ord}`, dateDay: DAY, dateMs: null, ord,
+    total: runIds.length, allIds: runIds, removals: [],
+  });
+  const feedstockRow = (ord: number) => ({
+    kind: "feedstock-missing", id: `fs-${ord}`, code: `FS-${ord}`, dateDay: null, dateMs: 0, ord,
+    total: 2, allIds: ["fs-1", "fs-2"], removals: [],
+  });
+  const batchRow = (ord: number) => ({
+    kind: "batch-pending", id: `cb-${ord}`, code: `CB-${ord}`, dateDay: "2026-09-30", dateMs: null, ord,
+    total: ATTENTION_PER_CHECK + 1, allIds: [], removals: [],
+  });
+
+  it("groups an over-cap check into one row linking to its filtered list", async () => {
+    mocks.union.mockResolvedValue([
+      // The branch is capped in SQL; its window count and id list carry the rest.
+      ...runIds.slice(0, ATTENTION_PER_CHECK).map((id, index) => runRow(id, index + 1)),
+      feedstockRow(1),
+      feedstockRow(2),
+      ...Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => batchRow(index + 1)),
+    ]);
+
+    const { items, batches } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+
+    const runs = new URLSearchParams({ facility: FACILITY_ID, ids: runIds.join(",") });
+    expect(items.map(({ entityCode, count, title, href }) => ({ entityCode, count, title, href }))).toEqual([
+      { entityCode: "Production runs", count: runIds.length, title: "Complete runs missing mass data", href: `/production-runs?${runs.toString()}` },
+      { entityCode: "FS-1", count: undefined, title: "Feedstock record missing data", href: expect.stringContaining("feedstock=fs-1") },
+      { entityCode: "FS-2", count: undefined, title: "Feedstock record missing data", href: expect.stringContaining("feedstock=fs-2") },
+      {
+        entityCode: "Credit batches",
+        count: ATTENTION_PER_CHECK + 1,
+        title: "Period ended · not submitted yet",
+        href: `/credit-batches?facility=${FACILITY_ID}`,
+      },
+    ]);
+    expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1, awaitingVerification: 0 });
+  });
+
+  it("counts the card's rows as N open", async () => {
+    mocks.union.mockResolvedValue([
+      ...runIds.slice(0, ATTENTION_PER_CHECK).map((id, index) => runRow(id, index + 1)),
+      feedstockRow(1),
+      feedstockRow(2),
+    ]);
+    const overview = await getDashboardOverview(CTX, FACILITY_ID, "month");
+    expect(overview.attention).toHaveLength(3);
+    expect(overview.attentionTotal).toBe(overview.attention.length);
   });
 });

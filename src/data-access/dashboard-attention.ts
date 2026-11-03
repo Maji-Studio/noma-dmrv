@@ -74,29 +74,47 @@ export function pendingBatchesWhere(
 export const PERIOD_ENDED_SUBMITTED_TITLE = "Period ended · awaiting verification";
 export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted yet";
 
+/** A closed period either waits on the verifier or on the operator's submission. */
+export type CreditBatchPeriodAttention = "submitted" | "notSubmitted";
+
+export const PERIOD_ATTENTION_TITLES: Record<CreditBatchPeriodAttention, string> = {
+  submitted: PERIOD_ENDED_SUBMITTED_TITLE,
+  notSubmitted: PERIOD_ENDED_NOT_SUBMITTED_TITLE,
+};
+
+/** Rows one check shows before it folds into a single grouped row. */
+export const ATTENTION_PER_CHECK = 4;
+
+/**
+ * One check's rows for Needs attention: its records while they fit the cap,
+ * else one grouped row standing for all of them, so every counted unit in
+ * "N open" has a row (#1532 F5).
+ */
+export function capOrGroup<T>(rows: readonly T[], total: number, group: () => T): T[] {
+  return total > ATTENTION_PER_CHECK ? [group()] : rows.slice(0, ATTENTION_PER_CHECK);
+}
+
 /**
  * What a pending batch puts in Needs attention, from its Removals' display
  * state (#1528). Each interrupted Removal gets its own row, and the batch then
- * shows no period row. Otherwise a closed period reads "awaiting verification"
- * only once a Removal is submitted (its phase, as on the batch page: a newer
- * draft does not undo an earlier submitted version); with no Removal or only a
- * draft it reads "not submitted yet". The batch status alone cannot say this:
- * it stays pending after submission.
+ * shows no period row. Otherwise a closed period is "submitted" (awaiting
+ * verification) only once a Removal is submitted (its phase, as on the batch
+ * page: a newer draft does not undo an earlier submitted version); with no
+ * Removal or only a draft it is "notSubmitted". The batch status alone cannot
+ * say this: it stays pending after submission.
  */
 export function creditBatchAttention(
   batch: { endDate: string | null },
   removals: readonly { status: Pick<DerivedStatus, "kind">; phase: "draft" | "submitted" }[],
   todayStr: string,
-): { interrupted: boolean; periodTitle: string | null } {
+): { interrupted: boolean; period: CreditBatchPeriodAttention | null } {
   if (findInterruptedRemoval(removals)) {
-    return { interrupted: true, periodTitle: null };
+    return { interrupted: true, period: null };
   }
-  if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, periodTitle: null };
+  if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, period: null };
   return {
     interrupted: false,
-    periodTitle: removals.some((removal) => removal.phase === "submitted")
-      ? PERIOD_ENDED_SUBMITTED_TITLE
-      : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
+    period: removals.some((removal) => removal.phase === "submitted") ? "submitted" : "notSubmitted",
   };
 }
 

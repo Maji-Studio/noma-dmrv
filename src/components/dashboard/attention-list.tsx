@@ -20,7 +20,10 @@ import { StructuralGapList } from "./structural-gap-list";
 interface AttentionListProps {
   attention: DashboardAttentionItem[];
   structuralGaps: DashboardStructuralGap[];
-  /** Exact uncapped count of rows; `attention` is a capped sample of the record rows. */
+  /**
+   * "N open": every row the card shows. A check over its cap and a structural
+   * gap are each one grouped row whose "N affected" says how many records.
+   */
   total: number;
 }
 
@@ -29,9 +32,6 @@ export function AttentionList({
   structuralGaps,
   total,
 }: AttentionListProps) {
-  // "N open" counts rows; a structural gap is one row however many records
-  // it groups (its "N affected" says how many).
-  const displayedOpenCount = structuralGaps.length + attention.length;
   const summaryState = deriveAttentionSummaryState(total);
 
   return (
@@ -65,19 +65,16 @@ export function AttentionList({
             <DashboardAttentionRow
               key={item.id}
               href={item.href}
-              metadata={formatDashboardRecordMetadata(item.entityCode, item.date)}
+              metadata={
+                item.count == null
+                  ? formatDashboardRecordMetadata(item.entityCode, item.date)
+                  : `${item.entityCode} · ${item.count} affected`
+              }
               title={item.title}
               divided={index > 0}
             />
           ))}
         </ul>
-      )}
-      {total > displayedOpenCount && (
-        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-10">
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            Showing first {displayedOpenCount} of {total}
-          </span>
-        </div>
       )}
     </DashboardPanel>
   );

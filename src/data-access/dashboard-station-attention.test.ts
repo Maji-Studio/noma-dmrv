@@ -26,41 +26,54 @@ describe("withCrossCuttingAttention", () => {
       biocharRouteGpsTargetId: "product-1",
     }, FACILITY_ID);
 
-    const result = byKey(withCrossCuttingAttention(stations(), gaps, NO_BATCHES));
+    const result = byKey(withCrossCuttingAttention(stations(), gaps, NO_BATCHES, FACILITY_ID));
 
-    expect(result.suppliers).toMatchObject({ attention: 2, reasons: [{ state: "warning", text: "2 feedstocks without supplier GPS" }] });
-    expect(result.feedstock).toMatchObject({ attention: 7, reasons: [{ state: "warning", text: "7 routes missing GPS" }] });
-    expect(result.deliveries).toMatchObject({ attention: 3, reasons: [{ state: "warning", text: "3 routes missing GPS" }] });
-    expect(result.products?.attention).toBe(0);
+    // Each lights the station whose form fixes it, and its reason links to that form.
+    expect(result.suppliers).toMatchObject({ attention: 2, reasons: [{ state: "warning", text: "2 feedstocks without supplier GPS", href: gaps[0]?.href }] });
+    expect(result.feedstock).toMatchObject({ attention: 7, reasons: [{ state: "warning", text: "7 routes missing GPS", href: gaps[1]?.href }] });
+    expect(result.products).toMatchObject({ attention: 3, reasons: [{ state: "warning", text: "3 routes missing GPS", href: gaps[2]?.href }] });
+    expect(gaps[2]?.href).toContain("/biochar-products?");
+    expect(result.deliveries?.attention).toBe(0);
   });
 
-  it("puts credit batch rows on Production after its own problems and before running runs", () => {
+  it("puts credit batch rows on Production, counting only what the operator can act on", () => {
     const result = byKey(withCrossCuttingAttention(
       stations({
         production: {
           attention: 2,
           reasons: [
             { state: "warning", text: "2 runs missing mass data" },
-            { state: "in-progress", text: "1 running now" },
+            { state: "in-progress", text: "1 running now", source: "runningRuns" },
           ],
         },
       }),
       [],
       { interrupted: 1, notSubmitted: 3, awaitingVerification: 1 },
+      FACILITY_ID,
     ));
 
-    expect(result.production?.attention).toBe(7);
+    const batches = `/credit-batches?facility=${FACILITY_ID}`;
+    // 2 runs + 1 interrupted + 3 not submitted; awaiting verification waits on the verifier.
+    expect(result.production?.attention).toBe(6);
     expect(result.production?.reasons).toEqual([
-      { state: "error", text: "1 submission interrupted" },
+      { state: "error", text: "1 submission interrupted", href: `/removals?facility=${FACILITY_ID}` },
       { state: "warning", text: "2 runs missing mass data" },
-      { state: "warning", text: "3 credit batches not submitted" },
-      { state: "in-progress", text: "1 running now" },
-      { state: "in-progress", text: "1 credit batch awaiting verification" },
+      { state: "warning", text: "3 credit batches not submitted", href: batches },
+      { state: "in-progress", text: "1 running now", source: "runningRuns" },
+      { state: "in-progress", text: "1 credit batch awaiting verification", href: batches },
     ]);
+  });
+
+  it("shows a batch awaiting verification without counting it", () => {
+    const result = byKey(withCrossCuttingAttention(stations(), [], { ...NO_BATCHES, awaitingVerification: 2 }, FACILITY_ID));
+    expect(result.production).toMatchObject({
+      attention: 0,
+      reasons: [{ state: "in-progress", text: "2 credit batches awaiting verification" }],
+    });
   });
 
   it("leaves stations untouched when nothing cross-cutting is open", () => {
     const input = stations();
-    expect(withCrossCuttingAttention(input, [], NO_BATCHES)).toEqual(input);
+    expect(withCrossCuttingAttention(input, [], NO_BATCHES, FACILITY_ID)).toEqual(input);
   });
 });

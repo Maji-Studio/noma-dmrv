@@ -19,6 +19,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   DashboardMassFlowSegment,
@@ -71,8 +72,8 @@ interface StationGeometry {
   index: string;
   color: string;
   labelX: number;
-  /** Attention badge anchor (absent = station never badges). */
-  badge?: { x: number; y: number };
+  /** Attention badge anchor, top right of the station's drawn mass. */
+  badge: { x: number; y: number };
   /** Tooltip anchor. */
   tip: { x: number; y: number };
 }
@@ -85,6 +86,7 @@ const STATION_GEO: Record<DashboardStationKey, StationGeometry> = {
     index: "01",
     color: ZONE.prod,
     labelX: BAY_CENTERS[0]!,
+    badge: { x: 196, y: 338 },
     tip: { x: 200, y: 352 },
   },
   feedstock: {
@@ -220,6 +222,9 @@ export function FlowHeroScene({
   const showChips = interactive && view !== "attention";
   const showBadges = interactive && view !== "flow";
   const showReasons = interactive && view === "attention";
+  const reasonStations = showReasons
+    ? stations.filter((station) => station.attention > 0 && station.reasons.length > 0)
+    : [];
   const showRibbons = interactive && view === "flow" && maxTonnes > 0;
   const showSmoke = interactive && view === "overview";
 
@@ -543,9 +548,9 @@ export function FlowHeroScene({
       {/* Attention badges. */}
       {showBadges &&
         stations
-          .filter((station) => station.attention > 0 && STATION_GEO[station.key].badge)
+          .filter((station) => station.attention > 0)
           .map((station) => {
-            const badge = STATION_GEO[station.key].badge!;
+            const badge = STATION_GEO[station.key].badge;
             const emphasized = view === "attention";
             const stationState = deriveWorstDashboardState(
               station.reasons.map((reason) => reason.state),
@@ -553,6 +558,7 @@ export function FlowHeroScene({
             return (
               <div
                 key={`badge-${station.key}`}
+                data-testid={`flow-hero-badge-${station.key}`}
                 className={[
                   "pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full font-[family-name:var(--font-mono)] font-medium leading-none text-white transition-all",
                   emphasized ? "px-10 py-6 text-[13px]" : "px-8 py-4 text-[10.5px]",
@@ -630,29 +636,38 @@ export function FlowHeroScene({
     </div>
     {/* Attention reasons (attention view only), below the art in each
         station's bay so several reasons per station stack instead of
-        running into the neighbours or past the scene's bottom edge. */}
-    {showReasons && (
+        running into the neighbours or past the scene's bottom edge. A reason
+        fixed somewhere other than the station's list links there. */}
+    {reasonStations.length > 0 && (
       <div
         className="hidden grid-cols-6 pb-12 md:grid"
         style={{ background: SCENE_BG, paddingLeft: pctX(BAY_LEFT_INSET), paddingRight: pctX(BAY_RIGHT_INSET) }}
         data-testid="flow-hero-reasons"
-        aria-hidden
       >
-        {stations
-          .filter((station) => station.attention > 0 && station.reasons.length > 0)
-          .map((station) => (
-            <ul
-              key={`reason-${station.key}`}
-              className="flex flex-col items-center gap-2 px-6 text-center text-[12px] font-light leading-[1.3]"
-              style={{ gridColumnStart: BAY_CENTERS.indexOf(STATION_GEO[station.key].labelX) + 1 }}
-            >
-              {station.reasons.map((reason) => (
-                <li key={reason.text} style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }}>
-                  {reason.text}
-                </li>
-              ))}
-            </ul>
-          ))}
+        {reasonStations.map((station) => (
+          <ul
+            key={`reason-${station.key}`}
+            className="flex flex-col items-center gap-2 px-6 text-center text-[12px] font-light leading-[1.3]"
+            style={{ gridColumnStart: BAY_CENTERS.indexOf(STATION_GEO[station.key].labelX) + 1 }}
+          >
+            {station.reasons.map((reason) => (
+              <li
+                key={reason.text}
+                style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }}
+                // Plain reasons repeat the station link's label; linked ones are their own target.
+                aria-hidden={reason.href ? undefined : true}
+              >
+                {reason.href ? (
+                  <Link href={reason.href} className="underline underline-offset-2">
+                    {reason.text}
+                  </Link>
+                ) : (
+                  reason.text
+                )}
+              </li>
+            ))}
+          </ul>
+        ))}
       </div>
     )}
     </>

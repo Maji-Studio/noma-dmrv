@@ -5,7 +5,7 @@
  * in Needs attention (one form section fixes every affected record) and also
  * lights the flow station its records belong to: supplier locations on
  * Suppliers, feedstock routes on Feedstock, biochar distribution routes on
- * Delivery (#1532 F5).
+ * Biochar, whose product form holds them (#1532 F5).
  */
 import { recordHref } from "@/lib/record-links";
 import {
@@ -141,7 +141,8 @@ export function buildDashboardStructuralGaps(
       metadata: structuralGapMetadata("Biochar product form", "Transport route", counts.biocharRouteGpsGaps),
       count: counts.biocharRouteGpsGaps,
       href: routeEditorHref(facilityId, "biochar", counts.biocharRouteGpsTargetId, ENTITY_FOCUS_TARGETS.transportRoute),
-      station: "deliveries",
+      // The route is fixed on the biochar product form, so it lights Biochar.
+      station: "products",
       stationReason: `${plural(counts.biocharRouteGpsGaps, "route")} missing GPS`,
     },
   ];

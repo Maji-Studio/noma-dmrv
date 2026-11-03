@@ -71,6 +71,10 @@ export type DashboardStationState = Extract<
 export interface DashboardStationReason {
   state: DashboardStationState;
   text: string;
+  /** Where this reason is fixed, when that is not the station's own list. */
+  href?: string;
+  /** Marks the running-runs reason, so views find it by source, not by state. */
+  source?: "runningRuns";
 }
 
 export interface DashboardStation {
@@ -560,7 +564,7 @@ export async function getDashboardStations(
           ? [{ state: "warning" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
           : []),
         ...(runningRuns > 0
-          ? [{ state: "in-progress" as const, text: `${runningRuns} running now` }]
+          ? [{ state: "in-progress" as const, text: `${runningRuns} running now`, source: "runningRuns" as const }]
           : []),
       ],
       href: facilityHref("/production-runs", facilityId),

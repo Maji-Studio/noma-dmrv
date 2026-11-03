@@ -96,7 +96,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
           station.reasons.map((reason) => reason.state),
         );
         const runningReason = station.reasons.find(
-          (reason) => reason.state === "in-progress",
+          (reason) => reason.source === "runningRuns",
         );
         return (
           <div key={station.key} className="flex flex-col">

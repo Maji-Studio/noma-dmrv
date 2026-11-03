@@ -520,7 +520,7 @@ describe("dashboard structural certification gaps", () => {
         metadata: "Biochar product form · Transport route · 1 affected",
         count: 1,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
-        station: "deliveries",
+        station: "products",
       },
     ]);
   });
@@ -549,7 +549,7 @@ describe("dashboard structural certification gaps", () => {
         key: "deliveryRouteGps",
         label: "Delivery route GPS missing",
         metadata: "Biochar product form · Transport route · 3 affected",
-        station: "deliveries",
+        station: "products",
       },
     ]);
   });
