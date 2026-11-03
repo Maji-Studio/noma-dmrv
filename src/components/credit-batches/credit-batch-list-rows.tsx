@@ -111,7 +111,7 @@ function BatchState({
       {view.state ? (
         <span className="inline-flex items-center gap-6 body-small font-medium">
           <StateMark state={view.state} size={STATE_MARK_PX} />
-          {view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
+          {view.state === "blocking" && view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
           {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
       ) : readinessStatus === "loading" && (
@@ -177,8 +177,9 @@ export function CreditBatchListRow({
       onClick={() => onOpen(creditBatch)}
     >
       <div className="flex min-w-0 flex-col gap-4 xl:contents">
-        <div className="flex min-w-0 items-center justify-between gap-12 xl:contents">
-          <div className="flex min-w-0 items-baseline gap-8 xl:contents">
+        {/* On a phone the code sets the wrap point: the feedstock name truncates first, and a state that still does not fit wraps below instead of running under the code. A named batch keeps min-w-0 so its name truncates instead. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-12 gap-y-4 xl:contents">
+          <div className={cn("flex flex-1 items-baseline gap-8 xl:contents", named && "min-w-0")}>
             <Link
               href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
               // The link navigates itself; the row's own click must not push a second time.
@@ -194,7 +195,7 @@ export function CreditBatchListRow({
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
               {named ? name : creditBatch.code.slice(codePrefix.length)}
             </Link>
-            <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED, named && "max-xl:hidden")}>
+            <span className={cn("min-w-0 truncate body-small max-xl:w-0 max-xl:flex-1 xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED, named && "max-xl:hidden")}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
             </span>
           </div>

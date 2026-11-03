@@ -39,7 +39,8 @@ export async function loadFacilityEmissionsOverview(
 ): Promise<FacilityEmissionsOverview> {
   const { batches, timezone } = await loadFacilityEmissionsOverviewScope(ctx, facilityId);
   if (!batches.length) return { batches: [] };
-  const displayByBatch = await loadBatchesEmissionLines(ctx, batches);
+  // Match the batch Emissions tab: attach comments before filtering handled lines.
+  const displayByBatch = await loadBatchesEmissionLines(ctx, batches, { comments: true });
   // Compare local calendar months, including the timestamp's year and zone offset.
   const month = formatFacilityDate(new Date(), timezone).slice(0, MONTH_PREFIX_LENGTH);
   return { batches: batches.map((batch) => {
