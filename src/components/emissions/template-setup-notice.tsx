@@ -10,20 +10,14 @@ import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
-  type RemovalTemplateBlockerCode,
 } from "@/lib/certification/removal-template-blockers";
 
 const SET_TEMPLATE_LABEL = "Set template";
-/** What a read-only batch says for blockers whose whole message is a repair step. */
-const READ_ONLY_FACTS: Partial<Record<RemovalTemplateBlockerCode, string>> = {
-  unpinnedTemplate: "This credit batch has no Removal template.",
-  missingFixedDatapoint: "Some fixed values are not set in the Isometric template.",
-};
 
 /** The notice text: the full message, or on a read-only batch only the fact. */
 export function templateSetupNoticeText(blocker: RemovalTemplateBlocker, readOnly: boolean): string {
   if (!readOnly) return blocker.message;
-  return blocker.copy?.detail ?? READ_ONLY_FACTS[blocker.code] ?? blocker.message;
+  return blocker.copy?.detail ?? blocker.copy?.readOnlyDetail ?? blocker.message;
 }
 
 export function TemplateSetupNotice({

@@ -145,7 +145,7 @@ it("keeps every batch blocker in the original order", () => {
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facility);
   expect(resolved.templateBlockers).toEqual([
     { code: "templateNotFullyRead", message: REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead, copy: { detail: "Template not fully read.", instruction: "Try again." } },
-    { code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint, copy: { instruction: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint } },
+    { code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint, copy: { instruction: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint, readOnlyDetail: "Some fixed values are not set in the Isometric template." } },
     { code: "templateLinesNeedReview", message: REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview, copy: { detail: "This Removal template has components to decide.", instruction: "Answer them in Settings, Removal templates." } },
   ]);
 });

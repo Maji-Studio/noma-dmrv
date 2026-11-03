@@ -31,12 +31,17 @@ export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
 /** Optional split for surfaces that can show facts without repair steps.
  * The existing message/detail remains the complete copy for other consumers.
  */
-export interface BlockerCopy { detail?: string; instruction?: string }
+export interface BlockerCopy {
+  detail?: string;
+  instruction?: string;
+  /** The fact a read-only batch states when `detail` is empty and the whole message is a repair step. */
+  readOnlyDetail?: string;
+}
 const TEMPLATE_BLOCKER_COPY: Partial<Record<RemovalTemplateBlockerCode, BlockerCopy>> = {
   notRemovalTemplate: { detail: NOT_REMOVAL_TEMPLATE, instruction: SET_REMOVAL_TEMPLATE },
-  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE },
+  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE, readOnlyDetail: "This credit batch has no Removal template." },
   templateNotFullyRead: { detail: TEMPLATE_NOT_FULLY_READ, instruction: TRY_AGAIN },
-  missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS },
+  missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS, readOnlyDetail: "Some fixed values are not set in the Isometric template." },
   templateLinesNeedReview: { detail: COMPONENTS_TO_DECIDE, instruction: ANSWER_IN_SETTINGS },
 };
 export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string; copy?: BlockerCopy }

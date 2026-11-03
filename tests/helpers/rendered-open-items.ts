@@ -11,6 +11,7 @@ export function renderedOpenItems<T extends { blocking: CreditBatchOpenItem[]; c
     delete joined.instruction;
     delete joined.readOnlyTitle;
     delete joined.readOnlyTitleAfterCode;
+    delete joined.readOnlyDetail;
     delete joined.detailMayInstruct;
     return joined;
   };

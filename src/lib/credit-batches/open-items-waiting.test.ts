@@ -45,6 +45,7 @@ describe("buildCreditBatchWaitingItems", () => {
         id: "not-applied",
         title: "0.05 t produced but not applied yet",
         detail: "It can join a Removal once its application is recorded.",
+        detailMayInstruct: true,
         target: { tab: "removals" },
       },
     ]);
@@ -72,6 +73,7 @@ describe("buildCreditBatchWaitingItems", () => {
       id: "not-applied",
       title: "0.01 t produced but not applied yet",
       detail: "It can join a Removal once its application is recorded.",
+      detailMayInstruct: true,
       target: { tab: "removals" },
     }]);
   });

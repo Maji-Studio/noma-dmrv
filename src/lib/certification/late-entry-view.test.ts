@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CARRY_WAITING_REASONS } from "./emission-entry-carry";
-import { lateEntryView, waitingAction, waitingDetailCopy, waitingDetail, waitingEntryTitle, type LateEntryFacts } from "./late-entry-view";
+import { CARRY_WAITING_DETAILS, CARRY_WAITING_REASONS } from "./emission-entry-carry";
+import { lateEntryView, waitingAction, waitingDetailCopy, waitingEntryTitle, readOnlyWaitingDetail, readOnlyWaitingEntryTitle, type LateEntryFacts } from "./late-entry-view";
 import { lateEntryRows } from "./late-entry-list";
 
 const AFTER = { removalId: "rm-9", removalCode: "RM-26-009" };
@@ -75,13 +75,21 @@ describe("lateEntryView", () => {
     const destination = lateEntryView({ recordedAfter: AFTER, carry }, "f1", { canManage: false })?.destination;
     expect(destination).toMatchObject({ kind: "waiting", action: null });
     expect(destination?.kind === "waiting" && destination.text).toContain("An Admin changes it in Settings, Removal templates.");
-    expect(waitingDetail("incompatibleTemplate", false)).toContain("An Admin changes it");
-    expect(waitingDetail("incompatibleTemplate", true)).not.toContain("An Admin");
+    expect(waitingDetailCopy("incompatibleTemplate", false).instruction).toContain("An Admin changes it");
+    expect(waitingDetailCopy("incompatibleTemplate", true).instruction).toBeUndefined();
   });
 
   it("drops the lead sentence for the to-do detail", () => {
-    expect(waitingDetail("noDraft")).toBe("No later draft is available at this facility.");
+    expect(waitingDetailCopy("noDraft")).toEqual({ detail: "No later draft is available at this facility." });
     expect(waitingEntryTitle("Diesel use", "2026-09-14")).toBe("Diesel use of Sep 14, 2026 is waiting for a Removal");
+  });
+
+  it("states a late entry on a read-only batch as a fact", () => {
+    expect(readOnlyWaitingEntryTitle("Diesel use", "2026-09-14")).toBe("Diesel use of Sep 14, 2026 is not in any Removal");
+    expect(readOnlyWaitingDetail("templateUnknown", "RM-26-009")).toBe("Recorded after RM-26-009 was sent. noma has not read the next draft's template.");
+    for (const reason of ["noDraft", "templateUnknown", "incompatibleTemplate"] as const) {
+      expect(readOnlyWaitingDetail(reason)).not.toMatch(/\byet\b|\bonce\b|Open |Admin/);
+    }
   });
 });
 
@@ -107,7 +115,10 @@ describe("lateEntryRows", () => {
 it.each([true, false])("keeps waiting copy unchanged when the viewer canManage=%s", (canManage) => {
   for (const reason of ["noDraft", "templateUnknown", "incompatibleTemplate"] as const) {
     const copy = waitingDetailCopy(reason, canManage);
-    expect([copy.detail, copy.instruction].filter(Boolean).join(" ")).toBe(waitingDetail(reason, canManage));
+    const text = [copy.detail, copy.instruction].filter(Boolean).join(" ");
+    expect(text).toBe(reason === "templateUnknown" ? CARRY_WAITING_DETAILS.templateUnknown
+      : reason === "incompatibleTemplate" && !canManage ? `${CARRY_WAITING_DETAILS[reason]} An Admin changes it in Settings, Removal templates.`
+      : CARRY_WAITING_DETAILS[reason]);
     expect(copy.detail).not.toMatch(/Open the Removal|An Admin|in Settings/);
   }
 });

@@ -11,7 +11,7 @@ import {
   readOnlyOpenItems,
   tabBadge,
 } from "./batch-page";
-import { MISSING_PRODUCTION_RUN_TITLE, READ_ONLY_MISSING_PRODUCTION_RUN_TITLE, type CreditBatchOpenItem } from "./open-items";
+import { MISSING_PRODUCTION_RUN_TITLE, READ_ONLY_MISSING_PRODUCTION_RUN_TITLE, openItemText, type CreditBatchOpenItem } from "./open-items";
 
 type Removal = CreditBatchPageModel["removals"][number];
 type Statement = NonNullable<CreditBatchPageModel["milestones"]["ghgStatement"]>;
@@ -287,4 +287,17 @@ it("uses final missing-run wording on read-only batches without changing the inp
   expect(readOnly.titleAfterCode).toBe(READ_ONLY_MISSING_PRODUCTION_RUN_TITLE);
   expect(readOnly.detail).toBe(missing.detail);
   expect(missing.title).toBe("RUN-1 is not in this credit batch yet");
+});
+
+it("states the template fact on a read-only batch from the blocker copy, and the editable text is unchanged", () => {
+  const item: CreditBatchOpenItem = { id: "t", title: "No Removal template", detail: undefined, instruction: "Set a Removal template in Settings, Removal templates.", readOnlyDetail: "This credit batch has no Removal template.", target: { href: "/x" } };
+  const [readOnly] = readOnlyOpenItems({ blocking: [item], check: [], waiting: [] }).blocking;
+  expect(readOnly.detail).toBe("This credit batch has no Removal template.");
+  expect(readOnly.instruction).toBeUndefined();
+  expect(openItemText(item)).toBe("Set a Removal template in Settings, Removal templates.");
+});
+
+it("hides the future-action detail of a Waiting item on a read-only batch", () => {
+  const item: CreditBatchOpenItem = { id: "not-applied", title: "0.05 t produced but not applied yet", detail: "It can join a Removal once its application is recorded.", detailMayInstruct: true, target: { tab: "removals" } };
+  expect(readOnlyOpenItems({ blocking: [], check: [], waiting: [item] }).waiting[0].detail).toBeUndefined();
 });

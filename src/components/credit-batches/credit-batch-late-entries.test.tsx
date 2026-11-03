@@ -87,6 +87,8 @@ describe("CreditBatchLateEntries", () => {
     const { container } = render(<CreditBatchLateEntries facilityId="f1" creditBatchId="cb" canManage={false} readOnly />);
     expect(container.textContent).toContain("The next draft's template cannot take this component.");
     expect(container.textContent).not.toContain("An Admin changes it");
+    expect(container.textContent).toContain("Not in any Removal.");
+    expect(container.textContent).not.toContain("Waiting");
   });
 
   it("keeps the Admin sentence when not read only", () => {

@@ -54,7 +54,13 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : context.deliveryRead?.error ? LOAD_FAILED : null,
+            : context.deliveryRead?.error ? (
+              // One statement with its retry, in the field itself.
+              <span className="inline-flex flex-wrap items-center gap-x-8 gap-y-4">
+                {LOAD_FAILED}
+                <Button type="button" variant="weak" size="small" busy={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>
+              </span>
+            ) : null,
           ...(deliveryReadFailed ? { valuePresent: false } : {}),
           ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
@@ -73,19 +79,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits || deliveryReadFailed ? (
-        <>
-          {deliveryReadFailed && (
-            <Notice
-              tone="warning"
-              action={<Button type="button" variant="default" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>}
-            >
-              The delivery could not be loaded.
-            </Notice>
-          )}
-          {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
-        </>
-      ) : undefined,
+      content: application.heldOutOfCredits ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice> : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
       // The bar and key line are always visible; the ledger and source runs

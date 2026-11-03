@@ -72,10 +72,12 @@ describe("read-only sheet sections", () => {
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
     const field = sections[0].fields.find((f) => f.label === "Delivery source");
-    expect(field?.value).toBe("Could not load");
     expect(field?.valuePresent).toBe(false);
-    render(<>{sections[0].content}</>);
-    expect(screen.getByText("The delivery could not be loaded.")).toBeTruthy();
+    // One statement, in the field, with its retry; no second Notice.
+    expect(sections[0].content).toBeUndefined();
+    render(<>{field?.value}</>);
+    expect(screen.getByText("Could not load")).toBeTruthy();
+    expect(screen.queryByText("The delivery could not be loaded.")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
@@ -85,7 +87,7 @@ describe("read-only sheet sections", () => {
     const delivery = { code: "DL-1", deliveryDate: new Date("2026-10-29") } as unknown as Parameters<typeof applicationSheetSections>[1]["delivery"];
     const sections = applicationSheetSections(APPLICATION, { delivery, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
     expect(sections[0].fields.find((f) => f.label === "Delivery source")?.valuePresent).not.toBe(false);
-    render(<>{sections[0].content}</>);
-    expect(screen.queryByText("The delivery could not be loaded.")).toBeNull();
+    expect(sections[0].content).toBeUndefined();
+    expect(screen.queryByText("Could not load")).toBeNull();
   });
 });
