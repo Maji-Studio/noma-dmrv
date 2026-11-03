@@ -266,8 +266,9 @@ and Split; its walk is controlled (`walk`, `onWalkChange`, pure `walkTo` /
   (`singleChain`): no stage list, no "Whole batch", no "Trace rollback"; "View
   full record" stays. Map is the batch layout (panel right, below the map under
   1024px). Split is the Flow chart beside a column of map over walk
-  (`layout="column"`); below 1280px the Flow stacks over the walk alone
-  (`layout="panel"`), and on a phone Split shows the Map.
+  (`layout="column"`); below 1280px, phones included, the Flow stacks over the
+  walk panel alone (`layout="panel"`, the map's warnings at its top) at a fixed
+  share of the viewport height, and the page scrolls.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
