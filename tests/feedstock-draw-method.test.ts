@@ -52,7 +52,9 @@ const allocations = (tx: DbTransaction, runId: string) => tx.select({ feedstockI
 describe('feedstock draw methods in the database', () => {
   it('gives each batch only the deliveries touched, leaving untouched transport unowned', () => scenario(async (tx, f) => {
     await reallocateRunsForBins(ctx, tx, [f.bin.id]);
-    await tx.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID, productionRunId: f.runs[0].id, feedstockId: f.deliveries[2].id, wetMassUsedKg: 0 });
+    await expect(tx.transaction(savepoint => savepoint.insert(productionRunFeedstocks).values({
+      organizationId: TEST_ORG_ID, productionRunId: f.runs[0].id, feedstockId: f.deliveries[2].id, wetMassUsedKg: 0,
+    }))).rejects.toThrow();
     const owners = await getFeedstockTransportOwnerBatches(ctx, f.deliveries.map(row => row.id), tx);
     expect(owners.get(f.deliveries[0].id)).toEqual([{ creditBatchId: f.batches[0].id, code: f.batches[0].code }]);
     expect(owners.get(f.deliveries[1].id)).toEqual([{ creditBatchId: f.batches[1].id, code: f.batches[1].code }]);
@@ -153,3 +155,55 @@ it('refuses an upstream replan that would rewrite a later Sent run', async () =>
     })).rejects.toMatchObject({ code: 'certification_locked' });
   });
 });
+
+it('refuses moving a run before a loss and rolls back the run and its shares', () => scenario(async (tx, f) => {
+  await tx.update(feedstocks).set({ deliveryDate: day(5) }).where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, f.deliveries[2].id)));
+  await tx.insert(binMovements).values({ organizationId: TEST_ORG_ID, storageLocationId: f.bin.id, lane: 'feedstock', movementType: 'loss',
+    massDeltaKg: -15, occurredAt: day(3), reason: 'Recorded loss', createdBy: ctx.userId });
+  await tx.update(productionRunFeedstockDraws).set({ wetMassKg: 5 }).where(and(eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id)));
+  await reallocateRunsForBins(ctx, tx, [f.bin.id]);
+  const before = await allocations(tx, f.runs[0].id);
+  await expect(tx.transaction(async savepoint => {
+    await savepoint.update(productionRuns).set({ startTime: day(2) }).where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.runs[0].id)));
+    await savepoint.update(productionRunFeedstockDraws).set({ wetMassKg: 10 }).where(and(eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id)));
+    await reallocateRunsForBins(ctx, savepoint, [f.bin.id], { onlyRunId: f.runs[0].id, earliestEventAt: day(2) });
+  })).rejects.toThrow(/Lost mass.*held.*less than/);
+  expect(await allocations(tx, f.runs[0].id)).toEqual(before);
+  const [run] = await tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, f.runs[0].id)));
+  expect(run.startTime).toEqual(day(4));
+  const [draw] = await tx.select().from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID), eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id)));
+  expect(draw.wetMassKg).toBe(5);
+}));
+
+it('records a method change on a bin with history but no stock events', () => scenario(async (tx, f) => {
+  const { feedstockBinMethodChanges } = await import('@/db/schema');
+  const { getFeedstockMethodChanges } = await import('@/data-access/feedstock-bin-method-history');
+  const [empty] = await tx.insert(storageLocations).values({ ...f.bin, id: crypto.randomUUID(), code: `DM-EMPTY-${crypto.randomUUID()}`, name: crypto.randomUUID() }).returning();
+  await tx.insert(feedstockBinMethodChanges).values({ organizationId: TEST_ORG_ID, storageLocationId: empty.id,
+    previousStockMode: 'split', stockMode: 'split', previousDrawOrder: 'newest_first', drawOrder: 'oldest_first', effectiveAt: day(1), createdBy: ctx.userId });
+  await applyFeedstockMethodChange(ctx, tx, empty, { drawOrder: 'newest_first' });
+  expect(await getFeedstockMethodChanges(ctx, empty.id, tx)).toHaveLength(2);
+}));
+
+it('refuses a backdated intake before a recorded Mass weighted to In order switch', () => scenario(async (tx, f) => {
+  const { feedstockBinMethodChanges } = await import('@/db/schema');
+  const { assertFeedstockAdditionAfterSplit } = await import('@/data-access/feedstock-intake-boundary');
+  await tx.insert(feedstockBinMethodChanges).values({ organizationId: TEST_ORG_ID, storageLocationId: f.bin.id,
+    previousStockMode: 'mix', stockMode: 'split', previousDrawOrder: 'oldest_first', drawOrder: 'oldest_first', effectiveAt: day(8), createdBy: ctx.userId });
+  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(7))).rejects.toThrow(/switched to In order at/);
+  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(8))).rejects.toThrow(/delivery day started/);
+  await expect(assertFeedstockAdditionAfterSplit(ctx, tx, f.bin, day(9))).resolves.toBeUndefined();
+}));
+
+it('indexes submitted [A, B] when a run previously used B and A overdraws at its start', () => scenario(async (tx, f) => {
+  const { replaceProductionRunFeedstockDraws } = await import('@/data-access/production-runs/feedstock-draws');
+  const [a] = await tx.insert(storageLocations).values({ ...f.bin, id: crypto.randomUUID(), code: `DM-A-${crypto.randomUUID()}`, name: crypto.randomUUID() }).returning();
+  await tx.insert(feedstocks).values({ ...f.deliveries[0], id: crypto.randomUUID(), code: `DM-LATE-${crypto.randomUUID()}`, storageLocationId: a.id, deliveryDate: day(5) });
+  await reallocateRunsForBins(ctx, tx, [f.bin.id]);
+  const before = await allocations(tx, f.runs[0].id);
+  await expect(tx.transaction(savepoint => replaceProductionRunFeedstockDraws(ctx, savepoint, {
+    productionRunId: f.runs[0].id, facilityId: f.bin.facilityId,
+    draws: [{ storageLocationId: a.id, wetMassKg: 1 }, { storageLocationId: f.bin.id, wetMassKg: 1 }],
+  }))).rejects.toMatchObject({ code: 'insufficient_stock', issues: [{ path: ['feedstockDraws', 0, 'storageLocationId'] }] });
+  expect(await allocations(tx, f.runs[0].id)).toEqual(before);
+}));

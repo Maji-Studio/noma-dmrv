@@ -20,6 +20,7 @@ import {
   binMovements,
   deliveries,
   feedstocks,
+  feedstockBinMethodChanges,
   outputStockAllocations,
   productionRunFeedstockDraws,
   productionRuns,
@@ -42,6 +43,7 @@ export interface StorageLocationReference {
  * list, so a table added here reaches both.
  */
 const REFERENCE_SOURCES = [
+  { blocker: "feedstock draw method history", table: feedstockBinMethodChanges, bin: feedstockBinMethodChanges.storageLocationId, org: feedstockBinMethodChanges.organizationId },
   { blocker: "feedstock batches", table: feedstocks, bin: feedstocks.storageLocationId, org: feedstocks.organizationId },
   { blocker: "production runs using it as a feedstock bin", table: productionRunFeedstockDraws, bin: productionRunFeedstockDraws.storageLocationId, org: productionRunFeedstockDraws.organizationId },
   { blocker: "production runs using it as a biochar bin", table: productionRuns, bin: productionRuns.biocharStorageLocationId, org: productionRuns.organizationId },

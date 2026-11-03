@@ -18,6 +18,7 @@ export interface FeedstockReplayEvent {
   kind: 'intake' | 'run_draw' | 'ingredient_draw' | 'loss' | 'count';
   wetDeltaKg: number | null;
   sourceId?: string | null;
+  code?: string | null;
   reversed?: boolean;
   /** Present only for runs before the replanning boundary. An empty array is authoritative. */
   savedShares?: readonly FeedstockDrawShare[];
@@ -70,16 +71,19 @@ function drawShares(amount: bigint, present: { id: string; units: bigint }[], me
   return shares;
 }
 
-/** One wet-stock ledger, shared by planning and read models. Non-run shortfalls consume only available stock. */
+/** One wet-stock ledger, shared by planning and read models. Validate withdrawals from the edit boundary. */
 export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], current: FeedstockDrawMethod,
-  changes: readonly FeedstockMethodChange[] = []) {
+  changes: readonly FeedstockMethodChange[] = [], boundary?: { occurredAt: string; recordedAt?: string; id?: string }) {
   const holdings = new Map<string, bigint>();
   const pendingShares = new Map<string, bigint>();
   const withdrawals = new Map<string, FeedstockDrawShare[]>();
   const points = new Map<string, Map<string, number>>();
   let unattributed = BigInt(0);
   for (const event of [...events].sort(compareFeedstockEvents)) {
-    if (event.reversed) continue;
+    if (event.reversed) {
+      points.set(event.id, new Map([...holdings].map(([id, units]) => [id, kg(units)])));
+      continue;
+    }
     const delta = grams(event.wetDeltaKg ?? 0);
     if (event.kind === 'intake' && delta > 0) {
       const remaining = (holdings.get(event.id) ?? BigInt(0)) + delta - (pendingShares.get(event.id) ?? BigInt(0));
@@ -95,7 +99,10 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
       const present = [...holdings].filter(([, units]) => units > 0).map(([id, units]) => ({ id, units }));
       const total = present.reduce((sum, row) => sum + row.units, BigInt(0));
       const requested = -delta;
-      if (event.kind === 'run_draw' && event.savedShares === undefined && requested > total + unattributed)
+      const affected = boundary !== undefined && (event.occurredAt > boundary.occurredAt ||
+        (event.occurredAt === boundary.occurredAt && (!boundary.recordedAt || event.recordedAt > boundary.recordedAt ||
+          (event.recordedAt === boundary.recordedAt && (!boundary.id || event.id >= boundary.id)))));
+      if (((event.kind === 'run_draw' && event.savedShares === undefined) || (event.kind !== 'run_draw' && affected)) && requested > total + unattributed)
         throw new FeedstockReplayOverdrawError(event, kg(total + unattributed), kg(requested));
       const amount = minimum(requested, total);
       let shares: Map<string, bigint>;

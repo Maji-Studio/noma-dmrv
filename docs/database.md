@@ -258,15 +258,21 @@ revision. Feedstock edits change bin stock and their own version, but do not
 rewrite the run's measured moisture or draws and do not bump
 the run version. A change to the run itself bumps its version.
 
-Run draws are allocated proportionally across complete intakes delivered on or
-before the run’s facility-local start day, including same-day deliveries. Run
-start/facility changes, facility timezone changes and intake date, bin, mass or
-status changes rebuild the allocations transactionally. Intake discovery excludes
-runs starting before the earliest affected delivery day minus one UTC day, before
-locking runs; the per-run facility-day cutoff remains exact. Timezone edits hold
-the facility row, then source bins, then runs in ID order. Provenance rebuilds
-allow archived historical source bins; stock writers still require active bins.
-An empty qualifying basis or a change to Sent lineage refuses the edit.
+Feedstock draws replay each bin's remaining deliveries using its Draw method:
+Mass weighted takes proportional wet shares; In order empties deliveries Oldest
+first or Newest first. Complete intakes become available at the start of their
+facility-local delivery day. Stock edits re-plan runs from the earliest affected
+instant, with recorded time at millisecond precision then event ID breaking ties.
+Earlier runs keep saved shares, including legacy shares under Sent Removals.
+Later withdrawals that exceed available stock refuse the edit. Rebuilds are
+transactional and refuse changes to Sent lineage. Timezone edits lock the facility,
+source bins, then runs in ID order. Rebuilds allow archived historical bins;
+stock writers require active bins. Saved run shares must have positive wet mass.
+
+`pnpm feedstock:recalculate` rebuilds allocations per bin and reports rewritten
+runs and transport ownership counts. `--dry-run` rolls back each bin after planning.
+Changes to bins under Sent Removals are refused with run and Removal codes. A failed bin
+rolls back independently; other bins continue and the command exits unsuccessfully.
 
 Application writers use `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,

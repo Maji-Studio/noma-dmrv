@@ -24,7 +24,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { GisBoundary } from "@/lib/geojson/types";
-import { and, gt, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type {
   BatchLineageApplicationFact,
   BatchLineageRunFact,
@@ -513,7 +513,6 @@ async function getFeedstocksForRuns(
           productionRunFeedstocks.productionRunId,
           productionRunIds,
         ),
-        gt(productionRunFeedstocks.wetMassUsedKg, 0),
         eq(
           productionRunFeedstocks.organizationId,
           ctx.organizationId,

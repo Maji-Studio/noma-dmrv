@@ -1,3 +1,5 @@
+import { assertFeedstockAdditionAfterSplit } from './feedstock-intake-boundary';
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { FEEDSTOCK_TRANSPORT_FIELDS } from "@/lib/record-lock-view";
 import { withIntakeAllocationIssues } from "@/lib/feedstock-allocation-errors";
 import { reallocateRunsForBins } from "./feedstock-run-allocations";
@@ -526,6 +528,9 @@ export async function createFeedstockInTransaction(
     (index) => ["allocations", index, "storageLocationId"],
   );
 
+  for (const id of binIds) {
+    await assertFeedstockAdditionAfterSplit(ctx, tx, { id, facilityId: data.facilityId }, data.deliveryDate);
+  }
   await snapshotStock?.(tx, binIds);
 
   const items = await withAutoCodes(
@@ -598,7 +603,7 @@ export async function createFeedstockInTransaction(
     },
   );
 
-  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate, eventTie: items.map(row => ({ id: row.id, recordedAt: row.createdAt })).sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime() || a.id.localeCompare(b.id))[0], change: { mutation: "create", subject: "feedstock" } }), {}, data);
+  await withIntakeAllocationIssues(() => reallocateRunsForBins(ctx, tx, binIds, { earliestDeliveryDate: data.deliveryDate, eventTie: earliestFeedstockEventTie(items.map(row => ({ id: row.id, recordedAt: row.createdAt }))), change: { mutation: "create", subject: "feedstock" } }), {}, data);
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -767,6 +772,10 @@ export async function updateFeedstockInTransaction(
       effectiveFeedstockTypeId,
       () => ["storageLocationId"],
     );
+  }
+
+  if (allocationChanged && status === 'complete' && effectiveStorageLocationId) {
+    await assertFeedstockAdditionAfterSplit(ctx, tx, { id: effectiveStorageLocationId, facilityId: effectiveFacilityId }, feedstockData.deliveryDate ?? locked.deliveryDate);
   }
 
   await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);

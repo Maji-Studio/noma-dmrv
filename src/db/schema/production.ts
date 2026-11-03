@@ -338,6 +338,7 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   wetMassUsedKg: massKg('wet_mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  check('production_run_feedstocks_positive_wet_mass', sql`${table.wetMassUsedKg} > 0`),
   index('production_run_feedstocks_organization_id_production_run_id_idx').on(
     table.organizationId,
     table.productionRunId

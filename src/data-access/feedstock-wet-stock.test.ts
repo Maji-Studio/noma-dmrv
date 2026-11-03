@@ -9,7 +9,7 @@ vi.mock("./feedstock-bin-ledger", () => ({ replayFeedstockBinStock: vi.fn() }));
 vi.mock("./feedstock-bin-method-history", () => ({ getFeedstockMethodChanges: async () => [] }));
 vi.mock("./output-stock-dates", () => ({ getOutputStockFacilityTimezone: async () => "UTC" }));
 function reader(batches: { id: string; massWetKg: number }[], code: string | null = "SL-26-001") {
-  vi.mocked(replayFeedstockBinStock).mockResolvedValue({ currentWetKg: batches.reduce((sum, row) => sum + row.massWetKg, 0), batches: [], withdrawals: new Map(),
+  vi.mocked(replayFeedstockBinStock).mockResolvedValue({ currentWetKg: batches.reduce((sum, row) => sum + row.massWetKg, 0), batches: [], withdrawals: new Map(), remainingDryKg: null,
     entries: batches.map(row => ({ id: row.id, sourceId: row.id, code: row.id, kind: "intake", occurredAt: "2026-03-01T00:00:00.000Z",
       recordedAt: "2026-03-01T00:00:00.000Z", wetDeltaKg: row.massWetKg, actorName: null, reason: "", countedWetKg: null, moisturePercent: null,
       beforeWetKg: 0, afterWetKg: row.massWetKg, estimatedDryKg: null })),

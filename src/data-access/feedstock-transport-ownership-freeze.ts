@@ -1,4 +1,3 @@
-import { sentFeedstockRecalculationAllowed } from '@/lib/feedstock-recalculation-policy';
 import type { DbTransaction } from "@/db";
 import { creditBatchProductionRuns, feedstocks, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -96,7 +95,7 @@ export async function prepareFeedstockTransportOwnershipFreeze(
         lineage.push(...await getLineageUnderLockedArtifacts(ctx, tx, artifacts, previousTarget));
       }
       const lock = recordLocks.feedstock({ removals: lineage.map(row => row.recordLockRemoval), dependents: [] });
-      if (lock.level !== "sent" || sentFeedstockRecalculationAllowed(ctx)) continue;
+      if (lock.level !== "sent") continue;
       throw new DomainError("certification_locked", withRecordLockGuidance(
         `Cannot ${change.mutation} this ${change.subject} because it would change which credit batch counts the transport legs of ${await feedstockLabel(ctx, tx, target.entityId)}, and a Removal that uses this feedstock is already sent.`,
         lock,

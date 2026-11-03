@@ -1,6 +1,7 @@
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
-import { and, asc, eq, inArray, isNull, sum } from "drizzle-orm";
+import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import { z } from "zod";
 import type { DbTransaction } from "@/db";
 import {
@@ -202,9 +203,9 @@ export async function replaceProductionRunFeedstockDraws(
   },
 ): Promise<number> {
   requireOrgScope(ctx);
-  const [previousTie] = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
-    .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, params.productionRunId)))
-    .orderBy(asc(productionRunFeedstockDraws.createdAt), asc(productionRunFeedstockDraws.id)).limit(1);
+  const previousTies = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
+    .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, params.productionRunId)));
+  const previousTie = earliestFeedstockEventTie(previousTies);
   const previousBins = await getProductionRunFeedstockDrawStorageIds(ctx, tx, params.productionRunId);
   const draws = normalizeProductionRunFeedstockDraws(params.draws);
   await validateProductionRunFeedstockDrawSources(
@@ -254,7 +255,7 @@ export async function replaceProductionRunFeedstockDraws(
       );
     }
 
-    await reallocateRunsForBins(ctx, tx, [...previousBins, ...draws.map((draw) => draw.storageLocationId)], { onlyRunId: params.productionRunId, earliestEventAt: params.earliestEventAt, eventTie: previousTie, transportOwnershipFreeze });
+    await reallocateRunsForBins(ctx, tx, [...draws.map((draw) => draw.storageLocationId), ...previousBins], { onlyRunId: params.productionRunId, earliestEventAt: params.earliestEventAt, eventTie: previousTie, transportOwnershipFreeze });
 
     return sumProductionRunFeedstockDraws(draws);
   });

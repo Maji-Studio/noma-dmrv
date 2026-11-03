@@ -165,10 +165,17 @@ with its source identity and physical placement date.
 _Avoid_: treating an accounting layer as proof of a physically separate pile;
 only a **split bin**'s sub-bins are physically separate.
 
+**Draw method (feedstock bin)**:
+How a draw takes wet mass from remaining deliveries. **Mass weighted** takes
+from every delivery in proportion to its remaining wet mass. **In order** empties
+one delivery before the next, using **Oldest first** or **Newest first**.
+Feedstock bins have no sub-bins.
+
 **Split bin**:
 An output bin whose layers sit physically apart as **sub-bins**. The operator
 records which sub-bins a draw came from and the order they were emptied;
-otherwise the bin's **default draw order** applies.
+otherwise the bin's **default draw order** applies. Feedstock bins use the same
+stock mode as **In order**, drawing across deliveries without sub-bins.
 
 **Default draw order**:
 The order a **split bin** draws from its **sub-bins**: *Oldest first* unless
@@ -181,7 +188,8 @@ _Avoid_: using it for a layer in a mix bin.
 
 **Mix bin**:
 An output bin holding one well-mixed pile. Every draw takes each layer in
-proportion to its remaining solids.
+proportion to its remaining solids. Feedstock bins use the same stock mode as
+**Mass weighted**, proportional to remaining wet mass without sub-bins.
 
 **Departure moisture**:
 The water fraction measured in material leaving a storage bin. It sets that

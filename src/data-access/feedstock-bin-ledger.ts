@@ -27,7 +27,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * their own batches. Every other withdrawal follows the method in force at
  * its instant; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string> } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]> }> {
+export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string }; occurredAt?: string; excludeProductId?: string } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null }> {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
@@ -98,7 +98,8 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
           wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
           moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT };
       }),
-  ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
+  ].filter(entry => (!options.occurredAt || entry.occurredAt <= options.occurredAt) &&
+    !(entry.kind === 'ingredient_draw' && entry.sourceId === options.excludeProductId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
   const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
   const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
@@ -110,23 +111,23 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
   const replay = replayFeedstockDraws(drafts.map(draft => ({ ...draft,
     savedShares: draft.kind === 'run_draw' && draft.sourceId && !options.replanRunIds?.has(draft.sourceId)
       ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
-  })), bin, await getFeedstockMethodChanges(ctx, storageLocationId, reader));
-  const dryAt = (id: string) => {
-    const holdings = replay.points.get(id);
+  })), bin, await getFeedstockMethodChanges(ctx, storageLocationId, reader), options.boundary);
+  const dryAt = (holdings: Map<string, number> | undefined) => {
     if (!holdings) return null;
-    let dry = 0;
+    let dryGrams = 0;
     for (const [batchId, wet] of holdings) {
       const basis = intakeById.get(batchId);
       if (wet > 0 && (!basis || basis.dryKg === null)) return null;
-      if (basis && basis.wetKg > 0) dry += wet * (basis.dryKg ?? 0) / basis.wetKg;
+      if (basis && basis.wetKg > 0) dryGrams += Math.round(wet * MASS_DECIMALS)
+        * (Math.round((basis.dryKg ?? 0) * MASS_DECIMALS) / Math.round(basis.wetKg * MASS_DECIMALS));
     }
-    return round(dry);
+    return dryGrams / MASS_DECIMALS;
   };
   let wetKg = 0;
   const entries = drafts.map((draft): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
     wetKg += draft.reversed ? 0 : draft.wetDeltaKg ?? 0;
-    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: dryAt(draft.id) };
+    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: dryAt(replay.points.get(draft.id)) };
   });
 
   const currentWetKg = round(wetKg);
@@ -141,8 +142,7 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
       wetKg: replay.remaining.get(b.id) ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: b.dryKg === null ? null : round((replay.remaining.get(b.id) ?? 0) * Number(b.dryKg) / Number(b.wetKg)), moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
-  if (entries.length) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
-  return { currentWetKg, entries, batches: pile, withdrawals: replay.withdrawals };
+  return { currentWetKg, entries, batches: pile, withdrawals: replay.withdrawals, remainingDryKg: replay.unattributedWetKg > 0 ? null : dryAt(replay.remaining) };
 }
 
 /** Public stock read omits the internal withdrawal index. */

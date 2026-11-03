@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { feedstocks, biocharProducts, productionRunFeedstockDraws, binMovements } from '@/db/schema';
+import { feedstocks, biocharProducts, productionRunFeedstockDraws, productionRunFeedstocks, binMovements, storageLocations, facilities } from '@/db/schema';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -14,12 +14,22 @@ import { getIngredientMoistureBasis } from './ingredient-moisture-basis';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
 
 const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'admin', isPlatformAdmin: false };
-function reader(intakes: unknown[], products: unknown[] = [], draws: unknown[] = [], movements: unknown[] = [], conditions: SQL[] = []) {
-  const results = new Map<unknown, unknown[]>([[feedstocks, intakes], [biocharProducts, products], [productionRunFeedstockDraws, draws], [binMovements, movements]]);
+const INTAKE_AT = new Date('2026-09-13T00:00:00.000Z');
+const DRAW_AT = new Date('2026-09-14T10:00:00.000Z');
+function reader(intakes: { wet: number; dry: number | null }[], products: unknown[] = [], draws: { wet: number; moisture?: number }[] = [], movements: { wet: number; moisture?: number | null; movementType?: string; correctsMovementId?: string }[] = [], conditions: SQL[] = [], stockMode = 'mix') {
+  const results = new Map<unknown, unknown[]>([
+    [storageLocations, [{ type: 'feedstock_bin', facilityId: 'facility', stockMode, drawOrder: 'oldest_first' }]],
+    [facilities, [{ timezone: 'UTC' }]],
+    [feedstocks, intakes.map((row, index) => ({ id: `intake-${index}`, wetKg: row.wet, dryKg: row.dry, deliveryDate: INTAKE_AT, createdAt: new Date(INTAKE_AT.getTime() + index), moisturePercent: null }))],
+    [biocharProducts, products.map((row, index) => ({ ...row as object, id: `product-${index}`, placedAt: DRAW_AT, createdAt: DRAW_AT }))],
+    [productionRunFeedstockDraws, draws.map((row, index) => ({ id: `draw-${index}`, sourceId: `run-${index}`, wetKg: row.wet, startTime: DRAW_AT, createdAt: DRAW_AT }))],
+    [productionRunFeedstocks, draws.map((row, index) => ({ feedstockId: 'intake-0', productionRunId: `run-${index}`, wetKg: row.wet }))],
+    [binMovements, movements.map((row, index) => ({ movement: { id: `movement-${index}`, massDeltaKg: row.wet, movementType: row.movementType ?? 'loss', correctsMovementId: row.correctsMovementId, occurredAt: DRAW_AT, createdAt: DRAW_AT, moistureRatioUsed: null }, actorName: null }))],
+  ]);
   return { select: vi.fn(() => {
     let table: unknown;
     let predicate: SQL;
-    const query = { from: (value: unknown) => { table = value; return query; }, innerJoin: () => query,
+    const query = { from: (value: unknown) => { table = value; return query; }, innerJoin: () => query, leftJoin: () => query,
       where: (condition: SQL) => { predicate = condition; return query; },
       then: (resolve: (rows: unknown[]) => unknown) => {
         conditions.push(predicate);
@@ -60,23 +70,19 @@ describe('remaining ingredient moisture', () => {
       { ingredients: [{ ...ingredient, massKg: 15000000, moistureContentPercent: basis?.moisturePercent }] });
     expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 13999999.95, moistureContentPercent: 6.666667 })]);
   });
-  it('limits every physical stock input to the requested instant and excludes archived intakes', async () => {
+  it('limits physical stock to the requested instant and excludes the current product', async () => {
     const conditions: SQL[] = [];
-    const at = '2026-09-14T12:00:00.000Z';
-    await getIngredientMoistureBasis(ctx, 'bin', at, reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
-    const queries = conditions.map(condition => new PgDialect().sqlToQuery(condition));
-    expect(queries[0].sql).toContain('"feedstocks"."archived_at" is null');
-    // An intake's calendar day is compared with the facility day of the instant.
-    expect(queries[0].sql).toContain('"feedstocks"."delivery_date"::date <= (');
-    expect(queries[0].sql).toContain('at time zone "facilities"."timezone")::date');
-    expect(queries[1].sql).toContain('"biochar_products"."placed_at" <=');
-    expect(queries[1].params).toContain('excluded-product');
-    expect(queries[2].sql).toContain('"production_runs"."start_time" <=');
-    expect(queries[2].params).toContain('cancelled');
-    // A timestamp without zone is read as UTC, never in the session zone.
-    expect(queries[3].sql).toContain('coalesce("bin_movements"."occurred_at", "bin_movements"."created_at" at time zone \'UTC\') <=');
-    for (const query of queries) expect(query.params).toContain('org');
-    for (const query of queries) expect(query.params).toContain(at);
+    const stock = () => reader([{ wet: 100, dry: 50 }], [priorDraw], [{ wet: 10 }], [{ wet: -10 }], conditions);
+    expect(await getIngredientMoistureBasis(ctx, 'bin', '2026-09-12T12:00:00.000Z', stock())).toBeNull();
+    expect(await getIngredientMoistureBasis(ctx, 'bin', '2026-09-14T09:00:00.000Z', stock())).toMatchObject({ wetMassKg: 100, dryMassKg: 50 });
+    expect(await getIngredientMoistureBasis(ctx, 'bin', '2026-09-14T12:00:00.000Z', stock(), 'product-0')).toMatchObject({ wetMassKg: 80, dryMassKg: 40 });
+    expect(await getIngredientMoistureBasis(ctx, 'bin', '2026-09-14T12:00:00.000Z', stock())).toMatchObject({ wetMassKg: 30, dryMassKg: 15 });
+    for (const condition of conditions) expect(new PgDialect().sqlToQuery(condition).params).toContain('org');
+  });
+  it('uses remaining delivery composition under Oldest first', async () => {
+    const tx = reader([{ wet: 10, dry: 10 }, { wet: 10, dry: 5 }],
+      [{ composition: { ingredients: [{ storageLocationId: 'bin', massKg: 10 }] } }], [], [], [], 'split');
+    expect(await getIngredientMoistureBasis(ctx, 'bin', undefined, tx)).toEqual({ wetMassKg: 10, dryMassKg: 5, moisturePercent: 50 });
   });
   it('keeps the same basis when fractional intake rows are returned in a different order', async () => {
     const intakes = [{ wet: 0.1, dry: 0.05 }, { wet: 0.2, dry: 0.1 }, { wet: 0.3, dry: 0.15 }];
@@ -122,4 +128,15 @@ it.each(['product', 'run', 'loss'])('a wetter %s withdrawal preserves the feedst
   const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 100, dry: 80 }],
     kind === 'product' ? [product] : [], kind === 'run' ? [{ wet: 50, moisture: 50 }] : [], kind === 'loss' ? [{ wet: -50 }] : []));
   expect(basis).toEqual({ wetMassKg: 50, dryMassKg: 40, moisturePercent: 20 });
+});
+
+
+it('keeps a dry-stock ledger point for a reversed loss mid-history', async () => {
+  const { replayFeedstockBinStock } = await import('./feedstock-bin-ledger');
+  const tx = reader([{ wet: 100, dry: 80 }], [], [], [
+    { wet: -20 }, { wet: 20, movementType: 'adjustment', correctsMovementId: 'movement-0' }, { wet: -10 },
+  ]);
+  const ledger = await replayFeedstockBinStock(ctx, 'bin', tx);
+  expect(ledger.entries.find(entry => entry.id === 'movement-0')).toMatchObject({ reversed: true, afterWetKg: 100, estimatedDryKg: 80 });
+  expect(ledger.entries.at(-1)).toMatchObject({ afterWetKg: 90, estimatedDryKg: 72 });
 });

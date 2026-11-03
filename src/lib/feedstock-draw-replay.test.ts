@@ -107,3 +107,17 @@ it('charges saved-share deficits to unattributed stock after deliveries are exha
   expect(result.unattributedWetKg).toBe(0);
   expect(result.withdrawals.get('saved')).toEqual([{ feedstockId: 'a', wetKg: 5 }]);
 });
+
+it.each(['loss', 'ingredient_draw', 'count'] as const)('refuses an affected %s overdraw but preserves earlier history', kind => {
+  const events = [event('a', 1, 10), event('run', 2, -5, 'run_draw'), event('withdrawal', 3, -10, kind), event('b', 4, 10)];
+  expect(() => replayFeedstockDraws(events, oldest, [], { occurredAt: at(2) })).toThrow(FeedstockReplayOverdrawError);
+  expect(() => replayFeedstockDraws(events, oldest, [], { occurredAt: at(4) })).not.toThrow();
+  expect(() => replayFeedstockDraws(events, oldest, [], { occurredAt: at(3), recordedAt: at(3), id: 'withdrawal' })).toThrow(FeedstockReplayOverdrawError);
+  expect(() => replayFeedstockDraws(events, oldest, [], { occurredAt: at(3), recordedAt: at(3), id: 'z' })).not.toThrow();
+});
+
+it('keeps a holdings point for a reversed loss in the middle of history', () => {
+  const result = replayFeedstockDraws([event('a', 1, 10), { ...event('loss', 2, -5, 'loss'), reversed: true }, event('b', 3, 10)], oldest);
+  expect([...result.points.get('loss')!]).toEqual([['a', 10]]);
+  expect(result.points.size).toBe(3);
+});

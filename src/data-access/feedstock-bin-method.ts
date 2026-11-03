@@ -17,8 +17,8 @@ export async function applyFeedstockMethodChange(ctx: OrgContext, tx: DbTransact
   const target = { stockMode: next.stockMode ?? existing.stockMode, drawOrder: next.drawOrder ?? existing.drawOrder };
   if (target.stockMode === existing.stockMode && target.drawOrder === existing.drawOrder) return target;
   const stock = await getFeedstockBinStock(ctx, existing.id, tx);
-  if (!stock.entries.length) return target;
   const history = await getFeedstockMethodChanges(ctx, existing.id, tx);
+  if (!stock.entries.length && !history.length) return target;
   const last = [...stock.entries.filter(entry => !entry.reversed).map(entry => entry.occurredAt), ...history.map(change => change.effectiveAt)].sort().at(-1);
   const now = new Date();
   let effectiveAt = now;

@@ -1,3 +1,4 @@
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { reallocateRunsForBins } from '../feedstock-run-allocations';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import type { ActivityEventInput } from "../activity-events";
@@ -114,7 +115,7 @@ export async function deleteProductionRunInTransaction(
 
   const previousDraws = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
     .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, productionRunId)));
-  const eventTie = previousDraws.sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime() || a.id.localeCompare(b.id))[0];
+  const eventTie = earliestFeedstockEventTie(previousDraws);
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
   const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,

@@ -3,7 +3,7 @@ import { db, type DbTransaction } from "@/db";
 import { storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { addDaysIso, startOfFacilityDay } from "@/lib/date-utils";
-import { formatMassKg } from "@/lib/format-utils";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { replayFeedstockDraws, FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
 import { replayFeedstockBinStock } from "./feedstock-bin-ledger";
 import { getFeedstockMethodChanges } from "./feedstock-bin-method-history";
@@ -89,6 +89,15 @@ export async function throwFeedstockReplayOverdraw(ctx: OrgContext, executor: Fe
   requireOrgScope(ctx);
   const code = await readFeedstockBinCode(ctx, executor, storageLocationId);
   const label = code === undefined ? 'This bin' : `Bin ${code}`;
+  if (error.event.kind !== 'run_draw') {
+    const [bin] = await executor.select({ facilityId: storageLocations.facilityId }).from(storageLocations).where(and(
+      eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
+    ));
+    const when = formatFacilityDateTime(new Date(error.event.occurredAt), await getOutputStockFacilityTimezone(ctx, bin.facilityId, executor));
+    const kind = { loss: 'Lost mass', ingredient_draw: 'Ingredient draw', count: 'Stock count', intake: 'Intake' }[error.event.kind];
+    throw new StockOverdrawError(`${kind}${error.event.code ? ` ${error.event.code}` : ''} at ${when}: ${label} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Correct the withdrawal or the earlier stock change.`,
+      { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
+  }
   const message = error.availableWetKg === 0 ? `${label} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`
     : `By the run’s start day ${code === undefined ? 'this bin' : `bin ${code}`} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Lower the draw or move the run’s start.`;
   throw new StockOverdrawError(message, { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });

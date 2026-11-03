@@ -1,6 +1,6 @@
-import { sentFeedstockRecalculationAllowed } from '@/lib/feedstock-recalculation-policy';
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipChange, type TransportOwnershipFreezeScope } from "./feedstock-transport-ownership-freeze";
-import { and, asc, eq, gt, gte, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, ne, or, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -54,15 +54,16 @@ export async function reallocateRunsForBins(
     earliestStart = new Date(Math.min(...instants));
   }
   const recordedAt = sql`date_trunc('milliseconds', ${productionRunFeedstockDraws.createdAt})`;
-  const [runTie] = onlyRunId ? await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
+  const runTies = onlyRunId ? await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
     .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, onlyRunId)))
-    .orderBy(asc(recordedAt), asc(productionRunFeedstockDraws.id)).limit(1) : [];
+    : [];
+  const runTie = earliestFeedstockEventTie(runTies);
   // Replacing draws assigns new IDs. In one transaction the timestamp stays
   // equal, so the replacement may sort before the old boundary. Replan from
   // the earlier position, including any same-start runs between those IDs.
   const ties = [options.eventTie, !options.eventTie || edited?.startTime.getTime() === earliestStart?.getTime() ? runTie : undefined]
     .filter((value): value is { recordedAt: Date; id: string } => value !== undefined);
-  const tie = ties.sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime() || a.id.localeCompare(b.id))[0];
+  const tie = earliestFeedstockEventTie(ties);
   const afterBoundary = earliestStart && tie ? or(gt(productionRuns.startTime, earliestStart), and(eq(productionRuns.startTime, earliestStart),
     or(gt(recordedAt, tie.recordedAt.toISOString()), and(eq(recordedAt, tie.recordedAt.toISOString()), gte(productionRunFeedstockDraws.id, tie.id)))))
     : earliestStart ? gte(productionRuns.startTime, earliestStart) : undefined;
@@ -82,7 +83,6 @@ export async function reallocateRunsForBins(
       options.facilityId ? eq(productionRuns.facilityId, options.facilityId) : undefined,
     ));
   const runIds = [...new Set(affected.map(row => row.runId))].sort();
-  if (!runIds.length) return [];
 
   const readDrawSnapshot = () => tx.select().from(productionRunFeedstockDraws).where(and(
     eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
@@ -98,12 +98,14 @@ export async function reallocateRunsForBins(
   assertStockLockSnapshot(JSON.stringify(draws) === JSON.stringify(currentDraws));
 
   const plans = new Map<string, FeedstockWetAllocation[]>();
-  for (const binId of [...new Set(draws.map(draw => draw.storageLocationId))]) {
+  for (const binId of [...new Set([...ids, ...draws.map(draw => draw.storageLocationId)])]) {
     let ledger: Awaited<ReturnType<typeof replayFeedstockBinStock>>;
     try {
-      ledger = await replayFeedstockBinStock(ctx, binId, tx, { replanRunIds: new Set(ids.includes(binId) ? runIds : []) });
+      ledger = await replayFeedstockBinStock(ctx, binId, tx, { replanRunIds: new Set(ids.includes(binId) ? runIds : []),
+        boundary: ids.includes(binId) ? { occurredAt: earliestStart?.toISOString() ?? '', recordedAt: tie?.recordedAt.toISOString(), id: tie?.id } : undefined });
     } catch (error) {
       if (!(error instanceof FeedstockReplayOverdrawError)) throw error;
+      if (error.event.kind !== 'run_draw') await throwFeedstockReplayOverdraw(ctx, tx, binId, error);
       const run = runs.find(row => row.id === error.event.sourceId)!;
       const runDraws = draws.filter(draw => draw.productionRunId === run.id);
       if (onlyRunId) runDraws.sort((a, b) => ids.indexOf(a.storageLocationId) - ids.indexOf(b.storageLocationId));
@@ -151,7 +153,7 @@ export async function reallocateRunsForBins(
       // submission that could be waiting for those same rows.
       const artifacts = await tryLockCertifiedLineageArtifacts(ctx, tx, [target]);
       assertStockLockSnapshot(artifacts !== null);
-      if (!sentFeedstockRecalculationAllowed(ctx)) await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
+      await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
       await tx.delete(productionRunFeedstocks).where(and(
         eq(productionRunFeedstocks.organizationId, ctx.organizationId),
         eq(productionRunFeedstocks.productionRunId, run.id),
