@@ -9,6 +9,9 @@ const TRY_AGAIN = "Try again.";
 const SET_FIXED_DATAPOINTS = "Set each value in the Isometric template editor before submitting.";
 const COMPONENTS_TO_DECIDE = "This Removal template has components to decide.";
 const ANSWER_IN_SETTINGS = "Answer them in Settings, Removal templates.";
+/** Facts a read-only batch states for blockers whose message is only a repair step. */
+const NO_REMOVAL_TEMPLATE = "This credit batch has no Removal template.";
+const FIXED_VALUES_NOT_SET = "Some fixed values are not set in the Isometric template.";
 
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This component belongs at the project level in Isometric.",
@@ -34,14 +37,14 @@ export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
 export interface BlockerCopy {
   detail?: string;
   instruction?: string;
-  /** The fact a read-only batch states when `detail` is empty and the whole message is a repair step. */
+  /** What a read-only surface states instead of `detail`: the fact of a blocker whose message is only a repair step, or merged facts. */
   readOnlyDetail?: string;
 }
 const TEMPLATE_BLOCKER_COPY: Partial<Record<RemovalTemplateBlockerCode, BlockerCopy>> = {
   notRemovalTemplate: { detail: NOT_REMOVAL_TEMPLATE, instruction: SET_REMOVAL_TEMPLATE },
-  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE, readOnlyDetail: "This credit batch has no Removal template." },
+  unpinnedTemplate: { instruction: SET_REMOVAL_TEMPLATE, readOnlyDetail: NO_REMOVAL_TEMPLATE },
   templateNotFullyRead: { detail: TEMPLATE_NOT_FULLY_READ, instruction: TRY_AGAIN },
-  missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS, readOnlyDetail: "Some fixed values are not set in the Isometric template." },
+  missingFixedDatapoint: { instruction: SET_FIXED_DATAPOINTS, readOnlyDetail: FIXED_VALUES_NOT_SET },
   templateLinesNeedReview: { detail: COMPONENTS_TO_DECIDE, instruction: ANSWER_IN_SETTINGS },
 };
 export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; message: string; copy?: BlockerCopy }

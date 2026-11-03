@@ -67,18 +67,18 @@ describe("read-only sheet sections", () => {
     expect(field?.value).toBeNull();
   });
 
-  it("shows a failed archived delivery read with Try again", () => {
+  it("states a failed archived delivery read once, with Retry in a notice", () => {
     const refetch = vi.fn();
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
     const field = sections[0].fields.find((f) => f.label === "Delivery source");
     expect(field?.valuePresent).toBe(false);
-    // One statement, in the field, with its retry; no second Notice.
-    expect(sections[0].content).toBeUndefined();
-    render(<>{field?.value}</>);
-    expect(screen.getByText("Could not load")).toBeTruthy();
-    expect(screen.queryByText("The delivery could not be loaded.")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(field?.value).toBe("Could not load");
+    // The field states the failure; the notice gives only the step.
+    render(<>{sections[0].content}</>);
+    expect(screen.getByRole("status").textContent).toContain("Retry to load the delivery source.");
+    expect(screen.queryByText(/could not be loaded/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
@@ -86,8 +86,11 @@ describe("read-only sheet sections", () => {
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch: vi.fn() };
     const delivery = { code: "DL-1", deliveryDate: new Date("2026-10-29") } as unknown as Parameters<typeof applicationSheetSections>[1]["delivery"];
     const sections = applicationSheetSections(APPLICATION, { delivery, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
-    expect(sections[0].fields.find((f) => f.label === "Delivery source")?.valuePresent).not.toBe(false);
+    const field = sections[0].fields.find((f) => f.label === "Delivery source");
+    expect(field?.valuePresent).not.toBe(false);
     expect(sections[0].content).toBeUndefined();
+    render(<>{field?.value}</>);
     expect(screen.queryByText("Could not load")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });

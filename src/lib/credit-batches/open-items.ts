@@ -432,6 +432,7 @@ export function buildCreditBatchWaitingItems(pageModel: CreditBatchPageModel | u
     waiting.push({
       id: "not-applied",
       title: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced but not applied yet`,
+      readOnlyTitle: `${formatTonnes(kgToTonnes(notAppliedDryKg))} produced and not applied`,
       detail: "It can join a Removal once its application is recorded.",
       // A future action: a read-only batch states no such thing.
       detailMayInstruct: true,

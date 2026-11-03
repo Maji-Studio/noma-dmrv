@@ -17,7 +17,7 @@ const SET_TEMPLATE_LABEL = "Set template";
 /** The notice text: the full message, or on a read-only batch only the fact. */
 export function templateSetupNoticeText(blocker: RemovalTemplateBlocker, readOnly: boolean): string {
   if (!readOnly) return blocker.message;
-  return blocker.copy?.detail ?? blocker.copy?.readOnlyDetail ?? blocker.message;
+  return blocker.copy?.readOnlyDetail ?? blocker.copy?.detail ?? blocker.message;
 }
 
 export function TemplateSetupNotice({

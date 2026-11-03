@@ -5,7 +5,6 @@ import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { LOAD_FAILED } from "@/lib/copy-utils";
-import { RECORD_LOCK_RETRY_LABEL } from "@/lib/record-lock-view";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -17,6 +16,9 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import { Notice } from "@/components/ui/notice";
+
+const DELIVERY_RETRY_LABEL = "Retry";
+const DELIVERY_RETRY_TEXT = "Retry to load the delivery source.";
 
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {
@@ -54,13 +56,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : context.deliveryRead?.error ? (
-              // One statement with its retry, in the field itself.
-              <span className="inline-flex flex-wrap items-center gap-x-8 gap-y-4">
-                {LOAD_FAILED}
-                <Button type="button" variant="weak" size="small" busy={context.deliveryRead.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{RECORD_LOCK_RETRY_LABEL}</Button>
-              </span>
-            ) : null,
+            : context.deliveryRead?.error ? LOAD_FAILED : null,
           ...(deliveryReadFailed ? { valuePresent: false } : {}),
           ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
@@ -79,7 +75,20 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice> : undefined,
+      content: application.heldOutOfCredits || deliveryReadFailed ? (
+        <>
+          {deliveryReadFailed && (
+            // The field states the failure; the notice carries only the step.
+            <Notice
+              tone="warning"
+              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{DELIVERY_RETRY_LABEL}</Button>}
+            >
+              {DELIVERY_RETRY_TEXT}
+            </Notice>
+          )}
+          {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
+        </>
+      ) : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
       // The bar and key line are always visible; the ledger and source runs

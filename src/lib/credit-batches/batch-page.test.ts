@@ -297,7 +297,9 @@ it("states the template fact on a read-only batch from the blocker copy, and the
   expect(openItemText(item)).toBe("Set a Removal template in Settings, Removal templates.");
 });
 
-it("hides the future-action detail of a Waiting item on a read-only batch", () => {
-  const item: CreditBatchOpenItem = { id: "not-applied", title: "0.05 t produced but not applied yet", detail: "It can join a Removal once its application is recorded.", detailMayInstruct: true, target: { tab: "removals" } };
-  expect(readOnlyOpenItems({ blocking: [], check: [], waiting: [item] }).waiting[0].detail).toBeUndefined();
+it("states a Waiting item as a fact on a read-only batch", () => {
+  const item: CreditBatchOpenItem = { id: "not-applied", title: "0.05 t produced but not applied yet", readOnlyTitle: "0.05 t produced and not applied", detail: "It can join a Removal once its application is recorded.", detailMayInstruct: true, target: { tab: "removals" } };
+  const [readOnly] = readOnlyOpenItems({ blocking: [], check: [], waiting: [item] }).waiting;
+  expect(readOnly.detail).toBeUndefined();
+  expect(readOnly.title).toBe("0.05 t produced and not applied");
 });
