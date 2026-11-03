@@ -111,7 +111,7 @@ function BatchState({
       {view.state ? (
         <span className="inline-flex items-center gap-6 body-small font-medium">
           <StateMark state={view.state} size={STATE_MARK_PX} />
-          {view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
+          {view.state === "blocking" && view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
           {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
       ) : readinessStatus === "loading" && (

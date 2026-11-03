@@ -43,7 +43,15 @@ describe("creditBatchStateOf", () => {
       removalId: "newest-submitted",
       removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
       removalInterrupted: true,
-    })).toEqual({ state: "interrupted", blockingCount: 0, openTodoCount: 0 });
+    })).toEqual({ state: "interrupted", blockingCount: 2, openTodoCount: 3 });
+  });
+  it.each([
+    { issueCount: 2, checkCount: 1, openTodoCount: 3 },
+    { issueCount: 0, checkCount: 2, openTodoCount: 2 },
+    { issueCount: 0, checkCount: 0, openTodoCount: 0 },
+  ])("keeps $openTodoCount open to-dos during an interrupted submission", ({ issueCount, checkCount, openTodoCount }) => {
+    expect(creditBatchStateOf({ ...open, removalInterrupted: true, issueCount, checkCount }))
+      .toEqual({ state: "interrupted", blockingCount: issueCount, openTodoCount });
   });
   it("drops the count once credits are issued", () => {
     expect(creditBatchStateOf({
