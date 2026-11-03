@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatMassKg } from "@/lib/format-utils";
 import { buildBatchSankey, EXIT_EPSILON_KG, type SankeyLineage } from "@/lib/chain-of-custody/sankey";
-import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { signedKg, summarySentence, valueLabel } from "./waterfall-parts";
 import { buildWaterfall, chartMaxKg, DEFAULT_COLUMN, levelAfter, type WaterfallLineage } from "./waterfall-model";
 
@@ -11,6 +11,19 @@ const APPLIED_DRY_T = 1;
 const APPLIED_WET_T = 1.2;
 const ROUNDING_CONVERSION_KG = 0.4;
 const ROUNDING_DOWNSTREAM_KG = -0.3;
+const BLEND_KG = 2_000;
+const INGREDIENT_KG = 500;
+const BLENDED_DRY_KG = 1_200;
+const ALLOCATED_DRY_KG = 1_100;
+const COMPOSITION = {
+  ingredients: [{
+    formulationIngredientId: "ingredient-line",
+    feedstockTypeId: "blend-feedstock",
+    feedstockTypeName: "Blend ingredient",
+    feedstockTypeCategory: "manure",
+    massKg: INGREDIENT_KG,
+  }],
+};
 
 function lineage(
   wetKg: (number | null)[],
@@ -52,6 +65,29 @@ function build(wetKg: (number | null)[]) {
 }
 
 describe("buildWaterfall", () => {
+  it.each([
+    { moisture: 20, allocated: null, expectedKg: BLENDED_DRY_KG },
+    { moisture: null, allocated: null, expectedKg: BLEND_KG - INGREDIENT_KG },
+    { moisture: 20, allocated: ALLOCATED_DRY_KG, expectedKg: ALLOCATED_DRY_KG },
+  ])("matches blended-lot totals and records with moisture=$moisture and allocation=$allocated", ({ moisture, allocated, expectedKg }) => {
+    const entry = lineage([RUN_DRY_IN_KG], { id: "app-1", code: "AP-26-001", dryT: APPLIED_DRY_T, wetT: APPLIED_WET_T });
+    entry.biocharProduct = { ...entry.biocharProduct!, massKg: BLEND_KG, moistureContentPercent: moisture, composition: COMPOSITION };
+    if (allocated != null) {
+      entry.sources = [{
+        productionRun: entry.productionRun!, reactor: null, feedstocks: entry.feedstocks,
+        allocatedWetMassKg: BLEND_KG - INGREDIENT_KG, allocatedDryMassKg: allocated,
+      }];
+    }
+    const model = buildWaterfall(buildBatchSankey([entry]), [entry]);
+    const storedKg = expectedKg - tonnesToKg(APPLIED_DRY_T);
+    const storage = model.items.find((item) => item.key === "in_storage");
+
+    expect(storage?.massKg).toBe(storedKg);
+    expect(storage?.records[0].massKg).toBe(storedKg);
+    expect(model.balanced).toBe(true);
+    expect(model.warnings).toEqual([]);
+  });
+
   it("starts wet, steps down by every exit the lib computes and ends on applied", () => {
     const model = build([3_000, 2_000]);
 

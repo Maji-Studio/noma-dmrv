@@ -48,6 +48,7 @@ export async function loadRunForwardFactsWithExecutor(
       productionDate: biocharProducts.productionDate,
       massKg: biocharProducts.massKg,
       moistureContentPercent: biocharProducts.moistureContentPercent,
+      composition: biocharProducts.composition,
       formulationName: formulations.name,
     })
     .from(biocharProductSourceAllocations)
@@ -126,6 +127,7 @@ export async function loadRunForwardFactsWithExecutor(
       productionDate: row.productionDate,
       massKg: row.massKg,
       moistureContentPercent: row.moistureContentPercent,
+      composition: row.composition,
       formulationName: row.formulationName,
       drawnWetMassKg: row.drawnWetMassKg,
       drawnDryMassKg: row.drawnDryMassKg,

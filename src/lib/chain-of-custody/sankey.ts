@@ -26,7 +26,7 @@
  * any data-access / "use server" coupling.
  */
 
-import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 export type SankeyColumnKey =
@@ -83,6 +83,7 @@ export interface SankeyLineage {
     id: string;
     massKg: number | null;
     moistureContentPercent: number | null;
+    composition?: unknown;
   } | null;
   feedstocks: {
     id: string;
@@ -174,16 +175,15 @@ export function buildBatchSankey(
     runOutputKg += run.biocharDryMassKg ?? 0;
   }
 
-  // `massKg` is the lot's WET mass, but every other column here is dry, so
-  // convert via the recorded moisture (biochar runs 1–2%) to keep one basis
-  // end to end (issue #361 F14; mirrors the dashboard custody ribbon). A lot
-  // with no moisture reading counts at wet mass rather than vanishing.
+  // Share the dashboard's allocation-first, ingredient-excluded biochar basis.
+  // Without a dry figure, retain only the source biochar's wet mass.
   let lotMassKg = 0;
   for (const lot of lotById.values()) {
-    lotMassKg += allocatedByProductId.get(lot.id) ??
-      computeClampedDryMass(lot.massKg, lot.moistureContentPercent) ??
-      lot.massKg ??
-      0;
+    lotMassKg += sourceBiocharMassFlowKg({
+      ...lot,
+      composition: lot.composition,
+      sourceAllocatedDryMassKg: allocatedByProductId.get(lot.id) ?? null,
+    });
   }
 
   const conversionLoss = residual(
