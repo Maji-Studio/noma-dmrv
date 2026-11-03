@@ -59,7 +59,7 @@ function proportional(amount: bigint, holdings: readonly { id: string; units: bi
   return new Map(shares.map(row => [row.id, row.units]));
 }
 
-function drawShares(amount: bigint, present: { id: string; units: bigint }[], method: FeedstockDrawMethod): Map<string, bigint> {
+export function drawShares(amount: bigint, present: { id: string; units: bigint }[], method: FeedstockDrawMethod): Map<string, bigint> {
   if (method.stockMode === 'mix') return proportional(amount, present);
   const shares = new Map<string, bigint>();
   let left = amount;
@@ -124,14 +124,15 @@ export function replayFeedstockDraws(events: readonly FeedstockReplayEvent[], cu
         holdings.set(id, remaining > 0 ? remaining : BigInt(0));
         if (remaining < 0) deficit -= remaining;
       }
-      // Preserve saved provenance, but charge its excess to the physical stock.
+      // Preserve saved provenance, but charge uncovered mass and excess to physical stock.
+      deficit += requested > attributed ? requested - attributed : BigInt(0);
       const remainingHoldings = [...holdings].filter(([, units]) => units > 0).map(([id, units]) => ({ id, units }));
       const remainingTotal = remainingHoldings.reduce((sum, row) => sum + row.units, BigInt(0));
       for (const [id, units] of drawShares(minimum(deficit, remainingTotal), remainingHoldings, feedstockMethodAt(current, changes, event.occurredAt))) {
         holdings.set(id, holdings.get(id)! - units);
         deficit -= units;
       }
-      const unassigned = deficit + (requested > attributed ? requested - attributed : BigInt(0));
+      const unassigned = deficit;
       unattributed -= minimum(unattributed, unassigned);
       withdrawals.set(event.id, [...shares].filter(([, units]) => units > 0).map(([feedstockId, units]) => ({ feedstockId, wetKg: kg(units) })));
     }

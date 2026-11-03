@@ -121,3 +121,22 @@ it('keeps a holdings point for a reversed loss in the middle of history', () => 
   expect([...result.points.get('loss')!]).toEqual([['a', 10]]);
   expect(result.points.size).toBe(3);
 });
+
+it.each([oldest, newest, mix])('conserves a positive saved draw with empty shares: %j', method => {
+  const result = replayFeedstockDraws([event('a', 1, 100),
+    { ...event('saved', 2, -20, 'run_draw'), savedShares: [] }, event('loss', 3, -10, 'loss')], method);
+  expect(result.withdrawals.get('saved')).toEqual([]);
+  expect([...result.remaining]).toEqual([['a', 70]]);
+  expect(result.unattributedWetKg).toBe(0);
+});
+
+it.each([
+  [oldest, [0, 10]], [newest, [10, 0]], [mix, [5, 5]],
+] as const)('charges partially covered saved draws by the active method: %j', (method, remaining) => {
+  const savedShares = [{ feedstockId: 'a', wetKg: 10 }];
+  const result = replayFeedstockDraws([event('a', 1, 20), event('b', 2, 10),
+    { ...event('saved', 3, -20, 'run_draw'), savedShares }], method);
+  expect(result.withdrawals.get('saved')).toEqual(savedShares);
+  expect([...result.remaining.values()]).toEqual(remaining);
+  expect(result.unattributedWetKg).toBe(0);
+});

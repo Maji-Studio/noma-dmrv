@@ -1,3 +1,4 @@
+import { FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE } from '@/schemas/storage-locations';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { db, type DbTransaction } from '@/db';
@@ -126,7 +127,7 @@ describe('feedstock draw methods in the database', () => {
   it('requires merge time after the last event and an empty mixed bin to split', () => scenario(async (tx, f) => {
     await reallocateRunsForBins(ctx, tx, [f.bin.id]);
     await expect(applyFeedstockMethodChange(ctx, tx, f.bin, { stockMode: 'mix', mergedAt: day(6) })).rejects.toThrow(/later than/);
-    await expect(applyFeedstockMethodChange(ctx, tx, f.bin, { stockMode: 'mix' })).rejects.toThrow(/Enter when/);
+    await expect(applyFeedstockMethodChange(ctx, tx, f.bin, { stockMode: 'mix' })).rejects.toThrow(FEEDSTOCK_MERGE_TIME_REQUIRED_MESSAGE);
     const method = await applyFeedstockMethodChange(ctx, tx, f.bin, { stockMode: 'mix', mergedAt: day(8) });
     expect(method.effectiveAt).toEqual(day(8));
     const [mixed] = await tx.update(storageLocations).set({ stockMode: method.stockMode, drawOrder: method.drawOrder }).where(and(eq(storageLocations.organizationId, TEST_ORG_ID), eq(storageLocations.id, f.bin.id))).returning();

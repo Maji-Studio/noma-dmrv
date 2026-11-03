@@ -23,7 +23,7 @@ beforeEach(() => {
   mocks.prepare.mockReset().mockResolvedValueOnce({ preview, lane: 'biochar', bin: { id: 'source', code: 'BC-1' } }).mockResolvedValueOnce({ preview: { ...preview, storageLocationId: 'destination', lane: 'product', basisFingerprint: 'destination-basis', beforeDryKg: 50, beforeSolidsKg: 60, beforeEstimatedWetKg: 60, beforeAllocations: [{ layerId: 'existing', code: 'Existing', dryMassKg: 50, wetMassKg: 60, runs: [] }] }, lane: 'product', bin: { formulationId: 'recipe' } });
   mocks.composition.mockResolvedValue({ ingredients: [{ storageLocationId: 'ingredient', massKg: 30, massDryKg: 24 }, { storageLocationId: 'ingredient', massKg: 15, massDryKg: 12 }, { storageLocationId: null, massKg: 10, massDryKg: 8 }] });
   mocks.where.mockResolvedValue([{ id: 'ingredient', code: 'ING-1', name: 'Compost' }]);
-  mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: 140 });
+  mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: 140, estimatedDrawDryKg: 42 });
 });
 
 describe('product stock preview', () => {
@@ -35,7 +35,7 @@ describe('product stock preview', () => {
     expect(new Set(bins.map(bin => bin.basisFingerprint)).size).toBe(1);
     expect(bins[0].basisFingerprint).not.toBe(preview.basisFingerprint);
     expect(bins[1]).toMatchObject({ beforeEstimatedWetKg: 150, afterEstimatedWetKg: 105, beforeDryKg: 140, afterDryKg: 98, removedDryKg: 42, dryLabel: 'dry solids' });
-    // Bin stock uses pro-rata intake solids, while the product retains its
+    // Bin stock uses replayed draw solids, while the product retains its
     // override (36 kg) plus the untracked ingredient's 8 kg dry solids.
     expect(bins[2]).toMatchObject({ beforeDryKg: 50, afterDryKg: 140, beforeSolidsKg: 60, afterSolidsKg: 194, removedWetKg: -175 });
     expect(bins[2].afterAllocations?.map(layer => layer.layerId)).toEqual(['existing', 'proposed-product']);
@@ -61,7 +61,7 @@ describe('product stock preview', () => {
     expect(bins[1].movementMoisturePercent).toBe(25);
   });
   it('keeps wet stock usable without inventing a dry estimate when operator moisture is retained', async () => {
-    mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: null });
+    mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: null, estimatedDrawDryKg: null });
     const bins = await previewProductStock(ctx, input);
     expect(bins[1]).toMatchObject({ beforeDryKg: null, afterDryKg: null, removedDryKg: null, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 105, blockingMessage: null });
     expect(bins[2].afterSolidsKg).toBe(194);
@@ -93,7 +93,7 @@ describe('product-wide preview basis', () => {
   });
   it('rejects changed ingredient wet availability even with unchanged override solids', async () => {
     const initial = await prepareProductStock(ctx, input, tx);
-    mocks.stock.mockResolvedValue({ wetMassKg: 140, dryMassKg: 130 });
+    mocks.stock.mockResolvedValue({ wetMassKg: 140, dryMassKg: 130, estimatedDrawDryKg: 42 });
     const changed = await repeatPrepared();
     expect(() => assertProductStockBasis(initial.basisFingerprint, changed)).toThrow('Stock changed');
   });
@@ -151,4 +151,14 @@ describe('optional product fingerprint (decision 53)', () => {
     expect(mocks.prepare.mock.calls[2][1]).toMatchObject({ occurredAt: '2026-09-14T12:00:00.000Z' });
     expect(offset.basisFingerprint).toBe(utc.basisFingerprint);
   });
+});
+
+it('previews the same Oldest first draw estimate recorded in composition', async () => {
+  mocks.composition.mockResolvedValue({ ingredients: [{ storageLocationId: 'ingredient', massKg: 30, massDryKg: 26.4,
+    moistureEstimate: { wetMassKg: 30, dryMassKg: 24, moisturePercent: 20 } }] });
+  mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: 140, estimatedDrawDryKg: 24 });
+  const prepared = await prepareProductStock(ctx, input, tx);
+  expect(prepared.bins[1]).toMatchObject({ beforeDryKg: 140, afterDryKg: 116, removedDryKg: 24, afterEstimatedWetKg: 120 });
+  expect(prepared.bins[1].movementMoisturePercent).toBeCloseTo(20);
+  expect(mocks.stock).toHaveBeenCalledWith(ctx, 'ingredient', input.placedAt, tx, undefined, 30);
 });

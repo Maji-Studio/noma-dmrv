@@ -50,7 +50,7 @@ describe('remaining ingredient moisture', () => {
     // The operator measured 20%; solids follow the reading, the 10% estimate is kept as what they saw.
     const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, moistureContentPercent: 20 }] });
     expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 24, moistureContentPercent: 20,
-      moistureEstimate: { moisturePercent: 10, wetMassKg: 150, dryMassKg: 135 } })]);
+      moistureEstimate: { moisturePercent: 10, wetMassKg: 30, dryMassKg: 27 } })]);
   });
   it('keeps the original pile ratio after a zero-moisture product override', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader(
@@ -139,4 +139,20 @@ it('keeps a dry-stock ledger point for a reversed loss mid-history', async () =>
   const ledger = await replayFeedstockBinStock(ctx, 'bin', tx);
   expect(ledger.entries.find(entry => entry.id === 'movement-0')).toMatchObject({ reversed: true, afterWetKg: 100, estimatedDryKg: 80 });
   expect(ledger.entries.at(-1)).toMatchObject({ afterWetKg: 90, estimatedDryKg: 72 });
+});
+
+it('estimates the Oldest first draw and remaining inventory from the same replay', async () => {
+  const { replayFeedstockBinStock } = await import('./feedstock-bin-ledger');
+  const tx = reader([{ wet: 100, dry: 80 }, { wet: 100, dry: 100 }], [priorDraw], [], [], [], 'split');
+  const composition = await resolveCompositionIngredientMassBasis(ctx, tx, { ingredients: [{ ...ingredient, moistureContentPercent: 12 }] });
+  expect(composition.ingredients).toEqual([expect.objectContaining({ massDryKg: 26.4,
+    moistureEstimate: { wetMassKg: 30, dryMassKg: 24, moisturePercent: 20 } })]);
+  const stock = await replayFeedstockBinStock(ctx, 'bin', tx, { drawWetKg: 30 });
+  expect(stock.currentWetKg).toBe(150);
+  expect(stock.remainingDryKg).toBe(140);
+  expect(stock.estimatedDrawDryKg).toBe(24);
+  const after = await replayFeedstockBinStock(ctx, 'bin', reader([{ wet: 100, dry: 80 }, { wet: 100, dry: 100 }],
+    [priorDraw, { composition }], [], [], [], 'split'));
+  expect(after.currentWetKg).toBe(120);
+  expect(after.remainingDryKg).toBe(116);
 });

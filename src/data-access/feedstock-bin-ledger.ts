@@ -6,7 +6,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
-import { replayFeedstockDraws, type FeedstockDrawShare } from '@/lib/feedstock-draw-replay';
+import { drawShares, feedstockMethodAt, replayFeedstockDraws, type FeedstockDrawShare } from '@/lib/feedstock-draw-replay';
 import { getFeedstockMethodChanges } from './feedstock-bin-method-history';
 import { findFeedstockLossBlocker, formatFeedstockLossLockReason } from '@/lib/feedstock-loss-lock';
 import { requireOrgScope } from './utils';
@@ -27,7 +27,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * their own batches. Every other withdrawal follows the method in force at
  * its instant; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string }; occurredAt?: string; excludeProductId?: string } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null }> {
+export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db, options: { replanRunIds?: ReadonlySet<string>; boundary?: { occurredAt: string; recordedAt?: string; id?: string }; occurredAt?: string; excludeProductId?: string; excludeRunId?: string; drawWetKg?: number } = {}): Promise<FeedstockBinStock & { withdrawals: Map<string, FeedstockDrawShare[]>; remainingDryKg: number | null; estimatedDrawDryKg: number | null }> {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId, stockMode: storageLocations.stockMode, drawOrder: storageLocations.drawOrder }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
@@ -99,7 +99,8 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
           moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT };
       }),
   ].filter(entry => (!options.occurredAt || entry.occurredAt <= options.occurredAt) &&
-    !(entry.kind === 'ingredient_draw' && entry.sourceId === options.excludeProductId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
+    !(entry.kind === 'ingredient_draw' && entry.sourceId === options.excludeProductId) &&
+    !(entry.kind === 'run_draw' && entry.sourceId === options.excludeRunId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
   const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
   const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
@@ -108,10 +109,11 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     shares.push({ feedstockId: draw.feedstockId, wetKg: Number(draw.wetKg) });
     drawsByRun.set(draw.productionRunId, shares);
   }
+  const changes = await getFeedstockMethodChanges(ctx, storageLocationId, reader);
   const replay = replayFeedstockDraws(drafts.map(draft => ({ ...draft,
     savedShares: draft.kind === 'run_draw' && draft.sourceId && !options.replanRunIds?.has(draft.sourceId)
       ? drawsByRun.get(draft.sourceId) ?? [] : undefined,
-  })), bin, await getFeedstockMethodChanges(ctx, storageLocationId, reader), options.boundary);
+  })), bin, changes, options.boundary);
   const dryAt = (holdings: Map<string, number> | undefined) => {
     if (!holdings) return null;
     let dryGrams = 0;
@@ -142,7 +144,15 @@ export async function replayFeedstockBinStock(ctx: OrgContext, storageLocationId
     .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
       wetKg: replay.remaining.get(b.id) ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: b.dryKg === null ? null : round((replay.remaining.get(b.id) ?? 0) * Number(b.dryKg) / Number(b.wetKg)), moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
-  return { currentWetKg, entries, batches: pile, withdrawals: replay.withdrawals, remainingDryKg: replay.unattributedWetKg > 0 ? null : dryAt(replay.remaining) };
+  const drawWetKg = options.drawWetKg ?? 0;
+  const available = [...replay.remaining].map(([id, wet]) => ({ id, units: BigInt(Math.round(wet * MASS_DECIMALS)) }));
+  const availableWet = [...replay.remaining.values()].reduce((sum, wet) => sum + wet, 0);
+  const estimatedDrawDryKg = drawWetKg > availableWet || drawWetKg < 0 ? null : dryAt(new Map(
+    [...drawShares(BigInt(Math.round(drawWetKg * MASS_DECIMALS)), available,
+      feedstockMethodAt(bin, changes, options.occurredAt ?? new Date().toISOString()))]
+      .map(([id, units]) => [id, Number(units) / MASS_DECIMALS]),
+  ));
+  return { currentWetKg, entries, batches: pile, estimatedDrawDryKg, withdrawals: replay.withdrawals, remainingDryKg: currentWetKg < 0 || replay.unattributedWetKg > 0 ? null : dryAt(replay.remaining) };
 }
 
 /** Public stock read omits the internal withdrawal index. */
