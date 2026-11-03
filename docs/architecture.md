@@ -808,11 +808,17 @@ Facility-scoped operations dashboard at `/dashboard`
 - The current Flow Hero body is a four-stat KPI band, the traceability hero
   (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
   and Certification panels. Week/month/all only changes the range-scoped KPI
-  and mass-flow values.
+  and mass-flow values. Each KPI counts by its own record date (runs by start
+  day, applications by application date, the CO₂e estimate by the batch's
+  period end), and its (i) says which.
 - One `getDashboardOverview` action supplies the page. Its aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
-  `dashboard-structural-gaps.ts`.
+  `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
+  gaps and credit batch rows on their flow station (batches on Production).
+- The Attention panel's "N open" counts rows: one per record for record
+  checks, one per credit batch row, and one per GPS gap, which groups every
+  record one form section fixes. Station badges count records.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).

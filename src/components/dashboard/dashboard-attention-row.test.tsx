@@ -60,11 +60,13 @@ describe("DashboardAttentionRow", () => {
         ]}
         structuralGaps={[
           {
-            key: "transportEndpointGps",
-            label: "Transport endpoint GPS missing",
+            key: "feedstockRouteGps",
+            label: "Feedstock route GPS missing",
             metadata: "Feedstock form · Transport route · 1 affected",
             count: 1,
             href: "/feedstock-intake?feedstock=feedstock-1&focus=transport-route",
+            station: "feedstock",
+            stationReason: "1 route missing GPS",
           },
         ]}
         total={3}

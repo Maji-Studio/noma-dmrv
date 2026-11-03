@@ -54,9 +54,15 @@ import {
   applicationEvidenceGapWhere,
   creditBatchAttention,
   feedstocksMissingDataWhere,
+  PERIOD_ENDED_SUBMITTED_TITLE,
   pendingBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
+import {
+  batchAttentionTotal,
+  withCrossCuttingAttention,
+  type DashboardBatchAttentionCounts,
+} from "./dashboard-station-attention";
 import {
   epochMs,
   getDashboardStations,
@@ -96,6 +102,21 @@ export type DashboardKpiKey =
   | "biocharProduced"
   | "appliedToSoil"
   | "co2eStored";
+
+/**
+ * Each KPI counts by its own record date (#1532 F9): runs by the day they
+ * started, applications by their application date, the CO₂e estimate by the
+ * day its credit batch's period ends. The clocks stay as they are; the hint
+ * says which one each figure uses, so a month can show applications next to
+ * no estimate.
+ */
+export const KPI_HINTS: Record<DashboardKpiKey, string> = {
+  feedstockProcessed: "Dry feedstock mass into complete runs, counted on the day each run started.",
+  biocharProduced: "Dry biochar mass out of complete runs, counted on the day each run started.",
+  appliedToSoil: "Dry mass of biochar applied to soil at customer sites, counted on the application date.",
+  co2eStored:
+    "Carbon stored in the credit batches' biochar, before project emissions are subtracted. Counted on the day each batch's period ends, so it can trail the runs and applications behind it.",
+};
 
 export interface DashboardKpi {
   key: DashboardKpiKey;
@@ -150,7 +171,10 @@ export interface DashboardOverview extends DashboardStationsData {
   attention: DashboardAttentionItem[];
   /** Cross-cutting certification blockers, kept separate from station badges. */
   structuralGaps: DashboardStructuralGap[];
-  /** Exact uncapped count of open items — the "N open" figure. */
+  /**
+   * Exact uncapped count of the card's rows: record rows, credit batch rows
+   * and one per structural gap. The "N open" figure.
+   */
   attentionTotal: number;
 }
 
@@ -222,7 +246,7 @@ export async function getDashboardOverview(
 
   const [
     [runRows, lotRows, applicationRows, { rows: batchRows, previews: batchPreviews }, feedstockRows],
-    { items: attentionItems, batchCount: batchAttentionCount },
+    { items: attentionItems, batches: batchAttention },
     stationsData,
     structuralGapCounts,
   ] =
@@ -387,6 +411,7 @@ export async function getDashboardOverview(
     {
       key: "feedstockProcessed",
       label: "Feedstock processed",
+      hint: KPI_HINTS.feedstockProcessed,
       unit: "t",
       value:
         currentFeedstockRuns.length > 0 ? feedstockInCurrentKg / 1000 : null,
@@ -402,6 +427,7 @@ export async function getDashboardOverview(
     {
       key: "biocharProduced",
       label: "Biochar produced",
+      hint: KPI_HINTS.biocharProduced,
       unit: "t",
       value: currentOutputRuns.length > 0 ? outputCurrentKg / 1000 : null,
       deltaPercent:
@@ -416,7 +442,7 @@ export async function getDashboardOverview(
     {
       key: "appliedToSoil",
       label: "Applied to soil",
-      hint: "Dry mass of biochar applied to soil at customer sites.",
+      hint: KPI_HINTS.appliedToSoil,
       unit: "t",
       value: currentApplications.length > 0 ? appliedCurrentTons : null,
       deltaPercent:
@@ -428,7 +454,7 @@ export async function getDashboardOverview(
     {
       key: "co2eStored",
       label: "Estimated CO₂e stored",
-      hint: "Carbon stored in the credit batches' biochar, before project emissions are subtracted.",
+      hint: KPI_HINTS.co2eStored,
       unit: "t",
       value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
@@ -438,7 +464,9 @@ export async function getDashboardOverview(
       detail:
         currentStoredBatches.length > 0
           ? `before project emissions, ${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
-          : "no estimate in period",
+          : currentBatches.length > 0
+            ? "no estimate in period"
+            : "no credit batch ended in period",
     },
   ];
 
@@ -468,21 +496,24 @@ export async function getDashboardOverview(
     { key: "applied", tonnes: tonnesToKg(appliedCurrentTons) / 1000 },
   ];
 
-  // Every attention check except overdue batches maps 1:1 to a flow station,
-  // and the station badge counts are exact (uncapped) — so the true queue size
-  // is their sum plus the batch-only count, without re-running the row queries.
+  // "N open" counts the card's rows: one per record for the record checks
+  // (station counts are exact, so no extra row query), one per credit batch
+  // row, and one per structural gap, which groups every record one form
+  // section fixes (#1532 F5). Read before the gaps and batches join the
+  // stations, which count records.
   const structuralGaps = buildDashboardStructuralGaps(
     structuralGapCounts,
     facilityId,
   );
-  const structuralGapTotal = structuralGaps.reduce(
-    (total, gap) => total + gap.count,
-    0,
-  );
   const attentionTotal =
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
-    batchAttentionCount +
-    structuralGapTotal;
+    batchAttentionTotal(batchAttention) +
+    structuralGaps.length;
+  const stations = withCrossCuttingAttention(
+    stationsData.stations,
+    structuralGaps,
+    batchAttention,
+  );
 
   return {
     range,
@@ -493,6 +524,7 @@ export async function getDashboardOverview(
     structuralGaps,
     attentionTotal,
     ...stationsData,
+    stations,
   };
 }
 
@@ -575,13 +607,13 @@ function attentionHref(
  * batches are read uncapped with their Removals' display facts (correlated
  * subqueries, no extra round trip): an interrupted Removal is one row per
  * Removal, a closed period one row per batch (`creditBatchAttention`), and
- * `batchCount` is their exact total for the queue size.
+ * `batches` counts them by kind for the queue size and the Production station.
  */
 export async function getDashboardAttentionItems(
   ctx: OrgContext,
   facilityId: string,
   todayStr: string,
-): Promise<{ items: DashboardAttentionItem[]; batchCount: number }> {
+): Promise<{ items: DashboardAttentionItem[]; batchCount: number; batches: DashboardBatchAttentionCounts }> {
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
 
@@ -699,5 +731,10 @@ export async function getDashboardAttentionItems(
     // An interrupted submission leads: it blocks the Removal until resumed.
     items: [...interrupted.values(), ...flags, ...periods.slice(0, ATTENTION_PER_CHECK)].slice(0, ATTENTION_TOTAL),
     batchCount: interrupted.size + periods.length,
+    batches: {
+      interrupted: interrupted.size,
+      notSubmitted: periods.filter((item) => item.title !== PERIOD_ENDED_SUBMITTED_TITLE).length,
+      awaitingVerification: periods.filter((item) => item.title === PERIOD_ENDED_SUBMITTED_TITLE).length,
+    },
   };
 }

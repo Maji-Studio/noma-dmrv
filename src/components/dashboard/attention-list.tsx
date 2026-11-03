@@ -20,7 +20,7 @@ import { StructuralGapList } from "./structural-gap-list";
 interface AttentionListProps {
   attention: DashboardAttentionItem[];
   structuralGaps: DashboardStructuralGap[];
-  /** Exact uncapped count of open items; `attention` is a capped sample of it. */
+  /** Exact uncapped count of rows; `attention` is a capped sample of the record rows. */
   total: number;
 }
 
@@ -29,11 +29,9 @@ export function AttentionList({
   structuralGaps,
   total,
 }: AttentionListProps) {
-  const structuralGapTotal = structuralGaps.reduce(
-    (sum, gap) => sum + gap.count,
-    0,
-  );
-  const displayedOpenCount = structuralGapTotal + attention.length;
+  // "N open" counts rows; a structural gap is one row however many records
+  // it groups (its "N affected" says how many).
+  const displayedOpenCount = structuralGaps.length + attention.length;
   const summaryState = deriveAttentionSummaryState(total);
 
   return (

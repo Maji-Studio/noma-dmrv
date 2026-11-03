@@ -199,9 +199,13 @@ describe("dashboard query budget", () => {
     const feedstockDate = result.attention[0]?.date;
     expect(feedstockDate).toBeInstanceOf(Date);
     expect((feedstockDate as Date).toISOString()).toBe("2026-06-20T00:00:00.000Z");
-    expect(result.attentionTotal).toBe(
-      1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
-    );
+    // "N open" counts rows: the feedstock record, the batch, one per gap.
+    expect(result.attentionTotal).toBe(1 + 1 + result.structuralGaps.length);
+    // The overdue batch lights Production, where the attention view shows it (#1532 F5).
+    expect(result.stations.find((s) => s.key === "production")).toMatchObject({
+      attention: 1,
+      reasons: [{ state: "warning", text: "1 credit batch not submitted" }],
+    });
     expect(queries).toBeLessThanOrEqual(OVERVIEW_QUERY_BUDGET);
 
     // One more batch must not add a round trip.

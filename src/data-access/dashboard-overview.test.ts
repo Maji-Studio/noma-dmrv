@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { OrgContext } from "@/lib/auth/server";
-import { getDashboardOverview } from "./dashboard-overview";
+import { getDashboardOverview, KPI_HINTS } from "./dashboard-overview";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
@@ -131,7 +131,7 @@ describe("dashboard display totals", () => {
   it.each([
     { count: 1, detail: "before project emissions, 1 credit batch" },
     { count: 3, detail: "before project emissions, 3 credit batches" },
-    { count: 0, detail: "no estimate in period" },
+    { count: 0, detail: "no credit batch ended in period" },
   ])("qualifies the CO₂e estimate for $count credit batches", async ({ count, detail }) => {
     const batches = Array.from({ length: count }, (_, index) => ({
       id: `batch-${index}`, endDate: DAY,
@@ -142,7 +142,6 @@ describe("dashboard display totals", () => {
     expect(overview.kpis.find((kpi) => kpi.key === "co2eStored")).toMatchObject({
       value: count || null,
       detail,
-      hint: "Carbon stored in the credit batches' biochar, before project emissions are subtracted.",
     });
   });
 
@@ -153,5 +152,16 @@ describe("dashboard display totals", () => {
       value: null,
       detail: "no estimate in period",
     });
+  });
+
+  // #1532 F9: each figure counts by its own date, and the hint says which.
+  it("names the date each KPI is counted by", async () => {
+    const overview = await getDashboardOverview(CTX, FACILITY_ID, "month");
+    const hints = Object.fromEntries(overview.kpis.map((kpi) => [kpi.key, kpi.hint]));
+    expect(hints).toEqual(KPI_HINTS);
+    expect(hints.feedstockProcessed).toContain("counted on the day each run started");
+    expect(hints.biocharProduced).toContain("counted on the day each run started");
+    expect(hints.appliedToSoil).toContain("counted on the application date");
+    expect(hints.co2eStored).toContain("Counted on the day each batch's period ends");
   });
 });
