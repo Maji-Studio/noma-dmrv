@@ -160,7 +160,10 @@ export function withoutRegistryCalculatedLines<T extends {
   records?: Pick<EmissionLineRecords, "calculatedBy"> | null;
   state: EmissionLineState;
   blocker?: RemovalBlocker | null;
+  entries?: readonly unknown[];
 }>(lines: readonly T[]): T[] {
+  // A line with entries stays visible so the operator can still see and edit them.
   return lines.filter((line) => !(line.contract?.automaticSource === "sequestration"
-    && line.records?.calculatedBy === "isometric" && line.state === "filled" && !line.blocker));
+    && line.records?.calculatedBy === "isometric" && line.state === "filled" && !line.blocker
+    && !line.entries?.length));
 }

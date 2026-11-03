@@ -20,12 +20,13 @@ import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
 import { removalTemplatesSettingsHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { EmissionLineAccordionBody } from "./emission-line-accordion-body";
-import { MENU_PULL, PHONE_COLUMNS, ROW_COLUMNS } from "./emission-line-grid";
+import { MENU_PULL, PHONE_COLUMNS, QUIET_REASON, ROW_COLUMNS } from "./emission-line-grid";
 import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
   groupLines,
   lineRecords,
+  isCalculatedByRegistry,
   isTotalMissing,
   lineTotalText,
   openSourceLabel,
@@ -153,6 +154,7 @@ interface LineRowProps {
 function LineRow({ line, showGroup, scope, actions, expanded, editingComment, undoBar }: LineRowProps) {
   const total = lineTotalText(line);
   const quietTotal = isTotalMissing(line);
+  const reasonTotal = isCalculatedByRegistry(line.records) && !line.total;
   const bodyId = `line-body-${line.componentId}`;
   const Caret = expanded ? CaretDownIcon : CaretRightIcon;
   return (
@@ -232,9 +234,11 @@ function LineRow({ line, showGroup, scope, actions, expanded, editingComment, un
             className={cn(
               "text-right body-small font-medium tabular-nums md:col-start-4 md:row-start-1 md:self-center",
               quietTotal && "font-normal text-[var(--color-text-tertiary)]",
+              // A reason is a sentence, not a figure: quiet; it wraps on two lines in the Total column and, on phones, sits on its own line.
+              reasonTotal && cn(QUIET_REASON, "md:max-w-[14ch] md:justify-self-end max-md:basis-full max-md:text-left max-md:whitespace-normal"),
               // Phones drop a missing Total (the state beside it already says so) and,
               // while the row is open, the Total the sources table below states.
-              quietTotal || expanded ? "max-md:hidden" : cn(META_CELL, "max-md:ml-auto max-md:justify-end max-md:whitespace-nowrap"),
+              quietTotal || expanded ? "max-md:hidden" : cn(META_CELL, reasonTotal ? "max-md:justify-start" : "max-md:ml-auto max-md:justify-end max-md:whitespace-nowrap"),
             )}
           >
             {total}

@@ -29,6 +29,7 @@ const MAX_FRACTION_DIGITS = 3;
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: MAX_FRACTION_DIGITS });
 export const NEEDS_SETUP_COPY = "noma cannot fill this component from its records yet. Its decision and the template are in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
+export const CALCULATED_BY_ISOMETRIC = "Calculated by Isometric";
 
 const OPEN_STATES: readonly EmissionLineState[] = ["needsSetup", "missingEvidence", "needsReview", "empty"];
 const DONE_STATES: readonly EmissionLineState[] = ["filled", "confirmedZero"];
@@ -150,9 +151,14 @@ export function countedOnText(records: LineRecords & { countedOn: NonNullable<Li
   return `${COUNTED_ON_PREFIX} ${records.countedOn.map((batch) => batch.code).join(", ")}`;
 }
 
+/** The registry calculates this line, so the records hold no figure of their own. */
+export function isCalculatedByRegistry(records: LineRecords | null | undefined): boolean {
+  return records?.calculatedBy === "isometric" && !hasRecordsFigure(records);
+}
+
 /** The source exists but holds nothing for this line. */
 export function isRecordsGap(records: LineRecords | null): boolean {
-  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records);
+  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records) && !isCalculatedByRegistry(records);
 }
 
 function countWords(count: number, one: string, many: string): string {
@@ -167,7 +173,7 @@ export function openSourceLabel(source: RecordsSource): string {
 export function recordsChipText(records: LineRecords): string {
   if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
-  if (hasRecordsFigure(records)) return countWords(records.count, words.shortOne, words.shortMany);
+  if (hasRecordsFigure(records) || isCalculatedByRegistry(records)) return countWords(records.count, words.shortOne, words.shortMany);
   if (records.count > 0) return `None on ${countWords(records.count, words.shortOne, words.shortMany)}`;
   return `No ${words.many} yet`;
 }
@@ -177,13 +183,15 @@ export function recordsText(records: LineRecords): string {
   if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   const counted = countWords(records.count, words.one, words.many);
+  if (isCalculatedByRegistry(records)) return counted;
   if (hasRecordsFigure(records)) return `${formatFigure(records.figure)} from ${counted}`;
   if (records.count === 0) return `No ${words.many} yet`;
   return `Not recorded on ${counted}`;
 }
 
-/** The records row's amount. */
+/** The records row's amount, including figures calculated by the registry. */
 export function recordsFigureText(records: LineRecords): string {
+  if (isCalculatedByRegistry(records)) return CALCULATED_BY_ISOMETRIC;
   return hasRecordsFigure(records) || isCountedElsewhere(records) ? formatFigure(records.figure) : MISSING_VALUE.notRecorded;
 }
 
@@ -242,6 +250,7 @@ function entryFigureText(entry: EmissionEntry): string {
 export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
+  if (isCalculatedByRegistry(line.records)) return CALCULATED_BY_ISOMETRIC;
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
@@ -251,7 +260,7 @@ export function lineTotalText(line: EmissionLine): string | null {
 
 /** The Total is a missing token, not a figure: phones drop it, since the state already says so. */
 export function isTotalMissing(line: EmissionLine): boolean {
-  return !line.total && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
+  return !line.total && !isCalculatedByRegistry(line.records) && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
 }
 
 /* ---------- what the operator may do ---------- */
