@@ -13,9 +13,13 @@ import { evaluateSampled1000YearReplicates } from "@/lib/certification/durabilit
 export interface DurabilityGateResult {
   /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
   blockers: string[];
-  blockerFacts: string[];
   /** Non-blocking §8.3.1 representative-sampling advisories. */
   warnings: string[];
+}
+
+/** The gates plus each blocker's fact, in the same order, for read-only surfaces. */
+export interface DurabilityGateResultWithFacts extends DurabilityGateResult {
+  blockerFacts: string[];
 }
 
 export interface DurabilityBatchData extends DurabilityGateResult {
@@ -23,6 +27,7 @@ export interface DurabilityBatchData extends DurabilityGateResult {
   batchesWithSamples: CreditBatchWithSamples[];
   /** Exact submission-gate blockers keyed to the batch that produced them. */
   blockersByBatchId: Record<string, string[]>;
+  /** The same blockers as facts, in the same order. */
   blockerFactsByBatchId: Record<string, string[]>;
 }
 
@@ -58,7 +63,6 @@ export function buildDurabilityBatchGates(
   }));
   return {
     blockers: perBatchGates.flatMap(({ gates }) => gates.blockers),
-    blockerFacts: perBatchGates.flatMap(({ gates }) => gates.blockerFacts),
     blockerFactsByBatchId: Object.fromEntries(perBatchGates.map(({ creditBatchId, gates }) => [creditBatchId, gates.blockerFacts])),
     warnings: perBatchGates.flatMap(({ gates }) => gates.warnings),
     blockersByBatchId: Object.fromEntries(
@@ -92,7 +96,7 @@ function isoSamplingDay(
  */
 export function buildDurabilityGates(
   batches: CreditBatchWithSamples[],
-): DurabilityGateResult {
+): DurabilityGateResultWithFacts {
   if (batches.length === 0) return { blockers: [], blockerFacts: [], warnings: [] };
   const facts: BatchGateFacts[] = batches.map((batch) => ({
     creditBatchId: batch.creditBatchId,

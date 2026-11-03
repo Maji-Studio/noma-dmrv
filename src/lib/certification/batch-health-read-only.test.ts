@@ -114,7 +114,7 @@ describe("read-only batch health facts", () => {
     expect(item.detail).toBe(hasCopy ? check.readOnlyDetail : undefined);
   });
 
-  it("states no fact when a fact-bearing check merges with one that has none, in either order", () => {
+  it("states carbon facts with the Sample evidence count when both route to Samples", () => {
     const carbonFact = "Credit batch CB-1 is marked as sampled but has no Samples.";
     const health = deriveBatchHealth({ ...healthy,
       carbonMissingInputs: [`${carbonFact} Add at least 3 Samples before submitting.`], carbonBlockerFacts: [carbonFact],
@@ -124,9 +124,9 @@ describe("read-only batch health facts", () => {
     });
     const check = health.checks.find((check) => check.status === "unmet" && check.fixTarget === "labSamples")!;
     expect(check.issueKey).toContain("+");
-    expect(check.readOnlyDetail).toBeUndefined();
+    expect(check.readOnlyDetail).toBe(`${carbonFact} · 1 record needs attention`);
     const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
-    expect(item.detail).toBeUndefined();
+    expect(item.detail).toBe(check.readOnlyDetail);
   });
 
   it("merges missing feedstock transport coverage with its lineage fact", () => {

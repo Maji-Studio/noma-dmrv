@@ -488,17 +488,22 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }
   const issues = facts.entityReadinessIssues;
   if (issues && issues.length > 0) {
-    return issues.map((issue) => ({
+    return issues.map((issue) => {
+      // A count of records, no repair step: read only states it too.
+      const detail = `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`;
+      return {
       key: "entityReadiness",
       issueKey: issue.key,
       label: ENTITY_READINESS_LABEL,
       requirementLabel: issue.label,
       unmetLabel: entityFieldUnmetLabel(issue.label),
       status: "unmet",
-      detail: `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`,
+      detail,
+      readOnlyDetail: detail,
       fixTarget: issue.fixTarget,
       affectedRecords: issue.affectedRecords,
-    }));
+    } satisfies BatchHealthCheckBase;
+    });
   }
   const suffix =
     facts.entityReadinessGaps.length > ENTITY_READINESS_PREVIEW_LIMIT
