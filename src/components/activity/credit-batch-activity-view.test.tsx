@@ -42,7 +42,8 @@ describe("a feed whose loaded events are all hidden updates", () => {
     state.hasNextPage = true;
     const text = render().textContent ?? "";
     expect(text).toContain("Show older activity");
-    expect(text).toContain("No changes to show on this page.");
+    expect(text).toContain("No changes to show yet");
     expect(text).not.toContain("No activity recorded yet");
+    expect(text).toContain("Older activity may have some.");
   });
 });
