@@ -54,12 +54,12 @@ export function useReconcileListPage({
  * Keeps one-based list pagination scoped to the active facility (or another
  * route scope) without an effect-driven reset when that scope changes.
  */
-export function useListPagination(scopeKey?: string | null) {
+export function useListPagination(scopeKey?: string | null, initialPageSize: number = DEFAULT_LIST_PAGE_SIZE) {
   const resolvedScopeKey = scopeKey ?? GLOBAL_LIST_SCOPE;
   const [pagination, setPagination] = useState<ListPaginationState>({
     scopeKey: resolvedScopeKey,
     page: 1,
-    pageSize: DEFAULT_LIST_PAGE_SIZE,
+    pageSize: initialPageSize,
   });
 
   const currentPage =

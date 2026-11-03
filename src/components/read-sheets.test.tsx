@@ -172,7 +172,8 @@ describe("read sheets", () => {
     { name: "wet mass with a dry line", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, figures: ["800 kg wet mass", "400 kg wet mass"], dry: ["640 kg", "200 kg"] },
     { name: "known dry biochar as the headline", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, figures: ["640 kg dry biochar", "200 kg dry biochar"], dry: [undefined, undefined] },
     { name: "large masses, still in kg", biochar: { wetKg: 2500, dryBiocharKg: 2000 }, product: { wetKg: null, dryBiocharKg: 1200 }, figures: ["2,500 kg wet mass", "1,200 kg dry biochar"], dry: ["2,000 kg", undefined] },
-    { name: "empty groups", biochar: { wetKg: 0, dryBiocharKg: 0 }, product: { wetKg: 0, dryBiocharKg: 0 }, figures: ["0 kg wet mass", "0 kg wet mass"], dry: ["0 kg", "0 kg"] },
+    { name: "empty groups", biochar: { wetKg: 0, dryBiocharKg: 0 }, product: { wetKg: 0, dryBiocharKg: 0 }, figures: ["Empty", "Empty"], dry: [undefined, undefined] },
+    { name: "a residue below the display minimum", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 0.4, dryBiocharKg: 0.2 }, figures: ["800 kg wet mass", "Empty"], dry: ["640 kg", undefined] },
   ])("shows the facility inventory with $name", ({ biochar, product, figures, dry }) => {
     const snapshot = facilityWithStock(settled(biochar, product));
     expect(snapshot.fields.map(field => [field.label, field.value])).toEqual([
@@ -180,8 +181,8 @@ describe("read sheets", () => {
     ]);
     expect(snapshot.fields.slice(1).map(field => field.secondary?.value)).toEqual(dry);
     expect(snapshot.fields.slice(1).map(field => field.hint)).toEqual([
-      figures[0].endsWith("wet mass") ? "Estimated wet mass at each batch's moisture. Sum of this facility's biochar bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's biochar bins, archived bins included.",
-      figures[1].endsWith("wet mass") ? "Estimated wet mass at each batch's moisture. Sum of this facility's product bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's product bins, archived bins included.",
+      figures[0] !== "640 kg dry biochar" && !figures[0].endsWith("dry biochar") ? "Estimated wet mass at each batch's moisture. Sum of this facility's biochar bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's biochar bins, archived bins included.",
+      figures[1] !== "640 kg dry biochar" && !figures[1].endsWith("dry biochar") ? "Estimated wet mass at each batch's moisture. Sum of this facility's product bins, archived bins included." : "A bin here has no wet estimate, so this is the dry biochar sum of this facility's product bins, archived bins included.",
     ]);
     const { container } = render(<EntitySideSheetSections sections={[snapshot]} />);
     expect(container.textContent).toContain(figures[0]);

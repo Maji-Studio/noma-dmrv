@@ -17,3 +17,11 @@ export const MIX_BIN_REMOVALS_CREDITABLE = false;
 
 /** Below this a part of a bin's stock is rounding, not a row, band or key entry worth showing. */
 export const STOCK_PART_MIN_KG = 0.05;
+
+/**
+ * A bin whose stock is below this reads "Empty" on every storage surface (bin
+ * card, lane total, facility sheet). Display precision is whole kilograms, so
+ * a residue under half a kilogram would render as "0 kg wet mass" next to a
+ * dry figure. Display only: the stored stock is never trimmed.
+ */
+export const STOCK_DISPLAY_MIN_KG = 0.5;

@@ -50,6 +50,31 @@ describe('archived storage board tile', () => {
     await act(async () => renderer.unmount());
     preview.mockReturnValue({ data: undefined, error: undefined });
   });
+  it.each([
+    { name: 'a product bin whose wet estimate rounds to zero', type: 'product_bin', stock: { beforeDryKg: 0.2, beforeEstimatedWetKg: 0.2 } },
+    { name: 'a biochar bin with a sub-display residue', type: 'biochar_bin', stock: { beforeDryKg: 0.2, beforeEstimatedWetKg: 0.3 } },
+    { name: 'a truly empty bin', type: 'product_bin', stock: { beforeDryKg: 0, beforeEstimatedWetKg: 0 } },
+  ])('reads Empty for $name, with no wet or dry figure', async ({ type, stock }) => {
+    preview.mockReturnValue({ data: stock, error: undefined } as never);
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type, productInventory: { formulationNames: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('Empty');
+    expect(text).not.toContain('wet mass');
+    expect(text).not.toContain('dry biochar');
+    expect(renderer.root.findAllByType(SecondaryFigure)).toHaveLength(0);
+    expect(renderer.root.findByType('article').props.className).toContain('opacity-70');
+    await act(async () => renderer.unmount());
+    preview.mockReturnValue({ data: undefined, error: undefined });
+  });
+  it('reads a feedstock bin with a sub-display residue as Empty, like its siblings', async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 0.3, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain('Empty');
+    expect(text).not.toContain('wet mass');
+    await act(async () => renderer.unmount());
+  });
   it('shows no figure while an active output bin is still loading', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });

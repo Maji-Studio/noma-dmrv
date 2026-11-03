@@ -42,6 +42,7 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
+import { STORAGE_BOARD_PAGE_SIZE } from "@/config/list-controls";
 import { StorageBinBoard } from "./storage-bin-board";
 import { StorageBinSheet, type StorageBinSheetState } from "./storage-bin-sheet";
 
@@ -53,7 +54,7 @@ export function StorageLocationList() {
   const [sortValue, setSortValue] = useState(DEFAULT_BIN_SORT.value);
   const [showArchived, setShowArchived] = useState(false);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
-    useListPagination(facilityId);
+    useListPagination(facilityId, STORAGE_BOARD_PAGE_SIZE);
   const debouncedSearch = useDebounce(
     searchQuery,
     LIST_SEARCH_DEBOUNCE_MS,

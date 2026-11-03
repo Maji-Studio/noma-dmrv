@@ -15,7 +15,6 @@
 
 import { Button, EmptyState, ListPagination } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useRecordLocks } from "@/hooks/use-record-locks";
@@ -45,9 +44,6 @@ import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations"
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
 const LOADING_TILES = 8;
-
-/** Below this, one page holds everything and pagination has nothing to offer. */
-const SMALLEST_PAGE_SIZE = Math.min(...LIST_PAGE_SIZE_OPTIONS);
 
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
@@ -136,9 +132,16 @@ function filterFigure(
   return onHandKg == null ? null : formatMass(onHandKg);
 }
 
+/** What a lane total measures: wet mass on every lane, dry biochar where a bin has no wet estimate. */
+function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter): string | null {
+  if (!summary || filter === "all" || summary[filter].onHandKg == null) return null;
+  return summary[filter].basis === "wet" ? "wet mass" : "dry biochar";
+}
+
 /** A select option names the type, and its figure in parentheses when there is one. */
-function optionLabel(filter: StorageBinTypeFilter, figure: string | null): string {
-  return figure ? `${binTypeFilterLabel(filter)} (${figure})` : binTypeFilterLabel(filter);
+function optionLabel(filter: StorageBinTypeFilter, figure: string | null, basis: string | null): string {
+  const detail = [figure, basis].filter(Boolean).join(" ");
+  return detail ? `${binTypeFilterLabel(filter)} (${detail})` : binTypeFilterLabel(filter);
 }
 
 /**
@@ -235,7 +238,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         >
           {BIN_TYPE_FILTER_ORDER.map((filter) => (
             <option key={filter} value={filter}>
-              {optionLabel(filter, filterFigure(laneSummary, filter))}
+              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter))}
             </option>
           ))}
         </select>
@@ -251,6 +254,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               isActive={filter === typeFilter}
               count={filterBinCount(laneSummary, filter)}
               figure={filterFigure(laneSummary, filter)}
+              basis={filterBasis(laneSummary, filter)}
               onSelect={() => onTypeFilterChange(filter)}
             />
           ))}
@@ -384,9 +388,9 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         )}
 
         {/* A rows-per-page control and four page arrows are noise on a facility
-            with one page of bins. The smallest page size is the threshold, so
-            the controls appear exactly when they can do something. */}
-        {total > SMALLEST_PAGE_SIZE && (
+            whose bins fit one page. The board pages at STORAGE_BOARD_PAGE_SIZE,
+            so the controls appear only for a board bigger than that. */}
+        {total > props.pageSize && (
           <ListPagination
             page={props.page}
             pageCount={props.pageCount}
@@ -406,12 +410,14 @@ function RailFilter({
   isActive,
   count,
   figure,
+  basis,
   onSelect,
 }: {
   filter: StorageBinTypeFilter;
   isActive: boolean;
   count: number | null;
   figure: string | null;
+  basis: string | null;
   onSelect: () => void;
 }) {
   const meta = filter === "all" ? null : BIN_TYPE_META[filter];
@@ -443,6 +449,7 @@ function RailFilter({
       </span>
       <span className="flex flex-col items-end">
         {figure && <span className="body-caption font-semibold tabular-nums">{figure}</span>}
+        {figure && basis && <span className="body-caption text-[var(--color-text-tertiary)]">{basis}</span>}
         {filter !== "all" && count != null && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {count} {count === 1 ? "bin" : "bins"}
