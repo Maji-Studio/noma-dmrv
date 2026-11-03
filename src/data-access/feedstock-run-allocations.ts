@@ -17,6 +17,14 @@ import { requireOrgScope } from "./utils";
 import { formatUtcDate, startOfFacilityDay } from '@/lib/date-utils';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 
+/** Run context for recalculation reports; field issues retain their caller-facing contract. */
+export class SentRunRewriteRefusedError extends DomainError {
+  constructor(readonly runId: string, readonly runCode: string, original: DomainError) {
+    super('certification_locked', original.message, { issues: original.issues, cause: original });
+    this.name = 'SentRunRewriteRefusedError';
+  }
+}
+
 /**
  * Rebuild provenance in the caller's transaction. Callers hold the changed bin
  * locks before changing inputs. Lock every other source bin before reading its
@@ -161,8 +169,7 @@ export async function reallocateRunsForBins(
           await assertLockedLineagesAllowMutation(ctx, tx, artifacts!, [{ target, mutation: "update" }]);
         } catch (error) {
           if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-          throw new DomainError(error.code, error.message, { issues: error.issues.map(issue => ({ ...issue,
-            meta: { ...issue.meta, runId: run.id, runCode: run.code } })), cause: error });
+          throw new SentRunRewriteRefusedError(run.id, run.code, error);
         }
       }
       await tx.delete(productionRunFeedstocks).where(and(

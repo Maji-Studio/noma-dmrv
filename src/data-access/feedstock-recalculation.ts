@@ -5,7 +5,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { compareFeedstockEvents } from '@/lib/feedstock-draw-replay';
 import { DomainError } from '@/lib/domain-errors';
 import { getRecordLocks } from './certification-lineage-guards';
-import { reallocateRunsForBins } from './feedstock-run-allocations';
+import { reallocateRunsForBins, SentRunRewriteRefusedError } from './feedstock-run-allocations';
 import { getFeedstockTransportOwnerBatches } from './feedstock-transport-ownership';
 import { lockBinStocks } from './lock-bin-stocks';
 import { requireOrgScope } from './utils';
@@ -24,6 +24,15 @@ async function ownedLegCounts(ctx: OrgContext, tx: DbTransaction, storageLocatio
   const counts: Record<string, number> = {};
   for (const leg of legs) for (const owner of owners.get(leg.feedstockId) ?? []) counts[owner.code] = (counts[owner.code] ?? 0) + 1;
   return counts;
+}
+
+async function getRemovalCodes(ctx: OrgContext, tx: DbTransaction, ids: string[]) {
+  requireOrgScope(ctx);
+  if (!ids.length) return [];
+  const removals = await tx.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids),
+  ));
+  return removals.map(row => row.code);
 }
 
 /** Inventory stays inside the verified organization scope. */
@@ -65,16 +74,21 @@ export async function recalculateFeedstockBin(ctx: OrgContext, tx: DbTransaction
     } : options.allowSentRewrite ? { allowSentRewrite: true } : {}));
   } catch (error) {
     if (!(error instanceof DomainError) || error.code !== 'certification_locked') throw error;
-    for (const issue of error.issues) {
-      const meta = issue.meta;
-      const ids = Array.isArray(meta?.removalIds) ? meta.removalIds.filter((id): id is string => typeof id === 'string') : [];
-      const blockedRemovals = ids.length ? await tx.select({ code: certifierRemovals.code }).from(certifierRemovals).where(and(
-        eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids),
-      )) : [];
-      refused.push({ runId: typeof meta?.runId === 'string' ? meta.runId : undefined,
-        code: typeof meta?.runCode === 'string' ? meta.runCode : undefined,
-        feedstockId: typeof meta?.feedstockId === 'string' ? meta.feedstockId : undefined,
-        removalCodes: blockedRemovals.map(row => row.code) });
+    if (error instanceof SentRunRewriteRefusedError) {
+      const [lock] = await getRecordLocks(ctx, tx, [{ entityType: 'productionRun', entityId: error.runId }], { sentOnly: true });
+      refused.push({ runId: error.runId, code: error.runCode,
+        removalCodes: await getRemovalCodes(ctx, tx, lock.heldBy.map(holder => holder.id)) });
+    } else {
+      for (const issue of error.issues) {
+        const meta = issue.meta;
+        if (typeof meta?.feedstockId !== 'string') continue;
+        const [feedstock] = await tx.select({ code: feedstocks.code }).from(feedstocks).where(and(
+          eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, meta.feedstockId),
+        ));
+        const ids = Array.isArray(meta.removalIds) ? meta.removalIds.filter((id): id is string => typeof id === 'string') : [];
+        refused.push({ feedstockId: meta.feedstockId, code: feedstock?.code,
+          removalCodes: await getRemovalCodes(ctx, tx, ids) });
+      }
     }
     // A bin-level refusal still fails the command when a guard has no structured target.
     if (!refused.length) refused.push({ removalCodes: [] });

@@ -3,13 +3,14 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
+import { DomainError, type DomainIssue } from '@/lib/domain-errors';
 const mocks = vi.hoisted(() => ({ replay: vi.fn(), freeze: vi.fn(), lock: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('./lock-bin-stocks', () => ({ lockBinStocks: mocks.lock, assertStockLockSnapshot: (valid: boolean) => { if (!valid) throw new Error('changed'); } }));
 vi.mock('./feedstock-bin-ledger', () => ({ replayFeedstockBinStock: mocks.replay }));
 vi.mock('./feedstock-transport-ownership-freeze', () => ({ prepareFeedstockTransportOwnershipFreeze: mocks.freeze }));
 vi.mock('./certification-lineage-guards', () => ({ tryLockCertifiedLineageArtifacts: async () => [], assertLockedLineagesAllowMutation: mocks.lineage }));
-import { reallocateRunsForBins, reallocateRunsForFacility } from './feedstock-run-allocations';
+import { reallocateRunsForBins, reallocateRunsForFacility, SentRunRewriteRefusedError } from './feedstock-run-allocations';
 
 it('clears stale shares on an explicitly edited cancelled run, excluding other cancelled runs', async () => {
   const at = new Date('2026-01-01T00:00:00Z');
@@ -86,8 +87,8 @@ it.each(['empty-at-switch', 'non-run overdraw'])('validates every facility bin e
   expect(inventory.params).toEqual(['org', 'facility', 'feedstock_bin']);
 });
 
-it.each([false, true])('Sent rewrite opt-in %s controls the lineage guard and is forwarded to the freeze', async allowSentRewrite => {
-  const { DomainError } = await import('@/lib/domain-errors');
+it.each([false, true].flatMap(allowSentRewrite => [false, true].map(withIssues => ({ allowSentRewrite, withIssues }))))(
+  'Sent rewrite opt-in $allowSentRewrite preserves lineage issues (withIssues=$withIssues) and is forwarded to the freeze', async ({ allowSentRewrite, withIssues }) => {
   const at = new Date('2026-01-01T00:00:00Z');
   const draw = { id: 'draw', productionRunId: 'run', storageLocationId: 'bin', createdAt: at };
   const results: unknown[] = [[{ runId: 'run' }], [draw], [{ id: 'run', code: 'PR1', status: 'complete' }], [draw],
@@ -105,14 +106,21 @@ it.each([false, true])('Sent rewrite opt-in %s controls the lineage guard and is
   mocks.replay.mockReset().mockResolvedValue({ entries: [{ kind: 'run_draw', sourceId: 'run', id: 'draw' }],
     withdrawals: new Map([['draw', [{ feedstockId: 'replacement', wetKg: 5 }]]]) });
   mocks.freeze.mockReset().mockResolvedValue(async (work: () => Promise<void>) => work());
-  mocks.lineage.mockReset().mockRejectedValue(new DomainError('certification_locked', 'Sent', { issues: [{ path: [], code: 'certification_locked', message: 'Sent', meta: { removalIds: ['removal'] } }] }));
+  const issues: DomainIssue[] = withIssues ? [{ path: ['orderId'], code: 'certification_locked', message: 'Sent', meta: { removalIds: ['removal'] } }] : [];
+  const original = new DomainError('certification_locked', 'Sent', { issues });
+  mocks.lineage.mockReset().mockRejectedValue(original);
   const result = reallocateRunsForBins(ctx, tx, ['bin'], { allowSentRewrite });
   if (allowSentRewrite) {
     await expect(result).resolves.toEqual(['run']);
     expect(mocks.lineage).not.toHaveBeenCalled();
     expect(values).toHaveBeenCalledWith([{ organizationId: 'org', productionRunId: 'run', feedstockId: 'replacement', wetMassUsedKg: 5 }]);
   } else {
-    await expect(result).rejects.toMatchObject({ code: 'certification_locked', issues: [{ meta: { runId: 'run', runCode: 'PR1', removalIds: ['removal'] } }] });
+    const failure = await result.catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(SentRunRewriteRefusedError);
+    expect(failure).toBeInstanceOf(DomainError);
+    expect(failure).toMatchObject({ code: original.code, message: original.message, runId: 'run', runCode: 'PR1', cause: original });
+    expect((failure as DomainError).issues).toBe(original.issues);
+    expect((failure as DomainError).issues).toEqual(issues);
     expect(mocks.lineage).toHaveBeenCalledOnce();
     expect(remove).not.toHaveBeenCalled();
   }
