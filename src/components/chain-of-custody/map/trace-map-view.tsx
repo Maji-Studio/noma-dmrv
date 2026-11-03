@@ -26,6 +26,7 @@
 import { useState } from "react";
 import { MapPinLineIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -181,8 +182,12 @@ export function TraceMapView({
         aria-label={chain ? `Chain to ${chain.end.shortCode}` : "Custody stages"}
       >
         {/* No map to carry the payload's warnings: they head the panel instead. */}
-        {layout === "panel" ? (
-          <MapWarningBanner warnings={model.geo.warnings} className="static max-w-none shrink-0 px-16 pt-12" />
+        {layout === "panel" && model.geo.warnings.length > 0 ? (
+          <div className="flex shrink-0 flex-col gap-8 px-16 pt-12">
+            {model.geo.warnings.map((warning) => (
+              <Notice key={warning} tone="warning">{warning}</Notice>
+            ))}
+          </div>
         ) : null}
         {current && walk ? (
           <TraceChainWalk
