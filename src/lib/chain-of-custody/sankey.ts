@@ -3,15 +3,17 @@
  * view's Sankey reading (plan: 2026-06-11-chain-of-custody-views, decision 3).
  *
  * One unit (dry kg) end to end: Feedstock → Production runs → Biochar lots →
- * Applied. Losses above the rounding tolerance have explicit labeled exits
+ * Applied. Losses positive at display precision have explicit labeled exits
  * rather than normalized column widths:
  *
  *   - conversion loss (pyrolysis syngas/vapour/ash — expected physics, not an
  *     error) exits at the production runs;
  *   - output never bagged into a lot exits between runs and lots;
  *   - in-storage / undelivered lot mass exits before "Applied".
- * Residuals with magnitude at or below EXIT_EPSILON_KG get no exit but are
- * summed, signed, in omittedResidualKg so consumers can close the balance.
+ * Exit masses are display-rounded differences of display-rounded columns.
+ * Columns remain raw. Residuals not shown and within EXIT_EPSILON_KG are
+ * summed raw, signed, in omittedResidualKg so consumers can close the balance.
+ * Warnings use raw residuals and EXIT_EPSILON_KG.
  *
  * The terminal node is the batch's applied mass. No net-tCO₂e figure is
  * carried at all — the registry owns project emissions/counterfactual
@@ -55,6 +57,7 @@ export interface SankeyExit {
   label: string;
   /** Column the exit leaves from. */
   fromColumn: SankeyColumnKey;
+  /** Display-rounded difference of display-rounded columns; columns and omittedResidualKg stay raw. */
   massKg: number;
   /** alert = compliance-relevant (red); loss = expected/neutral exit. */
   tone: "alert" | "loss";
@@ -65,7 +68,7 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
-  /** Signed sum of residuals with magnitude at or below EXIT_EPSILON_KG. */
+  /** Raw signed sum of residuals not shown and within EXIT_EPSILON_KG. */
   omittedResidualKg: number;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
@@ -99,7 +102,7 @@ export interface SankeyLineage {
   }[];
 }
 
-/** Residuals at or below this are rounding noise, not a labeled exit. */
+/** Raw residual tolerance for mass-balance warnings. */
 export const EXIT_EPSILON_KG = 0.5;
 
 interface ResidualResult {
@@ -117,14 +120,15 @@ function residual(
   inconsistencyWarning: string,
 ): ResidualResult {
   const raw = upstreamKg - downstreamKg;
+  // Subtract the displayed columns, rather than independently rounding
+  // their raw difference. Keep raw masses for tolerance and warnings.
+  const value = Math.max(0, roundDisplayedMassKg(
+    roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg),
+  ));
   return {
     raw,
-    // Subtract the displayed columns, rather than independently rounding
-    // their raw difference. Keep raw masses for tolerance and warnings.
-    value: Math.max(0, roundDisplayedMassKg(
-      roundDisplayedMassKg(upstreamKg) - roundDisplayedMassKg(downstreamKg),
-    )),
-    shown: raw > EXIT_EPSILON_KG,
+    value,
+    shown: value > 0,
     warning: raw < -EXIT_EPSILON_KG ? inconsistencyWarning : null,
   };
 }

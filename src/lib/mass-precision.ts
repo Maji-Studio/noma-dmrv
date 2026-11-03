@@ -1,8 +1,12 @@
 /** Default precision shared by mass labels and displayed mass balances. */
 export const MASS_KG_MAX_FRACTION_DIGITS = 1;
 
-const displayedMass = new Intl.NumberFormat("en-US", {
+export const MASS_KG_FORMAT_OPTIONS = {
   maximumFractionDigits: MASS_KG_MAX_FRACTION_DIGITS,
+} satisfies Intl.NumberFormatOptions;
+
+const displayedMass = new Intl.NumberFormat("en-US", {
+  ...MASS_KG_FORMAT_OPTIONS,
   useGrouping: false,
 });
 
