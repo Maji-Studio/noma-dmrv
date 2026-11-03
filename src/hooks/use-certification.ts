@@ -720,10 +720,13 @@ export function useDeleteRemoval() {
   return useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
-    onSuccess: () =>
+    // Deleting an interrupted Removal drops its Needs attention row (#1528).
+    onSuccess: () => Promise.all([
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
       }),
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
+    ]),
   });
 }
 

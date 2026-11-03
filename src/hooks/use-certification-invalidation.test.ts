@@ -28,6 +28,7 @@ import {
   useRemovalsForFacility,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
+  useDeleteRemoval,
   useSubmitRemoval,
 } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -103,6 +104,21 @@ describe("useSubmitRemoval", () => {
       // Health summaries and to-dos are certification keys.
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
     }
+  });
+});
+
+describe("useDeleteRemoval", () => {
+  it("refreshes the dashboard once a Removal is deleted", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useDeleteRemoval();
+
+    const [{ onSuccess }] = reactQueryMocks.useMutation.mock.calls[0] as [{ onSuccess: () => unknown }];
+    await onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
   });
 });
 

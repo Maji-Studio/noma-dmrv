@@ -1,6 +1,7 @@
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { describe, expect, it } from "vitest";
-import { removalDateLine } from "./credit-batch-removal-bar";
+import type { RemovalBarRemoval } from "@/lib/credit-batches/removal-bar";
+import { compactLabel, removalDateLine } from "./credit-batch-removal-bar";
 
 describe("removalDateLine", () => {
   const createdAt = new Date("2026-10-01T12:00:00Z");
@@ -18,4 +19,20 @@ describe("removalDateLine", () => {
 it("dates a Removal on the facility calendar", () => {
   const createdAt = new Date("2026-10-21T21:30:00Z");
   expect(removalDateLine({ phase: "draft", submittedAt: null, createdAt }, "Africa/Dar_es_Salaam")).toBe("Created Oct 22, 2026");
+});
+
+describe("compactLabel", () => {
+  const removal = (phase: "draft" | "submitted", kind: "submitted" | "not-submitted" | "interrupted", label: string) =>
+    ({ code: "RM-26-001", phase, status: { kind, label } }) as unknown as RemovalBarRemoval;
+
+  it("names only what the swatch cannot show", () => {
+    expect(compactLabel({ removal: removal("submitted", "submitted", "Submitted"), dryKg: 400 })).toBe("RM-26-001 · 0.40 t");
+    expect(compactLabel({ removal: removal("draft", "not-submitted", "Not submitted"), dryKg: 400 })).toBe("RM-26-001 · Draft · 0.40 t");
+    expect(compactLabel({ removal: removal("draft", "interrupted", "Submission interrupted"), dryKg: 400 }))
+      .toBe("RM-26-001 · Submission interrupted · 0.40 t");
+  });
+
+  it("keeps a corrected Removal submitted, as its swatch and stepper do", () => {
+    expect(compactLabel({ removal: removal("submitted", "not-submitted", "Not submitted"), dryKg: 400 })).toBe("RM-26-001 · 0.40 t");
+  });
 });

@@ -122,10 +122,11 @@ export function YearSwitcher({
   );
 }
 
-export function StateLegend() {
+/** The four lifecycle steps; Submission interrupted only while a bar in view shows it. */
+export function StateLegend({ interrupted }: { interrupted: boolean }) {
   return (
     <ul className={cn("flex flex-wrap items-center gap-x-16 gap-y-6 body-caption", MUTED)}>
-      {STATE_ORDER.map((state) => (
+      {STATE_ORDER.filter((state) => interrupted || state !== "interrupted").map((state) => (
         <li key={state} className="inline-flex items-center gap-6">
           <StateMark state={state} size={LEGEND_MARK_PX} />
           {STATE_TONE[state].title}

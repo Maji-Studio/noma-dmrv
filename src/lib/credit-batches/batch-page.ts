@@ -146,7 +146,7 @@ function removalCaption(model: CreditBatchPageModel, timeZone: string): string |
 export function creditBatchMilestones({ blockingCount, openCount, pageModel, timeZone }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
   const statement = pageModel?.milestones.ghgStatement ?? null;
   const missing = blockingCount != null && blockingCount > 0;
-  const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number }[] = [
+  const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number; keepCaption?: boolean }[] = [
     {
       key: "data",
       // Until the health answers, the step names itself without a verdict.
@@ -160,6 +160,8 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
       label: "Removal submitted",
       done: !!pageModel?.milestones.firstRemovalSubmittedAt,
       caption: pageModel ? removalCaption(pageModel, timeZone) : null,
+      // An interrupted Removal is named even while data is still blocking (#1528).
+      keepCaption: !!findInterruptedRemoval(pageModel?.removals),
     },
     {
       key: "verified",
@@ -181,7 +183,7 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
     label: step.label,
     state: step.done ? "done" : step.failed ? "failed" : index === currentIndex ? "current" : "todo",
     // Later steps say nothing until the batch reaches them.
-    caption: step.done || index === currentIndex ? step.caption : null,
+    caption: step.done || index === currentIndex || step.keepCaption ? step.caption : null,
     ...(step.count != null ? { count: step.count } : {}),
   }));
 }

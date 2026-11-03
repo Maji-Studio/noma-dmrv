@@ -659,7 +659,8 @@ it("removes member-only template repair guidance from read-only checks", () => {
 });
 
 it("links an interrupted Removal to Review & submit, but adds no submitted to-do", () => {
-  const result = buildCreditBatchOpenItems({
+  // The raw builder: the instruction stays separate so a read-only batch drops it.
+  const result = buildItems({
     ...batchContext,
     removals: [
       { id: "interrupted", code: "RM-26-003", status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false } },
@@ -669,7 +670,7 @@ it("links an interrupted Removal to Review & submit, but adds no submitted to-do
   expect(result.check).toEqual([{
     id: "interrupted:interrupted",
     title: "RM-26-003: Submission interrupted",
-    detail: "Open the Removal and finish Review & submit.",
+    instruction: "Open the Removal and finish Review & submit.",
     target: { href: "/removals?facility=facility&resume=interrupted" },
   }]);
 });

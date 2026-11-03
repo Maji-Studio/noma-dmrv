@@ -310,4 +310,9 @@ it("names an interrupted Removal in the milestone instead of calling it a draft"
   })] });
   const steps = creditBatchMilestones({ pageModel, blockingCount: 0, openCount: 1, timeZone: "UTC" });
   expect(steps.find(step => step.key === "removal")?.caption).toBe(`${pageModel.removals[0].code}: Submission interrupted`);
+  // Blocking data keeps the first step current; the interrupted Removal is still named.
+  const blocked = creditBatchMilestones({ pageModel, blockingCount: 2, openCount: 3, timeZone: "UTC" });
+  expect(blocked.find(step => step.key === "removal")).toMatchObject({
+    state: "todo", caption: `${pageModel.removals[0].code}: Submission interrupted`,
+  });
 });
