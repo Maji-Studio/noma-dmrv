@@ -40,9 +40,11 @@ export interface ApplicationTraceMapProps {
   edges: Edge[];
   /**
    * Split: the Flow chart beside the map and walk. It receives the records the
-   * current step lights and a pick that moves the walk to a record.
+   * current step lights and a pick that moves the walk to a record; the pick
+   * returns false for a record on no step (the reactor), which the page opens
+   * in its record sheet instead.
    */
-  renderFlow?: (focusNodeIds: Set<string> | null, onPick: (nodeId: string) => void) => ReactNode;
+  renderFlow?: (focusNodeIds: Set<string> | null, onPick: (nodeId: string) => boolean) => ReactNode;
 }
 
 export function ApplicationTraceMap({ applicationId, chainData, nodes, edges, renderFlow }: ApplicationTraceMapProps) {
@@ -74,6 +76,7 @@ export function ApplicationTraceMap({ applicationId, chainData, nodes, edges, re
   const pick = (nodeId: string) => {
     const next = model ? walkTo(model, buildChains(model), walk, nodeId) : null;
     if (next) setWalk(next);
+    return next !== null;
   };
   const flow = renderFlow(focusNodeIds, pick);
   if (splitStacked) {

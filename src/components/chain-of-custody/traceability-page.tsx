@@ -502,7 +502,10 @@ export function TraceabilityPage() {
             warnings={chainData?.warnings ?? []}
             labelMode={massUnit}
             focusNodeIds={stepNodeIds}
-            onNodeClick={(node) => pick(node.id)}
+            // A record on no step (the reactor) opens its sheet, as in Flow.
+            onNodeClick={(node) => {
+              if (!pick(node.id)) openNodeSheet(node);
+            }}
           />
         )}
       />

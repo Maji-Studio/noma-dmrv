@@ -23,6 +23,7 @@ it("opens the application's Map on its own chain walk, first step, with no Whole
 });
 
 it("Split: a Flow pick moves the walk, and the Flow lights the current step's records", () => {
+  const openSheet = vi.fn();
   render(
     <ApplicationTraceMap
       applicationId="ap1"
@@ -32,8 +33,8 @@ it("Split: a Flow pick moves the walk, and the Flow lights the current step's re
       renderFlow={(focus, pick) => (
         <div>
           <output data-testid="flow-focus">{[...(focus ?? [])].sort().join(",")}</output>
-          <button type="button" onClick={() => pick("delivery:dl1")}>Flow DL-26-001</button>
-          <button type="button" onClick={() => pick("reactor:r1")}>Flow reactor</button>
+          <button type="button" onClick={() => pick("delivery:dl1") || openSheet("delivery:dl1")}>Flow DL-26-001</button>
+          <button type="button" onClick={() => pick("reactor:r1") || openSheet("reactor:r1")}>Flow reactor</button>
         </div>
       )}
     />,
@@ -42,9 +43,12 @@ it("Split: a Flow pick moves the walk, and the Flow lights the current step's re
   fireEvent.click(screen.getByRole("button", { name: "Flow DL-26-001" }));
   expect(within(walkPanel()).getByText(/04 \/ 05/)).toBeTruthy();
   expect(screen.getByTestId("flow-focus").textContent).toBe("delivery:dl1");
-  // A record on no step (the reactor) leaves the walk where it is.
+  expect(openSheet).not.toHaveBeenCalled();
+  // A record on no step (the reactor) leaves the walk where it is; the page
+  // opens its sheet instead.
   fireEvent.click(screen.getByRole("button", { name: "Flow reactor" }));
   expect(within(walkPanel()).getByText(/04 \/ 05/)).toBeTruthy();
+  expect(openSheet).toHaveBeenCalledWith("reactor:r1");
   fireEvent.click(within(walkPanel()).getByRole("button", { name: /^Next/ }));
   expect(screen.getByTestId("flow-focus").textContent).toBe("application:ap1");
 });
