@@ -2,11 +2,12 @@ import { setProductSourceFixture } from "./helpers/product-source-fixture";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
 import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
 /**
- * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
+ * Carbon Viewer E2E (hermetic): the application-anchored Map and Split.
  *
- * Covers the traceability view segment (Flow / Map / Split), the
- * geography panel's rails (custody stages, not-geolocated), the split-view
- * cross-linking into the Flow chart, and the nothing-to-plot empty state.
+ * Covers the traceability view segment (Flow / Map / Split), the application
+ * Map opening on its own chain walk, marker picks moving the walk, the Split
+ * cross-link between the Flow chart and the walk, and a chain whose records
+ * lack GPS.
  *
  * The renderer regressions additionally inspect painted MapLibre features,
  * camera bounds and projected markers. A local blank basemap and SwiftShader
@@ -38,17 +39,16 @@ const MAX_BACK_STEPS = 6;
 
 test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 
-// Inbound (feedstock) leg distance — seeded directly on its transport_legs row
-// and rendered verbatim on the rail's inbound pill.
+// Inbound (feedstock) leg distance, seeded directly on its transport_legs row
+// and shown verbatim as the feedstock step's one-way distance.
 const INBOUND_DISTANCE_KM = 41.5;
 // Outbound (biochar) leg distance carried on the seeded transport_legs row. The
-// rail does NOT read this for biochar — it derives the outbound leg from the
-// delivery (mass = deliveredWetMassKg, distance = the customer-location's
-// facilityDistances). Kept for the seeded row's own provenance.
+// map does NOT read this for biochar: it derives the outbound leg from the
+// delivery (distance = the customer location's facilityDistances). Kept for
+// the seeded row's own provenance.
 const OUTBOUND_DISTANCE_KM = 12.3;
-// Distance the rail actually renders on the outbound pill: the shared seed's
-// customer location facility pair (see fixtures/seed-chain-data.ts).
-const OUTBOUND_RAIL_DISTANCE_KM = 25;
+// One step per stage: feedstock, run, product, order, delivery, application.
+const CHAIN_STEPS = 6;
 
 function createDbConnection() {
   const databaseUrl =
@@ -88,9 +88,17 @@ function observeRouteRequests(page: Page): RouteGeometriesRequest[] {
   return requests;
 }
 
+/** The application map's walk panel: one chain, "Chain to <field>". */
+const walkPanel = (page: Page) => page.getByRole("complementary", { name: /^Chain to / });
+const counter = (step: number) => new RegExp(`0${step} / 0${CHAIN_STEPS} · To `);
+
 async function expectRenderedGeography(page: Page, applicationId: string, field: typeof FIELD_POINT, destination: typeof DAR_POINT) {
   const map = page.getByTestId("carbon-viewer-map");
   await expect(map).toHaveAttribute("data-map-state", "ready", { timeout: MAP_READY_TIMEOUT_MS });
+  // The walk opens on the supplier; the application's own step frames the
+  // facility, the field and the delivery's destination together.
+  await walkPanel(page).getByRole("button", { name: /^Application/ }).click();
+  await expect(walkPanel(page)).toContainText(counter(CHAIN_STEPS));
   const marker = map.locator(`[data-node-id="application:${applicationId}"]`);
   await expect(marker).toHaveAttribute("data-position", JSON.stringify([field.lng, field.lat]));
   // MapLibre projects these elements. Visibility alone would pass for a marker
@@ -369,27 +377,27 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     await page.goto(
       traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
-    // Default view: Flow chart, no geography panel.
+    // Default view: Flow chart, no map.
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
+    await expect(walkPanel(page)).toHaveCount(0);
 
     const segment = page.getByTestId("chain-view-segment");
     await segment.getByRole("button", { name: "Map" }).click();
     await expect(page).toHaveURL(/view=map/);
-    await expect(page.getByTestId("carbon-viewer-panel")).toBeVisible({ timeout: 15000 });
+    await expect(walkPanel(page)).toBeVisible({ timeout: 15000 });
     await expect(page.locator(".react-flow__viewport")).toHaveCount(0);
 
     await segment.getByRole("button", { name: "Split" }).click();
     await expect(page).toHaveURL(/view=split/);
-    await expect(page.getByTestId("carbon-viewer-panel")).toBeVisible();
+    await expect(walkPanel(page)).toBeVisible();
     await expect(page.locator(".react-flow__viewport")).toBeVisible();
 
     await segment.getByRole("button", { name: "Flow" }).click();
     await expect(page).not.toHaveURL(/view=/);
-    await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
+    await expect(walkPanel(page)).toHaveCount(0);
   });
 
-  test("map view tracks the custody stages with provenance-backed leg distances", async ({
+  test("map view opens on the application's own chain walk", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -404,27 +412,24 @@ test.describe("Carbon Viewer (traceability geography)", () => {
       })
     );
 
-    const stageRail = page.getByTestId("carbon-viewer-stage-rail");
-    await expect(stageRail).toBeVisible({ timeout: 15000 });
-    // Stage tracker (2026-07): three milestones on one thread, each carrying
-    // its side's total distance, with the legs as sub-rows below.
-    await expect(stageRail).toContainText("Custody stages");
-    await expect(stageRail).toContainText("Feedstock in");
-    await expect(stageRail).toContainText("Pyrolysis");
-    await expect(stageRail).toContainText("Application out");
-    await expect(stageRail).toContainText(`${INBOUND_DISTANCE_KM} km`);
-    await expect(stageRail).toContainText(`${OUTBOUND_RAIL_DISTANCE_KM} km`);
+    const walk = walkPanel(page);
+    await expect(walk).toContainText(counter(1), { timeout: 15000 });
+    // One chain: no stage list to return to, no drill into the application.
+    await expect(walk.getByRole("button", { name: /Whole batch/ })).toHaveCount(0);
+    // The supplier's step carries the inbound leg's stored distance.
+    await expect(walk).toContainText(seededData.feedstock.code);
+    await expect(walk).toContainText(`${INBOUND_DISTANCE_KM} km`);
 
-    // Basemap or its graceful no-key fallback — hermetic either way.
-    await expect(
-      page
-        .getByTestId("carbon-viewer-map")
-        .or(page.getByTestId("carbon-viewer-no-map"))
-        .first()
-    ).toBeVisible();
+    for (let step = 2; step <= CHAIN_STEPS; step++) {
+      await walk.getByRole("button", { name: /^Next/ }).click();
+      await expect(walk).toContainText(counter(step));
+    }
+    await expect(walk.getByRole("button", { name: /^Next/ })).toHaveCount(0);
+    await expect(walk.getByRole("button", { name: /Trace rollback/ })).toHaveCount(0);
+    await expect(walk.getByRole("link", { name: /View full record/ })).toBeVisible();
   });
 
-  test("map view docks the clicked record and closes only on its own control", async ({
+  test("a marker click moves the walk to that record's step", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -438,36 +443,16 @@ test.describe("Carbon Viewer (traceability geography)", () => {
         view: "map",
       })
     );
+    const map = page.getByTestId("carbon-viewer-map");
+    await expect(map).toHaveAttribute("data-map-state", "ready", { timeout: MAP_READY_TIMEOUT_MS });
+    await expect(walkPanel(page)).toContainText(counter(1));
 
-    const stageRail = page.getByTestId("carbon-viewer-stage-rail");
-    await expect(stageRail).toBeVisible({ timeout: 15000 });
-
-    const panel = page.getByTestId("carbon-viewer-detail-panel");
-    await expect(panel).toHaveCount(0);
-
-    // The inbound leg's sub-row: opens its feedstock's record, with the leg's
-    // own transport numbers alongside.
-    const inboundRow = stageRail
-      .getByRole("button")
-      .filter({ hasText: `${INBOUND_DISTANCE_KM} km` })
-      .first();
-    await inboundRow.click();
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText(seededData.feedstock.code);
-    await expect(panel).toContainText("Transport");
-    await expect(panel).toContainText(`${INBOUND_DISTANCE_KM} km`);
-
-    // Deliberately not a toggle: the row keeps the record open, because the
-    // panel's own close is the only way back.
-    await inboundRow.click();
-    await expect(panel).toBeVisible();
-
-    await page.getByTestId("carbon-viewer-detail-panel-close").click();
-    await expect(panel).toHaveCount(0);
-    await expect(stageRail).toBeVisible();
+    // Dispatched: at this zoom the field sits beside the supplier, whose label may cover it.
+    await map.locator(`[data-node-id="application:${lineage.application.id}"]`).dispatchEvent("click");
+    await expect(walkPanel(page)).toContainText(counter(CHAIN_STEPS));
   });
 
-  test("split view cross-links chip selection into the Flow chart highlight", async ({
+  test("split view: a Flow pick moves the walk and the walk lights its step in Flow", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -482,50 +467,29 @@ test.describe("Carbon Viewer (traceability geography)", () => {
       })
     );
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
+    const walk = walkPanel(page);
+    await expect(walk).toContainText(counter(1), { timeout: 15000 });
 
-    // The legend rides the split half only — the map view's stage rail names
-    // each milestone in words instead.
-    await expect(page.getByTestId("carbon-viewer-legend")).toContainText(
-      "Facility · pyrolysis hub"
-    );
+    const nodeShell = (testId: string) =>
+      page.locator(`[data-testid="${testId}"]`).locator("[aria-label]").first();
+    const deliveryNode = `rf__node-delivery:${lineage.delivery.id}`;
+    const applicationNode = `rf__node-application:${lineage.application.id}`;
 
-    const chips = page.getByTestId("carbon-viewer-ungeo-chips");
-    await expect(chips).toBeVisible({ timeout: 15000 });
-    await chips.getByRole("button", { name: lineage.delivery.code }).click();
-
-    const deliveryCard = page
-      .locator(`[data-testid="rf__node-delivery:${lineage.delivery.id}"]`)
-      .locator('[data-highlighted="true"]');
-    await expect(deliveryCard).toBeVisible();
-  });
-
-  test("split view cards locate on the map instead of navigating", async ({
-    adminPage: page,
-    seededData,
-    cleanupTestData,
-  }) => {
-    void cleanupTestData;
-    const lineage = await seedGeoLineage(seededData);
-
-    await page.goto(
-      traceabilityUrl(seededData.facility.id, {
-        application: lineage.application.id,
-        view: "split",
-      })
-    );
-    await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-
-    const applicationNode = page.locator(
-      `[data-testid="rf__node-application:${lineage.application.id}"]`
-    );
-    await applicationNode.click();
-
-    // No navigation — the card highlights itself (and the map marker).
-    await expect(page).toHaveURL(/traceability/);
+    // A Flow click moves the walk instead of navigating.
+    await page.locator(`[data-testid="${deliveryNode}"]`).click();
     await expect(page).toHaveURL(/view=split/);
-    await expect(
-      applicationNode.locator('[data-highlighted="true"]')
-    ).toBeVisible();
+    await expect(walk).toContainText(counter(5));
+    await expect(walk).toContainText(lineage.delivery.code);
+
+    // The walk's step is lit in Flow; the rest dims (off the pointer, which
+    // would light its own hover lineage).
+    await page.mouse.move(0, 0);
+    await expect(nodeShell(deliveryNode)).toHaveCSS("opacity", "1");
+    await expect(nodeShell(applicationNode)).not.toHaveCSS("opacity", "1");
+    await walk.getByRole("button", { name: /^Next/ }).click();
+    await expect(walk).toContainText(counter(CHAIN_STEPS));
+    await expect(nodeShell(applicationNode)).toHaveCSS("opacity", "1");
+    await expect(nodeShell(deliveryNode)).not.toHaveCSS("opacity", "1");
   });
 
   test("keeps the facility on the map when operational records lack GPS", async ({
@@ -543,8 +507,8 @@ test.describe("Carbon Viewer (traceability geography)", () => {
       })
     );
 
-    const empty = page.getByTestId("carbon-viewer-empty");
-    await expect(page.getByTestId("carbon-viewer-stage-rail")).toBeVisible({ timeout: 15000 });
-    await expect(empty).toHaveCount(0);
+    await expect(walkPanel(page)).toContainText(counter(1), { timeout: 15000 });
+    await expect(page.getByTestId("carbon-viewer-map")).toBeVisible();
+    await expect(page.getByText("Nothing to place on the map yet")).toHaveCount(0);
   });
 });
