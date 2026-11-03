@@ -119,11 +119,11 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
       </>}
       onAdjust={onAdjust}
     >
-      {ready && layers.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
-      {!subBins.isLoading && layers.length > 0 && (mode === "mix"
+      {ready && (empty || layers.length === 0) && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
+      {!subBins.isLoading && !empty && layers.length > 0 && (mode === "mix"
         ? <MixPileBay bands={mixPileBands(layers, dryKg, wetKg, mixMoisture, zone)} capacityKg={capacityKg} />
         : <SubBinBays subBins={layers} timeZone={zone} label={SUB_BINS_LABEL} capacityKg={capacityKg} />)}
-      {!subBins.isLoading && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
+      {!subBins.isLoading && !empty && layers.length > 0 && <p className="body-caption text-[var(--color-text-secondary)]">{mode === "mix" ? MIX_CAPTION : SPLIT_CAPTION}</p>}
     </StockCard>
     <StockChartCard history={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} readOnly={readOnly} balance={readOnly ? preview.data : undefined} timeZone={zone}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>

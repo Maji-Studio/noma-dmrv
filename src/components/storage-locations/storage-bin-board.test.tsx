@@ -30,22 +30,30 @@ const mobileOptions = () => within(screen.getByLabelText("Filter by bin type", {
 afterEach(cleanup);
 
 describe("storage board lane figures", () => {
-  it("keeps wet implicit on the rail and names it inline in the mobile select", () => {
+  it("always names the basis of a non-empty lane, on the rail and in the mobile select", () => {
     board();
     expect(rail().getByText("458.4 t")).toBeTruthy();
-    expect(rail().queryByText("wet mass")).toBeNull();
+    expect(rail().getAllByText("wet mass")).toHaveLength(3);
     expect(mobileOptions()).toContain("Product (250 kg wet mass)");
   });
 
-  it("captions only a lane that fell back to dry biochar", () => {
-    board({ laneSummary: lanes({ biochar_bin: { binCount: 1, onHandKg: 900, basis: "dry" } }) });
+  it("names a lane that fell back to dry biochar, at one decimal like its cards", () => {
+    board({ laneSummary: lanes({ biochar_bin: { binCount: 1, onHandKg: 900.5, basis: "dry" } }) });
     expect(rail().getAllByText("dry biochar")).toHaveLength(1);
-    expect(mobileOptions()).toContain("Biochar (900 kg dry biochar)");
+    expect(rail().getByText("900.5 kg")).toBeTruthy();
+    expect(mobileOptions()).toContain("Biochar (900.5 kg dry biochar)");
   });
 
-  it("reads a lane whose total rounds to nothing as Empty, with no basis", () => {
-    board({ laneSummary: lanes({ product_bin: { binCount: 2, onHandKg: 0.3, basis: "dry" } }) });
-    expect(rail().getByText("Empty")).toBeTruthy();
+  it("shows a 0.3 kg feedstock lane as 0.3 kg, like its card, not Empty", () => {
+    board({ laneSummary: lanes({ feedstock_bin: { binCount: 1, onHandKg: 0.3, basis: "wet" } }) });
+    expect(rail().getByText("0.3 kg")).toBeTruthy();
+    expect(mobileOptions()).toContain("Feedstock (0.3 kg wet mass)");
+  });
+
+  it("reads a lane whose total renders as zero at its precision as Empty, with no basis", () => {
+    board({ laneSummary: lanes({ product_bin: { binCount: 2, onHandKg: 0.3, basis: "wet" }, biochar_bin: { binCount: 1, onHandKg: 0.04, basis: "dry" } }) });
+    expect(rail().getAllByText("Empty")).toHaveLength(2);
+    expect(rail().getAllByText("wet mass")).toHaveLength(1);
     expect(rail().queryByText("dry biochar")).toBeNull();
     expect(mobileOptions()).toContain("Product (Empty)");
   });

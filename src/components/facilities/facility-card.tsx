@@ -1,5 +1,6 @@
 "use client";
 
+import { EMPTY_STOCK_LABEL, isMassEmpty } from "@/lib/stock-display";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -83,9 +84,13 @@ export function FacilityCard({
           </div>
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">Feedstock, wet</p>
-            <p className="body-small text-[var(--color-text-primary)]">
-              {formatMass(facility.inventorySummary.feedstockWetKg)}
-            </p>
+            {isMassEmpty(facility.inventorySummary.feedstockWetKg) ? (
+              <p className="body-small text-[var(--color-text-tertiary)]">{EMPTY_STOCK_LABEL}</p>
+            ) : (
+              <p className="body-small text-[var(--color-text-primary)]">
+                {formatMass(facility.inventorySummary.feedstockWetKg)}
+              </p>
+            )}
           </div>
         </div>
       </div>

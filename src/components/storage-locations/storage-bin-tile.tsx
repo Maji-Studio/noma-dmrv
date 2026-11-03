@@ -83,7 +83,7 @@ export function StorageBinTile({
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
   // Empty is judged on the figure the tile leads with, at its own precision, so
-  // a residue that would read "0 kg wet mass" reads Empty, as the lane total and the facility sheet do.
+  // a residue that would read "0 kg wet mass" reads Empty, as the facility sheet does.
   const isEmpty = bin.type === "feedstock_bin" ? isMassEmpty(massKg) : isOutputStockEmpty(wetEstimateKg, massKg);
   // An active output bin's figures arrive with its stock read; until then the slot stays blank.
   const loading = bin.type !== "feedstock_bin" && bin.archivedAt == null && !output.data && !output.error;

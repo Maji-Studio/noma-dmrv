@@ -28,10 +28,10 @@ export const WET_ESTIMATE_DIGITS = 0;
 const HALF_UNIT = 1 / 2;
 
 /**
- * A bin whose wet estimate (or a lane total, shown in whole kilograms) is below
- * this reads "Empty": it would render as "0 kg". Derived from the figure's own
- * precision. Figures shown at one decimal (feedstock wet mass, dry biochar)
- * follow the formatter's rounds-to-zero rule instead (`isMassEmpty`). Display
- * only: the stored stock is never trimmed.
+ * A figure shown in whole kilograms (a wet estimate, a wet-basis output lane
+ * total) reads "Empty" below this: it would render as "0 kg". Derived from the
+ * precision. Figures shown at one decimal (feedstock wet mass, dry biochar, and
+ * the lanes of those) follow the formatter's rounds-to-zero rule instead
+ * (`isMassEmpty`). Display only: the stored stock is never trimmed.
  */
 export const WET_ESTIMATE_DISPLAY_MIN_KG = HALF_UNIT * 10 ** -WET_ESTIMATE_DIGITS;

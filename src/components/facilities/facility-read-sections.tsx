@@ -18,8 +18,6 @@ export interface FacilityStockState {
 }
 
 
-const EMPTY_HINT = "Empty means these bins hold only a trace, too little to show.";
-
 /**
  * One output-bin row. A row is left out once the read settled without a
  * derivable figure; while there is no data it loads or says why it failed.
@@ -31,7 +29,7 @@ function stockRow(label: string, scope: string, group: FacilityOutputStockGroup 
   if (group) {
     const empty = isOutputStockEmpty(group.wetKg, group.dryBiocharKg);
     return [{
-      label, hint: empty ? EMPTY_HINT : hint(group.wetKg !== null), value: empty ? EMPTY_STOCK_LABEL : outputStockFigure(group.wetKg, group.dryBiocharKg),
+      label, hint: empty ? undefined : hint(group.wetKg !== null), value: empty ? EMPTY_STOCK_LABEL : outputStockFigure(group.wetKg, group.dryBiocharKg),
       secondary: empty || group.wetKg === null ? undefined : { label: "Dry biochar", value: formatMassKg(group.dryBiocharKg) },
     }];
   }

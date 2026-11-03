@@ -149,8 +149,8 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
       caption={stock.data && !empty && estimatedDryKg !== null && <SecondaryFigure label="Dry solids" value={formatMassKg(estimatedDryKg)} />}
       onAdjust={onAdjust}
     >
-      {stock.data && bands.length === 0 && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
-      {bands.length > 0 && <MixPileBay label={estimatedDryKg === null ? "Wet feedstock by delivery, moisture unknown" : "Feedstock solids by delivery"} bands={bands} capacityKg={capacityKg} />}
+      {stock.data && (empty || bands.length === 0) && <EmptyState icon={null} title="No stock in this bin" padding="sm" />}
+      {!empty && bands.length > 0 && <MixPileBay label={estimatedDryKg === null ? "Wet feedstock by delivery, moisture unknown" : "Feedstock solids by delivery"} bands={bands} capacityKg={capacityKg} />}
     </StockCard>
     <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId} timeZone={zone} readOnly={readOnly} moisturePercent={estimatedMoisturePercent}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>

@@ -68,7 +68,7 @@ describe('archived storage board tile', () => {
     await act(async () => renderer.unmount());
     preview.mockReturnValue({ data: undefined, error: undefined });
   });
-  it('keeps a feedstock residue the one-decimal figure can show, like the lane total does', async () => {
+  it('keeps a feedstock residue the one-decimal figure can show, at the precision of its figure', async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<StorageBinTile bin={{ ...bin, archivedAt: null, type: 'feedstock_bin', feedstockTypeName: 'Pine chips', feedstockInventory: { currentWetMassKg: 0.3, feedstockTypes: [] } } as never} actions={[]} onView={vi.fn()} onReconcile={vi.fn()} />); });
     const text = JSON.stringify(renderer.toJSON());

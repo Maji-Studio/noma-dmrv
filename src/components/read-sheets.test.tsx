@@ -170,7 +170,7 @@ describe("read sheets", () => {
 
   const wetHint = (scope: string) => `Estimated wet mass at each batch's moisture. Sum of this facility's ${scope}, archived bins included.`;
   const dryHint = (scope: string) => `A bin here has no wet estimate, so this is the dry biochar sum of this facility's ${scope}, archived bins included.`;
-  const emptyHint = "Empty means these bins hold only a trace, too little to show.";
+  const emptyHint = undefined;
   it.each([
     { name: "wet mass with a dry line", biochar: { wetKg: 800, dryBiocharKg: 640 }, product: { wetKg: 400, dryBiocharKg: 200 }, figures: ["800 kg wet mass", "400 kg wet mass"], dry: ["640 kg", "200 kg"], hints: [wetHint("biochar bins"), wetHint("product bins")] },
     { name: "known dry biochar as the headline", biochar: { wetKg: null, dryBiocharKg: 640 }, product: { wetKg: null, dryBiocharKg: 200 }, figures: ["640 kg dry biochar", "200 kg dry biochar"], dry: [undefined, undefined], hints: [dryHint("biochar bins"), dryHint("product bins")] },

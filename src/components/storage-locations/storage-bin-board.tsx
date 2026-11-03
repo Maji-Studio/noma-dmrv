@@ -19,8 +19,8 @@ import type { StorageLocationLaneSummary } from "@/data-access/storage-location-
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
-import { formatMass } from "@/lib/format-utils";
-import { EMPTY_STOCK_LABEL, isWholeKgEmpty } from "@/lib/stock-display";
+import { formatMass, formatMassKg } from "@/lib/format-utils";
+import { EMPTY_STOCK_LABEL, isMassEmpty, isWholeKgEmpty } from "@/lib/stock-display";
 import { massBasisLabel } from "./stock-preview-shared";
 import {
   ArchiveIcon,
@@ -46,6 +46,9 @@ import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations"
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
 const LOADING_TILES = 8;
+
+/** Lane totals switch from kg to tonnes here, as `formatMass` does. */
+const KG_PER_TONNE = 1000;
 
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
@@ -130,21 +133,33 @@ function filterFigure(
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
-  const onHandKg = summary[filter].onHandKg;
+  const { onHandKg } = summary[filter];
   if (onHandKg == null) return null;
-  return isWholeKgEmpty(onHandKg) ? EMPTY_STOCK_LABEL : formatMass(onHandKg);
+  if (isLaneEmpty(summary, filter)) return EMPTY_STOCK_LABEL;
+  return wholeKgLane(summary, filter) || onHandKg >= KG_PER_TONNE ? formatMass(onHandKg) : formatMassKg(onHandKg);
+}
+
+/** Wet-basis output lanes are whole kilograms, like their cards' wet estimates. */
+function wholeKgLane(summary: LaneSummary, filter: Exclude<StorageBinTypeFilter, "all">): boolean {
+  return filter !== "feedstock_bin" && summary[filter].basis === "wet";
 }
 
 /**
- * The basis a lane total measures, written out only where it differs from the
- * tiles' wet-mass headline (a lane that fell back to dry biochar), or inline
- * where there is no caption slot (`inline`). An empty lane has no basis to name.
+ * Empty is judged with the precision the lane's figure is formatted at, which
+ * is the precision of its cards: whole kg for wet output lanes, one decimal
+ * for feedstock and dry-biochar lanes.
  */
-function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter, inline = false): string | null {
+function isLaneEmpty(summary: LaneSummary, filter: Exclude<StorageBinTypeFilter, "all">): boolean {
+  const { onHandKg } = summary[filter];
+  return wholeKgLane(summary, filter) ? isWholeKgEmpty(onHandKg) : isMassEmpty(onHandKg);
+}
+
+/** What a lane total measures, named on the rail and in the mobile select: it never switches silently. */
+function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter): string | null {
   if (!summary || filter === "all") return null;
   const { onHandKg, basis } = summary[filter];
-  if (onHandKg == null || isWholeKgEmpty(onHandKg)) return null;
-  return basis === "dry" || inline ? massBasisLabel(basis) : null;
+  if (onHandKg == null || isLaneEmpty(summary, filter)) return null;
+  return massBasisLabel(filter === "feedstock_bin" ? "wet" : basis);
 }
 
 /** A select option names the type, and its figure in parentheses when there is one. */
@@ -247,7 +262,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         >
           {BIN_TYPE_FILTER_ORDER.map((filter) => (
             <option key={filter} value={filter}>
-              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter, true))}
+              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter))}
             </option>
           ))}
         </select>
