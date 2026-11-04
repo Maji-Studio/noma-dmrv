@@ -1,6 +1,8 @@
 import type { PoolConfig } from 'pg';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+// pg lets these query parameters override the URL's host, so a URL carrying one is never treated as local.
+const HOST_OVERRIDE_PARAMS = ['host', 'hostaddr'];
 
 function parseDatabaseUrl(databaseUrl: string): URL {
   try {
@@ -11,7 +13,8 @@ function parseDatabaseUrl(databaseUrl: string): URL {
 }
 
 export function isLocalDatabaseTarget(databaseUrl: string): boolean {
-  return LOCAL_HOSTS.has(parseDatabaseUrl(databaseUrl).hostname);
+  const url = parseDatabaseUrl(databaseUrl);
+  return LOCAL_HOSTS.has(url.hostname) && !HOST_OVERRIDE_PARAMS.some((param) => url.searchParams.has(param));
 }
 
 export function describeDatabaseTarget(databaseUrl: string): string {

@@ -289,7 +289,7 @@ run and Removal codes when the guard supplies them, or the blocked feedstock for
 a transport ownership refusal.
 
 `--include-sent` requires a local database target, checked from `DATABASE_URL`
-regardless of `NODE_ENV`. Remote targets require the explicit
+regardless of `NODE_ENV`; a `host` or `hostaddr` query parameter makes it non-local. Remote targets require the explicit
 `--allow-remote-include-sent` override, including for dry runs.
 
 For the one-off pre-production staging rebuild, confirm `DATABASE_URL` targets

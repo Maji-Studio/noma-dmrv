@@ -75,12 +75,14 @@ it('closes the pool and redacts a fatal inventory failure', async () => {
 });
 
 it.each([
-  { nodeEnv: 'development', dryRun: false },
-  { nodeEnv: 'development', dryRun: true },
-])('rejects remote include-sent before opening a pool ($nodeEnv, dryRun=$dryRun)', async ({ nodeEnv, dryRun }) => {
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://production.example.invalid/app' },
+  { nodeEnv: 'development', dryRun: true, databaseUrl: 'postgresql://production.example.invalid/app' },
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://localhost/app?host=production.example.invalid' },
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://127.0.0.1/app?hostaddr=203.0.113.7' },
+])('rejects remote include-sent before opening a pool ($databaseUrl, dryRun=$dryRun)', async ({ nodeEnv, dryRun, databaseUrl }) => {
   const oldExitCode = process.exitCode;
   vi.stubEnv('NODE_ENV', nodeEnv);
-  vi.stubEnv('DATABASE_URL', 'postgresql://production.example.invalid/app');
+  vi.stubEnv('DATABASE_URL', databaseUrl);
   process.argv.push('--include-sent', ...(dryRun ? ['--dry-run'] : []));
   const fatal = vi.spyOn(console, 'error').mockImplementation(() => {});
   try {

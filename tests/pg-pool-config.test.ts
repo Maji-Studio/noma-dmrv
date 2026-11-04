@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { getPgPoolConfig } from "@/lib/pg-pool-config";
+import { getPgPoolConfig, isLocalDatabaseTarget } from "@/lib/pg-pool-config";
 
 describe("getPgPoolConfig", () => {
   afterEach(() => {
@@ -59,5 +59,17 @@ describe("getPgPoolConfig", () => {
     );
 
     expect(config.ssl).toBe(false);
+  });
+});
+
+describe("isLocalDatabaseTarget", () => {
+  it.each([
+    ["postgresql://postgres@localhost:5432/noma_dmrv_dev", true],
+    ["postgresql://postgres@127.0.0.1/noma_dmrv_dev?sslmode=disable", true],
+    ["postgresql://app@db.example.com/noma_dmrv_prod", false],
+    ["postgresql://postgres@localhost/app?host=db.example.com", false],
+    ["postgresql://postgres@localhost/app?hostaddr=203.0.113.7", false],
+  ])("classifies %s as local=%s", (databaseUrl, local) => {
+    expect(isLocalDatabaseTarget(databaseUrl)).toBe(local);
   });
 });
