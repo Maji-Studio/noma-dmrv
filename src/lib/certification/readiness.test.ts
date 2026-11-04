@@ -792,12 +792,12 @@ describe("readiness matches submission refusals", () => {
     expect(deriveRemovalReadiness(ready({ durabilityConfigurationBlockers: blockers }))).toMatchObject({ state: "blocked", reasons: blockers });
   });
   it.each([
-    ["Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.", "feedstocks"],
-    [deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!, "deliveryEvidence"],
-    [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders"],
-    [deliveryDistanceBlockerMessage({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!.message, "deliveryDistances"],
-  ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget) => {
-    const facts = ready({ submissionLineageIssues: [{ fact: "Lineage evidence is missing.", detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
+    ["Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.", "feedstocks", "feedstockTransport"],
+    [deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!, "deliveryEvidence", "deliveryProof"],
+    [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders", "applicationDestination"],
+    [deliveryDistanceBlockerMessage({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!.message, "deliveryDistances", "deliveryDistance"],
+  ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget, kind) => {
+    const facts = ready({ submissionLineageIssues: [{ kind, instruction: "", fact: "Lineage evidence is missing.", detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: [reason] });
     expect(buildRemovalRequirementsChecklist(facts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: reason }));
   });

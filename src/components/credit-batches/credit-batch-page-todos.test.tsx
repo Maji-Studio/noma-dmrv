@@ -72,6 +72,17 @@ describe("credit batch page to-dos", () => {
     expect(harness.loadTodos).toHaveBeenCalledWith("facility-1", "batch-1");
   });
 
+  it("shows a count badge on every tab with to-dos, selected or not", async () => {
+    harness.loadTodos.mockResolvedValue({ success: true, data: TODOS });
+    renderPage();
+    const samples = await screen.findByRole("tab", { name: /Samples/ });
+    expect(samples.getAttribute("aria-selected")).toBe("false");
+    await waitFor(() => expect(samples.querySelector('[aria-label="1 open to-do"]')?.textContent).toBe("1"));
+    const overview = screen.getByRole("tab", { name: /Overview/ });
+    expect(overview.querySelector('[aria-label$="open to-do"], [aria-label$="open to-dos"]')?.textContent).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Production/ }).querySelector("[aria-label]")).toBeNull();
+  });
+
   it("links the run code of a missing-run Check outside its Add in Edit button", async () => {
     harness.loadTodos.mockResolvedValue({ success: true, data: { ...TODOS, blocking: [], check: [{
       id: "missing-production-run:run-1", productionRun: { id: "run-1", code: "RUN-1" },

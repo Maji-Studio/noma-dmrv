@@ -576,9 +576,6 @@ export function CreditBatchList({
       ? undefined
       : formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate);
 
-  // Record lock (#1119): the sheet reads Sent from its own lock read alone;
-  // the lock line states the reason and Edit waits for the read.
-  const sideSheetLocked = sheetLock?.level === "sent";
   const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
   const sideSheetElement = (
       <EntitySideSheet
@@ -608,7 +605,6 @@ export function CreditBatchList({
                 isHealthLoading: healthLoading && !healthError,
                 canManage: canManage && !sheetReadOnly,
                 readOnly: !!sheetReadOnly,
-                locked: sideSheetLocked,
                 inRemoval: membershipLocked,
                 activeFocusTarget:
                   sideSheetEntity.id === focusedBatchId

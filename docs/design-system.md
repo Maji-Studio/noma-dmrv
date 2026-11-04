@@ -556,6 +556,11 @@ Always use `Button`; never a raw `<button>` with manual styling.
   case). `Button` imposes `label-button` type, fixed heights and
   `disabled:pointer-events-none`, so these keep a raw `<button>` with the same
   spinner glyph and `aria-busy` as `busy`.
+- **Exception: chart segments.** A segment of the credit batch's Biochar in
+  Removals bar (`credit-batch-removal-bar.tsx`) that is in no Removal is a raw
+  `<button>`: it is a proportional sliver of fill with no label, and `Button`'s
+  type, heights and padding would change its width. It keeps the focus ring
+  and a 44px tall hit area (`INLINE_HIT_AREA`); segments in a Removal are links.
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop

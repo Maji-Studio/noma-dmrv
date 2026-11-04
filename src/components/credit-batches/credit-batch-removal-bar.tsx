@@ -4,18 +4,28 @@
  * The Removals bar of the credit batch page: applied dry biochar split by the
  * Removal that holds it, then the part in none (epic #1136). The Overview
  * draws it compact, with a hover card per Removal that links to it; the
- * Removals tab draws it in detail, each Removal split into its applications,
- * and clicks through instead of hovering.
+ * Removals tab draws it in detail, each Removal split into its applications;
+ * each segment shows a tooltip on hover, focus or tap and links to its Removal.
  */
 import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
+import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
+import { TooltipPopup } from "@/components/ui/tooltip";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import {
+  applyTooltipOpenChange,
+  pressToggletip,
+  TOGGLETIP_CLOSED,
+  type ToggletipState,
+} from "@/components/ui/tooltip/toggletip-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   notAppliedCaptionKg,
   type RemovalBarGroup,
+  type RemovalBarPart,
   type RemovalBarRemoval,
   type RemovalBarSegment,
   type RemovalBarSlice,
@@ -28,6 +38,7 @@ import { FOCUS_RING, MUTED_TEXT } from "./credit-batch-page-parts";
 
 const OPEN_DELAY_MS = 200;
 const CLOSE_DELAY_MS = 120;
+const SEGMENT_TIP_DELAY_MS = 100;
 const CARD_OFFSET_PX = 8;
 const MIN_GROUP_PX = 6;
 const MIN_PART_PX = 2;
@@ -57,6 +68,75 @@ export function sliceLabel(slice: RemovalBarSlice): string {
 
 export function sliceMeta(slice: RemovalBarSlice): string {
   return `${slice.applicationCode}, applied ${formatCalendarDate(slice.applicationDate)}`;
+}
+
+export const NOT_IN_A_REMOVAL = "Not in a Removal";
+
+/** What one bar segment says, in the tooltip and (joined) as its single accessible name. */
+export function segmentFacts(slice: RemovalBarSlice, dryKg: number, removalCode: string | null) {
+  return {
+    title: sliceLabel(slice),
+    meta: sliceMeta(slice),
+    mass: `${tonnesFromKg(dryKg)} dry`,
+    membership: removalCode ? `In ${removalCode}` : NOT_IN_A_REMOVAL,
+  };
+}
+
+const TOUCH_POINTERS = new Set(["touch", "pen"]);
+
+/**
+ * One application in the Removals bar: a link to its Removal (a plain button
+ * when it is in none) that opens a tooltip on hover, keyboard focus and tap.
+ * A tap on a touch screen pins the tooltip instead of following the link; the
+ * key list below the bar links to the Removal. Enter on a focused link still
+ * follows it (a keyboard click has `detail` 0), and the touch flag is spent on
+ * the click it came with. Each segment's hit area is 44px tall (the drawn bar
+ * stays 24px); its width stays proportional, so on a phone a sliver's facts are
+ * also in the delivery list below. A segment in no Removal is a raw
+ * `<button>`: see the bar segment exception under Button in
+ * docs/design-system.md. Base UI's own "trigger-press"
+ * close is ignored (see `applyTooltipOpenChange`), or a tap would open and
+ * close it at once.
+ */
+function BarSegment({ part, removalCode, href, className, style }: { part: RemovalBarPart; removalCode: string | null; href: string | null; className: string; style: CSSProperties }) {
+  const [state, setState] = useState<ToggletipState>(TOGGLETIP_CLOSED);
+  const [touched, setTouched] = useState(false);
+  const facts = segmentFacts(part.slice, part.dryKg, removalCode);
+  const common = {
+    "aria-label": [facts.title, facts.meta, facts.mass, facts.membership].join(", "),
+    className: cn(className, FOCUS_RING),
+    style,
+    onPointerDown: (event: React.PointerEvent) => setTouched(TOUCH_POINTERS.has(event.pointerType)),
+  };
+  return (
+    <BaseTooltip.Root open={state.open} onOpenChange={(next, details) => setState((current) => applyTooltipOpenChange(current, next, details.reason))}>
+      <BaseTooltip.Trigger
+        render={href ? (
+          <Link
+            {...common}
+            href={href}
+            onClick={(event) => {
+              const tap = touched && event.detail !== 0;
+              setTouched(false);
+              if (!tap) return;
+              event.preventDefault();
+              setState(pressToggletip);
+            }}
+          />
+        ) : (
+          <button {...common} type="button" onClick={() => setState(pressToggletip)} />
+        )}
+      />
+      <TooltipPopup side="top">
+        <span className="flex flex-col gap-2">
+          <span className="font-medium">{facts.title}</span>
+          <span>{facts.meta}</span>
+          <span className="tabular-nums">{facts.mass}</span>
+          <span>{facts.membership}</span>
+        </span>
+      </TooltipPopup>
+    </BaseTooltip.Root>
+  );
 }
 
 export function SegmentSwatch({ segment, className }: { segment: RemovalBarSegment; className?: string }) {
@@ -194,6 +274,7 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
   // Removal codes sit above their segments; with no Removal there is nothing to name.
   const named = groups.some((group) => group.removal);
   return (
+    <BaseTooltip.Provider delay={SEGMENT_TIP_DELAY_MS} closeDelay={CLOSE_DELAY_MS}>
     <div className="flex flex-col gap-12">
       <div className="flex gap-4">
         {groups.map((group) => {
@@ -207,16 +288,17 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
               ) : (
                 <span aria-hidden className="block h-18" />
               ))}
-              <div className="flex h-24 gap-2" aria-hidden>
-                {group.parts.map((part) => {
-                  const style = { flexGrow: part.dryKg, flexBasis: 0, minWidth: MIN_PART_PX, backgroundColor: SEGMENT_FILLS[group.segment] };
-                  const className = "h-full border border-[var(--st-off-border)]";
-                  return href ? (
-                    <Link key={part.id} href={href} tabIndex={-1} title={`${sliceLabel(part.slice)}, ${tonnesFromKg(part.dryKg)}`} className={cn(className, "hover:opacity-80")} style={style} />
-                  ) : (
-                    <span key={part.id} title={`${sliceLabel(part.slice)}, ${tonnesFromKg(part.dryKg)}`} className={className} style={style} />
-                  );
-                })}
+              <div role="group" aria-label={groupName(group)} className="flex h-24 gap-2">
+                {group.parts.map((part) => (
+                  <BarSegment
+                    key={part.id}
+                    part={part}
+                    removalCode={group.removal?.code ?? null}
+                    href={href}
+                    className={cn("block h-full border border-[var(--st-off-border)]", INLINE_HIT_AREA, href && "hover:opacity-80")}
+                    style={{ flexGrow: part.dryKg, flexBasis: 0, minWidth: MIN_PART_PX, backgroundColor: SEGMENT_FILLS[group.segment] }}
+                  />
+                ))}
               </div>
             </div>
           );
@@ -253,6 +335,7 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
         })}
       </ul>
     </div>
+    </BaseTooltip.Provider>
   );
 }
 
