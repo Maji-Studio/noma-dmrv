@@ -50,7 +50,8 @@ import {
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
@@ -238,29 +239,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const [affectedApplicationIdsParam, setAffectedApplicationIdsParam] =
-    useQueryState(
-      "ids",
-      parseAsString.withOptions({ shallow: true, history: "replace" }),
-    );
-  const affectedApplicationFilter = parseExactIdFilter(
-    affectedApplicationIdsParam,
-  );
-  const affectedApplicationIds = affectedApplicationFilter.ids;
-  useEffect(() => {
-    if (
-      affectedApplicationIdsParam &&
-      affectedApplicationFilter.normalized !== affectedApplicationIdsParam
-    ) {
-      void setAffectedApplicationIdsParam(
-        affectedApplicationFilter.normalized,
-      );
-    }
-  }, [
-    affectedApplicationFilter.normalized,
-    affectedApplicationIdsParam,
-    setAffectedApplicationIdsParam,
-  ]);
+  const {
+    ids: affectedApplicationIds,
+    normalized: affectedApplicationNormalized,
+    clear: clearAffectedApplicationIds,
+  } = useExactIdFilterParam();
   // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
   // input, so the form section and detail row are hidden under 1000-year.
   // Fall back to 200-year while facility context resolves: showing the field
@@ -319,7 +302,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const [evidenceFilter, setEvidenceFilter] = useState<ApplicationEvidenceMethod | "">("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(
-      `${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedApplicationFilter.normalized ?? ""}`,
+      `${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedApplicationNormalized ?? ""}`,
     );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
@@ -555,7 +538,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setStatusFilter("");
     setEvidenceFilter("");
     setCreditBatchFilter(null);
-    setAffectedApplicationIdsParam(null);
+    void clearAffectedApplicationIds();
     setCurrentPage(1);
   };
 
@@ -749,12 +732,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       >
         <DataTable.Toolbar>
           {affectedApplicationIds.length > 0 && (
-            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
-              {affectedApplicationIds.length} affected{" "}
-              {affectedApplicationIds.length === 1
-                ? "application"
-                : "applications"}
-            </span>
+            <AffectedRecordsChip
+                count={affectedApplicationIds.length}
+                singular="application"
+                plural="applications"
+              />
           )}
           <DataTable.Search
             placeholder="Search applications..."

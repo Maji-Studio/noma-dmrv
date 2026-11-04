@@ -1,3 +1,4 @@
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 import { offsetInstantSchema } from "./event-instant";
 import { DELIVERY_CODE_MAX_LENGTH, DELIVERY_CODE_PATTERN, DELIVERY_DISTANCE_MESSAGE, DELIVERY_DISTANCE_NOTE_MAX_LENGTH, recordDeliveryInput } from "./delivery-input";
 import { dateOrStringSchema, expectedVersionSchema } from "./helpers";
@@ -32,7 +33,7 @@ import {
 import { deliveryDryMassSchema } from "./isometric";
 
 /** The most deliveries one list request returns, and the exact-id chunk size. */
-export const MAX_DELIVERY_LIST_SIZE = 100;
+export const MAX_DELIVERY_LIST_SIZE = EXACT_ID_FILTER_MAX;
 
 // ============================================
 // Constants and Enums

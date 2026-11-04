@@ -195,6 +195,17 @@ describe("batchHealthFixLinkFor", () => {
     );
   });
 
+  it.each([
+    { key: "transport", target: "feedstocks", path: "/feedstock-intake", label: "Review feedstock transport" },
+    { key: "entityReadiness", target: "orders", path: "/orders", label: "Review orders" },
+  ] as const)("routes multiple $target to exactly the affected records", ({ key, target, path, label }) => {
+    const link = batchHealthFixLinkFor(check(key, target, [
+      { id: "one", code: "RE-1", missing: ["Submission evidence"] },
+      { id: "two", code: "RE-2", missing: ["Submission evidence"] },
+    ]), facilityId, "batch-001");
+    expect(link).toEqual({ label, href: `${path}?facility=${facilityId}&ids=one%2Ctwo` });
+  });
+
   it("deep-links a registry mapping gap to the affected feedstock type", () => {
     const feedstockTypeId = "22222222-2222-4222-8222-222222222222";
     const link = batchHealthFixLinkFor(

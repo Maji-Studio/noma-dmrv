@@ -26,7 +26,7 @@ import type { OrderFulfillmentStatus } from "@/lib/orders/fulfillment";
 import { orderFulfillmentExpression } from "./order-fulfillment-sql";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { OrderFilterData } from "@/schemas/orders";
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL } from "drizzle-orm";
 
 // ============================================
 // Types
@@ -156,6 +156,7 @@ export async function getOrders(
 
   const {
     search,
+    ids,
     facilityId,
     customerId,
     status,
@@ -174,6 +175,8 @@ export async function getOrders(
     eq(orders.organizationId, ctx.organizationId),
     isNull(orders.archivedAt),
   ];
+
+  if (ids?.length) conditions.push(inArray(orders.id, ids));
 
   if (search) {
     const searchPattern = `%${search}%`;
