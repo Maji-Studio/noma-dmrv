@@ -17,7 +17,7 @@ it("keeps evidence and merged-delivery links even when a record has a location h
   expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "deliveryEvidence",
     affectedRecords: [records[0]] }, "facility").href).toContain("focus=transport-evidence");
   expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "deliveries",
-    affectedRecords: records }, "facility")).toEqual({ label: "Review deliveries", href: "/deliveries?facility=facility&ids=one%2Ctwo" });
+    affectedRecords: records }, "facility")).toEqual({ label: "Review deliveries", href: "/deliveries?facility=facility" });
 });
 it("does not label generic hrefs as location repairs", () => {
   expect(batchHealthFixLinkFor({ key: "carbon", affectedRecords: records }, "facility").label).toBe("Fix 2 Samples");
@@ -30,11 +30,11 @@ it("keeps emissions evidence separate from emission estimates and opens the batc
   });
 });
 
-it.each(["deliveries", "deliveryEvidence", "deliveryDistances"] as const)("links every affected id for %s", (fixTarget) => {
+it.each(["deliveries", "deliveryEvidence", "deliveryDistances"] as const)("scopes the %s link to its repair destination", (fixTarget) => {
   const affectedRecords = records.map(({ id, code, missing }) => ({ id, code, missing }));
   const link = batchHealthFixLinkFor({ key: "entityReadiness", fixTarget, affectedRecords }, "facility", "batch");
   const params = new URL(link.href, "https://noma.test").searchParams;
-  expect(params.get("ids")).toBe("one,two");
+  expect(params.get("ids")).toBe(fixTarget === "deliveries" ? null : "one,two");
   expect(params.get("facility")).toBe("facility");
   expect(params.get("creditBatch")).toBe("batch");
 });
