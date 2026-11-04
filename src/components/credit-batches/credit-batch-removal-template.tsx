@@ -24,11 +24,10 @@ import { Notice } from "@/components/ui/notice";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
 import { useCreditBatch } from "@/hooks/use-credit-batches";
-import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
+import { LOAD_FAILED, MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
 import { DECIDE_LINES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { linesDecidedByAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { DetailRow } from "./credit-batch-page-parts";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
@@ -117,7 +116,8 @@ export function CreditBatchRemovalTemplate({
     >
       {asDetailRow ? (
         // Inside the focus target, so a deep link highlights the name with its notices.
-        <dl className="flex flex-col">
+        // The rule above it continues the Batch details rows (its own `<dl>` is otherwise first).
+        <dl className="flex flex-col border-t border-[var(--color-border-tertiary)]">
           <DetailRow label="Removal template" value={pinned?.display_name ?? null} pending={namePending} emptyText={reason ?? MISSING_VALUE.notSet} />
         </dl>
       ) : (

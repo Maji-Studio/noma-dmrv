@@ -251,15 +251,18 @@ function DetailsPanel() {
   return (
     <FocusRow rowId={CREDIT_BATCH_DETAILS_ROW}>
       <PagePanel title="Batch details" labelledBy="credit-batch-details" titleAddon={lockText ? <LockMark text={lockText} /> : undefined}>
-        <dl className="flex flex-col">
-          <DetailRow label="Feedstock type" value={batch.feedstockTypeName} locked={rowLock} />
-          <DetailRow label="Durability" value={durabilityLabel(batch.durabilityOption)} />
-          <DetailRow label="Start date" value={formatDate(batch.startDate)} locked={rowLock} />
-          <DetailRow label="End date" value={formatDate(batch.endDate)} locked={rowLock} />
-          <DetailRow label="Sampling" value={batch.sampling === "unsampled" ? "Unsampled" : "Sampled"} />
-          <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
-        </dl>
-        <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} asDetailRow />
+        {/* One run of rows: the template's row sits flush under Notes, as the others do. */}
+        <div className="flex flex-col">
+          <dl className="flex flex-col">
+            <DetailRow label="Feedstock type" value={batch.feedstockTypeName} locked={rowLock} />
+            <DetailRow label="Durability" value={durabilityLabel(batch.durabilityOption)} />
+            <DetailRow label="Start date" value={formatDate(batch.startDate)} locked={rowLock} />
+            <DetailRow label="End date" value={formatDate(batch.endDate)} locked={rowLock} />
+            <DetailRow label="Sampling" value={batch.sampling === "unsampled" ? "Unsampled" : "Sampled"} />
+            <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
+          </dl>
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} asDetailRow />
+        </div>
       </PagePanel>
     </FocusRow>
   );

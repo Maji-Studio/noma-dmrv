@@ -4,8 +4,8 @@
  * The Removals bar of the credit batch page: applied dry biochar split by the
  * Removal that holds it, then the part in none (epic #1136). The Overview
  * draws it compact, with a hover card per Removal that links to it; the
- * Removals tab draws it in detail, each Removal split into its applications,
- * and clicks through instead of hovering.
+ * Removals tab draws it in detail, each Removal split into its applications;
+ * each segment shows a tooltip on hover, focus or tap and links to its Removal.
  */
 import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
