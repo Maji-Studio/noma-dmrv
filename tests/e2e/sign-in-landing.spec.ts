@@ -81,4 +81,17 @@ test.describe("Sign-in landing", () => {
     );
     await context.close();
   });
+
+  // #1571: URL parsing strips a tab or newline, so "/\t/evil.example" used to
+  // resolve to https://evil.example/ after a real sign-in.
+  for (const smuggled of ["%2F%09%2Fevil.example", "%2F%0A%2Fevil.example"]) {
+    test(`a return path that hides another origin (${smuggled}) lands on the dashboard`, async ({ browser, testUsers, baseURL }) => {
+      const { context, page } = await signIn(browser, testUsers.operator, DASHBOARD, `/login?from=${smuggled}`);
+      try {
+        expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
+      } finally {
+        await context.close();
+      }
+    });
+  }
 });

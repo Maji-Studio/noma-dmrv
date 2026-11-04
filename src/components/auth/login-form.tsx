@@ -13,22 +13,7 @@ import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
 import { followOAuthContinuation } from "@/lib/auth/oauth-continuation";
-
-const DEFAULT_SIGN_IN_PATH = "/";
-
-function getSafeSignInPath(from: string | null): string {
-  if (
-    !from ||
-    !from.startsWith("/") ||
-    from.startsWith("//") ||
-    from.includes("://") ||
-    from.includes("\\")
-  ) {
-    return DEFAULT_SIGN_IN_PATH;
-  }
-
-  return from;
-}
+import { getSafeSignInPath } from "@/lib/auth/sign-in-path";
 
 export function LoginForm() {
   const [serverError, setServerError] = useState("");
@@ -70,7 +55,7 @@ export function LoginForm() {
         else setServerError(OAUTH_RESTART_MESSAGE);
         return;
       }
-      startNavigation(() => router.push(getSafeSignInPath(searchParams.get("from"))));
+      startNavigation(() => router.push(getSafeSignInPath(searchParams.get("from"), window.location.origin)));
     } else {
       setServerError(
         result.error || "You could not be signed in. Check your details and try again.",
