@@ -47,7 +47,7 @@ function correctionFixture(kind = "sent", originStatus = "FAILED_VERIFICATION", 
       innerJoin: () => ({ where: async (condition: SQL) => { conditions.push(condition); return members; } }),
     }),
   }) }) } as unknown as DbTransaction;
-  return { ctx, tx, conditions };
+  return { ctx, tx, conditions, members };
 }
 
 it("discovers the same full batch union from every owner of the edited batch", async () => {
@@ -184,4 +184,42 @@ it("refuses a date without a locked correction window", async () => {
   const { assertSentEntryInCorrectionWindow } = await import("./emission-entry-corrections");
   expect(() => assertSentEntryInCorrectionWindow(makeTestOrgContext(), {} as DbTransaction, "carried", "receiver", "2026-06-10"))
     .toThrow("Keep the entry date within this Removal's period.");
+});
+
+it("keeps a base-holder carry receiver closed while its own union has a holder awaiting verification", async () => {
+  const { discoverEmissionCorrectionScope, lockEmissionCorrectionScope, revalidateEmissionCorrectionScope, emissionCorrectionWindow } =
+    await import("./emission-entry-corrections");
+  const { ctx, tx, members } = correctionFixture();
+  // R1={a, member}, R2={member, neighbor}, R3={neighbor}; only R2 receives a.
+  members.splice(0, members.length,
+    { removalId: "origin", creditBatchId: "a", startDate: "2026-06-01", applicationDate: "2026-06-16" },
+    { removalId: "origin", creditBatchId: "member", startDate: "2026-06-01", applicationDate: "2026-06-16" },
+    { removalId: "receiver", creditBatchId: "member", startDate: "2026-06-01", applicationDate: "2026-06-16" },
+    { removalId: "receiver", creditBatchId: "neighbor", startDate: "2026-06-01", applicationDate: "2026-06-16" },
+    { removalId: "shared", creditBatchId: "neighbor", startDate: "2026-06-01", applicationDate: "2026-06-16" },
+  );
+  const scope = await discoverEmissionCorrectionScope(ctx, tx, "a");
+  expect(scope.baseBatchIds).toEqual(["a", "member"]);
+  expect(scope.receiverUnions.get("receiver")).toContain("neighbor");
+  const pendingFacts = [fact("origin"), fact("receiver"), fact("shared", "AWAITING_VERIFICATION")]
+    .map(recordLockRemoval => ({ recordLockRemoval }));
+  mocks.locked.mockResolvedValue(pendingFacts);
+  await lockEmissionCorrectionScope(ctx, tx, "a");
+  expect(emissionCorrectionWindow(ctx, tx, "a", "origin")).toBeDefined();
+  expect(emissionCorrectionWindow(ctx, tx, "a", "receiver")).toBeUndefined();
+
+  const reopened = correctionFixture();
+  reopened.members.splice(0, reopened.members.length, ...members);
+  await lockEmissionCorrectionScope(reopened.ctx, reopened.tx, "a");
+  expect(emissionCorrectionWindow(reopened.ctx, reopened.tx, "a", "receiver")).toBeDefined();
+  mocks.lineage.mockResolvedValue(pendingFacts);
+  await revalidateEmissionCorrectionScope(reopened.ctx, reopened.tx, "a");
+  expect(emissionCorrectionWindow(reopened.ctx, reopened.tx, "a", "receiver")).toBeUndefined();
+});
+
+it("queries the edited batch's application owners once during discovery", async () => {
+  const { discoverEmissionCorrectionScope } = await import("./emission-entry-corrections");
+  const { ctx, tx, conditions } = correctionFixture();
+  await discoverEmissionCorrectionScope(ctx, tx, "a");
+  expect(conditions.filter(condition => new PgDialect().sqlToQuery(condition).params.includes("a"))).toHaveLength(1);
 });

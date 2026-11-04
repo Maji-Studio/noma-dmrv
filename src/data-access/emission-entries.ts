@@ -185,7 +185,7 @@ async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, value
 export async function tombstoneEmissionZeros(
   ctx: OrgContext,
   tx: DbTransaction,
-  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string },
+  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string; holdingRemovalId?: string | null },
 ) {
   requireOrgScope(ctx);
   const before = await tx.select().from(emissionEntries).where(and(
@@ -195,7 +195,7 @@ export async function tombstoneEmissionZeros(
   if (!before.length) return;
   const correctableIds = before.filter((zero) => {
     const removalId = zero.sentByRemovalId ?? zero.confirmedForRemovalId;
-    const window = removalId && !zero.sendReservedBySubmissionId
+    const window = removalId && (!entry.holdingRemovalId || removalId === entry.holdingRemovalId) && !zero.sendReservedBySubmissionId
       ? emissionCorrectionWindow(ctx, tx, zero.creditBatchId, removalId) : undefined;
     return window && inWindow(entry, window);
   }).map((zero) => zero.id);
@@ -299,7 +299,7 @@ async function writeEmissionEntryUnderLocks(
     })
     .returning();
   const values = await writeValues(ctx, tx, entry.id, data.values);
-  await tombstoneEmissionZeros(ctx, tx, entry);
+  await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: replacementHold?.removalId });
   await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
   return getEmissionEntry(ctx, entry.id, tx);
 }
@@ -392,7 +392,7 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)))
       .returning();
-    if (entry.kind === "value" && contentChanged) await tombstoneEmissionZeros(ctx, tx, saved);
+    if (entry.kind === "value" && contentChanged) await tombstoneEmissionZeros(ctx, tx, { ...saved, holdingRemovalId: entryHoldingRemovalId(entry) });
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });
@@ -443,7 +443,7 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
       })
       .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)))
       .returning();
-    if (entry.kind === "value" && !emissionEntryCounts(previous, observation, entry.componentId).counts) await tombstoneEmissionZeros(ctx, tx, saved);
+    if (entry.kind === "value" && !emissionEntryCounts(previous, observation, entry.componentId).counts) await tombstoneEmissionZeros(ctx, tx, { ...saved, holdingRemovalId: entryHoldingRemovalId(entry) });
     await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values: entry.values });
     return getEmissionEntry(ctx, id, tx);
   });
@@ -505,7 +505,7 @@ export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissi
     validateEmissionEntry({ ...common, values: values.map((value) => ({ ...value,
       quantityKind: entry.inputShape.find((shape) => shape.key === value.inputKey)!.quantityKind,
     })) });
-    await tombstoneEmissionZeros(ctx, tx, entry);
+    await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: entryHoldingRemovalId(entry) });
     const [saved] = await tx.update(emissionEntries).set({
       deletedAt: null, updatedAt: new Date(), version: nextVersion(emissionEntries.version),
       contentRevision: nextVersion(emissionEntries.contentRevision),

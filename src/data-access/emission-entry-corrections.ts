@@ -94,10 +94,19 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
 /** The base one-hop union follows application owners only, as advisory reads require. */
 export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Executor, batchId: string) {
   requireOrgScope(ctx);
+  return emissionCorrectionBatchIdsForOwners(ctx, executor, batchId, await emissionCorrectionOwnerIds(ctx, executor, batchId));
+}
+
+async function emissionCorrectionOwnerIds(ctx: OrgContext, executor: Executor, batchId: string) {
+  requireOrgScope(ctx);
   const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
   ));
-  const ownerIds = owners.flatMap(row => row.id ? [row.id] : []);
+  return owners.flatMap(row => row.id ? [row.id] : []);
+}
+
+async function emissionCorrectionBatchIdsForOwners(ctx: OrgContext, executor: Executor, batchId: string, ownerIds: string[]) {
+  requireOrgScope(ctx);
   return [...new Set([batchId, ...await emissionCorrectionMemberBatchIds(ctx, executor, ownerIds)])];
 }
 
@@ -110,11 +119,8 @@ async function emissionCorrectionMemberBatchIds(ctx: OrgContext, executor: Execu
 }
 
 /** Sent, reserved and held receivers, excluding the batch's application owners. */
-async function emissionCorrectionReceiverIds(ctx: OrgContext, executor: Executor, batchId: string) {
+async function emissionCorrectionReceiverIds(ctx: OrgContext, executor: Executor, batchId: string, directOwnerIds: string[]) {
   requireOrgScope(ctx);
-  const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
-    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
-  ));
   // Include tombstoned originals: replacements retain their sent Removal as a hold.
   const entries = await executor.select({
     id: emissionEntries.id, replacesEntryId: emissionEntries.replacesEntryId,
@@ -125,7 +131,7 @@ async function emissionCorrectionReceiverIds(ctx: OrgContext, executor: Executor
     eq(certificationSubmissions.localEntityType, "removal"),
   )).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, batchId)));
   const holds = await loadEmissionEntryHolds(ctx, entries, executor);
-  const ownerIds = new Set(owners.map(row => row.id));
+  const ownerIds = new Set(directOwnerIds);
   return [...new Set(entries.flatMap(entry => [entry.sentByRemovalId, entry.reservedByRemovalId, holds.get(entry.id)])
     .filter((id): id is string => !!id && !ownerIds.has(id)))];
 }
@@ -133,8 +139,9 @@ async function emissionCorrectionReceiverIds(ctx: OrgContext, executor: Executor
 /** Fence every group's artifacts together, but retain each group's own eligibility union. */
 export async function discoverEmissionCorrectionScope(ctx: OrgContext, executor: Executor, batchId: string) {
   requireOrgScope(ctx);
-  const baseBatchIds = await emissionCorrectionBatchIds(ctx, executor, batchId);
-  const receiverIds = await emissionCorrectionReceiverIds(ctx, executor, batchId);
+  const ownerIds = await emissionCorrectionOwnerIds(ctx, executor, batchId);
+  const baseBatchIds = await emissionCorrectionBatchIdsForOwners(ctx, executor, batchId, ownerIds);
+  const receiverIds = await emissionCorrectionReceiverIds(ctx, executor, batchId, ownerIds);
   const receiverUnions = new Map<string, string[]>();
   for (const receiverId of receiverIds) {
     const members = await emissionCorrectionMemberBatchIds(ctx, executor, [receiverId]);
@@ -159,8 +166,11 @@ async function loadCorrectionWindows(
   const baseHolders = holders(discovery.baseBatchIds);
   const windows = new Map<string, CorrectionWindow>();
   for (const fact of facts) {
-    const union = baseHolders.has(fact.id) ? discovery.baseBatchIds : discovery.receiverUnions.get(fact.id);
-    if (!union) continue;
+    const union = [...new Set([
+      ...(baseHolders.has(fact.id) ? discovery.baseBatchIds : []),
+      ...(discovery.receiverUnions.get(fact.id) ?? []),
+    ])];
+    if (!union.length) continue;
     const groupHolders = holders(union);
     if (!isRemovalCorrectionWindowOpen(fact, facts.filter(holder => groupHolders.has(holder.id)))) continue;
     const group = members.filter(row => row.removalId === fact.id);

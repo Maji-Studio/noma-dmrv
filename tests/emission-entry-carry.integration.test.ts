@@ -190,6 +190,54 @@ it("corrects an origin-sent entry while its carry receiver awaits verification",
     await db.delete(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, originEntry.id)));
   }
 });
+it("keeps the origin's sent zero when correcting a value carried and sent by the receiver", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
+  // Reconstruct R1's empty-line confirmation using the normal writer. The value belongs to R2.
+  const originSubmission = and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+    eq(certificationSubmissions.localEntityId, origin.removalId), eq(certificationSubmissions.submissionType, "removal"));
+  await db.update(certificationSubmissions).set({ status: "draft", submittedAt: null, externalId: null }).where(originSubmission);
+  const { entryIds: [zeroId] } = await recordEmissionZeros(ctx, {
+    removalId: origin.removalId, creditBatchId: origin.batchId, componentIds: ["line"],
+  });
+  expect(zeroId).toBeDefined();
+  await db.update(emissionEntries).set({ sentByRemovalId: origin.removalId }).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zeroId),
+  ));
+  await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date(), externalId: "origin-sent" }).where(originSubmission);
+  for (const [fixture, externalId, removalExternalId, periodEnd] of [
+    [origin, "returned-origin", "origin-sent", "2026-06-30"],
+    [receiving, "returned-receiver", "carried", "2026-07-31"],
+  ] as const) {
+    const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+      facilityId: origin.facilityId, reportingPeriodEndOn: periodEnd }).returning();
+    fixture.ghgStatementId = statement.id;
+    await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(
+      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, fixture.removalId),
+    ));
+    await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+      submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
+      version: 1, status: "submitted", externalId, submittedAt: new Date(),
+      metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: [removalExternalId] } });
+  }
+  registry.getGhgStatement.mockImplementation(async (_client, externalId) => ({
+    status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z",
+    ghg_entry_ids: [externalId === "returned-origin" ? "origin-sent" : "carried"],
+  }));
+  try {
+    const zeroBefore = await getEmissionEntry(ctx, zeroId);
+    const sent = await getEmissionEntry(ctx, entry.id);
+    expect(await updateEmissionEntry(ctx, { id: sent.id, expectedVersion: sent.version,
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "125", unit: "kWh" }],
+    })).toMatchObject({ sentByRemovalId: receiving.removalId, values: [expect.objectContaining({ magnitude: "125" })] });
+    expect(await getEmissionEntry(ctx, zeroId)).toMatchObject({ deletedAt: null, sentByRemovalId: origin.removalId,
+      version: zeroBefore.version, contentRevision: zeroBefore.contentRevision });
+  } finally {
+    registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  }
+});
 it("refuses a carry receiver introduced after the correction artifacts were locked", async () => {
   await expect(db.transaction(async tx => {
     await lockEmissionCorrectionScope(ctx, tx, origin.batchId);
