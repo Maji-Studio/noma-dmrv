@@ -545,7 +545,10 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   }
   for (const [kind, group] of counted) {
     const [first] = group;
-    const fact = group.length === 1 ? first.fact : submissionBlockerGroupFact(kind, group.length);
+    const recordCount = new Set(group.map((blocker) => blocker.record.id)).size;
+    const fact = group.length === 1
+      ? first.fact
+      : submissionBlockerGroupFact(kind, recordCount, first.record.code);
     lineageChecks.push({
       key: first.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
       issueKey: `submission-${first.fixTarget}`,

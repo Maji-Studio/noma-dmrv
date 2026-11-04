@@ -1,3 +1,4 @@
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 /**
  * Feedstock Validation Schemas
  * Unified schemas for the combined delivery + bin allocation workflow.
@@ -21,7 +22,7 @@ import {
 } from "./helpers";
 
 /** The most feedstocks one list request returns, and the exact-id chunk size. */
-export const MAX_FEEDSTOCK_LIST_SIZE = 100;
+export const MAX_FEEDSTOCK_LIST_SIZE = EXACT_ID_FILTER_MAX;
 
 // ============================================
 // Shared numeric field helpers

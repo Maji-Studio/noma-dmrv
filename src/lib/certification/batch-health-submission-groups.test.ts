@@ -109,7 +109,7 @@ describe("submission blocker groups", () => {
 
   it.each([
     { kind: "feedstockTransport", fixTarget: "feedstocks", key: "transport", messageFor: feedstockTransportMessage, fact: "2 feedstocks have no usable transport leg." },
-    { kind: "applicationDestination", fixTarget: "orders", key: "entityReadiness", messageFor: applicationDestinationMessage, fact: "2 applications have no customer location." },
+    { kind: "applicationDestination", fixTarget: "orders", key: "entityReadiness", messageFor: applicationDestinationMessage, fact: "2 orders have no customer location." },
   ] as const)("counts $kind while retaining the coded fact for one record", ({ kind, fixTarget, key, messageFor, fact }) => {
     const blockers = ["one", "two"].map((id) => {
       const message = messageFor(kind === "feedstockTransport" ? `Feedstock FS-${id}` : `AP-${id}`);
@@ -186,17 +186,17 @@ describe("submission blocker groups", () => {
       "submission-deliveries", "submission-orders",
     ]);
     expect(checks.map((check) => check.detail)).toEqual([
-      blockers[1].detail, `2 applications have no customer location. ${blockers[0].instruction}`,
+      blockers[1].detail, `2 orders have no customer location. ${blockers[0].instruction}`,
     ]);
     expect(checks[0].copy).toBeUndefined();
     expect(isCountedSubmissionBlocker(blockers[1])).toBe(false);
     expect(checks[0].readOnlyDetail).toBe(blockers[1].fact);
-    expect(checks[1].copy).toEqual({ detail: "2 applications have no customer location.", instruction: blockers[0].instruction });
+    expect(checks[1].copy).toEqual({ detail: "2 orders have no customer location.", instruction: blockers[0].instruction });
     expect(checks.map((check) => check.affectedRecords?.map((record) => record.id)))
       .toEqual([["record-1"], ["record-0", "record-2"]]);
   });
 
-  it("counts applications sharing an order while linking to that order once", () => {
+  it("counts one order for applications sharing an order while linking to it once", () => {
     const applications = lineages.slice(0, 2).map((lineage) => ({
       ...lineage,
       delivery: { ...lineage.delivery, proofOfDeliveryCount: 1, customerLocationId: null },
@@ -206,13 +206,34 @@ describe("submission blocker groups", () => {
     const [check] = unmet(blockers);
     expect(blockers).toHaveLength(2);
     expect(check).toMatchObject({
-      fixTarget: "orders", readOnlyDetail: "2 applications have no customer location.",
+      fixTarget: "orders", readOnlyDetail: "Order OR-1 has no customer location.",
+      copy: { detail: "Order OR-1 has no customer location.", instruction: blockers[0].instruction },
+      detail: `Order OR-1 has no customer location. ${blockers[0].instruction}`,
       affectedRecords: [{ id: "order-1", code: "OR-1", missing: blockers.map((blocker) => blocker.fact) }],
     });
     expect(batchHealthFixLinkFor(check, "facility").href).toBe("/orders?facility=facility&ids=order-1");
     expect(blockers.map((blocker) => blocker.fact)).toEqual([
       "Application AP-0 has no customer location.", "Application AP-1 has no customer location.",
     ]);
+  });
+
+  it("counts two distinct orders when applications share one of them", () => {
+    const applications = lineages.slice(0, 3).map((lineage, index) => ({
+      ...lineage,
+      delivery: { ...lineage.delivery, proofOfDeliveryCount: 1, customerLocationId: null },
+      order: index < 2 ? { id: "order-1", code: "OR-1" } : { id: "order-2", code: "OR-2" },
+    } as ChainOfCustodyData));
+    const blockers = buildSubmissionLineageBlockers(applications, [], {}, []);
+    const [check] = unmet(blockers);
+    expect(blockers).toHaveLength(3);
+    expect(check).toMatchObject({
+      fixTarget: "orders",
+      readOnlyDetail: "2 orders have no customer location.",
+      copy: { detail: "2 orders have no customer location.", instruction: blockers[0].instruction },
+      detail: `2 orders have no customer location. ${blockers[0].instruction}`,
+    });
+    expect(check.affectedRecords?.map(({ id }) => id)).toEqual(["order-1", "order-2"]);
+    expect(batchHealthFixLinkFor(check, "facility").href).toBe("/orders?facility=facility&ids=order-1%2Corder-2");
   });
 
   it("leaves delivery fallback blockers uncounted with every original record's copy", () => {

@@ -1,3 +1,4 @@
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 /**
  * Orders Validation Schemas
  * Zod schemas for order forms, server actions, and filtering
@@ -15,7 +16,7 @@ import {
 import { z } from "zod";
 
 /** The most orders one list request returns, and the exact-id chunk size. */
-export const MAX_ORDER_LIST_SIZE = 100;
+export const MAX_ORDER_LIST_SIZE = EXACT_ID_FILTER_MAX;
 
 // ============================================
 // Constants and Enums

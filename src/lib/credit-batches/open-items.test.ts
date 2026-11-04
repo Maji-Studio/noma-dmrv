@@ -680,7 +680,7 @@ it.each([
   { kind: "deliveryProof", fixTarget: "deliveryEvidence", messageFor: deliveryProofMessage, fact: "11 deliveries have no proof of delivery." },
   { kind: "deliveryDistance", fixTarget: "deliveryDistances", messageFor: deliveryDistanceMessage, fact: "11 deliveries have no positive transport distance." },
   { kind: "feedstockTransport", fixTarget: "feedstocks", messageFor: feedstockTransportMessage, fact: "11 feedstocks have no usable transport leg." },
-  { kind: "applicationDestination", fixTarget: "orders", messageFor: applicationDestinationMessage, fact: "11 applications have no customer location." },
+  { kind: "applicationDestination", fixTarget: "orders", messageFor: applicationDestinationMessage, fact: "11 orders have no customer location." },
 ] as const)("states the grouped $kind count without an instruction on a read-only batch", ({ kind, fixTarget, messageFor, fact }) => {
   const blockedRecordCount = 11;
   const health = deriveBatchHealth({

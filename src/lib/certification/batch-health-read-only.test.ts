@@ -90,20 +90,23 @@ describe("read-only batch health facts", () => {
     });
   });
 
-  it("counts application destination facts without their repair steps", () => {
+  it.each([
+    { secondOrderId: "order-1", fact: "Order OR-1 has no customer location." },
+    { secondOrderId: "order-2", fact: "2 orders have no customer location." },
+  ])("counts order destination facts without their repair steps: $fact", ({ secondOrderId, fact }) => {
     const first = applicationDestinationMessage("AP-1");
     const second = applicationDestinationMessage("AP-2");
     const health = deriveBatchHealth({ ...healthy, submissionLineageBlockers: [
-      { kind: "applicationDestination", instruction: first.instruction!, detail: first.message, fact: first.fact, fixTarget: "orders", record: { id: "app-1", code: "AP-1" } },
-      { kind: "applicationDestination", instruction: second.instruction!, detail: second.message, fact: second.fact, fixTarget: "orders", record: { id: "app-2", code: "AP-2" } },
+      { kind: "applicationDestination", instruction: first.instruction!, detail: first.message, fact: first.fact, fixTarget: "orders", record: { id: "order-1", code: "OR-1" } },
+      { kind: "applicationDestination", instruction: second.instruction!, detail: second.message, fact: second.fact, fixTarget: "orders", record: { id: secondOrderId, code: secondOrderId === "order-1" ? "OR-1" : "OR-2" } },
     ] });
     const unmet = health.checks.filter((check) => check.status === "unmet");
     expect(unmet).toHaveLength(1);
     const [check] = unmet;
     expect(check.fixTarget).toBe("orders");
     expect(check.issueKey).toBe("submission-orders");
-    expect(check.detail).toBe(`2 applications have no customer location. ${first.instruction}`);
-    expect(check.readOnlyDetail).toBe("2 applications have no customer location.");
+    expect(check.detail).toBe(`${fact} ${first.instruction}`);
+    expect(check.readOnlyDetail).toBe(fact);
     const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
     expect(item.detail).toBe(check.readOnlyDetail);
   });
