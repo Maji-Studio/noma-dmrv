@@ -3,6 +3,7 @@ import {
   applications,
   biocharProducts,
   certifierRemovals,
+  certificationSubmissions,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
@@ -20,6 +21,7 @@ import {
   type CertificationLineageLockEntityType,
   type CertificationLineageMutation,
 } from "@/lib/certification/lineage-lock-message";
+import { SUBMISSION_EXTERNAL_MUTATIONS, SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { recordLocks, type RecordLockRemoval } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
 import {
@@ -29,9 +31,10 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { requireOrgScope } from "./utils";
-import { readRecordLockLineage } from "./record-lock-lineage";
+import { readRecordLockLineage, type StatementReads } from "./record-lock-lineage";
 import { readRecordDependents } from "./record-lock-dependents";
 
 export type CertifiedLineageEntityType = Exclude<
@@ -42,6 +45,8 @@ export type CertifiedLineageEntityType = Exclude<
 export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
   entityId: string;
+  /** Feedstock transport follows frozen counted inputs and the current owner. */
+  transportOnly?: boolean;
 }
 
 function targetCondition(target: CertifiedLineageTarget): SQL {
@@ -68,6 +73,47 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
+/** Snapshot key written by removal-submission-build.ts (materializeRemovalSubmissionSnapshot). */
+const TRANSPORT_FEEDSTOCK_IDS_KEY = "transportFeedstockIds";
+
+function transportTargetCondition(ctx: OrgContext, target: CertifiedLineageTarget, owner: string | undefined): SQL {
+  // No eligible transport owner must retain the lock through every linked run.
+  if (!owner) return targetCondition(target);
+  // Any snapshot of the Removal that counted this record, or predates the
+  // counted list (fails closed), keeps the lock. Drafts count too: an
+  // interrupted attempt may already have reached the registry, and the lineage
+  // guard still decides whether a draft holds a lock at all. Rejected attempts
+  // with no registry mutation never reached Isometric, so cannot have counted
+  // anything and are excluded. A Removal without a snapshot is covered by the
+  // current owner. Artifact/row lock order is unchanged.
+  const countedTransport = sql<boolean>`exists (
+    select 1 from ${certificationSubmissions}
+    where ${certificationSubmissions.organizationId} = ${ctx.organizationId}
+      and ${certificationSubmissions.provider} = 'isometric'
+      and ${certificationSubmissions.localEntityType} = 'removal'
+      and ${certificationSubmissions.submissionType} = 'removal'
+      and ${certificationSubmissions.localEntityId} = ${certifierRemovals.id}
+      and not (
+        ${certificationSubmissions.status} = 'rejected'
+        and ${certificationSubmissions.externalId} is null
+        and (${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} is null
+          or ${certificationSubmissions.metadata}->>${SUBMISSION_METADATA_KEYS.externalMutation} not in (${SUBMISSION_EXTERNAL_MUTATIONS.possible}, ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}))
+        and ${certificationSubmissions.lockedAt} is null
+      )
+      and ${certificationSubmissions.payloadSnapshot} is not null
+      and (not (${certificationSubmissions.payloadSnapshot} ? ${TRANSPORT_FEEDSTOCK_IDS_KEY})
+        or (${certificationSubmissions.payloadSnapshot}->${TRANSPORT_FEEDSTOCK_IDS_KEY}) ? ${target.entityId})
+  )`;
+  return and(targetCondition(target), or(eq(productionRuns.id, owner), countedTransport))!;
+}
+
+/** Recomputed on each lineage read, including the read under artifact locks. */
+async function lineageTargetCondition(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, target: CertifiedLineageTarget): Promise<SQL> {
+  if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
+  const owner = (await getFeedstockTransportOwners(ctx, [target.entityId], tx)).get(target.entityId);
+  return transportTargetCondition(ctx, target, owner);
+}
+
 /** Records that share one master-data reference, such as a vehicle. */
 export interface CertifiedLineageTargetSet {
   feedstockIds: readonly string[];
@@ -85,13 +131,13 @@ function targetSetCondition(targets: CertifiedLineageTargetSet): SQL | undefined
   return conditions.length > 0 ? or(...conditions) : undefined;
 }
 
-function lineageQuery(
+async function lineageQuery(
   ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
   fresh = false,
 ) {
-  return resolveLineage(ctx, tx, targetCondition(target), fresh);
+  return resolveLineage(ctx, tx, await lineageTargetCondition(ctx, tx, target), fresh);
 }
 
 function lineageQueryWhere(
@@ -156,6 +202,28 @@ function lineageQueryWhere(
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), condition));
 }
 
+/** Unlocked pre-write batch targets for all candidate feedstocks in one read. */
+export async function getFeedstockLineageBatchTargets(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  feedstockIds: readonly string[],
+) {
+  requireOrgScope(ctx);
+  const targets = new Map<string, { entityType: "creditBatch"; entityId: string }[]>();
+  if (!feedstockIds.length) return targets;
+  const rows = await lineageQueryWhere(ctx, tx, inArray(feedstocks.id, [...feedstockIds]), "feedstock");
+  for (const row of rows) {
+    // The feedstock predicate excludes nulls from the lineage's left join.
+    if (row.targetId === null) continue;
+    const batches = targets.get(row.targetId) ?? [];
+    if (!batches.some(target => target.entityId === row.creditBatchId)) {
+      batches.push({ entityType: "creditBatch", entityId: row.creditBatchId });
+    }
+    targets.set(row.targetId, batches);
+  }
+  return targets;
+}
+
 /** Advisory UI read; mutations must use getLockedCertifiedLineage instead. */
 export async function getCertifiedLineage(
   ctx: OrgContext,
@@ -166,12 +234,22 @@ export async function getCertifiedLineage(
   return lineageQuery(ctx, tx, target, true);
 }
 
+/** Advisory read from saved registry facts only: no registry calls, so it stays cheap inside an open transaction. */
+export async function getSavedCertifiedLineage(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+) {
+  requireOrgScope(ctx);
+  return lineageQuery(ctx, tx, target, false);
+}
+
 type LineageRow = Awaited<ReturnType<ReturnType<typeof lineageQueryWhere>["execute"]>>[number];
 export type LockedCertifiedLineageRow = LineageRow & { recordLockRemoval: RecordLockRemoval };
 
-async function resolveLineage(ctx: OrgContext, tx: DbTransaction, condition: SQL, fresh = false): Promise<LockedCertifiedLineageRow[]> {
+async function resolveLineage(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, condition: SQL, fresh = false, options: { statementReads?: StatementReads; excludeSubmissionId?: string } = {}): Promise<LockedCertifiedLineageRow[]> {
   const rows = await lineageQueryWhere(ctx, tx, condition);
-  const facts = await readRecordLockLineage(ctx, tx, rows, fresh);
+  const facts = await readRecordLockLineage(ctx, tx, rows, fresh, options);
   const factsById = new Map(facts.map(fact => [fact.id, fact]));
   return rows.map(row => ({ ...row, recordLockRemoval: factsById.get(row.removalId)! }));
 }
@@ -209,6 +287,13 @@ export async function getLockedCertifiedLineage(
 ): Promise<LockedCertifiedLineageRow[]> {
   requireOrgScope(ctx);
   return lockLineage(tx, (fresh) => lineageQuery(ctx, tx, target, fresh));
+}
+
+/** A multi-batch entry operation locks the union in one artifact pass. */
+export async function getLockedCertifiedLineageForBatches(ctx: OrgContext, tx: DbTransaction, batchIds: readonly string[], excludeSubmissionId?: string) {
+  requireOrgScope(ctx);
+  if (!batchIds.length) return [];
+  return lockLineage(tx, (fresh) => resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), fresh, { excludeSubmissionId }));
 }
 
 /**
@@ -407,11 +492,24 @@ export async function getRecordLock(ctx: OrgContext, tx: DbTransaction, target: 
 export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, targets: readonly CertifiedLineageTarget[], options: { sentOnly?: boolean } = {}) {
   requireOrgScope(ctx);
   if (!targets.length) return [];
-  const rowsByKind = new Map(await Promise.all([...new Set(targets.map(target => target.entityType))].map(async kind => {
-    const rows = await lineageQueryWhere(ctx, tx, or(...targets.filter(target => target.entityType === kind).map(targetCondition))!, kind);
-    return [kind, rows] as const;
+  const transportTargets = targets.filter(target => target.entityType === "feedstock" && target.transportOnly);
+  const owners = transportTargets.length
+    ? await getFeedstockTransportOwners(ctx, transportTargets.map(target => target.entityId), tx)
+    : new Map<string, string>();
+  const groupKey = (target: CertifiedLineageTarget) => `${target.entityType}:${target.entityType === "feedstock" && !!target.transportOnly}`;
+  const queryGroups = new Map<string, CertifiedLineageTarget[]>();
+  for (const target of targets) {
+    const key = groupKey(target);
+    queryGroups.set(key, [...(queryGroups.get(key) ?? []), target]);
+  }
+  const rowsByGroup = new Map(await Promise.all([...queryGroups].map(async ([key, group]) => {
+    const conditions = group.map(target => {
+      if (target.entityType !== "feedstock" || !target.transportOnly) return targetCondition(target);
+      return transportTargetCondition(ctx, target, owners.get(target.entityId));
+    });
+    return [key, await lineageQueryWhere(ctx, tx, or(...conditions)!, group[0].entityType)] as const;
   })));
-  const groups = targets.map(target => rowsByKind.get(target.entityType)!.filter(row => row.targetId === target.entityId));
+  const groups = targets.map(target => rowsByGroup.get(groupKey(target))!.filter(row => row.targetId === target.entityId));
   const facts = await readRecordLockLineage(ctx, tx, groups.flat(), true);
   return Promise.all(targets.map(async (target, index) => recordLocks[target.entityType]({
     removals: facts.filter(fact => groups[index].some(row => row.removalId === fact.id)),
@@ -424,3 +522,10 @@ const LINEAGE_TARGET_COLUMNS = {
   biocharProduct: biocharProducts.id, delivery: deliveries.id, order: orders.id,
   feedstock: feedstocks.id, application: creditBatchApplications.applicationId,
 } as const;
+
+/** Advisory counterpart of the locked batch-union reader. Cache belongs to its caller. */
+export async function getCertifiedLineageForBatches(ctx: OrgContext, tx: Pick<DbTransaction, "select" | "selectDistinct">, batchIds: readonly string[], statementReads: StatementReads, excludeSubmissionId?: string) {
+  requireOrgScope(ctx);
+  if (!batchIds.length) return [];
+  return resolveLineage(ctx, tx, inArray(creditBatches.id, [...batchIds]), true, { statementReads, excludeSubmissionId });
+}

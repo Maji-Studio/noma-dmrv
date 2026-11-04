@@ -46,11 +46,11 @@ it("logs only safe identifiers and error classification when refresh fails", asy
   warn.mockRestore();
 });
 
-function statementReader(): Pick<DbTransaction, "select"> {
+function statementReader(status = "FAILED_VERIFICATION"): Pick<DbTransaction, "select"> {
   let reads = 0;
   const common = { createdAt: null, lockedAt: null, status: "submitted" };
   const removal = { ...common, id: "removal-submission", localEntityId: "removal", externalId: "entry", submittedAt: new Date("2026-10-01"), metadata: {} };
-  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: "FAILED_VERIFICATION" } };
+  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: status } };
   return { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [removal] : [statement]) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
 }
 
@@ -63,4 +63,40 @@ it("keeps Sent without making a request when the transaction has no refresh budg
   const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: "statement" }], true);
   expect(isSentRemoval(removal)).toBe(true);
   expect(getGhgStatement).not.toHaveBeenCalled();
+});
+
+it("discovers a Certify web verifier submission from an unmarked saved DRAFT", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader("DRAFT"), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(isSentRemoval(removal)).toBe(false);
+});
+
+it.each(["VERIFIED", "CREDITS_ISSUED", "AWAITING_VERIFICATION", "UNKNOWN"])("does not refresh a saved %s statement on fresh reads", async (status) => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader(status), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(getGhgStatement).not.toHaveBeenCalled();
+  expect(removal.statements[0]).toMatchObject({ status, fresh: false });
+  expect(isSentRemoval(removal)).toBe(true);
+});
+it("shares statement requests across readers only with an explicit request cache", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
+  const statementReads = new Map();
+  await Promise.all([statementReader(), statementReader()].map((tx) => readRecordLockLineage(makeTestOrgContext(), tx,
+    [{ removalId: "removal", ghgStatementId: "statement" }], true, { statementReads })));
+  expect(getGhgStatement).toHaveBeenCalledTimes(1);
+});
+
+
+it.each(["eligible", "unrelated", "remote-mutation", "in-flight", "ordinary-read"])("excludes only a validated refresh predecessor for its successor: %s", async (condition) => {
+  const common = { createdAt: null, submittedAt: null, externalId: null, localEntityId: "removal", payloadHash: "hash" };
+  const predecessor = { ...common, id: "predecessor", version: 2, status: "draft", lockedAt: condition === "in-flight" ? new Date() : new Date(0),
+    metadata: { externalMutation: condition === "remote-mutation" ? "possible" : "none", evidenceRefreshCandidates: [] } };
+  const current = { ...common, id: "current", version: 3, status: "draft", lockedAt: new Date(), metadata: { supersedePreviousId: condition === "unrelated" ? "other" : predecessor.id } };
+  let reads = 0;
+  const tx = { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [predecessor, current] : []) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: null }], false,
+    condition === "ordinary-read" ? {} : { excludeSubmissionId: current.id });
+  expect(removal.submissions.map(row => row.id)).toEqual(condition === "eligible" ? [] : condition === "ordinary-read" ? [predecessor.id, current.id] : [predecessor.id]);
 });

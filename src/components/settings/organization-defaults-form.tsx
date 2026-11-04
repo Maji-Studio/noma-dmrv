@@ -1,16 +1,20 @@
 /**
- * OrganizationDefaultsForm — the organization's operating defaults.
+ * OrganizationDefaultsForm — the organization's operating defaults, on
+ * Settings, General.
  *
  * Every field here seeds a form field somewhere else and nothing more: the
  * per-record value stays editable, and changing a default never rewrites a
  * saved record. That is the whole contract, and the helper text on each field
  * says which record it seeds, because a settings field whose consequence is
  * invisible is one an operator cannot reason about.
+ *
+ * Two groups (Q12): what new facilities start with (country, timezone) and
+ * what new records start with (evidence method, packaging). Members read the
+ * same values without the controls.
  */
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 import {
   ChoiceCardGroup,
@@ -21,7 +25,8 @@ import {
   SegmentedControl,
   ServerError,
 } from "@/components/forms";
-import { EmptyState } from "@/components/ui";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
+import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import type { OrganizationDefaults } from "@/config/organization-settings";
@@ -31,6 +36,7 @@ import {
 } from "@/hooks/use-organization-settings";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { isValidIanaTimezone } from "@/lib/timezones";
+import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
   APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS,
   formatApplicationEvidenceMethod,
@@ -44,7 +50,7 @@ import {
   type OrganizationSettingsInput,
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { EVIDENCE_METHOD_ART } from "@/components/applications";
 
 // A default evidence method decides which evidence every new application asks
@@ -60,6 +66,9 @@ const PACKAGING_LABELS: Record<PackagingType, string> = {
   loose: "Loose",
   bagged: "Bagged",
 };
+
+const NEW_FACILITIES_TITLE = "New facilities start with";
+const NEW_RECORDS_TITLE = "New records";
 
 const PACKAGING_OPTIONS = packagingTypes.map((type) => ({
   value: type,
@@ -83,14 +92,7 @@ export function OrganizationDefaultsForm() {
   const { defaults, viewerCanManage } = query.data;
 
   if (!viewerCanManage) {
-    return (
-      <EmptyState
-        icon={<SlidersHorizontalIcon size={32} />}
-        title="Only Organization Owners and Admins can change operating defaults"
-        description="Ask one to make changes."
-        padding="sm"
-      />
-    );
+    return <DefaultsReadView defaults={defaults} />;
   }
 
   // Keyed on the loaded values: react-hook-form reads `defaultValues` once, so
@@ -101,6 +103,7 @@ export function OrganizationDefaultsForm() {
 function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
   const toast = useToast();
   const saveMutation = useSaveOrganizationDefaults();
+  const formId = useId();
   const [serverError, setServerError] = useState("");
 
   const {
@@ -108,6 +111,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
     register,
     handleSubmit,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<OrganizationSettingsInput, unknown, OrganizationSettingsValues>({
     resolver: zodResolver(organizationSettingsFormSchema),
@@ -128,6 +133,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const defaultTimezone =
     (useWatch({ control, name: "defaultTimezone" }) as string | null | undefined) ??
     undefined;
@@ -142,20 +148,22 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       await saveMutation.mutateAsync(values);
       toast.success("Operating defaults saved.");
     } catch (error) {
-      setServerError(
+      setServerError(refuseSave(
+        error,
         error instanceof Error
           ? error.message
           : "The operating defaults were not saved. Try again.",
-      );
+      ) ?? "");
     }
   }
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-preview flex flex-col gap-24"
     >
-      <FormSection title="Region" divider={false}>
+      <FormSection title={NEW_FACILITIES_TITLE} divider={false}>
         <div className="grid grid-cols-1 gap-x-16 gap-y-16">
         <FormField
           id="default-country"
@@ -203,7 +211,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
         </div>
       </FormSection>
 
-      <FormSection title="New records">
+      <FormSection title={NEW_RECORDS_TITLE}>
         <FormField
           id="default-evidence-method"
           label="Application evidence"
@@ -235,18 +243,35 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
         </FormField>
       </FormSection>
 
-      <p className="body-caption text-[var(--color-text-tertiary)]">
-        These only seed new records. Nothing already saved changes.
-      </p>
-
       <FormActions
         control={control}
         isSubmitting={saveMutation.isPending}
         errorMessage={serverError}
         submitLabel="Save defaults"
-        submittingLabel="Saving…"
         sticky={false}
       />
     </form>
+  );
+}
+
+/** The same values for a viewer who cannot change them. */
+function DefaultsReadView({ defaults }: { defaults: OrganizationDefaults }) {
+  const timezone = isValidIanaTimezone(defaults.defaultTimezone)
+    ? formatTimezoneLabel(defaults.defaultTimezone)
+    : null;
+  return (
+    <div className="content-measure-preview flex flex-col gap-24">
+      <DetailSection title={NEW_FACILITIES_TITLE} divider={false}>
+        <DetailField label="Country" value={defaults.defaultCountry} emptySituation="notSet" />
+        <DetailField label="Timezone" value={timezone} emptySituation="notSet" />
+      </DetailSection>
+      <DetailSection title={NEW_RECORDS_TITLE}>
+        <DetailField
+          label="Application evidence"
+          value={formatApplicationEvidenceMethod(defaults.defaultEvidenceMethod)}
+        />
+        <DetailField label="Order packaging" value={PACKAGING_LABELS[defaults.defaultPackaging]} />
+      </DetailSection>
+    </div>
   );
 }

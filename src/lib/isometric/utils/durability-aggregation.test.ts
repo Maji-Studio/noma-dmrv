@@ -7,9 +7,17 @@ import {
   resolveConservativeSoilTemperature,
   resolveFacilityReferenceSoilTemperature,
   resolveSoilTemperatureScope,
+  weightedBatchChemistry,
   type CreditBatchDurabilityInput,
   type FacilityReferenceSoilTemperature,
 } from "./durability-aggregation";
+
+const VALID_CHEMISTRY_RATIO = 0.3;
+const NEGATIVE_CHEMISTRY_RATIO = -0.3;
+const WEIGHTED_TEST_MASS_KG = 100;
+const TEST_ORGANIC_CARBON_PERCENT = 80;
+const TEST_ASH_PERCENT = 10;
+const TEST_MOISTURE_PERCENT = 20;
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -30,6 +38,30 @@ function batch(
 ): CreditBatchDurabilityInput {
   return { creditBatchId, creditBatchCode, runs, samples };
 }
+
+describe("weightedBatchChemistry", () => {
+  it("excludes negative H/C_org and O/C_org replicates from weighted ratios only", () => {
+    const ratios = [VALID_CHEMISTRY_RATIO, VALID_CHEMISTRY_RATIO,
+      VALID_CHEMISTRY_RATIO, NEGATIVE_CHEMISTRY_RATIO];
+    const result = weightedBatchChemistry([batch("batch-1", "CB-1",
+      [{ id: "run-1", biocharDryMassKg: WEIGHTED_TEST_MASS_KG }],
+      ratios.map(ratio => sample({
+        hToCOrgRatio: ratio,
+        oToCOrgRatio: ratio,
+        organicCarbonPercent: TEST_ORGANIC_CARBON_PERCENT,
+        ashContentPercent: TEST_ASH_PERCENT,
+        moistureContentPercent: TEST_MOISTURE_PERCENT,
+      })),
+    )]);
+    expect(result.weightedHToCorgRatio).toBeCloseTo(VALID_CHEMISTRY_RATIO);
+    expect(result.weightedOToCorgRatio).toBeCloseTo(VALID_CHEMISTRY_RATIO);
+    expect(result).toMatchObject({
+      weightedOrganicCarbonPercent: TEST_ORGANIC_CARBON_PERCENT,
+      weightedAshPercent: TEST_ASH_PERCENT,
+      weightedMoisturePercent: TEST_MOISTURE_PERCENT,
+    });
+  });
+});
 
 describe("buildPerBatchDurabilityData (credit-batch grain, ADR 0016)", () => {
   it("produces one datapoint per credit batch with pooled replicate means and sample std-dev", () => {
@@ -384,5 +416,25 @@ describe("buildSoilTemperatureGate (200-year-scoped blocker + advisory)", () => 
     });
     expect(gate.blockers).toEqual([]);
     expect(gate.warnings).toEqual([]);
+  });
+});
+
+
+describe("unusable H/C_org aggregation", () => {
+  it("excludes negative ratios but retains zero and non-ratio chemistry", () => {
+    const [result] = buildPerBatchDurabilityData([batch("batch", "CB-1", [], [
+      sample({ hToCOrgRatio: -0.6, totalCarbonPercent: 60 }),
+      sample({ hToCOrgRatio: 0, totalCarbonPercent: 80 }),
+      sample({ hToCOrgRatio: 0.6, totalCarbonPercent: 100 }),
+    ])]);
+    expect(result).toMatchObject({ sampled: true, replicateCount: 2,
+      hToCorgRatio: { mean: 0.3 }, totalCarbonPercent: { mean: 80 } });
+  });
+
+  it("treats a batch with only negative ratios as unsampled", () => {
+    const [result] = buildPerBatchDurabilityData([batch("batch", "CB-1", [], [
+      sample({ hToCOrgRatio: -0.3 }),
+    ])]);
+    expect(result).toMatchObject({ sampled: false, replicateCount: 0, hToCorgRatio: null });
   });
 });

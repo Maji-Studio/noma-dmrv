@@ -1,8 +1,8 @@
 /**
  * CreditBatchEmissionsPanel: the batch sheet's "Emissions" section. It lists
- * the template lines that still need an operator (Not recorded, File missing,
- * Needs review, Needs setup) and links to the Emissions page for the batch.
- * Self-fetching and read-only; recording happens on the Emissions page.
+ * the template components that still need an operator (Not recorded, File missing,
+ * Check entry, Not set up) and links to the batch page's Emissions tab.
+ * Self-fetching and read-only; recording happens on the batch page's Emissions tab.
  */
 "use client";
 
@@ -10,12 +10,15 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SectionLabel } from "@/components/forms/section-label";
 import { Notice } from "@/components/ui/notice";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 // By file, not the emissions barrel: the batch sheet needs only these.
 import { EmissionLineBadge } from "@/components/emissions/emission-line-badge";
 import { isOpen } from "@/components/emissions/emission-line-display";
-import { emissionsBatchHref } from "@/components/emissions/emissions-overview-query";
+import { TemplateSetupNotice } from "@/components/emissions/template-setup-notice";
+import { recordHref } from "@/lib/record-links";
 import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
+import { isEmissionLinesBlocked } from "@/lib/certification/emission-lines-blocked-error";
 import { cn } from "@/lib/utils";
 import { SheetLinkRows } from "@/components/ui/sheet-link-row";
 
@@ -23,7 +26,7 @@ const OPEN_EMISSIONS_LABEL = "Open emissions";
 
 function OpenEmissionsLink({ creditBatchId, facilityId }: { creditBatchId: string; facilityId: string }) {
   return (
-    <Link href={emissionsBatchHref(creditBatchId, { facility: facilityId })} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
+    <Link href={recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" })} className={cn(buttonVariants({ variant: "weak", size: "small" }), "shrink-0")}>
       {OPEN_EMISSIONS_LABEL}
       <ArrowRightIcon size={14} aria-hidden />
     </Link>
@@ -42,26 +45,32 @@ function PanelSection({ children }: { children: React.ReactNode }) {
 export function CreditBatchEmissionsPanel({
   creditBatchId,
   facilityId,
-  enabled,
+  readOnly = false,
 }: {
   creditBatchId: string;
   facilityId: string;
-  /** The server's EMISSIONS_ENTRIES_ENABLED flag, passed down by the page. */
-  enabled: boolean;
+  /** A read-only batch states a template problem and offers no repair link. */
+  readOnly?: boolean;
 }) {
   const { data: lines, isLoading, error, refetch, isRefetching } = useBatchEmissionLines(
-    enabled && facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
+    facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
   );
-  if (!enabled) return null;
 
+  if (isEmissionLinesBlocked(error)) {
+    return (
+      <PanelSection>
+        <TemplateSetupNotice blocker={error.blocker} facilityId={facilityId} creditBatchId={creditBatchId} readOnly={readOnly} />
+      </PanelSection>
+    );
+  }
   if (error) {
     return (
       <PanelSection>
         <Notice
           tone="warning"
-          action={<Button variant="weak" size="small" busy={isRefetching} onClick={() => void refetch()}>Retry</Button>}
+          action={<Button variant="weak" size="small" busy={isRefetching} onClick={() => void refetch()}>{TRY_AGAIN_LABEL}</Button>}
         >
-          Emissions lines unavailable. Retry to load them.
+          Emissions lines unavailable. Try again to load them.
         </Notice>
       </PanelSection>
     );
@@ -81,7 +90,7 @@ export function CreditBatchEmissionsPanel({
         <div className="flex items-center justify-between gap-12">
           <span className="flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
             <CheckCircleIcon size={16} weight="bold" aria-hidden />
-            All lines recorded
+            All components recorded
           </span>
           <OpenEmissionsLink creditBatchId={creditBatchId} facilityId={facilityId} />
         </div>
@@ -93,7 +102,7 @@ export function CreditBatchEmissionsPanel({
     <PanelSection>
       <div className="flex flex-col gap-8">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {open.length} of {lines.length} {lines.length === 1 ? "line" : "lines"} still open
+          {open.length} of {lines.length} {lines.length === 1 ? "component" : "components"} still open
         </span>
         <SheetLinkRows>
           {open.map((line) => (

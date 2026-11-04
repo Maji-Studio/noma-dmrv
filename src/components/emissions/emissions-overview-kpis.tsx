@@ -11,6 +11,7 @@ import { CheckCircleIcon, FileXIcon, ListChecksIcon, WarningIcon } from "@phosph
 import { StatCard } from "@/components/ui";
 import type { FacilityEmissionsOverviewBatch } from "@/hooks/use-emissions-overview";
 import { formatCount } from "@/lib/copy-utils";
+import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import {
   emissionsOverviewHref,
@@ -41,7 +42,7 @@ export function EmissionsOverviewKpis({ facet, query, facilityId, isLoading }: E
   const tiles: { status: BatchStatusFilter; title: string; value: number; description: string; icon: React.ReactNode }[] = [
     {
       status: "open",
-      title: "Lines open",
+      title: "Components open",
       value: sum((batch) => batch.lineCounts.open),
       description: inBatches(count("open")),
       icon: <ListChecksIcon size={ICON_SIZE} weight="bold" />,
@@ -55,7 +56,7 @@ export function EmissionsOverviewKpis({ facet, query, facilityId, isLoading }: E
     },
     {
       status: "review",
-      title: "Needs review",
+      title: EMISSION_LINE_STATE_LABELS.needsReview,
       value: sum((batch) => batch.lineCounts.needsReview),
       description: inBatches(count("review")),
       icon: <WarningIcon size={ICON_SIZE} weight="bold" />,
@@ -64,7 +65,7 @@ export function EmissionsOverviewKpis({ facet, query, facilityId, isLoading }: E
       status: "done",
       title: "Done",
       value: done,
-      description: done === 1 ? "Credit batch, all lines recorded" : "Credit batches, all lines recorded",
+      description: done === 1 ? "Credit batch, all components recorded" : "Credit batches, all components recorded",
       icon: <CheckCircleIcon size={ICON_SIZE} weight="bold" />,
     },
   ];

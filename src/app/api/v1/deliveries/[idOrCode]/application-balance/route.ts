@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.deliveries.application-balance.get",
   const body = await readDeliveryApplicationBalance(request, ctx, idOrCode);
   headers.set("ETag", bodyHashEtag(DELIVERY_APPLICATION_BALANCE_REPRESENTATION_REVISION, body.data));
   return Response.json(body, { headers });
-});
+}, { audience: "rest" });

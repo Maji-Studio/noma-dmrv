@@ -1,8 +1,9 @@
 "use client";
 
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
+import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { WET_STOCK_DEFINITION } from "@/lib/output-stock/labels";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockAllocationView } from "@/types/output-stock";
 import type { ReactNode } from "react";
@@ -10,7 +11,7 @@ import { batchSegments, formatDryKeyMass, formatWetEstimate } from "./stock-prev
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
-  "Dry biochar is the tracked quantity. Wet stock is the mass added less the mass taken out; only a count sets moisture again. Stock stays available to every order until a delivery records the bin it left.";
+  `Dry biochar is the tracked quantity. ${WET_STOCK_DEFINITION} Stock stays available to every order until a delivery records the bin it left.`;
 
 /**
  * Which batches a draw touched, and which run produced each one.
@@ -48,7 +49,7 @@ export function OutputStockAllocations({ allocations }: { allocations: OutputSto
  *
  * Same shape as the movement blocks: caption, one headline figure, the batches
  * the bin holds as one bar and its key, then one action row. Under a wet
- * headline the tracked dry stock is a secondary line at both levels. There is no before and after because nothing
+ * headline the tracked dry stock is a secondary line. There is no before and after because nothing
  * is moving yet.
  *
  * Operators plan loads in wet mass, so the headline is the wet estimate when a
@@ -67,22 +68,23 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
   // A spent batch holds nothing to order against, so it stays off the block.
   const held = allocations.filter(allocation => allocation.dryMassKg > 0);
   const segments = batchSegments(held);
-  const dry = dryKg == null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
+  // Dry stock is a balance, so without one the headline is left out.
+  const dry = dryKg == null ? null : `${formatMassKg(dryKg)} dry biochar`;
   return (
     <CompositionCard
       title={binName}
       hint={AVAILABILITY_HINT}
       actions={actions}
-      calculation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
+      explanation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
       headline={wetEstimate
         ? <DerivedHeadline
             label="Available wet stock, estimate"
-            value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`}
-            // Dry stock is a balance, not a calculation: a secondary line at both levels.
-            secondary={{ label: "Available dry stock", value: dryKg == null ? null : formatMassKg(dryKg) }}
+            value={`${formatWetEstimate(wetEstimate.kg)} kg wet mass`}
+            // Dry stock is a balance, not a calculation: a secondary line.
+            secondary={{ label: DRY_BIOCHAR_LABEL, value: dryKg == null ? null : formatMassKg(dryKg) }}
             sub={wetEstimate.basis}
           />
-        : <DerivedHeadline label="Available dry stock" value={dry} />}
+        : <DerivedHeadline label="Available dry biochar" value={dry} />}
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />

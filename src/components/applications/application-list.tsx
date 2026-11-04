@@ -1,33 +1,39 @@
 "use client";
 
+import { recordHref, APPLICATION_DEEP_LINK_PARAM } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 /**
  * ApplicationList component
  * Displays application records in a DataTable with create/edit/delete
  * Includes stat cards, search, and pagination
  */
-
-
-import { applicationDeepLinkHref } from "@/lib/application-links";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { useLinkedApplicationDelivery } from "@/hooks/use-linked-application-delivery";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
+import { DRY_BIOCHAR_LABEL, WET_PRODUCT_LABEL } from "@/components/biochar-products/product-composition-components";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { Application } from "@/db/schema/application";
 import type { ApplicationListItem } from "@/data-access/applications";
 import {
   applicationKeys,
   useApplicationDeliveryOptions,
   useApplications,
+  useApplicationStats,
   useCreateApplication,
   useDeleteApplication,
   useUpdateApplication,
@@ -41,13 +47,13 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { APPLICATION_DEEP_LINK_PARAM } from "@/lib/application-links";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatCalendarDate, formatDateRange } from "@/lib/format-utils";
-import { sumNullableBy } from "@/lib/nullable-sum";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
+import { formatCalendarDate } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
@@ -63,7 +69,14 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
-import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
+import { applicationTonsToKg, formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
+
+/** Record details an operator can add from the Columns menu. */
+const APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT = {
+  deliveryCode: false,
+  cropType: false,
+  fieldIdentifier: false,
+};
 
 // ============================================
 // Column Definitions
@@ -73,12 +86,11 @@ function createColumns(
   onEdit: (application: ApplicationListItem) => void,
   onDelete: (applicationId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ApplicationListItem>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -93,6 +105,12 @@ function createColumns(
       ),
     },
     {
+      accessorKey: "deliveryCode",
+      meta: { nowrap: true },
+      header: "Delivery",
+      cell: ({ row }) => <span>{row.original.deliveryCode}</span>,
+    },
+    {
       id: "customer",
       header: "Customer / location",
       accessorFn: (row) => `${row.customerName ?? ""} ${row.locationName ?? ""}`.trim(),
@@ -101,7 +119,8 @@ function createColumns(
         return (
           <div className="flex flex-col">
             <span className="text-[var(--color-text-primary)]">
-              {customerName ?? MISSING_VALUE.notAvailable}
+              {/* A delivery without an order has no customer: the relation was never chosen. */}
+              {customerName ?? MISSING_VALUE.notSet}
             </span>
             {locationName && (
               <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
@@ -134,6 +153,16 @@ function createColumns(
       cell: ({ row }) => (
         <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
+    },
+    {
+      accessorKey: "cropType",
+      header: "Crop type",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.cropType ?? MISSING_VALUE.notRecorded}</span>,
+    },
+    {
+      accessorKey: "fieldIdentifier",
+      header: "Field identifier",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.fieldIdentifier ?? MISSING_VALUE.notRecorded}</span>,
     },
     {
       accessorKey: "applicationMethodType",
@@ -173,7 +202,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<ApplicationListItem>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -211,29 +239,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const [affectedApplicationIdsParam, setAffectedApplicationIdsParam] =
-    useQueryState(
-      "ids",
-      parseAsString.withOptions({ shallow: true, history: "replace" }),
-    );
-  const affectedApplicationFilter = parseExactIdFilter(
-    affectedApplicationIdsParam,
-  );
-  const affectedApplicationIds = affectedApplicationFilter.ids;
-  useEffect(() => {
-    if (
-      affectedApplicationIdsParam &&
-      affectedApplicationFilter.normalized !== affectedApplicationIdsParam
-    ) {
-      void setAffectedApplicationIdsParam(
-        affectedApplicationFilter.normalized,
-      );
-    }
-  }, [
-    affectedApplicationFilter.normalized,
-    affectedApplicationIdsParam,
-    setAffectedApplicationIdsParam,
-  ]);
+  const {
+    ids: affectedApplicationIds,
+    normalized: affectedApplicationNormalized,
+    clear: clearAffectedApplicationIds,
+  } = useExactIdFilterParam();
   // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
   // input, so the form section and detail row are hidden under 1000-year.
   // Fall back to 200-year while facility context resolves: showing the field
@@ -256,22 +266,27 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     APPLICATION_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
-  const focusedQueryEnabled = !!contextFacilityId && !!focusedApplicationId;
+  const focusedQueryEnabled = !!focusedApplicationId;
+  // An application whose facility was archived is read too, and opens read only.
   const focusedApplication = useApplications(
-    contextFacilityId && focusedApplicationId
-      ? { facilityId: contextFacilityId, ids: [focusedApplicationId] }
+    focusedApplicationId
+      ? { ids: [focusedApplicationId], includeArchived: true }
       : undefined,
     { enabled: focusedQueryEnabled },
   );
   const focusedApplicationItem =
     focusedApplication.data?.items.find((item) => item.id === focusedApplicationId) ?? null;
+  const linkedRecord = useLinkedRecordFacility(focusedApplicationItem, focusedApplication.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const focusedApplicationMissing =
     focusedQueryEnabled &&
     !focusedApplication.isLoading &&
     (focusedApplication.error != null || focusedApplicationItem == null);
-  const displaySideSheet =
-    sideSheet ??
-    (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedApplicationId && !linkedFacilityReady && !localSideSheet ? null :
+    localSideSheet ??
+    (linkedFacilityReady && focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 
   const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("application", displaySideSheet?.entity?.id);
@@ -287,7 +302,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const [evidenceFilter, setEvidenceFilter] = useState<ApplicationEvidenceMethod | "">("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(
-      `${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedApplicationFilter.normalized ?? ""}`,
+      `${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedApplicationNormalized ?? ""}`,
     );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
@@ -336,13 +351,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
-    executeCreate: async (data: ApplicationFormData) => {
+    executeCreate: async ({ data }: { data: ApplicationFormData; onRefusal: SaveRefusalHandler }) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
         throw new Error(result.error || "Application was not created. Check the form.");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
+        facilityId: contextFacilityId ?? "",
         deliveryCode: "",
         allocationShares: [],
         heldOutOfCredits: false,
@@ -359,8 +375,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Application was not created. Check the form.",
+    getCreateErrorMessage: (error, { onRefusal }) => {
+      return onRefusal(error, error instanceof Error ? error.message : "Application was not created. Check the form.");
+    },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this application.",
     openEditOnFailure: (application) =>
@@ -376,9 +393,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
   // Handlers
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = (data: ApplicationFormData, onRefusal: SaveRefusalHandler) =>
+    createWithEvidence.handleCreate({ data, onRefusal });
 
-  const handleUpdate = async (data: ApplicationFormData) => {
+  const handleUpdate = async (data: ApplicationFormData, onRefusal: SaveRefusalHandler, onCommitted: (record: Application) => void) => {
     if (!displaySideSheet?.entity) return;
     const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
@@ -402,10 +420,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           );
           if (!flushResult.ok) {
             // The update itself committed, so the still-open sheet has to adopt
-            // the version it wrote. Leaving the opened-on snapshot in place
+            // the version and form defaults it wrote, preserving typed input.
+            // Leaving the opened-on snapshot in place
             // would get the operator's next Save refused as stale against
             // their own write (#768).
             const saved = result.data;
+            onCommitted({ ...displaySideSheet.entity, ...saved });
             setSideSheet((prev) =>
               prev?.entity && prev.entity.id === applicationId
                 ? { ...prev, entity: { ...prev.entity, ...saved } }
@@ -439,7 +459,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         );
       }
     } catch (error) {
-      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Application was not saved. Try again.")));
     }
   };
 
@@ -467,6 +487,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const openCreate = () => {
+    createApplication.startDraft();
     void setFocusedApplicationId(null);
     setCreateError(null);
     setUpdateError(null);
@@ -495,9 +516,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Memoize columns
   const items = applications?.items ?? [];
   const applicationLocks = useRecordLocks("application", items.map((item) => item.id));
-  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks, applicationLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, applicationLocks.locks);
   const deliveryOptions = scopedDeliveries ?? deliveries;
-  const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -505,7 +525,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     isLoading,
     setCurrentPage,
   });
-  const totalBiochar = sumNullableBy(items, (item) => item.biocharAppliedTons);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useApplicationStats(contextFacilityId || undefined, { enabled: !!contextFacilityId });
 
   const hasActiveFilters =
     !!searchQuery ||
@@ -518,30 +538,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     setStatusFilter("");
     setEvidenceFilter("");
     setCreditBatchFilter(null);
-    setAffectedApplicationIdsParam(null);
+    void clearAffectedApplicationIds();
     setCurrentPage(1);
   };
-
-  if (!contextFacilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="distribution"
-          title="Applications"
-          subtitle="Field applications of biochar to soil"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container-max py-32">
-        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
 
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
@@ -565,16 +564,83 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       : sideSheetEntity
         ? formatCalendarDate(sideSheetEntity.applicationDate)
         : undefined;
+  // An archived facility's delivery is not among the working facility's options:
+  // its linked read serves the read-only view and never feeds the form.
+  const archivedLink = linkedRecord.readOnly?.reason === "archived" && sideSheetEntity?.facilityId === linkedRecord.readOnly.facilityId;
+  const archivedDeliveryRead = useLinkedApplicationDelivery(sideSheetEntity?.id ?? "", archivedLink);
+  const archivedDelivery = archivedDeliveryRead.data;
   const sideSheetDelivery = sideSheetEntity
-    ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
+    ? archivedLink
+      ? archivedDelivery ?? undefined
+      : deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
     : undefined;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "application");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={(mode) =>
+        setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
+      }
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      canEdit={fieldsEditable && isRecordEditable(sheetLock)}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
+      editLabel="Edit application"
+      readOnly={sheetReadOnly}
+      size="wide"
+      sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, deliveryRead: archivedLink ? archivedDeliveryRead : undefined, lock: applicationLock, durabilityOption, readOnly: !!sheetReadOnly }) : undefined}
+    >
+      <ApplicationForm
+        key={sideSheetEntity?.id ?? "create"}
+        application={sideSheetEntity ?? undefined}
+        lock={sheetLock}
+        deliveries={deliveryOptions}
+        durabilityOption={durabilityOption}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
+        errorMessage={createError || updateError || undefined}
+        deferredAttachments={deferredAttachments}
+      />
+    </EntitySideSheet>
+  );
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Applications"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
+        {sideSheetElement}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-max py-32">
+        <ServerError message={error.message || "The applications could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
 
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="records"
         title="Applications"
-        subtitle="Field applications of biochar to soil"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -587,22 +653,35 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total applications"
-          value={totalApplications}
+          value={statsData?.totalApplications ?? 0}
+          description="All applications in this facility"
           icon={<MapPinIcon size={24} weight="bold" />}
-          description="Field applications"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Biochar applied"
-          value={formatApplicationKgFromTons(totalBiochar)}
+          title="Applied mass"
+          value={
+            <MassPair
+              wetKg={applicationTonsToKg(statsData?.totalBiocharAppliedTons)}
+              dryKg={applicationTonsToKg(statsData?.totalBiocharAppliedDryTons)}
+              wetLabel={WET_PRODUCT_LABEL}
+              dryLabel={DRY_BIOCHAR_LABEL}
+            />
+          }
+          valueLayout="breakdown"
+          description="Only applications marked Applied"
           icon={<LeafIcon size={24} weight="bold" />}
-          description="Biochar applied on this page"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
+      <RecordLockListNotice read={applicationLocks} />
+
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={APPLICATION_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={items}
         enableSorting={false}
@@ -621,7 +700,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => applicationDeepLinkHref(row.id, contextFacilityId)}
+        getRowHref={(row) => recordHref("application", row.id, { facilityId: contextFacilityId })}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -653,12 +732,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       >
         <DataTable.Toolbar>
           {affectedApplicationIds.length > 0 && (
-            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
-              {affectedApplicationIds.length} affected{" "}
-              {affectedApplicationIds.length === 1
-                ? "application"
-                : "applications"}
-            </span>
+            <AffectedRecordsChip
+                count={affectedApplicationIds.length}
+                singular="application"
+                plural="applications"
+              />
           )}
           <DataTable.Search
             placeholder="Search applications..."
@@ -676,7 +754,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -724,9 +802,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <DataTable.Pagination />
       </DataTable>
 
-      {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingApplicationId}
@@ -738,41 +813,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           setDeleteError(null);
         }}
         isPending={deleteApplication.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        detailToggle
-        detailScope={sideSheetEntity?.id ?? "create"}
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={(mode) =>
-          setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
-        }
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        canEdit={fieldsEditable && isRecordEditable(sheetLock)}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying })}
-        editLabel="Edit application"
-        size="wide"
-        sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
-      >
-        <ApplicationForm
-          key={sideSheetEntity?.id ?? "create"}
-          application={sideSheetEntity ?? undefined}
-          lock={sheetLock}
-          deliveries={deliveryOptions}
-          durabilityOption={durabilityOption}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
-          errorMessage={createError || updateError || undefined}
-          deferredAttachments={deferredAttachments}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

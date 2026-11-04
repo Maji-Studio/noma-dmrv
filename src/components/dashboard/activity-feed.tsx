@@ -8,14 +8,15 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardActivityItem } from "@/data-access/dashboard-overview";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate, formatFacilityDay } from "@/lib/format-utils";
 import { DashboardPanel } from "./dashboard-panel";
 
 interface ActivityFeedProps {
   activity: DashboardActivityItem[];
+  timeZone: string;
 }
 
-export function ActivityFeed({ activity }: ActivityFeedProps) {
+export function ActivityFeed({ activity, timeZone }: ActivityFeedProps) {
   return (
     <DashboardPanel
       title="Recent activity"
@@ -45,7 +46,7 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
                 className="group grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-12 py-12"
               >
                 <span className="body-caption whitespace-nowrap text-[var(--color-text-tertiary)]">
-                  {formatDate(item.dateIso.slice(0, 10))}
+                  {item.calendarDay ? formatCalendarDate(item.dateIso) : formatFacilityDay(item.dateIso, timeZone)}
                 </span>
                 <span className="body-small truncate text-[var(--color-text-primary)]">
                   {item.title}

@@ -1,6 +1,9 @@
 "use server";
 
+import { getFormulationStats as getFormulationStatsData, type FormulationStats } from "@/data-access/formulation-stats";
+
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Formulations Server Actions
@@ -23,8 +26,26 @@ import {
   formulationFilterSchema,
 } from "@/schemas/formulations";
 import type { ActionResult } from "@/types/actions";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "formulation action failed";
+
+const formulationStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getFormulationStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<FormulationStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = formulationStatsFilterSchema.parse(filters);
+    return getFormulationStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load formulation stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "formulation:stats" } },
+  });
+}
 
 // ============================================
 // Formulation List/Query Operations
@@ -73,12 +94,13 @@ export async function getFormulationByIdFn(
  * Create a new formulation with optional ingredients
  */
 export async function createFormulationFn(
-  data: z.infer<typeof createFormulationSchema>
+  data: z.infer<typeof createFormulationSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<FormulationWithIngredients>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createFormulationSchema.parse(data);
 
-    const formulation = await runOperationInProcess(createFormulation, ctx, {
+    const formulation = await create(createFormulation, {
       name: validated.name,
       biocharRatio: validated.biocharRatio ?? null,
       description: validated.description || null,
@@ -86,7 +108,7 @@ export async function createFormulationFn(
     });
 
     return formulation;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create formulation",
     log: { message: LOG_MESSAGE, context: { op: "formulation:create" } },
   });

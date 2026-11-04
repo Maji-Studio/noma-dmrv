@@ -8,9 +8,9 @@
  * entered and takes the lab value only without oxygen; this line shows the
  * figure that will be saved, so an operator can see which one applies.
  *
- * The two figures are the block's headline, shown at both levels. Detailed
- * adds the atomic formulas with this sample's own numbers behind
- * `Show calculation`, the same way the moisture split discloses its arithmetic.
+ * The two figures are the block's headline. The atomic formulas with this
+ * sample's own numbers open from the caption's (i), the same way the moisture
+ * split explains its arithmetic.
  */
 "use client";
 
@@ -21,13 +21,36 @@ import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatSampleRatio, SAMPLE_RATIO_MOLAR_MASS as MOLAR_MASS } from "@/lib/calculations/sample-ratios";
 
+/**
+ * Why a ratio has no figure when every entry it needs is filled: the values
+ * give no usable ratio (a negative entry, or an organic carbon too small to
+ * divide by). The label and its CERT tag stay with this reason.
+ */
+export const RATIO_NOT_CALCULABLE = "Cannot be calculated from these values";
+
 function formatRatio(value: number | null): string {
   return value == null ? MISSING_VALUE.notRecorded : formatSampleRatio(value);
 }
 
-function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
+/** Why a ratio has no figure: the entries it is calculated from that are still empty. */
+function ratioGap(numeratorPercent: number | null, numeratorName: string, organicCarbonPercent: number | null): string | null {
+  const missing = [
+    numeratorPercent == null ? numeratorName : null,
+    organicCarbonPercent == null || organicCarbonPercent === 0 ? "organic carbon" : null,
+  ].filter((name): name is string => name !== null);
+  return missing.length > 0 ? `Needs ${missing.join(" and ")}` : null;
+}
+
+/** O:C org also takes the lab ratio entered above, so its reason offers that too. */
+function withLabRatio(gap: string | null): string | null {
+  return gap ? `${gap}, or the O:C org ratio` : null;
+}
+
+function DerivedRatio({ label, value, gap, certifyRequired, certifyStatus }: {
   label: string;
   value: number | null;
+  /** Why there is no figure, when the empty inputs say so. Null when every input is filled. */
+  gap: string | null;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
 }) {
@@ -38,6 +61,7 @@ function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
         {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
       </span>}
       value={value == null ? null : formatRatio(value)}
+      sub={value == null ? gap ?? RATIO_NOT_CALCULABLE : undefined}
     />
   );
 }
@@ -85,14 +109,19 @@ export function SampleDerivedRatios({
           <DerivedRatio
             label="H:C org"
             value={hToCOrgRatio}
+            gap={ratioGap(hydrogenPercent, "hydrogen", organicCarbonPercent)}
             certifyRequired={certifyRequired("hToCOrgRatio")}
             certifyStatus={certifyStatus("hToCOrgRatio")}
           />
-          <DerivedRatio label="O:C org" value={oToCOrgRatio} />
+          <DerivedRatio
+            label="O:C org"
+            value={oToCOrgRatio}
+            gap={oToCFromLab ? "Needs the O:C org ratio" : withLabRatio(ratioGap(oxygenPercent, "oxygen", organicCarbonPercent))}
+          />
         </div>
         {error && <p role="alert" className="body-caption text-[var(--st-bad)]">{error}</p>}
       </>}
-      calculation={(
+      explanation={(
         <dl className="space-y-8 body-caption text-[var(--color-text-secondary)]">
           <div>
             <dt>H:C org is the atomic ratio of hydrogen to organic carbon.</dt>

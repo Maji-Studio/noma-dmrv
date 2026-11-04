@@ -1,4 +1,4 @@
-export { BatchEmissionsPage } from "./batch-emissions-page";
+export { BatchEmissions } from "./batch-emissions";
 export { EmissionsOverview } from "./emissions-overview";
 export {
   BATCH_SORTS,

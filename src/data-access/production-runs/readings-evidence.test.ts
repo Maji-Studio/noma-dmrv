@@ -7,7 +7,7 @@ import { hasUploadedProductionReadingsFile } from "./readings-evidence";
 const ctx: OrgContext = {
   userId: "user-readings-evidence",
   organizationId: "org-readings-evidence",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

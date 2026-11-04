@@ -48,7 +48,7 @@ let ctx: OrgContext;
 let fixture: Awaited<ReturnType<typeof createActivityWriteFixture>>;
 
 beforeEach(async () => {
-  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "admin", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
   __setStorageProviderForTests(new RetirementStorageProvider());
 });
@@ -220,12 +220,24 @@ it("records transport-leg create/update/delete once with batch lineage", async (
   for (const row of rows) expect(row.creditBatchId).toBe(fixture.batch.id);
 });
 
-it("records sample-owned transport and its documents against the sample's batch", async () => {
-  const sample = await insertSample();
-  const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
+it("records feedstock-owned transport and its documents against the batch", async () => {
+  const leg = await createTransportLeg(ctx, legInput());
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   expect((await events("transport_leg", leg.id))[0].creditBatchId).toBe(fixture.batch.id);
   expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
+});
+
+it("records sample-owned transport and its documents against the sample's batch", async () => {
+  const sample = await insertSample();
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
+  const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
+  expect((await events("document", document.id))[0].creditBatchId).toBe(fixture.batch.id);
+  await runOperationInProcess(deleteLabSample, ctx, { labSampleId: sample.id, expectedVersion: sample.version });
+  expect((await events("transport_leg", leg.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
+  expect((await events("document", document.id))[0]).toMatchObject({ action: "deleted", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
 });
 
 it("records cascade transport deletes and document retirement with captured ownership", async () => {
@@ -270,7 +282,10 @@ it("upserts identical derived syncs without events and records changed fields on
 
 it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
   const sample = await insertSample();
-  const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
+  // New sample legs are refused; this row represents a leg saved before retirement.
+  const [leg] = await db.insert(transportLegs).values({
+    ...legInput(), organizationId: ctx.organizationId, entityType: "sample", entityId: sample.id, calculationMethodType: "distance_based",
+  }).returning();
   const sampleDocument = await insertDocument(ctx, documentInput("sample", sample.id));
   const legDocument = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   const input = { labSampleId: sample.id, expectedVersion: sample.version };

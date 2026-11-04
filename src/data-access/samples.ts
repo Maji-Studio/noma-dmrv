@@ -32,6 +32,7 @@ import {
   type SampleWithRelations,
 } from "./samples/sample-by-id";
 import { updateSampleInTransaction } from "./samples/update";
+import { getSamplesWithLabReports } from "./sample-document-evidence";
 import type { CreateSampleRequest, UpdateSampleRequest } from "./samples/write-values";
 
 export { getSampleById, type SampleWithRelations };
@@ -144,11 +145,15 @@ export async function getSamples(
     .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(samples.sampleCode), orderFn(samples.id))
     .limit(pageSize)
     .offset(offset);
 
-  const items: SampleWithRelations[] = sampleList.map(toSampleWithRelations);
+  const samplesWithLabReports = await getSamplesWithLabReports(ctx, sampleList.map((sample) => sample.id));
+  const items: SampleWithRelations[] = sampleList.map((sample) => ({
+    ...toSampleWithRelations(sample),
+    hasLabReport: samplesWithLabReports.has(sample.id),
+  }));
 
   return {
     items,

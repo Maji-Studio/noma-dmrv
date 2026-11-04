@@ -8,9 +8,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
-import { Notice } from "@/components/ui/notice";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationEvidenceMethod,
@@ -67,6 +66,8 @@ interface ApplicationEvidencePanelProps {
 
 const GIS_LABEL_ID = "gisBoundary-label";
 const GIS_ERROR_ID = "gisBoundary-error";
+/** The form field the boundary buttons stand for, for the error summary's link. */
+const GIS_FIELD_NAME = "gisBoundary";
 
 function GisReferenceField({
   boundary,
@@ -97,6 +98,7 @@ function GisReferenceField({
                 disabled={disabled}
                 onClick={onEdit}
                 aria-describedby={GIS_ERROR_ID}
+                data-field-name={GIS_FIELD_NAME}
               >
                 Replace
               </Button>
@@ -133,6 +135,7 @@ function GisReferenceField({
       disabled={disabled}
       onClick={onEdit}
       aria-describedby={GIS_ERROR_ID}
+      data-field-name={GIS_FIELD_NAME}
       className="h-auto justify-start gap-12 whitespace-normal bg-[var(--paper)] px-16 py-16 text-left normal-case tracking-normal"
     >
       <span className="flex size-40 shrink-0 items-center justify-center border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
@@ -203,7 +206,7 @@ export function ApplicationEvidencePanel({
   return (
     <div className="flex flex-col gap-16">
       {locked && !hideLockNotice && (
-        <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>
+        <RecordFilesLockedNotice lockKind="application" lockId={applicationId} />
       )}
       {!readOnly && (
         <ChoiceCardGroup

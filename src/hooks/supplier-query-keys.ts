@@ -5,6 +5,9 @@ export const supplierKeys = {
   lists: () => [...supplierKeys.all, "list"] as const,
   list: (filters?: Partial<SupplierFilterData>) =>
     [...supplierKeys.lists(), filters] as const,
+  stats: (filters?: { archived?: boolean }) =>
+    [...supplierKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...supplierKeys.all, "stats"] as const,
   details: () => [...supplierKeys.all, "detail"] as const,
   detail: (id: string) => [...supplierKeys.details(), id] as const,
   locations: () => [...supplierKeys.all, "locations"] as const,

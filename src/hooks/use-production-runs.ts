@@ -1,3 +1,6 @@
+import { EXACT_ID_FILTER_MAX as EXACT_ID_CHUNK_SIZE } from "@/lib/exact-id-filter";
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
+import { useIntentMutation } from "./use-create-intent-key";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Production Runs React Query Hooks
@@ -9,7 +12,6 @@ import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   useMutation,
-  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -25,6 +27,7 @@ import type {
 } from "@/data-access/production-runs";
 import {
   getProductionRunByIdFn,
+  getLinkedProductionRunByIdFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -43,8 +46,6 @@ import { StaleVersionError, isStaleVersionFailure, throwActionError } from "@/li
 
 import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
-
-const EXACT_ID_CHUNK_SIZE = 100;
 
 /**
  * Turn a failed production-run action into a thrown error, preserving the
@@ -74,6 +75,7 @@ export const productionRunKeys = {
     [...productionRunKeys.lists(), filters] as const,
   details: () => [...productionRunKeys.all, "detail"] as const,
   detail: (id: string) => [...productionRunKeys.details(), id] as const,
+  linkedDetail: (id: string) => [...productionRunKeys.all, "linked-detail", id] as const,
   stats: (facilityId?: string) =>
     [...productionRunKeys.all, "stats", facilityId] as const,
   // Prefix that matches every stats variant regardless of facilityId — use for
@@ -94,42 +96,14 @@ export function useProductionRuns(
   filters?: Partial<ProductionRunFilterData>,
   options?: { enabled?: boolean },
 ) {
-  const exactIds = filters?.ids ?? [];
-  const requests = exactIds.length > 0
-    ? Array.from(
-        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
-        (_, index) => {
-          const ids = exactIds.slice(
-            index * EXACT_ID_CHUNK_SIZE,
-            (index + 1) * EXACT_ID_CHUNK_SIZE,
-          );
-          return { ...filters, ids, page: 1, pageSize: ids.length };
-        },
-      )
-    : [filters];
-  const results = useQueries({
-    queries: requests.map((request) => ({
-      queryKey: productionRunKeys.list(request),
-      queryFn: async ({ signal }) => unwrap(await getProductionRunsRead(request, { signal })),
-      staleTime: 30000,
-      enabled: options?.enabled,
-    })),
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: productionRunKeys.list,
+    fetcher: async (request, { signal }) => unwrap(await getProductionRunsRead(request, { signal })),
+    staleTime: 30000,
+    enabled: options?.enabled,
   });
-
-  const items = results.flatMap((result) => result.data?.items ?? []);
-  return {
-    data: exactIds.length > 0
-      ? {
-          items,
-          total: items.length,
-          page: 1,
-          pageSize: Math.max(items.length, 1),
-          totalPages: items.length > 0 ? 1 : 0,
-        }
-      : results[0]?.data,
-    isLoading: results.some((result) => result.isLoading),
-    error: results.find((result) => result.error)?.error ?? null,
-  };
 }
 
 /**
@@ -142,6 +116,16 @@ export function useProductionRun(productionRunId: string, enabled = true) {
     enabled: enabled && !!productionRunId,
     retry: false,
     staleTime: 30000,
+  });
+}
+
+/** Separate cache prevents archived linked details from populating edit reads. */
+export function useLinkedProductionRun(productionRunId: string, enabled = true) {
+  return useQuery({
+    queryKey: productionRunKeys.linkedDetail(productionRunId),
+    queryFn: async () => unwrap(await getLinkedProductionRunByIdFn(productionRunId)),
+    enabled: enabled && !!productionRunId,
+    retry: false,
   });
 }
 
@@ -170,10 +154,10 @@ export function useCreateProductionRun(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.productionRun),
-    mutationFn: async (data: CreateProductionRunData) => {
-      const result = await createProductionRunFn(data);
+    mutationFn: async (data: CreateProductionRunData, intentKey) => {
+      const result = await createProductionRunFn(data, { intentKey });
       if (!result.success) {
         throwProductionRunActionError(result);
       }
@@ -204,6 +188,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, data.facilityId);
@@ -385,7 +370,8 @@ export function useDeleteProductionRun(
     mutationFn: async (variables: DeleteProductionRunData) => {
       const result = await deleteProductionRunFn(variables);
       if (!result.success) {
-        throwProductionRunActionError(result);
+        // Not an overlap: keep the code, issues and conflict so an in-use refusal is recognised.
+        throwActionError(result);
       }
       return;
     },
@@ -441,6 +427,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
       // Invalidate facility data

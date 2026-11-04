@@ -50,7 +50,11 @@ export async function waitForServer(server: ManagedProcess, baseUrl: string, sig
         signal: AbortSignal.any([signal, AbortSignal.timeout(HTTP_TIMEOUT_MS)]),
       });
       const guide = await response.text();
-      if (response.ok && guide.startsWith("# noma data-entry API v1")) return;
+      // Next dev compiles each route on first hit; warm /api/mcp so the first case's connect does not time out.
+      if (response.ok && guide.startsWith("# noma data-entry API v1")) {
+        const mcp = await fetch(`${baseUrl}/api/mcp`, { method: "POST", signal: AbortSignal.any([signal, AbortSignal.timeout(HTTP_TIMEOUT_MS)]) });
+        if (mcp.status === 401) return;
+      }
     } catch { signal.throwIfAborted(); }
     await delay(READY_POLL_MS, undefined, { signal });
   }

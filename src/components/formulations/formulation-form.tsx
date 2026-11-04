@@ -12,9 +12,11 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useEffect, useId, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   CompositionCard,
   FormActions,
@@ -36,6 +38,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   formulationPercentFormSchema,
+  FORMULATION_REFUSAL_ALIASES,
   percentFormToRatioPayload,
   ratioToPercent,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
@@ -44,6 +47,10 @@ import {
   type FormulationPercentFormData,
 } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(formulationPercentFormSchema);
 
 const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
@@ -151,7 +158,8 @@ function blendSegments({
 
 interface FormulationFormProps {
   formulation?: FormulationWithIngredients;
-  onSubmit: (data: FormulationFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FormulationFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -166,6 +174,8 @@ export function FormulationForm({
   errorMessage,
   submitLabel,
 }: FormulationFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!formulation;
 
   const {
@@ -174,6 +184,8 @@ export function FormulationForm({
     control,
     trigger,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(formulationPercentFormSchema),
@@ -199,11 +211,13 @@ export function FormulationForm({
     name: "ingredients",
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, aliases: FORMULATION_REFUSAL_ALIASES });
+
   const defaultSubmitLabel = isEditMode ? "Update formulation" : "Create formulation";
 
-  const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData));
-  });
+  const handleFormSubmit = latched(handleSubmit((data) => {
+    return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData), refuseSave);
+  }));
 
   // Watch shares for auto-balance, the allocation bar, and the total.
   const biocharPercent = useWatch({ control, name: "biocharPercent" });
@@ -266,7 +280,7 @@ export function FormulationForm({
   };
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSection divider={false}>
         <FormField
@@ -331,9 +345,8 @@ export function FormulationForm({
                   <FormInput
                     id="biocharPercent"
                     type="number"
+                    {...numberBounds("biocharPercent")}
                     step={SHARE_PERCENT_STEP}
-                    min="0"
-                    max="100"
                     placeholder="e.g., 70"
                     disabled={isSubmitting}
                     error={!!errors.biocharPercent}
@@ -394,9 +407,8 @@ export function FormulationForm({
                     <FormInput
                       id={`ingredients.${index}.sharePercent`}
                       type="number"
+                      {...numberBounds("ingredients.sharePercent")}
                       step={SHARE_PERCENT_STEP}
-                      min="0"
-                      max="100"
                       placeholder="e.g., 30"
                       disabled={isSubmitting}
                       error={!!errors.ingredients?.[index]?.sharePercent}
@@ -419,8 +431,8 @@ export function FormulationForm({
           ))}
         </div>
 
-        {/* What the entered shares make, directly under the share fields,
-            at both levels. A total other than 100% is something to fix, so
+        {/* What the entered shares make, directly under the share fields.
+            A total other than 100% is something to fix, so
             the Balance action joins it. */}
         {(biocharNum > 0 || fields.length > 0) && (
           <CompositionCard

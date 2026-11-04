@@ -166,7 +166,7 @@ describe("entries after template changes", () => {
     const before = observation();
     const after = structuredClone(before);
     after.enrichment.line.electricity_use = { unit: "Wh" };
-    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template line." });
+    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template component." });
     expect(emissionEntryCounts(after, after, "line").counts).toBe(true);
   });
   it.each(["removed", "kind", "policy", "scope", "template", "unknown-unit"])(
@@ -226,7 +226,7 @@ it("still allows confirmation for a fixed-factor change with unchanged entry uni
   const after = structuredClone(before);
   after.enrichment.line.factor = { unit: "kWh", fixedValue: "2" };
   expect(emissionEntryCounts(before, after, "line")).toMatchObject({
-    counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line.",
+    counts: false, canConfirm: true, reason: "Confirm this entry for the changed template component.",
   });
 });
 
@@ -255,4 +255,19 @@ it("accepts a clamped future batch start only as a server-defaulted date", () =>
   expect(() => validateEntryDate({ ...date, dateDefaulted: true })).not.toThrow();
   expect(() => validateEntryDate(date)).toThrow("future");
   expect(() => validateEntryDate({ ...date, occurredOn: "2026-10-21", dateDefaulted: true })).toThrow("future");
+});
+
+it("refuses an existing additive mass/distance contract and a second single paired entry", () => {
+  const input = args();
+  const component = input.observation.definition.groups[0].components[0];
+  component.blueprintKey = "transport";
+  component.inputs = [{ key: "mass", type: "monitored", quantityKind: "mass" }, { key: "distance", type: "monitored", quantityKind: "distance" }];
+  input.observation.enrichment.line = { mass: { unit: "tonne" }, distance: { unit: "km" } };
+  input.values = [{ inputKey: "mass", quantityKind: "mass", magnitude: "10", unit: "tonne" }, { inputKey: "distance", quantityKind: "distance", magnitude: "100", unit: "km" }];
+  input.activeValueCount = 1;
+  expect(() => validateEmissionEntry(input)).toThrow("Review its setup");
+  input.observation.lineSources.line.entryPolicy = "single";
+  expect(() => validateEmissionEntry(input)).toThrow("already has an entry");
+  input.activeValueCount = 0;
+  expect(validateEmissionEntry(input).lineRule).toBe("single");
 });

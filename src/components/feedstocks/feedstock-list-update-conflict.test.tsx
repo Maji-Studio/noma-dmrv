@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import { ConflictError, conflictCode } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
@@ -80,17 +81,23 @@ const refusal = new ConflictError(
 const mocks = vi.hoisted(() => ({
   form: undefined as
     | {
-        feedstock?: { code?: string };
+        feedstock?: { code?: string; version?: number };
+        onDistanceRefreshed?: () => Promise<void>;
         serverError?: string;
         serverErrorAction?: unknown;
-        onSubmit: (data: unknown) => Promise<void> | void;
+        onSubmit: (data: unknown, onRefusal?: (error: unknown, fallback: string) => string | null) => Promise<void> | void;
       }
     | undefined,
   updateRejection: undefined as unknown,
   deleteMutation: vi.fn(),
   updateMutation: vi.fn(),
+  fetch: vi.fn(),
+  createOptions: undefined as undefined | {
+    getCreateErrorMessage: (error: unknown, input: { data: unknown; onRefusal: (error: unknown, fallback: string) => string | null }) => string | null;
+  },
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: (name: string) => [
@@ -99,6 +106,7 @@ vi.mock("nuqs", () => ({
   ],
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/hooks/use-feedstocks", () => ({
@@ -107,13 +115,13 @@ vi.mock("@/hooks/use-feedstocks", () => ({
     isLoading: false,
     error: null,
   }),
-  useFetchFeedstock: () => vi.fn(),
+  useFetchFeedstock: () => mocks.fetch,
   useFeedstock: () => ({
     data: feedstock,
     error: null,
     isSuccess: true,
   }),
-  useCreateFeedstock: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateFeedstock: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateFeedstock: () => ({
     mutateAsync: mocks.updateMutation.mockRejectedValue(mocks.updateRejection),
     isPending: false,
@@ -121,7 +129,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
   useDeleteFeedstock: () => ({ mutateAsync: mocks.deleteMutation, isPending: false }),
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
-  useCreateWithEvidence: () => ({
+  useCreateWithEvidence: (options: NonNullable<typeof mocks.createOptions>) => (mocks.createOptions = options, {
     deferredAttachments: undefined,
     createdEntityIds: [],
     isFlushing: false,
@@ -187,6 +195,11 @@ vi.mock("@/components/ui/moisture-split", () => ({ MoistureSplit: () => null }))
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
   DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => Promise<void> }) =>
     isOpen ? <button data-testid="delete-confirm" onClick={onConfirm}>Confirm delete</button> : null,
+}));
+vi.mock("@/components/ui/in-use-delete-dialog", () => ({
+  InUseDeleteDialog: ({ label, children }: { label: string; children?: ReactNode }) => (
+    <div data-testid="in-use-dialog"><b>{label}</b>{children}</div>
+  ),
 }));
 // Renders its children only while open, so a still-mounted form proves the
 // sheet survived the refusal.
@@ -283,6 +296,65 @@ describe("FeedstockList update conflict", () => {
   });
 });
 
+describe("FeedstockList refused update shown at fields", () => {
+  it("shows only the footer text the form hands back, with the form's aliases in the payload", async () => {
+    mocks.updateRejection = new ActionError({ error: "Locked by a Removal.", code: "certification_locked", issues: [] });
+    const renderer = renderList();
+    const onRefusal = vi.fn(() => "Sent to a Removal.");
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, onRefusal);
+    });
+
+    expect(onRefusal).toHaveBeenCalledWith(mocks.updateRejection, "Locked by a Removal.");
+    expect(textOf(renderer, "server-error")).toBe("Sent to a Removal.");
+  });
+
+  it("clears the footer when every issue sits at a field", async () => {
+    mocks.updateRejection = new ActionError({ error: "Refused", issues: [] });
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => null);
+    });
+
+    expect(textOf(renderer, "server-error")).toBe("");
+  });
+
+  it("keeps the blockers when every reason sits at a field, so the box has no message", async () => {
+    mocks.updateRejection = refusal;
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, () => null);
+    });
+
+    expect(textOf(renderer, "server-error")).toBe("");
+    expect(JSON.stringify(renderer.toJSON())).toContain("PR-014");
+
+    // The next attempt clears them before the save runs.
+    mocks.updateRejection = new Error("Feedstock was not saved. Try again.");
+    act(() => renderer.update(<FeedstockList />));
+    await act(async () => {
+      await mocks.form?.onSubmit(draft);
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("PR-014");
+  });
+
+  it("keeps the stale-version message when the form leaves the refusal alone", async () => {
+    mocks.updateRejection = new StaleVersionError(STALE_VERSION_MESSAGE, {
+      entity: "feedstock", id: FEEDSTOCK_ID, code: STALE_VERSION_CONFLICT_CODE,
+    });
+    const renderer = renderList();
+
+    await act(async () => {
+      await mocks.form?.onSubmit(draft, (_error, fallback) => fallback);
+    });
+
+    expect(textOf(renderer, "server-error")).toBe(STALE_VERSION_MESSAGE);
+  });
+});
+
 describe("FeedstockList stale delete", () => {
   it("closes the confirmation and asks the operator to review the changed feedstock", async () => {
     mocks.deleteMutation.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
@@ -306,6 +378,86 @@ describe("FeedstockList stale delete", () => {
     expect(textOf(renderer, "delete-error")).toBe(
       "Feedstock FS-001 was not deleted. It changed since the list loaded. Review it before deleting.",
     );
+    act(() => renderer.unmount());
+  });
+});
+
+describe("FeedstockList refresh from location", () => {
+  it("resolves the refresh only once the form holds the new version, so Save sends it", async () => {
+    mocks.updateRejection = new Error("Feedstock was not saved. Try again.");
+    const refreshed = { ...feedstock, version: feedstock.version + 1 } as FeedstockWithRelations;
+    let landFetch!: () => void;
+    mocks.fetch.mockReset().mockReturnValue(new Promise((resolve) => { landFetch = () => resolve(refreshed); }));
+    const renderer = renderList();
+
+    let settled = false;
+    let reload!: Promise<void>;
+    await act(async () => {
+      reload = mocks.form!.onDistanceRefreshed!().then(() => { settled = true; });
+    });
+    // The record fetch is delayed: the refresh dialog must keep waiting.
+    expect(mocks.fetch).toHaveBeenCalledWith(FEEDSTOCK_ID);
+    expect(settled).toBe(false);
+    expect(mocks.form?.feedstock?.version).toBe(feedstock.version);
+
+    await act(async () => {
+      landFetch();
+      await reload;
+    });
+    expect(mocks.form?.feedstock?.version).toBe(refreshed.version);
+    await act(async () => {
+      await mocks.form?.onSubmit(draft);
+    });
+    expect(mocks.updateMutation).toHaveBeenLastCalledWith(expect.objectContaining({
+      feedstockId: FEEDSTOCK_ID, expectedVersion: refreshed.version,
+    }));
+    act(() => renderer.unmount());
+  });
+});
+
+describe("FeedstockList refused create shown at fields", () => {
+  it("hands a create refusal to the form's handler with the create message as fallback", () => {
+    renderList();
+    const refused = new ActionError({ error: "Refused", issues: [{ path: ["feedstockTypeId"], code: "validation_failed", message: "Choose a feedstock type." }] });
+    const onRefusal = vi.fn<(error: unknown, fallback: string) => string | null>(() => null);
+
+    expect(mocks.createOptions?.getCreateErrorMessage(refused, { data: draft, onRefusal })).toBeNull();
+    expect(onRefusal).toHaveBeenCalledWith(refused, "Refused");
+
+    onRefusal.mockClear();
+    onRefusal.mockReturnValue("Fallback shown");
+    expect(mocks.createOptions?.getCreateErrorMessage("not an error", { data: draft, onRefusal })).toBe("Fallback shown");
+    expect(onRefusal).toHaveBeenCalledWith("not an error", "Feedstock was not created. Check the form.");
+  });
+});
+
+describe("FeedstockList in-use delete refusal", () => {
+  const inUse = () => new ActionError({
+    error: "Feedstock FS-001 was not deleted because production runs still use it.",
+    code: "certification_locked",
+    issues: [{ path: ["feedstockId"], code: "certification_locked", message: "in use", meta: { reason: "in_use" } }],
+  });
+
+  it("replaces the confirm dialog with the in-use dialog for the row", async () => {
+    mocks.deleteMutation.mockReset().mockRejectedValue(inUse());
+    const renderer = renderList();
+    await act(async () => { renderer.root.findAllByType("button").find((b) => b.children.includes("Delete"))!.props.onClick(); });
+    await act(async () => { await renderer.root.findByProps({ "data-testid": "delete-confirm" }).props.onClick(); });
+
+    expect(renderer.root.findAllByProps({ "data-testid": "delete-confirm" })).toHaveLength(0);
+    const dialog = JSON.stringify(renderer.toJSON());
+    expect(dialog).toContain("FS-001");
+    expect(dialog).toContain("production runs still use it");
+    act(() => renderer.unmount());
+  });
+
+  it("keeps an ordinary refusal in the confirm dialog", async () => {
+    mocks.deleteMutation.mockReset().mockRejectedValue(new Error("Feedstock was not deleted. Try again."));
+    const renderer = renderList();
+    await act(async () => { renderer.root.findAllByType("button").find((b) => b.children.includes("Delete"))!.props.onClick(); });
+    await act(async () => { await renderer.root.findByProps({ "data-testid": "delete-confirm" }).props.onClick(); });
+
+    expect(renderer.root.findAllByProps({ "data-testid": "in-use-dialog" })).toHaveLength(0);
     act(() => renderer.unmount());
   });
 });

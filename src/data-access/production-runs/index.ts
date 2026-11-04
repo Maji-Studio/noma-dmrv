@@ -19,6 +19,7 @@ export type {
 export {
   getProductionRuns,
   getProductionRunById,
+  getLinkedProductionRunById,
   getProductionRunStats,
   getProductionRunsForCertification,
 } from "./queries";
@@ -40,4 +41,5 @@ export {
 
 export { ProductionRunOverlapError } from "./overlap";
 
+/** Facility-local start day for display and date filtering. */
 export { productionRunDateExpr } from "./date-expr";

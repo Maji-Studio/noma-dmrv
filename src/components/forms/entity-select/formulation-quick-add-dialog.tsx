@@ -29,15 +29,20 @@ export function FormulationQuickAddDialog({
   onClose,
   onSuccess = () => undefined,
 }: FormulationQuickAddDialogProps) {
-  const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FormulationFormData>({
+  // The shell stays mounted while closed: closing ends the draft and its key.
+  const close = () => {
+    startDraft();
+    onClose();
+  };
+  const { error, isSubmitting, handleSubmit, startDraft } = useQuickAddSubmit<FormulationFormData>({
     entityType: "formulation",
     // `createFormulationFn` answers with the full formulation; the select only
     // needs an option, so narrow it here rather than adding a second server
     // action that would drift from the one the Formulations page uses.
-    serverFn: async (data) => {
+    serverFn: async (data, intentKey) => {
       // `createFormulationSchema` *is* the form schema, so the form's data is
       // already the payload.
-      const result = await createFormulationFn(data);
+      const result = await createFormulationFn(data, { intentKey });
       if (!result.success) return result;
       return {
         success: true,
@@ -49,20 +54,20 @@ export function FormulationQuickAddDialog({
       };
     },
     onSuccess,
-    onClose,
+    onClose: close,
   });
 
   return (
     <QuickAddDialogShell
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="New formulation"
       width="lg"
       testId="formulation-quick-add-dialog"
     >
       <FormulationForm
         onSubmit={handleSubmit}
-        onCancel={onClose}
+        onCancel={close}
         isSubmitting={isSubmitting}
         errorMessage={error ?? undefined}
         submitLabel="Create formulation"

@@ -1,9 +1,9 @@
 /**
  * Feedstock Types E2E Tests
  *
- * Covers the Infrastructure catalogue page that replaced the old
+ * Covers the Setup catalogue page that replaced the old
  * /certification/production-processes surface (ADR 0022):
- * - navigation: Feedstock Types under Infrastructure, Production Processes gone
+ * - navigation: Feedstock types under Setup, Production Processes gone
  * - UI CRUD lifecycle: create → edit → archive → restore → delete (unused)
  *   The lifecycle ends in deletion so the spec leaves no rows behind (feedstock
  *   type codes are auto-generated and would escape the E2E- teardown sweep).
@@ -15,7 +15,7 @@ import { waitForSideSheet, waitForSideSheetClose } from "./fixtures";
 import { clickRowMenuItem } from "./fixtures/page-helpers";
 
 test.describe("Feedstock Types navigation", () => {
-  test("sidebar lists Feedstock Types under Infrastructure and has no Production Processes entry", async ({
+  test("sidebar lists Feedstock types under Setup and has no Production Processes entry", async ({
     adminPage: page,
   }) => {
     await page.goto("/feedstock-types");
@@ -23,7 +23,7 @@ test.describe("Feedstock Types navigation", () => {
 
     const sidebar = page.locator("aside, nav").first();
     await expect(
-      sidebar.getByRole("link", { name: "Feedstock Types" }),
+      sidebar.getByRole("link", { name: "Feedstock types" }),
     ).toBeVisible();
     await expect(
       sidebar.getByRole("link", { name: "Production Processes" }),

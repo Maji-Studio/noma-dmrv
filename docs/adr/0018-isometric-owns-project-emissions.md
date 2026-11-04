@@ -25,12 +25,13 @@ Status: accepted (2026-07-02)
 > [ADR 0031](./0031-operator-energy-estimates.md). Estimates paused 2026-10-16,
 > see ADR 0031.
 
-> **Proposed supersession 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> **Superseded in part 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions (staff travel, lab electricity, sampling consumables,
 > pyrolyzer direct emissions, sample shipping) onto Removals as per-batch
 > emissions entries. Establishment and end-of-life stay project-level, and the
-> scope guard keeps those tuples. Until ADR 0032 is accepted and implemented,
-> everything below is in force.
+> scope guard keeps those tuples. ADR 0032 was accepted on 2026-10-19.
+> The historical decisions below apply only where ADR 0032 has not superseded
+> them. Period inputs are never stubbed.
 
 ## Context
 
@@ -54,7 +55,7 @@ Delete the project-emissions journal subsystem end-to-end:
 - `certifier_project_emissions` table + `project_emission_category` enum
 - schemas / data-access / fn / hooks for project emissions
 - the "Period emissions (LCA-derived)" section and the registry-reconciliation
-  drift panel on `/certification/settings`
+  drift panel on the former `/certification/settings` (now the settings console)
 - the `CATEGORY_TO_BLUEPRINT` matcher (`project-emission-match.ts`) and the
   drift half of `scripts/isometric-coverage-check.ts`
 
@@ -88,6 +89,7 @@ the basis that the figure is sourced in Isometric.
   that the drift panel used was removed as dead code in PR #740 and is a
   ten-line client call to restore) — a future read-only view can be rebuilt
   from the registry without reintroducing a local copy.
-- The sandbox 0-stub escape hatch (`allowPeriodInputStub`) is unchanged:
-  production still fails closed when a template wrongly declares a period
-  input as REMOVAL-scope.
+- The sandbox zero stub is removed under [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+  and [plan §4.5, Guard](../plans/2026-10-15-template-driven-emissions.md#45-submission-snapshots-and-claims-pr-4).
+  Missing operating inputs require entries or Removal-confirmed zeros in every
+  environment; forbidden project-level components still fail closed.

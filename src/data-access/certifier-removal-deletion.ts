@@ -1,3 +1,5 @@
+import { lockReleaseBatches } from "./emission-entry-release-locks";
+import { deletedRemovalEntryFilter, releaseDeletedRemovalEntries } from "./emission-entry-deletion";
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { withCertificationStatusActivity } from "./certification-status-activity";
@@ -5,7 +7,7 @@ import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
 import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db, withDedicatedLockConnection } from "@/db";
 import {
   certificationSubmissions,
@@ -13,7 +15,9 @@ import {
 } from "@/db/schema/certification";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
+import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
+import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -65,8 +69,8 @@ import { requireOrgScope } from "./utils";
  * a finalized status refuses deletion. Membership in a GHG Statement refuses
  * it too.
  *
- * No role floor for now: any organization member may delete, registry
- * cleanup included (decision of 2026-09-08, tracked in issue #746).
+ * Members may delete Removals that never touched the registry. Once the
+ * boundary opened, the floor in removal-deletion-role.ts requires an Admin; Platform Admins always pass.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -93,6 +97,38 @@ const REMOVAL_DELETE_MISSING_ERROR =
   "This Removal no longer exists. Refresh the page.";
 export const REMOVAL_DELETE_CHANGED_ERROR =
   "This Removal changed while it was being deleted. Refresh the page and review its status.";
+export const REMOVAL_DELETE_ROLE_ERROR =
+  "Only Admins can delete a Removal that may have records on Isometric. Ask an Admin to delete it.";
+
+/** Whether the loaded deletion facts indicate possible registry records. */
+export function removalDeletionOpensRegistryBoundary(facts: {
+  metadata: unknown;
+  rows: readonly unknown[];
+  biocharApplications: readonly unknown[];
+  measurementSamples: readonly unknown[];
+  productionBatches: readonly { registrationId: string | null }[];
+}): boolean {
+  return (
+    removalMayHaveExternalMutation(facts.metadata) ||
+    // Sources are released only when ledger rows exist, so this covers them too.
+    facts.rows.length > 0 ||
+    facts.biocharApplications.length > 0 ||
+    facts.measurementSamples.length > 0 ||
+    facts.productionBatches.some((batch) => batch.registrationId !== null)
+  );
+}
+
+function assertRemovalDeletionRole(
+  ctx: OrgContext,
+  facts: Parameters<typeof removalDeletionOpensRegistryBoundary>[0],
+): void {
+  if (
+    removalDeletionOpensRegistryBoundary(facts) &&
+    !hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE)
+  ) {
+    throw new SafeError(REMOVAL_DELETE_ROLE_ERROR);
+  }
+}
 
 export interface RemovalDeletionClaim {
   removalId: string;
@@ -308,6 +344,14 @@ export async function claimRemovalDeletion(
                 ),
               ),
             );
+    assertRemovalDeletionRole(ctx, {
+      metadata: removal.metadata,
+      rows,
+      biocharApplications,
+      measurementSamples,
+      productionBatches,
+    });
+
     // Every row gets the same fresh lock, rejected ones included: the submit
     // path resumes a rejected row with an unchanged payload hash, and its
     // resume CAS refuses any row whose lock is still fresh.
@@ -557,14 +601,29 @@ export async function finalizeRemovalDeletion(
     ]);
 
     const productionBatchIds = (claim.productionBatches ?? []).map((batch) => batch.creditBatchId);
-    if (productionBatchIds.length) {
-      // Serialize finalizers of different Removals before checking surviving owners.
-      await tx.select({ id: creditBatches.id }).from(creditBatches)
-        .where(and(inArray(creditBatches.id, productionBatchIds), eq(creditBatches.organizationId, ctx.organizationId)))
-        .orderBy(creditBatches.id).for("update");
-    }
+    await lockReleaseBatches(ctx, tx, {
+      removalId: claim.removalId,
+      entryFilter: deletedRemovalEntryFilter(claim.removalId, claim.submissionIds),
+      extraBatchFilter: or(
+        productionBatchIds.length ? inArray(creditBatches.id, productionBatchIds) : undefined,
+        eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
+        claim.submissionIds.length ? inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds) : undefined,
+      ),
+    });
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
+
+    // A marker or Production Batch registration may have appeared after claim.
+    // Recheck the role floor under the locks before any local cleanup writes.
+    const productionBatches = (await removalProductionBatchTargets(ctx, claim.removalId, tx))
+      .filter((batch) => claim.submissionIds.length > 0 || batch.registrationId !== null);
+    assertRemovalDeletionRole(ctx, {
+      metadata: removal.metadata,
+      rows: claim.submissionIds,
+      biocharApplications: claim.biocharApplications,
+      measurementSamples: claim.measurementSamples ?? [],
+      productionBatches,
+    });
 
     const previousActivityBatches: (typeof creditBatches.$inferSelect)[] = [];
     let releasedReservations: { id: string }[] = [];
@@ -634,7 +693,7 @@ export async function finalizeRemovalDeletion(
         previousActivityBatches.push(...await tx.select().from(creditBatches).where(and(
           eq(creditBatches.organizationId, ctx.organizationId),
           inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds),
-        )).orderBy(creditBatches.id).for("update"));
+        )).orderBy(creditBatches.id));
         releasedReservations = await tx
           .update(creditBatches)
           .set({ version: nextVersion(creditBatches.version),
@@ -660,7 +719,7 @@ export async function finalizeRemovalDeletion(
     const previousClaimedBatches = await tx.select().from(creditBatches).where(and(
       eq(creditBatches.organizationId, ctx.organizationId),
       eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
-    )).orderBy(creditBatches.id).for("update");
+    )).orderBy(creditBatches.id);
     previousActivityBatches.push(...previousClaimedBatches.filter(row => !previousActivityBatches.some(previous => previous.id === row.id)));
     const releasedClaims = await tx
       .update(creditBatches)
@@ -676,6 +735,7 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: creditBatches.id });
 
+    await releaseDeletedRemovalEntries(ctx, tx, claim.removalId, claim.submissionIds, true);
     const released = await tx
       .update(creditBatchApplications)
       .set({ removalId: null })

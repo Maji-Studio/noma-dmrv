@@ -1,5 +1,6 @@
 "use client";
 
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import {
   useApplicationStorageLocationSync,
   useSyncApplicationStorageLocation,
 } from "@/hooks/use-storage-location-sync";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import type { ApplicationStorageLocationSyncState } from "@/fn/certification";
 
 const STATE_PRESENTATION: Record<
@@ -27,10 +28,15 @@ const STATE_PRESENTATION: Record<
 
 export function ApplicationStorageLocationSync({
   applicationId,
+  readOnly = false,
 }: {
   applicationId: string;
+  /** A read-only sheet shows the status without the register or sync action. */
+  readOnly?: boolean;
 }) {
   const query = useApplicationStorageLocationSync(applicationId);
+  const { facilityId } = useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   const sync = useSyncApplicationStorageLocation();
 
   if (query.isLoading) {
@@ -65,7 +71,7 @@ export function ApplicationStorageLocationSync({
           label={presentation.label}
           size="small"
         />
-        {view.viewerCanManage && (
+        {view.viewerCanManage && !readOnly && (
           <Button
             variant="weak"
             size="small"
@@ -100,7 +106,7 @@ export function ApplicationStorageLocationSync({
       )}
       {view.attemptedAt && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Last checked {formatDateTime(new Date(view.attemptedAt))}
+          Last checked {formatFacilityDateTime(new Date(view.attemptedAt), timeZone)}
         </p>
       )}
       {view.state === "drifted" && (

@@ -1,3 +1,5 @@
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
+import { useIntentMutation } from "./use-create-intent-key";
 import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
@@ -6,6 +8,7 @@ import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MAX_FEEDSTOCK_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/feedstocks";
 import type {
   FeedstockFilterData,
   FeedstockStatsFilterData,
@@ -28,10 +31,9 @@ import {
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
-import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 
 // ============================================
 // Query Keys
@@ -59,9 +61,11 @@ export function useFeedstocks(
   filters?: Partial<FeedstockFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: feedstockKeys.list(filters),
-    queryFn: async () => unwrap(await getFeedstocksFn(filters)),
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: feedstockKeys.list,
+    fetcher: async (request) => unwrap(await getFeedstocksFn(request)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -108,9 +112,9 @@ export function useFeedstockStats(
 export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstockResult, CreateFeedstockData>) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.feedstock),
-    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
+    mutationFn: async (data: CreateFeedstockData, intentKey) => unwrap(await createFeedstockFn(data, { intentKey })),
     onSuccess: async (data, variables) => {
       for (const feedstock of data.feedstocks) {
         queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
@@ -123,11 +127,9 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -156,11 +158,9 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -184,11 +184,9 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
-      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Runs, credit batches, certification readiness and the dashboard.
+      invalidateAfterFeedstockReplan(queryClient);
       void invalidateRecordedTransport(queryClient);
-      // Feedstock writes resync the derived transport leg (distance/provenance),
-      // an input to certification readiness.
-      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {

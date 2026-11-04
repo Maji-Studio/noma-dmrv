@@ -1,8 +1,10 @@
 "use client";
 
-import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
+import { useId } from "react";
 import { useController, useForm, useWatch } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -30,11 +32,16 @@ import { nextTransportDistanceSource } from "./distance-provenance";
 import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(transportLegFormSchema);
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
   leg?: TransportLeg | TransportLegFormData | null;
-  onSubmit: (data: TransportLegFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: TransportLegFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -43,7 +50,6 @@ interface TransportLegFormProps {
 const formatTransportMethod = (method: string) =>
   method.charAt(0).toUpperCase() + method.slice(1);
 
-const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
   isCertifyFormField("transportLeg", field);
 
@@ -85,6 +91,8 @@ export function TransportLegForm({
   isSubmitting = false,
   errorMessage,
 }: TransportLegFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
   const defaultValues = legToFormDefaults(leg);
@@ -94,11 +102,14 @@ export function TransportLegForm({
     handleSubmit,
     control,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(transportLegFormSchema),
     defaultValues,
   });
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
   const certStatus = makeCertFieldStatus(isPersisted ? defaultValues : undefined);
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
@@ -131,12 +142,13 @@ export function TransportLegForm({
     (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
     selectableTransportMethods[0];
 
-  const submit = handleSubmit(async (data) => {
-    await onSubmit(data as TransportLegFormData);
-  });
+  const submit = latched(handleSubmit(async (data) => {
+    await onSubmit(data as TransportLegFormData, refuseSave);
+  }));
 
   return (
     <form
+      id={formId}
       onSubmit={(event) => {
         // The dialog portal avoids invalid nested form markup, but React portal
         // events still bubble through the component tree to an owning form.
@@ -190,6 +202,7 @@ export function TransportLegForm({
               each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
+            fieldNames={{ lat: "originGpsLatitude", lng: "originGpsLongitude" }}
             label="From position"
             accent="orange"
             latitude={originLat ?? null}
@@ -204,6 +217,7 @@ export function TransportLegForm({
           />
           <PositionPicker
             idPrefix="destination"
+            fieldNames={{ lat: "destinationGpsLatitude", lng: "destinationGpsLongitude" }}
             label="To position"
             accent="pink"
             latitude={destinationLat ?? null}
@@ -281,15 +295,14 @@ export function TransportLegForm({
               unit="kg"
               required
               error={errors.loadMassKg?.message}
-              helperText="Mass moved on this leg. Used to weight transport emissions."
+              helperText="Used to weight transport emissions."
               certifyRequired={isTransportLegCertifyField("loadMassKg")}
               certifyStatus={certStatus("loadMassKg")}
             >
               <FormInput
                 id="loadMassKg"
                 type="number"
-                step="any"
-                min={MIN_LOAD_MASS_KG}
+                {...numberBounds("loadMassKg")}
                 error={!!errors.loadMassKg}
                 {...register("loadMassKg")}
               />
@@ -308,7 +321,7 @@ export function TransportLegForm({
               />
             </FormField>
             <FormField id="modelYear" label="Model year" error={errors.modelYear?.message}>
-              <FormInput id="modelYear" type="number" min={MODEL_YEAR_MIN} max={MODEL_YEAR_MAX} step="1" error={!!errors.modelYear} {...register("modelYear")} />
+              <FormInput id="modelYear" type="number" {...numberBounds("modelYear")} error={!!errors.modelYear} {...register("modelYear")} />
             </FormField>
           </div>
         </div>

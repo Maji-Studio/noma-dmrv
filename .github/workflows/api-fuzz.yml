@@ -41,13 +41,15 @@ jobs:
           --health-retries 10
 
     env:
+      MCP_ENABLED: "true"
+      STOCK_ADJUSTMENTS_ENABLED: "true"
+      MULTI_BIN_RUNS_ENABLED: "true"
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       API_FUZZ_BASE_URL: http://127.0.0.1:3100/api/v1
       CI: "true"
       NOMA_HERMETIC_CI: "true"
       API_FUZZ_DISABLE_RATE_LIMIT: "true"
-      ALLOW_SELF_SIGNUP: "false"
       STORAGE_PROVIDER: local-fs
       STORAGE_LOCAL_FS_ROOT: .storage-api-fuzz
       STORAGE_SIGNING_SECRET: local-storage-signing-secret-local-32

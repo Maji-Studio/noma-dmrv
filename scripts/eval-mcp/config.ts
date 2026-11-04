@@ -26,7 +26,8 @@ export const CASES = [
 export const LAB_TOOL_CALL_BUDGET = 8;
 export const LAB_BATCH_CODE = "CB-X";
 export const LAB_DURABILITY_OPTION = "200_year";
-export const LAB_BATCH_WINDOW_DAYS = 30;
+/** Isometric batches must end before start + one calendar month (#1149); 27 days fits every month. */
+export const LAB_BATCH_WINDOW_DAYS = 27;
 export const LAB_SAMPLING_LOCAL_TIME = "10:00";
 /** Stored `real` columns round-trip through float32, so percents compare within this. */
 export const LAB_VALUE_TOLERANCE = 1e-4;

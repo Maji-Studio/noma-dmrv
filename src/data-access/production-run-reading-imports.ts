@@ -38,7 +38,7 @@ export async function getProductionRunReadingsImportContext(
       mimeType: documents.mimeType,
       productionRunId: productionRuns.id,
       runCode: productionRuns.code,
-      runDate: productionRunDateExpr(),
+      runDate: productionRunDateExpr(ctx.organizationId),
       runWindowStart: productionRuns.startTime,
       runWindowEnd: productionRuns.endTime,
     })

@@ -56,7 +56,7 @@ action the browser can call with any arguments, so it must never accept an
 `OrgContext` (or any object with `organizationId`, `orgRole` or
 `isPlatformAdmin`), a raw `organizationId`/`orgId`, a `db`/`tx` handle, or a
 `...args: Parameters<…>` passthrough, and it must not apply `requireOrgRole` /
-`requireOrgScope` to anything but the `withAction` callback's context. Put
+`requireOrgScope` to anything but the `withAction` or `withCreate` callback's context. Put
 trusted-context code in a directive-free module: `src/lib/operations/` for
 migrated writes, `src/lib/read-models/` for reads, or a legacy core under
 src/fn/**/*-core.ts. `pnpm check:server-action-exports` enforces this with
@@ -86,6 +86,11 @@ such methods, fails closed even for harmless uses and has no waiver.
   unless profiling demands it.
 - **Avoid `useEffect`** — prefer React Query, server actions, or derived state. Reach for it
   only for external-system sync, subscriptions, or imperative DOM work.
+- **Readers of a mutable third-party instance start with `"use no memo"`** — a component
+  that reads one from context or props (e.g. the TanStack `table` from `useReactTable`, which
+  the compiler skips as an incompatible library) must opt out, and the context value carrying
+  it must not be memoized, or the compiled reader caches first-render reads (#1280,
+  `src/components/ui/data-table/index.tsx`).
 
 ## Adding a feature
 

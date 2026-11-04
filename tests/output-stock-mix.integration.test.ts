@@ -22,8 +22,9 @@ afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedS
 async function twoBatches() {
   const f = await postedStockFixture({ quantityKg: 5000, stockKg: 0 });
   fixtures.push(f);
-  const p1 = await postProduct(f, { massKg: 400, placedAt: "2026-09-12T12:00:00.000Z" });
-  const p2 = await postProduct(f, { massKg: 300, placedAt: "2026-09-13T12:00:00.000Z" });
+  // Water keeps the pile wetter than the 20% draws below, so a draw never leaves wet below solids (#1252).
+  const p1 = await postProduct(f, { massKg: 400, waterAddedKg: 200, placedAt: "2026-09-12T12:00:00.000Z" });
+  const p2 = await postProduct(f, { massKg: 300, waterAddedKg: 150, placedAt: "2026-09-13T12:00:00.000Z" });
   return { ...f, p1, p2 };
 }
 type Fixture = Awaited<ReturnType<typeof twoBatches>>;

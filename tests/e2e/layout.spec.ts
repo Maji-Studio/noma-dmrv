@@ -24,12 +24,12 @@ test.describe("App Layout - Sidebar Navigation", () => {
   }) => {
     const protectedRoutes = [
       // Production
-      "/feedstocks",
+      "/feedstock-intake",
       "/production-runs",
       // Infrastructure
       "/facilities",
       "/reactors",
-      "/storage-locations",
+      "/storage-bins",
       // Parties
       "/suppliers",
       "/customers",
@@ -79,11 +79,11 @@ test.describe("App Routes Structure", () => {
     const entityRoutes = [
       { path: "/facilities", name: "Facilities" },
       { path: "/reactors", name: "Reactors" },
-      { path: "/storage-locations", name: "Storage Locations" },
+      { path: "/storage-bins", name: "Storage Locations" },
       { path: "/suppliers", name: "Suppliers" },
       { path: "/customers", name: "Customers" },
-      { path: "/feedstocks", name: "Feedstocks" },
-      { path: "/production-runs", name: "Production Runs" },
+      { path: "/feedstock-intake", name: "Feedstock intake" },
+      { path: "/production-runs", name: "Production runs" },
     ];
 
     for (const route of entityRoutes) {

@@ -1,5 +1,5 @@
 /**
- * Test harness for the required marker guards (`form-detail-parity-forms.test.tsx`).
+ * Test harness for the required marker guards (`form-required-markers.test.tsx`).
  * Renders a form and reads which `FormField`s carry the star (`required`) and how
  * many `RequiredMarker`s render in all, so stars outside FormField (a position
  * picker label, the GIS reference label) count too.
@@ -14,7 +14,6 @@
  */
 import type { ReactElement } from "react";
 import { act, create, type ReactTestInstance } from "react-test-renderer";
-import { FormDetailProvider } from "./form-detail-context";
 import { FormField } from "./form-field";
 import { RequiredMarker } from "./required-marker";
 
@@ -33,10 +32,10 @@ async function submitForms(root: ReactTestInstance) {
   }
 }
 
-async function render(element: ReactElement) {
+export async function renderForm(element: ReactElement) {
   let renderer!: ReturnType<typeof create>;
   await act(async () => {
-    renderer = create(<FormDetailProvider scope="required-markers">{element}</FormDetailProvider>);
+    renderer = create(element);
   });
   return renderer;
 }
@@ -48,7 +47,7 @@ const read = (root: ReactTestInstance) => ({
 });
 
 export async function requiredMarkers(element: ReactElement, { submit = true } = {}): Promise<RequiredMarkers> {
-  const renderer = await render(element);
+  const renderer = await renderForm(element);
   const before = read(renderer.root);
   if (submit) await submitForms(renderer.root);
   const after = read(renderer.root);
@@ -67,7 +66,7 @@ export async function conditionalRequired(
   target: string | ((root: ReactTestInstance) => { starred: boolean; error: string | undefined }),
   empty: (root: ReactTestInstance) => Promise<void> = async () => undefined,
 ): Promise<ConditionalResult> {
-  const renderer = await render(element);
+  const renderer = await renderForm(element);
   await empty(renderer.root);
   await submitForms(renderer.root);
   const field = typeof target === "string"

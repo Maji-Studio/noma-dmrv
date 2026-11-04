@@ -1,12 +1,13 @@
 /**
- * Above the line list: the KPI strip (Lines open and Files missing apply
+ * Above the line list: the KPI strip (Components open and Files missing apply
  * their chip), the state chips with counts and the sort select.
  */
 "use client";
 
 import { DataTable } from "@/components/ui";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatFacilityDay } from "@/lib/format-utils";
+import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { LINE_SORTS, LINE_SORT_LABELS, type LineCounts, type LineFilter, type LineSort } from "./emission-line-display";
 
@@ -21,12 +22,13 @@ export interface BatchKpis {
 
 interface KpiCell { label: string; value: string; detail: string; filter?: LineFilter }
 
-export function BatchKpiStrip({ kpis, filter, onFilter }: { kpis: BatchKpis; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
+/** `timeZone` is the batch's own facility zone: the working facility may be another one. */
+export function BatchKpiStrip({ kpis, timeZone, filter, onFilter }: { kpis: BatchKpis; timeZone: string; filter: LineFilter | null; onFilter: (next: LineFilter | null) => void }) {
   const cells: KpiCell[] = [
-    { label: "Lines open", value: String(kpis.open), detail: `of ${kpis.total} lines`, filter: "open" },
-    { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "line" : "lines", filter: "missing" },
+    { label: "Components open", value: String(kpis.open), detail: `of ${kpis.total} components`, filter: "open" },
+    { label: "Files missing", value: String(kpis.filesMissing), detail: kpis.filesMissing === 1 ? "component" : "components", filter: "missing" },
     { label: "Manual entries this month", value: String(kpis.entriesThisMonth), detail: "" },
-    { label: "Last entry", value: kpis.lastEntryAt ? formatDate(kpis.lastEntryAt) : MISSING_VALUE.none, detail: "" },
+    { label: "Last entry", value: kpis.lastEntryAt ? formatFacilityDay(kpis.lastEntryAt, timeZone) : MISSING_VALUE.none, detail: "" },
   ];
   return (
     <div className="grid grid-cols-2 bg-[var(--paper)] [border:var(--panel-border)] lg:grid-cols-4">
@@ -70,7 +72,7 @@ export const LINE_CHIPS: { filter: LineFilter | null; label: string; count: keyo
   { filter: null, label: "All", count: "all" },
   { filter: "open", label: "Open", count: "open" },
   { filter: "missing", label: "File missing", count: "missing" },
-  { filter: "review", label: "Needs review", count: "review" },
+  { filter: "review", label: EMISSION_LINE_STATE_LABELS.needsReview, count: "review" },
   { filter: "notRecorded", label: "Not recorded", count: "notRecorded" },
   { filter: "done", label: "Done", count: "done" },
 ];
@@ -91,7 +93,7 @@ export function LineToolbar({ counts, filter, sort, onFilter, onSort }: LineTool
   return (
     <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
       <div className="-mx-16 overflow-x-auto px-16 sm:mx-0 sm:px-0">
-        <div role="group" aria-label="Show lines" className="flex w-max border-[1.5px] border-[var(--clr-dark-purple-20)]">
+        <div role="group" aria-label="Show components" className="flex w-max border-[1.5px] border-[var(--clr-dark-purple-20)]">
           {LINE_CHIPS.map((chip, index) => {
             const active = filter === chip.filter;
             const count = counts[chip.count];
@@ -115,7 +117,7 @@ export function LineToolbar({ counts, filter, sort, onFilter, onSort }: LineTool
           })}
         </div>
       </div>
-      <DataTable.FilterSelect value={sort} onChange={(event) => onSort(event.target.value as LineSort)} aria-label="Sort lines">
+      <DataTable.FilterSelect value={sort} onChange={(event) => onSort(event.target.value as LineSort)} aria-label="Sort components">
         {LINE_SORTS.map((option) => (
           <option key={option} value={option}>{`Sort: ${LINE_SORT_LABELS[option].toLowerCase()}`}</option>
         ))}

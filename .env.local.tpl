@@ -33,15 +33,24 @@ BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env local/BETTER_AUTH_S
 CRON_SECRET="op://Environment Variables/noma-dmrv env local/CRON_SECRET"
 ADMIN_EMAIL="op://Environment Variables/noma-dmrv env local/ADMIN_EMAIL"
 ADMIN_PASSWORD="op://Environment Variables/noma-dmrv env local/ADMIN_PASSWORD"
-ALLOW_SELF_SIGNUP="op://Environment Variables/noma-dmrv env local/ALLOW_SELF_SIGNUP"
 # Required true for e2e auth fixtures (Better Auth rate-limits sign-in)
 DISABLE_RATE_LIMIT="op://Environment Variables/noma-dmrv env local/DISABLE_RATE_LIMIT"
+
+# -----------------------------------------------------------------------------
+# Unfinished features (src/config/feature-switches.ts)
+# -----------------------------------------------------------------------------
+# Not ready yet: these still lack testing and concept work. Set "true" in the
+# local item; staging and production leave them unset, which means off.
+MCP_ENABLED="op://Environment Variables/noma-dmrv env local/MCP_ENABLED"
+STOCK_ADJUSTMENTS_ENABLED="op://Environment Variables/noma-dmrv env local/STOCK_ADJUSTMENTS_ENABLED"
+MULTI_BIN_RUNS_ENABLED="op://Environment Variables/noma-dmrv env local/MULTI_BIN_RUNS_ENABLED"
 
 # -----------------------------------------------------------------------------
 # Resend (Email Service)
 # -----------------------------------------------------------------------------
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env local/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env local/RESEND_FROM_EMAIL"
+RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env local/RESEND_REPLY_TO"
 
 # -----------------------------------------------------------------------------
 # Isometric (sandbox)

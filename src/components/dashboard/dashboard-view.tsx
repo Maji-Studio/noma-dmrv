@@ -21,10 +21,10 @@ import {
 } from "@/components/onboarding";
 import { SetupCreateSheet } from "@/components/onboarding/setup-create-sheet";
 import { RegistryConnectionDialog } from "@/components/certification/registry-connection-dialog";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { HeroKpiBand } from "./hero-kpi-band";
 import { FlowHero } from "./flow-hero";
 import { AttentionList } from "./attention-list";
@@ -37,6 +37,7 @@ const DEFAULT_RANGE: DashboardRange = "month";
 export function DashboardView() {
   const { activeOrganizationId, facilityId, selectedFacility } =
     useFacilityContext();
+  const { timeZone } = useFacilityClock(facilityId);
   const [setupSurface, setSetupSurface] = useState<"facility" | "reactor" | "registry" | null>(null);
   const [range, setRange] = useState<DashboardRange>(DEFAULT_RANGE);
   const { data, isLoading, error } = useDashboardOverview(facilityId, range);
@@ -74,7 +75,7 @@ export function DashboardView() {
           <p className="body-small text-[var(--color-text-secondary)]">
             {facilityId
               ? data
-                ? `Live operations · updated ${formatDateTime(data.generatedAt)}`
+                ? `Live operations · updated ${formatFacilityDateTime(data.generatedAt, timeZone)}`
                 : "Live operations across this facility"
               : "Select a facility to monitor its carbon removal."}
           </p>
@@ -132,7 +133,7 @@ export function DashboardView() {
           key={facilityId}
           facilityId={facilityId}
           facilityLabel={selectedFacility?.code}
-          canManage={onboarding.status?.isOwnerOrAdmin ?? false}
+          canManage={onboarding.status?.canManage ?? false}
           onClose={() => setSetupSurface(null)}
         />
       )}
@@ -149,6 +150,7 @@ function DashboardBody({
   isLoading: boolean;
   facilityId: string;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   return (
     <>
       <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
@@ -170,7 +172,7 @@ function DashboardBody({
             structuralGaps={data.structuralGaps}
             total={data.attentionTotal}
           />
-          <ActivityFeed activity={data.activity} />
+          <ActivityFeed activity={data.activity} timeZone={timeZone} />
           <CertificationBlock
             certification={data.certification}
             facilityId={facilityId}

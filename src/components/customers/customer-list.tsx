@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { entityViewHref } from "@/lib/entity-deep-link";
+import { recordHref, CUSTOMER_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -19,6 +19,7 @@ import {
   useRestoreCustomer,
   useCustomerLocations,
   useCustomers,
+  useCustomerStats,
   useUpdateCustomer,
 } from "@/hooks/use-customers";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -28,13 +29,16 @@ import {
 } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { CustomerDeleteDialog } from "./customer-delete-dialog";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { customerInUseReferences, inUseMoreCount, type InUseRecordLink } from "@/lib/in-use-references";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { CUSTOMER_DELIVERIES_REASON } from "@/lib/party-domain-errors";
 import { ArchivedCustomerNotice } from "@/components/parties";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
@@ -46,13 +50,19 @@ import { CascadeChangedError } from "@/lib/cascade-changed";
 import type { CascadePreview } from "@/lib/domain-errors";
 import { toSaveErrorMessage, StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, LOCATION_DEEP_LINK_PARAM } from "@/lib/entity-deep-link";
-import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
 import { ILLUSTRATION_SIZE, CustomerArt } from "@/components/ui/illustrations";
 
 /** Shown when the orders deleted with a customer changed after the dialog listed them. */
 const CASCADE_CHANGED_MESSAGE = "The orders deleted with this customer changed. Review the list and delete again.";
+
+/** Contact details an operator can add from the Columns menu. */
+const CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  address: false,
+  contactEmail: false,
+  contactPhone: false,
+};
 
 // ============================================
 // Column Definitions
@@ -95,6 +105,34 @@ function createColumns(
       cell: ({ row }) => (
         <span className="inline-flex items-center justify-center min-w-[28px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium">
           {row.original.locationCount}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactEmail",
+      header: "Contact email",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.contactEmail || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "contactPhone",
+      meta: { nowrap: true },
+      header: "Contact phone",
+      cell: ({ row }) => (
+        <span className="text-[var(--color-text-secondary)]">
+          {row.original.contactPhone || MISSING_VALUE.notRecorded}
         </span>
       ),
     },
@@ -151,6 +189,9 @@ export function CustomerList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<CustomerWithRelations | null>(null);
+  // The deliveries a refused confirm named, so the in-use dialog can link each one.
+  const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
+  const [conflictMore, setConflictMore] = useState(0);
   // The order list the server sent back when it changed since the dialog opened.
   const [changedCascade, setChangedCascade] = useState<{ cascade: CascadePreview; message: string } | null>(null);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
@@ -198,7 +239,6 @@ export function CustomerList() {
   const customers = customersData?.items ?? [];
 
   // Computed stats
-  const totalCustomers = customersData?.total ?? 0;
   const totalPages = customersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -206,11 +246,12 @@ export function CustomerList() {
     isLoading,
     setCurrentPage,
   });
-  const totalLocations = customers.reduce((sum, c) => sum + c.locationCount, 0);
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useCustomerStats({ archived: showArchived });
   const hasActiveSearch = searchInput.trim().length > 0;
 
   // Side sheet helpers
   const openCreate = () => {
+    createCustomer.startDraft();
     void setFocusedCustomerId(null);
     void setDeepLinkMode(null);
     void setLocationIntent(null);
@@ -274,7 +315,7 @@ export function CustomerList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
+  const handleCreate = async (data: CustomerFormData, onRefusal: SaveRefusalHandler, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
       // One transaction on the server: a location that fails takes the customer
@@ -286,15 +327,16 @@ export function CustomerList() {
       closeSideSheet();
       toast.success("Customer created.");
     } catch (error) {
-      setCreateError(
+      setCreateError(onRefusal(
+        error,
         error instanceof Error
           ? error.message
           : "The customer and its locations were not created. Check the form and save again.",
-      );
+      ));
     }
   };
 
-  const handleUpdate = async (data: CustomerFormData) => {
+  const handleUpdate = async (data: CustomerFormData, onRefusal: SaveRefusalHandler) => {
     if (!displaySideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -310,7 +352,7 @@ export function CustomerList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Customer was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Customer was not saved. Try again.")));
     }
   };
 
@@ -342,9 +384,13 @@ export function CustomerList() {
         return;
       }
       const message = toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingCustomer.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      const references = customerInUseReferences(error);
+      // An archived customer opens the in-use dialog only to link its blockers; otherwise the server's own reason shows inline.
+      if (isInUseDeleteRefusal(error) && (!deletingCustomer.archivedAt || references.length > 0)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active customer, Close only for an archived one).
         setDeleteConflict(deletingCustomer);
+        setConflictReferences(references);
+        setConflictMore(inUseMoreCount(error, "deliveries"));
         setDeletingCustomer(null);
         return;
       }
@@ -395,8 +441,11 @@ export function CustomerList() {
   // A customer whose orders have deliveries is refused when the dialog opens,
   // so the lock shows before the operator confirms anything.
   const previewRefusedInUse =
-    !!deletingCustomer && !deletingCustomer.archivedAt && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error.message);
+    !!deletingCustomer && !!deletePreview.error && isInUseDeleteRefusal(deletePreview.error) &&
+    (!deletingCustomer.archivedAt || customerInUseReferences(deletePreview.error).length > 0);
   const conflictCustomer = deleteConflict ?? (previewRefusedInUse ? deletingCustomer : null);
+  const conflictLinks = deleteConflict ? conflictReferences : customerInUseReferences(deletePreview.error);
+  const conflictMoreLinks = deleteConflict ? conflictMore : inUseMoreCount(deletePreview.error, "deliveries");
 
   const columns = createColumns(openView, openEdit, handleArchive, handleRestore, handleDelete);
 
@@ -426,9 +475,8 @@ export function CustomerList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="partners"
         title="Customers"
-        subtitle="Biochar buyers and their application locations"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -441,22 +489,25 @@ export function CustomerList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived customers" : "Active customers"}
-          value={totalCustomers}
+          value={statsData?.totalCustomers ?? 0}
+          description="In this organization"
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biochar application customers"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Locations on this page"
-          value={totalLocations}
+          title="Total locations"
+          value={statsData?.totalLocations ?? 0}
+          description={showArchived ? "Locations of all archived customers" : "Locations of all customers that are not archived"}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
-          description="Application field locations on this page"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={CUSTOMER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={customers}
         enableSorting={false}
@@ -475,7 +526,7 @@ export function CustomerList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => entityViewHref("/customers", CUSTOMER_DEEP_LINK_PARAM, row.id)}
+        getRowHref={(row) => recordHref("customer", row.id)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -525,7 +576,10 @@ export function CustomerList() {
       {conflictCustomer && (
         <InUseDeleteDialog
           label={conflictCustomer.code}
-          onArchive={() => handleArchive(conflictCustomer)}
+          onArchive={conflictCustomer.archivedAt ? undefined : () => handleArchive(conflictCustomer)}
+          reason={conflictLinks.length > 0 ? CUSTOMER_DELIVERIES_REASON : undefined}
+          references={conflictLinks}
+          moreReferences={conflictMoreLinks}
           onClose={() => {
             setDeleteConflict(null);
             setDeletingCustomer(null);

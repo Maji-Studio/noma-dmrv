@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/server", () => ({
   resolveOrgContext: mocks.resolveOrgContext,
+  hasOrgRole: vi.fn().mockReturnValue(false),
 }));
 vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: mocks.requireOrgFacility,
@@ -48,9 +49,10 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
-vi.mock("@/config/env", () => ({
-  env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
-}));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
+});
 vi.mock("@/lib/log", () => ({
   logger: mocks.logger,
   sanitizeErrorMessage: (error: unknown) =>
@@ -59,6 +61,7 @@ vi.mock("@/lib/log", () => ({
 
 import type { DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { POST as activitySummaryRoute } from "./credit-batches/activity/summary/route";
 import { POST as activityRoute } from "./credit-batches/activity/route";
 import { POST as creditBatchesRoute } from "./credit-batches/route";
@@ -244,6 +247,7 @@ const endpoints: Record<string, ReadEndpoint> = {
       linkedFacilityCount: 0,
       isProduction: false,
       viewerCanManage: false,
+      viewerCanDeleteRegistryRemovals: false,
     },
     badInput: () =>
       certifierSummaryRoute(
@@ -321,7 +325,7 @@ describe.each(Object.entries(endpoints))(
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toEqual({
         success: false,
-        error: "Select an Organization to continue.",
+        error: "Select an organization to continue.",
       });
       expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     });
@@ -397,10 +401,10 @@ describe("startup read contracts", () => {
   });
 
   it("preserves the scoped facility lookup's missing-row response", async () => {
-    mocks.getFacilityById.mockRejectedValueOnce(new SafeError("Facility not found"));
+    mocks.getFacilityById.mockRejectedValueOnce(new DomainError("not_found", "Facility not found"));
     const response = await facilityRoute(post("/api/reads/facilities"), facilityParams(FOREIGN_FACILITY_ID));
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ success: false, error: "Facility was not found." });
+    await expect(response.json()).resolves.toEqual({ success: false, error: "Facility was not found.", code: "not_found" });
     expect(mocks.getFacilityById).toHaveBeenCalledWith(ORG_CONTEXT, FOREIGN_FACILITY_ID);
   });
 

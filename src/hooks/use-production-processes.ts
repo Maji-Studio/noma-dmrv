@@ -1,5 +1,6 @@
 "use client";
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getMethodBEligibilityFn,
@@ -51,9 +52,9 @@ export function useRecordMethodBPrerequisites() {
 
 export function useStartNewProductionProcess() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: StartNewProcessInput) =>
-      unwrap(await startNewProductionProcessFn(input)),
+  return useIntentMutation({
+    mutationFn: async (input: StartNewProcessInput, intentKey) =>
+      unwrap(await startNewProductionProcessFn(input, { intentKey })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: productionProcessKeys.all }),
   });
 }

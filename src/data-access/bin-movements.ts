@@ -1,3 +1,5 @@
+import { retryTransaction } from '@/lib/db/transaction-retry';
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { DomainError } from "@/lib/domain-errors";
 import { OUTPUT_STOCK_FUTURE_TIME_MESSAGE } from "./output-stock-post";
 import { getFeedstockBinStock } from "./feedstock-bin-ledger";
@@ -196,6 +198,7 @@ async function createBinMovementInTransaction(
     throw error;
   }
 
+  if (input.lane === 'feedstock') await reallocateRunsForBins(ctx, tx, [input.storageLocationId], { earliestEventAt: movement.movementType === 'loss' ? movement.occurredAt! : movement.createdAt, eventTie: { recordedAt: movement.createdAt, id: movement.id } });
   return movement;
 }
 
@@ -205,8 +208,8 @@ async function createBinMovementInTransaction(
  * The ledger is append-only, so a resubmitted form would otherwise post a
  * second deduction. The request key the form instance generated serializes the
  * retry, replays the saved movement when the values match, and refuses a key
- * reused with different values. Reversing a mistaken loss is a separate
- * command that does not exist yet.
+ * reused with different values. Correcting or removing a mistaken loss uses
+ * `correctFeedstockLoss` in `./feedstock-loss-corrections`.
  */
 export async function createBinMovement(
   ctx: OrgContext,
@@ -235,7 +238,7 @@ export async function createBinMovement(
     massDeltaKg: input.massDeltaKg,
     reason: input.reason,
   };
-  return db.transaction(async (tx) => {
+  return retryTransaction(() => db.transaction(async (tx) => {
     // Request key first: a concurrent twin waits here and replays the saved
     // movement instead of queueing behind the bin lock for a second insert.
     await lockMovementRequest(ctx, tx, input.idempotencyKey);
@@ -285,7 +288,7 @@ export async function createBinMovement(
         payloadHash: requestFingerprint(payload),
       },
     });
-  });
+  }));
 }
 
 /**
@@ -299,7 +302,7 @@ export async function recordStockTakeMovement(
 ): Promise<BinMovement> {
   requireOrgScope(ctx);
   if (input.lane !== 'feedstock') throw new SafeError('Use the output stock preview and posting action for output bins.');
-  return db.transaction(async (tx) => {
+  return retryTransaction(() => db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
     await assertBinLaneTarget(ctx, tx, input);
 
@@ -354,5 +357,5 @@ export async function recordStockTakeMovement(
       countedWetMassKg,
       moistureRatioUsed,
     });
-  });
+  }));
 }

@@ -7,7 +7,11 @@
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
@@ -18,6 +22,8 @@ import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/s
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
@@ -25,11 +31,13 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
   useDeleteReactor,
   useReactors,
+  useReactorStats,
   useUpdateReactor,
 } from "@/hooks/use-reactors";
 import {
@@ -37,12 +45,18 @@ import {
   type CreateReactorData,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { formatTotalThroughputTph } from "./reactor-throughput";
+import { formatThroughputTph } from "./reactor-throughput";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
+
+/** Throughput is optional detail an operator can add from the Columns menu. */
+const REACTOR_COLUMNS_HIDDEN_BY_DEFAULT = {
+  nominalThroughputTph: false,
+};
 
 // ============================================
 // Column Definitions
@@ -67,23 +81,20 @@ function createColumns(
       cell: ({ row }) => <span>{row.original.identifier}</span>,
     },
     {
-      accessorKey: "facilityName",
-      header: "Facility",
-      cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-          {row.original.facilityCode && (
-            <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-              {row.original.facilityCode}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
+    },
+    {
+      accessorKey: "nominalThroughputTph",
+      header: "Nominal throughput (tph)",
+      cell: ({ row }) => (
+        <span>
+          {row.original.nominalThroughputTph === null
+            ? MISSING_VALUE.notRecorded
+            : row.original.nominalThroughputTph.toLocaleString()}
+        </span>
+      ),
     },
     {
       id: "actions",
@@ -117,12 +128,21 @@ export function ReactorList() {
     entity: ReactorWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
+  const [linkedReactorId, setLinkedReactorId] = useQueryState(
+    RECORD_LINKS.reactor.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const linkedReactor = useEntityEditRecord("reactor", linkedReactorId ?? "");
+  const linkedRecord = useLinkedRecordFacility(linkedReactor.data, linkedReactor.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const [deletingReactor, setDeletingReactor] = useState<ReactorWithRelations | null>(null);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string } | null>(null);
 
   // Server-side search: debounce the search input before querying
   const [searchInput, setSearchInput] = useState("");
@@ -143,6 +163,10 @@ export function ReactorList() {
     filters,
     { enabled: !!contextFacilityId },
   );
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useReactorStats(
+    contextFacilityId || undefined,
+    { enabled: !!contextFacilityId },
+  );
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();
@@ -150,50 +174,68 @@ export function ReactorList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    void setLinkedReactorId(null);
+    createReactor.startDraft();
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (reactor: ReactorWithRelations) => {
+    void setLinkedReactorId(reactor.id);
     setSideSheet({ entity: reactor, mode: "view" });
   };
   const openEdit = (reactor: ReactorWithRelations) => {
+    void setLinkedReactorId(reactor.id);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: reactor, mode: "edit" });
   };
   const closeSideSheet = () => {
+    void setLinkedReactorId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
   };
   useOpenCreateIntent(openCreate);
 
+  // A missing or deleted linked reactor toasts once and drops the param.
+  useEffect(() => {
+    if (linkedReactorId && !linkedReactor.data && (linkedReactor.isError || linkedReactor.isSuccess)) {
+      toast.error("Linked reactor could not be opened");
+      void setLinkedReactorId(null);
+    }
+  }, [linkedReactorId, linkedReactor.data, linkedReactor.isError, linkedReactor.isSuccess, setLinkedReactorId, toast]);
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== contextFacilityId ? null : sideSheet;
+  const displaySideSheet = localSideSheet ?? (linkedReactorId && linkedReactor.data && linkedFacilityReady
+    ? { mode: "view" as const, entity: linkedReactor.data }
+    : null);
+
   // Handlers
-  const handleCreate = async (data: CreateReactorData) => {
+  const handleCreate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       await createReactor.mutateAsync(data);
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Reactor created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Reactor was not created. Check the form.");
+      setCreateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: CreateReactorData) => {
-    if (!sideSheet?.entity) return;
+  const handleUpdate = async (data: CreateReactorData, onRefusal: SaveRefusalHandler) => {
+    if (!displaySideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
-      setSideSheet(null);
+      await updateReactor.mutateAsync({ reactorId: displaySideSheet.entity.id, expectedVersion: displaySideSheet.entity.version, ...data });
+      closeSideSheet();
       toast.success("Reactor updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Reactor was not saved. Try again.");
+      setUpdateError(onRefusal(error, error instanceof Error ? error.message : "Reactor was not saved. Try again."));
     }
   };
 
   const handleDelete = (reactorId: string) => {
+    setDeleteError(null);
     setDeletingReactor((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 
@@ -205,15 +247,20 @@ export function ReactorList() {
       setDeletingReactor(null);
       toast.success("Reactor deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Reactor ${deletingReactor.code}`, "Reactor was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        setInUseRefusal({ code: deletingReactor.code, message });
+        setDeletingReactor(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeletingReactor(null);
-      setDeleteError(toDeleteErrorMessage(error, `Reactor ${deletingReactor.code}`, "Reactor was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
   const columns = createColumns(openEdit, handleDelete);
 
   const reactors = reactorsData?.items ?? [];
-  const totalReactors = reactorsData?.total ?? 0;
   const totalPages = reactorsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -221,18 +268,61 @@ export function ReactorList() {
     isLoading,
     setCurrentPage,
   });
-  const totalThroughputValue = formatTotalThroughputTph(reactors);
+  const totalThroughputValue = formatThroughputTph(
+    statsData?.totalNominalThroughputTph ?? null,
+  );
   const hasActiveSearch = searchInput.trim().length > 0;
+
+  // Derived values for the side sheet
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
+
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "reactor");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!contextFacilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      mode={sideSheetMode}
+      onModeChange={(mode) => displaySideSheet && setSideSheet({ ...displaySideSheet, mode })}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      editLabel="Edit reactor"
+      readOnly={sheetReadOnly}
+      sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
+    >
+      <ReactorForm
+        key={sideSheetEntity?.id ?? "create"}
+        reactor={sideSheetEntity as Reactor | undefined}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={closeSideSheet}
+        isSubmitting={createReactor.isPending || updateReactor.isPending}
+        errorMessage={createError || updateError || undefined}
+        submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
+      />
+    </EntitySideSheet>
+  );
 
   if (!contextFacilityId) {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          area="infrastructure"
+          area="setup"
           title="Reactors"
-          subtitle="Pyrolysis equipment and facility capacity"
         />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
+        {sideSheetElement}
       </div>
     );
   }
@@ -245,23 +335,11 @@ export function ReactorList() {
     );
   }
 
-  // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
-
-  const sideSheetTitle =
-    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
-
-  const sideSheetSubtitle =
-    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
-
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
+        area="setup"
         title="Reactors"
-        subtitle="Pyrolysis equipment and facility capacity"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
@@ -274,25 +352,29 @@ export function ReactorList() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total reactors"
-          value={totalReactors}
+          value={statsData?.totalReactors ?? 0}
+          description="All reactors in this facility"
           icon={<LightningIcon size={24} weight="bold" />}
-          description="Pyrolysis equipment units"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
-          title="Throughput on this page"
+          title="Nominal throughput"
           value={totalThroughputValue}
+          description="Combined across all reactors in this facility"
           icon={<FlaskIcon size={24} weight="bold" />}
-          description="Combined nominal throughput on this page"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={REACTOR_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={reactors}
         onRowClick={openView}
+        getRowHref={(row) => recordHref("reactor", row.id, { facilityId: row.facilityId })}
         enableSorting={false}
         enablePagination
         manualPagination
@@ -338,42 +420,29 @@ export function ReactorList() {
       </DataTable>
 
       {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deletingReactor && <ServerError message={deleteError} />}
+
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+        </InUseDeleteDialog>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingReactor}
         title="Delete reactor"
-        message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
+        message="Are you sure you want to delete this reactor? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingReactor(null);
           setDeleteError(null);
         }}
         isPending={deleteReactor.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
-      {/* Unified Side Sheet */}
-      <EntitySideSheet
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        editLabel="Edit reactor"
-        sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
-      >
-        <ReactorForm
-          key={sideSheetEntity?.id ?? "create"}
-          reactor={sideSheetEntity as Reactor | undefined}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createReactor.isPending || updateReactor.isPending}
-          errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
-        />
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

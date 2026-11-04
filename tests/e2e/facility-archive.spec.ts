@@ -65,10 +65,20 @@ test.describe("Facility cascading archive", () => {
 
     // --- Facility is visible in the active list ---
     await page.goto("/facilities");
-    await expect(page.getByText("Active facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities", { exact: true })).toBeVisible({
       timeout: 15000,
     });
+    // The search is debounced. Opening the row menu before the filtered list
+    // arrives lets the refetch swap the card for a skeleton and close the menu
+    // under the click (#1379).
+    const filteredListResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/reads/facilities" &&
+        (response.request().postData() ?? "").includes(facility.name),
+    );
     await page.getByLabel("Search facilities").fill(facility.name);
+    await filteredListResponse;
     const facilityCard = page.locator("article").filter({ hasText: facility.name });
     await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
       timeout: 10000,
@@ -118,7 +128,7 @@ test.describe("Facility cascading archive", () => {
     await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText("Archived facilities")).toBeVisible();
+    await expect(page.getByText("Archived facilities", { exact: true })).toBeVisible();
 
     // --- Restore brings facility + children back ---
     await facilityCard

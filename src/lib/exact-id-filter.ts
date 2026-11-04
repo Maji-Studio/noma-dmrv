@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const uuidSchema = z.uuid();
 
+/**
+ * Most ids an exact-record list filter (`?ids=`) accepts. The list schemas
+ * cap at it, and a link past it opens the plain list instead.
+ */
+export const EXACT_ID_FILTER_MAX = 100;
+
 export interface ExactIdFilter {
   ids: string[];
   normalized: string | null;

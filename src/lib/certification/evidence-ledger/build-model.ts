@@ -11,6 +11,7 @@
  * mass per delivery, so no global applied-share scaling is needed.
  */
 import { SafeError } from "@/lib/errors";
+import { transportLedgerInput } from "./input-selection";
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
@@ -74,18 +75,14 @@ function basisOf(leg: TransportLeg): LedgerDistanceBasis {
   }
 }
 
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-}
-
 function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
-  const loadMassKg =
-    leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
+  const input = transportLedgerInput(leg);
+  const { loadMassKg } = input;
   const massMissing = loadMassKg === 0;
   // Every leg counts its round trip (issue #852), so the row carries the
   // doubled distance into the t·km and reconciles to the category subtotal,
   // which `aggregateTransportMassDistance` also doubles.
-  const effectiveDistanceKm = countedRoundTripKm(leg.distanceKm);
+  const effectiveDistanceKm = countedRoundTripKm(input.distanceKm);
   const tkm = round2(effectiveDistanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
@@ -97,10 +94,10 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
     destinationName: leg.destinationName,
     originGeo: geoOf(leg.originGpsLatitude, leg.originGpsLongitude),
     destinationGeo: geoOf(leg.destinationGpsLatitude, leg.destinationGpsLongitude),
-    oneWayDistanceKm: leg.distanceKm,
+    oneWayDistanceKm: input.distanceKm,
     distanceKm: effectiveDistanceKm,
     loadMassKg,
-    mode: capitalize(leg.transportMethodType),
+    mode: input.transportMethodType,
     vehicle,
     basis: basisOf(leg),
     tkm,
@@ -111,6 +108,7 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
 function buildCategory(
   key: LedgerCategoryKey,
   legs: TransportLeg[],
+  transportOwnedElsewhere = false,
 ): LedgerCategory {
   const meta = CATEGORY_META[key];
   const builtLegs = legs.map((leg, i) =>
@@ -118,7 +116,7 @@ function buildCategory(
   );
   const canonical = key === "biochar"
     ? aggregateBiocharTransportMassDistance(legs)
-    : aggregateTransportMassDistance(legs, meta.name);
+    : aggregateTransportMassDistance(legs, meta.name, transportOwnedElsewhere);
   if (key === "biochar" && canonical.warning) throw new SafeError(canonical.warning);
   const rawTkm = canonical.massDistanceTonneKm ?? 0;
   const canonicalRawSubtotalTkm = round2(rawTkm);
@@ -144,7 +142,7 @@ function buildCategory(
 export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
   const { legsByCategory } = args;
   const categories: LedgerCategory[] = [
-    buildCategory("feedstock", legsByCategory.feedstock),
+    buildCategory("feedstock", legsByCategory.feedstock, legsByCategory.feedstockTransportOwnedElsewhere),
     buildCategory("biochar", legsByCategory.biochar),
     buildCategory("sample", legsByCategory.sample),
   ];

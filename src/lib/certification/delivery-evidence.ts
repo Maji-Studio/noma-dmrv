@@ -46,3 +46,14 @@ export function isAcceptedDeliveryEvidenceDocument(document: {
 export const PROOF_OF_DELIVERY_DOCUMENT_TYPES = [
   "delivery_receipt", "bill_of_lading", "photo",
 ] as const satisfies readonly DocumentType[];
+
+/** An uploaded file that counts as proof of delivery, the rule the submission blocker counts by. */
+export function isProofOfDeliveryDocument(document: {
+  uploadStatus: string;
+  documentType: string;
+}): boolean {
+  return (
+    document.uploadStatus === "uploaded" &&
+    PROOF_OF_DELIVERY_DOCUMENT_TYPES.some((type) => type === document.documentType)
+  );
+}

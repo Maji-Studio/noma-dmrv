@@ -1,4 +1,7 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { getDashboardAttentionItems } from "@/data-access/dashboard-overview";
+import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -10,8 +13,9 @@ import {
   certificationSubmissions,
   productionRuns,
 } from "@/db/schema";
-import { buildCreditBatchOpenItems } from "@/lib/credit-batches/open-items";
+import { buildCreditBatchWaitingItems } from "@/lib/credit-batches/open-items";
 import { getCreditBatchPageModel } from "@/data-access/credit-batch-page-model";
+import * as creditBatchAccounting from "@/data-access/credit-batch-accounting";
 import { markSubmissionSubmitted } from "@/data-access/certification";
 import {
   REMOTE_PERIOD_END_ON_METADATA_KEY,
@@ -28,6 +32,123 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 beforeAll(() => ensureTestOrg());
 
 describe("credit batch page model", () => {
+  it("keeps the original snapshot when a Removal deletion commits after the rollup read", async () => {
+    const fixture = await createLineageFixture("none");
+    const loadRollups = creditBatchAccounting.loadCreditBatchRollups;
+    const rollupRead = vi.spyOn(creditBatchAccounting, "loadCreditBatchRollups")
+      .mockImplementationOnce(async (...args) => {
+        const rollups = await loadRollups(...args);
+        // The first read has established the snapshot. Commit the deletion on
+        // another connection before allowing the remaining page reads to start.
+        await db.transaction(async tx => {
+          await tx.update(creditBatchApplications).set({ removalId: null })
+            .where(and(eq(creditBatchApplications.organizationId, TEST_ORG_ID),
+              eq(creditBatchApplications.removalId, fixture.removalId)));
+          await tx.delete(certifierRemovals)
+            .where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID),
+              eq(certifierRemovals.id, fixture.removalId)));
+        });
+        return rollups;
+      });
+    try {
+      const model = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(rollupRead).toHaveBeenCalledOnce();
+      expect(model.slices[0].removalId).toBe(fixture.removalId);
+      expect(model.removals).toEqual([expect.objectContaining({ id: fixture.removalId, phase: "draft", dryKg: 190 })]);
+      expect(model.mass).toMatchObject({
+        appliedDryKg: 190, inSubmittedDryKg: 0, inDraftDryKg: 190, notInRemovalDryKg: 0,
+      });
+
+      const afterDeletion = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(afterDeletion.slices[0].removalId).toBeNull();
+      expect(afterDeletion.removals).toEqual([]);
+      expect(afterDeletion.mass).toMatchObject({
+        appliedDryKg: 190, inSubmittedDryKg: 0, inDraftDryKg: 0, notInRemovalDryKg: 190,
+      });
+    } finally {
+      rollupRead.mockRestore();
+      await cleanupLineageFixture(fixture);
+    }
+  });
+
+  it("excludes an interrupted submitted Removal from the first-submitted milestone", async () => {
+    const fixture = await createLineageFixture("none");
+    try {
+      await db.update(certifierRemovals).set({ startedOn: "2026-06-01", completedOn: "2026-06-30" })
+        .where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, fixture.removalId)));
+      const submittedAt = new Date("2026-06-17T12:00:00Z");
+      const [submission] = await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: fixture.removalId, version: 1,
+        status: "submitted", externalId: `page-${fixture.removalId}`,
+        payloadHash: "interrupted", payloadSnapshot: {}, submittedAt,
+        metadata: { lastAttemptOutcome: "interrupted" },
+      }).returning({ id: certificationSubmissions.id });
+
+      const model = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(model.removals[0]).toMatchObject({ phase: "draft", status: { kind: "interrupted" } });
+      const displays = await loadCreditBatchRemovalDisplays(makeTestOrgContext(), [fixture.batchId]);
+      expect(displays.get(fixture.batchId)?.[0].status.kind).toBe("interrupted");
+      const todos = buildCreditBatchOpenItems({
+        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
+        removals: displays.get(fixture.batchId),
+      });
+      expect(todos.check).toContainEqual(expect.objectContaining({
+        title: `${model.removals[0].code}: Submission interrupted`,
+        target: { href: `/removals?facility=${fixture.facilityId}&resume=${fixture.removalId}` },
+      }));
+      const interruptedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(interruptedAttention.items).toContainEqual(expect.objectContaining({
+        title: "Submission interrupted",
+        href: `/removals?facility=${fixture.facilityId}&resume=${fixture.removalId}`,
+        entityCode: expect.stringMatching(new RegExp(`^${model.removals[0].code} · `)),
+      }));
+      expect(interruptedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
+
+      expect(model.mass).toMatchObject({ inDraftDryKg: 190, inSubmittedDryKg: 0 });
+      expect(model.milestones).toMatchObject({ firstRemovalSubmittedAt: null, firstRemovalSubmittedCode: null });
+
+      await db.update(certificationSubmissions).set({ metadata: {} })
+        .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
+      const completedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(completedModel.removals[0].phase).toBe("submitted");
+      const submittedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      // A submitted batch waits on the verifier, not the operator: it leaves Needs attention (#1532).
+      expect(submittedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
+      expect(submittedAttention.items.some(item => item.title === "Submission interrupted")).toBe(false);
+      expect(submittedAttention.batches).toEqual({ interrupted: 0, notSubmitted: 0, returned: 0 });
+      const submittedTodos = buildCreditBatchOpenItems({
+        facilityId: fixture.facilityId, creditBatchId: fixture.batchId, canManage: true,
+        removals: completedModel.removals,
+      });
+      expect(submittedTodos.check).toEqual([]);
+
+      expect(completedModel.milestones).toMatchObject({
+        firstRemovalSubmittedAt: submittedAt, firstRemovalSubmittedCode: completedModel.removals[0].code,
+      });
+      // A newer draft (a correction) does not undo the submitted version, on the page or the dashboard.
+      await db.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
+        localEntityType: "removal", localEntityId: fixture.removalId, version: 2,
+        status: "draft", payloadHash: "correction", payloadSnapshot: {}, metadata: {},
+      });
+      const correctedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(correctedModel.removals[0]).toMatchObject({ phase: "submitted", status: { kind: "not-submitted" } });
+      const correctedDisplays = await loadCreditBatchRemovalDisplays(makeTestOrgContext(), [fixture.batchId]);
+      expect(correctedDisplays.get(fixture.batchId)?.[0]).toMatchObject({ phase: "submitted", status: { kind: "not-submitted" } });
+      const correctedAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(correctedAttention.items.some(item => item.title.startsWith("Period ended"))).toBe(false);
+
+      await db.update(certificationSubmissions).set({ status: "draft", metadata: {}, lockedAt: null })
+        .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
+      const draftAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
+      expect(draftAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · not submitted yet" }));
+
+    } finally {
+      await cleanupLineageFixture(fixture);
+    }
+  });
+
   it("groups frozen slices by Removal, accounts in dry kg, and hides another organization's batch", async () => {
     const fixture = await createLineageFixture("none");
     const extraIds: string[] = [];
@@ -167,7 +288,7 @@ describe("credit batch page model", () => {
       const decimalModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
       expect(decimalModel.mass).toEqual({ producedDryKg: 0.9, appliedDryKg: 0.9,
         inSubmittedDryKg: 0.1, inDraftDryKg: 0.1, notInRemovalDryKg: 0.7, notAppliedDryKg: 0 });
-      expect(buildCreditBatchOpenItems({ pageModel: decimalModel }).waiting).toEqual([]);
+      expect(buildCreditBatchWaitingItems(decimalModel)).toEqual([]);
 
       const [statement] = await db.insert(certifierGhgStatements).values({
         organizationId: TEST_ORG_ID,
@@ -198,7 +319,7 @@ describe("credit batch page model", () => {
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
-        status: "in-verification",
+        status: expect.objectContaining({ kind: "in-verification", value: "pending", label: "In verification" }),
         submittedToVerifierAt,
         creditsIssuedAt: null,
       });

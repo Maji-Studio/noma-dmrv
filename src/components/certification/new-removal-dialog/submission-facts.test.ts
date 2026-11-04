@@ -41,11 +41,11 @@ const SECOND_BATCH = {
   applicationCount: 3,
 } as MemberCreditBatch;
 
-// Midday UTC so the rendered range does not shift a day under a negative
-// local offset.
+// The compiled window carries calendar dates at UTC midnight; the label must
+// not shift a day under a negative local offset (issue #1282).
 const REPORTING_WINDOW = {
-  startedOn: "2026-06-05T12:00:00.000Z",
-  completedOn: "2026-08-20T12:00:00.000Z",
+  startedOn: "2026-06-05T00:00:00.000Z",
+  completedOn: "2026-08-20T00:00:00.000Z",
 };
 
 const READY_COMPILATION = {
@@ -78,7 +78,7 @@ function check(
   key: RemovalRequirementCheck["key"],
   status: RemovalRequirementCheck["status"],
 ): RemovalRequirementCheck {
-  return { key, label: key, requirementLabel: key, status };
+  return { key, label: key, requirementLabel: key, unmetLabel: key, status };
 }
 
 function readiness(
@@ -170,7 +170,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
   it("pluralises the blocking issue count", () => {
     expect(
       facts({
-        checks: [check("mapping", "unmet"), check("template", "unmet")],
+        checks: [check("mapping", "unmet"), check("templateSet", "unmet")],
       }).headline,
     ).toBe("2 issues block submission");
   });
@@ -235,8 +235,8 @@ describe("buildSubmissionFacts verdict precedence", () => {
   });
 
   it("shows a typed advisory once, not again as a free-text note", () => {
-    const message = "Electricity is recorded, but the active Removal template has no automatic source for it.";
-    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message } as const;
+    const message = "Electricity is recorded, but the active Removal template takes no automatic datapoints for it. Check which template component should take it in Removal templates.";
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLines", message } as const;
     const result = facts({
       compilation: { ...READY_COMPILATION, submissionAdvisories: [advisory], warnings: [message, "Other note."] } as unknown as RemovalCompilationView,
       ctx: { ...CONTEXT, submissionWarnings: [message] } as unknown as RemovalCertifyContext,
@@ -247,7 +247,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
   });
 
   it("falls back to the context advisories before the compilation arrives", () => {
-    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLineReview", message: "Startup diesel is recorded." } as const;
+    const advisory = { code: "droppedRecordedFact", fixTarget: "templateLines", message: "Startup diesel is recorded." } as const;
     const result = facts({
       compilation: null,
       ctx: { ...CONTEXT, submissionAdvisories: [advisory] } as unknown as RemovalCertifyContext,
@@ -280,7 +280,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       facts({
         checks: [
           check("mapping", "met"),
-          check("template", "met"),
+          check("templateSet", "met"),
           check("evidence", "warning"),
         ],
       }),
@@ -299,7 +299,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       facts({
         checks: [
           check("mapping", "met"),
-          check("template", "met"),
+          check("templateSet", "met"),
           check("durability", "skipped"),
         ],
       }),

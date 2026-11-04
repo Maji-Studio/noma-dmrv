@@ -13,6 +13,7 @@ const buttonVariants = cva(
         primary: "bg-[var(--color-interaction)] text-white hover:bg-[var(--color-interaction-hover)] active:bg-[var(--color-interaction-active)] border-transparent",
         accent: "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent-active)] border-transparent",
         noOutline: "border-transparent bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-medium)]",
+        danger: "bg-[var(--color-signal-red)] text-white hover:brightness-90 active:brightness-75 border-transparent",
         destructive: "border border-[var(--st-bad)] bg-transparent text-[var(--st-bad)] hover:bg-[var(--clr-red-10)] active:bg-[var(--clr-red-20)]",
       },
       size: {
@@ -24,11 +25,18 @@ const buttonVariants = cva(
         icon: "h-[32px] w-[32px] p-0",
       },
       width: {
-        default: "w-auto",
+        /* No class of its own: the icon size owns its 32px width. The
+           `w-auto` for the text sizes lives in compoundVariants below. */
+        default: "",
         square: "aspect-square p-0",
         full: "w-full",
       },
     },
+    compoundVariants: (["default", "small", "large"] as const).map((size) => ({
+      size,
+      width: "default" as const,
+      class: "w-auto",
+    })),
     defaultVariants: {
       variant: "default",
       size: "default",

@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { useForm } from "react-hook-form";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FormActions } from "@/components/forms/form-actions";
 import type { SubmitBlock } from "@/components/ui/submit-block-context";
@@ -31,7 +33,7 @@ const PENDING: SubmitBlock = { reason: "Checking whether this record can change.
 function renderSheet(block: SubmitBlock | null) {
   return create(
     <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="ORD-1"
-      editNotice={<p>Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.</p>} submitBlock={block}>
+      editNotice={<p>Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.</p>} submitBlock={block}>
       <DraftForm />
     </EntitySideSheet>,
   );
@@ -54,14 +56,17 @@ describe("EntitySideSheet record lock in edit mode", () => {
     // The form stays mounted (RHF keeps the draft) inside a disabled fieldset.
     expect(renderer.root.findAllByType("input")).toHaveLength(1);
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
-    expect(text()).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
+    expect(text()).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
     expect(buttonsNamed("Save changes")).toHaveLength(0);
     expect(buttonsNamed("Back to view")).toHaveLength(1);
+    expect(buttonsNamed("Back to view")[0].props.className).toContain("max-sm:flex-1");
   });
 
   it("explains a pending check above Save, which stays off, and leaves fields to the form", () => {
     act(() => { renderer = renderSheet(PENDING); });
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(false);
+    // The fieldset is a flex item of the body: min-w-0 stops its min-content width from widening the sheet past a phone.
+    expect(renderer.root.findByType("fieldset").props.className).toContain("min-w-0");
     const [save] = buttonsNamed("Save changes");
     expect(save.props.disabled).toBe(true);
     const [reason] = renderer.root.findAll((node) => node.type === "div" && node.props.id === save.props["aria-describedby"]);
@@ -108,5 +113,37 @@ describe("RecordLockFormFrame (picker edit dialogs)", () => {
     });
     expect(renderer.root.findByType("fieldset").props.disabled).toBe(true);
     expect(buttonsNamed("Save changes")).toHaveLength(0);
+  });
+});
+
+describe("a refusal once the record is Sent", () => {
+  function RefusingForm() {
+    const { control, register } = useForm({
+      defaultValues: { notes: "Typed draft" },
+      errors: { root: { lockRefusal: { type: "locked" } } },
+    });
+    return <form>
+      <input {...register("notes")} />
+      <FormActions control={control} errorMessage="This record is locked. Its Removal was sent." />
+    </form>;
+  }
+
+  it("sits in the slot above the lock line, takes focus, and leaves no Save", () => {
+    render(
+      <EntitySideSheet open mode="edit" onModeChange={() => undefined} onOpenChange={() => undefined} title="FS-1"
+        editNotice={<p>Lock line</p>} submitBlock={SENT}>
+        <RefusingForm />
+      </EntitySideSheet>,
+    );
+    const box = document.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(box?.textContent).toContain("Your changes were not saved.");
+    expect(document.activeElement).toBe(box);
+    // Above the lock line, not at the end of the form.
+    const lockLine = screen.getByText("Lock line");
+    expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    // Read from focus once: the box itself is not a live region.
+    expect(box!.querySelector('[role="alert"]')).toBeNull();
+    cleanup();
   });
 });

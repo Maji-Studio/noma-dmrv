@@ -40,12 +40,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getApplications } from "@/data-access/applications";
+import { getDeliveries } from "@/data-access/deliveries";
+import { getFeedstocks } from "@/data-access/feedstocks";
+import { getOrders } from "@/data-access/orders";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { applications } from "@/db/schema/application";
 import { documents } from "@/db/schema/documentation";
 import { facilities, reactors } from "@/db/schema/facilities";
-import { feedstockTypes } from "@/db/schema/feedstock";
+import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
@@ -390,6 +394,117 @@ describe("applicationEvidenceGapCountSql (via getApplications)", () => {
         sqlGapCountByCode.get(app.code),
         `SQL vs JS-twin equivalence for ${app.spec.key}`,
       ).toBe(gaps.length);
+    }
+  });
+});
+
+describe("getApplications exact-id read of an archived application (#1499)", () => {
+  it("returns it only for an ids read that asks for archived rows", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const target = fixture.applications[0];
+    // The facility archive cascade stamps the delivery; applications have no archived_at.
+    await db.update(deliveries).set({ archivedAt: new Date() }).where(eq(deliveries.id, fixture.deliveryId));
+    try {
+      const plain = await getApplications(orgCtx, { ids: [target.id] });
+      const archived = await getApplications(orgCtx, { ids: [target.id], includeArchived: true });
+      const listed = await getApplications(orgCtx, { facilityId: fixture.facilityId, includeArchived: true, pageSize: LIST_PAGE_SIZE });
+      const otherOrg = await getApplications({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [target.id], includeArchived: true });
+      expect(plain.items).toHaveLength(0);
+      expect(archived.items.map((item) => item.code)).toEqual([target.code]);
+      // Lists never show archived rows, even when the flag is sent.
+      expect(listed.items).toHaveLength(0);
+      expect(otherOrg.items).toHaveLength(0);
+    } finally {
+      await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, fixture.deliveryId));
+    }
+  });
+});
+
+describe("getDeliveries exact-id filter", () => {
+  it("narrows ids within the existing organization, facility and archive scope", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const targetId = fixture.deliveryId;
+    const exact = await getDeliveries(orgCtx, { ids: [targetId], facilityId: fixture.facilityId });
+    expect(exact.items.map((item) => item.id)).toEqual([targetId]);
+    expect(exact.total).toBe(1);
+    const otherIds = await getDeliveries(orgCtx, { ids: [crypto.randomUUID()] });
+    expect(otherIds.items).toEqual([]);
+    expect(otherIds.total).toBe(0);
+    const otherFacility = await getDeliveries(orgCtx, { ids: [targetId], facilityId: crypto.randomUUID() });
+    expect(otherFacility.items).toEqual([]);
+    const otherOrg = await getDeliveries({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [targetId] });
+    expect(otherOrg.items).toEqual([]);
+    await db.update(deliveries).set({ archivedAt: new Date() })
+      .where(eq(deliveries.id, targetId));
+    try {
+      expect((await getDeliveries(orgCtx, { ids: [targetId] })).items).toEqual([]);
+    } finally {
+      await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, targetId));
+    }
+  });
+});
+
+describe("getOrders exact-id filter", () => {
+  it("narrows ids within the existing organization, facility and archive scope", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const targetId = fixture.orderId;
+    const exact = await getOrders(orgCtx, { ids: [targetId], facilityId: fixture.facilityId });
+    expect(exact.items.map((item) => item.id)).toEqual([targetId]);
+    expect(exact.total).toBe(1);
+    const otherIds = await getOrders(orgCtx, { ids: [crypto.randomUUID()] });
+    expect(otherIds.items).toEqual([]);
+    expect(otherIds.total).toBe(0);
+    const otherFacility = await getOrders(orgCtx, { ids: [targetId], facilityId: crypto.randomUUID() });
+    expect(otherFacility.items).toEqual([]);
+    const otherOrg = await getOrders({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [targetId] });
+    expect(otherOrg.items).toEqual([]);
+    await db.update(orders).set({ archivedAt: new Date() })
+      .where(eq(orders.id, targetId));
+    try {
+      expect((await getOrders(orgCtx, { ids: [targetId] })).items).toEqual([]);
+    } finally {
+      await db.update(orders).set({ archivedAt: null }).where(eq(orders.id, targetId));
+    }
+  });
+});
+
+describe("getFeedstocks exact-id filter", () => {
+  it("narrows ids within the existing organization, facility and archive scope", async (ctx) => {
+    if (!dbReachable || !fixture) {
+      ctx.skip();
+      return;
+    }
+    const orgCtx = makeTestOrgContext(TEST_USER_ID);
+    const [stock] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
+      organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, feedstockTypeId: fixture.feedstockTypeId,
+      code: `E2E-EXACT-${crypto.randomUUID()}`, massDryKg: 80, massWetKg: 100, moistureContentPercent: 20,
+    })).returning();
+    try {
+      const exact = await getFeedstocks(orgCtx, { ids: [stock.id], facilityId: fixture.facilityId });
+      expect(exact.items.map((item) => item.id)).toEqual([stock.id]);
+      expect(exact.total).toBe(1);
+      const otherIds = await getFeedstocks(orgCtx, { ids: [crypto.randomUUID()] });
+      expect(otherIds.items).toEqual([]);
+      expect(otherIds.total).toBe(0);
+      expect((await getFeedstocks(orgCtx, { ids: [stock.id], facilityId: crypto.randomUUID() })).items).toEqual([]);
+      expect((await getFeedstocks({ ...orgCtx, organizationId: "org-not-the-fixture" }, { ids: [stock.id] })).items).toEqual([]);
+      await db.update(feedstocks).set({ archivedAt: new Date() }).where(eq(feedstocks.id, stock.id));
+      expect((await getFeedstocks(orgCtx, { ids: [stock.id] })).items).toEqual([]);
+    } finally {
+      await db.delete(feedstocks).where(eq(feedstocks.id, stock.id));
+      await cleanupFeedstockFixtureParents(db);
     }
   });
 });

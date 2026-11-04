@@ -35,8 +35,8 @@ describe("formatDate", () => {
   it("returns a dash for null and invalid dates", () => {
     expect(formatDate(null)).toBe("Not recorded");
     expect(formatDate(undefined)).toBe("Not recorded");
-    expect(formatDate("2026-02-31")).toBe("Not available");
-    expect(formatDate(new Date(Number.NaN))).toBe("Not available");
+    expect(formatDate("2026-02-31")).toBe("Unreadable date");
+    expect(formatDate(new Date(Number.NaN))).toBe("Unreadable date");
   });
 });
 
@@ -54,7 +54,7 @@ describe("formatDateTime", () => {
 
   it("returns a dash for null and invalid values", () => {
     expect(formatDateTime(null)).toBe("Not recorded");
-    expect(formatDateTime("not-a-date")).toBe("Not available");
+    expect(formatDateTime("not-a-date")).toBe("Unreadable date");
   });
 });
 
@@ -76,17 +76,11 @@ describe("formatDateRange", () => {
       formatDateRange(new Date(2026, 5, 1), new Date(2026, 5, 30)),
     ).toBe("Jun 1 to Jun 30, 2026");
     expect(formatDateRange(null, "2026-06-30")).toBe("Not recorded");
-    expect(formatDateRange("2026-06-01", "invalid")).toBe("Not available");
+    expect(formatDateRange("2026-06-01", "invalid")).toBe("Unreadable date");
   });
 });
 
 describe("formatCo2e", () => {
-  it("returns a dash for null, undefined, and NaN", () => {
-    expect(formatCo2e(null)).toBe("Not available");
-    expect(formatCo2e(undefined)).toBe("Not available");
-    expect(formatCo2e(Number.NaN)).toBe("Not available");
-  });
-
   it("renders whole kg below one tonne and tonnes at or above it", () => {
     expect(formatCo2e(950)).toBe("950 kg CO₂e");
     expect(formatCo2e(1000)).toBe("1 t CO₂e");

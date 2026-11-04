@@ -1,3 +1,5 @@
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -8,6 +10,7 @@ import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Order } from "@/db/schema";
+import { MAX_ORDER_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/orders";
 import type {
   OrderFilterData,
   CreateOrderData,
@@ -17,6 +20,7 @@ import type {
 import type { PaginatedOrders, OrderWithRelations } from "@/data-access/orders";
 import {
   getOrdersFn,
+  getOrderStatsFn,
   getOrdersForSelectFn,
   createOrderFn,
   updateOrderFn,
@@ -37,6 +41,9 @@ export const orderKeys = {
   lists: () => [...orderKeys.all, "list"] as const,
   list: (filters?: Partial<OrderFilterData>) =>
     [...orderKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...orderKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...orderKeys.all, "stats"] as const,
   details: () => [...orderKeys.all, "detail"] as const,
   detail: (id: string) => [...orderKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
@@ -52,6 +59,15 @@ export const orderKeys = {
 // Query Hooks
 // ============================================
 
+export function useOrderStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: orderKeys.stats(filters),
+    queryFn: async () => unwrap(await getOrderStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
+
 /**
  * Hook to fetch paginated list of orders with filtering
  */
@@ -59,10 +75,12 @@ export function useOrders(
   filters?: Partial<OrderFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: orderKeys.list(filters),
-    queryFn: async () => unwrap(await getOrdersFn(filters)),
-    staleTime: 30000, // 30 seconds
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: orderKeys.list,
+    fetcher: async (request) => unwrap(await getOrdersFn(request)),
+    staleTime: 30000,
     enabled: options?.enabled,
   });
 }
@@ -106,15 +124,16 @@ export function useCreateOrder(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.order),
-    mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data)),
+    mutationFn: async (data: CreateOrderData, intentKey) => unwrap(await createOrderFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -215,6 +234,7 @@ export function useUpdateOrder(
         queryKey: orderKeys.detailWithRelations(data.id),
       });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -310,6 +330,7 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
       invalidateStockEntityQueries(queryClient, "order");
       // Order writes record activity on the batches their deliveries reach.
       void queryClient.invalidateQueries({ queryKey: activityKeys.all });
@@ -338,12 +359,14 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
 
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
         queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
       }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.statsPrefix() });
 
       await callbacks?.onSettled?.(data, error, variables);
     },

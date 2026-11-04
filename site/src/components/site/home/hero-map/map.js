@@ -1,5 +1,5 @@
 // Home hero map: a small port of the app's Carbon Viewer map
-// (src/components/chain-of-custody/map/carbon-transit-map.tsx, src/components/map/map-theme.ts).
+// (src/components/chain-of-custody/map/trace-map-canvas.tsx, src/components/map/map-theme.ts).
 // MapTiler "dataviz" basemap recoloured into a diagram (labels hidden, hairline boundaries), square
 // site markers, bowed legs with marching ants, distance chips and record cards.
 // Without PUBLIC_MAPTILER_KEY the map runs on a blank style over the dotted field (hero-map.css).

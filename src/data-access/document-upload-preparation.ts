@@ -14,7 +14,7 @@ import { requireOrgScope } from "./utils";
 /** Unlocked owner discovery before external upload inspection. */
 export async function inspectUploadOwner(ctx: OrgContext, row: DocumentRow) {
   requireOrgScope(ctx);
-  return db.transaction((tx) => inspectDocumentOwner(ctx, tx, row.entityType, row.entityId));
+  return db.transaction((tx) => inspectDocumentOwner(ctx, tx, row.entityType, row.entityId, row.documentType));
 }
 
 export type PromotionCandidateResult = { kind: "registered" } | { kind: "uploaded"; document: DocumentRow } | { kind: "failed"; document: DocumentRow } | { kind: "gone" };

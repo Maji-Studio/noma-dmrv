@@ -63,7 +63,7 @@ export function makeMapping(): CertifierProjectRow {
     externalProjectId: EXTERNAL_PROJECT_ID,
     protocolSlug: "biochar",
     protocolVersion: "1.2",
-    defaultRemovalTemplateId: "rvt_1",
+    removalTemplateId: "rvt_1",
     webhookSecret: null,
     metadata: null,
     createdAt: new Date(),
@@ -88,6 +88,7 @@ export function makeRemoteStatement(
     submitted_at: null,
     credits_issued_at: null,
     pending_total_co2e_removed_kg: null,
+    pending_total_co2e_reduced_kg: null,
     ...overrides,
   } as GhgStatement;
 }

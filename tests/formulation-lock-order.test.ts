@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { biocharProducts, feedstockTypes, formulationIngredients, formulations, storageLocations } from "@/db/schema";
-import { createStorageLocation, updateStorageLocation } from "@/data-access/storage-locations";
+import { createStorageLocationInTransaction, updateStorageLocation } from "@/data-access/storage-locations";
 import { createStorageLocation as quickAdd } from "@/data-access/quick-add";
 import { updateFeedstockType } from "@/data-access/feedstock-types";
 import { createFormulation, updateFormulation, deleteFormulation } from "@/lib/operations/formulations";
@@ -46,7 +46,7 @@ describe("formulation lock order", { timeout: TIMEOUT_MS }, () => {
       const f = await fixture();
       const row = (await runOperation(createFormulation, f.ctx, { name: "Claim target" })).data;
       const data = { code: `BIN-${crypto.randomUUID()}`, name: `Claim ${crypto.randomUUID()}`, type: "product_bin" as const, facilityId: f.facility.id, formulationId: row.id };
-      const claim = kind === "create" ? () => createStorageLocation(f.ctx, data)
+      const claim = kind === "create" ? () => db.transaction((tx) => createStorageLocationInTransaction(f.ctx, tx, data))
         : kind === "quick-add" ? () => quickAdd(f.ctx, data)
         : () => updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: f.bin.version, formulationId: row.id });
       const remove = () => runOperation(deleteFormulation, f.ctx, { formulationId: row.id, expectedVersion: 1 }, { pool: writers });

@@ -10,9 +10,9 @@ import type { ActionResult } from "@/types/actions";
 import { toActionFailure } from "./action-errors";
 
 /** The failure shape a `mapError` callback may answer with. */
-type MappedFailure = { success: false; error: string };
+export type MappedFailure = { success: false; error: string };
 
-interface WithActionOptions<E extends MappedFailure> {
+export interface WithActionOptions<E extends MappedFailure> {
   /** Optional task-specific context for ZodError messages. */
   zodErrorPrefix?: string;
   /** Fallback message when error is not an Error instance. */

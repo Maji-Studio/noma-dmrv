@@ -100,7 +100,7 @@ answers, whether it is essential, and the best layer for it. Prefer removing dup
 irrelevant content over merely hiding it.
 
 PASS A — ROUTE + FLOW SWEEP (populated state)
-Inventory every route under src/app/(app)/ and src/app/admin/ and build a visit checklist.
+Inventory every route under src/app/(app)/ (including platform/) and build a visit checklist.
 Visit each and check: bare strings, dead ends, contradictory CTAs, 404s, console errors,
 layout failures, routes exposed that cannot be used, certification routes not gated. For
 records that legitimately have no children yet, judge whether the empty/partial state

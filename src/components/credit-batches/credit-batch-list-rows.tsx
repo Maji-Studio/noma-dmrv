@@ -2,7 +2,7 @@
 
 /**
  * The List view of /credit-batches: one compact row per credit batch, read on
- * a phone first. Below `xl` a row is two lines (code, feedstock and state, then
+ * a phone first. Below `xl` a row is two lines (name or code, feedstock and state, then
  * the dates and the applied biochar), plus the menu; from `xl` the
  * same elements line up as table columns under one header. One DOM serves both:
  * the line wrappers turn into `display: contents` at `xl`, so every value is a
@@ -11,19 +11,23 @@
  * State and colors are the timeline's (STATE_TONE): Open, Ready, Submitted,
  * Issued. Applied biochar is the dry mass held by the batch's slices.
  */
+import { recordHref } from "@/lib/record-links";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { EyeIcon, PencilSimpleIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import { RecordLockOverviewChip } from "@/components/record-locks/record-lock-chip";
+import { isInterruptedLockDisplay } from "@/components/record-locks/record-lock-labels";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchStateView } from "@/lib/credit-batches/batch-state";
+import { creditBatchName, creditBatchNameWithCode } from "@/lib/credit-batch-label";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { cn } from "@/lib/utils";
+import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
 import { BlockingCount, MUTED, STATE_TONE, StateMark } from "./credit-batch-timeline-parts";
 
 const STATE_MARK_PX = 10;
@@ -36,39 +40,47 @@ const CODE_PREFIX = /^CB-/;
 
 /**
  * One grid for the header and every row. Below `xl`: content, then the 44px
- * menu. From `xl`: code, feedstock, dates, production runs, applied (dry),
+ * menu. From `xl`: name or code, feedstock, dates, production runs, applied (dry),
  * status, menu.
  */
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_44px] items-center gap-x-8 pl-12 xl:pr-4 xl:pl-16 xl:grid-cols-[104px_minmax(0,1fr)_176px_56px_104px_minmax(0,1.2fr)_44px] xl:gap-x-16";
+  "grid grid-cols-[minmax(0,1fr)_44px] items-center gap-x-8 pl-12 xl:pr-4 xl:pl-16 xl:grid-cols-[176px_minmax(0,1fr)_176px_56px_104px_minmax(0,1.2fr)_44px] xl:gap-x-16";
 
 export type FactsStatus = "loading" | "failed" | "ready";
 
 /**
- * Delete is refused once a Removal is Sent or a Sample uses the batch. A draft
- * Removal alone does not stop it: deleting the batch releases its slices.
+ * Delete is refused for Sent or returned Removals and Samples. A draft Removal
+ * that never reached Isometric does not stop it: deletion releases its slices.
  */
 export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolean {
-  return !!lock && lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample");
+  return !!lock && lock.level !== "sent" && !lock.returnedBy.length && !lock.usedBy.some((link) => link.kind === "sample");
 }
 
-/** The row's dry applied biochar: never the wet figure, never a guess. */
-export function appliedDryLabel(facts: CreditBatchTimelineFacts | undefined, status: FactsStatus): string | null {
+/**
+ * The row's dry applied biochar: never the wet figure, never a guess. `null`
+ * while the facts load. A batch the facts do not cover leaves the figure out,
+ * since it is only a sum. A failed read leaves it out too: the list's Notice
+ * above the rows says the read failed and carries Retry, so no row repeats it.
+ */
+export function appliedDryLabel(
+  facts: CreditBatchTimelineFacts | undefined,
+  status: FactsStatus,
+): { figure: string } | { leftOut: true } | null {
   if (status === "loading") return null;
-  if (status === "failed" || !facts) return MISSING_VALUE.notAvailable;
-  return formatTonnes(kgToTonnes(facts.appliedDryKg));
+  if (status === "failed" || !facts) return { leftOut: true };
+  return { figure: formatTonnes(kgToTonnes(facts.appliedDryKg)) };
 }
 
 export function creditBatchRowActions({
   creditBatch,
   lock,
-  onView,
+  onOpen,
   onEdit,
   onDelete,
 }: {
   creditBatch: CreditBatchWithRelations;
   lock: RecordLockView | undefined;
-  onView: (creditBatch: CreditBatchWithRelations) => void;
+  onOpen: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
 }) {
@@ -77,7 +89,7 @@ export function creditBatchRowActions({
   // guard enforces it.
   const locked = !isRecordEditable(lock);
   return [
-    { label: "Open details", icon: <EyeIcon size={16} />, onSelect: () => onView(creditBatch) },
+    { label: "Open details", icon: <EyeIcon size={16} />, onSelect: () => onOpen(creditBatch) },
     ...(locked ? [] : [{ label: "Edit", icon: <PencilSimpleIcon size={16} />, onSelect: () => onEdit(creditBatch) }]),
     ...(!locked && isCreditBatchDeletable(lock)
       ? [{ label: "Delete", destructive: true, icon: <TrashIcon size={16} />, onSelect: () => onDelete(creditBatch.id) }]
@@ -99,29 +111,30 @@ function BatchState({
       {view.state ? (
         <span className="inline-flex items-center gap-6 body-small font-medium">
           <StateMark state={view.state} size={STATE_MARK_PX} />
-          {STATE_TONE[view.state].title}
+          {view.state === "blocking" && view.openTodoCount > 0 ? OPEN_TODOS_LABEL : STATE_TONE[view.state].title}
+          {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
-      ) : readinessStatus === "loading" ? (
+      ) : readinessStatus === "loading" && (
+        // A failed read shows nothing here: the list's Notice says so once, with Retry.
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-      ) : (
-        <span className={cn("body-small", MUTED)}>{MISSING_VALUE.notAvailable}</span>
       )}
-      {view.blockingCount > 0 && (
-        <span className={cn("inline-flex items-center gap-6 body-small", MUTED)}>
-          {/* Named in words where a row has room; a phone shows the timeline's count bubble alone. */}
-          <span className="max-xl:sr-only">Missing data</span>
-          <BlockingCount count={view.blockingCount} aria-hidden />
-          <span className="sr-only">{view.blockingCount}</span>
-        </span>
-      )}
-      <LockChip lock={lock} className="hidden xl:inline-flex" />
+      <LockChip lock={lock} state={view.state} className="hidden xl:inline-flex" />
     </span>
   );
 }
 
-/** An Open record lock is the default and would echo the Open state; only In use and Sent show. */
-function LockChip({ lock, className }: { lock: RecordLockView | undefined; className?: string }) {
-  return lock && lock.level !== "open" ? <RecordLockChip level={lock.level} className={className} /> : null;
+/**
+ * Overview rows show the lock only once Sent, like every other list (#1162).
+ * An interrupted batch whose lock also reads interrupted drops the chip, which
+ * would repeat its state; a batch still Sent through another holder keeps it.
+ */
+function LockChip({ lock, state, className }: {
+  lock: RecordLockView | undefined;
+  state: CreditBatchStateView["state"];
+  className?: string;
+}) {
+  if (state === "interrupted" && isInterruptedLockDisplay(lock)) return null;
+  return <RecordLockOverviewChip lock={lock} className={className} />;
 }
 
 export function CreditBatchListRow({
@@ -131,7 +144,7 @@ export function CreditBatchListRow({
   facts,
   factsStatus,
   lock,
-  onView,
+  onOpen,
   onEdit,
   onDelete,
 }: {
@@ -142,38 +155,47 @@ export function CreditBatchListRow({
   factsStatus: FactsStatus;
   /** The batch's record lock, from the list's one batched read. */
   lock: RecordLockView | undefined;
-  onView: (creditBatch: CreditBatchWithRelations) => void;
+  /** Opens the batch page; the code link and the row both lead there. */
+  onOpen: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
 }) {
   const applied = appliedDryLabel(facts, factsStatus);
   const dates = formatDateRange(creditBatch.startDate, creditBatch.endDate);
-  const codePrefix = CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
+  // A named batch shows its name; an unnamed one its code, without the shared "CB-" prefix on a phone.
+  const name = creditBatchName(creditBatch);
+  const named = name !== null;
+  // Screen readers get the code too, so two batches with one name stay apart.
+  const accessibleName = creditBatchNameWithCode(creditBatch);
+  const codePrefix = named ? "" : CODE_PREFIX.exec(creditBatch.code)?.[0] ?? "";
   return (
-    // The whole row is a pointer convenience; the code button is the keyboard
-    // and screen-reader route to the same view (no role or tabIndex on the row).
+    // The whole row is a pointer convenience; the code link is the keyboard
+    // and screen-reader route to the same page (no role or tabIndex on the row).
     <li
       data-credit-batch-row={creditBatch.code}
       className={cn(ROW_GRID, "cursor-pointer py-12 transition-colors hover:bg-[var(--row-hover-bg)] [border-bottom:var(--row-divider)] last:[border-bottom:none] xl:py-8")}
-      onClick={() => onView(creditBatch)}
+      onClick={() => onOpen(creditBatch)}
     >
       <div className="flex min-w-0 flex-col gap-4 xl:contents">
-        <div className="flex min-w-0 items-center justify-between gap-12 xl:contents">
-          <div className="flex min-w-0 items-baseline gap-8 xl:contents">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onView(creditBatch);
-              }}
-              aria-label={`Open credit batch ${creditBatch.code}`}
-              className="shrink-0 cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1"
+        {/* On a phone the code sets the wrap point: the feedstock name truncates first, and a state that still does not fit wraps below instead of running under the code. A named batch keeps min-w-0 so its name truncates instead. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-12 gap-y-4 xl:contents">
+          <div className={cn("flex flex-1 items-baseline gap-8 xl:contents", named && "min-w-0")}>
+            <Link
+              href={recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId })}
+              // The link navigates itself; the row's own click must not push a second time.
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`Open credit batch ${accessibleName}`}
+              title={named ? accessibleName : undefined}
+              className={cn(
+                "cursor-pointer text-left body-small font-medium tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] xl:col-start-1 xl:row-start-1",
+                named ? "min-w-0 truncate" : "shrink-0",
+              )}
             >
-              {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code. */}
+              {/* Every row is a credit batch, so a phone drops the shared "CB-" prefix as the timeline bars do; the label keeps the full code, and a named batch shows its name instead. */}
               {codePrefix && <span className="max-xl:hidden">{codePrefix}</span>}
-              {creditBatch.code.slice(codePrefix.length)}
-            </button>
-            <span className={cn("min-w-0 truncate body-small xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED)}>
+              {named ? name : creditBatch.code.slice(codePrefix.length)}
+            </Link>
+            <span className={cn("min-w-0 truncate body-small max-xl:w-0 max-xl:flex-1 xl:col-start-2 xl:row-start-1 xl:text-[var(--color-text-primary)]", MUTED, named && "max-xl:hidden")}>
               {creditBatch.feedstockTypeName ?? UNNAMED_FEEDSTOCK}
             </span>
           </div>
@@ -185,7 +207,7 @@ export function CreditBatchListRow({
           {/* A caption on the two-line row, body text in the table; only one is ever displayed. */}
           <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4 xl:hidden">
             <span className={cn("body-caption", MUTED)}>{dates}</span>
-            <LockChip lock={lock} />
+            <LockChip lock={lock} state={view.state} />
           </span>
           <span className={cn("hidden body-small xl:col-start-3 xl:row-start-1 xl:block", MUTED)}>{dates}</span>
           <span className="hidden body-small tabular-nums xl:col-start-4 xl:row-start-1 xl:block xl:text-right">
@@ -193,27 +215,22 @@ export function CreditBatchListRow({
             {creditBatch.productionRunCount}
           </span>
           <span className="inline-flex shrink-0 items-baseline gap-6 xl:col-start-5 xl:row-start-1 xl:justify-end">
-            <span className={cn("body-caption xl:sr-only", MUTED)}>{APPLIED_DRY_LABEL}</span>
+            {/* The column keeps its slot so the grid stays aligned; a left-out figure drops its caption too. */}
+            {(applied === null || !("leftOut" in applied)) && (
+              <span className={cn("body-caption xl:sr-only", MUTED)}>{APPLIED_DRY_LABEL}</span>
+            )}
             {applied === null ? (
               <Skeleton width={FIGURE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
-            ) : (
-              <span
-                data-applied-dry
-                className={cn(
-                  "body-small tabular-nums",
-                  applied === MISSING_VALUE.notAvailable ? "text-[var(--color-text-tertiary)]" : "font-medium",
-                )}
-              >
-                {applied}
-              </span>
+            ) : "figure" in applied && (
+              <span data-applied-dry className="body-small font-medium tabular-nums">{applied.figure}</span>
             )}
           </span>
         </div>
       </div>
       <RowActionsMenu
-        label={`Actions for credit batch ${creditBatch.code}`}
+        label={`Actions for credit batch ${accessibleName}`}
         className="flex justify-center self-center [&>button]:size-44 xl:col-start-7 xl:row-start-1"
-        actions={creditBatchRowActions({ creditBatch, lock, onView, onEdit, onDelete })}
+        actions={creditBatchRowActions({ creditBatch, lock, onOpen, onEdit, onDelete })}
       />
     </li>
   );

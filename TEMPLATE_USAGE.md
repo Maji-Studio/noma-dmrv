@@ -1,18 +1,19 @@
 # Adding a Feature
 
 Use this checklist when adding an entity or extending a CRUD workflow in
-noma-dmrv. The current feedstock-type feature is the compact reference:
+noma-dmrv. Facilities are the reference entity:
 
-- schema/table: `src/db/schema/feedstock.ts`
-- validation: `src/schemas/feedstock-types.ts`
-- data access: `src/data-access/feedstock-types.ts`
-- server actions: `src/fn/feedstock-types.ts`
-- React Query: `src/hooks/use-feedstock-types.ts`
-- UI: `src/components/feedstock-types/`
-- route: `src/app/(app)/feedstock-types/page.tsx`
-- focused tests: `src/components/feedstock-types/*.test.{ts,tsx}`
+- schema/table: `src/db/schema/facilities.ts`
+- validation: `src/schemas/facilities.ts`
+- data access: `src/data-access/facility-mutations.ts`
+- app-only create operation: `src/lib/operations/facilities.ts`
+- server actions: `src/fn/facilities.ts`
+- React Query: `src/hooks/use-facilities.ts`
+- UI: `src/components/facilities/`
+- route: `src/app/(app)/facilities/page.tsx`
+- focused tests: `src/hooks/use-create-facility.test.tsx`
 
-Copy its layer boundaries, not its registry-specific behavior.
+Copy its layer boundaries and keyed create flow.
 
 ## 1. Define the domain and persistence boundary
 
@@ -74,29 +75,35 @@ Return cross-org ids as absent; do not reveal their existence. Throw
 `ActionConflictError` when the UI should link to a blocking record. Never return
 raw database errors.
 
-## 4. Wrap actions with `withAction()`
+## 4. Wrap creates with `withCreate()`
 
-New and materially changed actions use `src/fn/with-action.ts`. It resolves
-`OrgContext`, formats `ActionResult<T>`, handles Zod failures/conflicts, logs
-unexpected errors safely, and can opt into per-user rate limiting:
+`withCreate` composes `withAction`: it resolves `OrgContext`, formats
+`ActionResult<T>`, handles Zod failures/conflicts and logs unexpected errors.
+Validate the payload before calling the app-only operation once:
 
 ```ts
 "use server";
 
-export async function createWidgetFn(
-  input: unknown,
-): Promise<ActionResult<Widget>> {
-  return withAction(async (ctx) => {
-    const data = createWidgetSchema.parse(input);
-    return createWidget(ctx, data);
-  });
+export async function createFacilityFn(
+  data: CreateFacilityData,
+  options?: CreateIntentOptions,
+): Promise<ActionResult<Facility>> {
+  return withCreate((_ctx, create) =>
+    create(createFacility, createFacilitySchema.parse(data)), options, {
+      fallbackMessage: "Failed to create facility",
+    });
 }
 ```
 
-Do not call `requireOrgContext()` again inside the callback and do not hand-roll
-`try/catch`. Some legacy entity actions still use direct wrappers; migrate the
-action when changing it rather than copying that pattern. Never send raw
-`error.message` to the client.
+The `create_facility` operation in `src/lib/operations/facilities.ts` uses
+`withAutoCodes` and calls `createFacilityInTransaction(ctx, savepoint, data)`.
+Every reference read and write uses that transaction so the retry key and row
+commit together. App-only operations stay out of `registry.ts`. Keep generated
+code prefixes, normalization, conflict messages and after-save work intact.
+
+Updates, deletes and reads still use `withAction`. Do not resolve context again
+inside either wrapper or hand-roll `try/catch`. Never send raw database errors
+to the client. Classify new creates in `src/fn/create-action-coverage.test.ts`.
 
 ## 5. Add a query-key factory and hooks
 
@@ -119,6 +126,20 @@ factory root after mutations. Include `facilityId` and other filters in keys;
 never use an inline query if an existing hook already owns the data. Global
 query defaults live in `src/app/providers.tsx`; override freshness only when
 the feature needs different behavior.
+
+Creates use `useIntentMutation`, forwarding the draft key separately:
+
+```ts
+return useIntentMutation({
+  mutationFn: async (data: CreateFacilityData, intentKey) =>
+    unwrap(await createFacilityFn(data, { intentKey })),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: facilityKeys.all }),
+});
+```
+
+Call `createFacility.startDraft()` when opening a new create draft. Failed saves
+retain the key; success rotates it before `onSuccess`. Keep existing cache
+updates and invalidations, as `useCreateFacility` does.
 
 ## 6. Build the UI in existing primitives
 

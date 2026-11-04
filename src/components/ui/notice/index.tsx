@@ -68,6 +68,16 @@ export interface NoticeProps
   action?: ReactNode;
   /** Quiet neutral card for non-error tones. Ignored for `error`. */
   boxed?: boolean;
+  /**
+   * `false` drops the live-region role, for a notice whose content changes
+   * while the user works and announces itself another way.
+   */
+  live?: boolean;
+  /**
+   * Replaces the `info` tone's icon with the subject's own, for a line that
+   * carries its own ⓘ (`FormFooterPreview`). Other tones keep theirs.
+   */
+  infoIcon?: Icon;
 }
 
 export function Notice({
@@ -75,16 +85,18 @@ export function Notice({
   title,
   action,
   boxed = false,
+  live = true,
+  infoIcon,
   className,
   children,
   ...props
 }: NoticeProps) {
   const config = TONES[tone];
-  const ToneIcon = config.Icon;
+  const ToneIcon = tone === "info" && infoIcon ? infoIcon : config.Icon;
 
   return (
     <div
-      role={config.role}
+      role={live ? config.role : undefined}
       data-tone={tone}
       className={cn(
         "flex flex-wrap items-start gap-x-8 gap-y-8",

@@ -8,6 +8,13 @@ const mocks = vi.hoisted(() => ({
   lockArgs: [] as unknown[][],
 }));
 
+const recordLockMock = vi.hoisted(() => ({ lock: undefined as unknown, args: [] as unknown[][] }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLock: (...args: unknown[]) => {
+    recordLockMock.args.push(args);
+    return { lock: recordLockMock.lock, status: "ready", retry: () => {}, retrying: false };
+  },
+}));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);
@@ -59,7 +66,7 @@ describe("TransportEvidencePanel certification lock", () => {
       mocks.locked = true;
       render(<TransportEvidencePanel entityType={entityType} entityId="owner-1" embedded />);
 
-      expect(mocks.lockArgs).toContainEqual([entityType, "owner-1"]);
+      expect(mocks.lockArgs).toContainEqual([entityType, "owner-1", entityType === "feedstock" || entityType === "transport_leg" ? "transport" : undefined]);
       expect(screen.getByText(RECORD_FILES_LOCKED_MESSAGE)).toBeTruthy();
       expect(screen.getByRole("link", { name: "Open ticket.pdf" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Delete ticket.pdf" })).toBeNull();

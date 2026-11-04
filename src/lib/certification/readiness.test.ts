@@ -1,5 +1,5 @@
 import { removalTemplateBlocker } from "./removal-template-blockers";
-import { deliveryProofBlocker, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers } from "./submission-readiness";
+import { deliveryProofBlocker, applicationDestinationBlocker, deliveryDistanceBlockerMessage, durabilityConfigurationBlockers } from "./submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
@@ -131,11 +131,18 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     });
   });
 
+  it("names the template check 'No Removal template chosen' in the checklist when none is chosen", () => {
+    const check = checkFor(buildRemovalRequirementsChecklist(ready({ hasRemovalTemplate: false })), "templateSet");
+    expect(check.status).toBe("unmet");
+    expect(check.unmetLabel).toBe("No Removal template chosen");
+    expect(checkFor(buildRemovalRequirementsChecklist(ready()), "templateSet").unmetLabel).toBe(CERT_REQUIREMENT_META.templateSet.unmetLabel);
+  });
+
   it("blocks when no default template is selected", () => {
     const r = deriveRemovalReadiness(ready({ hasRemovalTemplate: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "Choose a Removal template for this credit batch.",
+      "Set a Removal template in Settings, Removal templates.",
     );
   });
 
@@ -403,7 +410,7 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
       status: "unmet",
       detail: "Organization Isometric credentials are not configured",
     });
-    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "templateSet").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
   });
@@ -412,8 +419,8 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasRemovalTemplate: false, templateBlockers: [removalTemplateBlocker("templateNotFound")] }),
     );
-    expect(checkFor(checks, "template")).toMatchObject({
-      key: "template",
+    expect(checkFor(checks, "templateSet")).toMatchObject({
+      key: "templateSet",
       status: "unmet",
       detail: "Template no longer exists in Isometric.",
     });
@@ -532,7 +539,8 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
       "credentials",
-      "template",
+      "templateSet",
+      "templateLines",
       "transport",
       "transportUniformity",
       "production",
@@ -553,7 +561,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       ready({ hasMapping: false }),
     );
     expect(checkFor(checks, "mapping").status).toBe("unmet");
-    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "templateSet").status).toBe("skipped");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
@@ -562,7 +570,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(
       ready({ hasRemovalTemplate: false }),
     );
-    expect(checkFor(checks, "template").status).toBe("unmet");
+    expect(checkFor(checks, "templateSet").status).toBe("unmet");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");
     expect(checkFor(checks, "feedstockTypeMapping").status).toBe("skipped");
   });
@@ -784,13 +792,23 @@ describe("readiness matches submission refusals", () => {
     expect(deriveRemovalReadiness(ready({ durabilityConfigurationBlockers: blockers }))).toMatchObject({ state: "blocked", reasons: blockers });
   });
   it.each([
-    ["Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.", "feedstocks"],
-    [deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!, "deliveryEvidence"],
-    [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders"],
-    [deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!, "deliveryDistances"],
-  ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget) => {
-    const facts = ready({ submissionLineageIssues: [{ detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
+    ["Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.", "feedstocks", "feedstockTransport"],
+    [deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!, "deliveryEvidence", "deliveryProof"],
+    [applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!, "orders", "applicationDestination"],
+    [deliveryDistanceBlockerMessage({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, recordedDistanceKm: null })!.message, "deliveryDistances", "deliveryDistance"],
+  ] as const)("shows the lineage refusal in readiness and the checklist: %s", (reason, fixTarget, kind) => {
+    const facts = ready({ submissionLineageIssues: [{ kind, instruction: "", fact: "Lineage evidence is missing.", detail: reason, fixTarget, record: { id: "delivery-1", code: "D-0012" } }] });
     expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: [reason] });
     expect(buildRemovalRequirementsChecklist(facts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: reason }));
   });
+});
+
+it.each([
+  { ownedElsewhere: true, missingEntityIds: [], satisfied: true },
+  { ownedElsewhere: undefined, missingEntityIds: [], satisfied: false },
+  { ownedElsewhere: true, missingEntityIds: ["missing"], satisfied: false },
+])("judges zero feedstock transport with ownership evidence: %j", ({ ownedElsewhere, missingEntityIds, satisfied }) => {
+  const facts = ready({ requiredTransport: [{ category: "feedstock", count: 0, ownedElsewhere, missingEntityIds, aggregationWarning: null }] });
+  expect(deriveRemovalReadiness(facts).state).toBe(satisfied ? "ready" : "blocked");
+  expect(checkFor(buildRemovalRequirementsChecklist(facts), "transport").status).toBe(satisfied ? "met" : "unmet");
 });

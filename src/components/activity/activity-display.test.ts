@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
+import { UNKNOWN_FACILITY_TIMEZONE as VIEW_TIME_ZONE } from "@/lib/date-utils";
 import { activityFieldLines } from "./activity-change-lines";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
@@ -12,6 +12,8 @@ import {
   activityFieldLabel,
   activityRecordHref,
   activityRecordLabel,
+  activityRecordTitle,
+  isHiddenActivityField,
   activityRecordTypeLabel,
   activityStatusKey,
   humanizeFieldName,
@@ -59,9 +61,9 @@ describe("who made the change", () => {
     expect(activityActorDisplay(item({ actor: null, source: "script" }))).toMatchObject({ name: "Script" });
   });
 
-  it("uses the shared token for a person whose name cannot be read", () => {
+  it("names an unknown user when the person's name cannot be read", () => {
     expect(activityActorDisplay(item({ actor: { id: "gone", name: null } }))).toEqual({
-      name: MISSING_VALUE.notAvailable, missing: true, channel: null,
+      name: "Unknown user", missing: true, channel: null,
     });
   });
 });
@@ -86,7 +88,7 @@ describe("changed field names", () => {
   });
 
   it("drops bookkeeping fields and repeats", () => {
-    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] })))
+    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] }), VIEW_TIME_ZONE))
       .toEqual([{ kind: "changed", key: "notes", label: "Notes" }]);
   });
 });
@@ -115,14 +117,14 @@ describe("record names and meanings", () => {
 describe("record links", () => {
   it("opens each record's side sheet on the facility it lives at", () => {
     expect(activityRecordHref(item(), CONTEXT)).toBe("/production-runs?facility=facility-1&run=run-1");
-    expect(activityRecordHref(item({ entityType: "feedstock", entityId: "f-1" }), CONTEXT)).toBe("/feedstocks?facility=facility-1&feedstock=f-1");
+    expect(activityRecordHref(item({ entityType: "feedstock", entityId: "f-1" }), CONTEXT)).toBe("/feedstock-intake?facility=facility-1&feedstock=f-1");
     expect(activityRecordHref(item({ entityType: "biochar_product", entityId: "p-1" }), CONTEXT)).toBe("/biochar-products?facility=facility-1&biocharProduct=p-1");
-    expect(activityRecordHref(item({ entityType: "lab_sample", entityId: "s-1" }), CONTEXT)).toBe("/samples?facility=facility-1&sample=s-1");
+    expect(activityRecordHref(item({ entityType: "lab_sample", entityId: "s-1" }), CONTEXT)).toBe("/lab-samples?facility=facility-1&sample=s-1");
     expect(activityRecordHref(item({ entityType: "delivery", entityId: "d-1" }), CONTEXT)).toBe("/deliveries?facility=facility-1&delivery=d-1");
     expect(activityRecordHref(item({ entityType: "application", entityId: "a-1" }), CONTEXT)).toBe("/applications?facility=facility-1&application=a-1");
-    expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/certification/removals?facility=facility-1&removal=r-1");
-    expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/certification/ghg-statements?facility=facility-1&statement=g-1");
-    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches?facility=facility-1&batch=other");
+    expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/removals?facility=facility-1&removal=r-1");
+    expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/ghg-statements?facility=facility-1&statement=g-1");
+    expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches/other?facility=facility-1");
     expect(activityRecordHref(item({ entityType: "order", entityId: "o-1" }), CONTEXT)).toBe("/orders?facility=facility-1&order=o-1");
   });
 
@@ -133,7 +135,7 @@ describe("record links", () => {
 
   it("opens a document's owner, the sheet that holds its files", () => {
     expect(activityRecordHref(item({ entityType: "document", entityId: "doc-1", reasonCode: "document:lab_report:sample:s-1" }), CONTEXT))
-      .toBe("/samples?facility=facility-1&sample=s-1");
+      .toBe("/lab-samples?facility=facility-1&sample=s-1");
   });
 
   it("links nothing for tombstones, unknown facilities, sheetless records and the batch itself", () => {
@@ -149,4 +151,30 @@ describe("record links", () => {
 
 it("labels emissions entries with the glossary name", () => {
   expect(ACTIVITY_RECORD_TYPE_LABELS.emission_entry).toBe("Emissions entry");
+});
+
+describe("record title", () => {
+  it("says the type once when the label only repeats it", () => {
+    expect(activityRecordTitle("Emissions entry", "Emissions entry")).toBe("Emissions entry");
+    expect(activityRecordTitle("Emissions entry", " emissions ENTRY ")).toBe("Emissions entry");
+  });
+
+  it("puts the record's code after its type", () => {
+    expect(activityRecordTitle("Removal", "RM-26-001")).toBe("Removal RM-26-001");
+    expect(activityRecordTitle("Removal", null)).toBe("Removal");
+  });
+});
+
+describe("fields an operator never sees", () => {
+  it("hides checksums, upload progress and send reservations", () => {
+    for (const field of ["checksumSha256", "uploadStatus", "sendReservedBySubmissionId", "productionEmissionsClaimReservedBySubmissionId"]) {
+      expect(isHiddenActivityField(field)).toBe(true);
+    }
+    expect(isHiddenActivityField("note")).toBe(false);
+  });
+
+  it("lists no line for an update that only touched them", () => {
+    const changed = item({ changedFields: ["checksumSha256", "uploadStatus", "sendReservedBySubmissionId"], changes: { uploadStatus: { from: "pending", to: "uploaded" } } });
+    expect(activityFieldLines(changed, VIEW_TIME_ZONE)).toEqual([]);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBinFormulationLocked, isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, isRecordFieldHeld, isRecordFieldLocked, recordLockSaveBlock, type RecordLockView } from "./record-lock-view";
+import { isBinFormulationLocked, isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, isRecordFieldHeld, isRecordFieldLocked, isTransportOnlyEditable, recordLockSaveBlock, type RecordLockView } from "./record-lock-view";
 
 const lock = (level: RecordLockView["level"]): RecordLockView => ({
   level, heldBy: [], usedBy: [], freeFields: level === "sent" ? [] : ["code", "quantityKg"], howToFree: null, returnedBy: [],
@@ -75,5 +75,29 @@ describe("production run output basis (assertProductionRunOutputBasisChange)", (
     expect(isProductionRunOutputLocked(run("inUse", ["creditBatch"]))).toBe(false);
     expect(isProductionRunOutputLocked(run("open", []))).toBe(false);
     expect(isProductionRunOutputLocked(undefined)).toBe(false);
+  });
+});
+
+describe("a Sent feedstock whose transport no sent Removal counted", () => {
+  const sent = (transportLevel?: RecordLockView["level"]): RecordLockView => ({
+    ...lock("sent"), ...(transportLevel ? { transport: { level: transportLevel, heldBy: [] } } : {}),
+  });
+  it("offers Edit and keeps only the transport fields open", () => {
+    expect(isTransportOnlyEditable(sent("open"))).toBe(true);
+    expect(isRecordEditable(sent("open"))).toBe(true);
+    expect(isRecordFieldLocked(sent("open"), "massWetKg")).toBe(true);
+    expect(isRecordFieldLocked(sent("open"), "notes")).toBe(true);
+    for (const field of ["vehicleId", "transportDistanceKm", "transportDistanceSource", "distanceNote"]) {
+      expect(isRecordFieldLocked(sent("open"), field)).toBe(false);
+    }
+    expect(recordLockSaveBlock(sent("open"), "ready")).toBeNull();
+  });
+  it("stays read-only when the transport is sent too, or the lock has no transport scope", () => {
+    for (const view of [sent("sent"), sent()]) {
+      expect(isTransportOnlyEditable(view)).toBe(false);
+      expect(isRecordEditable(view)).toBe(false);
+      expect(isRecordFieldLocked(view, "vehicleId")).toBe(true);
+      expect(recordLockSaveBlock(view, "ready")?.readOnly).toBe(true);
+    }
   });
 });

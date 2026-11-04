@@ -1,8 +1,7 @@
 /**
  * Driver Quick Add Dialog
  * Inline dialog for adding a driver from the EntitySelect dropdown, and for
- * editing one when `driver` is passed (the picker's edit action and the
- * settings list). Embeds the full DriverForm inside QuickAddDialogShell.
+ * editing one when `driver` is passed (the picker's edit action). Embeds the full DriverForm inside QuickAddDialogShell.
  */
 "use client";
 
@@ -15,6 +14,7 @@ import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateDriver } from "@/hooks/use-fleet";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
@@ -29,7 +29,7 @@ interface DriverQuickAddDialogProps {
 
 const DRIVER_NOT_SAVED = "The driver was not saved. Try again.";
 
-function toDriverPayload(data: DriverFormData) {
+export function toDriverPayload(data: DriverFormData) {
   return {
     name: data.name.trim(),
     licenseNumber: data.licenseNumber?.trim() || null,
@@ -43,9 +43,10 @@ export function DriverQuickAddDialog({
   onSuccess,
   driver: driverProp,
 }: DriverQuickAddDialogProps) {
+  // One key per open draft: a retry after a lost response replays the first save.
   const create = useQuickAddSubmit<DriverFormData>({
     entityType: "driver",
-    serverFn: (data) => createDriverFn(toDriverPayload(data)),
+    serverFn: (data, intentKey) => createDriverFn(toDriverPayload(data), { intentKey }),
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
@@ -55,7 +56,7 @@ export function DriverQuickAddDialog({
   const update = useUpdateDriver();
   const [editError, setEditError] = useState<string | null>(null);
 
-  const handleEdit = async (data: DriverFormData) => {
+  const handleEdit = async (data: DriverFormData, onRefusal: SaveRefusalHandler) => {
     if (!driver) return;
     setEditError(null);
     try {
@@ -66,7 +67,7 @@ export function DriverQuickAddDialog({
       });
       onClose();
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, DRIVER_NOT_SAVED));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, DRIVER_NOT_SAVED)));
     }
   };
 
@@ -78,7 +79,10 @@ export function DriverQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
-      onOpen={() => setEditError(null)}
+      onOpen={() => {
+        create.startDraft();
+        setEditError(null);
+      }}
       title={isEdit ? "Edit driver" : "New driver"}
       width="sm"
       testId={isEdit ? "driver-edit-dialog" : "driver-quick-add-dialog"}

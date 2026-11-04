@@ -34,6 +34,8 @@ function chunk(ids: readonly string[]): string[][] {
 export function useRecordLocks(entityType: RecordLockViewKind, ids: readonly (string | null | undefined)[]): {
   locks: RecordLockViews;
   statusOf: (id: string) => RecordLockStatus;
+  /** True while any chunk's latest read has failed. */
+  failed: boolean;
   /** Re-reads every failed chunk in place; open drafts are untouched. */
   retry: () => void;
   retrying: boolean;
@@ -61,6 +63,7 @@ export function useRecordLocks(entityType: RecordLockViewKind, ids: readonly (st
   return {
     locks: new Proxy(locks, { get: (target, prop) => (typeof prop === "string" ? target[canonical(prop)] : undefined) }),
     statusOf,
+    failed: failed.length > 0,
     retry: () => { for (const query of failed) void query.refetch(); },
     retrying: failed.some((query) => query.isFetching),
   };

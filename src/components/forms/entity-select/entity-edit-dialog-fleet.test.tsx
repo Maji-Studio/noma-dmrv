@@ -32,8 +32,12 @@ vi.mock("@/fn/quick-add", () => ({
   createOperatorFn: vi.fn(),
 }));
 
+// These tests run in Node, where the refusal handler cannot read the form from the document;
+// they cover the dialog's own save flow, so the handler returns the dialog's fallback.
+vi.mock("@/components/forms/use-save-refusal", () => ({ useSaveRefusal: () => (_error: unknown, fallback: string) => fallback }));
+
 vi.mock("@/hooks/use-quick-add-submit", () => ({
-  useQuickAddSubmit: () => ({ error: null, isSubmitting: false, handleSubmit: vi.fn() }),
+  useQuickAddSubmit: () => ({ startDraft: vi.fn(), error: null, isSubmitting: false, handleSubmit: vi.fn() }),
 }));
 
 vi.mock("@/hooks/use-fleet", () => ({
@@ -234,7 +238,9 @@ describe("EntityEditDialog", () => {
     landRead({ ...vehicle, name: "Saved elsewhere", version: 4 });
     await rerender(true);
 
-    expect(text(tree.root)).toContain(STALE_VERSION_MESSAGE);
+    // The box splits the message into a title and a detail.
+    expect(text(tree.root)).toContain(STALE_VERSION_MESSAGE.split(". ")[0]);
+    expect(text(tree.root)).toContain("Review the latest values before saving again.");
     await submit();
     expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({
       name: "Draft name",
@@ -295,7 +301,8 @@ describe("EntityEditDialog", () => {
     await act(async () => {
       tree = create(<EntityEditDialog entityType="driver" entityId="driver-1" isOpen onClose={vi.fn()} />);
     });
-    expect(text(tree.root)).toContain("The driver could not be loaded. Try again.");
+    expect(text(tree.root)).toContain("The driver could not be loaded.");
+    expect(text(tree.root)).toContain("Try again.");
     expect(tree.root.findAllByType("form")).toHaveLength(0);
   });
 });

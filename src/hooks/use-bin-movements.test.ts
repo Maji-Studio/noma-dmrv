@@ -1,3 +1,4 @@
+import { ActionError } from "@/lib/action-error";
 import { conflictCode } from "@/lib/conflict-ref";
 import { describe, expect, it, vi } from "vitest";
 
@@ -48,8 +49,15 @@ describe("throwRecordLossError", () => {
     }
   });
 
-  it("falls back to a plain error", () => {
-    expect(() => throwRecordLossError({ error: "Failed to record loss" }))
-      .toThrow("Failed to record loss");
+  it("falls back to an ActionError that keeps its issues", () => {
+    const issues = [{ path: ["reason"], code: "validation_failed" as const, message: "Say why." }];
+    try {
+      throwRecordLossError({ error: "Failed to record loss", issues });
+      expect.unreachable("expected an action error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ActionError);
+      expect((error as ActionError).message).toBe("Failed to record loss");
+      expect((error as ActionError).issues).toEqual(issues);
+    }
   });
 });

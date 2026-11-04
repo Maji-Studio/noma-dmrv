@@ -23,7 +23,7 @@ export const biocharProductRepresentationSchema = z.object({
   formulationId: z.uuid().describe("Formulation identifier, UUID; the Pure biochar formulation for an unblended product."),
   status: z.enum(biocharProductStatusValues).describe("Product state: draft, testing, ready or sold."),
   placedAt: z.iso.datetime().describe("Instant the product was mixed and placed, UTC, RFC 3339."),
-  productionDate: z.iso.date().describe("Production run calendar day of the oldest biochar lot drawn, YYYY-MM-DD."),
+  productionDate: z.iso.date().describe("Facility-local mixing day for blends; oldest source run calendar day for pure biochar, YYYY-MM-DD."),
   sourceBiocharStorageLocationId: z.uuid().describe("Biochar bin the biochar was drawn from, UUID."),
   storageLocationId: z.uuid().describe("Product bin the blend was placed in, UUID."),
   biocharWetMassKg: z.number().describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),

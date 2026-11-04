@@ -3,21 +3,24 @@
 /**
  * The hover card of a credit batch bar. Base UI PreviewCard: it opens on hover
  * and on keyboard focus of the bar, and on a first tap on touch screens (the
- * second tap opens the batch). The bar itself is the control that opens the
- * batch, so the card carries facts only, no link.
+ * second tap opens the batch page). The bar itself is the link to the batch
+ * page, so the card carries facts only, no link.
  * Elevated surface per the design system: paper, full-ink border, no shadow.
  */
+import { creditBatchLabel, creditBatchName } from "@/lib/credit-batch-label";
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { PreviewCard } from "@base-ui/react/preview-card";
-import { CalendarBlankIcon, LeafIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlankIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import type { TimelineState } from "@/lib/credit-batches/timeline";
+import { OPEN_TODOS_LABEL, todosLabel } from "@/lib/credit-batches/batch-page";
 import { cn } from "@/lib/utils";
-import { MUTED, STATE_TONE } from "./credit-batch-timeline-parts";
+import { BlockingCount, MUTED, STATE_TONE } from "./credit-batch-timeline-parts";
 
 const OPEN_DELAY_MS = 200;
 const CLOSE_DELAY_MS = 120;
@@ -33,29 +36,35 @@ const NEGLIGIBLE_TONNES = 0.005;
 const STATE_BADGE: Record<TimelineState, StatusValue> = {
   blocking: "pending",
   ready: "running",
+  interrupted: "failed",
   submitted: "complete",
   issued: "issued",
 };
 
 export interface HoverCardBatch {
   code: string;
+  /** The operator-given name; the heading shows it with the code beneath. */
+  name?: string | null;
   feedstockName: string;
   startDate: string;
   endDate: string;
   state: TimelineState | null;
-  blockingCount: number;
+  /** Blocking + Check items while Open or interrupted, the same count as the batch page's Overview badge. */
+  todoCount: number;
   facts: CreditBatchTimelineFacts | undefined;
   /** Whether `facts` is still loading or could not be loaded, so a gap is not read as a missing measurement. */
   factsStatus: "loading" | "failed" | "ready";
 }
 
-function tonnesOrMissing(kg: number | null | undefined, status: HoverCardBatch["factsStatus"]): string {
+/** A sum, so a batch the facts do not cover leaves the figure out (null). */
+function tonnesOrMissing(kg: number | null | undefined, status: HoverCardBatch["factsStatus"]): string | null {
   if (status === "loading") return "Loading";
-  if (status === "failed") return MISSING_VALUE.notAvailable;
-  return kg == null ? MISSING_VALUE.notAvailable : formatTonnes(kgToTonnes(kg));
+  if (status === "failed") return LOAD_FAILED;
+  return kg == null ? null : formatTonnes(kgToTonnes(kg));
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
+function Figure({ label, value }: { label: string; value: string | null }) {
+  if (value === null) return null;
   return (
     <div className="flex flex-col gap-2">
       <dt className={cn("body-caption", MUTED)}>{label}</dt>
@@ -64,14 +73,20 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
+/** Exported for tests. */
+export function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
   const { facts, state } = batch;
   const notInRemoval = facts ? kgToTonnes(facts.notInRemovalDryKg) : 0;
+  const produced = tonnesOrMissing(facts?.producedDryKg, batch.factsStatus);
+  const applied = tonnesOrMissing(facts?.appliedDryKg, batch.factsStatus);
   return (
     <div className="flex w-[300px] max-w-[calc(100vw-32px)] flex-col">
       <div className="flex flex-col gap-10 px-16 pt-16 pb-12">
         <div className="flex items-center justify-between gap-12">
-          <span className="body-medium font-medium tabular-nums">{batch.code}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="min-w-0 break-words body-medium font-medium tabular-nums">{creditBatchLabel(batch)}</span>
+            {creditBatchName(batch) && <span className={cn("body-small tabular-nums", MUTED)}>{batch.code}</span>}
+          </span>
           {state && <StatusBadge status={STATE_BADGE[state]} label={STATE_TONE[state].title} size="small" className={STATE_TONE[state].badge} />}
         </div>
         <div className={cn("flex flex-col gap-4 body-small", MUTED)}>
@@ -85,16 +100,19 @@ function HoverCardBody({ batch }: { batch: HoverCardBatch }) {
           </span>
         </div>
       </div>
-      {batch.blockingCount > 0 && (
+      {batch.todoCount > 0 && (
         <div className={cn("flex items-center gap-8 px-16 py-8 body-small font-medium", STATE_TONE.blocking.tint)}>
-          <WarningCircleIcon size={16} weight="fill" className={cn("shrink-0", STATE_TONE.blocking.text)} aria-hidden />
-          {`Missing data ${batch.blockingCount}`}
+          {OPEN_TODOS_LABEL}
+          <BlockingCount count={batch.todoCount} role="img" aria-label={todosLabel(batch.todoCount)} />
         </div>
       )}
-      <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">
-        <Figure label="Produced (dry)" value={tonnesOrMissing(facts?.producedDryKg, batch.factsStatus)} />
-        <Figure label="Applied (dry)" value={tonnesOrMissing(facts?.appliedDryKg, batch.factsStatus)} />
-      </dl>
+      {/* Both figures left out leaves no strip behind: no empty bordered row. */}
+      {(produced !== null || applied !== null) && (
+        <dl className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-12">
+          <Figure label="Produced (dry)" value={produced} />
+          <Figure label="Applied (dry)" value={applied} />
+        </dl>
+      )}
       {facts && notInRemoval > NEGLIGIBLE_TONNES && (
         <p className={cn("border-t border-[var(--color-border-tertiary)] px-16 py-10 body-small", MUTED)}>
           {`${formatTonnes(notInRemoval)} not in a Removal`}
@@ -114,13 +132,14 @@ export function BatchHoverCard({
   batch,
   label,
   className,
-  onOpenBatch,
+  href,
   children,
 }: {
   batch: HoverCardBatch;
   label: string;
   className?: string;
-  onOpenBatch: () => void;
+  /** The batch page. */
+  href: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -140,21 +159,21 @@ export function BatchHoverCard({
         delay={OPEN_DELAY_MS}
         closeDelay={CLOSE_DELAY_MS}
         render={
-          <button
-            type="button"
+          <Link
+            href={href}
             aria-label={label}
             className={className}
             onClick={(event) => {
-              // A first touch tap shows the card; the next one opens the batch.
+              // A first touch tap shows the card; the next one follows the link.
               const pointerType = (event.nativeEvent as PointerEvent).pointerType;
               if (pointerType === "touch" && !open) {
+                event.preventDefault();
                 setPinned(true);
                 setOpen(true);
                 return;
               }
               setPinned(false);
               setOpen(false);
-              onOpenBatch();
             }}
           />
         }

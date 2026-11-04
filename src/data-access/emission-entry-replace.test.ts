@@ -1,17 +1,20 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import { documents, emissionEntries, emissionEntryValues } from "@/db/schema";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), gate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn(), carried: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
-vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
-vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: mocks.gate }));
-import { replaceEmissionEntry } from "./emission-entries";
+vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(),
+  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow,
+  isCarriedEmissionCorrection: mocks.carried }));
+import { replaceEmissionEntry, tombstoneEmissionZeros } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
 const id = "00000000-0000-4000-8000-000000000001";
@@ -20,7 +23,7 @@ const original: typeof emissionEntries.$inferSelect = {
   id, organizationId: ctx.organizationId, creditBatchId: "batch", removalTemplateId: "template",
   componentId: "line", inputShape: shape, lineRule: "additive", observationId: "old-observation",
   kind: "value", confirmedForRemovalId: null, occurredOn: "2026-01-02", note: "old note", createdBy: ctx.userId,
-  version: 2, contentRevision: 2, deletedAt: null, sentByRemovalId: null, sendReservedBySubmissionId: null,
+  version: 2, contentRevision: 2, deletedAt: null, sentByRemovalId: null, replacesEntryId: null, sendReservedBySubmissionId: null,
   createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02"),
 };
 const previous: EntryObservation & { id: string } = {
@@ -56,6 +59,8 @@ function query(result: () => unknown[]) {
 beforeEach(() => {
   vi.resetAllMocks();
   locks.length = 0;
+  mocks.holds.mockResolvedValue(new Map());
+  mocks.carried.mockReturnValue(false);
   current = { ...previous, id: "current-observation", enrichment: { line: { electricity_use: { unit: "MJ" } } } };
   locked = { ...original };
   saved = { ...original, id: "replacement", observationId: current.id, version: 1, contentRevision: 1 };
@@ -63,6 +68,7 @@ beforeEach(() => {
     () => [batch], () => [{ archivedAt: null, timezone: "UTC" }], () => [batch], () => [locked],
     () => [locked], () => oldValues, () => [{ count: 1 }],
     () => [], // Active sibling values after the old row was tombstoned.
+    () => [], // No draft zeros to tombstone.
     () => [saved], () => newValues, () => [{ count: 0 }],
     () => [saved], () => newValues, () => [{ count: 1 }]];
   select.mockImplementation(() => {
@@ -76,6 +82,7 @@ beforeEach(() => {
   } }));
   insert.mockImplementation(table => ({ values: (data: object) => {
     inserted(table, data);
+    if (table === emissionEntries) saved = { ...saved, ...data };
     return query(() => table === emissionEntries ? [saved] : newValues);
   } }));
   const tx = { select, update, insert, delete: () => query(() => []) } as unknown as DbTransaction;
@@ -87,7 +94,7 @@ beforeEach(() => {
 it("replaces in one transaction with ordered locks, current binding, normalized values and moved evidence", async () => {
   expect(await replaceEmissionEntry(ctx, input)).toMatchObject({ id: "replacement", values: newValues, documentCount: 1 });
   expect(mocks.transaction).toHaveBeenCalledTimes(1);
-  expect(locks).toEqual(["share", "update", "update"]);
+  expect(locks).toEqual(["share", "update", "update", "update"]);
   expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({
     organizationId: ctx.organizationId, creditBatchId: original.creditBatchId, componentId: original.componentId,
     observationId: current.id, occurredOn: batch.endDate, note: input.note, createdBy: ctx.userId,
@@ -136,10 +143,8 @@ it("refuses a foreign or missing entry before locking or writing", async () => {
   expect(update).not.toHaveBeenCalled();
 });
 
-it("checks organization scope and the feature gate before opening a transaction", async () => {
+it("checks organization scope before opening a transaction", async () => {
   await expect(replaceEmissionEntry({ ...ctx, organizationId: "" }, input)).rejects.toThrow("Unauthorized");
-  mocks.gate.mockImplementation(() => { throw new Error("Disabled"); });
-  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("Disabled");
   expect(mocks.transaction).not.toHaveBeenCalled();
 });
 
@@ -158,4 +163,61 @@ it.each([
 ])("applies create validation: $message", async ({ message, ...patch }) => {
   await expect(replaceEmissionEntry(ctx, { ...input, ...patch })).rejects.toThrow(message);
   expect(insert).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("links a replacement to its sent original without stamping (already held=%s)", async (held) => {
+  const sentId = held ? "sent-original" : id;
+  if (held) {
+    locked.replacesEntryId = sentId;
+    mocks.holds.mockImplementation(async (_ctx, entries: { id: string }[]) =>
+      new Map(entries.map((entry) => [entry.id, "removal"])));
+  } else locked.sentByRemovalId = "removal";
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  await replaceEmissionEntry(ctx, input);
+  expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({ replacesEntryId: sentId }));
+  expect(saved.sentByRemovalId).toBeNull();
+  expect(mocks.assertWindow).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "removal", batch.endDate);
+  expect(mocks.activity.mock.calls.map(call => call[2])).toEqual(["deleted", "created"]);
+});
+
+it("refuses an unsent held replacement after the window closes", async () => {
+  locked.replacesEntryId = "sent-original";
+  mocks.holds.mockResolvedValue(new Map([[id, "removal"]]));
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("reserved or sent");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+});
+
+it.each(["sent", "held"])("refuses Enter again for a %s carried entry before writing", async holding => {
+  if (holding === "sent") locked.sentByRemovalId = "receiver";
+  else {
+    locked.replacesEntryId = "sent-original";
+    mocks.holds.mockResolvedValue(new Map([[id, "receiver"]]));
+  }
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  await expect(replaceEmissionEntry(ctx, input))
+    .rejects.toThrow("This entry was carried into a later Removal, so it cannot be entered again.");
+  expect(mocks.carried).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
+});
+
+it.each([undefined, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {
+  const zero = { ...original, id: "origin-zero", kind: "zero", sentByRemovalId: "origin", confirmedForRemovalId: "origin" };
+  const where = vi.fn((_condition: SQL) => ({ returning: async () => [] }));
+  const tx = {
+    select: () => query(() => [zero]),
+    update: () => ({ set: () => ({ where }) }),
+  } as unknown as DbTransaction;
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  await tombstoneEmissionZeros(ctx, tx, { ...original, holdingRemovalId });
+  const statement = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
+  expect(statement.params).toContain(ctx.organizationId);
+  if (holdingRemovalId === "receiver") expect(statement.params).not.toContain(zero.id);
+  else expect(statement.params).toContain(zero.id);
+  // Draft invalidation remains a separate branch, gated on an unsent zero.
+  expect(statement.sql).toContain('"sent_by_removal_id" is null');
+  expect(statement.sql).toContain("not exists");
 });

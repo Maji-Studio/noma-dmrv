@@ -13,13 +13,13 @@ function attachmentWithStatus(
 }
 
 describe("runCreateWithEvidenceChoreography", () => {
-  it.each([true, false])("uses the form callback to suppress handled create errors: %s", async (handled) => {
+  it.each([null, "Refused"])("uses the form callback's create-error footer: %s", async (footer) => {
     const error = new Error("Refused");
-    const onError = vi.fn<(error: unknown) => boolean>(() => handled);
+    const onRefusal = vi.fn<(error: unknown, fallback: string) => string | null>(() => footer);
     const setError = vi.fn();
     const flushMany = vi.fn();
     await runCreateWithEvidenceChoreography({
-      input: { onError },
+      input: { onRefusal },
       entityType: "delivery",
       entityNoun: "Delivery",
       executeCreate: async () => { throw error; },
@@ -28,13 +28,13 @@ describe("runCreateWithEvidenceChoreography", () => {
       retainCreatedEntityIds: vi.fn(),
       setFlushing: vi.fn(),
       setError,
-      getCreateErrorMessage: (error, input) => input.onError(error) ? null : "Refused",
+      getCreateErrorMessage: (error, input) => input.onRefusal(error, "Delivery was not created. Check the form."),
       openEditOnFailure: vi.fn(),
       closeOnSuccess: vi.fn(),
       onSuccess: vi.fn(),
     });
-    expect(onError).toHaveBeenCalledWith(error);
-    expect(setError).toHaveBeenLastCalledWith(handled ? null : "Refused");
+    expect(onRefusal).toHaveBeenCalledWith(error, "Delivery was not created. Check the form.");
+    expect(setError).toHaveBeenLastCalledWith(footer);
     expect(flushMany).not.toHaveBeenCalled();
   });
 

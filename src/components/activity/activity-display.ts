@@ -5,23 +5,15 @@
  * alike. The values an update recorded (`changes`, with current link names in
  * `changeLabels`) become one line per field in `activity-change-lines.ts`.
  */
+import { recordHref } from "@/lib/record-links";
 import type { CreditBatchActivityPage } from "@/data-access/credit-batch-activity";
 import {
   isActivityEntityType,
   type ActivityEntityType,
 } from "@/db/schema/common";
 import { CERTIFY_FIELD_REGISTRY, type CertifyEntityKind } from "@/lib/certification/certify-field-registry";
-import { applicationDeepLinkHref } from "@/lib/application-links";
-import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { deliveryDeepLinkHref } from "@/lib/delivery-links";
-import { orderDeepLinkHref } from "@/lib/order-links";
-import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
-import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
-import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
+import { humanizeEnum, UNKNOWN_USER } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/schemas/documents";
 
@@ -42,7 +34,7 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityAction, string> = {
 /** Glossary names (GLOSSARY.md): Sample, Removal and GHG Statement keep their capitals. */
 export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   emission_entry: "Emissions entry",
-  emission_line_comment: "Line comment",
+  emission_line_comment: "Component comment",
   credit_batch: "Credit batch",
   production_run: "Production run",
   feedstock: "Feedstock",
@@ -102,11 +94,11 @@ export interface ActivityActorDisplay {
 export function activityActorDisplay(item: Pick<ActivityItem, "actor" | "source">): ActivityActorDisplay {
   if (!item.actor) {
     const name = ACTORLESS_SOURCE_LABELS[item.source];
-    return name ? { name, missing: false, channel: null } : { name: MISSING_VALUE.notAvailable, missing: true, channel: null };
+    return name ? { name, missing: false, channel: null } : { name: UNKNOWN_USER, missing: true, channel: null };
   }
   const channel = SOURCE_CHANNEL_LABELS[item.source];
   return {
-    name: item.actor.name ?? MISSING_VALUE.notAvailable,
+    name: item.actor.name ?? UNKNOWN_USER,
     missing: item.actor.name == null,
     channel: channel ? `via ${channel}` : null,
   };
@@ -123,9 +115,7 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   emission_entry: "Emissions entry",
   credit_batch: "Credit batch",
   removalAssignment: "Removal assignment",
-  productionClaimReservation: "Production claim reservation",
   productionClaim: "Production claim",
-  uploadStatus: "Upload status",
   removalTemplateId: "Removal template",
   // The shared mass and moisture names (docs/design-system.md, wet/dry mass).
   massWetKg: WET_MASS_FIELD_LABEL,
@@ -146,8 +136,16 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   entityType: "Linked record type",
   entityId: "Linked record",
 };
-/** Bookkeeping fields every save touches; they say nothing to an operator. */
-const HIDDEN_FIELDS = new Set(["version", "expectedVersion", "facilityId", "organizationId"]);
+/**
+ * Bookkeeping fields every save touches, and system-written fields (file
+ * checksums, upload progress, send reservations); they say nothing to an
+ * operator, so a change to them is never listed.
+ */
+const HIDDEN_FIELDS = new Set([
+  "version", "expectedVersion", "facilityId", "organizationId",
+  "checksumSha256", "uploadStatus",
+  "sendReservedBySubmissionId", "productionEmissionsClaimReservedBySubmissionId", "productionClaimReservation",
+]);
 
 export function isHiddenActivityField(field: string): boolean {
   return HIDDEN_FIELDS.has(field);
@@ -237,6 +235,15 @@ export function activityRecordLabel(item: Pick<ActivityItem, "entityType" | "rea
   return item.record.label;
 }
 
+/**
+ * The record as one phrase: its type, then its name when the name adds
+ * something. Records whose "name" is only their type ("Emissions entry") read once.
+ */
+export function activityRecordTitle(typeLabel: string, label: string | null): string {
+  if (!label || label.trim().toLowerCase() === typeLabel.trim().toLowerCase()) return typeLabel;
+  return `${typeLabel} ${label}`;
+}
+
 /** What membership and status events mean, in words. Null when the kind says it all. */
 export function activityChangeSummary(item: Pick<ActivityItem, "entityType" | "reasonCode">): string | null {
   if (item.entityType === "production_run" && item.reasonCode === "attached") return "Added to this credit batch";
@@ -276,16 +283,16 @@ export function activityRecordHref(
   }
   switch (entityType) {
     case "credit_batch":
-      return entityId === context.creditBatchId ? null : creditBatchDeepLinkHref(entityId, facility);
-    case "production_run": return productionRunDeepLinkHref(entityId, facility);
-    case "feedstock": return feedstockDeepLinkHref(entityId, facility);
-    case "biochar_product": return biocharProductDeepLinkHref(entityId, facility);
-    case "lab_sample": return sampleDetailHref(facility, entityId);
-    case "order": return orderDeepLinkHref(entityId, facility);
-    case "delivery": return deliveryDeepLinkHref(entityId, facility);
-    case "application": return applicationDeepLinkHref(entityId, facility);
-    case "removal": return certificationRemovalsHref({ facility, removal: entityId });
-    case "ghg_statement": return ghgStatementDeepLinkHref(entityId, facility);
+      return entityId === context.creditBatchId ? null : recordHref("creditBatch", entityId, { facilityId: facility });
+    case "production_run": return recordHref("productionRun", entityId, { facilityId: facility });
+    case "feedstock": return recordHref("feedstock", entityId, { facilityId: facility });
+    case "biochar_product": return recordHref("biocharProduct", entityId, { facilityId: facility });
+    case "lab_sample": return recordHref("sample", entityId, { facilityId: facility });
+    case "order": return recordHref("order", entityId, { facilityId: facility });
+    case "delivery": return recordHref("delivery", entityId, { facilityId: facility });
+    case "application": return recordHref("application", entityId, { facilityId: facility });
+    case "removal": return recordHref("removal", entityId, { facilityId: facility });
+    case "ghg_statement": return recordHref("ghgStatement", entityId, { facilityId: facility });
     default: return null;
   }
 }

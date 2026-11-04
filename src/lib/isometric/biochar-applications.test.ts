@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/db", () => ({}));
 import {
   createIsometricClientFromTransport,
   type IsometricClient,
@@ -242,7 +244,7 @@ describe("Biochar Application reconciliation", () => {
 describe("Biochar Application evidence reconciliation", () => {
   it("accepts a readback that omits Source links when Sources were requested", () => {
     // Certify's documented Biochar Application response carries no
-    // `source_ids`; the accepted create request is the attachment contract.
+    // `source_ids`; the separate GraphQL readback checks the attachment.
     const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
     expect(biocharApplicationMismatchMessage(remote(), expected)).toBeNull();
   });

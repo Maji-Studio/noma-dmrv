@@ -128,7 +128,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     // no page.goto(). This is the exact scenario the fix targets: a query
     // that was cached under refetchOnWindowFocus:false must have been
     // invalidated by the application mutation, or this would still read 4.50 t.
-    await page.locator("nav").getByRole("link", { name: "Credit Batches" }).click();
+    await page.locator("nav").getByRole("link", { name: "Credit batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
     await page.waitForLoadState("networkidle");
     // The sidebar link opens the timeline; the row figures live in the list view.

@@ -1,6 +1,6 @@
 /** Storage bin side-sheet view mode: the sections config for EntitySideSheet. */
 import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
-import { formatStorageLocationType, OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
+import { FEEDSTOCK_STOCK_MODE_LABELS, formatStorageLocationType, OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
 import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputBinBalance } from "./output-bin-balance";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
@@ -70,8 +70,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       // Lifetime running total of source biochar across every product ever
       // stored here, never decremented on delivery — qualified so it cannot
       // be read as stock still on hand next to "Current product mass"
-      // (DR-002 / PB-26-001).
-      label: "Biochar received, all time",
+      // (DR-002 / PB-26-001). Dry basis, like "Applied, dry" beside it (#1251).
+      label: "Biochar received, dry, all time",
       value: formatMassKg(storageLocation.productInventory.biocharEquivalentKg),
     },
     {
@@ -103,7 +103,12 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   ];
 }
 
-export function storageLocationSheetSections(bin: StorageLocationWithFacility, onReconcile: (bin: StorageLocationWithFacility) => void): DetailPanelSection[] {
+export function storageLocationSheetSections(
+  bin: StorageLocationWithFacility,
+  onReconcile?: (bin: StorageLocationWithFacility) => void,
+  /** A read-only bin hides the history's Lost mass controls and reads times in its own facility's zone. */
+  view: { readOnly?: boolean; timeZone?: string } = {},
+): DetailPanelSection[] {
   return [
     {
       title: "Storage details",
@@ -132,6 +137,10 @@ export function storageLocationSheetSections(bin: StorageLocationWithFacility, o
         ...(bin.type === "product_bin"
           ? [{ label: "Formulation", value: bin.formulationName }]
           : []),
+        ...(bin.type === "feedstock_bin"
+          ? [{ label: "Draw method", value: FEEDSTOCK_STOCK_MODE_LABELS[bin.stockMode] },
+            ...(bin.stockMode === "split" ? [{ label: "Draw order", value: OUTPUT_DRAW_ORDER_LABELS[bin.drawOrder] }] : [])]
+          : []),
         ...(bin.type !== "feedstock_bin"
           ? [{ label: "Stock mode", value: OUTPUT_STOCK_MODE_LABELS[bin.stockMode] }]
           : []),
@@ -146,10 +155,10 @@ export function storageLocationSheetSections(bin: StorageLocationWithFacility, o
       fields: buildStorageDetailFields(bin),
       content: bin.type === "feedstock_bin" ? (
         <FeedstockBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
-          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
+          onAdjust={bin.archivedAt || !onReconcile ? undefined : () => onReconcile(bin)} readOnly={view.readOnly} timeZone={view.timeZone} />
       ) : (
         <OutputBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
-          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
+          onAdjust={bin.archivedAt || !onReconcile ? undefined : () => onReconcile(bin)} readOnly={view.readOnly} timeZone={view.timeZone} />
       ),
     },
   ];

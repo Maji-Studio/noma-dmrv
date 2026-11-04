@@ -124,11 +124,13 @@ export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryO
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
   if (delivery.deliveredWetMassKg != null) {
-    return formatWetDryStock({ wetKg: delivery.deliveredWetMassKg, dryKg: delivery.massDryKg });
+    // Without a tracked dry biochar the delivery cannot be applied, so the label says so.
+    return formatWetDryStock({ wetKg: delivery.deliveredWetMassKg, dryKg: delivery.massDryKg, missing: "not tracked" });
   }
 
   if (delivery.massDryKg != null) {
-    return formatWetDryStock({ wetKg: null, dryKg: delivery.massDryKg });
+    // The delivered wet mass is the operator's to record.
+    return formatWetDryStock({ wetKg: null, dryKg: delivery.massDryKg, missing: MISSING_VALUE.notRecorded });
   }
 
   if (delivery.orderQuantityKg != null) {

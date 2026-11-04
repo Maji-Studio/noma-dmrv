@@ -4,18 +4,11 @@
  */
 "use server";
 
-import {
-  createDriver,
-  createOperator,
-  createVehicle,
-  createFeedstockType,
-  createStorageLocation,
-} from "@/data-access/quick-add";
-import { drivers, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
+import { createDriver } from "@/lib/operations/drivers";
+import { createOperator } from "@/lib/operations/operators";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
+import { createVehicle, createQuickStorageLocation } from "@/lib/operations/quick-add";
+import { createFeedstockType } from "@/lib/operations/feedstock-types";
 import {
   driverQuickAddSchema,
   operatorQuickAddSchema,
@@ -30,7 +23,7 @@ import {
 } from "@/schemas/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { ActionResult } from "@/types/actions";
-import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 // ============================================
 // Driver Quick Add
@@ -40,17 +33,13 @@ import { withAction } from "./with-action";
  * Create a new driver from quick-add dialog
  */
 export async function createDriverFn(
-  data: DriverQuickAddData
+  data: DriverQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const parsed = driverQuickAddSchema.parse(data);
-    return withAutoCode(
-      ctx,
-      "DRV", drivers, drivers.code, undefined,
-      (code) => createDriver(ctx, { ...parsed, code }),
-      CODE_CONFLICT_MESSAGES.driver,
-    );
-  }, { fallbackMessage: "Failed to create driver" });
+    return create(createDriver, parsed);
+  }, options, { fallbackMessage: "Failed to create driver" });
 }
 
 // ============================================
@@ -58,12 +47,13 @@ export async function createDriverFn(
 // ============================================
 
 export async function createOperatorFn(
-  data: OperatorQuickAddData
+  data: OperatorQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const parsed = operatorQuickAddSchema.parse(data);
-    return createOperator(ctx, parsed);
-  }, { fallbackMessage: "Failed to create operator" });
+    return create(createOperator, parsed);
+  }, options, { fallbackMessage: "Failed to create operator" });
 }
 
 // ============================================
@@ -74,65 +64,27 @@ export async function createOperatorFn(
  * Create a new vehicle from quick-add dialog
  */
 export async function createVehicleFn(
-  data: VehicleQuickAddData
+  data: VehicleQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
-    const parsed = vehicleQuickAddSchema.parse(data);
-    return withAutoCode(
-      ctx,
-      "VEH", vehicles, vehicles.code, undefined,
-      (code) => createVehicle(ctx, { ...parsed, code }),
-      CODE_CONFLICT_MESSAGES.vehicle,
-    );
-  }, { fallbackMessage: "Failed to create vehicle" });
+  return withCreate((_ctx, create) => create(createVehicle, vehicleQuickAddSchema.parse(data)), options,
+    { fallbackMessage: "Failed to create vehicle" });
 }
 
-// ============================================
-// Feedstock Type Quick Add
-// ============================================
-
-/**
- * Create a new feedstock type from quick-add dialog
- */
 export async function createFeedstockTypeFn(
-  data: FeedstockTypeQuickAddData
+  data: FeedstockTypeQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
-    const parsed = feedstockTypeQuickAddSchema.parse(data);
-    return withAutoCode(
-      ctx,
-      "FT", feedstockTypes, feedstockTypes.code, undefined,
-      (code) => createFeedstockType(ctx, { ...parsed, code }),
-      CODE_CONFLICT_MESSAGES.feedstockType,
-    );
-  }, { fallbackMessage: "Failed to create feedstock type" });
+  return withCreate(async (_ctx, create) => {
+    const result = await create(createFeedstockType, feedstockTypeQuickAddSchema.parse(data));
+    return { id: result.id, code: result.code, name: result.name, subtitle: `${result.category} · ${result.usage}` };
+  }, options, { fallbackMessage: "Failed to create feedstock type" });
 }
 
-// ============================================
-// Storage Location Quick Add
-// ============================================
-
-/**
- * Create a new storage location from quick-add dialog
- */
 export async function createStorageLocationFn(
-  data: StorageLocationQuickAddData
+  data: StorageLocationQuickAddData,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (ctx) => {
-    const parsed = storageLocationQuickAddSchema.parse(data);
-
-    const prefixMap: Record<string, string> = {
-      feedstock_bin: "FB",
-      biochar_bin: "BB",
-      product_bin: "PB",
-    };
-    const prefix = prefixMap[parsed.type] ?? "PB";
-
-    return withAutoCode(
-      ctx,
-      prefix, storageLocations, storageLocations.code, undefined,
-      (code) => createStorageLocation(ctx, { ...parsed, code }),
-      CODE_CONFLICT_MESSAGES.storageLocation,
-    );
-  }, { fallbackMessage: "Failed to create storage bin" });
+  return withCreate((_ctx, create) => create(createQuickStorageLocation, storageLocationQuickAddSchema.parse(data)), options,
+    { fallbackMessage: "Failed to create storage bin" });
 }

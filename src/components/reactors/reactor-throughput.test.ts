@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatTotalThroughputTph } from "./reactor-throughput";
+import { formatThroughputTph, formatTotalThroughputTph } from "./reactor-throughput";
 
 describe("formatTotalThroughputTph", () => {
   it("renders the missing-value token, without a unit, when nothing is recorded", () => {
@@ -30,5 +30,19 @@ describe("formatTotalThroughputTph", () => {
 
   it("still reports a real measured zero", () => {
     expect(formatTotalThroughputTph([{ nominalThroughputTph: 0 }])).toBe("0 tph");
+  });
+});
+
+describe("formatThroughputTph", () => {
+  it("renders the token, without a unit, for a null total", () => {
+    expect(formatThroughputTph(null)).toBe(MISSING_VALUE.notRecorded);
+  });
+
+  it("keeps a recorded zero as a figure with its unit", () => {
+    expect(formatThroughputTph(0)).toBe("0 tph");
+  });
+
+  it("formats a recorded total with the unit", () => {
+    expect(formatThroughputTph(4)).toBe("4 tph");
   });
 });

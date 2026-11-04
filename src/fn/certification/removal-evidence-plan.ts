@@ -7,6 +7,7 @@ import {
 } from "./biochar-application-intents";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
+import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
 import {
   collectCandidateSourceDocumentsForRemoval,
   resolveSourceBindingCandidates,
@@ -96,7 +97,10 @@ export async function planRemovalEvidence(args: {
       : filterCandidateSourcesForSubmissionLifecycle(
           await collectCandidateSourceDocumentsForRemoval(orgCtx, {
             removalId,
+            entryContributions: ctx.removalEntryContext?.contributions,
             lineages: ctx.lineages,
+            feedstockCodes: ctx.feedstockCodes,
+            transportFeedstockIds: ctx.transportCoverage.feedstock.entityIds,
             memberBatches: ctx.memberBatches,
             memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
               batch.samples.map((sample) => ({
@@ -106,6 +110,7 @@ export async function planRemovalEvidence(args: {
             ),
           }),
           ctx.latestSubmission,
+          ctx.correctionWindowOpen,
         ));
   const sourceBindingCandidates =
     supplied.sourceBindingCandidates ??
@@ -144,15 +149,18 @@ export async function planRemovalEvidence(args: {
       args.compiledBiocharApplicationIntents,
       sourceBindingCandidates,
     ),
-    sourceBindingPlan: buildRemovalSourceBindingPlan({
+    sourceBindingPlan: withEmissionEntryEvidenceDiagnostics(removalId, () => buildRemovalSourceBindingPlan({
+      removalId,
       candidates: datapointSourceCandidates,
       template,
       lineSources: ctx.lineSources,
       ...membership,
-    }),
+      entryContributions: ctx.removalEntryContext?.contributions,
+    })),
     // The semantic plan includes pending files with placeholder Source IDs. The
     // operational plan above remains strict, so placeholders never reach the API.
-    semanticSourceBindingPlan: buildRemovalSourceBindingPlan({
+    semanticSourceBindingPlan: withEmissionEntryEvidenceDiagnostics(removalId, () => buildRemovalSourceBindingPlan({
+      removalId,
       candidates: candidateSourceDocuments
         .filter(hasBinding)
         .map((candidate) => ({
@@ -162,6 +170,7 @@ export async function planRemovalEvidence(args: {
       template,
       lineSources: ctx.lineSources,
       ...membership,
-    }),
+      entryContributions: ctx.removalEntryContext?.contributions,
+    })),
   };
 }

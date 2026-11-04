@@ -58,15 +58,14 @@ describe("TransportRoutePreview", () => {
   });
 
   it("draws a planned route without a load or a CERT chip", () => {
-    const html = renderToStaticMarkup(<TransportRoutePreview {...ROUTE} plannedRoute certTag />);
+    const html = renderToStaticMarkup(<TransportRoutePreview {...ROUTE} plannedRoute />);
 
     expect(text(html)).not.toContain("400 kg");
     expect(html).not.toContain("data-cert-field=");
   });
 
-  it("carries the CERT chip only when asked, as read views do", () => {
+  it("carries no CERT chip; distance and mass inputs carry their own", () => {
     expect(renderToStaticMarkup(<TransportRoutePreview {...ROUTE} />)).not.toContain("data-cert-field=");
-    expect(renderToStaticMarkup(<TransportRoutePreview {...ROUTE} saved certTag />)).toContain("data-cert-field=");
   });
 
   it("draws a located route without a distance so its map stays reachable", () => {
@@ -80,7 +79,9 @@ describe("TransportRoutePreview", () => {
       />,
     ));
 
-    expect(rendered).toContain("Road · One way: Not recorded");
+    expect(rendered).toContain("Road");
+    expect(rendered).not.toContain("One way: Not recorded");
+    expect(rendered).not.toContain("Distance source");
     expect(rendered).not.toContain("Nothing to draw yet.");
   });
 

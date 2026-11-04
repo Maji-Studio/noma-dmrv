@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import sandboxFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import culaFixture from "../../../tests/fixtures/isometric/cula-template-2026-10-15.json";
+import productionFixture from "../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import enrichment from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate, type LineSources } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
@@ -19,11 +19,11 @@ vi.mock("./durability-measurement-samples", () => ({
 }));
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
-const cula = culaFixture as GhgEntryTemplate;
+const production = productionFixture as GhgEntryTemplate;
 const GENSET = "rtc_1KWHFRM4GSBX5Y7A";
 const blueprints = [
   ...enrichment.blueprints as IsometricComponentBlueprint[],
-  // Mock registry metadata for the Cula legacy storage blueprint absent from
+  // Mock registry metadata for the production-template legacy storage blueprint absent from
   // the sandbox enrichment fixture. Its template inputs stay unchanged.
   { key: "carbon_rich_substance_sequestration", inputs: [
     { input_key: "carbon_content", quantity_kind: "dimensionless", compatible_unit: "dimensionless", data_shape: "SCALAR" },
@@ -42,7 +42,7 @@ function sources(template: GhgEntryTemplate) {
   return resolveLineSources({ definition: normalizeTemplateDefinition(template) });
 }
 
-/** Exclude entry-only functionality and Cula's known unsupported legacy transport. */
+/** Exclude entry-only functionality and the production template's known unsupported legacy transport. */
 function supportedAutomaticTemplate(template: GhgEntryTemplate) {
   const lineSources = sources(template);
   return { ...structuredClone(template), groups: template.groups.map((group) => ({ ...group,
@@ -52,8 +52,9 @@ function supportedAutomaticTemplate(template: GhgEntryTemplate) {
 
 function facilityFacts(template: GhgEntryTemplate, lineSources: LineSources): FacilityCertifierFacts {
   return {
+    facilityTimezone: "UTC",
     hasOrgCredentials: true, mapping: { externalProjectId: template.project_id },
-    defaultTemplate: { ...template, id: "different-default" },
+    currentTemplate: { ...template, id: "different-default" },
     templatesById: { [template.id]: {
       template, observation: { lineSources }, enrichmentProblems: [],
       lineSourceProblems: validateLineSources(normalizeTemplateDefinition(template), lineSources),
@@ -68,7 +69,7 @@ function prepare(template: GhgEntryTemplate, lineSources = sources(template), fa
   const facts = facilityFacts(template, lineSources);
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], facts);
   const context = { ...resolved, facilityId, mapping: facts.mapping, hasOrgCredentials: true };
-  return { resolved, ...prepareRemovalSubmission(context, { isometricEnvironment: "sandbox" }) };
+  return { resolved, ...prepareRemovalSubmission(context) };
 }
 
 function compile(template: GhgEntryTemplate, lineSources = sources(template), facilityId?: string) {
@@ -78,31 +79,31 @@ function compile(template: GhgEntryTemplate, lineSources = sources(template), fa
   return { ...result, inputs: resolveTemplateInputs({
     template: result.prepared!.removalTemplate, lineSources: result.prepared!.lineSources,
     blueprintsByKey: result.prepared!.blueprintsByKey, externalProjectId: result.prepared!.externalProjectId,
-    agg, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: true, omitProductionComponents: false,
+    agg, sourceIds: [], sourceBindingPlan: [], omitProductionComponents: false,
   }) };
 }
 
 describe("pinned-template compilation drift matrix", () => {
   it("resolves and compiles two facilities' distinct pins and contracts in the same run", () => {
-    // The full Cula fixture must keep its legacy transport refusal, not silently
+    // The full production-template fixture must keep its legacy transport refusal, not silently
     // acquire the sandbox's mass-distance binding.
-    const legacy = prepare(cula);
+    const legacy = prepare(production);
     expect(legacy.blockers).toContainEqual(expect.objectContaining({ code: "templateUnbindable", message: expect.stringContaining("blueprint transport") }));
     const first = supportedAutomaticTemplate(sandbox);
-    const second = supportedAutomaticTemplate(cula);
+    const second = supportedAutomaticTemplate(production);
     const a = compile(first, sources(first), "sandbox-facility");
-    const b = compile(second, sources(second), "cula-facility");
+    const b = compile(second, sources(second), "production-facility");
     expect(a.resolved.removalTemplate?.id).toBe(sandbox.id);
-    expect(b.resolved.removalTemplate?.id).toBe(cula.id);
+    expect(b.resolved.removalTemplate?.id).toBe(production.id);
     expect(a.prepared!.externalProjectId).toBe(sandbox.project_id);
-    expect(b.prepared!.externalProjectId).toBe(cula.project_id);
+    expect(b.prepared!.externalProjectId).toBe(production.project_id);
     expect(a.resolved.lineSources[GENSET].automaticSource).toBe("run-genset-diesel");
     expect(b.resolved.lineSources[GENSET]).toBeUndefined();
     expect(b.resolved.lineSources.rtc_1M2QJGQS21S0H1G0.automaticSource).toBe("run-genset-diesel");
     expect(a.inputs.monitored).toContainEqual(expect.objectContaining({ inputKey: "electricity_use", quantity: { magnitude: agg.totalElectricityKwh, unit: "kWh" } }));
     expect(b.inputs.monitored).not.toContainEqual(expect.objectContaining({ inputKey: "electricity_use" }));
     expect(b.inputs.monitored).toContainEqual(expect.objectContaining({ inputKey: "product_mass", quantity: { magnitude: agg.totalBiocharDryMassKg, unit: "kg" } }));
-    expect(resolveRemovalTemplate([{ removalTemplateId: cula.id }], facilityFacts(first, sources(first))).templateBlockers[0].code).toBe("templateNotFound");
+    expect(resolveRemovalTemplate([{ removalTemplateId: production.id }], facilityFacts(first, sources(first))).templateBlockers[0].code).toBe("templateNotFound");
   });
 
   it("compiles a known component moved between compatible group instances", () => {
@@ -132,7 +133,7 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.prepared).toBeNull();
     expect(result.blockers.map((blocker) => blocker.code)).toEqual(["templateLinesNeedReview", "templateUnbindable"]);
     const diagnostic = result.blockers.find((blocker) => blocker.code === "templateUnbindable")!.message;
-    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "Review the Removal template lines in Certification settings."]) {
+    for (const detail of ["Generator diesel", GENSET, "fuel_usage_by_volume", "unknown_pressure", "This Removal template has components to decide."]) {
       expect(diagnostic).toContain(detail);
     }
   });
@@ -151,9 +152,9 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.requiredTransportCategories).not.toContain(category);
     const transportLegs: TransportLegsByCategory = { feedstock: [], biochar: [], sample: [] };
     transportLegs[category] = [{ id: "recorded-leg", distanceKm: 20 } as TransportLegsByCategory[typeof category][number]];
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [], transportLegs }))
       .toEqual([expect.stringContaining(`${label} is recorded`)]);
-    expect(buildSubmissionWarnings({ removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
+    expect(buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: result.prepared!.removalTemplate, lineSources, runs: [], lineages: [] })).toEqual([]);
   });
 
   it("fails closed when a carried automatic contract moves to an incompatible scope", () => {
@@ -171,4 +172,12 @@ describe("pinned-template compilation drift matrix", () => {
     expect(result.resolved.templateBlockers.map((blocker) => blocker.code)).toContain("templateLinesNeedReview");
     expect(findUnbindableTemplateInputs(changed, { lineSources })).toContainEqual(expect.objectContaining({ componentId: GENSET }));
   });
+});
+
+it("stops warning about retired sample transport facts", () => {
+  const template = supportedAutomaticTemplate(sandbox);
+  const warnings = buildSubmissionWarnings({ facilityTimezone: "UTC", removalTemplate: template, lineSources: sources(template), runs: [], lineages: [],
+    transportLegs: { feedstock: [], biochar: [], sample: [{ id: "legacy-sample-leg", distanceKm: 20 } as TransportLegsByCategory["sample"][number]] },
+  });
+  expect(warnings).toEqual([]);
 });

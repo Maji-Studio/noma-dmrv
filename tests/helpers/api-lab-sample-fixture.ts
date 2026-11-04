@@ -38,7 +38,7 @@ async function issueKey(f: LabSampleFixture, name: string, scopes: readonly ApiS
 
 export async function createApiLabFixture(options: LabSampleFixtureOptions = {}): Promise<ApiLabFixture> {
   const f = await createLabSampleFixture(options);
-  await db.insert(members).values({ id: randomUUID(), organizationId: f.ctx.organizationId, userId: f.ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), organizationId: f.ctx.organizationId, userId: f.ctx.userId, role: "admin" });
   const writer = await issueCredential(f, "Lab sample writer", ["lab-samples:write"]);
   return {
     ...f,

@@ -21,7 +21,7 @@ describe("sample create intent", () => {
     const href = sampleCreateHref("facility-1", "batch-1");
     const url = new URL(href, "https://example.test");
 
-    expect(url.pathname).toBe("/samples");
+    expect(url.pathname).toBe("/lab-samples");
     expect(url.searchParams.get("facility")).toBe("facility-1");
     expect(url.searchParams.get("create")).toBe("true");
     expect(url.searchParams.get("createCreditBatch")).toBe("batch-1");

@@ -15,7 +15,7 @@ const returned = (level: RecordLockView["level"], status = "FAILED_VERIFICATION"
     statementStatus: status,
   }],
 });
-const STATEMENT_HREF = `/certification/ghg-statements?facility=${FACILITY}&statement=statement-1`;
+const STATEMENT_HREF = `/ghg-statements?facility=${FACILITY}&statement=statement-1`;
 
 describe("Removal correction needed", () => {
   it("marks a returned Removal's row and points to the GHG Statement that resubmits it", () => {

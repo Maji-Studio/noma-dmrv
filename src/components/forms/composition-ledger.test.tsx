@@ -31,6 +31,6 @@ describe("composition ledger", () => {
     const html = ledger(total, dry, water);
     expect(html).not.toContain("width:");
     expect(html).not.toContain("100%");
-    expect(html).toContain("Not available");
+    expect(html).not.toContain("Not available");
   });
 });

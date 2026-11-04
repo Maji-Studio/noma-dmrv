@@ -3,9 +3,12 @@ import type { Sample } from "@/db/schema";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
+  applyProductionBatchIds,
   buildDurabilityMeasurementSampleSubmissions,
+  creditBatchIdsForMeasurementSamples,
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   patchMeasurementSampleSourceBindings,
+  type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import {
   normalizeMeasurementSamplesForHash,
@@ -159,7 +162,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     );
 
     await patchMeasurementSampleSourceBindings({
-      client: { patch } as never,
+      client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
       captures: ["sample-a", "sample-b"].map((sampleId) => ({
         measurementSampleId: `measurement-${sampleId}`,
         supplierReferenceId: `reference-${sampleId}`,
@@ -220,7 +223,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-existing",
@@ -251,7 +254,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-1",
@@ -290,6 +293,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-carbon",
       expect.objectContaining({ source_ids: ["source-durability"] }),
+      { idempotent: true },
     );
   });
 
@@ -304,7 +308,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-a",
@@ -370,11 +374,13 @@ describe("patchMeasurementSampleSourceBindings", () => {
       1,
       "/datapoints/datapoint-carbon-a",
       expect.objectContaining({ source_ids: ["source-inventory-a"] }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenNthCalledWith(
       2,
       "/datapoints/datapoint-carbon-b",
       expect.objectContaining({ source_ids: ["source-inventory-b"] }),
+      { idempotent: true },
     );
   });
 
@@ -434,7 +440,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
 
     await expect(
       patchMeasurementSampleSourceBindings({
-        client: { patch } as never,
+        client: { patch, get: vi.fn().mockResolvedValue({ source_ids: [] }) } as never,
         captures: [
           {
             measurementSampleId: "measurement-sample-1",
@@ -473,18 +479,21 @@ describe("patchMeasurementSampleSourceBindings", () => {
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-inorganic-a",
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-s-a",
       expect.objectContaining({
         source_ids: ["source-durability-ledger"],
       }),
+      { idempotent: true },
     );
   });
 });
@@ -843,5 +852,46 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(
       submissions.map((submission) => submission.creditBatchProductMassKg),
     ).toEqual([500, 500, 500]); // one direct Datapoint is built from this batch fact
+  });
+});
+
+describe("measurement-sample binding", () => {
+  const CREDIT_BATCH_ID = "11111111-1111-4111-8111-111111111111";
+  const PRODUCTION_BATCH_ID = "ptb_1GAFJ4C051S06E0Z";
+  const perSample = [1, 2, 3].map(
+    (index) =>
+      ({
+        creditBatchId: CREDIT_BATCH_ID,
+        sampleId: `sample-${index}`,
+        creditBatchProductMassKg: 1_970,
+        operationKey: `pb:${CREDIT_BATCH_ID}:sample:sample-${index}`,
+        supplierRefId: `nm-mts-x-pb-y-s-${index}-v1`,
+        label: `Sample sample-${index}`,
+        body: { production_batch_id: null },
+      }) as unknown as DurabilityMeasurementSampleSubmission,
+  );
+
+  it("collects one credit batch for all of its local Samples", () => {
+    expect(creditBatchIdsForMeasurementSamples(perSample)).toEqual([
+      CREDIT_BATCH_ID,
+    ]);
+  });
+
+  it("stamps the same registered production batch onto every local Sample", () => {
+    const bound = applyProductionBatchIds(
+      perSample,
+      new Map([[CREDIT_BATCH_ID, PRODUCTION_BATCH_ID]]),
+    );
+    expect(bound.map((submission) => submission.body.production_batch_id)).toEqual([
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+      PRODUCTION_BATCH_ID,
+    ]);
+  });
+
+  it("fails closed rather than submitting a null production batch", () => {
+    expect(() => applyProductionBatchIds(perSample, new Map())).toThrow(
+      /production batch/,
+    );
   });
 });

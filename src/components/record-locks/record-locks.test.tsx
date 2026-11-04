@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
+import { useForm } from "react-hook-form";
 import { cleanup, render, screen } from "@testing-library/react";
+import { FormActions } from "@/components/forms/form-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RecordLockLink, RecordLockView } from "@/lib/record-lock-view";
-import { RecordLockChip } from "./record-lock-chip";
+import { RecordLockChip, RecordLockOverviewChip, RecordLockSentMark } from "./record-lock-chip";
+import { recordLockTitleMark } from "./record-lock-title-mark";
+import { RecordLockFormFrame, recordLockSheetProps } from "./record-lock-sheet-props";
+import { INTERRUPTED_HOW_TO_FREE, INTERRUPTED_HOW_TO_FREE_ONE, INTERRUPTED_MIXED_HOW_TO_FREE_ONE } from "@/lib/record-lock";
 import { RecordLockNotice } from "./record-lock-notice";
 import { RecordUsedBy } from "./record-used-by";
 
@@ -22,8 +27,8 @@ function view(level: RecordLockView["level"], heldBy: RecordLockLink[], usedBy =
   return {
     level, heldBy, usedBy, freeFields: level === "sent" ? [] : ["code"],
     howToFree: level === "sent"
-      ? "Wait for Isometric to return the covering GHG Statement, then refresh its status."
-      : level === "inUse" ? "Correct or remove the records that use it first." : null,
+      ? "If Isometric sends the GHG Statement back, refresh its status to edit again."
+      : level === "inUse" ? "To change them, first correct or remove those records." : null,
     returnedBy: [],
   };
 }
@@ -49,6 +54,97 @@ describe("RecordLockChip", () => {
   });
 });
 
+describe("overview surfaces show only Sent", () => {
+  it.each([["open", "Open"], ["inUse", "In use"]] as const)("hides %s in the overview chip", (level, label) => {
+    const { container } = render(<><RecordLockOverviewChip lock={view(level, [RUN])} /></>);
+    expect(container.textContent).toBe("");
+    expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it("shows Sent in the overview chip", () => {
+    render(<><RecordLockOverviewChip lock={view("sent", [REMOVAL])} /></>);
+    expect(screen.getAllByText("Sent")).toHaveLength(1);
+  });
+
+  it("marks only Sent with a named lock icon, and renders nothing for other rows", () => {
+    const mark = recordLockTitleMark<{ id: string }>({ a: view("inUse", [RUN]), b: view("sent", [REMOVAL]) });
+    expect(mark({ id: "a" })).toBeNull();
+    render(<>{mark({ id: "b" })}</>);
+    const icon = screen.getByRole("img", { name: "Sent" });
+    expect(icon.getAttribute("title")).toBe("Sent to Isometric");
+    expect(icon.textContent).toBe("");
+  });
+
+  it("renders no sent mark for Open or In use", () => {
+    const { container } = render(<><RecordLockSentMark lock={view("open", [])} /><RecordLockSentMark lock={undefined} /></>);
+    expect(container.textContent).toBe("");
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("keeps all three levels in the sheet header badge", () => {
+    for (const [level, label] of [["open", "Open"], ["inUse", "In use"], ["sent", "Sent"]] as const) {
+      const { unmount } = render(<>{recordLockSheetProps({ lock: view(level, [RUN]), status: "ready" }).titleBadge}</>);
+      expect(screen.getByText(label)).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("drops the In use badge where In use locks nothing, keeping Sent", () => {
+    const inUse = recordLockSheetProps({ lock: view("inUse", [RUN]), status: "ready", inUseLocksNothing: true });
+    expect(inUse.titleBadge).toBeUndefined();
+    render(<>{recordLockSheetProps({ lock: view("sent", [REMOVAL]), status: "ready", inUseLocksNothing: true }).titleBadge}</>);
+    expect(screen.getByText("Sent")).toBeTruthy();
+  });
+});
+
+describe("Interrupted display", () => {
+  const OTHER: RecordLockLink = { ...REMOVAL, id: "removal-2" };
+  const allInterrupted = { ...view("sent", [REMOVAL, OTHER]), interruptedHolders: [REMOVAL, OTHER] };
+  const mixed = { ...view("sent", [REMOVAL, OTHER]), interruptedHolders: [OTHER] };
+  const normal = view("sent", [REMOVAL]);
+
+  it("reads Interrupted in the sheet tag only when every holder is interrupted", () => {
+    const tag = (lock: RecordLockView) => recordLockSheetProps({ lock, status: "ready" }).titleBadge;
+    const { unmount } = render(<>{tag(allInterrupted)}</>);
+    expect(screen.getByText("Submission interrupted").getAttribute("data-record-lock")).toBe("sent");
+    // Interrupted takes the red of the Removal's own "Submission interrupted" badge, not Sent's.
+    expect(screen.getByText("Submission interrupted").className).toContain("--st-bad");
+    expect(screen.queryByText("Sent")).toBeNull();
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<>{tag(lock)}</>);
+      expect(screen.getByText("Sent")).toBeTruthy();
+      expect(screen.queryByText("Submission interrupted")).toBeNull();
+      r.unmount();
+    }
+  });
+
+  it("names the overview mark Interrupted only when every holder is interrupted", () => {
+    const { unmount } = render(<RecordLockSentMark lock={allInterrupted} />);
+    const icon = screen.getByRole("img", { name: "Submission interrupted" });
+    expect(icon.getAttribute("title")).toBe("Sending to Isometric was started and not finished");
+    expect(icon.getAttribute("data-record-lock")).toBe("sent");
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<RecordLockSentMark lock={lock} />);
+      const sent = screen.getByRole("img", { name: "Sent" });
+      expect(sent.getAttribute("title")).toBe("Sent to Isometric");
+      r.unmount();
+    }
+  });
+
+  it("labels tiles and credit batch rows Interrupted only when every holder is interrupted", () => {
+    const { unmount } = render(<RecordLockOverviewChip lock={allInterrupted} />);
+    expect(screen.getByText("Submission interrupted")).toBeTruthy();
+    unmount();
+    for (const lock of [mixed, normal]) {
+      const r = render(<RecordLockOverviewChip lock={lock} />);
+      expect(screen.getByText("Sent")).toBeTruthy();
+      r.unmount();
+    }
+  });
+});
+
 describe("RecordLockNotice", () => {
   it("renders nothing while Open or unknown", () => {
     const { container } = render(<><RecordLockNotice lock={view("open", [])} /><RecordLockNotice lock={undefined} /></>);
@@ -58,7 +154,7 @@ describe("RecordLockNotice", () => {
   it("names the one record that uses it as a link, with how to free it", () => {
     render(<RecordLockNotice lock={view("inUse", [RUN])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by production run PR-26-004, so fields that feed its numbers are locked. Correct or remove the records that use it first.",
+      "Some fields can't be changed, because production run PR-26-004 uses its figures. To change them, first correct or remove that record.",
     );
     expect(screen.getByRole("link", { name: "production run PR-26-004" }).getAttribute("href"))
       .toBe(`/production-runs?facility=${FACILITY}&run=run-1`);
@@ -67,7 +163,7 @@ describe("RecordLockNotice", () => {
   it("names two holders and counts the rest", () => {
     render(<RecordLockNotice lock={view("inUse", [PRODUCT, DELIVERY, LOSS])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by biochar product BP-26-021, delivery DL-26-003 and 1 more, so fields that feed their numbers are locked. Correct or remove the records that use it first.",
+      "Some fields can't be changed, because biochar product BP-26-021, delivery DL-26-003 and 1 more use its figures. To change them, first correct or remove those records.",
     );
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
@@ -75,22 +171,55 @@ describe("RecordLockNotice", () => {
   it("names the Removal by its period when Sent, linked to the Removals list", () => {
     render(<RecordLockNotice lock={view("sent", [REMOVAL])} />);
     expect(screen.getByRole("status").textContent).toBe(
-      "Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
     );
-    expect(screen.getByRole("link").getAttribute("href")).toBe(`/certification/removals?facility=${FACILITY}&removal=removal-1`);
+    expect(screen.getByRole("link").getAttribute("href")).toBe(`/removals?facility=${FACILITY}&removal=removal-1`);
+  });
+
+  it("leads with the Removal's code when it is known, then the period", () => {
+    render(<RecordLockNotice lock={view("sent", [{ ...REMOVAL, label: "RM-26-001" }])} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because this was sent to Isometric with Removal RM-26-001, Jan 1 to Mar 31, 2026. If Isometric sends the GHG Statement back, refresh its status to edit again.",
+    );
+  });
+
+  it("says sending was started and not finished for an interrupted Removal", () => {
+    const interrupted = { ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], howToFree: INTERRUPTED_HOW_TO_FREE_ONE };
+    render(<RecordLockNotice lock={interrupted} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because sending Removal Jan 1 to Mar 31, 2026 to Isometric was started and not finished. To edit again, delete or resume that Removal, or review its records in Isometric.",
+    );
+  });
+
+  it("names several interrupted Removals", () => {
+    const other: RecordLockLink = { ...REMOVAL, id: "removal-2", period: { startedOn: "2026-04-01", completedOn: "2026-06-30" } };
+    const interrupted = { ...view("sent", [REMOVAL, other]), interruptedHolders: [REMOVAL, other], howToFree: INTERRUPTED_HOW_TO_FREE };
+    render(<RecordLockNotice lock={interrupted} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because sending Removal Jan 1 to Mar 31, 2026 and Removal Apr 1 to Jun 30, 2026 to Isometric was started and not finished. To edit again, delete or resume those Removals, or review their records in Isometric.",
+    );
+  });
+
+  it("names the sent and the unfinished Removal separately when holders differ", () => {
+    const other: RecordLockLink = { ...REMOVAL, id: "removal-2", period: { startedOn: "2026-04-01", completedOn: "2026-06-30" } };
+    const mixed = { ...view("sent", [REMOVAL, other]), interruptedHolders: [other], howToFree: INTERRUPTED_MIXED_HOW_TO_FREE_ONE };
+    render(<RecordLockNotice lock={mixed} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026, and sending Removal Apr 1 to Jun 30, 2026 was started and not finished. To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.",
+    );
   });
 
   it("stays silent for a kind that keeps every field free while In use, but not once Sent", () => {
     const { container, rerender } = render(<RecordLockNotice lock={view("inUse", [REMOVAL])} inUseLocksNothing />);
     expect(container.textContent).toBe("");
     rerender(<RecordLockNotice lock={view("sent", [REMOVAL])} inUseLocksNothing />);
-    expect(container.textContent).toContain("so every field is locked");
+    expect(container.textContent).toContain("Nothing can be changed");
   });
 
   it("names a storage bin's latest stock record as a link when there is one", () => {
     render(<RecordLockNotice lock={view("inUse", [DELIVERY])} subject="storageBin" />);
     expect(screen.getByRole("status").textContent).toBe(
-      "In use by its stock history, most recently delivery DL-26-003, so the storage type and feedstock type are locked.",
+      "Storage type and feedstock type can't be changed, because stock has already been recorded in this bin. Latest: delivery DL-26-003.",
     );
     expect(screen.getByRole("link", { name: "delivery DL-26-003" })).toBeTruthy();
   });
@@ -105,7 +234,7 @@ describe("RecordLockNotice", () => {
 
   it("names a storage bin's stock history instead of a record", () => {
     render(<RecordLockNotice lock={view("inUse", [])} subject="storageBin" />);
-    expect(screen.getByRole("status").textContent).toBe("In use by its stock history, so the storage type and feedstock type are locked.");
+    expect(screen.getByRole("status").textContent).toBe("Storage type and feedstock type can't be changed, because stock has already been recorded in this bin.");
   });
 });
 
@@ -126,8 +255,8 @@ describe("returned by Isometric", () => {
       "Returned by IsometricGHG Statement Jul 1 to Sep 30, 2026 failed verification. Changes here go to Removal Jan 1 to Mar 31, 2026 when you resubmit it.",
     );
     expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
-      .toBe(`/certification/ghg-statements?facility=${FACILITY}&statement=statement-1`);
-    expect(inUse.textContent).toContain("In use by production run PR-26-004");
+      .toBe(`/ghg-statements?facility=${FACILITY}&statement=statement-1`);
+    expect(inUse.textContent).toContain("because production run PR-26-004 uses its figures");
   });
 
   it("names a statement back in draft, and shows the line on an Open record too", () => {
@@ -166,5 +295,42 @@ describe("RecordUsedBy", () => {
   it("counts storage bin references", () => {
     render(<RecordUsedBy lock={view("inUse", [], [{ kind: "binReference", id: "feedstock batches", label: "feedstock batches", facilityId: FACILITY, count: 12 }])} />);
     expect(screen.getByText("Feedstock batches (12)")).toBeTruthy();
+  });
+});
+
+function LockRefusedActions() {
+  const { control } = useForm({ errors: { root: { lockRefusal: { type: "locked" } } } });
+  return <FormActions control={control} errorMessage="Locked. Its Removal was sent." submitLabel="Save record" />;
+}
+
+describe("RecordLockFormFrame refusal slot", () => {
+  it("shows a refusal above the lock line once the record is Sent, with focus and no Save", () => {
+    const sent = view("sent", [REMOVAL]);
+    render(
+      <RecordLockFormFrame lock={sent} status="ready">
+        <LockRefusedActions />
+      </RecordLockFormFrame>,
+    );
+    const box = document.querySelector<HTMLElement>("[data-top-refusal]");
+    expect(box?.textContent).toContain("Your changes were not saved.");
+    expect(document.activeElement).toBe(box);
+    expect(screen.queryByRole("button", { name: "Save record" })).toBeNull();
+    const lockLine = screen.getByRole("status");
+    expect(box!.compareDocumentPosition(lockLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("RecordLockNotice on a Sent feedstock with open transport", () => {
+  it("names the editable sections and the Removal", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), transport: { level: "open", heldBy: [] } }} />);
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/^Only Transport details and Transport evidence can be changed\. This feedstock's transport legs are not part of .+\.$/);
+  });
+
+  it("keeps the transport-only wording when the Removal's sending was interrupted", () => {
+    render(<RecordLockNotice lock={{ ...view("sent", [REMOVAL]), interruptedHolders: [REMOVAL], transport: { level: "open", heldBy: [] } }} />);
+    const text = screen.getByRole("status").textContent ?? "";
+    expect(text).toContain("Only Transport details and Transport evidence can be changed.");
+    expect(text).not.toContain("Nothing can be changed");
   });
 });

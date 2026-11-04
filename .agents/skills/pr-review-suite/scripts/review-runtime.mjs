@@ -1,18 +1,24 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
+import { MODEL_PROFILES } from "./review-models.mjs";
+
 export const DEFAULT_MODELS = ["codex", "opus"];
-export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness"];
+export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness", "design"];
 export const DEFAULT_TIMEOUT_MINUTES = 20;
 export const DEFAULT_CONCURRENCY = 2;
 export const DEFAULT_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5000;
+const UI_FILE_EXTENSIONS = [".tsx", ".jsx", ".css", ".scss", ".html", ".vue", ".svelte"];
+const UI_TEST_FILENAME_PATTERN = /\.(?:test|spec)\./;
+const UI_TEST_PATH_PATTERN = /(?:^|\/)(?:e2e|tests|__tests__|__mocks__)(?:\/|$)/;
 
 export function usage() {
   return `
 Usage:
-  run-pr-review-suite.mjs [--pr <number|url|branch>] [--spec <path>]
-    [--models codex,opus] [--practices standards,spec,deep-correctness]
+  run-pr-review-suite.mjs [--pr <number|url|branch> | --local [--base <branch>]]
+    [--spec <path> | --issue <number>] [--prior <report.json>]... [--profile full|light]
+    [--models codex,opus] [--practices standards,spec,deep-correctness,design]
     [--timeout-minutes 20] [--concurrency 2]
     [--artifact-dir <path>] (--publish | --dry-run | --plan)
   run-pr-review-suite.mjs --self-test
@@ -22,6 +28,13 @@ Modes:
   --dry-run   Run reviews and write the aggregate report without GitHub writes.
   --plan      Resolve inputs and write prompts without running reviewers.
   --self-test Run offline parser, aggregation, and prompt checks.
+
+Options:
+  --local     Review committed HEAD without a PR; requires --dry-run or --plan.
+  --base      Local base branch (default staging); fetch origin, then use merge-base.
+  --issue     Explicit issue spec source; cannot be combined with --spec.
+  --prior     Earlier report.json with fixed/declined findings; repeat in round order.
+  --profile   full (default) or light, with cheaper Codex and lower Opus effort.
 `.trim();
 }
 
@@ -29,6 +42,11 @@ export function parseArgs(argv) {
   const options = {
     pr: undefined,
     spec: undefined,
+    local: false,
+    base: "staging",
+    issue: undefined,
+    prior: [],
+    profile: "full",
     models: [...DEFAULT_MODELS],
     practices: [...DEFAULT_PRACTICES],
     timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
@@ -49,6 +67,13 @@ export function parseArgs(argv) {
 
     if (argument === "--pr") options.pr = value();
     else if (argument === "--spec") options.spec = value();
+    else if (argument === "--local") options.local = true;
+    else if (argument === "--base") options.base = value();
+    else if (argument === "--issue") {
+      options.issue = value();
+      if (!/^[1-9]\d*$/.test(options.issue)) throw new Error("--issue must be a positive issue number");
+    } else if (argument === "--prior") options.prior.push(value());
+    else if (argument === "--profile") options.profile = value();
     else if (argument === "--models") options.models = splitList(value());
     else if (argument === "--practices") options.practices = splitList(value());
     else if (argument === "--timeout-minutes") {
@@ -77,9 +102,42 @@ export function parseArgs(argv) {
     );
   }
 
+  if (options.local && options.pr) throw new Error("--local cannot be combined with --pr");
+  if (options.local && !["dry-run", "plan"].includes(options.mode)) {
+    throw new Error("--local requires --dry-run or --plan and cannot be used with --publish");
+  }
+  if (!options.local && argv.includes("--base")) throw new Error("--base is only meaningful with --local");
+  if (options.issue && options.spec) throw new Error("--issue cannot be combined with --spec");
+  if (!Object.hasOwn(MODEL_PROFILES, options.profile)) throw new Error(`Unknown --profile: ${options.profile}; choose full or light`);
+  if (!options.base || options.base.startsWith("-")) throw new Error("--base must be a branch name");
+
   validateSelection("model", options.models, DEFAULT_MODELS);
   validateSelection("practice", options.practices, DEFAULT_PRACTICES);
   return options;
+}
+
+export function selectPractices({ practices, spec, changedFiles, basePracticeReference }) {
+  const skippedPractices = new Map();
+  const hasUiChanges = changedFiles.some((path) =>
+    UI_FILE_EXTENSIONS.some((extension) => path.endsWith(extension)) &&
+    !UI_TEST_FILENAME_PATTERN.test(path.split("/").at(-1)) &&
+    !UI_TEST_PATH_PATTERN.test(path),
+  );
+  for (const practice of practices) {
+    if (practice === "spec" && !spec) {
+      skippedPractices.set(practice, "No spec available");
+    } else if (practice === "design") {
+      if (!hasUiChanges) {
+        skippedPractices.set(practice, "No UI files changed");
+      } else if (!/^## Design\r?$/m.test(basePracticeReference || "")) {
+        skippedPractices.set(practice, "No Design practice in the base branch");
+      }
+    }
+  }
+  return {
+    practices: practices.filter((practice) => !skippedPractices.has(practice)),
+    skippedPractices,
+  };
 }
 
 function splitList(value) {

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ActionError } from "@/lib/action-error";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,7 +11,7 @@ const ids = vi.hoisted(() => ({
   facility: "00000000-0000-4000-8000-000000000003", order: "00000000-0000-4000-8000-000000000004",
   movement: "00000000-0000-4000-8000-000000000005", a: "00000000-0000-4000-8000-00000000000a", b: "00000000-0000-4000-8000-00000000000b",
 }));
-const state = vi.hoisted(() => ({ preview: vi.fn(), drift: vi.fn(), refresh: vi.fn() }));
+const state = vi.hoisted(() => ({ preview: vi.fn(), drift: vi.fn(), refresh: vi.fn(), lockedReason: null as string | null }));
 vi.mock("@/fn/transport-distance-refresh", () => ({
   getTransportDistanceDriftFn: (...args: unknown[]) => state.drift(...args),
   refreshDeliveryDistanceFn: (...args: unknown[]) => state.refresh(...args),
@@ -19,10 +20,10 @@ vi.mock("@/fn/transport-distance-refresh", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/fn/output-stock", () => ({
   getOutputStockHistoryFn: async () => ({ success: true, data: [{ id: ids.movement, kind: "delivery", deliveryId: ids.delivery,
-    editLockedReason: null, sources: [{ layerId: ids.a, moisturePercent: 20 }] }] }),
+    editLockedReason: state.lockedReason, sources: [{ layerId: ids.a, moisturePercent: 20 }] }] }),
   getOutputSubBinsFn: async () => ({ success: true, data: { stockMode: "split", drawOrder: "oldest_first", subBins: [ids.a, ids.b].map((layerId, index) => ({
     layerId, code: index === 0 ? "P1" : "P2", placedAt: "2026-09-12T12:00:00.000Z", dryMassKg: 1000, solidsKg: 1000,
-    wetEstimateKg: 1250, moisturePercent: 20, basis: null, recentMovements: [],
+    wetEstimateKg: 1250, moisturePercent: 20, basis: null, recentMovements: [], ingredients: [],
   })) } }),
   previewOutputStockFn: (...args: unknown[]) => state.preview(...args),
 }));
@@ -53,13 +54,13 @@ beforeEach(() => {
   state.preview.mockReset().mockResolvedValue({ success: true, data: { basisFingerprint: "fresh-basis", blockingMessage: null } });
   state.drift.mockReset().mockResolvedValue({ success: true, data: { ...drift, hasDrift: false, currentDistanceKm: 42 } });
   state.refresh.mockReset();
+  state.lockedReason = null;
   Element.prototype.scrollIntoView = vi.fn();
   window.matchMedia = vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
 afterEach(() => { cleanup(); client.clear(); });
 
-async function open(record = delivery, onDistanceRefreshed?: () => void) {
-  const save = vi.fn();
+async function open(record = delivery, onDistanceRefreshed?: () => Promise<void>, save = vi.fn()) {
   const view = render(<QueryClientProvider client={client}><DeliveryForm delivery={record} onSubmit={save} onDistanceRefreshed={onDistanceRefreshed} /></QueryClientProvider>);
   const reading = await screen.findByRole("spinbutton", { name: /^P1 moisture/ });
   await waitFor(() => expect((reading as HTMLInputElement).value).toBe("20"));
@@ -180,6 +181,34 @@ it("clears a saved override with null and returns to the derived distance", asyn
   }), expect.any(Function), undefined);
 });
 
+// A Sent refusal puts the saved override back, the open panel included.
+const sentRefusal = () => vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+  error: "Sent to a Removal.", code: "certification_locked",
+  issues: [{ path: ["distanceKmOverride"], code: "certification_locked", message: "Sent to a Removal." }],
+}), "Delivery was not saved."));
+
+it("closes a newly opened override after a Sent refusal restores the saved distance", async () => {
+  const { form } = await open({ ...delivery, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery, undefined, sentRefusal());
+  fireEvent.click(screen.getByRole("button", { name: OVERRIDE }));
+  fireEvent.change(distanceInput(), { target: { value: "60" } });
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(distanceInput().readOnly).toBe(true));
+  expect(distanceInput().value).toBe("42");
+  expect(screen.queryByRole("combobox", { name: /Distance source/ })).toBeNull();
+  expect(screen.getByRole("button", { name: OVERRIDE })).toBeTruthy();
+});
+
+it("restores a saved override the operator cleared before a Sent refusal", async () => {
+  const { form } = await open({ ...overridden, recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery, undefined, sentRefusal());
+  fireEvent.click(screen.getByRole("button", { name: RESET }));
+  expect(distanceInput().value).toBe("42");
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(distanceInput().value).toBe("60"));
+  expect(screen.getByRole("button", { name: RESET })).toBeTruthy();
+  expect((screen.getByRole("combobox", { name: /Distance source/ }) as HTMLSelectElement).value).toBe("document");
+  expect((screen.getByRole("textbox", { name: /Distance note/ }) as HTMLInputElement).value).toBe("Detour");
+});
+
 // Edit mode: a compact refresh from location under the derived distance.
 const recorded = { ...delivery, code: "DL-26-001", recordedDistanceKm: 42, recordedDistanceSource: "manual" } as Delivery;
 
@@ -215,7 +244,7 @@ it("asks to save or discard unsaved edits before refreshing", async () => {
 it("refreshes with the drift's version and asks the sheet to reopen on the new one", async () => {
   state.drift.mockResolvedValue({ success: true, data: drift });
   state.refresh.mockResolvedValue({ success: true, data: { ...drift, expectedVersion: 4, recordedDistanceKm: 55, hasDrift: false } });
-  const reopened = vi.fn();
+  const reopened = vi.fn(async () => undefined);
   const { save } = await open(recorded, reopened);
   fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
   const dialog = await screen.findByRole("dialog", { name: "Refresh distance from location?" });
@@ -224,4 +253,67 @@ it("refreshes with the drift's version and asks the sheet to reopen on the new o
   expect(state.refresh).toHaveBeenCalledWith({ entityId: ids.delivery, expectedVersion: 3 });
   await waitFor(() => expect(reopened).toHaveBeenCalledOnce());
   expect(save).not.toHaveBeenCalled();
+});
+
+// Date and time share the mass lock (#993): an Open delivery moves through one correction.
+const LOCKED_REASON = "Correction blocked by application AP-001. Delete the application first.";
+const dateInput = () => screen.getByLabelText(/Delivery date and time/) as HTMLInputElement;
+
+it("posts a date-only change as a stock correction at the new time", async () => {
+  const { save, form, button } = await open();
+  expect(dateInput().disabled).toBe(false);
+  fireEvent.change(dateInput(), { target: { value: "2026-10-02T09:30" } });
+  await waitFor(() => expect(state.preview).toHaveBeenCalledWith(expect.objectContaining({
+    correctsMovementId: ids.movement, occurredAt: "2026-10-02T09:30:00.000Z" })));
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
+    deliveryDate: new Date("2026-10-02T09:30:00.000Z"), correctsMovementId: ids.movement, basisFingerprint: "fresh-basis" }), expect.any(Function), undefined));
+});
+
+it("shows a refusal caused by the new time under the date", async () => {
+  const refusal = "This time moves the delivery past Lost mass (Oct 2, 2026, 08:00). Choose a time on the same side of that entry.";
+  state.preview.mockResolvedValue({ success: true, data: { basisFingerprint: "fresh-basis", blockingMessage: refusal } });
+  const { save, form } = await open();
+  fireEvent.change(dateInput(), { target: { value: "2026-10-02T09:30" } });
+  const field = dateInput().closest("[data-form-field]") ?? dateInput().parentElement!.parentElement!;
+  await waitFor(() => expect(field.textContent).toContain(refusal));
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("locks the date with the mass and explains why once", async () => {
+  state.lockedReason = LOCKED_REASON;
+  render(<QueryClientProvider client={client}><DeliveryForm delivery={delivery} onSubmit={vi.fn()} /></QueryClientProvider>);
+  expect(await screen.findAllByText(LOCKED_REASON)).toHaveLength(1);
+  expect(dateInput().disabled).toBe(true);
+  expect((screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement).disabled).toBe(true);
+});
+
+it("restores the saved delivery mass after a lineage refusal", async () => {
+  const { save, form, button } = await open();
+  save.mockImplementation((_data, onRefusal) => onRefusal(new ActionError({
+    error: "Sent to a Removal.", code: "certification_locked",
+    issues: [{ path: ["sources"], code: "certification_locked", message: "Sent to a Removal." }],
+  }), "Delivery was not saved."));
+  const mass = screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement;
+  fireEvent.change(mass, { target: { value: "120" } });
+  await waitFor(() => expect(state.preview).toHaveBeenCalled());
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect(mass.value).toBe("100"));
+  expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy();
+});
+
+it("restores a changed sub-bin reading when only sources are refused", async () => {
+  const { save, reading, form, button } = await open();
+  save.mockImplementation((_data, onRefusal) => onRefusal(new ActionError({
+    error: "Sent to a Removal.", code: "certification_locked",
+    issues: [{ path: ["sources"], code: "certification_locked", message: "Sent to a Removal." }],
+  }), "Delivery was not saved."));
+  fireEvent.change(reading, { target: { value: "30" } });
+  await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+  await act(async () => { fireEvent.submit(form); });
+  await waitFor(() => expect((reading as HTMLInputElement).value).toBe("20"));
+  expect(screen.getByText("Locked. Your change was not saved.")).toBeTruthy();
 });

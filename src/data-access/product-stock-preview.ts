@@ -40,24 +40,23 @@ export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPrev
     for (const [id, wetDraw] of draws) {
       const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.id, id), eq(storageLocations.type, 'feedstock_bin'), isNull(storageLocations.archivedAt)));
       if (!bin) throw new SafeError('Ingredient bin not found or archived');
-      const stock = await getIngredientStockBasis(ctx, id, input.placedAt, tx);
+      const stock = await getIngredientStockBasis(ctx, id, input.placedAt, tx, undefined, wetDraw);
       if (!stock) throw new SafeError('Ingredient stock not found.');
       const beforeWet = stock.wetMassKg;
       const beforeDry = stock.dryMassKg;
-      // Ingredient stock is withdrawn pro rata; an ingredient reading describes the
-      // material mixed into the product, not a new measurement of the remaining bin.
-      const dryDraw = beforeDry === null ? null : beforeWet > 0 ? beforeDry * wetDraw / beforeWet : 0;
+      // Replay estimates the actual deliveries drawn; measured moisture belongs to the product.
+      const dryDraw = stock.estimatedDrawDryKg ?? null;
       const afterDry = beforeDry === null || dryDraw === null ? null : beforeDry - dryDraw;
       const allocation = (wet: number, dry: number | null) => [{ layerId: id, code: bin.code, wetMassKg: wet, dryMassKg: dry, runs: [] }];
       bins.push({ ...source.preview, storageLocationId: id, binCode: bin.code, binName: bin.name, formulationName: null, lane: 'ingredient', dryLabel: 'dry solids', wetLabel: 'wet stock',
         beforeDryKg: beforeDry, afterDryKg: afterDry, beforeSolidsKg: beforeDry, afterSolidsKg: afterDry,
         beforeEstimatedWetKg: beforeWet, afterEstimatedWetKg: beforeWet - wetDraw, removedDryKg: dryDraw, removedWetKg: wetDraw,
-        movementMoisturePercent: beforeWet > 0 && beforeDry !== null ? (1 - beforeDry / beforeWet) * PERCENT_SCALE : null,
+        movementMoisturePercent: wetDraw > 0 && dryDraw !== null ? (1 - dryDraw / wetDraw) * PERCENT_SCALE : null,
         allocations: [], beforeAllocations: allocation(beforeWet, beforeDry), afterAllocations: allocation(beforeWet - wetDraw, afterDry),
         blockingMessage: wetDraw > beforeWet ? 'Ingredient withdrawal exceeds available wet stock.' : null, discrepancySolidsKg: 0,
         // Ingredient bins keep wet stock; an ingredient reading describes the material used, not the bin.
         // The spread source preview's mix facts belong to the biochar bin, not this ingredient bin.
-        moistureEstimate: null, moistureReset: null, calculatedWithout: [], stockMode: undefined });
+        moistureEstimate: null, moistureReset: null, reestimate: null, calculatedWithout: [], stockMode: undefined });
     }
     const wetAdded = input.massKg + input.waterAddedKg + ingredients.reduce((sum, ingredient) => sum + ingredient.massKg, 0);
     const solidsAdded = source.preview.removedDryKg + ingredients.reduce((sum, ingredient) => sum + (ingredient.massKg > 0 ? ingredient.massDryKg : 0), 0);
@@ -70,7 +69,7 @@ export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPrev
     const beforeWet = before.beforeEstimatedWetKg;
     const beforeAllocations = before.beforeAllocations;
     const added = { layerId: 'proposed-product', code: 'New product', wetMassKg: wetAdded, dryMassKg: source.preview.removedDryKg, runs: source.preview.allocations.flatMap(a => a.runs) };
-    bins.push({ ...before, movementMoisturePercent: moisture, beforeEstimatedWetKg: beforeWet, beforeAllocations, afterDryKg: before.beforeDryKg + source.preview.removedDryKg, afterSolidsKg: before.beforeSolidsKg + solidsAdded,
+    bins.push({ ...before, reestimate: null, movementMoisturePercent: moisture, beforeEstimatedWetKg: beforeWet, beforeAllocations, afterDryKg: before.beforeDryKg + source.preview.removedDryKg, afterSolidsKg: before.beforeSolidsKg + solidsAdded,
       afterEstimatedWetKg: beforeWet === null ? null : beforeWet + wetAdded,
       afterAllocations: [...(beforeAllocations ?? []), added], allocations: [added], removedDryKg: -source.preview.removedDryKg,
       removedWetKg: -wetAdded, discrepancySolidsKg: 0, blockingMessage: source.preview.blockingMessage });

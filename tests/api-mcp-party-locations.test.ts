@@ -1,3 +1,4 @@
+import { toolText } from "@/lib/mcp/results";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, notExists } from "drizzle-orm";
@@ -194,7 +195,7 @@ async function state(kind: Kind, t: Target, operation: string, source: string) {
       fromStatus: event.fromStatus, toStatus: event.toStatus, changedFields: event.changedFields, changes: event.changes })),
   });
 }
-async function refusal(kind: Kind, command: Command, target: Target, code: string, pointer?: string, fields = fieldsFor(kind, command)) {
+async function refusal(kind: Kind, command: Command, target: Target, code: string, pointer?: string, fields = fieldsFor(kind, command), expectedMessage?: string) {
   const before = await snapshot();
   const action = await app(kind, command, target, fields);
   expect(action.success).toBe(false);
@@ -207,6 +208,15 @@ async function refusal(kind: Kind, command: Command, target: Target, code: strin
   expect(action.code).toBe(code);
   expect(problem.code).toBe(code);
   expect(result.structuredContent.code).toBe(code);
+  if (expectedMessage) {
+    expect(action.error).toBe(expectedMessage);
+    expect(problem.detail).toBe(expectedMessage);
+    expect(result.structuredContent.detail).toBe(expectedMessage);
+    expect(result.content[0].text).toBe(toolText(expectedMessage, result.structuredContent));
+    expect(problem.errors[0].detail).toBe(expectedMessage);
+    expect(action.issues?.[0].message).toBe(expectedMessage);
+    expect(result.structuredContent.issues).toEqual(problem.errors);
+  }
   const issues = (action.issues ?? []).map(issue => ({ code: issue.code, pointer: jsonPointer(issue.path), meta: issue.meta }));
   const normalize = (items: { code: string; pointer?: string; meta?: unknown }[]) => items.map(({ code, pointer, meta }) => ({ code, pointer, meta }));
   expect(normalize(problem.errors)).toEqual(issues);
@@ -379,8 +389,9 @@ describe("customer destination refusals", () => {
     const t = await parent("customer");
     const order = await insertReadOrder(a, "LOCATION-PARITY-ORDER", { customerId: t.parentId, customerLocationId: t.locationId });
     const delivery = await insertReadDelivery(a, order.id, order.quantityKg);
-    const problem = await refusal("customer", "delete", t, "conflict", "/locationId");
-    expect(problem.errors[0].meta).toEqual({ orderCodes: [order.code] });
+    const problem = await refusal("customer", "delete", t, "conflict", "/locationId", {},
+      `Customer location was not deleted because orders use it: ${order.code}. Archive it instead.`);
+    expect(problem.errors[0].meta).toEqual({ orderCount: 1, orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
     const [project] = await db.insert(certifierProjects).values({ organizationId: a.ctx.organizationId, facilityId: a.facility.id,
       provider: "isometric", externalProjectId: `prj-${randomUUID()}`, externalFacilityId: `fcl-${randomUUID()}` }).returning();
     const [mapping] = await db.insert(certifierStorageLocations).values({ organizationId: a.ctx.organizationId, customerLocationId: t.locationId,
@@ -394,7 +405,9 @@ describe("customer destination refusals", () => {
     expect(await db.select().from(certifierStorageLocations).where(eq(certifierStorageLocations.id, mapping.id))).toEqual([mapping]);
     const listing = await rpcBody(await MCP(rpc(a.partyKey, "tools/call", { name: "find_customer_locations", arguments: { idOrCode: t.parentId, archived: true } })));
     expect(listing.result.structuredContent.data).toContainEqual(expect.objectContaining({ id: t.locationId }));
-    await refusal("customer", "delete", { ...t, version: 2 }, "conflict", "/locationId");
+    const archivedProblem = await refusal("customer", "delete", { ...t, version: 2 }, "conflict", "/locationId", {},
+      `Customer location was not deleted because orders use it: ${order.code}.`);
+    expect(archivedProblem.errors[0].meta).toEqual({ orderCount: 1, orderCodes: [order.code], orders: [{ id: order.id, code: order.code, facilityId: order.facilityId }], reason: "in_use" });
   }, TIMEOUT_MS);
 
   it("matches a storage-site-only delete refusal", async () => {
@@ -404,6 +417,10 @@ describe("customer destination refusals", () => {
     await db.insert(certifierStorageLocations).values({ organizationId: a.ctx.organizationId, customerLocationId: t.locationId,
       certifierProjectId: project.id, externalProjectId: project.externalProjectId, externalStorageLocationId: `slc-${randomUUID()}`,
       supplierReference: t.locationId, submittedPayload: buildCreateStorageLocationRequest({ externalProjectId: project.externalProjectId, name: site.name, latitude: site.gpsLatitude, longitude: site.gpsLongitude, supplierReferenceId: t.locationId }), payloadHash: "test" });
-    await refusal("customer", "delete", t, "conflict", "/locationId");
+    await refusal("customer", "delete", t, "conflict", "/locationId", {},
+      "Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.");
+    expect((await rest("customer", "archive", t)).status).toBe(200);
+    await refusal("customer", "delete", { ...t, version: 2 }, "conflict", "/locationId", {},
+      "Customer location was not deleted because it is registered with Isometric as a storage site.");
   }, TIMEOUT_MS);
 });

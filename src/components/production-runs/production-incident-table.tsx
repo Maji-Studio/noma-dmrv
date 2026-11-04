@@ -7,6 +7,7 @@
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useProductionIncidents,
@@ -36,6 +37,8 @@ interface ProductionIncidentTableProps {
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   readOnly?: boolean;
+  /** The run's own facility zone when that facility is archived and outside the facility list. */
+  timeZone?: string;
 }
 
 export function ProductionIncidentTable({
@@ -44,13 +47,14 @@ export function ProductionIncidentTable({
   defaultReactorId,
   defaultOperatorId,
   readOnly = false,
+  timeZone: zone,
 }: ProductionIncidentTableProps) {
   const { data: incidents, isLoading, error } = useProductionIncidents(productionRunId);
   const createIncident = useCreateProductionIncident();
   const updateIncident = useUpdateProductionIncident();
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
-  const { timeZone } = useFacilityClock(facilityId);
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: zone });
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }
@@ -62,6 +66,7 @@ export function ProductionIncidentTable({
   const [formError, setFormError] = useState<string | null>(null);
 
   const openCreate = () => {
+    createIncident.startDraft();
     setFormError(null);
     setFormDialog({ open: true });
   };
@@ -74,7 +79,7 @@ export function ProductionIncidentTable({
     setFormError(null);
   };
 
-  const handleSubmit = async (data: ProductionIncidentFormData) => {
+  const handleSubmit = async (data: ProductionIncidentFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       if (formDialog.open && formDialog.incident) {
@@ -90,7 +95,7 @@ export function ProductionIncidentTable({
       }
       closeForm();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Incident was not saved. Try again.");
+      setFormError(onRefusal(err, err instanceof Error ? err.message : "Incident was not saved. Try again."));
     }
   };
 

@@ -26,7 +26,7 @@ import type { OrderFulfillmentStatus } from "@/lib/orders/fulfillment";
 import { orderFulfillmentExpression } from "./order-fulfillment-sql";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { OrderFilterData } from "@/schemas/orders";
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL } from "drizzle-orm";
 
 // ============================================
 // Types
@@ -59,7 +59,7 @@ export interface PaginatedOrders {
 // ============================================
 
 import { SafeError } from "@/lib/errors";
-import { orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
+import { ORDER_DELIVERY_NAME_CAP, orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import { formulationArchived } from "@/lib/formulation-domain-errors";
 import { lockCustomerReference, lockCustomerLocationReference } from "./party-reference-guards";
@@ -156,6 +156,7 @@ export async function getOrders(
 
   const {
     search,
+    ids,
     facilityId,
     customerId,
     status,
@@ -174,6 +175,8 @@ export async function getOrders(
     eq(orders.organizationId, ctx.organizationId),
     isNull(orders.archivedAt),
   ];
+
+  if (ids?.length) conditions.push(inArray(orders.id, ids));
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -228,7 +231,7 @@ export async function getOrders(
 
   // Get orders with related entity names + delivery aggregate
   const orderList = await selectRows(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(orders.code), orderFn(orders.id))
     .limit(pageSize)
     .offset(offset);
 
@@ -404,18 +407,31 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   });
 }
 
-export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"]): Promise<Order> {
+export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"], mode: "direct" | "customer-cascade"): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion } = input;
   await lockBiocharTransportRouteTopology(ctx, tx);
+  // Topology stabilizes repoints; facility before order matches archive/restore.
+  // The customer cascade already holds those locks and permits archived facilities.
+  if (mode === "direct") {
+    const [snapshot] = await tx.select({ facilityId: orders.facilityId }).from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+    if (!snapshot) throw orderReferenceNotFound("orderId");
+    await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), "not_found", ["facilityId"]);
+  }
   const [existing] = await tx.select().from(orders)
     .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId))).for("update");
   if (!existing) throw orderReferenceNotFound("orderId");
   assertRowVersion({ entity: "order", id: orderId, expectedVersion, actualVersion: existing.version });
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "delete"), "certification_locked", ["orderId"]);
-  const [delivery] = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
-    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
-  if (delivery) throw orderHasDeliveries(delivery);
+  const blockingDeliveries = await tx.select({ id: deliveries.id, code: deliveries.code }).from(deliveries)
+    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)))
+    .orderBy(asc(deliveries.code)).limit(ORDER_DELIVERY_NAME_CAP);
+  if (blockingDeliveries.length > 0) {
+    const [{ total }] = await tx.select({ total: count() }).from(deliveries)
+      .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
+    throw orderHasDeliveries(blockingDeliveries, existing.code, total);
+  }
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
   return existing;

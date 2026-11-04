@@ -17,13 +17,19 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
+import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as removalsDA from "@/data-access/certifier-removals";
+import { assertRegisteredProductionBatchesMatch } from "@/fn/certification/production-batch-precheck";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+
+vi.mock("@/fn/certification/production-batch-precheck", () => ({
+  assertRegisteredProductionBatchesMatch: vi.fn(async () => undefined),
+}));
 
 const CHANGED_RUN_OUTPUT_MASS_KG = 500;
 const CHANGED_FEEDSTOCK_MASS_KG = 5000;
@@ -180,6 +186,12 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
 
   it("claims only the unclaimed batch in a mixed follow-up Removal", async () => {
     const secondBatchId = "33333333-3333-4333-8333-333333333333";
+    const [productionInput] = await productionBatchesDA.getProductionBatchRegistryInputs(
+      makeTestOrgContext(USER_ID), [CREDIT_BATCH_ID],
+    );
+    vi.mocked(productionBatchesDA.getProductionBatchRegistryInputs).mockResolvedValue([
+      productionInput, { ...productionInput, creditBatchId: secondBatchId, creditBatchCode: "CB-TEST-002" },
+    ]);
     const memberBatchClaims = [
       {
         creditBatchId: CREDIT_BATCH_ID,
@@ -672,5 +684,49 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
     expect(ledger.markSubmissionRejected).not.toHaveBeenCalled();
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitRemoval — registered batch pre-pass", () => {
+  it("runs for a first submit and for a superseding resubmit, and is skipped for a resumed draft with a GHG Entry", async () => {
+    const precheck = vi.mocked(assertRegisteredProductionBatchesMatch);
+    precheck.mockClear();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(makeContext(ORIGINAL_BIOCHAR_MASS_KG));
+    vi.mocked(isometric.createDatapoint).mockImplementation(fakeExternalIds("dp") as never);
+    vi.mocked(isometric.createGhgEntry).mockImplementation(fakeExternalIds("rmv") as never);
+
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    expect(precheck).toHaveBeenCalledTimes(1);
+    expect(precheck.mock.calls[0][0]).toMatchObject({ removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+
+    // The Removal is now submitted; changed source mass makes the next submit a superseding v2.
+    const superseding = makeContext(CHANGED_BIOCHAR_MASS_KG, {
+      memberBatchClaims: [{
+        creditBatchId: CREDIT_BATCH_ID, code: "CB-TEST-001", durabilityOption: "200_year", claimedByRemovalId: REMOVAL_ID,
+        productionRunIds: [PRODUCTION_RUN_ID], applicationIds: [APPLICATION_ID],
+        applicationSlices: [{ applicationId: APPLICATION_ID, allocatedWetMassKg: ORIGINAL_BIOCHAR_MASS_KG, allocatedDryMassKg: ORIGINAL_BIOCHAR_MASS_KG }],
+      }],
+    });
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(superseding);
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(makeFreshScope({ claimedByRemovalId: REMOVAL_ID }));
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    expect(precheck).toHaveBeenCalledTimes(2);
+
+    // A draft that already holds its GHG Entry resumes reconciliation without the pre-pass.
+    const base = superseding;
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...base,
+      latestSubmission: { ...base.latestSubmission!, status: "draft", externalId: "rmv_existing" },
+    });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }).catch(() => undefined);
+    expect(precheck).toHaveBeenCalledTimes(2);
+
+    // The same draft without a GHG Entry yet still gets the pre-pass, so the skip above is the externalId rule.
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...base,
+      latestSubmission: { ...base.latestSubmission!, status: "draft", externalId: null },
+    });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }).catch(() => undefined);
+    expect(precheck).toHaveBeenCalledTimes(3);
   });
 });

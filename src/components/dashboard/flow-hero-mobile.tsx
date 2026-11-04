@@ -15,6 +15,7 @@ import type {
 import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
 import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { formatTonnes } from "./flow-hero-scene";
+import { hasHref, StationReasonRow } from "./station-reason-link";
 
 /** Compact glyph per station, referencing the shared defs. */
 const STATION_GLYPH: Record<
@@ -96,7 +97,10 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
           station.reasons.map((reason) => reason.state),
         );
         const runningReason = station.reasons.find(
-          (reason) => reason.state === "in-progress",
+          (reason) => reason.source === "runningRuns",
+        );
+        const cardReasons = station.reasons.filter(
+          (reason) => hasHref(reason) || reason.state !== "in-progress",
         );
         return (
           <div key={station.key} className="flex flex-col">
@@ -155,6 +159,17 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 →
               </span>
             </Link>
+            {/* The reasons behind the badge, as on desktop; those fixed off the
+                station's list link there. "Running now" stays in the caption. */}
+            {cardReasons.length > 0 && (
+              <ul className="body-caption flex flex-col pl-12" data-testid={`flow-hero-mobile-reasons-${station.key}`}>
+                {cardReasons.map((reason) => (
+                  <li key={reason.text}>
+                    <StationReasonRow reason={reason} />
+                  </li>
+                ))}
+              </ul>
+            )}
             {segment && (
               <div className="flex items-center gap-8 py-4 pl-32">
                 <span

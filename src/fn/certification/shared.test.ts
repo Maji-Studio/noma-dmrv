@@ -47,3 +47,13 @@ describe("template-scoped biochar transport", () => {
     expect(() => buildLedgerModel({ ...metadata, legsByCategory: legs })).toThrow();
   });
 });
+
+
+it("carries transport owned elsewhere to submission aggregation and the ledger with no synthetic legs", async () => {
+  const legs = await loadTransportLegsByCategory(makeTestOrgContext(), {
+    ...entityIds, feedstockTransportOwnedElsewhere: true,
+  }, lineages, []);
+  expect(legs.feedstock).toEqual([]);
+  expect(enrichWithTransportLegs(aggregateProductionRuns(runs), legs).feedstockTransportMassDistanceTonneKm).toBe(0);
+  expect(buildLedgerModel({ ...metadata, legsByCategory: legs }).categories[0]).toMatchObject({ legs: [], subtotalTkm: 0 });
+});

@@ -1,5 +1,4 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { collectTransportEntityIds } from "@/lib/isometric";
 import { includesProductionInputs } from "./production-claim-policy";
 
@@ -9,6 +8,7 @@ type ProductionClaimScopeBatch = {
   id: string;
   productionRunIds: string[];
   productionFeedstockIds: string[];
+  productionHasLinkedFeedstock?: boolean;
   productionEmissionsClaimedByRemovalId: string | null;
 };
 
@@ -32,52 +32,44 @@ export function collectProductionClaimAwareRequiredTransportCategories(args: {
   memberBatches: ProductionClaimScopeBatch[];
   requiredTransportCategories: readonly TransportCategory[];
 }): TransportCategory[] {
-  const includesProductionInputs = args.memberBatches.some((batch) =>
+  const productionBatches = args.memberBatches.filter((batch) =>
     batchIncludesProductionInputs(batch, args.removalId),
   );
-  return includesProductionInputs
-    ? [...args.requiredTransportCategories]
-    : args.requiredTransportCategories.filter(
-        (category) => category === "biochar",
-      );
+  return args.requiredTransportCategories.filter((category) => {
+    if (category === "biochar") return true;
+    return productionBatches.length > 0;
+  });
 }
 
 export function collectProductionClaimAwareTransportEntityIds(args: {
   removalId: string | null;
   memberBatches: ProductionClaimScopeBatch[];
   lineages: ChainOfCustodyData[];
-  batchesWithSamples: CreditBatchWithSamples[];
 }): ReturnType<typeof collectTransportEntityIds> {
   const productionBatches = args.memberBatches.filter((batch) =>
     batchIncludesProductionInputs(batch, args.removalId),
   );
-  const productionBatchIds = new Set(
-    productionBatches.map((batch) => batch.id),
-  );
   const productionRunIds = new Set(
     productionBatches.flatMap((batch) => batch.productionRunIds),
   );
-  const all = collectTransportEntityIds(
-    args.lineages,
-    args.batchesWithSamples,
+  const all = collectTransportEntityIds(args.lineages);
+  const productionLineages = args.lineages.filter((lineage) =>
+    lineage.productionRun
+      ? productionRunIds.has(lineage.productionRun.id)
+      : false,
   );
-  const production = collectTransportEntityIds(
-    args.lineages.filter((lineage) =>
-      lineage.productionRun
-        ? productionRunIds.has(lineage.productionRun.id)
-        : false,
-    ),
-    args.batchesWithSamples.filter((batch) =>
-      productionBatchIds.has(batch.creditBatchId),
-    ),
+  const production = collectTransportEntityIds(productionLineages);
+  const feedstockIds = Array.from(
+    new Set([
+      ...production.feedstockIds,
+      ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
+    ]),
   );
+  const hasLinkedFeedstock = productionLineages.some(lineage => lineage.feedstocks.length > 0)
+    || productionBatches.some(batch => batch.productionHasLinkedFeedstock);
   return {
-    feedstockIds: Array.from(
-      new Set([
-        ...production.feedstockIds,
-        ...productionBatches.flatMap((batch) => batch.productionFeedstockIds),
-      ]),
-    ),
+    feedstockIds,
+    ...(hasLinkedFeedstock && feedstockIds.length === 0 ? { feedstockTransportOwnedElsewhere: true } : {}),
     biocharProductIds: all.biocharProductIds,
     sampleIds: production.sampleIds,
   };

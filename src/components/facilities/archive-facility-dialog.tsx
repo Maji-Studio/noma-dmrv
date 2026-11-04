@@ -93,13 +93,13 @@ export function ArchiveFacilityDialog({
     <Modal
       isOpen={!!facility}
       onClose={handleCancel}
+      dismissible={!isPending}
       ariaLabelledBy={titleId}
       ariaDescribedBy={descId}
       width="sm"
     >
       <div className="flex flex-col gap-24">
-        {/* pr-40 keeps the title clear of the Modal's built-in close button. */}
-        <div className="flex flex-col gap-12 pr-40">
+        <div className="flex flex-col gap-12">
           <h2 id={titleId} className="title-heading-3">
             Archive facility {facility?.code}
           </h2>
@@ -193,18 +193,19 @@ export function ArchiveFacilityDialog({
         <div className="flex flex-wrap gap-16 justify-start">
           <Button
             size="large"
-            variant="default"
+            variant="primary"
             onClick={() => {
               setTypedCode("");
               onConfirm();
             }}
-            disabled={isPending || isLoading || !impact || !typedCodeMatches}
+            disabled={isLoading || !impact || !typedCodeMatches}
+            busy={isPending}
           >
-            {isPending ? "Archiving..." : "Archive"}
+            Archive
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={handleCancel}
             disabled={isPending}
           >

@@ -1,5 +1,8 @@
 "use server";
+import { recordProductionSample } from "@/lib/operations/production-samples";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 
 /**
  * Production Samples Server Actions
@@ -10,7 +13,6 @@ import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 import {
   getProductionSamples as getProductionSamplesData,
-  createProductionSample,
   updateProductionSample,
   deleteProductionSample,
   type ProductionSampleWithRelations,
@@ -70,28 +72,14 @@ export async function getProductionSamplesFn(
  * Create a new in-process measurement
  */
 export async function createProductionSampleFn(
-  data: z.infer<typeof createProductionSampleSchema>
+  data: z.infer<typeof createProductionSampleSchema>,
+  options?: CreateIntentOptions,
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createProductionSampleSchema.parse(data);
 
-    const sample = await createProductionSample(ctx, {
-      productionRunId: validated.productionRunId,
-      timestamp: validated.timestamp,
-      weightGrams: validated.weightGrams ?? null,
-      volumeMl: validated.volumeMl ?? null,
-      temperatureC: validated.temperatureC ?? null,
-      moistureContentPercent: validated.moistureContentPercent ?? null,
-      fixedCarbonPercent: validated.fixedCarbonPercent ?? null,
-      volatileMatterPercent: validated.volatileMatterPercent ?? null,
-      ashContentPercent: validated.ashContentPercent ?? null,
-      photoUrl: validated.photoUrl || null,
-      sampledById: validated.sampledById ?? null,
-      notes: validated.notes ?? null,
-    });
-
-    return sample;
-  }, {
+    return create(recordProductionSample, validated);
+  }, options, {
     fallbackMessage: CREATE_FAILURE,
     log: { message: "createProductionSampleFn failed", context: { op: "production-sample:create" } },
     mapError: (error) =>

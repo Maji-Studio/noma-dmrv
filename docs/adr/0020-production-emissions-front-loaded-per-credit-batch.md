@@ -4,11 +4,45 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
-> **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> **Amended 2026-10-29: feedstock transport counts once.** A feedstock
+> record's transport legs belong to its earliest complete, non-archived linked
+> run in a non-archived credit batch (start time, then run ID, across the
+> organization). Only credit batches containing that run count those legs; a
+> production-claiming batch whose linked records are all owned elsewhere
+> reports 0 t·km. Pro-rata stock allocations still link the record to later
+> runs for traceability and dry mass. Running, failed and cancelled runs cannot
+> own legs, and a record linked only to such runs has no owner.
+> Each Removal's submission snapshot lists the feedstock records whose
+> transport it counted. Its lock on a record's transport (legs, transport
+> evidence, vehicle and distance) follows that list, so a Removal that did not
+> count them leaves them editable for the owner batch; snapshots without the
+> list, and records with no owner, keep the full lock. The record's other
+> fields stay locked through every linked run.
+>
+> Once any linked Removal holds the feedstock record's full lineage at Sent,
+> ownership is frozen (#1490), including when that Removal sent its transport
+> as zero because another batch owned it. Run dates, status, draws, batch
+> membership, deletion, feedstock intake edits and facility timezone edits refuse
+> any owner change, including to or from no owner. Freeze comparisons count
+> archived runs and batches, so facility archive/restore does not move an owner,
+> while deleting or emptying an archived owning batch does.
+> Standalone scopes take transaction-scoped blocking advisory locks for candidate
+> feedstocks in sorted ID order, keyed by
+> `feedstock-transport-owner:{organizationId}:{feedstockId}`. Joined scopes reuse
+> the outer scope. Writers capture owners and lineage targets before the write, compare owners
+> afterwards in the same transaction, then try-lock all full-lineage artifacts
+> of changed records and read Sent facts under those locks. They roll back with
+> `certification_locked` when a Sent record moves. Edits that keep the owner,
+> and ownership changes without Sent lineage, remain allowed subject to the
+> existing validation and dependency guards. Transport-leg locks and Removal
+> submission are unchanged; counted-ID snapshot freshness when a write wins
+> before the claim remains an [open question](../open-questions.md#counted-transport-ids-when-an-ownership-write-precedes-a-claim-1490).
+
+> **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > keeps the production claim and the follow-up omission, and adds a claim per
 > emissions entry: a follow-up Removal keeps a production component when it has
-> unsent entries for it, and sends only those. The text below stays in force
-> until ADR 0032 is accepted and implemented.
+> unsent entries for it, and sends only those. ADR 0032 was accepted on
+> 2026-10-19. The text below stays in force until it is fully implemented.
 
 > **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
 > historical Context below do not match noma's Biochar Protocol v1.2

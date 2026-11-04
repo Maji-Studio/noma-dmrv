@@ -10,7 +10,7 @@ import { requireOrgScope } from "./utils";
 
 type Reader = Pick<DbTransaction, "select">;
 
-/** Numeric consumers only. Merely sharing a bin does not establish a dependency. */
+/** Saved lineage determines freezes. Sharing a bin alone does not. */
 export async function readRecordDependents(ctx: OrgContext, tx: Reader, target: CertifiedLineageTarget): Promise<RecordLockHolder[]> {
   requireOrgScope(ctx);
   return (await readRecordDependentsBatch(ctx, tx, target.entityType, [target.entityId])).get(target.entityId) ?? [];

@@ -30,7 +30,6 @@ export function RevokeApiKeyDialog({ apiKey, onClose, organizationId }: {
       isPending={revoke.isPending}
       errorMessage={error}
       confirmLabel="Revoke key"
-      pendingLabel="Revoking..."
     />
   );
 }

@@ -85,6 +85,13 @@ interface EntitySelectBaseProps {
   createLabel?: string;
   /** Callback when quick-add is triggered */
   onCreateNew?: () => void;
+  /**
+   * For an entity created on its own page rather than in a quick-add dialog
+   * (reactors): the "Add new" row opens this page in a new tab, so the form
+   * keeps what the operator entered. The options reload when the operator
+   * comes back to this tab. `onCreateNew` wins when both are given.
+   */
+  createHref?: string;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
   /** Upstream source value(s); changes re-enable automatic selection after a user clear. */
@@ -97,6 +104,11 @@ interface EntitySelectBaseProps {
   excludeIds?: readonly string[];
   /** Auto-select when there is exactly one option available */
   autoSelectSingle?: boolean;
+  /**
+   * Receives the only option's id when `autoSelectSingle` picks it, instead of
+   * `onChange`, so a form can treat the pick as a default rather than an edit.
+   */
+  onAutoSelect?: (id: string) => void;
   /** Always show the search input while dropdown is open */
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
@@ -137,6 +149,11 @@ interface EntitySelectBaseProps {
   onEditSelected?: () => void;
   /** Overrides the default Edit <selectedOption.name> label. */
   editLabel?: string;
+  /**
+   * The RHF field path this picker writes, set as `data-field-name` on the
+   * trigger so the form error summary can find and focus it when `id` differs.
+   */
+  fieldName?: string;
 
 }
 

@@ -284,6 +284,17 @@ export function percentFormToRatioPayload(
   };
 }
 
+/**
+ * Server refusal path to form field. The server speaks ratios and calls the
+ * ingredient rows `lines` in its own refusals; the form speaks percent shares
+ * and `ingredients`.
+ */
+export const FORMULATION_REFUSAL_ALIASES = {
+  biocharRatio: "biocharPercent",
+  "ingredients.*.ratio": "ingredients.*.sharePercent",
+  "lines.*.feedstockTypeId": "ingredients.*.feedstockTypeId",
+} as const;
+
 // ============================================
 // Type Inference
 // ============================================

@@ -2,15 +2,17 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
+import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
+import { NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 
-const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[] }));
+const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0, facilityTemplate: "rvt_new" as string | null }));
 vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
-    data: { mapping: { externalProjectId: "prj_test", defaultRemovalTemplateId: "rvt_new" } },
+    data: { mapping: { externalProjectId: "prj_test", removalTemplateId: mocks.facilityTemplate } },
     isLoading: false, isSuccess: true,
   }),
   useIsometricProjectTemplates: () => ({
@@ -18,15 +20,16 @@ vi.mock("@/hooks/use-certification", () => ({
     isLoading: false, isSuccess: true, isError: false, error: null,
   }),
 }));
-vi.mock("./credit-batch-template-switch-dialog", () => ({ CreditBatchTemplateSwitchDialog: () => null }));
 
-function mount(canManage: boolean, locked = false, activeFocusTarget?: string) {
+function mount(canManage: boolean, activeFocusTarget?: string, inRemoval = false, readOnly = false) {
   render(
     <CreditBatchRemovalTemplate
       creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: mocks.pin }}
       canManage={canManage}
-      locked={locked}
       activeFocusTarget={activeFocusTarget}
+      linesToDecide={mocks.linesToDecide}
+      inRemoval={inRemoval}
+      readOnly={readOnly}
     />,
   );
 }
@@ -37,67 +40,169 @@ const landingLine = () => document.querySelector("p[role='status']");
 beforeEach(() => {
   mocks.pin = "rvt_new";
   mocks.listed = ["rvt_new"];
+  mocks.linesToDecide = 0;
+  mocks.facilityTemplate = "rvt_new";
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
 
 describe("CreditBatchRemovalTemplate", () => {
-  it("names the pinned template and offers Switch template to Owners and Admins", () => {
-    mount(true);
-    expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Switch template" })).toBeTruthy();
+  it("names the template read-only, with no link to Settings for anyone", () => {
+    for (const canManage of [true, false]) {
+      mount(canManage);
+      expect(screen.getByText("Dark Earth Carbon Template")).toBeTruthy();
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
+      cleanup();
+    }
   });
 
-  it("is read-only for members and while a Removal locks the batch", () => {
-    mount(false);
-    expect(screen.queryByRole("button", { name: "Switch template" })).toBeNull();
-    cleanup();
-    mount(true, true);
-    expect(screen.queryByRole("button", { name: "Switch template" })).toBeNull();
+  it("shows the name as a Batch details row inside the deep-link focus target", () => {
+    render(
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: "rvt_new" }}
+        canManage
+        activeFocusTarget={ENTITY_FOCUS_TARGETS.removalTemplate}
+        linesToDecide={0}
+        asDetailRow
+      />,
+    );
+    const label = screen.getByText("Removal template");
+    expect(label.tagName).toBe("DT");
+    const name = screen.getByText("Dark Earth Carbon Template");
+    expect(name.closest("dd")).not.toBeNull();
+    // The highlighted callout holds the row, so a deep link lands on the name.
+    expect(landingLine()).not.toBeNull();
+    expect(name.closest(`[data-focus-target="${ENTITY_FOCUS_TARGETS.removalTemplate}"]`)).not.toBeNull();
   });
 
-  it("says an unpinned batch has no template and who can choose one", () => {
+  it("states why a pinned name cannot be read in the row's empty style", () => {
+    mocks.listed = [];
+    render(
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: "rvt_new" }}
+        canManage
+        linesToDecide={0}
+        asDetailRow
+      />,
+    );
+    const reason = screen.getByText(NOT_FOUND_ON_ISOMETRIC);
+    expect(reason.hasAttribute("data-empty")).toBe(true);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("shows an unset template as Not set with its notice and no link to Settings", () => {
+    mocks.pin = null;
+    render(
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: null }}
+        canManage
+        linesToDecide={0}
+        asDetailRow
+      />,
+    );
+    expect(screen.getByText("Not set").hasAttribute("data-empty")).toBe(true);
+    expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("says an unset batch has no template and who can set one", () => {
     mocks.pin = null;
     mount(true);
-    expect(screen.getByRole("button", { name: "Set template" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Switch template" })).toBeNull();
+    expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
     cleanup();
     mount(false);
     expect(screen.getByText("Not set")).toBeTruthy();
-    expect(screen.getByText("This credit batch has no Removal template. Ask an Owner or Admin to choose one.")).toBeTruthy();
+    expect(screen.getByText("This credit batch has no Removal template. Ask an Admin to set one.")).toBeTruthy();
+  });
+
+  describe("while the template has components to decide", () => {
+    const LEAD = "17 components to decide, so this credit batch can't go into a Removal.";
+
+    it("tells a member who decides them, with no link", () => {
+      mocks.linesToDecide = 17;
+      mount(false);
+      expect(screen.getByText(`${LEAD} An Admin answers them in Settings, Removal templates.`)).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Answer in Settings" })).toBeNull();
+    });
+
+    it("gives Admins an Answer in Settings link to the Check step with this template picked", () => {
+      mocks.linesToDecide = 17;
+      mount(true);
+      expect(screen.getByText(LEAD)).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Answer in Settings" }).getAttribute("href")).toBe(
+        "/settings/removal-templates?facility=facility-1&setup=check&template=rvt_new",
+      );
+    });
+
+    it("shows plain text, no Answer link, when the batch was kept on an older template than the facility's", () => {
+      mocks.linesToDecide = 3;
+      mocks.facilityTemplate = "rvt_other";
+      mount(true);
+      expect(screen.getByText("3 components to decide, so this credit batch can't go into a Removal.")).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Answer in Settings" })).toBeNull();
+    });
+
+    it("says another Removal once a Removal holds the batch", () => {
+      mocks.linesToDecide = 1;
+      mount(false, undefined, true);
+      expect(screen.getByText("1 component to decide, so this credit batch can't go into another Removal. An Admin answers it in Settings, Removal templates.")).toBeTruthy();
+      cleanup();
+      mocks.linesToDecide = 17;
+      mount(true, undefined, true);
+      expect(screen.getByText("17 components to decide, so this credit batch can't go into another Removal.")).toBeTruthy();
+    });
+
+    it("says nothing when every component is decided or the pin is gone", () => {
+      mount(true);
+      expect(screen.queryByText(/components? to decide/)).toBeNull();
+      cleanup();
+      mocks.linesToDecide = 17;
+      mocks.listed = [];
+      mount(true);
+      expect(screen.queryByText(/components? to decide/)).toBeNull();
+    });
   });
 
   describe("opened by a readiness blocker link", () => {
     const FOCUS = "removal-template";
-    const UNPINNED_COPY = "Choose a Removal template for this credit batch before adding it to a Removal.";
-    const MISSING_COPY = "Template no longer exists in Isometric. Switch to another Removal template.";
+    const UNPINNED_COPY = "Set a Removal template in Settings before adding this credit batch to a Removal.";
+    const MISSING_COPY = "Template no longer exists in Isometric. Choose another Removal template in Settings.";
 
     it("says an unpinned batch needs a template once", () => {
       mocks.pin = null;
-      mount(true, false, FOCUS);
-      expect(screen.getAllByText(/Choose a Removal template/)).toHaveLength(1);
+      mount(true, FOCUS);
+      expect(screen.getAllByText(/Set a Removal template/)).toHaveLength(1);
       expect(screen.getByText(UNPINNED_COPY)).toBeTruthy();
       expect(landingLine()).toBeNull();
     });
 
     it("lands on the not-found notice, not on a request to choose a template", () => {
       mocks.listed = [];
-      mount(true, false, FOCUS);
+      mount(true, FOCUS);
       expect(screen.getAllByText(/Template no longer exists/)).toHaveLength(1);
       expect(screen.getByText(MISSING_COPY)).toBeTruthy();
-      expect(screen.queryByText(/Choose a Removal template/)).toBeNull();
+      expect(screen.queryByText(/Set a Removal template/)).toBeNull();
       expect(landingLine()).toBeNull();
     });
 
     it("shows one neutral line when the pin is listed and a blocker still sent the operator here", () => {
-      mount(true, false, FOCUS);
+      mount(true, FOCUS);
       expect(landingLine()?.textContent).toBe(REMOVAL_TEMPLATE_LANDING_LINE);
-      expect(screen.queryByText(/Choose a Removal template/)).toBeNull();
+      expect(screen.queryByText(/Set a Removal template/)).toBeNull();
     });
 
     it("shows no landing line when the sheet was not opened by the link", () => {
       mount(true);
       expect(landingLine()).toBeNull();
     });
+  });
+
+  it("states the missing template as a fact alone on a read-only batch", () => {
+    mocks.pin = null;
+    mount(false, undefined, false, true);
+    expect(screen.getByText("This credit batch has no Removal template.")).toBeTruthy();
+    expect(screen.queryByText(/Ask an Admin|Set a Removal template/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Change in Settings" })).toBeNull();
   });
 });

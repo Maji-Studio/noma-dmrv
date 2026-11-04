@@ -136,6 +136,9 @@ export function lPer100KmToLPerKm(lPer100Km: number): number {
   return lPer100Km / 100;
 }
 
+/** Server refusal path (L/km) to form field (L/100 km). */
+export const VEHICLE_REFUSAL_ALIASES = { fuelConsumptionLPerKm: "fuelConsumptionLPer100Km" } as const;
+
 /** Convert L/km (DB storage) to L/100km (user-friendly) */
 export function lPerKmToLPer100Km(lPerKm: number): number {
   return lPerKm * 100;

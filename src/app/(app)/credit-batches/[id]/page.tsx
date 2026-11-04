@@ -1,22 +1,29 @@
+import { HydrationBoundary } from "@tanstack/react-query";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
+import { CreditBatchPage } from "@/components/credit-batches";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getFacilityById } from "@/data-access/facilities";
+import { creditBatchKeys } from "@/hooks/credit-batch-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
-import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
+import { DomainError } from "@/lib/domain-errors";
+import { createServerHydrationState } from "@/lib/react-query/server-hydration";
 
 /**
- * The credit-batch detail page was retired in favour of the list's view side
- * sheet — old links land there via `?batch=<id>` (production-run pattern).
+ * The routed credit batch page (epic #1136). The batch loads through the
+ * org-scoped read, so another organization's batch is a not-found. A
+ * `?facility=` naming a different facility is a not-found too; a link without
+ * one gains the batch's facility so the sidebar and facility context agree.
+ * The exception is a batch in an archived facility: the facility selection
+ * rewrites `?facility=` to an active facility, so a reload of that URL still
+ * opens the batch, read only (#1502).
  */
-interface CreditBatchRedirectPageProps {
+interface CreditBatchPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function CreditBatchRedirectPage({
-  params,
-  searchParams,
-}: CreditBatchRedirectPageProps) {
+export default async function CreditBatchRoute({ params, searchParams }: CreditBatchPageProps) {
   const { id } = await params;
   const sp = await searchParams;
 
@@ -25,24 +32,41 @@ export default async function CreditBatchRedirectPage({
   }
 
   const ctx = await requireOrgContext();
-  const batch = await getCreditBatchById(ctx, id, { skipPreview: true });
+  const batch = await getCreditBatchById(ctx, id);
   if (!batch) {
     notFound();
   }
 
-  const nextParams = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(sp)) {
-    if (key === CREDIT_BATCH_DEEP_LINK_PARAM || key === "facility") continue;
-    if (Array.isArray(value)) {
-      for (const entry of value) nextParams.append(key, entry);
-    } else if (value !== undefined) {
-      nextParams.set(key, value);
+  const facility = sp.facility;
+  if (facility !== undefined && facility !== batch.facilityId) {
+    // A mismatch is a not-found unless the batch's own facility is archived.
+    const batchFacility = await getFacilityById(ctx, batch.facilityId).catch((error: unknown) => {
+      if (error instanceof DomainError && error.code === "not_found") return null;
+      throw error;
+    });
+    if (batchFacility?.archivedAt == null) notFound();
+  }
+  if (facility === undefined) {
+    const nextParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(sp)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) nextParams.append(key, entry);
+      } else if (value !== undefined) {
+        nextParams.set(key, value);
+      }
     }
+    nextParams.set("facility", batch.facilityId);
+    redirect(`/credit-batches/${id}?${nextParams.toString()}`);
   }
 
-  nextParams.set("facility", batch.facilityId);
-  nextParams.set(CREDIT_BATCH_DEEP_LINK_PARAM, id);
+  const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
+  const state = createServerHydrationState([
+    { queryKey: creditBatchKeys.detail(batch.id), data: batch },
+  ]);
 
-  redirect(`/credit-batches?${nextParams.toString()}`);
+  return (
+    <HydrationBoundary state={state}>
+      <CreditBatchPage creditBatchId={batch.id} canManage={canManage} />
+    </HydrationBoundary>
+  );
 }

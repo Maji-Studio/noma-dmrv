@@ -28,6 +28,9 @@ if (underVitest) {
 
 const testEnvDefaults: Record<string, string> = {
   NODE_ENV: "test",
+  MCP_ENABLED: "true",
+  STOCK_ADJUSTMENTS_ENABLED: "true",
+  MULTI_BIN_RUNS_ENABLED: "true",
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/app_template_test",
   // The app default is a single connection, but the DB-backed concurrency
   // tests (tests/certification-submissions.test.ts) hold a transaction open
@@ -38,7 +41,6 @@ const testEnvDefaults: Record<string, string> = {
   BETTER_AUTH_SECRET: "test-secret-32-chars-minimum-length",
   RESEND_API_KEY: "",
   RESEND_FROM_EMAIL: "",
-  ALLOW_SELF_SIGNUP: "false",
   ADMIN_EMAIL: "admin@example.com",
   CREDENTIALS_ENCRYPTION_KEY: "00".repeat(32),
   STORAGE_PROVIDER: "local-fs",
@@ -60,4 +62,11 @@ if (underVitest) {
   process.env.DB_POOL_LOCK_TIMEOUT_MS = TEST_LOCK_TIMEOUT_MS;
   // Last, so it judges the URL every suite will actually connect to.
   assertThrowawayTestDatabase(process.env.DATABASE_URL!);
+}
+
+// jsdom has no layout and no scrollIntoView. The form error summary scrolls
+// the first refused field into view after a save, from a timer, so a form
+// test that submits invalid input would otherwise end in an uncaught error.
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
 }

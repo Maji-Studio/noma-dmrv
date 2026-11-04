@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
+import { withAction } from "@/fn/with-action";
 import { toActionFailure } from "@/fn/action-errors";
 import { runOperation, runOperationInProcess, type Operation, type OperationScope, type RunOptions } from "./runner";
 
@@ -13,6 +14,7 @@ vi.mock("@/data-access/activity-events", () => ({ recordActivity: activity }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn, error: vi.fn() }, sanitizeErrorMessage: () => "sanitized" }));
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ctx }));
 const ctx = { userId: "user-id", organizationId: "org-id", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const tx = {} as OperationScope["tx"];
 const saved = new Date("2026-10-06T00:00:00Z");
@@ -22,6 +24,8 @@ const operation: Operation<z.ZodObject<{ amount: z.ZodNumber }>, { date: Date; a
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  claim.mockReset();
+  record.mockReset();
   owned.mockImplementation(async (_ctx, _deadline, callback) => {
     try { return { kind: "committed", data: await callback(tx) }; }
     catch (error) { return { kind: "callback_threw", error }; }
@@ -247,13 +251,91 @@ describe("shared operation runner", () => {
     })).toEqual({
       success: false,
       code: "outcome_unknown",
-      error: "It is not known whether this change was saved. Check the list before trying again.",
+      error: "The app could not confirm that it saved this change. Check the list before trying again.",
     });
     await expect(runOperation(operation, ctx, { amount: 1 }, {
       idempotency: { credentialId: "credential-id", key: "key" },
     })).rejects.toBe(apiError);
     expect(apiError.retryable).toBe(true);
     expect(apiError.message).toContain("Retry with the same idempotency key.");
+  });
+
+  it("claims an app intent and returns the same native Dates on first save and replay", async () => {
+    const intentKey = "11111111-1111-4111-8111-111111111111";
+    claim.mockResolvedValueOnce({ kind: "owner", recordId: "app-record" });
+    const execute = vi.fn(operation.execute);
+    const first = await runOperationInProcess({ ...operation, execute }, ctx, { amount: 1 }, { intentKey });
+    expect(claim).toHaveBeenCalledWith(ctx, tx, expect.objectContaining({ credentialId: "app-form:user-id", key: intentKey }));
+    const stored = JSON.parse(JSON.stringify(record.mock.calls[0][3]));
+    expect(stored).toEqual({ date: { $date: saved.toISOString() }, amount: 1 });
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: stored });
+    const replay = await runOperationInProcess({ ...operation, execute }, ctx, { amount: 1 }, { intentKey });
+    expect(first).toEqual({ date: saved, amount: 1 });
+    expect(replay).toEqual(first);
+    expect(replay.date).toBeInstanceOf(Date);
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("replays a keyed retry once after a lost acknowledgement", async () => {
+    // Fake only the store and transaction boundary; the real runner owns replay.
+    const outcomes = new Map<string, unknown>();
+    claim.mockImplementation(async (_ctx, _tx, request) => {
+      const recordId = `${request.credentialId}:${request.key}:${request.operationId}`;
+      return outcomes.has(recordId)
+        ? { kind: "replay", outcome: outcomes.get(recordId) }
+        : { kind: "owner", recordId };
+    });
+    record.mockImplementation(async (_ctx, _tx, recordId, outcome) => {
+      outcomes.set(recordId, JSON.parse(JSON.stringify(outcome)));
+    });
+    const execute = vi.fn(operation.execute);
+    const op = { ...operation, execute };
+    const options = { intentKey: "11111111-1111-4111-8111-111111111111" };
+    owned.mockImplementationOnce(async (_ctx, _deadline, callback) => {
+      await callback(tx);
+      throw new DomainError("outcome_unknown", "Lost commit acknowledgement", { retryable: true });
+    });
+    await expect(runOperationInProcess(op, ctx, { amount: 1 }, options)).rejects.toMatchObject({ code: "outcome_unknown" });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual({ date: saved, amount: 1 });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual({ date: saved, amount: 1 });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledOnce();
+    expect(outcomes.size).toBe(1);
+  });
+
+  it.each([
+    ["idempotency_key_reused", "The app already saved this record with other values. Close the form and check the list."],
+    ["idempotency_in_progress", "The app is still saving this record. Wait a moment, then check the list."],
+    ["outcome_unknown", "The app could not confirm the save. Try again: the app will not save this record twice."],
+    ["replay_unavailable", "The app already saved this record. Close the form and check the list."],
+  ] as const)("preserves the cause and exposes app copy for keyed %s", async (code, message) => {
+    const cause = new DomainError(code, "Transport copy", { retryable: true });
+    owned.mockRejectedValueOnce(cause);
+    const error = await runOperationInProcess(operation, ctx, { amount: 1 }, { intentKey: "draft" }).catch(error => error);
+    expect(error).toMatchObject({ code, message, cause });
+    expect(toActionFailure(error, { fallbackMessage: "Fallback", log: { message: "failed" } }))
+      .toEqual({ success: false, code, error: message });
+    owned.mockRejectedValueOnce(cause);
+    expect(await withAction(ctx => runOperationInProcess(operation, ctx, { amount: 1 }, { intentKey: "draft" })))
+      .toEqual({ success: false, code, error: message });
+  });
+
+  it("leaves keyless errors and claims unchanged", async () => {
+    const error = new DomainError("replay_unavailable", "Original copy");
+    owned.mockRejectedValueOnce(error);
+    await expect(runOperationInProcess(operation, ctx, { amount: 1 })).rejects.toBe(error);
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it("revives nested Dates while leaving date strings and null values alone", async () => {
+    const output = { entries: [{ when: saved, text: saved.toISOString(), missing: null }] };
+    const op = { ...operation, describe: undefined, execute: async () => output };
+    claim.mockResolvedValueOnce({ kind: "owner", recordId: "nested" });
+    const options = { intentKey: "nested-draft" };
+    const first = await runOperationInProcess(op, ctx, { amount: 1 }, options);
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: JSON.parse(JSON.stringify(record.mock.calls[0][3])) });
+    expect(await runOperationInProcess(op, ctx, { amount: 1 }, options)).toEqual(output);
+    expect(first).toEqual(output);
   });
 
   it("keeps native Dates for in-process results and JSON Dates for API responses and replays", async () => {
@@ -267,10 +349,10 @@ describe("shared operation runner", () => {
     expect((await runOperation(operation, ctx, { amount: 1 }, options)).data).toEqual(first.data);
   });
 
-  it("refuses dry run and idempotency at runtime on the native seam", async () => {
+  it.each([undefined, "11111111-1111-4111-8111-111111111111"])("refuses dry run and idempotency at runtime with intent %s", async (intentKey) => {
     for (const options of [{ dryRun: true }, { dryRun: false }, { idempotency: { credentialId: "id", key: "key" } }] satisfies RunOptions[]) {
       // @ts-expect-error The type contract also refuses these options.
-      await expect(runOperationInProcess(operation, ctx, { amount: 1 }, options)).rejects.toMatchObject({ code: "validation_failed" });
+      await expect(runOperationInProcess(operation, ctx, { amount: 1 }, { ...options, intentKey })).rejects.toMatchObject({ code: "validation_failed" });
     }
     expect(owned).not.toHaveBeenCalled();
   });

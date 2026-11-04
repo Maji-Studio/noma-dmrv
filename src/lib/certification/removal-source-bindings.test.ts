@@ -4,6 +4,8 @@ import {
   buildRemovalSourceBindingPlan,
   classifyRemovalSourceCandidate,
   sourceIdsForDatapointTarget,
+  removalEvidenceRoleLabelsForTarget,
+  listOptionalRemovalEvidenceTargets,
   SOURCE_BINDING_MAPPING_REVISION,
 } from "./removal-source-bindings";
 import {
@@ -337,6 +339,28 @@ describe("buildRemovalSourceBindingPlan", () => {
     ["credit-batch-1", ["delivery-1"]],
   ]);
 
+  it("keeps automatic-only plans byte-identical at a fixed mapping revision", () => {
+    // Golden pre-entry plan. A vocabulary revision change is intentional and
+    // independent of role classification, target resolution and ordering.
+    const candidates = classified.map((candidate) => ({ ...candidate,
+      binding: { ...candidate.binding, mappingRevision: "legacy-revision" } }));
+    const plan = buildRemovalSourceBindingPlan({ candidates, template: template as never,
+      applicationIdsByCreditBatchId, deliveryIdsByCreditBatchId });
+    expect(JSON.stringify(plan)).toBe(JSON.stringify([
+      { documentId: "document-delivery", sourceId: "source-delivery", nomaRole: "delivery_bill_of_lading",
+        lineage: { entityType: "delivery", entityId: "delivery-1", entityLabel: "Delivery DEL-001" },
+        intendedTarget: { kind: "ordinary", groupKey: "biochar-transport", componentId: "component-biochar-transport",
+          componentBlueprintKey: "mass_distance_based_ci_emissions", inputKey: "mass_distance", creditBatchIds: [] }, mappingRevision: "legacy-revision" },
+      { documentId: "document-feedstock", sourceId: "source-feedstock", nomaRole: "feedstock_bill_of_lading",
+        lineage: { entityType: "feedstock", entityId: "feedstock-1", entityLabel: "Feedstock FS-001" },
+        intendedTarget: { kind: "ordinary", groupKey: "biomass-feedstock-transport", componentId: "component-feedstock-transport",
+          componentBlueprintKey: "mass_distance_based_ci_emissions", inputKey: "mass_distance", creditBatchIds: [] }, mappingRevision: "legacy-revision" },
+      { documentId: "document-inventory", sourceId: "source-inventory", nomaRole: "inventory", lineage: application,
+        intendedTarget: { kind: "sequestration", groupKey: "co2-stored", componentId: "component-sequestration",
+          componentBlueprintKey: "carbon_rich_substance_sequestration", inputKey: "product_mass", creditBatchIds: ["credit-batch-1"] }, mappingRevision: "legacy-revision" },
+    ]));
+  });
+
   it("persists source identity, Noma role, lineage, target, and revision", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,
@@ -549,6 +573,86 @@ describe("buildRemovalSourceBindingPlan", () => {
         ]),
       }),
     ).toThrow(/does not resolve to a Removal credit batch/i);
+  });
+
+  it.each([1, 2])("skips retired sample shipping evidence with %i manual lines", (count) => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "pdf", removalId: "removal-1",
+      metadata: { kind: "transport_evidence_ledger", removalId: "removal-1" },
+      lineage: { entityType: "credit_batch", entityId: "credit-batch-1", entityLabel: "Credit batch" },
+    })!;
+    const components = Array.from({ length: count }, (_, index) => ({
+      id: `sample-${index}`, blueprint_key: "mass_distance_based_ci_emissions",
+      inputs: [{ input_key: "mass_distance" }],
+    }));
+    const manual = { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as const;
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [{ documentId: "ledger", sourceId: "ledger", binding }],
+      template: { groups: [...template.groups, { key: "sampling-required-for-mrv", components }] } as never,
+      lineSources: Object.fromEntries(components.map((component) => [component.id, manual])),
+      applicationIdsByCreditBatchId,
+    });
+    expect(plan.map((entry) => entry.intendedTarget.groupKey)).toEqual([
+      "biochar-transport", "biomass-feedstock-transport",
+    ]);
+    expect(removalEvidenceRoleLabelsForTarget({
+      groupKey: "sampling-required-for-mrv", componentBlueprintKey: "mass_distance_based_ci_emissions",
+      inputKey: "mass_distance", lineContract: manual,
+    })).not.toContain("Transport evidence ledger");
+    expect(listOptionalRemovalEvidenceTargets().some((target) => target.groupKey === "sampling-required-for-mrv")).toBe(false);
+  });
+
+  it.each([true, false])("resolves duplicate biomass lines only when one owns the source: %s", (ownsSource) => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "bill_of_lading", metadata: {},
+      lineage: { entityType: "feedstock", entityId: "feedstock-1", entityLabel: "Feedstock" },
+    })!;
+    const biomass = template.groups.find((group) => group.key === "biomass-feedstock-transport")!;
+    const build = () => buildRemovalSourceBindingPlan({
+      candidates: [{ documentId: "bill", sourceId: "bill", binding }],
+      template: { groups: [{ ...biomass, components: [
+        ...biomass.components, { ...biomass.components[0], id: "other-biomass" },
+      ] }] } as never,
+      lineSources: {
+        "component-feedstock-transport": { scope: "operating", entryPolicy: "additive", origin: "reviewed" },
+        "other-biomass": { scope: "operating", entryPolicy: "additive", origin: "reviewed",
+          ...(ownsSource ? { automaticSource: "feedstock-transport" as const } : {}) },
+      },
+      applicationIdsByCreditBatchId,
+    });
+    if (ownsSource) expect(build().map((entry) => entry.intendedTarget.componentId)).toEqual(["other-biomass"]);
+    else expect(build).toThrow(/expected exactly one/);
+  });
+
+  it("skips the optional transport ledger biomass target when neither duplicate line owns the source", () => {
+    const binding = classifyRemovalSourceCandidate({
+      documentType: "pdf", removalId: "removal-1",
+      metadata: { kind: "transport_evidence_ledger", removalId: "removal-1" },
+      lineage: { entityType: "credit_batch", entityId: "credit-batch-1", entityLabel: "Credit batch" },
+    })!;
+    const manual = { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as const;
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [{ documentId: "ledger", sourceId: "ledger", binding }],
+      template: { groups: template.groups.map((group) => group.key === "biomass-feedstock-transport"
+        ? { ...group, components: [...group.components, { ...group.components[0], id: "other-biomass" }] }
+        : group) } as never,
+      lineSources: {
+        "component-feedstock-transport": manual,
+        "other-biomass": manual,
+      },
+      applicationIdsByCreditBatchId,
+    });
+    expect(plan.map((entry) => entry.intendedTarget.groupKey)).toEqual(["biochar-transport"]);
+  });
+
+  it("keeps a single live transport target even with a manual contract", () => {
+    const binding = classifyRemovalSourceCandidate({ documentType: "bill_of_lading", metadata: {}, lineage: delivery })!;
+    const plan = buildRemovalSourceBindingPlan({
+      candidates: [{ documentId: "bill", sourceId: "bill", binding }], template: template as never,
+      lineSources: { "component-biochar-transport": { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+      applicationIdsByCreditBatchId,
+    });
+    expect(plan.map((entry) => entry.intendedTarget.componentId)).toEqual(["component-biochar-transport"]);
   });
 
   it("binds one transport ledger Source to every matching transport Datapoint", () => {

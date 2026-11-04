@@ -12,7 +12,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 
 vi.mock("@/db", () => ({ db: {} }));
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false } as const;
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false } as const;
 const context = { instance: "/api/v1/production-runs", requestId: "request" } as ApiRouteContext;
 const collision = { cause: { code: "23505", constraint: "production_runs_organization_id_code_unique" } };
 

@@ -17,7 +17,7 @@
  * edge is introduced against pair writers, facility archive or formulation writes.
  */
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { and, asc, isNull, isNotNull, sql, eq } from "drizzle-orm";
+import { and, asc, count, isNull, isNotNull, sql, eq } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
 import { feedstocks, suppliers, supplierLocations, type Supplier, type SupplierLocation } from "@/db/schema";
@@ -91,10 +91,14 @@ export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   const [locked] = await tx.select().from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).for("update");
   if (!locked) throw partyNotFound("supplier");
   assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: locked.version });
-  const uses = await tx.select({ code: feedstocks.code }).from(feedstocks)
+  const uses = await tx.select({ id: feedstocks.id, code: feedstocks.code, facilityId: feedstocks.facilityId }).from(feedstocks)
     .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.supplierId, supplierId)))
     .orderBy(asc(feedstocks.code)).limit(BLOCKER_LIMIT);
-  if (uses.length) throw supplierHasIntakes(uses.map(row => row.code));
+  if (uses.length) {
+    const [{ total }] = await tx.select({ total: count() }).from(feedstocks)
+      .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.supplierId, supplierId)));
+    throw supplierHasIntakes(uses, total);
+  }
   const children = await tx.select().from(supplierLocations).where(and(eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.supplierId, supplierId)))
     .orderBy(asc(supplierLocations.id)).for("update");
   try {

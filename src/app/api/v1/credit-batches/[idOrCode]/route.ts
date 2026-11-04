@@ -13,4 +13,4 @@ export const GET = apiRoute<Params>("api.v1.credit-batches.get", "credit-batches
   const data = await readCreditBatch(ctx, idOrCode);
   headers.set("ETag", creditBatchEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

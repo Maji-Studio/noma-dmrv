@@ -40,7 +40,7 @@ async function expectClientCredentials(accessToken: string, clientSecret: string
   }));
 }
 
-function makeCtx(orgRole: OrgContext["orgRole"] = "owner"): OrgContext {
+function makeCtx(orgRole: OrgContext["orgRole"] = "admin"): OrgContext {
   return {
     userId: "user_test_certifier_credentials_lifecycle",
     organizationId: ORG_ID,

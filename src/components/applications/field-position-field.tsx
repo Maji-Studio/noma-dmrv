@@ -3,7 +3,7 @@
 import { FormError } from "@/components/forms/form-error";
 import { FormField } from "@/components/forms/form-field";
 import { RequiredMarker } from "@/components/forms/required-marker";
-import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
+import { GPS_FIELD_NAMES, PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 
 export type FieldPositionMode = "derive" | "manual";
@@ -15,8 +15,6 @@ const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
 
 /** Deriving has a consequence the operator needs to see: the position moves with the delivery. */
 const DERIVE_CUE = "Follows the delivery destination, and updates if you change it.";
-/** Entering by hand only needs an explanation, behind the ⓘ. */
-const MANUAL_HELPER = "Search an address, click the map, or type the coordinates.";
 
 export interface DerivedPosition {
   gpsLatitude: number;
@@ -24,20 +22,21 @@ export interface DerivedPosition {
 }
 
 type PositionFieldName = "gpsLatitude" | "gpsLongitude";
-type ResetPositionField = (
+type SetPositionField = (
   name: PositionFieldName,
-  options: { defaultValue: number | null },
+  value: number | null,
+  options: { shouldValidate: boolean; shouldDirty: boolean },
 ) => void;
 
-export function resetFieldPosition(
-  resetField: ResetPositionField,
+export function setFieldPosition(
+  setValue: SetPositionField,
   derived: DerivedPosition | null,
 ): void {
-  resetField("gpsLatitude", {
-    defaultValue: derived?.gpsLatitude ?? null,
+  setValue("gpsLatitude", derived?.gpsLatitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
-  resetField("gpsLongitude", {
-    defaultValue: derived?.gpsLongitude ?? null,
+  setValue("gpsLongitude", derived?.gpsLongitude ?? null, {
+    shouldValidate: true, shouldDirty: true,
   });
 }
 
@@ -91,7 +90,6 @@ export function FieldPositionField({
           id="fieldPositionMode"
           label="Field position"
           cue={mode === "derive" ? DERIVE_CUE : undefined}
-          helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
           <SegmentedControl
             id="fieldPositionMode"
@@ -133,6 +131,7 @@ export function FieldPositionField({
       {mode === "manual" && (
         <PositionPicker
           idPrefix="gps"
+          fieldNames={GPS_FIELD_NAMES}
           label="Set the pin"
           accent="pink"
           latitude={latitude ?? null}

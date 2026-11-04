@@ -1,3 +1,9 @@
+import { automaticSourceAvailable, catalogSourceForRole } from "@/lib/isometric/template-observations/catalog-sources";
+import { carriedEntrySourceDescription, type CarriedEntryNote } from "./emission-entry-carry-copy";
+import { isInFrozenEntrySet } from "./removal-entry-snapshot";
+import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
+import { EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";
+import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { effectiveContract, type LineContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
@@ -31,9 +37,14 @@ export interface RemovalSourceLineage {
 }
 
 /** A Source's intended registry input, projected from the catalog's evidence targets. */
-export type RemovalSourceIntendedTarget = EvidenceIntendedTarget;
+export type RemovalSourceIntendedTarget = EvidenceIntendedTarget | {
+  kind: "explicit";
+  componentId: string;
+  inputKey: string;
+};
 
 export interface ClassifiedRemovalSource {
+  carriedEntry?: Pick<CarriedEntryNote, "creditBatchCode" | "occurredOn">;
   nomaRole: NomaEvidenceRole;
   nomaRoleLabel: string;
   lineage: RemovalSourceLineage;
@@ -53,8 +64,8 @@ interface CandidateDocumentFacts {
 interface SourceBindingRule {
   nomaRole: NomaEvidenceRole;
   nomaRoleLabel: string;
-  intendedTarget: RemovalSourceIntendedTarget;
-  additionalIntendedTargets?: RemovalSourceIntendedTarget[];
+  intendedTarget: EvidenceIntendedTarget;
+  additionalIntendedTargets?: EvidenceIntendedTarget[];
 }
 
 export interface RemovalEvidenceTargetLookup {
@@ -73,7 +84,7 @@ export interface OptionalRemovalEvidenceTarget
 const EVIDENCE_TARGETS = projectEvidenceTargets();
 
 function sourceBindingRule(
-  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger">,
+  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry">,
   nomaRoleLabel: string,
 ): SourceBindingRule {
   const [intendedTarget, ...additionalIntendedTargets] =
@@ -148,6 +159,7 @@ export const SOURCE_BINDING_MAPPING_REVISION = payloadHash({
   rules: SOURCE_BINDING_RULES,
   durabilityLedgerTargets: DURABILITY_LEDGER_TARGETS,
   materializationRevision: SOURCE_BINDING_MATERIALIZATION_REVISION,
+  explicitEntryRole: { role: "emission_entry", targetKeys: ["componentId", "inputKey"] },
 });
 
 function durabilityLedgerBinding(
@@ -279,7 +291,7 @@ export function buildRemovalSourceDescription(
   lineageEntityLabel?: string,
 ): string {
   return binding
-    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}.`
+    ? `Noma role: ${binding.nomaRoleLabel}. Lineage: ${binding.lineage.entityLabel}${binding.carriedEntry ? `, ${carriedEntrySourceDescription(binding.carriedEntry)}` : ""}.`
     : `Supporting evidence for ${lineageEntityLabel}.`;
 }
 
@@ -295,7 +307,7 @@ export interface RemovalSourceBindingPlanEntry {
   nomaRole: NomaEvidenceRole;
   lineage: RemovalSourceLineage;
   intendedTarget: {
-    kind: RemovalSourceIntendedTarget["kind"];
+    kind: EvidenceIntendedTarget["kind"];
     groupKey: string;
     componentId: string;
     componentBlueprintKey: string;
@@ -306,16 +318,29 @@ export interface RemovalSourceBindingPlanEntry {
   mappingRevision: string;
 }
 
+// Lookup only: projected targets are hashed and persisted unchanged.
+function targetAutomaticSource(target: EvidenceIntendedTarget) {
+  if (target.kind !== "ordinary") return undefined;
+  return catalogSourceForRole(target.componentBlueprintKey, target.inputKey, target.groupKey, target.componentDisplayName);
+}
+
+function targetSourceAvailable(target: EvidenceIntendedTarget): boolean {
+  const source = targetAutomaticSource(target);
+  return !source || automaticSourceAvailable(source);
+}
+
 function matchesIntendedComponent(
   blueprintKey: string,
   contract: LineContract | undefined,
-  target: RemovalSourceIntendedTarget,
+  target: EvidenceIntendedTarget,
 ): boolean {
+  if (!targetSourceAvailable(target)) return false;
+  const source = targetAutomaticSource(target);
   return target.kind === "sequestration"
     ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
         (target.componentDisplayName === undefined ||
-          (contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === "safety-margin"));
+          (source !== undefined && contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === source));
 }
 
 /**
@@ -379,7 +404,7 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
       rule.intendedTarget,
       ...(rule.additionalIntendedTargets ?? []),
     ]) {
-      if (target.kind !== "ordinary") continue;
+      if (target.kind !== "ordinary" || !targetSourceAvailable(target)) continue;
       const key = [
         target.groupKey,
         target.componentBlueprintKey,
@@ -417,6 +442,8 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
  */
 export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
+  removalId?: string;
+  entryContributions?: Pick<RemovalEntryContributions, "manifest" | "entrySet">;
   lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
@@ -430,8 +457,38 @@ export function buildRemovalSourceBindingPlan(args: {
         binding.intendedTarget,
         ...(binding.additionalIntendedTargets ?? []),
       ];
-      return targets.flatMap((target) => {
-        const matchingComponents = args.template.groups
+      return targets.flatMap((target): RemovalSourceBindingPlanEntry[] => {
+        if (target.kind === "explicit") {
+          const matches = args.template.groups.flatMap((group) =>
+            group.components.filter((component) => component.id === target.componentId &&
+              component.inputs.some((input) => input.input_key === target.inputKey && input.type === "monitored"))
+              .map((component) => ({ group, component })),
+          );
+          const contribution = args.entryContributions?.manifest.find((input) =>
+            input.componentId === target.componentId && input.inputKey === target.inputKey);
+          const entries = contribution?.entries.filter((entry) =>
+            entry.entryId === binding.lineage.entityId && entry.kind === "value" &&
+            entry.evidenceDocumentIds.includes(documentId) &&
+            isInFrozenEntrySet(entry, args.entryContributions?.entrySet)) ?? [];
+          if (binding.nomaRole !== "emission_entry" || binding.lineage.entityType !== "emission_entry" ||
+            matches.length !== 1 || entries.length !== 1) {
+            throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {
+              componentId: target.componentId, inputKey: target.inputKey,
+              entryId: binding.lineage.entityId, documentId,
+            });
+          }
+          const { group, component } = matches[0];
+          return [{ documentId, sourceId, nomaRole: binding.nomaRole, lineage: binding.lineage,
+            intendedTarget: { kind: "ordinary" as const, groupKey: group.key, componentId: component.id,
+              componentBlueprintKey: component.blueprint_key, inputKey: target.inputKey, creditBatchIds: [] },
+            mappingRevision: binding.mappingRevision }];
+        }
+        if (binding.nomaRole === "emission_entry") {
+          throw new EmissionEntryEvidenceError(EMISSION_ENTRY_FILE_MISMATCH, {
+            inputKey: target.inputKey, entryId: binding.lineage.entityId, documentId,
+          });
+        }
+        let matchingComponents = args.template.groups
           .filter((group) => group.key === target.groupKey)
           .flatMap((group) => group.components)
           .filter(
@@ -445,6 +502,13 @@ export function buildRemovalSourceBindingPlan(args: {
                 (input) => input.input_key === target.inputKey,
               ),
           );
+        const source = targetAutomaticSource(target);
+        if (matchingComponents.length > 1 && source) {
+          matchingComponents = matchingComponents.filter((component) => {
+            const contract = args.lineSources?.[component.id];
+            return contract && effectiveContract(contract).automaticSource === source;
+          });
+        }
         if (matchingComponents.length === 0 && target.optionalInTemplate) {
           return [];
         }

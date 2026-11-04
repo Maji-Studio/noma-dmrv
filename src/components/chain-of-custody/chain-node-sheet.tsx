@@ -2,9 +2,9 @@
 
 /**
  * Chain node detail side-sheet — a read-only slide-over opened by clicking a
- * card on the DAG / lineage graph. Replaces the old click-to-navigate so a
+ * record on the Flow chart. Replaces the old click-to-navigate so a
  * click stays in context (the full record is one explicit step away via "View
- * full record"). Application cards in the batch roll-up also offer "Trace
+ * full record"). Application records in the batch roll-up also offer "Trace
  * rollback" to drill into that member's lineage.
  */
 
@@ -30,7 +30,7 @@ export interface ChainNodeSheetNode {
   details: LineageDetailRow[];
   /** Full-record route, when the node maps to a routed entity page. */
   href: string | null;
-  /** Batch roll-up application card — offers "Trace rollback". */
+  /** Batch roll-up application record: offers "Trace rollback". */
   drillable?: boolean;
 }
 
@@ -94,36 +94,33 @@ export function ChainNodeSheet({
           )}
         </SlideOverPanel.Body>
 
-        {(drillable && onTrace) || (href && onViewRecord) ? (
-          <SlideOverPanel.Footer className="justify-stretch">
-            {drillable && onTrace ? (
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => {
-                  onOpenChange(false);
-                  onTrace();
-                }}
-              >
-                <TreeStructureIcon size={14} weight="bold" />
-                Trace rollback
-              </Button>
-            ) : null}
-            {href && onViewRecord ? (
-              <Button
-                variant="default"
-                className="flex-1"
-                onClick={() => {
-                  onOpenChange(false);
-                  onViewRecord();
-                }}
-              >
-                <ArrowUpRightIcon size={14} weight="bold" />
-                View full record
-              </Button>
-            ) : null}
-          </SlideOverPanel.Footer>
-        ) : null}
+        <SlideOverPanel.Footer>
+          {drillable && onTrace ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                onOpenChange(false);
+                onTrace();
+              }}
+            >
+              <TreeStructureIcon size={14} weight="bold" />
+              Trace rollback
+            </Button>
+          ) : null}
+          {href && onViewRecord ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                onOpenChange(false);
+                onViewRecord();
+              }}
+            >
+              <ArrowUpRightIcon size={14} weight="bold" />
+              View full record
+            </Button>
+          ) : null}
+          <SlideOverPanel.FooterClose />
+        </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
   );

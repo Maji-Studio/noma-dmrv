@@ -24,6 +24,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import type { SchemaArea, SchemaColumnInfo, SchemaRelationship, SchemaTableInfo } from "@/lib/schema/catalog";
+import { NO_COLUMN_DESCRIPTION } from "@/lib/schema/copy";
 import columnExamples from "@/lib/schema/column-examples.json";
 import columnDescriptions from "@/lib/schema/column-descriptions.json";
 
@@ -143,7 +144,7 @@ const columnDefs = [
       if (!val) {
         return (
           <span className="text-[var(--color-text-tertiary)]">
-            {MISSING_VALUE.notAvailable}
+            {NO_COLUMN_DESCRIPTION}
           </span>
         );
       }

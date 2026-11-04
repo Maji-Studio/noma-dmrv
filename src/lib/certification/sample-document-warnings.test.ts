@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sampleDocumentWarnings } from "./sample-document-warnings";
+import { sampleDocumentWarningKeys, sampleDocumentWarnings } from "./sample-document-warnings";
 
 describe("sample document advisories", () => {
   it("warns only for a sampled batch with no uploaded lab report", () => {
@@ -21,4 +21,11 @@ it("warns about a missing histogram only for loaded, sampled 1,000-year evidence
   expect(sampleDocumentWarnings({ ...histogramFacts, sampling: "unsampled" })).toEqual([]);
   expect(sampleDocumentWarnings({ ...histogramFacts, durabilityOption: "200_year" })).toEqual([]);
   expect(sampleDocumentWarnings({ ...histogramFacts, durabilityOption: null })).toEqual([]);
+});
+
+it("keys the same gaps the sentences name", () => {
+  const facts = { sampling: "sampled" as const, creditBatchCode: "CB-1", hasLabReport: false, hasReflectanceHistogram: false, durabilityOption: "1000_year" as const };
+  expect(sampleDocumentWarningKeys(facts)).toEqual(["labReport", "reflectanceHistogram"]);
+  expect(sampleDocumentWarningKeys({ ...facts, durabilityOption: "200_year" })).toEqual(["labReport"]);
+  expect(sampleDocumentWarningKeys({ ...facts, sampling: "unsampled" })).toEqual([]);
 });

@@ -9,20 +9,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 type PageArea =
-  | "production"
-  | "infrastructure"
-  | "distribution"
+  | "records"
   | "verification"
-  | "certification";
+  | "partners"
+  | "certification"
+  | "setup";
 
 // Eyebrow label + accent-ink class per sidebar nav area. Verification and
 // certification read pink in the sidebar, so both share the pink-family ink.
 const AREA_META: Record<PageArea, { label: string; inkClass: string }> = {
-  production: { label: "Production", inkClass: "text-[var(--acc-prod-ink)]" },
-  infrastructure: { label: "Infrastructure", inkClass: "text-[var(--acc-infra-ink)]" },
-  distribution: { label: "Distribution", inkClass: "text-[var(--acc-dist-ink)]" },
+  records: { label: "Records", inkClass: "text-[var(--acc-prod-ink)]" },
   verification: { label: "Verification", inkClass: "text-[var(--acc-dist-ink)]" },
+  partners: { label: "Partners", inkClass: "text-[var(--acc-dist-ink)]" },
   certification: { label: "Certification", inkClass: "text-[var(--acc-dist-ink)]" },
+  setup: { label: "Setup", inkClass: "text-[var(--acc-infra-ink)]" },
 };
 
 interface PageHeaderProps {
@@ -31,7 +31,7 @@ interface PageHeaderProps {
   /** Override the eyebrow text (defaults to the area label). */
   eyebrow?: string;
   title: string;
-  /** One-line page description — every list page should have one. */
+  /** Optional one-line subtitle. Use it only when it adds something the title lacks: scope, what is counted, or a constraint. */
   subtitle?: string;
   /** Right-aligned slot, typically the New Entity button. */
   actions?: React.ReactNode;

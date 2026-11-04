@@ -25,7 +25,6 @@ import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
-import { DetailedOnly } from "./form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
@@ -53,6 +52,8 @@ interface MassMoistureInputProps {
   label?: string;
   registration: UseFormRegisterReturn;
   error?: string;
+  /** The caller renders the error line (`FieldErrorRow`), so it can span the row. */
+  errorOutside?: boolean;
   warning?: string;
   required?: boolean;
   disabled?: boolean;
@@ -82,6 +83,8 @@ interface MassMoistureInputProps {
 interface MoistureReadingProps {
   estimate?: MoistureFieldEstimate | null;
   reading?: unknown;
+  /** Drop the far-from-estimate advisory, where the surface already says what to do about it (the re-estimate notice). */
+  hideDeviationWarning?: boolean;
 }
 
 /**
@@ -108,6 +111,7 @@ export function MoistureField({
   step = STORED_PERCENT_INPUT_STEP,
   estimate,
   reading,
+  hideDeviationWarning,
   unit,
 }: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string; unit?: string }) {
   const guidance = estimate === undefined ? null : moistureReadingGuidance(estimate, parseWatchedNumber(reading));
@@ -117,7 +121,7 @@ export function MoistureField({
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       unit={unit}
       error={error}
-      warning={guidance?.warning ?? warning}
+      warning={(hideDeviationWarning ? undefined : guidance?.warning) ?? warning}
       // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
       helperText={[rangeHelperText, helperText].filter(Boolean).join(" ")}
       cue={guidance?.cue ?? cue}
@@ -147,6 +151,7 @@ export function WetMassField({
   label,
   registration,
   error,
+  errorOutside,
   warning,
   required,
   disabled,
@@ -166,6 +171,7 @@ export function WetMassField({
       label={label ?? qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel)}
       unit={unit}
       error={error}
+      errorOutside={errorOutside}
       warning={warning}
       helperText={helperText}
       cue={cue}
@@ -221,10 +227,9 @@ interface MassMoistureFieldsProps {
  *
  * The split is unframed on purpose: it is not a separate panel of output, it is
  * what the two inputs above it mean, so the bar and its key sit directly under
- * them and move as they change. `MoistureSplit` decides how much of the
- * calculation to show from the form detail level. Both levels draw the split
- * once wet mass or moisture has a value. Before that, the unresolved state is
- * explanation of what will appear, so only Detailed shows it.
+ * them and move as they change. The split is drawn once wet mass or moisture
+ * has a value; before that its unresolved state would only explain what will
+ * appear, so nothing renders. `MoistureSplit` keeps the ledger behind its (i).
  */
 export function MassMoistureFields({
   wet,
@@ -263,9 +268,9 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      {/* Hidden while nothing inside has content, so Simple adds no empty grid row. */}
+      {/* Hidden while nothing inside has content, so it adds no empty grid row. */}
       <div data-testid="mass-moisture-split" className="md:col-span-2 [&:not(:has(*:not(:empty)))]:hidden">
-        <DetailedOnly unless={started}>{split}</DetailedOnly>
+        {started && split}
         {splitFooter}
       </div>
     </div>

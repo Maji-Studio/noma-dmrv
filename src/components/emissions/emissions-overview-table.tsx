@@ -28,7 +28,7 @@ const COUNT_COLUMNS: readonly { state: EmissionLineState; count: keyof EmissionL
   { state: "empty", count: "notRecorded" },
   { state: "needsSetup", count: "needsSetup" },
 ];
-const NO_LINES_TEXT = "No lines";
+const NO_LINES_TEXT = "No components";
 
 const TH =
   "px-16 py-10 font-medium text-left whitespace-nowrap bg-[var(--sea)] lg:sticky lg:top-0 lg:z-[1] lg:[box-shadow:inset_0_-1px_0_var(--color-border-tertiary)]";
@@ -53,7 +53,7 @@ export function EmissionsOverviewTable({ rows, query, facilityId, onSort }: Emis
   const router = useRouter();
   return (
     <div className="overflow-x-auto lg:overflow-visible">
-      <table className="w-full body-small" aria-label="Credit batches by line state">
+      <table className="w-full body-small" aria-label="Credit batches by component state">
         <thead className="text-[var(--color-text-secondary)]">
           <tr>
             <SortHeader sort="code" query={query} onSort={onSort} />

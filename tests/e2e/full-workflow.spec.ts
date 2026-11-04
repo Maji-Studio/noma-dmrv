@@ -729,10 +729,10 @@ test.describe("Full E2E Workflow - UI Navigation", () => {
     const protectedRoutes = [
       "/facilities",
       "/reactors",
-      "/storage-locations",
+      "/storage-bins",
       "/suppliers",
       "/customers",
-      "/feedstocks",
+      "/feedstock-intake",
       "/production-runs",
     ];
 

@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import {
   biocharProductSourceAllocations,
-  biocharProducts,
   creditBatchProductionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -16,15 +15,15 @@ import {
 import { requireOrgScope } from "./utils";
 
 /**
- * Correlates a product-list row with a credit batch through
+ * Correlates a product and a credit batch (either may be a list row) through
  * the batch's production-run membership. This is the same lineage used by
  * credit-batch accounting, so operational list filters cannot drift from the
  * certification checklist.
  */
 export function inCreditBatchLineage(
   ctx: OrgContext,
-  creditBatchId: string,
-  biocharProductId: SQLWrapper,
+  creditBatchId: string | SQLWrapper,
+  biocharProductId: string | SQLWrapper,
 ): SQL {
   requireOrgScope(ctx);
 
@@ -32,7 +31,7 @@ export function inCreditBatchLineage(
     db
       .select({ value: sql`1` })
       .from(creditBatchProductionRuns)
-      .leftJoin(
+      .innerJoin(
         biocharProductSourceAllocations,
         and(
           eq(
@@ -43,17 +42,11 @@ export function inCreditBatchLineage(
             biocharProductSourceAllocations.organizationId,
             ctx.organizationId,
           ),
-        ),
-      )
-      .innerJoin(
-        biocharProducts,
-        and(
+          // Correlate through allocations so an outer product column is not shadowed.
           eq(
-            biocharProducts.id,
             biocharProductSourceAllocations.biocharProductId,
+            biocharProductId,
           ),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-          eq(biocharProducts.id, biocharProductId),
         ),
       )
       .where(
@@ -93,13 +86,12 @@ export function inCreditBatchProductionRuns(
   );
 }
 
-/** Delivery membership comes exclusively from net posted source-run effects. */
-export function inDeliveryCreditBatchLineage(ctx: OrgContext, creditBatchId: string, deliveryId: SQLWrapper): SQL {
+/** Source runs with positive net posted dry mass, netted separately per product/run. */
+export function deliverySourceRunIds(ctx: OrgContext, deliveryId: string | SQLWrapper): SQL {
   requireOrgScope(ctx);
-  return sql`exists (
-    select 1 from output_stock_allocations osa
+  return sql`
+    select osra.production_run_id from output_stock_allocations osa
     join output_stock_run_allocations osra on osra.allocation_id = osa.id and osra.organization_id = ${ctx.organizationId}
-    join credit_batch_production_runs cbpr on cbpr.production_run_id = osra.production_run_id and cbpr.organization_id = ${ctx.organizationId}
     join deliveries source_delivery on source_delivery.id = osa.delivery_id and source_delivery.organization_id = ${ctx.organizationId}
       and source_delivery.storage_location_id = osa.source_storage_location_id
     join production_runs source_run on source_run.id = osra.production_run_id and source_run.organization_id = ${ctx.organizationId}
@@ -107,24 +99,38 @@ export function inDeliveryCreditBatchLineage(ctx: OrgContext, creditBatchId: str
     join biochar_products source_product on source_product.id = osa.biochar_product_id and source_product.organization_id = ${ctx.organizationId}
       and source_product.facility_id = source_delivery.facility_id
     where osa.organization_id = ${ctx.organizationId} and osa.delivery_id = ${deliveryId}
-      and cbpr.credit_batch_id = ${creditBatchId}
     group by osa.biochar_product_id, osra.production_run_id
     having sum(osra.dry_mass_kg) > 0
+  `;
+}
+
+/** Delivery membership comes exclusively from net posted source-run effects. */
+export function inDeliveryCreditBatchLineage(ctx: OrgContext, creditBatchId: string | SQLWrapper, deliveryId: string | SQLWrapper): SQL {
+  requireOrgScope(ctx);
+  return sql`exists (
+    select 1 from credit_batch_production_runs cbpr
+    where cbpr.organization_id = ${ctx.organizationId} and cbpr.credit_batch_id = ${creditBatchId}
+      and cbpr.production_run_id in (${deliverySourceRunIds(ctx, deliveryId)})
   )`;
 }
 
-/** Applications match their frozen slice or their own source-run shares, including held-out applications. */
-export function inApplicationCreditBatchLineage(ctx: OrgContext, creditBatchId: string, applicationId: SQLWrapper): SQL {
+/** Batches from frozen slices and positive source-run shares, without applying mix-bin hold-out. */
+export function applicationCreditBatchIds(ctx: OrgContext, applicationId: string | SQLWrapper): SQL {
   requireOrgScope(ctx);
-  return sql`(exists (
-    select 1 from credit_batch_applications slice
+  return sql`
+    select slice.credit_batch_id from credit_batch_applications slice
     where slice.organization_id = ${ctx.organizationId} and slice.application_id = ${applicationId}
-      and slice.credit_batch_id = ${creditBatchId}
-  ) or exists (
-    select 1 from application_output_allocations share
+    union
+    select membership.credit_batch_id from application_output_allocations share
     join credit_batch_production_runs membership on membership.production_run_id = share.production_run_id
       and membership.organization_id = ${ctx.organizationId}
     where share.organization_id = ${ctx.organizationId} and share.application_id = ${applicationId}
-      and membership.credit_batch_id = ${creditBatchId} and (share.wet_mass_kg > 0 or share.dry_mass_kg > 0)
-  ))`;
+      and (share.wet_mass_kg > 0 or share.dry_mass_kg > 0)
+  `;
+}
+
+/** Applications match their frozen slice or their own source-run shares, including held-out applications. */
+export function inApplicationCreditBatchLineage(ctx: OrgContext, creditBatchId: string | SQLWrapper, applicationId: string | SQLWrapper): SQL {
+  requireOrgScope(ctx);
+  return sql`${creditBatchId} in (${applicationCreditBatchIds(ctx, applicationId)})`;
 }

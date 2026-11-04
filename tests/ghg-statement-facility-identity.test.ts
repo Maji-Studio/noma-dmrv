@@ -80,7 +80,7 @@ function makeOtherOrgContext(): OrgContext {
   return {
     userId: "user_test_ghg_identity_other",
     organizationId: OTHER_ORG_ID,
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   };
 }

@@ -26,6 +26,34 @@ interface RecordUpdateInputs {
 import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
 
+/** The second sentence of the In use notice: what to do. The default `howToFree` of an In use lock. */
+export const IN_USE_HOW_TO_FREE = "To change them, first correct or remove those records.";
+/** The same sentence when one record holds the lock. */
+export const IN_USE_HOW_TO_FREE_ONE = "To change them, first correct or remove that record.";
+/** The refusal variants: a refusal message has no "them" to point back at. */
+export const IN_USE_REFUSAL_HOW_TO_FREE = "To change this, first correct or remove the records that use it.";
+export const IN_USE_REFUSAL_HOW_TO_FREE_ONE = "To change this, first correct or remove the record that uses it.";
+
+/** The Sent sentence: what to do once Isometric returns the GHG Statement. */
+export const SENT_HOW_TO_FREE = "If Isometric sends the GHG Statement back, refresh its status to edit again.";
+
+/** The Sent sentence when sending was started and not finished: what to do, for one or several Removals. */
+export const INTERRUPTED_HOW_TO_FREE_ONE = "To edit again, delete or resume that Removal, or review its records in Isometric.";
+export const INTERRUPTED_HOW_TO_FREE = "To edit again, delete or resume those Removals, or review their records in Isometric.";
+/** The same sentence when other holders were sent: the lock also waits for Isometric's GHG Statement. */
+export const INTERRUPTED_MIXED_HOW_TO_FREE_ONE = "To edit again, delete or resume that Removal, and wait for Isometric to send the GHG Statement back.";
+export const INTERRUPTED_MIXED_HOW_TO_FREE = "To edit again, delete or resume those Removals, and wait for Isometric to send the GHG Statement back.";
+
+/**
+ * The In use sentence for a surface and holder count. Only for the default
+ * `howToFree`; a lock with its own sentence keeps it.
+ */
+export function inUseHowToFree(surface: "notice" | "refusal", holderCount: number): string {
+  const one = holderCount === 1;
+  if (surface === "notice") return one ? IN_USE_HOW_TO_FREE_ONE : IN_USE_HOW_TO_FREE;
+  return one ? IN_USE_REFUSAL_HOW_TO_FREE_ONE : IN_USE_REFUSAL_HOW_TO_FREE;
+}
+
 const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted", "rejected", "superseded"]);
 const REMOTELY_SUBMITTED_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted"]);
 
@@ -42,9 +70,21 @@ export function isRemoteSubmission(submission: RecordLockSubmission): boolean {
   return REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus) || submissionHasRemoteEffect(submission);
 }
 
+export function isSubmittedAttempt(submission: RecordLockSubmission): boolean {
+  return Boolean(submission.submittedAt) || REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus);
+}
+
+function isIdleAttempt(submission: RecordLockSubmission): boolean {
+  return !submission.inFlight && isTerminalAttemptStatus(submission.status);
+}
+
+/** The status half of a return; freshness and attempt coverage are checked by the callers below. */
+export function hasReturnedStatementStatus(statement: Pick<RecordLockStatement, "status" | "submittedToVerifier">): boolean {
+  return statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier);
+}
+
 export function isReturnedStatement(statement: RecordLockStatement): boolean {
-  return statement.fresh && !statement.inFlight &&
-    (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
+  return statement.fresh && !statement.inFlight && hasReturnedStatementStatus(statement);
 }
 
 /** Client-safe facts. Callers resolve dependencies and every ledger version. */
@@ -99,13 +139,33 @@ export interface RecordLock<Field extends string = string> {
   /** Fields accepted while In use, subject to ordinary validation and stock sufficiency. */
   freeFields: readonly Field[];
   howToFree: string | null;
+  /**
+   * Sent only: the subset of `heldBy` whose sending was started and not
+   * finished, so those records were not sent. Absent when every holder was sent.
+   */
+  interruptedHolders?: readonly RecordLockHolder[];
   /** Open or In use only: the returned Removals whose resubmission will carry corrections. */
   returnedBy?: readonly RecordLockReturn[];
 }
 
+/**
+ * Sending was started and not finished: still Sent, but nothing reached
+ * Isometric (no submitted or accepted attempt, no remote effect) and no
+ * statement covers it. An earlier rejected attempt does not change that.
+ */
+/**
+ * Sent, with no statement and no attempt that Isometric took as submitted or
+ * accepted. A draft already created at Isometric still counts: sending it was
+ * started and not finished, so delete or resume is the way out.
+ */
+export function isInterruptedRemoval(removal: RecordLockRemoval): boolean {
+  return isSentRemoval(removal) && !removal.statements.length &&
+    !removal.submissions.some(submission => REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus));
+}
+
 export function isSentRemoval(removal: RecordLockRemoval): boolean {
   const unknownOrInFlight = removal.submissions.some(submission =>
-    submission.inFlight || !isTerminalAttemptStatus(submission.status),
+    !isIdleAttempt(submission),
   );
   if (unknownOrInFlight) return true;
   const allStatementsSafe = removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
@@ -131,6 +191,35 @@ export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
     removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
 }
 
+/**
+ * Display only, from persisted lineage: the same Returned rule as a fresh read,
+ * so a mixed, unknown or superseded lineage never reads as returned. Never
+ * authorizes an edit; that still needs `isReturnedRemoval` on a fresh read.
+ */
+export function readsAsReturnedFromPersisted(removal: RecordLockRemoval): boolean {
+  return isReturnedRemoval({ ...removal, statements: removal.statements.map(statement => ({ ...statement, fresh: true })) });
+}
+
+/** Entry corrections use the existing returned state and every shared lineage holder. */
+export function isRemovalCorrectionWindowOpen(removal: RecordLockRemoval, lineage: readonly RecordLockRemoval[] = [removal]): boolean {
+  return isReturnedRemoval(removal) && lineage.every((holder) =>
+    holder.submissions.every(isIdleAttempt) &&
+    // An unsubmitted DRAFT on another holder has never locked its lineage.
+    holder.statements.every((statement) => isReturnedStatement(statement) ||
+      (statement.fresh && !statement.inFlight && statement.status === "DRAFT" && !statement.submittedToVerifier)));
+}
+
+/** Display only: persisted statuses use the correction rule for every shared holder.
+ * Missing/failed lineage reads must be rejected by the caller, never replaced by [].
+ */
+export function readsAsCorrectionWindowOpenFromPersisted(removalId: string, lineage: readonly RecordLockRemoval[]): boolean {
+  const persisted = lineage.map(holder => ({ ...holder,
+    statements: holder.statements.map(statement => ({ ...statement, fresh: true })),
+  }));
+  const removal = persisted.find(holder => holder.id === removalId);
+  return !!removal && isRemovalCorrectionWindowOpen(removal, persisted);
+}
+
 function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {
   const returned = facts.removals.filter(isReturnedRemoval).map(removal => ({
     removalId: removal.id, statements: removal.statements.map(statement => ({ id: statement.id, status: statement.status })),
@@ -139,16 +228,19 @@ function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {
 }
 
 function recordLock<Kind extends keyof RecordUpdateInputs>(facts: RecordLockFacts, freeFields: readonly (keyof RecordUpdateInputs[Kind] & string)[]): RecordLock<keyof RecordUpdateInputs[Kind] & string> {
-  const heldBy = [...new Map(facts.removals.filter(isSentRemoval).map(removal => [removal.id, { kind: "removal", id: removal.id, ...(removal.label ? { label: removal.label } : {}) }])).values()];
+  const sent = facts.removals.filter(isSentRemoval);
+  const toHolder = (removal: RecordLockRemoval): RecordLockHolder => ({ kind: "removal", id: removal.id, ...(removal.label ? { label: removal.label } : {}) });
+  const heldBy = [...new Map(sent.map(removal => [removal.id, toHolder(removal)])).values()];
   if (heldBy.length) {
-    const interrupted = facts.removals.some(removal => isSentRemoval(removal) && !removal.statements.length &&
-      removal.submissions.some(submission => submission.status !== "submitted" && submission.status !== "accepted"));
-    return { level: "sent", heldBy, freeFields: [], howToFree: interrupted
-      ? "Delete or resume the interrupted Removal, or review its records in Isometric."
-      : "Wait for Isometric to return the covering GHG Statement, then refresh its status." };
+    const interruptedHolders = [...new Map(sent.filter(isInterruptedRemoval).map(removal => [removal.id, toHolder(removal)])).values()];
+    if (interruptedHolders.length === heldBy.length) return { level: "sent", heldBy, freeFields: [], interruptedHolders,
+      howToFree: heldBy.length > 1 ? INTERRUPTED_HOW_TO_FREE : INTERRUPTED_HOW_TO_FREE_ONE };
+    if (interruptedHolders.length) return { level: "sent", heldBy, freeFields: [], interruptedHolders,
+      howToFree: interruptedHolders.length > 1 ? INTERRUPTED_MIXED_HOW_TO_FREE : INTERRUPTED_MIXED_HOW_TO_FREE_ONE };
+    return { level: "sent", heldBy, freeFields: [], howToFree: SENT_HOW_TO_FREE };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
-    howToFree: "Correct or remove the records that use it first.", ...returnedBy(facts) };
+    howToFree: IN_USE_HOW_TO_FREE, ...returnedBy(facts) };
   return { level: "open", heldBy: [], freeFields, howToFree: null, ...returnedBy(facts) };
 }
 
@@ -164,7 +256,7 @@ export const recordLocks = {
   order: (facts: RecordLockFacts) => recordLock<"order">(facts, ["code", "quantityKg", "orderDate", "packaging"]),
   delivery: (facts: RecordLockFacts) => recordLock<"delivery">(facts, ["code", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote"]),
   application: (facts: RecordLockFacts) => recordLock<"application">(facts, ["code", "applicationDate", "fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethod", "evidenceMethod", "gpsLatitude", "gpsLongitude", "gisBoundary", "soilTemperatureSource", "soilTemperatureC"]),
-  creditBatch: (facts: RecordLockFacts) => recordLock<"creditBatch">(facts, ["code", "siteManagementNotes", ...(facts.dependents.every(holder => holder.kind === "sample") ? ["startDate", "endDate", "facilityId", "feedstockTypeId", "productionRunIds"] as const : [])]),
+  creditBatch: (facts: RecordLockFacts) => recordLock<"creditBatch">(facts, ["code", "name", "siteManagementNotes", ...(facts.dependents.every(holder => holder.kind === "sample") ? ["startDate", "endDate", "facilityId", "feedstockTypeId", "productionRunIds"] as const : [])]),
   removal: (facts: RecordLockFacts) => recordLock<"removal">(facts, []),
   stockEntry: (facts: RecordLockFacts) => recordLock<"stockEntry">(facts, []),
   storageLocation: (facts: RecordLockFacts) => recordLock<"storageLocation">(facts, ["code", "name", "capacityKg", "storageDescription", "storageMethod", "drawOrder", "stockMode", "mergedAt", "formulationId"]),
@@ -180,7 +272,14 @@ export function recordInUseFreeFields(kind: RecordLockKind): readonly string[] {
 /** Every lock refusal names its holder, then explains how to free the record. */
 export function withRecordLockGuidance(message: string, lock: RecordLock): string {
   if (lock.level === "open") return message;
-  return `${message}${formatRecordLockHolders(lock)} ${lock.howToFree ?? "Correct or remove the records that use it first."}`;
+  // The notice's "them" points at the fields it just named; a refusal message has no such referent.
+  const howToFree = lock.level === "inUse" && (!lock.howToFree || lock.howToFree === IN_USE_HOW_TO_FREE)
+    ? inUseHowToFree("refusal", lock.heldBy.length)
+    : lock.howToFree;
+  // Mixed: say which holders were not sent, so "delete or resume" has a referent.
+  const mixed = lock.level === "sent" && lock.interruptedHolders?.length && lock.interruptedHolders.length < lock.heldBy.length;
+  const unfinished = mixed ? ` Sending ${describeHolders(lock.interruptedHolders ?? [])} to Isometric was started and not finished.` : "";
+  return `${message}${formatRecordLockHolders(lock)}${unfinished} ${howToFree}`;
 }
 
 const HOLDER_LABELS: Record<string, string> = {
@@ -189,10 +288,15 @@ const HOLDER_LABELS: Record<string, string> = {
   application: "application", creditBatch: "credit batch", stockEntry: "stock entry", storageLocation: "storage bin",
 };
 
-export function formatRecordLockHolders(lock: RecordLock): string {
-  const holders = lock.heldBy.map(holder => {
+function describeHolders(holderList: readonly RecordLockHolder[]): string {
+  const holders = holderList.map(holder => {
     const kind = HOLDER_LABELS[holder.kind] ?? "record";
     return holder.label ? `${kind} ${holder.label}` : `${/^[aeiou]/i.test(kind) ? "an" : "a"} ${kind}`;
   });
-  return holders.length ? ` Held by ${[...new Set(holders)].join(", ")}.` : "";
+  return [...new Set(holders)].join(", ");
+}
+
+export function formatRecordLockHolders(lock: RecordLock): string {
+  const holders = describeHolders(lock.heldBy);
+  return holders ? ` Held by ${holders}.` : "";
 }

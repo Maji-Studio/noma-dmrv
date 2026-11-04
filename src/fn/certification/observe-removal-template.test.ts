@@ -5,7 +5,7 @@ import { normalizeTemplateDefinition, type GhgEntryTemplate } from "@/lib/isomet
 import type { IsometricClient } from "@/lib/isometric";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import sandbox from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
-import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-removal-template";
+import { enrichmentForObservation, observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-removal-template";
 
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservation: vi.fn(), observeTemplate: vi.fn() }));
 vi.mock("@/lib/isometric/template-observations/load-enrichment", () => ({ loadTemplateEnrichment: vi.fn() }));
@@ -28,6 +28,15 @@ beforeEach(() => {
   vi.mocked(loadTemplateEnrichment).mockResolvedValue(enrichment);
 });
 describe("template enrichment reuse", () => {
+  it("returns reused enrichment without invoking the lazy blueprint loader", async () => {
+    const loadBlueprints = vi.fn(async () => []);
+    expect(await enrichmentForObservation({
+      ...input, definition: normalizeTemplateDefinition(template), previous: previous(0), loadBlueprints,
+    })).toEqual({ enrichment, reused: true });
+    expect(loadBlueprints).not.toHaveBeenCalled();
+    expect(loadTemplateEnrichment).not.toHaveBeenCalled();
+    expect(observeTemplate).not.toHaveBeenCalled();
+  });
   it("reuses a complete identical definition within the 24-hour TTL and still observes it", async () => {
     vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0));
     await observeRemovalTemplate(ctx, input);

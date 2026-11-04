@@ -1,21 +1,20 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
+import { assert, afterEach, beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
 vi.mock("@/data-access/facility-emissions-overview", () => ({ loadFacilityEmissionsOverviewScope: vi.fn() }));
+vi.mock("@/data-access/emission-line-comments", () => ({ listEmissionLineCommentsForBatches: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("@/data-access/batch-emission-automatic-figures", () => ({ loadBatchesEmissionAutomaticFacts: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn() }));
-// Prevent importing the detail loader's unused database dependencies in this unit suite.
-vi.mock("@/data-access/emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
-vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
-vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
 import { loadFacilityEmissionsOverviewScope } from "@/data-access/facility-emissions-overview";
+import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
+import { loadBatchesEmissionLines } from "./batches-emission-lines";
 import { loadFacilityEmissionsOverview } from "./facility-emissions-overview";
 
 const ctx = makeTestOrgContext();
@@ -41,10 +40,11 @@ function entry(componentId: string, overrides = {}) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadBatchEmissionEntryCarry).mockResolvedValue([]);
+  vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue([]);
   vi.useFakeTimers();
   // It is still October in Los Angeles, even though UTC has crossed into November.
   vi.setSystemTime(new Date("2026-11-01T03:00:00Z"));
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "America/Los_Angeles", batches: [batch, { ...batch, id: "old", code: "CB-1", startDate: "2026-09-01" }] } as never);
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
@@ -72,20 +72,50 @@ it("derives all six states, facility-month counts and last occurrence with bulk 
   expect(getTemplateObservationsByIds).toHaveBeenCalledExactlyOnceWith(ctx, ["missing"]);
   expect(listEmissionEntriesForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
   expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
+  expect(listEmissionLineCommentsForBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["new", "old"]);
 });
 
-it("ignores entries behind the disabled flag and keeps the overview shape", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
+it.each([
+  { state: "handled", applications: 1, enrichmentComplete: true,
+    counts: { total: 0, open: 0, recorded: 0, notRecorded: 0, needsReview: 0 } },
+  { state: "handled with comment", applications: 1, enrichmentComplete: true, comment: true,
+    counts: { total: 1, open: 0, recorded: 1, notRecorded: 0, needsReview: 0 } },
+  { state: "empty", applications: 0, enrichmentComplete: true,
+    counts: { total: 1, open: 1, recorded: 0, notRecorded: 1, needsReview: 0 } },
+  { state: "needsReview", applications: 1, enrichmentComplete: false,
+    counts: { total: 1, open: 1, recorded: 0, notRecorded: 0, needsReview: 1 } },
+])("counts $state sequestration through the facility overview read model", async ({ applications, enrichmentComplete, counts, comment }) => {
+  const storageObservation: EntryObservation & { id: string } = {
+    ...observation,
+    definition: { groups: [{ id: "storage", key: "co2-stored", displayName: "CO₂ stored", description: "", components: [{
+      id: "sequestration", displayName: "Sequestration", description: "",
+      blueprintKey: "biochar_sequestration_1000_year_f_durable_max",
+      inputs: [{ key: "product_mass", type: "monitored", quantityKind: "mass" }],
+    }] }] },
+    enrichment: enrichmentComplete ? { sequestration: { product_mass: { unit: "kg" } } } : {},
+    lineSources: { sequestration: { scope: "operating", origin: "reviewed", automaticSource: "sequestration", entryPolicy: "none" } },
+  };
+  vi.mocked(loadFacilityEmissionsOverviewScope).mockResolvedValue({ timezone: "UTC", batches: [batch] } as never);
+  vi.mocked(getLatestTemplateObservations).mockResolvedValue([storageObservation] as never);
+  vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
+  vi.mocked(listEmissionLineCommentsForBatches).mockResolvedValue(comment ? [{
+    id: "comment", organizationId: ctx.organizationId, creditBatchId: batch.id,
+    componentId: "sequestration", body: "Check this application", version: 1,
+    createdAt: new Date(), updatedAt: new Date(), createdBy: ctx.userId, updatedBy: ctx.userId,
+  }] : []);
+  vi.mocked(loadBatchesEmissionAutomaticFacts).mockResolvedValue({
+    new: { automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: applications } },
+  });
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
-  expect(result.batches[0]).toMatchObject({ entriesThisMonth: 0, lastEntryOn: null,
-    lineCounts: { total: 6, open: 6, notRecorded: 5, needsSetup: 1 } });
-  expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
+  expect(result.batches).toHaveLength(1);
+  expect(result.batches[0].lineCounts).toEqual({ ...counts, fileMissing: 0, needsSetup: 0 });
 });
 
 it("shows one setup item for an unpinned or unread template without failing other batches", async () => {
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([]);
   const result = await loadFacilityEmissionsOverview(ctx, "facility");
-  expect(result.batches[0].lineCounts).toMatchObject({ total: 1, open: 1, needsSetup: 1 });
+  expect(result.batches[0]).toMatchObject({ entriesThisMonth: 3, lastEntryOn: "2026-10-16",
+    lineCounts: { total: 1, open: 1, needsSetup: 1 } });
 });
 
 it("authorizes the facility even when there are no batches and avoids other reads", async () => {
@@ -95,4 +125,18 @@ it("authorizes the facility even when there are no batches and avoids other read
   expect(getLatestTemplateObservations).not.toHaveBeenCalled();
   vi.mocked(loadFacilityEmissionsOverviewScope).mockRejectedValue(new Error("Facility not found"));
   await expect(loadFacilityEmissionsOverview(ctx, "foreign")).rejects.toThrow("Facility not found");
+});
+
+it("isolates unread and unpinned templates while deriving review lines for a sibling", async () => {
+  const result = await loadBatchesEmissionLines(ctx, [
+    batch, { ...batch, id: "unread", removalTemplateId: "unread-template" },
+    { ...batch, id: "unpinned", removalTemplateId: null },
+  ]);
+  const ready = result.get("new")!;
+  assert(ready.status === "ready");
+  expect(ready.lines.filter(line => line.state === "needsReview")).toHaveLength(1);
+  expect(result.get("unread")).toEqual({ status: "blocked", blocker: "templateNotFullyRead", storedEntries: [] });
+  expect(result.get("unpinned")).toEqual({ status: "blocked", blocker: "unpinnedTemplate", storedEntries: [] });
+  expect(getLatestTemplateObservations).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", ["template", "unread-template"]);
+  expect(loadBatchesEmissionAutomaticFacts).toHaveBeenCalledExactlyOnceWith(ctx, ["new"]);
 });

@@ -14,15 +14,14 @@ import {
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import {
   IsometricApiError,
   listProjects,
-  listComponentBlueprints,
   listGhgEntryTemplates,
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { assertSequestrationTemplateSelectable } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   facilityEmissionConfigSchema,
   saveMappingSchema,
@@ -32,7 +31,9 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
-import { loadRemovalTemplateFacts } from "./removal-template-facts";
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
@@ -98,11 +99,23 @@ async function listProjectsWithConfiguration(
     if (err instanceof IsometricApiError && err.code === "not_configured") {
       return { projects: [], isConfigured: false };
     }
+    if (
+      err instanceof IsometricApiError &&
+      (err.status === HTTP_UNAUTHORIZED || err.status === HTTP_FORBIDDEN)
+    ) {
+      throw new DomainError(
+        "registry_read_refused",
+        "Isometric refused the saved keys. Replace them in Settings, Registry.",
+      );
+    }
     throw err;
   }
 }
 
-// Org Owner/Admin-only: this action rewires which Isometric project every
+const PRODUCTION_CONFIRMATION_MESSAGE =
+  "Confirm you want to save against the production Isometric environment.";
+
+// Org Admin-only: this action rewires which Isometric project every
 // future Removal / GHG-statement submission for the facility targets.
 // Platform admins also pass through requireOrgRole.
 export async function saveFacilityCertifierMapping(
@@ -119,9 +132,9 @@ export async function saveFacilityCertifierMapping(
       env.ISOMETRIC_ENVIRONMENT === "production" &&
       !parsed.confirmProduction
     ) {
-      throw new SafeError(
-        "Confirm you want to save against the production Isometric environment.",
-      );
+      throw new DomainError("validation_failed", PRODUCTION_CONFIRMATION_MESSAGE, {
+        issues: [{ path: ["confirmProduction"], code: "validation_failed", message: PRODUCTION_CONFIRMATION_MESSAGE }],
+      });
     }
 
     const client = await resolveIsometricClient(orgCtx);
@@ -139,42 +152,18 @@ export async function saveFacilityCertifierMapping(
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
       throw new SafeError("Selected project does not exist on Isometric.");
     }
-    if (parsed.defaultRemovalTemplateId) {
-      const templates = await listGhgEntryTemplates(client, parsed.externalProjectId);
-      const selectedTemplate = templates.find(
-        (t) => t.id === parsed.defaultRemovalTemplateId,
-      );
-      if (!selectedTemplate) {
-        throw new SafeError(
-          "Selected template does not belong to the chosen project.",
-        );
-      }
-      // We only submit biochar REMOVAL credits; a REDUCTION template bound
-      // here would mislabel every future GHG entry created from it.
-      if (selectedTemplate.credit_type !== "REMOVAL") {
-        throw new SafeError(
-          "Selected template is not a REMOVAL template. Only REMOVAL templates can be used for biochar submissions.",
-        );
-      }
-      assertSequestrationTemplateSelectable(selectedTemplate);
-      await loadRemovalTemplateFacts(orgCtx, {
-        client, externalProjectId: parsed.externalProjectId, template: selectedTemplate,
-        blueprints: await listComponentBlueprints(client),
-      });
-    }
 
     return upsertCertifierProject(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
-      defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
       externalFacilityId: parsed.externalFacilityId,
     });
   });
 }
 
-// Org Owner/Admin-only: unlinking strands every in-flight submission's audit
+// Org Admin-only: unlinking strands every in-flight submission's audit
 // trail against an external project the operator can no longer reach.
 export async function deleteFacilityCertifierMapping(
   facilityId: string,
@@ -194,7 +183,7 @@ export async function loadIsometricProjectTemplates(
   });
 }
 
-// Org Owner/Admin-only: this per-facility emission-estimate config feeds the
+// Org Admin-only: this per-facility emission-estimate config feeds the
 // reference soil temperature submitted with every 200-year removal.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,

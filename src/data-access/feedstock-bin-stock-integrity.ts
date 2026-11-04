@@ -18,10 +18,12 @@
  * bin (ADR 0027).
  */
 
-import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
+  facilities,
   binMovements,
   productionRunFeedstockDraws,
   productionRuns,
@@ -29,8 +31,8 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
-import { DomainError } from "@/lib/domain-errors";
-import { formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { DomainError, type DomainIssue } from "@/lib/domain-errors";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
@@ -83,6 +85,7 @@ async function listLaneWithdrawals(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationId: string,
+  timeZone: string,
 ): Promise<ConflictRef[]> {
   const runs = await tx
     .selectDistinct({ id: productionRuns.id, code: productionRuns.code })
@@ -133,6 +136,7 @@ async function listLaneWithdrawals(
       : [];
 
   const movementSlots = remaining - products.length;
+  const reversal = alias(binMovements, "loss_reversal");
   const movements =
     movementSlots > 0
       ? await tx
@@ -148,6 +152,16 @@ async function listLaneWithdrawals(
               eq(binMovements.storageLocationId, storageLocationId),
               eq(binMovements.lane, "feedstock"),
               lt(binMovements.massDeltaKg, 0),
+              or(
+                ne(binMovements.movementType, "loss"),
+                notExists(tx.select({ id: reversal.id }).from(reversal).where(and(
+                  eq(reversal.organizationId, ctx.organizationId),
+                  eq(reversal.storageLocationId, storageLocationId),
+                  eq(reversal.lane, "feedstock"),
+                  eq(reversal.movementType, "adjustment"),
+                  eq(reversal.correctsMovementId, binMovements.id),
+                ))),
+              ),
             ),
           )
           .orderBy(binMovements.createdAt, binMovements.id)
@@ -169,7 +183,7 @@ async function listLaneWithdrawals(
       entity: STOCK_CONFLICT_ENTITY.binMovement,
       id: movement.id,
       // Feedstock history shows the reason and recorded time, not an output physical date.
-      code: conflictCode(`${movement.reason} (${formatDateTime(movement.createdAt)})`),
+      code: conflictCode(`${movement.reason} (${formatFacilityDateTime(movement.createdAt, timeZone)})`),
     })),
   ];
 }
@@ -178,6 +192,7 @@ async function listLaneWithdrawals(
  * Refuse the transaction when any of these bins now derives a negative wet
  * feedstock lane. The conflict names the offending bin, and the blockers
  * name its withdrawals for the operator to review.
+ * Callers can point the issue at the input responsible for that bin's shortfall.
  * A reduction that lands on exactly zero passes.
  */
 export async function assertFeedstockBinLanesNotNegative(
@@ -185,6 +200,7 @@ export async function assertFeedstockBinLanesNotNegative(
   tx: DbTransaction,
   storageLocationIds: ReadonlyArray<string | null | undefined>,
   write: FeedstockStockWrite,
+  issuePath: (storageLocationId: string) => DomainIssue["path"] = () => ["storageLocationId"],
 ): Promise<void> {
   requireOrgScope(ctx);
   const binIds = [
@@ -193,8 +209,12 @@ export async function assertFeedstockBinLanesNotNegative(
   if (binIds.length === 0) return;
 
   const bins = await tx
-    .select({ id: storageLocations.id, code: storageLocations.code })
+    .select({ id: storageLocations.id, code: storageLocations.code, timeZone: facilities.timezone })
     .from(storageLocations)
+    .innerJoin(facilities, and(
+      eq(facilities.id, storageLocations.facilityId),
+      eq(facilities.organizationId, ctx.organizationId),
+    ))
     .where(
       and(
         inArray(storageLocations.id, binIds),
@@ -205,14 +225,15 @@ export async function assertFeedstockBinLanesNotNegative(
   for (const bin of bins) {
     const [stock] = await deriveLaneStock(ctx, tx, { storageLocationIds: [bin.id], lanes: "feedstock" });
     if (isNegativeStock(stock.feedstockStockWetKg)) {
-      const blockers = await listLaneWithdrawals(ctx, tx, bin.id);
+      const blockers = await listLaneWithdrawals(ctx, tx, bin.id, bin.timeZone);
       const message = negativeLaneMessage(write, bin.code, Math.abs(stock.feedstockStockWetKg));
+      const issueMessage = `Bin ${bin.code} would go ${formatMassKg(Math.abs(stock.feedstockStockWetKg))} below zero.`;
       // Compare the proposed intake supply with existing withdrawals. Movement
       // adjustments contribute to supply or demand according to their net sign.
       throw new DomainError("insufficient_stock", message, {
         conflict: { entity: CONFLICT_ENTITY, id: bin.id, code: conflictCode(bin.code) },
         blockers,
-        issues: [{ path: ["storageLocationId"], code: "insufficient_stock", message, meta: {
+        issues: [{ path: issuePath(bin.id), code: "insufficient_stock", message: issueMessage, meta: {
           storageLocationId: bin.id,
           availableWetKg: stock.feedstockIntakeWetKg + Math.max(stock.feedstockMovementDeltaKg, 0),
           requestedWetKg: stock.feedstockConsumedWetKg + Math.max(-stock.feedstockMovementDeltaKg, 0),

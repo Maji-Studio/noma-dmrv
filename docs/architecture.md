@@ -24,13 +24,37 @@ components (UI)
   `OrgContext`) live in directive-free modules. Migrated writes use
   `src/lib/operations/`; legacy cores remain under fn/**/*-core.ts.
   A `"use server"` file exports only actions that resolve their own context
-  from the session (`withAction`); CI enforces this with
+  from the session (`withAction`, or `withCreate` for keyed creates); CI enforces this with
   `pnpm check:server-action-exports`.
 - `src/lib/operations/` defines each operation as an `id`, an `input` Zod
   schema and an `execute` function. `runOperation` serves transports with
   JSON-normalized results, idempotency and dry run. `runOperationInProcess`
-  serves Server Actions with native types, including `Date` and `undefined`.
-  The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
+  serves Server Actions with native types. Keyless calls preserve `Date` and
+  `undefined` directly. Keyed create actions accept an optional UUID `intentKey`
+  through `withCreate(callback, intent, options)` in `src/fn/with-create.ts`.
+  This directive-free helper composes `withAction` and gives the callback
+  `(ctx, create)`. Validate the payload first, then call `create(operation, input)`
+  once. The helper parses the retry options lazily and forwards them to the runner;
+  auth, rate limits, error mapping and logging still come from `withAction`.
+  Keep post-save projections and follow-up work inside the callback.
+  With a key, the runner reuses the idempotency store under an app user namespace, scoped
+  to the Organization, and revives tagged Dates on both the first result and
+  replay. Other keyed values follow JSON semantics. Create hooks use `useIntentMutation` to keep one key
+  per draft. Their `mutationFn(variables, intentKey)` passes `{ intentKey }` to
+  the action and throws on a failed `ActionResult`. A retry after a failure
+  reuses the key. The helper rotates it after a successful save, before the
+  caller's `onSuccess`, or when `startDraft()` is called for a new draft. Equal values with
+  a new key create a separate entry. App replay uses the store's existing
+  retention period. Quick-add dialogs that submit through `useQuickAddSubmit`
+  hold their draft key in that hook and call its `startDraft` on open or close.
+  API key creation is the one keyed create outside the runner: a retry
+  replaces the unseen key instead of replaying it ([auth.md](./auth.md)).
+  It reads the same lazily parsed key through `create.key`; only this adapter
+  may use that property. The keyed action shape is
+  `withCreate((_ctx, create) => create(op, schema.parse(input)), intent, options)`.
+  `create-action-coverage.test.ts` checks the inventory, wrapper wiring, single
+  parse point and client keys. Every create is keyed or a documented exception;
+  domain stock-posting keys keep their existing paths.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
@@ -39,11 +63,24 @@ components (UI)
   `delete_order`). Application writes use the registered `record_application`,
   `update_application` and `delete_application` operations. Product and delivery deletes use the app-only `delete_posted_biochar_product`
   and `delete_posted_delivery` operations, with activity capture and document cleanup. Lost mass form edits run `record_output_stock_movement`
-  with the unpublished `checkFormEditLock` option. Delivery updates run
+  with the unpublished `checkFormEditLock` option; Lost mass form deletes run the app-only `delete_output_stock_loss`. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared
   stock writer with the same dependency check as native corrections (ADR 0035).
   These UI options and the delivery operation are not published in REST/MCP.
+  Production sample, production incident, transport leg, driver, operator and
+  credit batch creates run app-only operations (`record_production_sample`,
+  `record_production_incident`, `record_transport_leg`, `create_driver`,
+  `create_operator`, `create_credit_batch`) so their forms can send an intent
+  key; the credit batch roll-up still runs after the runner returns.
+  Facility, reactor, storage-bin sheet and production-process starts also use
+  app-only operations (`create_facility`, `create_reactor`,
+  `create_storage_location`, `start_new_production_process`). Settings and
+  quick-add share `create_feedstock_type`. The storage-bin sheet keeps its own
+  operation because it accepts storage method/description and generates `SL`
+  codes; quick-add uses `FB`/`BB`/`PB` and returns an enriched option.
+  All their reference reads, locks and inserts use the runner transaction;
+  generated-code retries use savepoints. These reference creates add no activity.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -91,7 +128,8 @@ components (UI)
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
 `ActionResult`.
-Every server action uses `withAction`; do not hand-roll
+Every server action uses `withAction` (keyed creates compose it through
+`withCreate`); do not hand-roll
 `try { requireOrgContext() } catch` in new or existing actions. Pass the entity's
 log message and `op` via `log`, the operator-facing fallback via
 `fallbackMessage`, and a Zod prefix via `zodErrorPrefix`. Use `mapError` for
@@ -116,8 +154,8 @@ export async function createItem(input: CreateItem) {
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
 windowMs } })`, checked after auth so it keys on the resolved `userId`. It
-applies to expensive or abuse-prone actions: certification submits and geo
-geocode/route are the current users.
+applies to expensive or abuse-prone actions: certification submits, geo
+geocode/route and the Profile password change are the current users.
 
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
@@ -130,6 +168,9 @@ own; the returned shape is preserved in the action's result type), or `undefined
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
+`toActionFailure` maps a value PostgreSQL refuses for holding U+0000 (SQLSTATE
+22021 or 22P05) to a `validation_failed` result and does not log it; boundaries
+with their own catch call `nulCharacterFailure` before their fallback.
 
 ### `SafeError` vs `Error`
 
@@ -162,10 +203,15 @@ history-row label, and the stale-version sentinel
 parent the operator manages it from: a feedstock-type delete blocked by a
 production process names its facility, one blocked by a formulation
 ingredient names its formulation. Mutation hooks re-throw a
-failure through `throwActionError` (`src/lib/stale-version.ts`): a stale save
-becomes `StaleVersionError`, any other conflict becomes `ConflictError` with
-its blockers. Forms are expected to honor both; the first list consumer is
-the feedstock edit sheet, which shows the runs and products a negative-stock
+failure through `throwActionError` (`src/lib/stale-version.ts`) as an
+`ActionError` carrying `code`, `issues` (always an array), `conflict`, `blockers`
+and `preview`. In-use delete refusals, including fleet deletes, keep
+`code: "conflict"` on the error and issue and add
+`issues[].meta.reason: "in_use"`; the UI checks the top-level conflict code and
+that marker on the `ActionError` instead of matching message text. A stale save
+becomes `StaleVersionError`; any other conflict becomes `ConflictError`. Both
+extend `ActionError`. Forms are expected to honor both; the first list consumer
+is the feedstock edit sheet, which shows the runs and products a negative-stock
 refusal named.
 
 The success branch may carry `warning?: string`: the write committed and a
@@ -221,14 +267,41 @@ facility persists via `?facility=<id>` + localStorage through `nuqs`; sidebar
 hrefs carry it; **forms never ask the user to pick a facility** — they read it
 from context.
 
+Record hrefs are owned by `src/lib/record-links.ts`: its table supplies both
+the list path and the sheet query parameter. List pages with an organization-scoped
+by-id read use `useLinkedRecordFacility` so the active facility follows the linked
+record. The hook selects only a facility available in context, through the context
+setter, and holds the linked sheet closed until the selection matches. A record in
+a facility outside that list is shown where it is: the hook reads the facility by
+id (org-scoped) and returns `readOnly` when it is archived, or when that read fails
+or cannot run (fail closed, with a retry on the read). The page passes
+`linkedRecordReadOnly` (`src/lib/linked-record-read-only.ts`) as the sheet's
+`readOnly` and to its section builders, so `EntitySideSheet` stays in view mode
+with no Edit, no lock chip and no lock line, an edit link opens view, and the
+sections drop their write actions (distance refresh, uploads, sync). The sheet stays
+mounted over the "Select a facility" empty state too, opening only for such a link.
+The archived facility never becomes the working facility, and server writes stay
+refused (#1499). Orders, feedstock intakes, deliveries, biochar products, lab
+Samples, applications (read by id with `includeArchived`), reactors, production
+runs, credit batches (sheet and routed page) and storage bins pass the state. The
+routed credit batch page keeps the working facility where it is and still opens for
+a reload of an archived facility's batch. Production runs, batch members and
+application deliveries read through linked reads (`getLinkedProductionRunById`,
+`getLinkedCreditBatchMembers`, `getLinkedApplicationDelivery`) that return only rows
+archived with their facility and never authorize a write. Output bins in an archived
+facility read their stock through `getLinkedOutputBinInventory` (read-only sheet
+only); feedstock bin reads already include archived rows. Gaps:
+[open-questions.md](./open-questions.md#records-in-archived-facilities-1502).
+
 ### Quick-Add and cascading selects
 
 Quick-Add lets a form create a missing prerequisite without leaving the page:
 schemas in `src/schemas/quick-add.ts` (minimal fields only); after create call
 `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to
 populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
-`?create=true` deep links. `FormEntitySelect` auto-clears when parent values
-change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
+`?create=true` deep links, with an optional context parameter for the form.
+`FormEntitySelect` auto-clears when parent values change via `dependsOn`
+(backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
 
 The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
@@ -264,22 +337,33 @@ runtime.
 ## Routing & Auth
 
 - `src/app/(auth)/*` public · `src/app/(app)/*` authenticated workspace ·
-  `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
+  `src/app/(app)/platform/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
-- **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
-  Members roster; only Owners/Admins (and Platform Admins) can mutate membership
-  or open Defaults. Every member can edit and delete vehicles, drivers and
-  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
-  Platform Admin without that membership cannot manage keys.
-  `/certification/settings` is registry configuration and
-  stays there by ADR
-  [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
-  cross-tenant platform administration (`users.role === "admin"`) and is now
-  only the organization directory — `/admin` itself redirects to
-  `/admin/organizations`. Both settings surfaces render the shared
-  `SettingsRail`; `/settings` selects by route, `/certification/settings` by
-  `?section=`.
+- **One settings console** (`/settings`, #1277). `SettingsConsole` renders a
+  rail grouped by whose setting it is, one route per pane, listed in
+  `src/lib/settings/panes.ts`: **You** (Profile, Connected apps), **Organization**
+  (General, Members, Developers) and **Certification** (Registry, Removal
+  templates, Facilities). Platform pages are not settings: Organizations (the
+  Platform home), Diagnostics and Template mapping live under `/platform` in the
+  sidebar's Platform section (#1373). Each route loads the viewer with
+  `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
+  outside the viewer's audience is a 404, and Removal templates and Facilities
+  answer with Registry while the organization has no registry keys saved.
+  Every member opens General and Members read-only; Admins (and Platform
+  Admins) change them. Developers (API keys) requires a verified Admin
+  membership; a Platform Admin without one sees it without controls.
+  Certification panes configure the working facility from
+  `FacilityProvider`; there is no second facility picker. The settings index
+  opens General, preserving its query. Legacy settings paths are deleted.
+  Vehicles and Crew are list pages under Setup: `/vehicles` is one
+  `DataTable` (`?create=`, `?vehicle=<id>` and `mode=edit` open a record's
+  sheet); `/crew` has Drivers | Operators tabs (`?tab=operator`, `?create=`,
+  `?driver=`/`?operator=<id>` + `mode=edit`). Every member can edit and delete
+  vehicles, drivers and operators there, as every member can create them from
+  a picker. Platform administration (`users.role === "admin"`) lives at
+  `/platform/organizations`, `/platform/diagnostics` and
+  `/platform/template-mapping`, guarded by the platform layout's `requireAdmin()`.
+  There is no platform index page or legacy redirect.
 - `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
@@ -325,8 +409,12 @@ runtime.
   hook. A mutation hook that can change a lineage declares it with
   `meta: recordLockMeta(RECORD_LOCK_TOUCHES.<family>)`
   (`src/hooks/record-lock-query-keys.ts`). After a successful write, only the
-  mounted lock reads of those kinds refetch; registry writes declare
-  `registry` and refresh every kind. A new write that adds or removes a
+  mounted lock reads of those kinds refetch. A `certification_locked` refusal
+  also refreshes them. Writes that only need refusal recovery use
+  `{ onRefusalOnly: true }` to leave successful lock reads alone; document
+  mutations resolve the owner kind and also refresh its certification-lock
+  query on refusal. Registry writes declare `registry` and refresh every kind
+  even on failure, unless explicitly refusal-only. A new write that adds or removes a
   dependency, or changes a Removal or GHG Statement, must declare its family,
   or the fail-closed screens keep showing a stale lock. The read itself is
   `/api/reads/record-locks` (below).
@@ -345,10 +433,20 @@ runtime.
 
 ### Hook ActionResult unwrapping
 
-Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`,
+which delegates failures to `throwActionError`. Hooks throw `ActionError`
+(`src/lib/action-error.ts`) carrying the server message, `code`, `issues`
+(always an array), `conflict`, `blockers` and `preview`. Stale-version and
+conflict errors retain their subclasses.
 The only exception is a hook that reads `field`, `conflict` or `warning`, or
 returns something other than `result.data`; typed errors go through
-`throwActionError`. `pnpm check:action-boundaries` enforces this rule.
+`throwActionError`. `throwRecordLossError` (`src/hooks/use-bin-movements.ts`) is one: a locked loss entry carries its bin as `conflict` with a non-conflict code, so it throws a plain `ActionError` instead of a `ConflictError`. `pnpm check:action-boundaries` enforces this rule.
+
+A form shows what the hook kept: `useSaveRefusal` files each issue on the field
+it names and returns the footer text for the rest (see
+[forms.md](./forms.md#components), `FormError` / `ServerError`). Edit forms for
+deliveries, applications and feedstock updates use it; the other forms still
+show the one footer line.
 
 ### Authenticated read transport
 
@@ -413,6 +511,12 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Certification submits acquire the boundary advisory lock, facility durability
+advisory lock, certifier mapping `FOR UPDATE`, artifacts, then mirror locks.
+GHG Statement reconciliation follows this order, taking boundary and durability
+on the same dedicated transaction. A caller already holding boundary as a session
+lock passes the held flag instead of requesting it again on another connection.
+
 Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
 then insert the party, ordered locations and pairs inside the `withAutoCodes`
 savepoint and read back through `tx`. Last explicit default wins, otherwise the
@@ -454,12 +558,17 @@ client retries changed-set conflicts. The runner retries deadlocks (40P01),
 serialization failures (40001) and lock timeouts (55P03), and owns after-commit
 storage draining.
 
-Explicit credit-batch membership create, update and delete discover the batch,
-current/prospective runs and certification artifacts unlocked, then lock sorted
-artifacts, sorted facilities `FOR SHARE`, sorted runs `FOR UPDATE` on create or
-membership refresh, the target production-process advisory scope, and the batch
+Explicit credit-batch membership create, update and delete discover the batch's
+facility unlocked, then lock current and target facilities `FOR SHARE` in id
+order before reading facility-local membership dates or taking other locks.
+They then discover current/prospective runs and certification artifacts, lock
+sorted artifacts, sorted runs `FOR UPDATE` on create or membership refresh,
+the target production-process advisory scope, and the batch
 `FOR UPDATE` with its version
-check (insert on create). Both artifact helpers use
+check. The sorted per-feedstock `feedstock-transport-owner` advisory locks
+follow the batch lock on update/delete and precede the insert on create. They
+are taken at the outermost write boundary before the ownership snapshot.
+Both artifact helpers use
 `acquireCertificationArtifactLocksSorted` and its global key ordering; create
 has no existing certification lineage to guard. Runs stay before process scope
 because production-run auto-attachment already holds its run when requesting
@@ -482,6 +591,42 @@ All three membership writers use `src/lib/db/transaction-retry.ts`
 shared with the runner, for 40P01, 40001 and 55P03. Production-run writers retain
 the runner's retry and deadline handling. Exhausted attempts return `concurrent_write_retry`.
 
+Production-run creation already takes its active facility `FOR SHARE` before
+reactor `SHARE`, bin-stock advisory locks, reactor-overlap advisory lock, the
+run insert and auto-attachment. Updates take the current and target facilities
+`FOR SHARE` in id order (archived included; a changed target must also be active) before an optional reactor `SHARE`, sorted bin-stock
+advisory locks, run `UPDATE`, sorted per-feedstock `feedstock-transport-owner`
+advisory locks and ownership snapshot, lineage artifacts, reactor-overlap advisory lock,
+the run/draw writes, then auto-attachment's process scope, batch artifacts and
+batch `UPDATE`. Delete takes the transport-owner locks after bin/run locks
+and before lineage artifacts. Creation first takes them in draw replacement
+after the run insert; auto-attachment takes its own snapshot after process scope,
+batch artifacts and batch UPDATE when no enclosing freeze exists. Joined scopes
+reuse the outer locks. Intake and timezone rebuilds plan every run first, then
+take one freeze over the rewritten runs' saved and planned records after all
+source-bin locks and sorted run UPDATE locks, before any per-run rewrite.
+A changed run facility after discovery refuses the write.
+Archived facilities cannot accept run updates; facility archive also archives
+its runs. The pre-facility operator, reference and generated-code checks are
+unlocked reads. API calls may first claim an idempotency record; none of the
+facility UPDATE holders acquire those infrastructure records.
+
+Sample writers discover their batches' facilities unlocked, take sorted facility
+`SHARE`, sorted lineage artifacts, sorted batch `UPDATE`, then Sample `UPDATE`
+(on edits/deletes), and revalidate lineage before writing. A batch that moved
+facilities during discovery refuses the write instead of taking a late facility
+lock. Sample create, moves and time edits resolve dates only under this scope.
+
+These facility shares serialize membership and Sample date checks with facility
+time zone edits, which take facility `UPDATE` before checking for existing runs
+or Samples in credit batches. A zone edit that wins is visible to the writer;
+a writer that commits first makes a later zone change refuse. Facility archive,
+restore and Removal creation also take facility `UPDATE` before child locks.
+Durability edits take their advisory lock before facility `UPDATE`; mapping
+adoption takes its mapping advisory locks before facility `UPDATE` and batches.
+Membership and Sample writers never acquire those advisory locks. Run creation
+needs no extra facility lock for this rule.
+
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
@@ -496,14 +641,16 @@ locked after a row. Sample ancestors are their credit batch or legacy run;
 applications use their delivery; internal children use their archive-bearing
 parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
 uses owner, mirror, document order; Source mirroring never locks an owner.
-Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
-retry. Application writers now use the runner and the artifacts-first sequence
+Sample writers take facility shares before artifacts and child rows; delivery
+writers use artifacts before rows. Existing feedstock, order and production-run
+inversions remain subject to the runner's bounded retry. Application writers now use the runner and the artifacts-first sequence
 above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
-Emission entry writers discover ancestors unlocked, then lock the facility
-`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+Emission entry writers discover ancestors unlocked, then lock certification
+artifacts in sorted order before the facility `FOR SHARE`, credit batch
+`FOR UPDATE`, entry `FOR UPDATE`, and documents last.
 They revalidate the batch's facility and the entry's batch after locking; changed
 parents return retryable `conflict` without taking a new ancestor lock.
 This order matches facility archive and applies to confirmation and deletion too.
@@ -537,6 +684,21 @@ Outbound integration submitting MRV data to Isometric's Certify API. Schema is
 provider-agnostic (`certifier_*` tables) so another registry could be hosted
 later; Isometric-specific HTTP, transformers, and typings live under
 `src/lib/isometric/`.
+
+Credit batch to-dos are built in one server read by the directive-free
+`credit-batch-todos-core.ts`: facility certifier facts load once, followed by
+bounded batch contexts and set-based sample, emission-line and missing production run reads.
+Unsent batches held by a Removal list every fitting unassigned run. Addable runs get
+an Add-in-Edit Check and stay listed with a same-day entry sentence. Runs whose biochar
+is in an Application another Removal holds get a late-run style Check pointing to
+the Emissions tab, cleared by a later same-day entry. Sent batches keep the same
+hide rule for late runs. Unheld batches attach matching runs automatically and get
+no such Check. The list projects only Blocking and Check counts, health state and lines to decide from
+this core; its Removal, GHG Statement and lock fields remain in the list action.
+`loadCreditBatchTodosFn` reads one batch through the same core; the batch page
+reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
+on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting
+items need the page model (`buildCreditBatchWaitingItems`) and are never counted.
 
 ```text
 components/certification/  →  hooks/use-certification.ts  →  fn/certification/
@@ -597,21 +759,21 @@ Numeric dependencies still apply after reopening. Independent master-data,
 document and Removal lifecycle guards remain outside this policy; see
 [Record locks](./database.md#record-locks).
 
-**Workspace:** `/certification` (ADR
+**Workspace:** Certification (ADR
 [0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class
-sidebar group with three concrete routes — Removals · GHG Statements ·
-Settings. Root `/certification` redirects to Removals preserving `?facility=`.
-Removals has list, side-sheet (`?removal=`), detail
-(`/removals/[removalId]`) and review (`/[removalId]/review`) surfaces; new
-Removals are created through the New-Removal wizard. Settings holds the
-facility↔project link and emission/LCA config.
+sidebar group with two operational routes: `/removals` and `/ghg-statements`.
+Removals has a list and side sheet (`?removal=`); `?resume=` opens a saved
+Removal in the New-Removal wizard. Settings holds the facility↔project link
+and emission/LCA config in its own console.
 
-**`CertificationRegistryGuard`** (`src/components/certification/`) gates the
-operational `/certification/*` routes on the facility having a registry link;
-Settings stays open. It is mounted in the certification layout. **New
-operational certification routes must sit inside that guard.**
+**`CertificationRegistryGuard`** (`src/components/certification/`) gates
+`/removals` and `/ghg-statements` on the facility having a registry link.
+It is mounted alongside the shared error boundary in
+`src/app/(app)/(certification)/`; the route group adds no URL segment.
+Settings stays outside the group. **New operational certification routes must
+sit inside that guard.** Legacy app paths are deleted without redirects.
 
-**Generated GHG Statement report:** an Owner/Admin prepares a versioned PDF from
+**Generated GHG Statement report:** an Admin prepares a versioned PDF from
 live Isometric statement and GHG Entry facts, reviews it through the normal
 org-scoped document route, then approves it. Submission rotates a random
 per-report verifier token, stores only its SHA-256 digest, and sends Isometric
@@ -646,11 +808,20 @@ Facility-scoped operations dashboard at `/dashboard`
 - The current Flow Hero body is a four-stat KPI band, the traceability hero
   (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
   and Certification panels. Week/month/all only changes the range-scoped KPI
-  and mass-flow values.
+  and mass-flow values. Each KPI counts by its own record date (runs by start
+  day, applications by application date, the CO₂e estimate by the batch's
+  period end), and its (i) says which.
 - One `getDashboardOverview` action supplies the page. Its aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
-  `dashboard-structural-gaps.ts`.
+  `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
+  gaps and credit batch rows on their flow station (batches on Production).
+- The Attention panel lists each check's records while there are at most two,
+  else one grouped "N affected" row (linking to the list filtered by `ids`
+  where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row
+  per GPS gap. "N open" counts records: single rows, grouped counts and gap
+  counts, so every counted record is reachable from a row. A batch whose
+  Removal is submitted waits on the verifier and is left out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).
@@ -685,12 +856,11 @@ and tells the operator when older readings are omitted; it is not virtualized.
 ## Traceability Visualization
 
 Credit-batch anchored lineage at `/traceability` (canonical).
-`/chain-of-custody` is a legacy redirect that preserves search params and
-forwards — do not add a page there. Deep links: `?batch=<id>` opens the batch
+Deep links: `?batch=<id>` opens the batch
 roll-up, `?application=<id>` an application drill-down.
 
 Batch roll-up merges every member application's rollback, dedupes production
-runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
+runs, and exposes **Flow | Map | Sankey**. Drill-down exposes **Flow | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
 conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
@@ -701,8 +871,9 @@ Anchor model: ADR
   `use-chain-graph.ts` / `chain-node.tsx` / `chain-edge.tsx`, plus `map/`,
   `sankey/`, `trail/`, `chain-constants.ts`.
 - **Data**: `src/data-access/chain-of-custody{,-batch,-trail}.ts`.
-- **Layout**: dagre LR layout on a React Flow canvas with minimap, hover focus,
-  and record-opening side sheets.
+- **Layout**: the Flow chart's column layout (`flow-layout.ts`) on a React
+  Flow canvas, no minimap, with hover and selection focus and record-opening
+  side sheets.
 - **Scope**: selectors and resolved anchors are filtered against the active
   facility so stale or foreign deep links cannot render another facility's
   provenance. Full detail in [traceability.md](./traceability.md).

@@ -46,6 +46,12 @@ interface FormFieldProps {
   id: string;
   label: string;
   error?: string;
+  /**
+   * The caller renders the error line itself (`FieldErrorRow`), for a message
+   * that may run wider than this field's column. The control stays linked to
+   * it through `aria-describedby` and `aria-invalid`.
+   */
+  errorOutside?: boolean;
   /** Non-blocking field advisory. Hidden whenever a blocking error is present. */
   warning?: string;
   /**
@@ -167,6 +173,7 @@ export function FormField({
   id,
   label,
   error,
+  errorOutside = false,
   warning,
   helperText,
   hint,
@@ -258,7 +265,7 @@ export function FormField({
           {warning}
         </p>
       )}
-      <FormError id={errorId} message={error} />
+      {!errorOutside && <FormError id={errorId} message={error} />}
     </>
   );
 

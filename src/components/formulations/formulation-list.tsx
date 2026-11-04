@@ -5,7 +5,9 @@
 "use client";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArchiveIcon, ListChecksIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -13,8 +15,10 @@ import {
   useCreateFormulation,
   useDeleteFormulation,
   useRestoreFormulation,
+  useFormulation,
   useFormulations,
   useUpdateFormulation,
+  useFormulationStats,
 } from "@/hooks/use-formulations";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -31,10 +35,12 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { formulationInUseReason } from "@/lib/in-use-references";
 import { ArchivedFormulationNotice } from "./formulation-notices";
 import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -144,11 +150,16 @@ type SideSheetState =
 // ============================================
 
 export function FormulationList() {
-  const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [localSheet, setLocalSheet] = useState<SideSheetState | null>(null);
+  const [linkedFormulationId, setLinkedFormulationId] = useQueryState(
+    RECORD_LINKS.formulation.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [deletingFormulation, setDeletingFormulation] = useState<FormulationWithIngredients | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FormulationWithIngredients | null>(null);
+  const [conflictReason, setConflictReason] = useState<string | undefined>();
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -165,6 +176,7 @@ export function FormulationList() {
     page: currentPage,
     pageSize,
   });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useFormulationStats(showArchived);
   const createFormulation = useCreateFormulation();
   const updateFormulation = useUpdateFormulation();
   const deleteFormulation = useDeleteFormulation();
@@ -172,8 +184,23 @@ export function FormulationList() {
   const restoreFormulation = useRestoreFormulation();
   const toast = useToast();
 
+  // Formulations belong to the organization, so a link needs no facility switch.
+  const linkedFormulation = useFormulation(linkedFormulationId ?? "", !!linkedFormulationId);
+  useEffect(() => {
+    if (linkedFormulationId && !linkedFormulation.data && (linkedFormulation.isError || linkedFormulation.isSuccess)) {
+      toast.error("Linked formulation could not be opened");
+      void setLinkedFormulationId(null);
+    }
+  }, [linkedFormulationId, linkedFormulation.data, linkedFormulation.isError, linkedFormulation.isSuccess, setLinkedFormulationId, toast]);
+  const sideSheet: SideSheetState | null = localSheet ??
+    (linkedFormulationId && linkedFormulation.data ? { mode: "view", entity: linkedFormulation.data } : null);
+  // Closing the sheet also drops the link, or the linked view would reopen.
+  const setSideSheet = (state: SideSheetState | null) => {
+    setLocalSheet(state);
+    if (!state) void setLinkedFormulationId(null);
+  };
+
   const formulations = formulationsData?.items ?? [];
-  const totalFormulations = formulationsData?.total ?? 0;
   const totalPages = formulationsData?.totalPages ?? 0;
   const hasActiveSearch = searchInput.trim().length > 0;
   useReconcileListPage({
@@ -184,18 +211,18 @@ export function FormulationList() {
   });
 
   // Handlers
-  const handleCreate = async (data: FormulationFormData) => {
+  const handleCreate = async (data: FormulationFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createFormulation.mutateAsync(data);
       setSideSheet(null);
       toast.success("Formulation created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Formulation was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Formulation was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FormulationFormData) => {
+  const handleUpdate = async (data: FormulationFormData, onRefusal: SaveRefusalHandler) => {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
     try {
@@ -207,7 +234,7 @@ export function FormulationList() {
       setSideSheet(null);
       toast.success("Formulation updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Formulation was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Formulation was not saved. Try again."));
     }
   };
 
@@ -222,9 +249,10 @@ export function FormulationList() {
       toast.success("Formulation deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Formulation ${deletingFormulation.code}`, "Formulation was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingFormulation.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      if (isInUseDeleteRefusal(error)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active formulation, Close only for an archived one).
         setDeleteConflict(deletingFormulation);
+        setConflictReason(formulationInUseReason(error));
         setDeletingFormulation(null);
         return;
       }
@@ -271,9 +299,9 @@ export function FormulationList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { setFormError(null); setSideSheet({ mode: "create", entity: null }); };
-  const openView = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
-  const openEdit = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
+  const openCreate = () => { createFormulation.startDraft(); void setLinkedFormulationId(null); setFormError(null); setSideSheet({ mode: "create", entity: null }); };
+  const openView = (formulation: FormulationWithIngredients) => { void setLinkedFormulationId(formulation.id); setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
+  const openEdit = (formulation: FormulationWithIngredients) => { void setLinkedFormulationId(formulation.id); setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
   const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
   useOpenCreateIntent(openCreate);
 
@@ -308,9 +336,8 @@ export function FormulationList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="production"
+        area="setup"
         title="Formulations"
-        subtitle="Biochar product recipes and blend ratios"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -323,10 +350,10 @@ export function FormulationList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived formulations" : "Active formulations"}
-          value={totalFormulations}
+          value={statsData?.totalFormulations ?? 0}
           icon={<ListChecksIcon size={24} weight="bold" />}
-          description="Biochar product recipes"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
@@ -350,6 +377,7 @@ export function FormulationList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
+        getRowHref={(row) => recordHref("formulation", row.id)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -392,7 +420,6 @@ export function FormulationList() {
               <ArchiveIcon size={16} weight="bold" />
               Archived
             </Button>
-            <DataTable.ColumnVisibility />
           </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
@@ -401,7 +428,8 @@ export function FormulationList() {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => handleArchive(deleteConflict)}
+          reason={conflictReason}
+          onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);
@@ -429,8 +457,6 @@ export function FormulationList() {
       />
 
       <EntitySideSheet
-        detailToggle="form"
-        detailScope={sideSheet?.entity?.id ?? "create"}
         open={!!sideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={sideSheet?.mode ?? "create"}

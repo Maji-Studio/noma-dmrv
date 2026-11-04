@@ -120,7 +120,7 @@ it("sends cleared application defaults explicitly on create so the operation can
   mocks.create.mockResolvedValueOnce({ success: true, data: saved });
   await harness(useCreateApplication, new QueryClient(), { deliveryId: ID, biocharAppliedKg: 1000 }, async invoke => {
     await act(async () => { await invoke(); });
-    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ appliedWetMassKg: 1000, gpsLatitude: null, gpsLongitude: null, soilTemperatureC: null, soilTemperatureSource: null }));
+    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ appliedWetMassKg: 1000, gpsLatitude: null, gpsLongitude: null, soilTemperatureC: null, soilTemperatureSource: null }), { intentKey: expect.any(String) });
   });
 });
 

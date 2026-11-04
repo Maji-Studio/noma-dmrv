@@ -1,7 +1,19 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "path";
+import { TABLE_LOCK_BARRIER_FILES } from "./tests/helpers/table-lock-barrier-files";
+
+// Run every test in a zone that is not a facility zone (facilities are in
+// Africa/Dar_es_Salaam, UTC and elsewhere), so code that reads the process
+// zone instead of the facility's fails here, not in front of a tester.
+process.env.TZ = "America/Los_Angeles";
 
 const DEFAULT_LOCAL_MAX_WORKERS = 2;
+const PARALLEL_GROUP_ORDER = 0;
+const TABLE_LOCK_BARRIER_GROUP_ORDER = 1;
+// One file at a time: Vitest sizes a group from its project's maxWorkers, not
+// fileParallelism. Vitest's own VITEST_MAX_WORKERS env overrides every project,
+// this one included; CI does not set it.
+const TABLE_LOCK_BARRIER_MAX_WORKERS = 1;
 const configuredMaxWorkers = Number(process.env.VITEST_MAX_WORKERS ?? DEFAULT_LOCAL_MAX_WORKERS);
 const localMaxWorkers = Number.isInteger(configuredMaxWorkers) && configuredMaxWorkers > 0
   ? configuredMaxWorkers
@@ -27,6 +39,26 @@ export default defineConfig({
       "**/.claude/worktrees/**",
       // The landing site is a separate package (site/).
       "site/**",
+    ],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "parallel",
+          // Project excludes extend the inherited root exclude list.
+          exclude: TABLE_LOCK_BARRIER_FILES,
+          sequence: { groupOrder: PARALLEL_GROUP_ORDER },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "table-lock-barriers",
+          include: TABLE_LOCK_BARRIER_FILES,
+          maxWorkers: TABLE_LOCK_BARRIER_MAX_WORKERS,
+          sequence: { groupOrder: TABLE_LOCK_BARRIER_GROUP_ORDER },
+        },
+      },
     ],
   },
   resolve: {

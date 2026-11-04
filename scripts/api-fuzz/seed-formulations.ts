@@ -1,5 +1,6 @@
+import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { createFeedstockType } from "@/data-access/feedstock-types";
+import { createFeedstockTypeInTransaction } from "@/data-access/feedstock-types";
 import { formulationEtag } from "@/lib/api/representation-etags";
 import { archiveFormulation, createFormulation } from "@/lib/operations/formulations";
 import { runOperation } from "@/lib/operations/runner";
@@ -13,9 +14,9 @@ const scriptOptions = { activitySource: "script" as const };
 export async function seedFormulations(ctx: OrgContext) {
   const create = async (name: string) => (await runOperation(createFormulation, ctx, { name, biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions)).data;
   const pure = await create("API fuzz pure biochar");
-  const blendType = await createFeedstockType(ctx, {
+  const blendType = await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, {
     code: "FUZZ-BLEND", name: "API fuzz blend ingredient", category: "compost", usage: "blend",
-  });
+  }));
   const blend = (await runOperation(createFormulation, ctx, {
     name: "API fuzz blend", biocharRatio: BIOCHAR_RATIO,
     lines: [{ feedstockTypeId: blendType.id, ratio: INGREDIENT_RATIO }],

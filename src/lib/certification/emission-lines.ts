@@ -1,17 +1,23 @@
+import { EMPTY_REMOVAL_LINE } from "@/lib/certification/emission-entry-messages";
 import { DomainError } from "@/lib/domain-errors";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { effectiveContract, validateLineSources, type LineSources, type LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
 import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
 import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
+import type { EntryCarryDisposition, EntryCarryDestination, EntryRevisionDestination } from "./emission-entry-carry";
 import { emissionLineBindingDecision } from "./emission-line-binding";
+import type { BlockerCopy } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
 
-const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the same unit before adding them.";
+const UNIT_MISMATCH_COPY = { detail: "Emissions values use different units.", instruction: "Use the same unit before adding them." };
+const UNIT_MISMATCH_MESSAGE = `${UNIT_MISMATCH_COPY.detail} ${UNIT_MISMATCH_COPY.instruction}`;
+const REENTER_EMISSION_ENTRY = "Enter the values again for the current template component.";
+const MISSING_EVIDENCE_INSTRUCTION = "Add a file for each emissions entry with a value.";
 
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
-  needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
+  needsReview: "Check entry", needsSetup: "Not set up", confirmedZero: "Recorded as zero",
 } as const;
 export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
@@ -20,7 +26,12 @@ export interface EmissionLineRecords {
   source: EmissionRecordSource;
   count: number;
   figure: EmissionFigure | null;
+  /** The Emissions filter reads this to hide handled sequestration calculated by Isometric. */
+  calculatedBy?: "isometric";
+  /** A recorded zero whose legs another credit batch counts: those batches, linked in place of the count. */
+  countedOn?: readonly CountedOnBatch[];
 }
+export interface CountedOnBatch { creditBatchId: string; code: string }
 const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
   "run-genset-diesel": "productionRuns", "run-startup-diesel": "productionRuns",
   "run-electricity": "productionRuns", "feedstock-dry-mass": "productionRuns",
@@ -29,6 +40,16 @@ const RECORD_SOURCES: Record<AutomaticSourceId, EmissionRecordSource> = {
   "delivery-transport": "deliveries", sequestration: "applications",
 };
 export interface EmissionLineEntryFact {
+  carry?: EntryCarryDisposition;
+  reportedIn?: EntryCarryDestination | null;
+  revisionOf?: EntryRevisionDestination | null;
+  /** The Removal of the entry's own batch that was already sent when the entry was recorded. */
+  recordedAfter?: { removalId: string; removalCode: string } | null;
+  /** Present on stored entries; the submit step's component table reads them. */
+  id?: string;
+  /** The day the entry's use happened (YYYY-MM-DD). */
+  occurredOn?: string;
+  documentCount?: number;
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
   confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
@@ -36,7 +57,11 @@ export interface EmissionLineEntryFact {
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
   enrichmentComplete: boolean;
+  entriesCanSubmit?: boolean;
   automaticFigures: Partial<Record<AutomaticSourceId, EmissionFigure | null>>;
+  /** The batches counting this batch's linked feedstock transport, when every leg is owned elsewhere. */
+  feedstockTransportCountedOn?: readonly CountedOnBatch[];
+  omittedAutomaticSources?: readonly AutomaticSourceId[];
   automaticRecordCounts?: Partial<Record<AutomaticSourceId, number>>;
   entries: readonly EmissionLineEntryFact[];
 }
@@ -70,25 +95,36 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
-    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
+    const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete, entriesCanSubmit: facts.entriesCanSubmit });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
+    const calculatedByIsometric = contract?.automaticSource === "sequestration" && (facts.automaticRecordCounts?.sequestration ?? 0) > 0;
     const records: EmissionLineRecords | null = contract?.automaticSource ? {
       source: RECORD_SOURCES[contract.automaticSource],
       count: facts.automaticRecordCounts?.[contract.automaticSource] ?? 0,
       figure: automaticFigure,
+      ...(calculatedByIsometric ? { calculatedBy: "isometric" as const } : {}),
+      ...(contract.automaticSource === "feedstock-transport" && facts.feedstockTransportCountedOn?.length
+        ? { countedOn: facts.feedstockTransportCountedOn } : {}),
     } : null;
     let state: EmissionLineState;
-    let blocker: RemovalBlocker | undefined = decision?.blocker;
+    let blocker: (RemovalBlocker & { copy?: BlockerCopy }) | undefined = decision?.blocker;
     if (decision && decision.state !== "empty") { state = decision.state; blocker = decision.blocker; }
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
-      blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "entryMissingEvidence", message: MISSING_EVIDENCE_INSTRUCTION, copy: { instruction: MISSING_EVIDENCE_INSTRUCTION }, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     } else if (automaticFigure || values.length) state = "filled";
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
-    else { state = "empty"; blocker = decision?.blocker; }
+    // Display completeness only: preserve the binding decision's submission blocker.
+    else if (calculatedByIsometric) state = "filled";
+    else if (contract?.automaticSource && facts.omittedAutomaticSources?.includes(contract.automaticSource)) { state = "filled"; blocker = undefined; }
+    else { state = "empty"; blocker = decision?.blocker;
+      if (facts.entriesCanSubmit && contract?.scope === "operating" && contract.entryPolicy !== "none") {
+        blocker = { code: "lineHasNoSource", message: EMPTY_REMOVAL_LINE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      }
+    }
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
@@ -96,12 +132,12 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const unitMismatch = entries.some((entry) => entry.unitMismatch) || figures.some((figure) => figure.unit !== figures[0]?.unit);
     if (unitMismatch) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: UNIT_MISMATCH_MESSAGE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: UNIT_MISMATCH_MESSAGE, copy: UNIT_MISMATCH_COPY, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const stale = entries.find((entry) => !entry.counts);
     if (stale) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: stale.reason ?? REENTER_EMISSION_ENTRY, ...(stale.reason == null ? { copy: { instruction: REENTER_EMISSION_ENTRY } } : {}), fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
@@ -113,3 +149,22 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];
+
+/**
+ * Display surfaces (the Emissions tab, its counts, the facility overview) hide handled
+ * sequestration calculated by Isometric, keeping open states and blockers visible.
+ * Submission, readiness and payloads read the full list from deriveBatchEmissionLines.
+ */
+export function withoutRegistryCalculatedLines<T extends {
+  contract?: { automaticSource?: AutomaticSourceId } | null;
+  records?: Pick<EmissionLineRecords, "calculatedBy"> | null;
+  state: EmissionLineState;
+  blocker?: RemovalBlocker | null;
+  entries?: readonly unknown[];
+  comment?: unknown;
+}>(lines: readonly T[]): T[] {
+  // A line with entries or a comment stays visible so the operator can still see and edit them.
+  return lines.filter((line) => !(line.contract?.automaticSource === "sequestration"
+    && line.records?.calculatedBy === "isometric" && line.state === "filled" && !line.blocker
+    && !line.entries?.length && !line.comment));
+}

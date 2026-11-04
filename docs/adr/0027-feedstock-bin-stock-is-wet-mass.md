@@ -22,10 +22,11 @@ not constrain a physical withdrawal.
   movement.
 - Storage selectors, summaries, and overdraw messages use authoritative wet
   stock. A dry estimate may be displayed only when clearly marked non-binding.
-- Nothing in the app adds mass back to a feedstock bin.
+- Nothing in the app tops up a feedstock bin.
   A stock take can only confirm or reduce stock
-  (`src/data-access/bin-movements.ts:recordStockTakeMovement`), and there is
-  no correction movement that raises a lane. A lane never persists below zero:
+  (`src/data-access/bin-movements.ts:recordStockTakeMovement`).
+  A Lost mass reversal restores exactly one recorded loss, at most once; it is not a top-up.
+  A lane never persists below zero:
   every feedstock write that can shrink one re-derives it and rolls back
   (`src/data-access/feedstock-bin-stock-integrity.ts:assertFeedstockBinLanesNotNegative`).
   When an intake correction is refused, the repair is to correct whichever

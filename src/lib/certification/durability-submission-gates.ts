@@ -36,6 +36,7 @@
  * The COA / lab-report Source requirement (D4) lives with the measurement-sample
  * chemistry datapoints (Phase E), not here.
  */
+import { blockerMessage, type BlockerMessage } from "./blocker-message";
 import { pluralize } from "@/lib/copy-utils";
 
 import {
@@ -52,12 +53,19 @@ import type { CreditBatchSampling } from "@/schemas/credit-batches";
  * The unpaired-H/C_org explanation shared by blocker (d) and the readiness
  * chip, so both surfaces name the same Samples in the same order and words.
  */
-export function describeUnpairedHToCSamples(sampleCodes: string[]): string {
+export function unpairedHToCSamplesMessage(sampleCodes: string[]): BlockerMessage {
   const count = sampleCodes.length;
   const sorted = [...sampleCodes].sort((left, right) =>
     left.localeCompare(right),
   );
-  return `${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${sorted.join(", ")}. Eligibility is judged only on Samples with both ratios, so ${count === 1 ? "this H/C_org goes" : "these H/C_org values go"} unchecked. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`;
+  return blockerMessage(
+    `${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${sorted.join(", ")}. Eligibility is judged only on Samples with both ratios, so ${count === 1 ? "this H/C_org goes" : "these H/C_org values go"} unchecked.`,
+    `Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`,
+  );
+}
+
+export function describeUnpairedHToCSamples(sampleCodes: string[]): string {
+  return unpairedHToCSamplesMessage(sampleCodes).message;
 }
 
 /**
@@ -93,6 +101,7 @@ export interface DurabilitySubmissionGateResult {
   ok: boolean;
   /** One human-readable blocker line per failed gate, ready to join into a SafeError. */
   blockers: string[];
+  blockerMessages: BlockerMessage[];
   /** Non-blocking advisories: currently the after-window sampling warning. */
   warnings: string[];
 }
@@ -105,7 +114,7 @@ export interface DurabilitySubmissionGateResult {
 export function evaluateDurabilitySubmissionGates(
   batches: BatchGateFacts[],
 ): DurabilitySubmissionGateResult {
-  const blockers: string[] = [];
+  const blockerMessages: BlockerMessage[] = [];
   const warnings: string[] = [];
 
   for (const batch of batches) {
@@ -115,9 +124,10 @@ export function evaluateDurabilitySubmissionGates(
       for (const sample of batch.replicateProvenance) {
         if (sample.samplingDay == null) continue;
         if (sample.samplingDay < batch.startDate) {
-          blockers.push(
-            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. Correct the Sample date before submitting (§8.3.1).`,
-          );
+          blockerMessages.push(blockerMessage(
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}.`,
+            `Correct the Sample date before submitting (§8.3.1).`,
+          ));
         } else if (sample.samplingDay > batch.endDate) {
           warnings.push(
             `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. §8.3.1 says biochar should be sampled in its final pre-storage condition, after processing and at typical moisture levels, and before blending when it is applied with other substances such as compost. Confirm this Sample represents the batch in that condition.`,
@@ -132,9 +142,10 @@ export function evaluateDurabilitySubmissionGates(
 
     // (b) A batch explicitly created as sampled must carry sample evidence.
     if (sampleRowCount === 0) {
-      blockers.push(
-        `Credit batch ${batch.creditBatchCode} is marked as sampled but has no Samples. Add at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
-      );
+      blockerMessages.push(blockerMessage(
+        `Credit batch ${batch.creditBatchCode} is marked as sampled but has no Samples.`,
+        `Add at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
+      ));
       continue;
     }
 
@@ -148,9 +159,10 @@ export function evaluateDurabilitySubmissionGates(
       eligibility.usableReplicateCount,
     );
     if (!replicateCheck.meetsMinimum) {
-      blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} ${pluralize(eligibility.usableReplicateCount, "Sample")} with complete H/C_org and O/C_org results. Add complete results to at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
-      );
+      blockerMessages.push(blockerMessage(
+        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} ${pluralize(eligibility.usableReplicateCount, "Sample")} with complete H/C_org and O/C_org results.`,
+        `Add complete results to at least ${MINIMUM_REPLICATES_PER_BATCH} Samples before submitting.`,
+      ));
     }
 
     // (a) Eligibility — judged on the pooled replicate mean (D8); indeterminate fails closed.
@@ -166,27 +178,29 @@ export function evaluateDurabilitySubmissionGates(
           `O/C_org mean ${eligibility.meanOToCOrgRatio?.toFixed(3)} ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}`,
         );
       }
-      blockers.push(
+      blockerMessages.push(blockerMessage(
         `Credit batch ${batch.creditBatchCode} fails biochar eligibility (${parts.join("; ")}), under module §3 Table 2.`,
-      );
+      ));
     } else if (eligibility.eligible === null) {
-      blockers.push(
-        `Credit batch ${batch.creditBatchCode} is missing H/C_org or O/C_org chemistry, so its eligibility under module §3 Table 2 cannot be confirmed. Record both values before submitting.`,
-      );
+      blockerMessages.push(blockerMessage(
+        `Credit batch ${batch.creditBatchCode} is missing H/C_org or O/C_org chemistry, so its eligibility under module §3 Table 2 cannot be confirmed.`,
+        `Record both values before submitting.`,
+      ));
     }
 
     // (d) Paired submission: the submitted H/C_org population (same
-    // `isUsableNumber` predicate as the aggregation) minus the paired replicates
+    // `isUsableRatio` predicate as the aggregation) minus the paired replicates
     // eligibility already judged.
     const unpairedSampleCodes = eligibility.unpairedHToCReplicateIndexes.map(
       (index) => batch.replicateProvenance[index].sampleCode,
     );
     if (unpairedSampleCodes.length > 0) {
-      blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${describeUnpairedHToCSamples(unpairedSampleCodes)}`,
-      );
+      const copy = unpairedHToCSamplesMessage(unpairedSampleCodes);
+      blockerMessages.push(blockerMessage(
+        `Credit batch ${batch.creditBatchCode} has ${copy.fact}`, copy.instruction,
+      ));
     }
   }
 
-  return { ok: blockers.length === 0, blockers, warnings };
+  return { ok: blockerMessages.length === 0, blockers: blockerMessages.map((item) => item.message), blockerMessages, warnings };
 }

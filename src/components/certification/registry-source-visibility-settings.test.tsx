@@ -58,7 +58,7 @@ describe("RegistrySourceVisibilitySettings", () => {
     const html = renderToStaticMarkup(<RegistrySourceVisibilitySettings />);
 
     expect(html).toContain("Public");
-    expect(html).toContain("Organization Owners and Admins manage this policy");
+    expect(html).toContain("Organization Admins manage this policy");
     expect(html).toContain(
       "Only new Sources use this setting. Existing Sources are unchanged.",
     );

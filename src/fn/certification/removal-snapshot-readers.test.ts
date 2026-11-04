@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertRemovalSnapshotConfigurationCurrent,
+  readRemovalEntrySnapshot,
   readRemovalBiocharApplicationIntents,
   readRemovalSourceBindingPlan,
   readRemovalSupersedePreviousId,
@@ -194,4 +195,11 @@ describe("readRemovalBiocharApplicationIntents", () => {
       read([{ ...baseIntent, allocatedWetMassKg: undefined }]),
     ).toThrow(/older Biochar Application format/i);
   });
+});
+
+ it("reads the frozen entry set and accepts older snapshots as empty", () => {
+  expect(readRemovalEntrySnapshot({ payloadSnapshot: {} })).toEqual({ templateObservationId: null, frozenEntrySet: [] });
+  const frozen = { templateObservationId: "observation", frozenEntrySet: [{ entryId: "entry", contentRevision: 3 }] };
+  expect(readRemovalEntrySnapshot({ payloadSnapshot: frozen })).toEqual(frozen);
+  expect(() => readRemovalEntrySnapshot({ payloadSnapshot: { frozenEntrySet: [{ entryId: "entry", contentRevision: 0 }] } })).toThrow();
 });

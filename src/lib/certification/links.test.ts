@@ -1,99 +1,44 @@
 import { describe, expect, it } from "vitest";
-import {
-  CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-  CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
-  CERTIFICATION_SETTINGS_SECTION_PARAM,
-  CERTIFICATION_SETTINGS_SOURCES_SECTION,
-  certificationEmissionEstimatesHref,
-  certificationRemovalsHref,
-  certificationSettingsHref,
-  productionRunDeepLinkHref,
-  traceabilityActivityHref,
-  traceabilityApplicationHref,
-} from "./links";
+import { certificationRemovalsHref, facilityCertificationSettingsHref, registrySettingsHref, removalTemplatesSettingsHref, traceabilityActivityHref, traceabilityApplicationHref, traceabilityBatchHref } from "./links";
 
-describe("certificationEmissionEstimatesHref", () => {
-  it("selects the emissions section for the active facility", () => {
-    expect(certificationEmissionEstimatesHref("fac abc/123")).toBe(
-      `/certification/settings?${CERTIFICATION_SETTINGS_SECTION_PARAM}=${CERTIFICATION_SETTINGS_EMISSIONS_SECTION}` +
-        `&facility=fac%20abc%2F123`,
+describe("settings link builders", () => {
+  it("sends registry fixes to Settings, Registry with the working facility", () => {
+    expect(registrySettingsHref("fac abc/123")).toBe("/settings/registry?facility=fac%20abc%2F123");
+    expect(registrySettingsHref()).toBe("/settings/registry");
+    expect(registrySettingsHref(null)).toBe("/settings/registry");
+  });
+
+  it("sends project link, tier and soil reference fixes to Settings, Facilities", () => {
+    expect(facilityCertificationSettingsHref("fac-1")).toBe("/settings/facilities?facility=fac-1");
+  });
+
+  it("sends component fixes to Settings, Removal templates, optionally narrowed to one template", () => {
+    expect(removalTemplatesSettingsHref("fac-1")).toBe("/settings/removal-templates?facility=fac-1");
+    expect(removalTemplatesSettingsHref("fac-1", "rvt new")).toBe(
+      "/settings/removal-templates?facility=fac-1&template=rvt%20new",
     );
   });
 
-  it("uses a query param, not a fragment — only the selected section mounts", () => {
-    // The settings page is a rail plus one detail pane, so `#emission-estimates`
-    // would scroll to an element that has not rendered.
-    const href = certificationEmissionEstimatesHref("fac-1");
-    expect(href).not.toContain("#");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
-    );
-  });
-});
-
-describe("certificationSettingsHref", () => {
-  it("defaults to the certifier section", () => {
-    const href = certificationSettingsHref("fac-abc123");
-    expect(href).toBe(
-      "/certification/settings?section=certifier&facility=fac-abc123",
-    );
-  });
-
-  it("accepts a section override", () => {
-    const href = certificationSettingsHref(
-      "fac-abc123",
-      CERTIFICATION_SETTINGS_SOURCES_SECTION,
-    );
-    expect(href).toBe(
-      `/certification/settings?section=${CERTIFICATION_SETTINGS_SOURCES_SECTION}&facility=fac-abc123`,
-    );
-  });
-
-  it("URL-encodes the facilityId in the facility query param", () => {
-    const href = certificationSettingsHref("fac abc/123");
-    expect(href).toContain("facility=fac%20abc%2F123");
-  });
-
-  it("URL-encodes the section when it contains special characters", () => {
-    const href = certificationSettingsHref("fac-1", "my section");
-    expect(href).toContain("section=my%20section");
-  });
-
-  it("always starts with /certification/settings", () => {
-    const href = certificationSettingsHref("any-facility");
-    expect(href.startsWith("/certification/settings")).toBe(true);
-  });
-
-  it("produces a path that includes both section and facility params", () => {
-    const href = certificationSettingsHref("fac-xyz");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-    );
-    expect(url.searchParams.get("facility")).toBe("fac-xyz");
-  });
-
-  it("certifier is the default so unmet setup checks land in the right place", () => {
-    // The submission checks and the batch-selection step both link to
-    // certificationSettingsHref(facilityId) with no override. Keys and the
-    // project link are one pane now, so either kind of gap is fixed there.
-    const href = certificationSettingsHref("facility-id");
-    const url = new URL(href, "http://localhost");
-    expect(url.searchParams.get(CERTIFICATION_SETTINGS_SECTION_PARAM)).toBe(
-      CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
-    );
+  it("never links to the retired certification settings route", () => {
+    for (const href of [
+      registrySettingsHref("f"),
+      facilityCertificationSettingsHref("f"),
+      removalTemplatesSettingsHref("f", "t"),
+    ]) {
+      expect(href.startsWith("/settings/")).toBe(true);
+      expect(href).not.toContain("/certification/settings");
+    }
   });
 });
 
 describe("certificationRemovalsHref", () => {
-  it("redirects to removals without a query when searchParams is empty", () => {
-    expect(certificationRemovalsHref({})).toBe("/certification/removals");
+  it("links to removals without a query when searchParams is empty", () => {
+    expect(certificationRemovalsHref({})).toBe("/removals");
   });
 
   it("preserves a single facility param", () => {
     expect(certificationRemovalsHref({ facility: "fac-abc123" })).toBe(
-      "/certification/removals?facility=fac-abc123",
+      "/removals?facility=fac-abc123",
     );
   });
 
@@ -141,15 +86,15 @@ describe("certificationRemovalsHref", () => {
 });
 
 describe("record deep links", () => {
-  it("encodes production-run and traceability identities", () => {
-    expect(productionRunDeepLinkHref("run/1", "facility 1")).toBe(
-      "/production-runs?facility=facility+1&run=run%2F1",
-    );
+  it("encodes traceability identities", () => {
     expect(traceabilityApplicationHref("batch/1", "application 1")).toBe(
       "/traceability?batch=batch%2F1&application=application+1",
     );
     expect(traceabilityActivityHref("batch/1", "facility 1")).toBe(
       "/traceability?facility=facility+1&batch=batch%2F1&view=activity",
+    );
+    expect(traceabilityBatchHref("batch/1", "facility 1")).toBe(
+      "/traceability?facility=facility+1&batch=batch%2F1",
     );
   });
 });

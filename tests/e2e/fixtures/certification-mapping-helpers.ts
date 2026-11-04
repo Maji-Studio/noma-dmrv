@@ -9,7 +9,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
 import { and, eq } from "drizzle-orm";
-import { DEC_ORG_ID } from "@/db/org-defaults";
+import { fixtureOrgId } from "./fixture-org";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
@@ -39,19 +39,19 @@ export async function seedCertifierMapping(
   opts: {
     externalProjectId: string;
     externalFacilityId?: string;
-    defaultRemovalTemplateId?: string | null;
+    removalTemplateId?: string | null;
   },
 ): Promise<SeededMapping> {
   const { db, pool } = createDbConnection();
   try {
     await db.insert(schema.certifierProjects).values({
-      organizationId: DEC_ORG_ID,
+      organizationId: fixtureOrgId(),
       facilityId,
       provider: "isometric",
       externalProjectId: opts.externalProjectId,
       protocolSlug: CERTIFICATION_PROTOCOL_SLUG,
       protocolVersion: CERTIFICATION_PROTOCOL_VERSION,
-      defaultRemovalTemplateId: opts.defaultRemovalTemplateId ?? null,
+      removalTemplateId: opts.removalTemplateId ?? null,
       externalFacilityId: opts.externalFacilityId ?? `fcl_e2e_${facilityId.replaceAll("-", "")}`,
     });
   } finally {
@@ -119,8 +119,10 @@ function templateHasUnboundFixedInput(template: RawRemovalTemplate): boolean {
 }
 
 /**
- * A fresh observation compiles only when every line has a settled contract
- * that binds, the same coverage submission runs (entry-only lines block).
+ * A fresh observation compiles only when every component has a settled
+ * contract that binds. This uses the same coverage check as submission:
+ * entry-only components need recorded values or confirmed zeros, so they
+ * block this fixture, which supplies neither. Sandbox never fills them with zeros.
  */
 function templateCompilesOnFirstRead(template: RawRemovalTemplate): boolean {
   const ghgTemplate = template as unknown as IsometricGhgEntryTemplate;

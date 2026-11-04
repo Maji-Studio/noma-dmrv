@@ -123,7 +123,7 @@ describe("timelineYears", () => {
 });
 
 describe("deriveTimelineState", () => {
-  const base = { lifecycleFailed: false, healthState: "ready" as const, blockingCount: 0 };
+  const base = { removalInterrupted: false, lifecycleFailed: false, healthState: "ready" as const, blockingCount: 0 };
   it("is unknown until readiness loads", () => {
     expect(deriveTimelineState(null)).toBeNull();
   });
@@ -142,7 +142,11 @@ describe("deriveTimelineState", () => {
   it("is open when verification failed, even with no missing data", () => {
     expect(deriveTimelineState({ ...base, lifecycleStepIndex: 2, lifecycleFailed: true })).toBe("blocking");
   });
-  it("keeps the data readiness for a rejected or interrupted Removal", () => {
+  it("is interrupted when any holding Removal is, over every other state", () => {
+    expect(deriveTimelineState({ ...base, removalInterrupted: true, lifecycleStepIndex: 1 })).toBe("interrupted");
+    expect(deriveTimelineState({ ...base, removalInterrupted: true, lifecycleStepIndex: 0, healthState: "incomplete", blockingCount: 2 })).toBe("interrupted");
+  });
+  it("keeps the data readiness for a rejected Removal", () => {
     expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0, lifecycleFailed: true })).toBe("ready");
     expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0, lifecycleFailed: true, healthState: "incomplete", blockingCount: 1 })).toBe("blocking");
   });

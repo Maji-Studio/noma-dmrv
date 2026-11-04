@@ -1,6 +1,6 @@
 "use client";
 
-import { entityViewHref } from "@/lib/entity-deep-link";
+import { recordHref } from "@/lib/record-links";
 import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
@@ -19,7 +19,7 @@ import { ServerError } from "@/components/forms";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import {
   EntitySideSheet,
   type SideSheetMode,
@@ -45,6 +45,7 @@ import {
   useUpdateFeedstockType,
 } from "@/hooks/use-feedstock-types";
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_EDIT_MODE,
@@ -66,7 +67,6 @@ interface SideSheetState {
   entity: FeedstockType | null;
   mode: SideSheetMode;
 }
-
 
 export function shouldShowFeedstockTypeSampling(params: {
   feedstockType: FeedstockType | null;
@@ -99,6 +99,9 @@ export function IsometricLinkedBadge() {
     </span>
   );
 }
+
+/** Description is optional detail an operator can add from the Columns menu. */
+const FEEDSTOCK_TYPE_COLUMNS_HIDDEN_BY_DEFAULT = { description: false };
 
 function createColumns(params: {
   canManage: boolean;
@@ -146,6 +149,18 @@ function createColumns(params: {
       cell: ({ row }) => (
         <MutedValue archived={!!row.original.archivedAt}>
           {row.original.usage === "blend" ? "Blend" : "Pyrolysis"}
+        </MutedValue>
+      ),
+    },
+    {
+      accessorKey: "description",
+      enableGlobalFilter: false,
+      header: "Description",
+      cell: ({ row }) => (
+        <MutedValue archived={!!row.original.archivedAt}>
+          <span className="block max-w-xs truncate">
+            {row.original.description || MISSING_VALUE.notRecorded}
+          </span>
         </MutedValue>
       ),
     },
@@ -269,6 +284,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
   const openCreate = () => {
     if (!canManage) return;
+    createFeedstockType.startDraft();
     void setFocusedFeedstockTypeId(null);
     void setDeepLinkMode(null);
     setFormError(null);
@@ -296,18 +312,18 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     setFormError(null);
   };
 
-  const handleCreate = async (data: FeedstockTypeFormData) => {
+  const handleCreate = async (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createFeedstockType.mutateAsync(data);
       setSideSheet(null);
       toast.success("Feedstock type created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Feedstock type was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Feedstock type was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FeedstockTypeFormData) => {
+  const handleUpdate = async (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => {
     const editing =
       displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
     if (!editing) return;
@@ -323,7 +339,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       void setDeepLinkMode(null);
       toast.success("Feedstock type updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Feedstock type was not saved. Try again.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Feedstock type was not saved. Try again."));
     }
   };
 
@@ -356,7 +372,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       toast.success("Feedstock type deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message)) {
+      if (isInUseDeleteRefusal(error)) {
         setDeleteConflict(deletingType);
       } else {
         toast.error(message);
@@ -400,9 +416,9 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
-        title="Feedstock Types"
-        subtitle="Organization-wide catalogue for pyrolysis feedstocks and blend materials"
+        area="setup"
+        title="Feedstock types"
+        subtitle="Shared by every facility in your organization."
         actions={
           canManage ? (
             hasRegistryConnection ? (
@@ -435,7 +451,6 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           title="Total types"
           value={feedstockTypes.length}
           icon={<DatabaseIcon size={24} weight="bold" />}
-          description="Pyrolysis and blend catalogue entries"
           isLoading={feedstockTypesQuery.isLoading}
         />
         <StatCard
@@ -457,7 +472,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => {
+          onArchive={deleteConflict.archivedAt ? undefined : () => {
             setConflictArchiveError(null);
             void handleArchive(deleteConflict);
           }}
@@ -471,10 +486,11 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       )}
 
       <DataTable
+        defaultColumnVisibility={FEEDSTOCK_TYPE_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={filteredFeedstockTypes}
         onRowClick={openView}
-        getRowHref={(row) => entityViewHref("/feedstock-types", FEEDSTOCK_TYPE_QUERY_PARAM, row.id, facilityId)}
+        getRowHref={(row) => recordHref("feedstockType", row.id, { facilityId })}
         enableSorting
         enableFiltering
         enablePagination

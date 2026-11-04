@@ -4,6 +4,8 @@
  */
 "use client";
 
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { useState, useEffect, useRef } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -19,6 +21,7 @@ import {
   useCreateProductionRun,
   useDeleteProductionRun,
   useProductionRun,
+  useLinkedProductionRun,
   useProductionRuns,
   useUpdateProductionRun,
   useProductionRunStats,
@@ -32,23 +35,30 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { InUseDeleteDialog, InUseReference } from "@/components/ui/in-use-delete-dialog";
+import { ActionError } from "@/lib/action-error";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { MassPair } from "@/components/ui/mass-pair";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { recordLockColumn, recordLockSheetProps } from "@/components/record-locks";
+import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
-import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockStatus, type RecordLockViews } from "@/lib/record-lock-view";
+import { isProductionRunOutputLocked, isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
-import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { footerForRefusedSave } from "./production-run-refusal";
 import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -62,15 +72,8 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
-
-function productionRunDetailHref(run: ProductionRunWithRelations) {
-  const params = new URLSearchParams({
-    facility: run.facilityId,
-    run: run.id,
-  });
-  return `/production-runs?${params.toString()}`;
-}
 
 // ============================================
 // Status Badge
@@ -80,16 +83,25 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // Column Definitions
 // ============================================
 
+/** Run details start hidden and are added from the Columns menu. */
+const PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT = {
+  operator: false,
+  biocharMoisturePercent: false,
+  residenceTimeMinutes: false,
+  electricityKwh: false,
+  dieselOperationLiters: false,
+  dieselGensetLiters: false,
+};
+
 function createColumns(
   onEdit: (run: ProductionRunWithRelations) => void,
   onDelete: (runId: string) => void,
   locks: RecordLockViews,
-  lockStatusOf: (id: string) => RecordLockStatus,
 ): ColumnDef<ProductionRunWithRelations>[] {
   return [
     {
       accessorKey: "code",
-      meta: { nowrap: true, recordLink: true },
+      meta: { nowrap: true, recordLink: true, recordLinkBefore: recordLockTitleMark(locks) },
       header: "Code",
       cell: ({ row }) => (
         <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
@@ -100,14 +112,6 @@ function createColumns(
       meta: { nowrap: true },
       header: "Date",
       cell: ({ row }) => formatDate(row.original.date),
-    },
-    {
-      id: "facility",
-      header: "Facility",
-      accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <span>{row.original.facilityName || MISSING_VALUE.notAvailable}</span>
-      ),
     },
     {
       id: "reactor",
@@ -136,6 +140,55 @@ function createColumns(
       ),
     },
     {
+      id: "operator",
+      header: "Operator",
+      accessorFn: (row) => row.operatorName ?? "",
+      cell: ({ row }) => <span className="block max-w-xs truncate">{row.original.operatorName || MISSING_VALUE.notSet}</span>,
+    },
+    {
+      accessorKey: "biocharMoisturePercent",
+      header: qualifyMassLabel(MASS_MOISTURE_LABELS.moisture, "Biochar"),
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMoisturePercent(row.original.biocharMoisturePercent)}</span>
+      ),
+    },
+    {
+      accessorKey: "residenceTimeMinutes",
+      header: "Residence time",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.residenceTimeMinutes == null ? MISSING_VALUE.notRecorded : `${row.original.residenceTimeMinutes} min`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "electricityKwh",
+      header: "Electricity",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.electricityKwh == null ? MISSING_VALUE.notRecorded : `${row.original.electricityKwh} kWh`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselOperationLiters",
+      header: "Startup / plant diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselOperationLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselOperationLiters} L`}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "dieselGensetLiters",
+      header: "Genset diesel",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {row.original.dieselGensetLiters == null ? MISSING_VALUE.notRecorded : `${row.original.dieselGensetLiters} L`}
+        </span>
+      ),
+    },
+    {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
@@ -149,7 +202,6 @@ function createColumns(
         />
       ),
     },
-    recordLockColumn<ProductionRunWithRelations>(locks, lockStatusOf),
     {
       id: "actions",
       meta: { stickyEnd: true },
@@ -163,7 +215,7 @@ function createColumns(
               actions={[
                 {
                   label: "Open details",
-                  href: productionRunDetailHref(row.original),
+                  href: recordHref("productionRun", row.original.id, { facilityId: row.original.facilityId }),
                 },
                 ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
                 ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) }] : []),
@@ -185,11 +237,7 @@ export function ProductionRunList() {
   // Global facility context
   const { facilityId, facilities } = useFacilityContext();
   const [focusedRunId, setFocusedRunId] = useQueryState(
-    "run",
-    parseAsString.withOptions({ shallow: true, history: "replace" }),
-  );
-  const [affectedRunIdsParam, setAffectedRunIdsParam] = useQueryState(
-    "ids",
+    RECORD_LINKS.productionRun.param,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
@@ -197,20 +245,11 @@ export function ProductionRunList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const affectedRunFilter = parseExactIdFilter(affectedRunIdsParam);
-  const affectedRunIds = affectedRunFilter.ids;
-  useEffect(() => {
-    if (
-      affectedRunIdsParam &&
-      affectedRunFilter.normalized !== affectedRunIdsParam
-    ) {
-      void setAffectedRunIdsParam(affectedRunFilter.normalized);
-    }
-  }, [
-    affectedRunFilter.normalized,
-    affectedRunIdsParam,
-    setAffectedRunIdsParam,
-  ]);
+  const {
+    ids: affectedRunIds,
+    normalized: affectedRunNormalized,
+    clear: clearAffectedRunIds,
+  } = useExactIdFilterParam();
   const handledInvalidRunIdRef = useRef<string | null>(null);
 
   // Filter state
@@ -218,7 +257,7 @@ export function ProductionRunList() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(
-      `${facilityId ?? ""}:${creditBatchFilter}:${affectedRunFilter.normalized ?? ""}`,
+      `${facilityId ?? ""}:${creditBatchFilter}:${affectedRunNormalized ?? ""}`,
     );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
@@ -232,6 +271,8 @@ export function ProductionRunList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete because records still use the row: its code and the server's reason.
+  const [inUseRefusal, setInUseRefusal] = useState<{ code: string; message: string; reference?: { href: string; code: string; kind: string } } | null>(null);
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
@@ -248,7 +289,18 @@ export function ProductionRunList() {
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters, {
     enabled: !!facilityId,
   });
-  const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
+  const focusedNormalRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
+  // The normal read hides runs archived with their facility; the separate
+  // linked read opens them read only. It never authorizes a write.
+  // A normal read that errored cannot supply the record even when it still
+  // holds cached data, so the linked read is tried then too.
+  const normalRunUsable = !!focusedNormalRun.data && !focusedNormalRun.isError;
+  const needsLinkedRun = !!focusedRunId && !focusedNormalRun.isLoading && !focusedNormalRun.isFetching && !normalRunUsable;
+  const focusedLinkedRun = useLinkedProductionRun(focusedRunId ?? "", needsLinkedRun);
+  // Cached data from a failed normal read still beats a linked read that has none.
+  const focusedRun = !needsLinkedRun || normalRunUsable || (!focusedLinkedRun.data && focusedNormalRun.data) ? focusedNormalRun : focusedLinkedRun;
+  const linkedRecord = useLinkedRecordFacility(focusedRun.data, focusedRun.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
     facilityId || undefined,
     !!facilityId,
@@ -274,19 +326,20 @@ export function ProductionRunList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_run",
     entityNoun: "Production run",
-    executeCreate: async (data: ProductionRunSubmitData) => {
+    executeCreate: async ({ data }: { data: ProductionRunSubmitData; onRefusal: SaveRefusalHandler }) => {
       const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
     setUpdateError,
-    getCreateErrorMessage: (error) => {
+    getCreateErrorMessage: (error, { onRefusal }) => {
       // Let the form surface an overlap conflict inline (on the start field,
       // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      return error instanceof Error
-        ? error.message
-        : "Production run was not created. Check the form.";
+      return footerForRefusedSave(
+        error,
+        error instanceof Error ? error.message : "Production run was not created. Check the form.",
+        onRefusal,
+      );
     },
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachment before saving this production run.",
@@ -298,9 +351,11 @@ export function ProductionRunList() {
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
-  const handleCreate = createWithEvidence.handleCreate;
+  const handleCreate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
+    await createWithEvidence.handleCreate({ data, onRefusal });
+  };
 
-  const handleUpdate = async (data: ProductionRunSubmitData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -325,14 +380,17 @@ export function ProductionRunList() {
       closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
-      if (getRunConflict(error)) throw error;
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
+      const fallback = toSaveErrorMessage(error, "Production run was not saved. Try again.");
+      setUpdateError(footerForRefusedSave(error, fallback, onRefusal));
     }
   };
 
-  const handleDelete = (runId: string) => setDeletingRunId(runId);
+  const handleDelete = (runId: string) => {
+    setDeleteError(null);
+    setDeletingRunId(runId);
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
@@ -345,12 +403,25 @@ export function ProductionRunList() {
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
+      const message = toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again.");
+      if (isInUseDeleteRefusal(error)) {
+        const blocker = error instanceof ActionError ? error.conflict : undefined;
+        const reference = blocker?.entity === "biocharProduct"
+          ? { href: recordHref("biocharProduct", blocker.id, { facilityId: deleting.facilityId }), code: blocker.code, kind: "biochar product" }
+          : blocker?.entity === "creditBatch"
+            ? { href: recordHref("creditBatch", blocker.id, { facilityId: deleting.facilityId }), code: blocker.code, kind: "credit batch" }
+            : undefined;
+        setInUseRefusal({ code: deleting.code, message, reference });
+        setDeletingRunId(null);
+        return;
+      }
       if (error instanceof StaleVersionError) setDeleting(null);
-      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
+      setDeleteError(message);
     }
   };
 
   const openCreate = () => {
+    createRun.startDraft();
     setFocusedRunId(null);
     setCreateError(null);
     setUpdateError(null);
@@ -372,7 +443,7 @@ export function ProductionRunList() {
     setSearchQuery("");
     setStatusFilter("");
     setCreditBatchFilter(null);
-    setAffectedRunIdsParam(null);
+    void clearAffectedRunIds();
     setCurrentPage(1);
   };
   const hasActiveFilters =
@@ -381,7 +452,7 @@ export function ProductionRunList() {
     creditBatchFilter ||
     affectedRunIds.length > 0;
 
-  const columns = createColumns(openEdit, handleDelete, runLocks.locks, runLocks.statusOf);
+  const columns = createColumns(openEdit, handleDelete, runLocks.locks);
 
   useEffect(() => {
     if (!focusedRunId) {
@@ -389,14 +460,9 @@ export function ProductionRunList() {
       return;
     }
     if (focusedRun.isLoading || focusedRun.isFetching || focusedRun.isPending) return;
+    // The linked read is the fallback for an errored normal read: wait for it before calling the link invalid.
+    if (needsLinkedRun && (focusedLinkedRun.isLoading || focusedLinkedRun.isFetching || focusedLinkedRun.isPending)) return;
     if (handledInvalidRunIdRef.current === focusedRunId) return;
-
-    if (focusedRun.data && facilityId && focusedRun.data.facilityId !== facilityId) {
-      handledInvalidRunIdRef.current = focusedRunId;
-      toast.error("Linked production run is not in the selected facility");
-      setFocusedRunId(null);
-      return;
-    }
 
     if (focusedRun.isError || (focusedRun.isSuccess && !focusedRun.data)) {
       handledInvalidRunIdRef.current = focusedRunId;
@@ -412,6 +478,10 @@ export function ProductionRunList() {
     focusedRun.isPending,
     focusedRun.isSuccess,
     focusedRunId,
+    focusedLinkedRun.isFetching,
+    focusedLinkedRun.isLoading,
+    focusedLinkedRun.isPending,
+    needsLinkedRun,
     setFocusedRunId,
     toast,
   ]);
@@ -419,10 +489,12 @@ export function ProductionRunList() {
   const deepLinkedSideSheet =
     focusedRunId &&
     focusedRun.data &&
-    (!facilityId || focusedRun.data.facilityId === facilityId)
+    linkedFacilityReady
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
+  // A row the operator opened shows at once; only a link waits for its facility.
+  const displaySideSheet = focusedRunId && !linkedFacilityReady && !localSideSheet ? null : localSideSheet ?? deepLinkedSideSheet;
   const { lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying } = useRecordLock("productionRun", displaySideSheet?.entity?.id);
 
   const confirmCreateClose = () =>
@@ -438,27 +510,6 @@ export function ProductionRunList() {
     setSideSheet({ entity: displaySideSheet.entity, mode });
   };
 
-  if (!facilityId) {
-    return (
-      <div className="container-max page-shell">
-        <PageHeader
-          area="production"
-          title="Production Runs"
-          subtitle="Pyrolysis batches from feedstock to biochar output"
-        />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
-      </div>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <div className="container-max py-32">
-        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
-      </div>
-    );
-  }
-
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
@@ -473,12 +524,81 @@ export function ProductionRunList() {
         ? formatDate(sideSheetEntity.date)
         : undefined;
 
+  // A link into an archived facility opens its record read only, over the
+  // "Select a facility" empty state too when no facility is active.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, sideSheetEntity, "production run");
+  // With no working facility only a read-only link opens the sheet; create
+  // needs a facility. The sheet stays mounted so it slides in as elsewhere.
+  const sideSheetAllowed = !!facilityId || !!linkedRecord.readOnly;
+  const sideSheetElement = (
+    <EntitySideSheet
+      numberedSections
+      open={sideSheetAllowed && sideSheetOpen}
+      onOpenChange={(open) => !open && closeSideSheet()}
+      onCloseAttempt={confirmCreateClose}
+      mode={sideSheetMode}
+      onModeChange={handleModeChange}
+      title={sideSheetTitle}
+      subtitle={sideSheetSubtitle}
+      {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
+      canEdit={isRecordEditable(sheetLock)}
+      editLabel="Edit production run"
+      readOnly={sheetReadOnly}
+      size="wide"
+      sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilitiesWithLinked(facilities, linkedRecord)) : undefined}
+    >
+      <ProductionRunForm
+        key={sideSheetEntity?.id ?? "create"}
+        productionRun={sideSheetEntity ?? undefined}
+        lock={sheetLock}
+        onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+        onCancel={attemptCloseSideSheet}
+        isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
+        errorMessage={createError || updateError || undefined}
+        submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
+        deferredAttachments={deferredAttachments}
+      >
+        {sideSheetEntity && sideSheetMode === "edit" ? (
+          <>
+            <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
+            <ProductionIncidentTable
+              productionRunId={sideSheetEntity.id}
+              facilityId={sideSheetEntity.facilityId}
+              defaultReactorId={sideSheetEntity.reactorId}
+              defaultOperatorId={sideSheetEntity.operatorId}
+            />
+          </>
+        ) : null}
+      </ProductionRunForm>
+    </EntitySideSheet>
+  );
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="records"
+          title="Production runs"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
+        {sideSheetElement}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="container-max py-32">
+        <ServerError message={fetchError.message || "The production runs could not be loaded. Refresh the page and try again."} />
+      </div>
+    );
+  }
+
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="production"
-        title="Production Runs"
-        subtitle="Pyrolysis batches from feedstock to biochar output"
+        area="records"
+        title="Production runs"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -489,7 +609,7 @@ export function ProductionRunList() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} isLoading={statsLoading} />
         <StatCard
           title="Biochar output"
           value={
@@ -502,12 +622,15 @@ export function ProductionRunList() {
           icon={<LeafIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
-        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
-        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
+        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} isLoading={statsLoading} />
+        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} isLoading={statsLoading} />
       </div>
+
+      <RecordLockListNotice read={runLocks} />
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={PRODUCTION_RUN_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={runs}
         enableSorting={false}
@@ -526,7 +649,7 @@ export function ProductionRunList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={productionRunDetailHref}
+        getRowHref={(row) => recordHref("productionRun", row.id, { facilityId: row.facilityId })}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -553,9 +676,12 @@ export function ProductionRunList() {
         <DataTable.Toolbar>
           <div className="flex w-full flex-col gap-8 sm:flex-1 sm:flex-row sm:items-center">
             {affectedRunIds.length > 0 && (
-              <span className="inline-flex h-32 shrink-0 items-center self-start border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)] sm:self-auto">
-                {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
-              </span>
+              <AffectedRecordsChip
+                count={affectedRunIds.length}
+                singular="production run"
+                plural="production runs"
+                className="shrink-0 self-start sm:self-auto"
+              />
             )}
             <DataTable.Search
               placeholder="Search production runs..."
@@ -574,7 +700,7 @@ export function ProductionRunList() {
               <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {formatDateRange(batch.startDate, batch.endDate)}
+                  {creditBatchOptionLabel(batch)}
                 </option>
               ))}
             </DataTable.FilterSelect>
@@ -601,58 +727,26 @@ export function ProductionRunList() {
         <DataTable.Pagination />
       </DataTable>
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deleting && <ServerError message={deleteError} />}
+
+      {inUseRefusal && (
+        <InUseDeleteDialog label={inUseRefusal.code} onClose={() => setInUseRefusal(null)}>
+          <p>{inUseRefusal.message}</p>
+          {inUseRefusal.reference && <InUseReference {...inUseRefusal.reference} />}
+        </InUseDeleteDialog>
+      )}
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete production run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
+        message="Are you sure you want to delete this production run? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        detailToggle
-        detailScope={sideSheetEntity?.id ?? "create"}
-        numberedSections
-        open={sideSheetOpen}
-        onOpenChange={(open) => !open && closeSideSheet()}
-        onCloseAttempt={confirmCreateClose}
-        mode={sideSheetMode}
-        onModeChange={handleModeChange}
-        title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
-        {...recordLockSheetProps({ lock: sheetLock, status: sheetLockStatus, retry: retrySheetLock, retrying: sheetLockRetrying, inUseLocksNothing: !isProductionRunOutputLocked(sheetLock) })}
-        canEdit={isRecordEditable(sheetLock)}
-        editLabel="Edit production run"
-        size="wide"
-        sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
-      >
-        <ProductionRunForm
-          key={sideSheetEntity?.id ?? "create"}
-          productionRun={sideSheetEntity ?? undefined}
-          lock={sheetLock}
-          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
-          errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
-          deferredAttachments={deferredAttachments}
-        >
-          {sideSheetEntity && sideSheetMode === "edit" ? (
-            <>
-              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
-              <ProductionIncidentTable
-                productionRunId={sideSheetEntity.id}
-                facilityId={sideSheetEntity.facilityId}
-                defaultReactorId={sideSheetEntity.reactorId}
-                defaultOperatorId={sideSheetEntity.operatorId}
-              />
-            </>
-          ) : null}
-        </ProductionRunForm>
-      </EntitySideSheet>
+      {sideSheetElement}
     </div>
   );
 }

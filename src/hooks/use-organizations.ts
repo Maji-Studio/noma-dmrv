@@ -2,35 +2,48 @@
  * Organization React Query hooks — members, invitations, and the Platform
  * Admin org directory. Mutations invalidate the member/invitation lists.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
   inviteMemberAction,
+  leaveOrganizationAction,
   listInvitationsFn,
   listMembersFn,
   listOrganizationsFn,
+  listPlatformOrganizationsFn,
   removeMemberAction,
+  renameOrganizationAction,
   revokeInvitationAction,
+  resendInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/organization-api-access";
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
+import { authClient } from "@/lib/auth/client";
+import type { CreateOrganizationInput, RenameOrganizationInput } from "@/schemas/organizations";
+import { useIntentMutation } from "@/hooks/use-create-intent-key";
 import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
+import { suppressUnloadWarning } from "@/lib/leave-guard";
+import { stashOrgSwitchNotice, type OrgSwitchTarget } from "@/lib/org-switch-notice";
 
 // How many times the active-organization read is re-attempted after a
 // transport or server fault before the sidebar settles on an error. A
 // no-organization answer never spends one; it is refused outright below.
 const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
 
-const organizationKeys = {
+/** Where an organization switch lands unless the caller names a page. */
+const ORG_SWITCH_LANDING_HREF = "/dashboard";
+
+export const organizationKeys = {
   all: ["organizations"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
   invitations: () => [...organizationKeys.all, "invitations"] as const,
   apiAccess: () => [...organizationKeys.all, "api-access"] as const,
+  platformDirectory: () => [...organizationKeys.all, "platform-directory"] as const,
   directory: () => [...organizationKeys.all, "directory"] as const,
   activeProfile: () => [...organizationKeys.all, "active-profile"] as const,
 };
@@ -52,33 +65,56 @@ export function useActiveOrganizationProfile() {
   });
 }
 
+/** Refetch the member list, for a change made elsewhere (a member renaming themselves). */
+export function invalidateOrgMembers(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+}
+
 export function useResetAfterOrgSwitch() {
   /**
    * `warning` is a non-fatal outcome of the switch itself (the "remember my
    * organization" preference was not saved). The reload below discards any
-   * toast raised here, so it is handed to the page the operator lands on.
+   * toast raised here, so it is handed to the page the operator lands on. The
+   * "Now working in <org>" confirmation travels the same way; the name is
+   * optional because an accepted invitation does not know it. `landingHref`
+   * is where the hard load goes, the Dashboard unless the caller switched to
+   * reach a specific page (Platform "Manage members" opens Settings, Members).
    */
-  return function resetAfterOrgSwitch(warning?: string) {
+  return function resetAfterOrgSwitch(
+    warning?: string,
+    target?: OrgSwitchTarget,
+    landingHref: string = ORG_SWITCH_LANDING_HREF,
+  ) {
     if (typeof window === "undefined") {
       return;
     }
     stashPendingWarning(warning);
+    stashOrgSwitchNotice(target);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-    } finally {
+    } catch {
       // localStorage can throw when storage is blocked; the switch already
-      // succeeded server-side, so always land in the new workspace. A hard
-      // load makes every server component, Better Auth store, and client
-      // cache re-read the new context.
-      window.location.assign("/dashboard");
+      // succeeded server-side, so swallow it and still land in the new
+      // organization.
     }
+    // The operator already chose to switch (and discarded any unsaved edits);
+    // the browser's own "Leave site?" would ask again, and Stay would strand
+    // the page in the old organization with the session in the new one.
+    suppressUnloadWarning();
+    // A hard load makes every server component, Better Auth store, and client
+    // cache re-read the new context.
+    window.location.assign(landingHref);
   };
 }
 
 export function useEnterOrganization() {
   const resetAfterOrgSwitch = useResetAfterOrgSwitch();
 
-  return async function enterOrganization(organizationId: string) {
+  return async function enterOrganization(
+    organizationId: string,
+    organizationName?: string,
+    landingHref?: string,
+  ) {
     const result = await setActiveOrganizationAction({ organizationId });
     // Success means the server session moved, whether or not the "remember my
     // organization" preference was saved with it. Always reset, or the client
@@ -86,7 +122,7 @@ export function useEnterOrganization() {
     // (issue #769). A `warning` on the result is the preference, not the
     // switch.
     if (result.success) {
-      resetAfterOrgSwitch(result.warning);
+      resetAfterOrgSwitch(result.warning, { organizationId, organizationName }, landingHref);
     }
     return result;
   };
@@ -119,6 +155,14 @@ export function useAllOrganizations(enabled = true) {
   });
 }
 
+export function usePlatformOrganizations(enabled = true) {
+  return useQuery({
+    queryKey: organizationKeys.platformDirectory(),
+    queryFn: async () => unwrap(await listPlatformOrganizationsFn()),
+    enabled,
+  });
+}
+
 export function useAllOrganizationApiAccess(enabled = true) {
   return useQuery({
     queryKey: organizationKeys.apiAccess(),
@@ -132,7 +176,10 @@ export function useSetOrganizationApiAccess() {
   return useMutation({
     mutationFn: async (input: { id: string; enabled: boolean }) =>
       unwrap(await setOrganizationApiAccessFn(input)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
+    },
   });
 }
 
@@ -162,6 +209,27 @@ export function useRevokeInvitation() {
   });
 }
 
+export function useResendInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invitationId: string) =>
+      unwrap(await resendInvitationAction({ invitationId })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() }),
+  });
+}
+
+/** After success, useResetAfterOrgSwitch(undefined, undefined, "/") leaves the workspace. */
+export function useLeaveOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await leaveOrganizationAction()),
+    onSuccess: () => {
+      authClient.$store.notify("$listOrg");
+      return queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+    },
+  });
+}
+
 export function useChangeMemberRole() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -169,6 +237,7 @@ export function useChangeMemberRole() {
       unwrap(await changeMemberRoleAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
     },
   });
 }
@@ -180,21 +249,32 @@ export function useRemoveMember() {
       unwrap(await removeMemberAction({ memberIdOrEmail })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
     },
   });
 }
 
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      slug: string;
-      ownerEmail: string;
-    }) => unwrap(await createOrganizationAction(input)),
+  return useIntentMutation({
+    mutationFn: async (input: CreateOrganizationInput, intentKey) =>
+      unwrap(await createOrganizationAction(input, { intentKey })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.platformDirectory() });
       queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
+    },
+  });
+}
+
+export function useRenameOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RenameOrganizationInput) =>
+      unwrap(await renameOrganizationAction(input)),
+    onSuccess: () => {
+      authClient.$store.notify("$listOrg");
+      return queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
   });
 }

@@ -1,7 +1,9 @@
 /**
- * The stock history's ledger, shared by feedstock and output bins: days as
- * headers, one line per operator action with its own size and the stock left
- * after, and the detail of that action opening under its line.
+ * The stock history's ledger rows. The feedstock history uses the whole set:
+ * days as headers, one line per operator action with its own size and the
+ * stock left after, and the detail of that action opening under its line. The
+ * output history lays out its own lines (time, then the line it reads as) on
+ * the same row shell and caret, and shares the facts list.
  */
 "use client";
 
@@ -12,6 +14,14 @@ import { StockChip } from "./stock-figures";
 
 const ICON_PX = 16;
 const CARET_ICON_PX = 14;
+
+/** The row shell every history line opens from: a 44px target, hover tint and focus ring. Callers add their own grid columns. */
+export const LEDGER_SUMMARY_CLASS = "grid min-h-44 cursor-pointer list-none items-start gap-8 py-10 hover:bg-[var(--clr-dark-purple-5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] [&::-webkit-details-marker]:hidden";
+
+/** The caret that turns when a history line opens. */
+export function LedgerCaret() {
+  return <CaretDownIcon size={CARET_ICON_PX} aria-hidden="true" className="mt-4 text-[var(--color-text-tertiary)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />;
+}
 
 export function LedgerDayHeader({ day, afterLabel }: { day: string; afterLabel?: string }) {
   return (
@@ -37,7 +47,7 @@ export function LedgerLine({ id, time, iconKind, label, chips = [], note, amount
 }) {
   return (
     <details id={id} open={defaultOpen} className="group border-b border-[var(--color-border-secondary)]">
-      <summary className="grid cursor-pointer list-none grid-cols-[40px_16px_minmax(0,1fr)_auto_14px] items-start gap-8 py-10 hover:bg-[var(--clr-dark-purple-5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] [&::-webkit-details-marker]:hidden">
+      <summary className={`${LEDGER_SUMMARY_CLASS} grid-cols-[40px_16px_minmax(0,1fr)_auto_14px]`}>
         <span className="pt-2 body-caption tabular-nums text-[var(--color-text-tertiary)]">{time}</span>
         <StockKindIcon kind={iconKind} size={ICON_PX} className={`mt-2 ${struck ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`} />
         <span className="flex min-w-0 flex-col">
@@ -51,20 +61,10 @@ export function LedgerLine({ id, time, iconKind, label, chips = [], note, amount
           <span className={`body-small font-medium ${struck ? "line-through text-[var(--color-text-tertiary)]" : ""}`}>{amount}</span>
           <span className="body-caption text-[var(--color-text-tertiary)]">{after}</span>
         </span>
-        <CaretDownIcon size={CARET_ICON_PX} aria-hidden="true" className="mt-4 text-[var(--color-text-tertiary)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        <LedgerCaret />
       </summary>
       <div className="flex flex-col gap-10 pb-16 sm:pl-64">{children}</div>
     </details>
-  );
-}
-
-/** A mode change or other event that moves no stock: a break in the list, not a line item. */
-export function LedgerBreak({ id, iconKind, title, caption, source }: { id: string; iconKind: string; title: string; caption: string; source?: ReactNode }) {
-  return (
-    <div id={id} className="flex items-start gap-8 border-b border-[var(--color-border-secondary)] py-10 body-caption text-[var(--color-text-secondary)]">
-      <StockKindIcon kind={iconKind} size={ICON_PX} className="text-[var(--color-text-tertiary)]" />
-      <span><span className="font-medium text-[var(--color-text-primary)]">{title}.</span> {caption}{source}</span>
-    </div>
   );
 }
 
@@ -81,8 +81,10 @@ function FigureBlock({ label, value, caption }: { label: string; value: string; 
 interface FigureSide { value: string; caption?: string }
 
 /** Before and after as two blocks with an arrow between, optionally under a title naming what changed. */
-export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "After"] }: {
+export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "After"], stackOnPhone = false }: {
   title?: string;
+  /** On a phone the blocks stack and the arrow points down. */
+  stackOnPhone?: boolean;
   before: string | FigureSide;
   after: string | FigureSide;
   labels?: [string, string];
@@ -91,9 +93,9 @@ export function LedgerBeforeAfter({ title, before, after, labels = ["Before", "A
   return (
     <div className="flex flex-col gap-4">
       {title && <span className="body-caption text-[var(--color-text-secondary)]">{title}</span>}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8">
+      <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8${stackOnPhone ? " max-sm:grid-cols-1" : ""}`}>
         <FigureBlock label={labels[0]} {...side(before)} />
-        <ArrowRightIcon size={ICON_PX} aria-label="to" className="text-[var(--color-text-tertiary)]" />
+        <ArrowRightIcon size={ICON_PX} aria-label="to" className={`text-[var(--color-text-tertiary)]${stackOnPhone ? " max-sm:justify-self-center max-sm:rotate-90" : ""}`} />
         <FigureBlock label={labels[1]} {...side(after)} />
       </div>
     </div>

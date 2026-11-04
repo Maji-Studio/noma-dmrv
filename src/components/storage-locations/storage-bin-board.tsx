@@ -15,13 +15,14 @@
 
 import { Button, EmptyState, ListPagination } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { useRecordLocks } from "@/hooks/use-record-locks";
 import { isRecordDeletable, isRecordEditable, type RecordLockView } from "@/lib/record-lock-view";
-import { formatMass } from "@/lib/format-utils";
+import { formatMass, formatMassKg } from "@/lib/format-utils";
+import { EMPTY_STOCK_LABEL, isMassEmpty, isWholeKgEmpty } from "@/lib/stock-display";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { formatWetEstimate, massBasisLabel } from "./stock-preview-shared";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -40,15 +41,13 @@ import {
   binTypeFilterLabel,
   type StorageBinTypeFilter,
 } from "./bin-display";
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
 import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
 const LOADING_TILES = 8;
-
-/** Below this, one page holds everything and pagination has nothing to offer. */
-const SMALLEST_PAGE_SIZE = Math.min(...LIST_PAGE_SIZE_OPTIONS);
 
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
@@ -119,20 +118,56 @@ function filterBinCount(
  * "all". Feedstock is dry mass and product is packed mass, so their sum is not
  * a certifiable quantity and is never shown as one.
  *
- * Facility roll-ups use auto-tonne `formatMass`; per-bin figures on the tiles
- * stay fixed kg.
+ * A lane switches to tonnes at one tonne, as `formatMass` does; under a tonne it
+ * reads at the precision of its cards (see `isLaneEmpty`), so the Empty judgement
+ * and the figure share one precision.
  */
 function filterFigure(
   summary: LaneSummary | undefined,
   filter: StorageBinTypeFilter,
-): string {
-  if (!summary) return MISSING_VALUE.notAvailable;
+): string | null {
+  // Before the summary lands, or for a type with no on-hand total, the figure
+  // is a sum the board does not have, so it is left out.
+  if (!summary) return null;
   if (filter === "all") {
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
-  const onHandKg = summary[filter].onHandKg;
-  return onHandKg == null ? MISSING_VALUE.notAvailable : formatMass(onHandKg);
+  const { onHandKg } = summary[filter];
+  if (onHandKg == null) return null;
+  if (isLaneEmpty(summary, filter)) return EMPTY_STOCK_LABEL;
+  if (onHandKg >= KG_PER_TONNE) return formatMass(onHandKg);
+  // Under a tonne a lane reads like its cards: a wet-estimate lane in whole kg, the rest at one decimal.
+  return wholeKgLane(summary, filter) ? `${formatWetEstimate(onHandKg)} kg` : formatMassKg(onHandKg);
+}
+
+/** Wet-basis output lanes are whole kilograms, like their cards' wet estimates. */
+function wholeKgLane(summary: LaneSummary, filter: Exclude<StorageBinTypeFilter, "all">): boolean {
+  return filter !== "feedstock_bin" && summary[filter].basis === "wet";
+}
+
+/**
+ * Empty is judged with the precision the lane's figure is formatted at, which
+ * is the precision of its cards: whole kg for wet output lanes, one decimal
+ * for feedstock and dry-biochar lanes.
+ */
+function isLaneEmpty(summary: LaneSummary, filter: Exclude<StorageBinTypeFilter, "all">): boolean {
+  const { onHandKg } = summary[filter];
+  return wholeKgLane(summary, filter) ? isWholeKgEmpty(onHandKg) : isMassEmpty(onHandKg);
+}
+
+/** What a lane total measures, named on the rail and in the mobile select: it never switches silently. */
+function filterBasis(summary: LaneSummary | undefined, filter: StorageBinTypeFilter): string | null {
+  if (!summary || filter === "all") return null;
+  const { onHandKg, basis } = summary[filter];
+  if (onHandKg == null || isLaneEmpty(summary, filter)) return null;
+  return massBasisLabel(filter === "feedstock_bin" ? "wet" : basis);
+}
+
+/** A select option names the type, and its figure in parentheses when there is one. */
+function optionLabel(filter: StorageBinTypeFilter, figure: string | null, basis: string | null): string {
+  const detail = [figure, basis].filter(Boolean).join(" ");
+  return detail ? `${binTypeFilterLabel(filter)} (${detail})` : binTypeFilterLabel(filter);
 }
 
 /**
@@ -147,6 +182,7 @@ function binRowActions(
     "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
   >,
   lock: RecordLockView | undefined,
+  stockAdjustments: boolean,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
     return [
@@ -158,11 +194,13 @@ function binRowActions(
     ];
   }
   return [
-    {
-      label: "Adjust stock",
-      icon: <ArrowsClockwiseIcon size={16} />,
-      onSelect: () => handlers.onReconcile(bin),
-    },
+    ...(stockAdjustments
+      ? [{
+          label: "Adjust stock",
+          icon: <ArrowsClockwiseIcon size={16} />,
+          onSelect: () => handlers.onReconcile(bin),
+        }]
+      : []),
     // Edit and Delete wait for the lock read to answer.
     ...(isRecordEditable(lock)
       ? [{
@@ -209,6 +247,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
     onView,
     onReconcile,
   } = props;
+  const { stockAdjustments } = useFeatureSwitches();
   const binLocks = useRecordLocks("storageLocation", bins.map((bin) => bin.id));
 
   return (
@@ -229,7 +268,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         >
           {BIN_TYPE_FILTER_ORDER.map((filter) => (
             <option key={filter} value={filter}>
-              {binTypeFilterLabel(filter)} ({filterFigure(laneSummary, filter)})
+              {optionLabel(filter, filterFigure(laneSummary, filter), filterBasis(laneSummary, filter))}
             </option>
           ))}
         </select>
@@ -245,6 +284,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               isActive={filter === typeFilter}
               count={filterBinCount(laneSummary, filter)}
               figure={filterFigure(laneSummary, filter)}
+              basis={filterBasis(laneSummary, filter)}
               onSelect={() => onTypeFilterChange(filter)}
             />
           ))}
@@ -368,7 +408,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               <StorageBinTile
                 key={bin.id}
                 bin={bin}
-                actions={binRowActions(bin, props, binLocks.locks[bin.id])}
+                actions={binRowActions(bin, props, binLocks.locks[bin.id], stockAdjustments)}
                 lock={binLocks.locks[bin.id]}
                 onView={onView}
                 onReconcile={onReconcile}
@@ -378,9 +418,9 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         )}
 
         {/* A rows-per-page control and four page arrows are noise on a facility
-            with one page of bins. The smallest page size is the threshold, so
-            the controls appear exactly when they can do something. */}
-        {total > SMALLEST_PAGE_SIZE && (
+            whose bins fit one page. The board pages at STORAGE_BOARD_PAGE_SIZE,
+            so the controls appear only for a board bigger than that. */}
+        {total > props.pageSize && (
           <ListPagination
             page={props.page}
             pageCount={props.pageCount}
@@ -400,12 +440,14 @@ function RailFilter({
   isActive,
   count,
   figure,
+  basis,
   onSelect,
 }: {
   filter: StorageBinTypeFilter;
   isActive: boolean;
   count: number | null;
-  figure: string;
+  figure: string | null;
+  basis: string | null;
   onSelect: () => void;
 }) {
   const meta = filter === "all" ? null : BIN_TYPE_META[filter];
@@ -436,7 +478,9 @@ function RailFilter({
         </span>
       </span>
       <span className="flex flex-col items-end">
-        <span className="body-caption font-semibold tabular-nums">{figure}</span>
+        {figure && (figure === EMPTY_STOCK_LABEL
+          ? <span className="body-caption text-[var(--color-text-tertiary)]">{figure}</span>
+          : <span className="body-caption whitespace-nowrap font-semibold tabular-nums">{basis ? `${figure} ${basis}` : figure}</span>)}
         {filter !== "all" && count != null && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {count} {count === 1 ? "bin" : "bins"}

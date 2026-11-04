@@ -154,7 +154,7 @@ describe("production run create status rule", () => {
     const result = createProductionRunSchema.safeParse({ ...input, status: "complete" });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["endTime"], message: expect.stringContaining("end date and time") }));
+      expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["endTime"], message: expect.stringContaining("needs an end time") }));
       expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["biocharOutputKg"], message: expect.stringContaining("biochar output") }));
     }
   });

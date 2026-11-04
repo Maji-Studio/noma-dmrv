@@ -11,6 +11,11 @@ const state = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
+  attempts: [] as Array<{ errorMessage: string | null; outcome: { kind: string } }>,
+  deleteAccess: {
+    viewerCanDeleteRegistryRemovals: true as boolean | null,
+    hasRegisteredProductionBatches: false as boolean | null,
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -58,11 +63,27 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
 }));
 
+vi.mock("./component-table", () => ({ ComponentTable: () => null }));
+vi.mock("./component-table-model", () => ({
+  buildComponentTable: () => ({ loading: false, batches: [], rows: [], groups: [] }),
+}));
+vi.mock("./source-records", () => ({ SourceRecords: () => null }));
+vi.mock("./shared-source-file-notices", () => ({ useSharedSourceFiles: () => [] }));
+
 vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <div>{message}</div>,
 }));
 
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
+}));
+
+vi.mock("../submission-outcome-notice", () => ({
+  SubmissionOutcomeNotice: ({ outcome }: { outcome: { kind: string } }) => <div>{`Outcome notice: ${outcome.kind}`}</div>,
+}));
+
 vi.mock("@/hooks/use-certification", () => ({
+  useRemovalSubmissionAttempts: () => ({ data: state.attempts }),
   useDeleteRemoval: () => ({
     mutate: state.discardMutate,
     isPending: false,
@@ -79,6 +100,10 @@ vi.mock("@/hooks/use-certification", () => ({
     error: null,
     refetch: vi.fn(),
   }),
+}));
+
+vi.mock("@/hooks/use-removal-delete-access", () => ({
+  useRemovalDeleteAccess: () => state.deleteAccess,
 }));
 
 vi.mock("@/lib/certification/readiness", () => ({
@@ -150,6 +175,11 @@ beforeEach(() => {
   state.toastSuccess.mockReset();
   state.discardMutate.mockReset();
   state.discardReset.mockReset();
+  state.attempts = [];
+  state.deleteAccess = {
+    viewerCanDeleteRegistryRemovals: true,
+    hasRegisteredProductionBatches: false,
+  };
 });
 
 describe("SubmitStep", () => {
@@ -216,6 +246,48 @@ describe("SubmitStep", () => {
       await act(async () => { renderer!.unmount(); });
     },
   );
+
+  it.each([
+    ["differs", true],
+    ["no-answer", false],
+  ])("shows the %s outcome notice for the attempt that just ended (close only: %s)", async (kind, closeOnly) => {
+    state.attempts = [{ errorMessage: "Registry check failed", outcome: { kind } }];
+    const mutation = {
+      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
+      error: new Error("Registry check failed"), reset: vi.fn(),
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+          onDone={vi.fn()} submitMutation={mutation as never} />,
+      );
+    });
+    const text = JSON.stringify(renderer!.toJSON());
+    expect(text).toContain(`Outcome notice: ${kind}`);
+    expect(findButton(renderer!, "Close") !== undefined).toBe(closeOnly);
+    expect(findButton(renderer!, "Try again") !== undefined).toBe(!closeOnly);
+    await act(async () => renderer?.unmount());
+  });
+
+  it("keeps the plain error when the newest attempt is an older failure", async () => {
+    state.attempts = [{ errorMessage: "An older failure", outcome: { kind: "differs" } }];
+    const mutation = {
+      mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined,
+      error: new Error("Registry check failed"), reset: vi.fn(),
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+          onDone={vi.fn()} submitMutation={mutation as never} />,
+      );
+    });
+    const text = JSON.stringify(renderer!.toJSON());
+    expect(text).toContain("Registry check failed");
+    expect(text).not.toContain("Outcome notice");
+    await act(async () => renderer?.unmount());
+  });
 
   it("discards a local draft only after confirmation", async () => {
     const onDone = vi.fn();
@@ -319,6 +391,84 @@ describe("SubmitStep", () => {
       "Removal deleted. Credit batches are available again.",
     );
     await act(async () => renderer?.unmount());
+  });
+
+  describe("role floor (issue #746)", () => {
+    const IDLE_MUTATION = {
+      mutate: vi.fn(),
+      isPending: false,
+      isSuccess: false,
+      data: undefined,
+      error: null,
+      reset: vi.fn(),
+    } as never;
+    const REGISTRY_CONTEXT = {
+      ...CONTEXT,
+      latestSubmission: {
+        status: "draft",
+        lockedAt: null,
+        metadata: { lastAttemptOutcome: "interrupted" },
+      },
+    } as RemovalCertifyContext;
+    const MARKER_CONTEXT = {
+      ...CONTEXT,
+      registryBoundaryOpened: true,
+      deletionInProgress: false,
+    } as RemovalCertifyContext;
+
+    async function renderStep(ctx: RemovalCertifyContext) {
+      let renderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        renderer = create(
+          <SubmitStep
+            removalId="removal-1"
+            facilityId="facility-1"
+            facilityName="Tanzania facility"
+            ctx={ctx}
+            onDone={vi.fn()}
+            submitMutation={IDLE_MUTATION}
+          />,
+        );
+      });
+      return renderer!;
+    }
+
+    it("lets a member discard a draft that never touched the registry", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
+      const renderer = await renderStep(CONTEXT);
+      expect(findButton(renderer, "Discard draft")).toBeDefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it.each([
+      ["a ledger row", REGISTRY_CONTEXT, false],
+      ["the external mutation marker", MARKER_CONTEXT, false],
+      ["a registered Production Batch", CONTEXT, true],
+    ] as const)("hides deletion from a member once %s opened the boundary", async (_label, ctx, registeredBatch) => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: registeredBatch };
+      const renderer = await renderStep(ctx);
+      expect(findButton(renderer, "Delete Removal")).toBeUndefined();
+      expect(findButton(renderer, "Discard draft")).toBeUndefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it.each([
+      ["a ledger row", REGISTRY_CONTEXT, false],
+      ["the external mutation marker", MARKER_CONTEXT, false],
+      ["a registered Production Batch", CONTEXT, true],
+    ] as const)("offers deletion to an Admin once %s opened the boundary", async (_label, ctx, registeredBatch) => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: registeredBatch };
+      const renderer = await renderStep(ctx);
+      expect(findButton(renderer, "Delete Removal")).toBeDefined();
+      await act(async () => renderer.unmount());
+    });
+
+    it("waits for the viewer role before offering a registry deletion", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: null, hasRegisteredProductionBatches: false };
+      const renderer = await renderStep(REGISTRY_CONTEXT);
+      expect(findButton(renderer, "Delete Removal")).toBeUndefined();
+      await act(async () => renderer.unmount());
+    });
   });
 
   it("does not offer deletion once a submission completed", async () => {

@@ -4,7 +4,7 @@
  * The read never returns null. An organization with no row gets
  * `DEFAULT_ORGANIZATION_SETTINGS`, so every consumer sees one shape and nobody
  * has to decide what "no settings row" means at the call site. Only writes
- * require the Owner/Admin floor; any member may read, because these are form
+ * require the Admin floor; any member may read, because these are form
  * defaults that every member's forms need.
  */
 import { eq } from "drizzle-orm";

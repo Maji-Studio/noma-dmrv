@@ -10,7 +10,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] py-32">
       <div className="max-w-md w-full">
         <NomaLogo
           title="noma"

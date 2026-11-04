@@ -1,3 +1,4 @@
+import { REMOVAL_MEMBERSHIP_STATUSES } from "@/lib/certification/removal-membership";
 import {
   and,
   desc,
@@ -113,7 +114,7 @@ export async function listGhgStatementsForFacility(
     .select()
     .from(certifierGhgStatements)
     .where(and(eq(certifierGhgStatements.facilityId, facilityId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
-    .orderBy(desc(certifierGhgStatements.createdAt));
+    .orderBy(desc(certifierGhgStatements.createdAt), desc(certifierGhgStatements.id));
 }
 
 export async function listFacilityIdsForExternalRemovals(
@@ -732,6 +733,7 @@ export async function listFinalizingRemovalsForFacility(
         status: latest.status,
         externalId: latest.externalId,
         payloadSnapshot: latest.payloadSnapshot,
+        payloadSnapshotFrozen: latest.payloadSnapshotFrozen,
         payloadHash: latest.payloadHash,
         metadata: latest.metadata,
         submittedAt: latest.submittedAt,
@@ -808,11 +810,7 @@ export async function reconcileRemovalMembership(
           eq(certificationSubmissions.submissionType, "removal"),
           eq(certificationSubmissions.localEntityType, "removal"),
           inArray(certificationSubmissions.externalId, externalRemovalIds),
-          inArray(certificationSubmissions.status, [
-            "submitted",
-            "accepted",
-            "superseded",
-          ]),
+          inArray(certificationSubmissions.status, REMOVAL_MEMBERSHIP_STATUSES),
           eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       );

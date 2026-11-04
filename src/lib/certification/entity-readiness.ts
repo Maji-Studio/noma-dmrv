@@ -29,7 +29,7 @@ export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 export type EntityReadinessRecord = object;
 
 export const REMOVAL_FIELD_CHECK_SCOPE =
-  "Fields complete checks this record's own fields and, for deliveries, proof of delivery. Removal submission also checks linked production runs, Samples, transport legs, delivery distances and the order’s customer location.";
+  "Fields complete checks this record's own fields and, for deliveries, the distance and proof of delivery. Removal submission also checks linked production runs, Samples, transport legs, delivery distances and the order’s customer location.";
 
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
@@ -177,10 +177,17 @@ export function deriveEntityCertifyReadiness(
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
+    if (descriptor.chipOnly) continue;
     if (!certifyFieldConditionApplies(descriptor, entity)) continue;
+    if (
+      descriptor.nonBlocking &&
+      descriptor.satisfaction?.mode === "equals" &&
+      fieldValue(entity, descriptor.satisfaction.field) === undefined
+    ) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
-    if (descriptor.advisory) {
-      warnings.push({ ...fieldGap(descriptor, entityKind), detail: descriptor.advisory });
+    if (descriptor.advisory || descriptor.nonBlocking) {
+      const warning = fieldGap(descriptor, entityKind);
+      warnings.push({ ...warning, detail: descriptor.advisory ?? warning.detail });
     } else {
       gaps.push(fieldGap(descriptor, entityKind));
     }

@@ -21,6 +21,9 @@ diesel against. Production runs are the membership primitive for a
 **credit batch** and roll up (applied-biochar scoped) into an Isometric
 **Removal** through their derived application lineage — a run is *not*
 1:1 with a Removal.
+A completed run joins the credit batch whose window contains the day the
+run ended on the facility's calendar, in its time zone. Lists and dashboards
+date runs by the day they started on the facility's calendar.
 
 **Production run status**:
 New runs default to *Running*. Operators may create an already-finished run
@@ -50,15 +53,21 @@ _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emissions entry**:
 An operating-emissions measurement recorded on one credit batch and bound to a
-Removal-template line. Its typed values and evidence supplement automatic run
-figures where the line allows it.
+Removal-template **component**. Its typed values and evidence supplement the component's
+**automatic datapoints** where the component allows it.
 _On screen_: manual entry; the screen calls the part that comes from forms and
 routes "From records".
 _Avoid_: activity (reserved for the history log).
 
-**Line comment**:
-One editable comment on a credit batch's Removal-template line, identified by
-component ID. It stays in noma and never changes line state or blocks a Removal.
+**Recorded zero**:
+A confirmation that one component had no emissions for a specific Removal.
+It is an emissions entry owned by that Removal, contributes 0, and needs no file.
+It is never pooled into another Removal. On screen it is a component recorded as zero.
+_Avoid_: zero stub.
+
+**Component comment**:
+One editable comment on a credit batch's Removal-template component, identified by
+component ID. It stays in noma and never changes the component's state or blocks a Removal.
 Earlier wording stays in the activity log. Each emissions entry keeps its own note.
 
 **Emission estimate**:
@@ -91,6 +100,13 @@ catalogue when Isometric is the organization's certifier
 and are **never submitted** to a registry.
 _Avoid_: ingredient, material (the catalog is one thing; usage
 disambiguates).
+
+**Feedstock record**:
+Material received into one feedstock bin, with its feedstock type, supplier,
+wet mass, moisture and delivery date.
+_On screen_: the list of feedstock records is called Feedstock intake.
+On feedstock bin screens, a "delivery" is one Feedstock record as received,
+not a customer **Delivery**, which has its own transport and proof of delivery.
 
 **Feedstock bin**:
 A storage bin holding one **feedstock type**, set when the bin is created.
@@ -151,10 +167,17 @@ with its source identity and physical placement date.
 _Avoid_: treating an accounting layer as proof of a physically separate pile;
 only a **split bin**'s sub-bins are physically separate.
 
+**Draw method (feedstock bin)**:
+How a draw takes wet mass from remaining deliveries. **Mass weighted** takes
+from every delivery in proportion to its remaining wet mass. **In order** empties
+one delivery before the next, using **Oldest first** or **Newest first**.
+Feedstock bins have no sub-bins.
+
 **Split bin**:
 An output bin whose layers sit physically apart as **sub-bins**. The operator
 records which sub-bins a draw came from and the order they were emptied;
-otherwise the bin's **default draw order** applies.
+otherwise the bin's **default draw order** applies. Feedstock bins use the same
+stock mode as **In order**, drawing across deliveries without sub-bins.
 
 **Default draw order**:
 The order a **split bin** draws from its **sub-bins**: *Oldest first* unless
@@ -167,12 +190,14 @@ _Avoid_: using it for a layer in a mix bin.
 
 **Mix bin**:
 An output bin holding one well-mixed pile. Every draw takes each layer in
-proportion to its remaining solids.
+proportion to its remaining solids. Feedstock bins use the same stock mode as
+**Mass weighted**, proportional to remaining wet mass without sub-bins.
 
 **Departure moisture**:
 The water fraction measured in material leaving a storage bin. It sets that
-draw's dry mass only. It never changes the **estimated moisture** or **wet
-stock** of what stays in the bin.
+draw's dry mass. It changes the **estimated moisture** of what stays only if
+subtracting the draw would leave less **wet stock** than dry solids: what stays
+is then re-estimated at that draw's moisture until the next count.
 
 **Wet stock** (output bin):
 The wet mass a sub-bin or mix pile holds by the records: wet mass added less
@@ -182,7 +207,8 @@ has none left. A layer with no dry biochar left holds no wet stock.
 
 **Estimated moisture**:
 A sub-bin's or mix pile's water fraction by the records: what it was added
-with, or the latest count. Removals leave it unchanged. A hint beside moisture
+with, or the latest count. Draws leave it unchanged unless wet stock would fall
+below dry solids, in which case the draw's measured moisture re-estimates what stays. A hint beside moisture
 fields, never a prefilled value.
 
 **Biochar share of solids**:
@@ -291,7 +317,7 @@ began; treating eligibility as a stored unlock.
 The three off-system agreements with Isometric that must be recorded on
 a **production process** before its first *unsampled* credit batch: the
 agreed baseline size (floor 30), the random-sampling-plan/PDD reference,
-and the declared moisture pathway. Recording them is an owner/admin
+and the declared moisture pathway. Recording them is an admin
 action and is what enables Method B for that process — there is no
 separate unlock flag. A sample count can never infer them. _Avoid_:
 "unlock" as a distinct stored state; capturing these per credit batch.
@@ -387,16 +413,21 @@ consistent pyrolysis conditions). The one-calendar-month cap is noma’s
 conservative rule (ADR 0016), not a pinned Biochar v1.1 requirement. A facility running
 several feedstocks in a month therefore has several **concurrent**
 credit batches, one per feedstock. The `startDate`/`endDate` window
-means production period, not application period. Batch membership is
-production runs — each completed run matching the batch's organization,
-facility, feedstock, and production window is attached automatically, so the
-batch may be declared before any runs exist. Application-by-credit-batch wet
+means production period, not application period. Batch members are
+**production runs**. Each completed run joins the credit batch whose inclusive
+window contains the day the run ended on the facility's calendar, in its time
+zone, matching its organization, facility and feedstock. Lists and dashboards
+date runs by the day they started on the facility's calendar. Matching runs
+attach automatically while membership is unlocked, so the batch may be declared
+before any runs exist. Application-by-credit-batch wet
 and dry mass slices are derived from product provenance. A slice belongs to a
 Removal only after its nullable ownership is assigned, so newly applied mass
 from the same credit batch can remain unassigned for a later Removal without
 changing the earlier one. A credit batch's production emissions are claimed by
 at most one Removal. There is no claimant until the first successful Removal
 submission records one, preventing double-counting across entries (ADR 0020).
+Each emissions entry has a separate claim: one submission reserves it, then stamps
+the sending Removal on it. This claim is independent of the batch production claim.
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -419,6 +450,8 @@ basis splits by emission-input bucket (ADR 0020): **stored** quantities
 are ex-post applied-scoped (each run weighted by its applied share);
 the **production** bucket submits in full, once, on the claiming
 Removal; the **delivery** bucket is applied-scoped.
+A Removal also sends the individual emissions entries its submission reserves,
+stamping itself as their sender so each entry is sent once.
 Submission is single-phase (`submitRemoval`) **to the registry**. There is
 **no remote Removal status** in this integration, so a Removal's lifecycle
 ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /
@@ -441,7 +474,7 @@ verifier status to a Removal.
 **GHG Statement report**:
 The supplier-generated, versioned PDF that explains one **GHG Statement** and
 its authoritative Isometric GHG Entry totals to the verifier. noma prepares a
-frozen version from live registry facts, an Owner/Admin reviews and approves
+frozen version from live registry facts, an Admin reviews and approves
 it, and Statement submission supplies its URL to Isometric. Versions progress
 *prepared → approved → submitted*; their frozen content is never overwritten,
 while lifecycle metadata and the revocable token digest advance in place.
@@ -505,10 +538,52 @@ An Isometric removal-template input bound in the registry to a
 policy-level value (an emission factor, a global-warming potential) —
 the same for every submission. Contrast **monitored input**.
 
-**Zero stub**:
-A placeholder mapping that emits `0` for a **monitored input** noma
-cannot yet source. A template carrying any zero stub must not be used
-against a production registry project.
+**Removal template**:
+The Isometric template (credit type REMOVAL) a **Removal** is built from. It
+lists the components Isometric expects, in groups. Each facility has one
+Removal template, and its **credit batches** use it. An Admin sets it in the
+"Set Removal template" dialog (Settings, Removal templates, "Set template"):
+pick the template, then check what changes. Setting it switches every credit
+batch whose Removal is not sent; batches whose Removal is sent or certified,
+and archived batches, keep their template. A credit batch page shows its
+template read-only. The dialog lists every Removal template in the project;
+those that do not fit the facility are marked "Does not fit" and cannot be
+picked. Admins set up templates; Members read the summary card. Component
+decisions are stored per organization and template, so they apply to every
+facility using it.
+_Avoid_: GHG entry template (the registry's API name), template pin, active
+template.
+
+**Component**:
+One entry of a **Removal template**, named as Isometric names it: Isometric
+builds each component from a component blueprint, and groups components into
+component groups. Its decision covers its scope, its **automatic datapoints**
+and whether it takes **emissions entries**. A template's component decisions
+are made once, and every facility and credit batch using that template follows
+them. noma proposes a decision where it can; an Admin decides. Say
+"template component" only where "component" alone is ambiguous. The emissions
+pages use the same word.
+_Avoid_: line, emission line, template line, template input.
+
+**Components to decide**:
+The components without a saved decision, always shown with their count
+("3 components to decide"). A Removal template with components to decide
+blocks the Removals of every credit batch on it. A component added to a template
+after setup reopens as "1 to decide". The link to settle them reads "Answer in
+Settings": it opens the Set Removal template dialog, whose Check step asks the open questions, for that
+template where the page knows it, and Removal templates in Settings otherwise. A decided component noma cannot
+fill links "Open Removal templates" (the Settings pane) instead.
+noma decides what it can; the Check step asks only the rest. In the New Removal checks
+this is the **Components decided** check; the batch's own template choice is
+the **Template set** check.
+_Avoid_: lines to decide, needs review, unresolved, template review.
+
+**Automatic datapoints**:
+The noma records that fill a **component** by themselves, for example
+feedstock transport legs or generator diesel from production runs. Isometric
+calls each submitted value a Datapoint, and one component can take several (a
+transport component takes distance and mass).
+_Avoid_: automatic figure, records source.
 
 ### Provenance & lineage
 
@@ -552,10 +627,13 @@ and an "attestation ledger" would each show.
 _Avoid_: timeline, ledger, audit log.
 
 **Mass balance**:
-The dry-mass flow reading of a **credit batch**: feedstock → production
-runs → biochar lots → applied, with every loss drawn as an explicit
-labeled exit — **conversion loss**, in-storage
-mass. Ribbon widths always mean dry kg; columns are never normalized.
+The mass flow reading of a **credit batch**, drawn as a waterfall in kg:
+feedstock → production runs → biochar lots → applied, with every loss drawn as
+an explicit labeled exit — **conversion loss**, in-storage mass. It starts on
+the wet feedstock when every member run's draws carry a wet mass and every dry
+input is known, with water driven off as the first exit, and is dry kg from
+there on; otherwise it starts on the dry feedstock. Columns are never
+normalized. It carries no CO₂e: that is registry-owned.
 _Avoid_: volume flow.
 
 **Conversion loss**:
@@ -688,11 +766,31 @@ _Avoid_: superadmin, root.
 
 **Member**:
 A user's belonging to an **Organization**, carrying one org role —
-*Owner* (first user, full control, an org never loses its last owner),
-*Admin* (manages members and org settings; registry-facing submissions
-are Admin-and-up), or *Member* (day-to-day MRV data entry). A user may
+*Admin* (full organization control) or *Member* (day-to-day MRV data entry). A user may
 hold memberships in several Organizations, though one is the norm.
 _Avoid_: teammate, seat.
+
+**Admin**:
+An Organization role with full control of its settings and members, including
+registry-facing submissions. Organization deletion through the plugin is refused;
+organization lifecycle belongs to Platform Admins. The first member is an
+Admin. An Organization must keep at least one Admin: the last Admin cannot be
+demoted, removed, or leave until another member becomes an Admin. Replaces the
+former Owner role. Distinct from **Platform Admin**.
+
+### Connected apps
+
+**Connected app**:
+An app a person has allowed to act for them in one **Organization**, within
+permissions they approve. This is the app-facing term shown in Settings.
+_Avoid_: integration, API key, OAuth client when writing interface copy.
+
+**OAuth client**:
+The technical identity of an app that requests a person's permission to use
+noma; one OAuth client can have many **Connected apps** belonging to different
+people or Organizations.
+_Avoid_: client in operator-facing copy; treating the app identity as one
+person's connection.
 
 ## Relationships
 

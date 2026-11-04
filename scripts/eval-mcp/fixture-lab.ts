@@ -49,7 +49,7 @@ export async function seedLabFixture(caseId: string, now = new Date()): Promise<
   const org = fixture.ctx.organizationId;
   try {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "admin" });
     await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, durabilityOption: LAB_DURABILITY_OPTION, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const [process] = await db.insert(productionProcesses)

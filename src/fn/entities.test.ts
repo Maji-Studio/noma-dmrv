@@ -43,3 +43,18 @@ it("preserves validate-only sibling filters when normalizing the customer id", a
   });
   expect(input.filterBy.customerId).toBe(customerId);
 });
+
+it('validates and forwards the ingredient draw estimate parameters on the existing entity read', async () => {
+  const { getEntityByIdFn } = await import('./entities');
+  const { getEntityById } = await import('@/data-access/entities');
+  vi.mocked(getEntityById).mockResolvedValue(null);
+  const filter = { occurredAt: '2026-01-01T12:00:00Z', drawWetKg: '30', excludeProductId: customerId };
+  expect(await getEntityByIdFn('storageLocation', customerId, filter)).toEqual({ success: true, data: null });
+  expect(getEntityById).toHaveBeenCalledWith(ctx, 'storageLocation', customerId, { ...filter, drawWetKg: 30 });
+});
+it.each(['0', '-1', 'NaN', 'Infinity', ''])('rejects an invalid ingredient mass %s before reading', async drawWetKg => {
+  const { getEntityByIdFn } = await import('./entities');
+  const { getEntityById } = await import('@/data-access/entities');
+  expect(await getEntityByIdFn('storageLocation', customerId, { drawWetKg })).toMatchObject({ success: false });
+  expect(getEntityById).not.toHaveBeenCalled();
+});

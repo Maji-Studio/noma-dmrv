@@ -166,3 +166,8 @@ describe("ApplicationForm Add all", () => {
     expect(screen.queryByRole("button", { name: /Add all/ })).toBeNull();
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
+}));

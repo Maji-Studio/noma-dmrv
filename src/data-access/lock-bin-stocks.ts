@@ -45,13 +45,14 @@ export async function lockBinStocks(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationIds: ReadonlyArray<string | null | undefined>,
+  options: { allowArchived?: boolean } = {},
 ): Promise<void> {
   const sortedIds = [...new Set(
     storageLocationIds.filter((id): id is string => id != null),
   )].sort();
 
   for (const storageLocationId of sortedIds) {
-    await lockBinStock(ctx, tx, storageLocationId);
+    await lockBinStock(ctx, tx, storageLocationId, options);
   }
 }
 

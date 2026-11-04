@@ -66,7 +66,7 @@ export function EmissionsOverviewToolbar({ query, setQuery, hasFilters, onClear,
               const value = event.target.value;
               void setQuery({ status: isOneOf<BatchStatusFilter>(BATCH_STATUS_FILTERS, value) ? value : null });
             }}
-            aria-label="Filter credit batches by line state"
+            aria-label="Filter credit batches by component state"
           >
             <option value="">All states</option>
             {BATCH_STATUS_FILTERS.map((status) => (

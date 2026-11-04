@@ -23,7 +23,7 @@ const CUSTOMER_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const LOCATION_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const UPDATED_AT = new Date("2026-01-01T00:00:00.000Z");
 
-type SubmitHandler = (data: never) => Promise<void> | void;
+type SubmitHandler = (data: never, onRefusal: never) => Promise<void> | void;
 
 const harness = vi.hoisted(() => ({
   update: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
 }));
 
 vi.mock("@/hooks/use-customers", () => ({
-  useCreateCustomerLocation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomerLocation: () => ({ startDraft: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateCustomerLocation: () => ({
     mutateAsync: harness.update,
     isPending: false,
@@ -122,7 +122,7 @@ describe("CustomerLocationDialog on a stale-version refusal", () => {
     });
 
     await act(async () => {
-      await harness.onSubmit?.(draft as never);
+      await harness.onSubmit?.(draft as never, ((_error: unknown, fallback: string) => fallback) as never);
     });
 
     expect(harness.update).toHaveBeenCalledWith(
@@ -153,7 +153,7 @@ describe("CustomerLocationDialog on a stale-version refusal", () => {
     });
 
     await act(async () => {
-      await harness.onSubmit?.(draft as never);
+      await harness.onSubmit?.(draft as never, ((_error: unknown, fallback: string) => fallback) as never);
     });
 
     expect(onClose).toHaveBeenCalled();

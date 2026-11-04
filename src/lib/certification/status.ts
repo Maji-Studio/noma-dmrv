@@ -123,8 +123,26 @@ export type RemovalWorkflowStatusKind =
   | "submitted"
   | "superseded";
 
+/** Generic reasons the Removal sheet drops when the submission outcome notice says it better. */
+export const REMOVAL_FAILED_REVIEW_REASON =
+  "Review submission history, then select Review & submit.";
+export const REMOVAL_INTERRUPTED_RECONCILE_REASON =
+  "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.";
+
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
+
+/**
+ * The batch-level Removal rule (#1528): a credit batch reads Submission
+ * interrupted while any Removal holding its slices is interrupted, whichever
+ * Removal is newest. The list, timeline, stepper, to-dos and dashboard all
+ * decide it here.
+ */
+export function findInterruptedRemoval<T extends { status: Pick<DerivedStatus, "kind"> }>(
+  removals: readonly T[] | undefined,
+): T | undefined {
+  return removals?.find((removal) => removal.status.kind === "interrupted");
+}
 
 export interface RemovalReportingWindowDates {
   startedOn: string | null;
@@ -342,9 +360,7 @@ export function deriveRemovalWorkflowStatus({
       );
     }
     return interruptedWorkflowStatus(
-      [
-        "This submission was interrupted and registry work may already exist. Select Review & submit to reconcile it.",
-      ],
+      [REMOVAL_INTERRUPTED_RECONCILE_REASON],
       true,
       false,
     );
@@ -363,7 +379,7 @@ export function deriveRemovalWorkflowStatus({
     const reasons =
       enrichmentStatus === "available" && readiness?.state === "blocked"
         ? readiness.reasons
-        : ["Review submission history, then select Review & submit."];
+        : [REMOVAL_FAILED_REVIEW_REASON];
     return {
       ...REMOVAL_SUBMISSION_FAILED,
       reasons,

@@ -1,4 +1,4 @@
-import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { formulationFreezesTypeUsage } from "@/lib/formulation-domain-errors";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { and, asc, eq } from "drizzle-orm";
@@ -17,7 +17,9 @@ import {
 import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
-import { ActionConflictError, SafeError } from "@/lib/errors";
+import { SafeError } from "@/lib/errors";
+import { isometricLinkLockedMessage } from "@/lib/feedstock-type-link-lock-copy";
+import { DomainError } from "@/lib/domain-errors";
 import {
   getFeedstockTypeDeleteDecision,
   type FeedstockTypeDeleteConflict,
@@ -32,6 +34,11 @@ import {
 } from "@/schemas/feedstock-types";
 import { requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
+import {
+  getFeedstockTypeLinkLock,
+  getLockedFeedstockTypeLinkLock,
+  type FeedstockTypeLinkLock,
+} from "./feedstock-type-link-lock";
 
 export const FEEDSTOCK_TYPE_MANAGE_ROLE = "admin";
 
@@ -53,13 +60,13 @@ export async function listFeedstockTypes(
     .orderBy(asc(feedstockTypes.name));
 }
 
-export async function createFeedstockType(
-  ctx: OrgContext,
+export async function createFeedstockTypeInTransaction(
+  ctx: OrgContext, tx: DbTransaction,
   data: CreateFeedstockTypeData & { code: string },
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
-  const [created] = await db
+  const [created] = await tx
     .insert(feedstockTypes)
     .values({
       organizationId: ctx.organizationId,
@@ -75,6 +82,14 @@ export async function createFeedstockType(
   return created;
 }
 
+/** The advisory read the edit sheet asks for, outside any transaction. */
+export async function readFeedstockTypeLinkLock(
+  ctx: OrgContext,
+  feedstockTypeId: string,
+): Promise<FeedstockTypeLinkLock> {
+  return getFeedstockTypeLinkLock(ctx, db, feedstockTypeId);
+}
+
 export async function updateFeedstockType(
   ctx: OrgContext,
   data: UpdateFeedstockTypeData,
@@ -88,6 +103,7 @@ export async function updateFeedstockType(
         version: feedstockTypes.version,
         category: feedstockTypes.category,
         usage: feedstockTypes.usage,
+        isometricFeedstockTypeId: feedstockTypes.isometricFeedstockTypeId,
       })
       .from(feedstockTypes)
       .where(
@@ -100,6 +116,19 @@ export async function updateFeedstockType(
 
     if (!locked) throw new SafeError("Feedstock type not found.");
     assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: locked.version });
+
+    if (changes.isometricFeedstockTypeId !== undefined) {
+      changes.isometricFeedstockTypeId = changes.isometricFeedstockTypeId?.trim() || null;
+      if (locked.isometricFeedstockTypeId !== null && changes.isometricFeedstockTypeId !== locked.isometricFeedstockTypeId) {
+        const linkLock = await getLockedFeedstockTypeLinkLock(ctx, tx, feedstockTypeId);
+        if (linkLock.locked) {
+          const message = isometricLinkLockedMessage(linkLock.removals.map(removal => removal.code));
+          throw new DomainError("certification_locked", message, {
+            issues: [{ path: ["isometricFeedstockTypeId"], code: "certification_locked", message }],
+          });
+        }
+      }
+    }
 
     if (changes.usage !== undefined && changes.usage !== "blend" && changes.usage !== locked.usage) {
       const [used] = await tx.select({ name: formulations.name }).from(formulationIngredients)
@@ -268,9 +297,10 @@ export async function deleteFeedstockType(
     const conflict = await findDeleteConflict(ctx, tx, feedstockTypeId);
     const decision = getFeedstockTypeDeleteDecision(conflict ? [conflict] : []);
     if (decision.action === "conflict") {
-      throw new ActionConflictError(
+      throw inUseDeleteRefusal(
         `Feedstock type ${IN_USE_DELETE_MARKER} records still use it. Archive it instead.`,
-        decision.conflict,
+        ["feedstockTypeId"],
+        { conflict: decision.conflict },
       );
     }
     const [deleted] = await tx

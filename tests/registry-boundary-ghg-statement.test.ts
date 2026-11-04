@@ -233,6 +233,9 @@ beforeEach(() => {
 
 beforeAll(() => ensureTestOrg());
 
+// 51 statements reconcile and record a sync each; the default 5s is too tight under CI load.
+const PAGINATED_RECONCILE_TIMEOUT_MS = 20_000;
+
 describe("facility certification boundary lock", () => {
   it("serializes a Removal claim behind the GHG creation boundary", async () => {
     const fixture = await createFixture();
@@ -984,5 +987,5 @@ describe("registry-list GHG statement reconciliation", () => {
       .from(certifierGhgStatements)
       .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
     expect(rows).toHaveLength(statementCount);
-  });
+  }, PAGINATED_RECONCILE_TIMEOUT_MS);
 });

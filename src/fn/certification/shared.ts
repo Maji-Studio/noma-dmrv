@@ -1,3 +1,4 @@
+import type { TransportCategory } from "@/lib/certification/readiness";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
@@ -97,9 +98,9 @@ export async function loadTransportLegsByCategory(
   orgCtx: OrgContext,
   entityIds: TransportEntityIdsByCategory,
   lineages: ChainOfCustodyData[],
-  requiredTransportCategories: readonly (keyof TransportLegsByCategory)[],
+  requiredTransportCategories: readonly TransportCategory[],
 ): Promise<TransportLegsByCategory> {
-  const [feedstock, biochar, sample] = await Promise.all([
+  const [feedstock, biochar] = await Promise.all([
     getTransportLegsWithEvidenceForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
     // Accounting projects one frozen application × product × source-run slice
     // per lineage; never recompute its share from mutable product totals.
@@ -109,7 +110,6 @@ export async function loadTransportLegsByCategory(
           loadMassKg: tonnesToKg(lineage.application.biocharAppliedTons ?? 0),
         })))
       : [],
-    getTransportLegsWithEvidenceForEntities(orgCtx, "sample", entityIds.sampleIds),
   ]);
-  return { feedstock, biochar, sample };
+  return { feedstock, biochar, sample: [], feedstockTransportOwnedElsewhere: entityIds.feedstockTransportOwnedElsewhere };
 }

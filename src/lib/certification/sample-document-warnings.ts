@@ -17,6 +17,16 @@ export function missingSampleReflectanceHistogram(facts: SampleDocumentFacts): b
   return facts.sampling === "sampled" && facts.durabilityOption === "1000_year" && facts.hasReflectanceHistogram === false;
 }
 
+/** Which Sample document a batch lacks, for readers that word it themselves. */
+export type SampleDocumentWarningKey = "labReport" | "reflectanceHistogram";
+
+export function sampleDocumentWarningKeys(facts: SampleDocumentFacts): SampleDocumentWarningKey[] {
+  const keys: SampleDocumentWarningKey[] = [];
+  if (missingSampleLabReport(facts)) keys.push("labReport");
+  if (missingSampleReflectanceHistogram(facts)) keys.push("reflectanceHistogram");
+  return keys;
+}
+
 export function sampleDocumentWarnings(facts: SampleDocumentFacts): string[] {
   const warnings: string[] = [];
   if (missingSampleLabReport(facts)) {

@@ -1,3 +1,4 @@
+import { blockerMessage, type BlockerMessage } from "./blocker-message";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { isSequestrationBlueprintKey } from "@/lib/isometric/storage-blueprints";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
@@ -14,18 +15,18 @@ export function hasDurabilityMeasurementComponents(
   ) ?? false;
 }
 
-export function durabilityConfigurationBlockers(
+export function durabilityConfigurationBlockerMessages(
   batches: readonly { sampling: string; durabilityOption: string }[],
-): string[] {
-  const blockers: string[] = [];
+): BlockerMessage[] {
+  const blockers: BlockerMessage[] = [];
   if (batches.some((batch) => batch.sampling !== "sampled")) {
     blockers.push(
-      "Unsampled Method B Removals cannot be submitted yet. Wait for support to confirm registry availability.",
+      blockerMessage("Unsampled Method B Removals cannot be submitted yet.", "Wait for support to confirm registry availability."),
     );
   }
   if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
     blockers.push(
-      "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability.",
+      blockerMessage("200-year Removals cannot be submitted yet.", "Wait for support to confirm registry availability."),
     );
   }
   const thousandYearCount = batches.filter(
@@ -33,40 +34,102 @@ export function durabilityConfigurationBlockers(
   ).length;
   if (thousandYearCount > MAX_1000_YEAR_CREDIT_BATCHES) {
     blockers.push(
-      "A 1000-year Removal can contain one credit batch. Split these credit batches into separate Removals.",
+      blockerMessage("A 1000-year Removal can contain one credit batch.", "Split these credit batches into separate Removals."),
     );
   }
   return blockers;
 }
 
-export function applicationDestinationBlocker(input: {
+export function durabilityConfigurationBlockers(
+  batches: readonly { sampling: string; durabilityOption: string }[],
+): string[] {
+  return durabilityConfigurationBlockerMessages(batches).map((item) => item.message);
+}
+
+export const feedstockTransportMessage = (label: string) => blockerMessage(
+  `${label} has no usable transport leg.`,
+  "Record a positive distance and load mass before submitting.",
+);
+export const applicationDestinationMessage = (code: string) => blockerMessage(
+  `Application ${code} has no customer location.`,
+  "Select a customer location on the order before submitting.",
+);
+export const deliveryProofMessage = (code: string) => blockerMessage(
+  `Delivery ${code} has no proof of delivery.`,
+  "Attach a delivery receipt, bill of lading or delivery photo before submitting.",
+);
+export const deliveryDistanceMessage = (code: string) => blockerMessage(
+  `Delivery ${code} has no positive transport distance.`,
+  "Set the customer location distance or a delivery distance override before submitting.",
+);
+
+/** Count blockers with exact-list repair links; customer locations without an order stay per record. */
+export function isCountedSubmissionBlocker(blocker: SubmissionLineageBlocker): boolean {
+  return blocker.kind === "deliveryProof" || blocker.kind === "deliveryDistance" ||
+    blocker.kind === "feedstockTransport" ||
+    (blocker.kind === "applicationDestination" && blocker.fixTarget === "orders");
+}
+
+/**
+ * The fact for one counted group, all of one kind. It counts distinct repair
+ * records; one record keeps its own coded fact. Customer locations always name
+ * the order, where the fix is made. The repair step is the members' own.
+ */
+export function submissionBlockerGroupFact(group: readonly SubmissionLineageBlocker[]): string {
+  const [first] = group;
+  const count = new Set(group.map((blocker) => blocker.record.id)).size;
+  if (first.kind === "applicationDestination") {
+    return count === 1
+      ? `Order ${first.record.code} has no customer location.`
+      : `${count} orders have no customer location.`;
+  }
+  if (count === 1) return first.fact;
+  switch (first.kind) {
+    case "deliveryProof":
+      return `${count} deliveries have no proof of delivery.`;
+    case "deliveryDistance":
+      return `${count} deliveries have no positive transport distance.`;
+    case "feedstockTransport":
+      return `${count} feedstocks have no usable transport leg.`;
+  }
+}
+
+export function applicationDestinationBlockerMessage(input: {
   applicationCode: string;
   customerLocationId: string | null;
-}): string | null {
+}): BlockerMessage | null {
   return input.customerLocationId
     ? null
-    : `Application ${input.applicationCode} has no customer location. Select a customer location on the order before submitting.`;
+    : applicationDestinationMessage(input.applicationCode);
 }
 
-export function deliveryProofBlocker(input: {
+export function applicationDestinationBlocker(input: Parameters<typeof applicationDestinationBlockerMessage>[0]): string | null {
+  return applicationDestinationBlockerMessage(input)?.message ?? null;
+}
+
+export function deliveryProofBlockerMessage(input: {
   deliveryCode: string;
   proofOfDeliveryCount: number;
-}): string | null {
+}): BlockerMessage | null {
   return input.proofOfDeliveryCount > 0
     ? null
-    : `Delivery ${input.deliveryCode} has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.`;
+    : deliveryProofMessage(input.deliveryCode);
 }
 
-export function deliveryDistanceBlocker(input: {
+export function deliveryProofBlocker(input: Parameters<typeof deliveryProofBlockerMessage>[0]): string | null {
+  return deliveryProofBlockerMessage(input)?.message ?? null;
+}
+
+export function deliveryDistanceBlockerMessage(input: {
   deliveryCode: string;
   deliveryStatus: string | null;
   distanceKmOverride: number | null;
   recordedDistanceKm: number | null;
-}): string | null {
+}): BlockerMessage | null {
   return input.deliveryStatus === "delivered" &&
     positiveOrNull(input.distanceKmOverride) == null &&
     positiveOrNull(input.recordedDistanceKm) == null
-    ? `Delivery ${input.deliveryCode} has no positive transport distance. Set the customer location distance or a delivery distance override before submitting.`
+    ? deliveryDistanceMessage(input.deliveryCode)
     : null;
 }
 
@@ -88,6 +151,9 @@ export function missingFeedstockTransportIds(
 }
 
 export interface SubmissionLineageBlocker {
+  kind: "feedstockTransport" | "deliveryProof" | "applicationDestination" | "deliveryDistance";
+  instruction: string;
+  fact: string;
   detail: string;
   fixTarget: "feedstocks" | "deliveryEvidence" | "deliveryDistances" | "orders" | "deliveries";
   record: { id: string; code: string; href?: string };

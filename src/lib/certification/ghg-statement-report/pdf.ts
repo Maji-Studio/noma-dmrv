@@ -172,8 +172,11 @@ const styles = {
 const KG_DECIMAL_PLACES = 3;
 const THOUSANDS_GROUPING = /\B(?=(\d{3})+(?!\d))/g;
 
+/** A registry figure the GHG Statement leaves empty says where the gap is. */
+const ISOMETRIC_GIVES_NONE = "Isometric gives none";
+
 const formatKg = (value: number | null): string => {
-  if (value === null) return MISSING_VALUE.notAvailable;
+  if (value === null) return ISOMETRIC_GIVES_NONE;
   const [whole, fraction] = Math.abs(value)
     .toFixed(KG_DECIMAL_PLACES)
     .split(".");

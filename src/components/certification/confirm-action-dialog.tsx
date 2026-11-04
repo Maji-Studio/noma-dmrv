@@ -26,11 +26,9 @@ interface ConfirmActionDialogProps {
   body: ReactNode;
   /** Primary button label. */
   confirmLabel: string;
-  /** Label while the action is in flight. Defaults to `confirmLabel` + "…". */
-  busyLabel?: string;
-  /** Irreversible actions (delete) get red; reversible actions can stay neutral. */
-  variant?: "default" | "neutral" | "destructive";
-  /** Disables both buttons and shows the spinner on the primary. */
+  /** Irreversible actions (delete) get a filled red button; every other confirm is filled primary. */
+  variant?: "default" | "destructive";
+  /** Disables both buttons and shows the spinner on the primary; the label stays. */
   isPending?: boolean;
   /** Renders the inline production EnvBanner above the title. */
   isProduction?: boolean;
@@ -38,6 +36,8 @@ interface ConfirmActionDialogProps {
   errorMessage?: string;
   /** Blocks the primary action when the body names a blocker. Cancel stays live. */
   confirmDisabled?: boolean;
+  /** False holds the dialog open against Escape, the backdrop and the X, e.g. while a request runs. */
+  dismissible?: boolean;
 }
 
 const TITLE_ID = "confirm-action-title";
@@ -49,18 +49,17 @@ export function ConfirmActionDialog({
   title,
   body,
   confirmLabel,
-  busyLabel,
   variant = "default",
   isPending = false,
   isProduction = false,
   errorMessage,
   confirmDisabled = false,
+  dismissible = true,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
-  const isNeutral = variant === "neutral";
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy={TITLE_ID} width="sm">
+    <Modal isOpen={isOpen} onClose={onClose} dismissible={dismissible && !isPending} ariaLabelledBy={TITLE_ID} width="sm">
       <div className="flex flex-col gap-20">
         {isProduction && <EnvBanner isProduction variant="inline" />}
 
@@ -78,21 +77,16 @@ export function ConfirmActionDialog({
         <div className="flex flex-wrap justify-start gap-12">
           <Button
             size="large"
-            variant={isDestructive || isNeutral ? "default" : "primary"}
-            className={
-              isDestructive
-                ? "bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
-                : undefined
-            }
+            variant={isDestructive ? "danger" : "primary"}
             onClick={onConfirm}
             disabled={confirmDisabled}
             busy={isPending}
           >
-            {isPending ? (busyLabel ?? `${confirmLabel}…`) : confirmLabel}
+            {confirmLabel}
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={onClose}
             disabled={isPending}
           >

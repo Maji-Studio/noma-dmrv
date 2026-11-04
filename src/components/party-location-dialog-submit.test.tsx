@@ -59,6 +59,7 @@ vi.mock("@/components/forms/entity-select/quick-add-dialog-shell", () => ({
 
 vi.mock("@/hooks/use-customers", () => ({
   useCreateCustomerLocation: () => ({
+    startDraft: vi.fn(),
     mutateAsync: harness.customerCreate,
     isPending: false,
   }),
@@ -70,6 +71,7 @@ vi.mock("@/hooks/use-customers", () => ({
 
 vi.mock("@/hooks/use-suppliers", () => ({
   useCreateSupplierLocation: () => ({
+    startDraft: vi.fn(),
     mutateAsync: harness.supplierCreate,
     isPending: false,
   }),

@@ -9,34 +9,87 @@ import {
   entryValues,
   groupLines,
   lineMatches,
+  lineCounts,
   lineTotalText,
   kgToTonnes,
   multiplyDecimals,
   tonnesToKg,
   recordsChipText,
+  countedOnHref,
+  isRecordsGap,
   recordsHref,
   recordsText,
-  validateEntryDate,
-  validateFields,
+  recordsFigureText,
 } from "./emission-line-display";
+import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
+import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
+import { deriveBatchEmissionLines, withoutRegistryCalculatedLines } from "@/lib/certification/emission-lines";
+import { validateEntryDate } from "@/schemas/emission-entry-form";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
 
 const RUNS = { source: "productionRuns" as const, count: 22, figure: { magnitude: "120", unit: "L" } };
+
+function sequestrationLine(applicationCount: number) {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const line = deriveBatchEmissionLines({
+    definition, lineSources: resolveLineSources({ definition }), problems: [], enrichmentComplete: true,
+    automaticFigures: { sequestration: null }, automaticRecordCounts: { sequestration: applicationCount }, entries: [],
+  }).find((line) => line.contract?.automaticSource === "sequestration")!;
+  return makeLine({ ...line, entries: [] });
+}
+
+describe("Isometric sequestration display", () => {
+  it.each([1, 15])("drops handled sequestration with %s applications from counts and filters", (count) => {
+    const sequestration = sequestrationLine(count);
+    const other = makeLine({ componentId: "other", state: "empty" });
+    const shown = withoutRegistryCalculatedLines([sequestration, other]);
+    expect(shown).toEqual([other]);
+    expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
+    expect(groupLines(shown).map((group) => group.key)).not.toContain(sequestration.groupKey);
+  });
+
+  it("keeps a batch without applications open and makes counts agree with filters", () => {
+    const empty = sequestrationLine(0);
+    expect(lineTotalText(empty)).toBe("Not recorded");
+    expect(recordsChipText(empty.records!)).toBe("No applications yet");
+    expect(recordsFigureText(empty.records!)).toBe("Not recorded");
+    expect(isRecordsGap(empty.records)).toBe(true);
+    const shown = withoutRegistryCalculatedLines([empty, sequestrationLine(15)]);
+    expect(shown).toEqual([empty]);
+    expect(lineCounts(shown)).toEqual({ all: 1, open: 1, missing: 0, review: 0, notRecorded: 1, done: 0 });
+    expect(shown.filter((line) => lineMatches(line, "open"))).toEqual([empty]);
+    expect(shown.filter((line) => lineMatches(line, "done"))).toEqual([]);
+    expect(groupLines(shown).map((group) => group.key)).toContain(empty.groupKey);
+  });
+});
 
 describe("records copy", () => {
   it("names the figure, the gap and the empty source", () => {
     expect(recordsChipText(RUNS)).toBe("22 runs");
     expect(recordsText(RUNS)).toBe("120 L from 22 production runs");
+    expect(recordsFigureText(RUNS)).toBe("120 L");
     expect(recordsChipText({ ...RUNS, figure: null })).toBe("None on 22 runs");
     expect(recordsText({ ...RUNS, figure: null })).toBe("Not recorded on 22 production runs");
+    expect(recordsFigureText({ ...RUNS, figure: null })).toBe("Not recorded");
     expect(recordsChipText({ source: "deliveries", count: 0, figure: null })).toBe("No deliveries yet");
     expect(recordsChipText({ source: "transportLegs", count: 1, figure: { magnitude: "5", unit: "km * tonne" } })).toBe("1 leg");
+  });
+
+  it("names the batches that count the legs instead of a bare zero", () => {
+    const zero = { magnitude: "0", unit: "km * tonne" };
+    const counted = { source: "transportLegs" as const, count: 0, figure: zero, countedOn: [{ creditBatchId: "a", code: "CB-26-001" }, { creditBatchId: "b", code: "CB-26-002" }] };
+    expect(recordsChipText(counted)).toBe("Counted on CB-26-001, CB-26-002");
+    expect(recordsText(counted)).toBe("Counted on CB-26-001, CB-26-002");
+    expect(isRecordsGap(counted)).toBe(false);
+    expect(recordsFigureText(counted)).toBe("0 t·km");
+    expect(countedOnHref("a", "fac")).toBe("/credit-batches/a?facility=fac&tab=emissions");
+    expect(recordsChipText({ ...counted, countedOn: undefined })).toBe("No transport legs yet");
   });
 
   it("links runs, deliveries and applications filtered to the credit batch", () => {
     const ids = { facilityId: "fac", creditBatchId: "cb" };
     expect(recordsHref(RUNS, ids)).toBe("/production-runs?facility=fac&creditBatch=cb");
-    expect(recordsHref({ source: "transportLegs", count: 2, figure: null }, ids)).toBe("/feedstocks?facility=fac");
+    expect(recordsHref({ source: "transportLegs", count: 2, figure: null }, ids)).toBe("/feedstock-intake?facility=fac");
   });
 });
 
@@ -48,11 +101,20 @@ describe("units and totals", () => {
     expect(displayUnit("kWh")).toBe("kWh");
   });
 
-  it("shows Not recorded, a confirmed zero and Needs setup", () => {
+  it("shows Not recorded, a confirmed zero and Not set up", () => {
     expect(lineTotalText(makeLine())).toBe("Not recorded");
     expect(lineTotalText(makeLine({ state: "confirmedZero", unit: "km" }))).toBe("0 km");
-    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Needs setup");
+    expect(lineTotalText(makeLine({ state: "needsSetup" }))).toBe("Not set up");
     expect(lineTotalText(makeLine({ state: "filled", total: { magnitude: "19880", unit: "kWh" } }))).toBe("19,880 kWh");
+  });
+
+  it("leaves the Total out, never Not recorded, when a line holds figures that do not add up", () => {
+    const mixedUnits = makeLine({ state: "needsReview", entries: [makeEntry({ values: [{ id: "v1", organizationId: "org", entryId: "entry-1", inputKey: "energy", magnitude: "3.2", unit: "MWh", massDistanceDetail: null }], total: null })] });
+    expect(lineTotalText(mixedUnits)).toBeNull();
+    expect(lineTotalText(makeLine({ state: "needsReview", entries: [makeEntry({ counts: false })] }))).toBeNull();
+    const records = { source: "productionRuns" as const, count: 3, figure: { magnitude: "72", unit: "kWh" } };
+    expect(lineTotalText(makeLine({ state: "needsReview", records } as never))).toBeNull();
+    expect(lineTotalText(makeLine({ records: { ...records, figure: null } } as never))).toBe("Not recorded");
   });
 
   it("multiplies decimals exactly", () => {
@@ -114,13 +176,12 @@ describe("add manual entry", () => {
     const single = makeLine({ entryPolicy: "single" });
     expect(addEntryRefusal(single)).toBeNull();
     expect(addEntryRefusal({ ...single, entries: [makeEntry()] })).toBe("One manual entry per credit batch");
-    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This line takes no manual entries");
+    expect(addEntryRefusal(makeLine({ entryPolicy: "none" }))).toBe("This component takes no manual entries");
   });
 
   it("splits a mass-distance input into mass and distance and sends the exact product", () => {
     const line = makeLine({ unit: "km * tonne", inputShape: [{ key: "md", type: "monitored", quantityKind: "mass_distance", unit: "km * tonne" }] });
     expect(entryFields(line).map((field) => `${field.label} ${field.unit}`)).toEqual(["Mass kg", "Distance km"]);
-    expect(validateFields(line, { "md:mass": "12", "md:distance": "x" })).toEqual({ "md:distance": "Enter a non-negative decimal value." });
     expect(entryValues(line, { "md:mass": "12", "md:distance": "4600" })).toEqual([
       {
         inputKey: "md",
@@ -165,7 +226,7 @@ describe("filters and groups", () => {
     expect(lineMatches(makeLine({ state: "empty" }), "notRecorded")).toBe(true);
     expect(lineMatches(makeLine({ state: "filled" }), "open")).toBe(false);
   });
-  it("groups template lines in order under the server's group names", () => {
+  it("groups template components in order under the server's group names", () => {
     const groups = groupLines([
       makeLine({ componentId: "a", groupKey: "co2-stored", groupName: "CO₂ stored" }),
       makeLine({ componentId: "b", groupKey: "co2-stored", groupName: "CO₂ stored" }),

@@ -17,6 +17,8 @@ import {
 import { XIcon, CheckCircleIcon, XCircleIcon, WarningIcon, InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
+import { takeArrivalToast } from "@/lib/arrival-toast";
 import { takePendingWarning } from "@/lib/pending-warning";
 
 // ============================================
@@ -120,6 +122,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
       value={{ toasts, addToast, removeToast, success, error, warning, info }}
     >
       <PendingWarningToast />
+      <ArrivalToast />
       {children}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </ToastContext.Provider>
@@ -141,6 +144,22 @@ function PendingWarningToast() {
     const pending = takePendingWarning();
     if (pending) warning(pending, PENDING_WARNING_DURATION_MS);
   }, [warning]);
+  return null;
+}
+
+/**
+ * Shows the success toast a flow queued for the page it navigates to (a delete
+ * that returns to its list). It runs when the rendered path changes, so the
+ * message appears with the destination, never beside the dialog that started
+ * the navigation. Same external-store sync as above.
+ */
+function ArrivalToast() {
+  const { success } = useToast();
+  const pathname = usePathname();
+  useEffect(() => {
+    const message = takeArrivalToast(pathname);
+    if (message) success(message);
+  }, [pathname, success]);
   return null;
 }
 

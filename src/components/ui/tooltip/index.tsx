@@ -192,5 +192,5 @@ function InfoHint({
   );
 }
 
-export { Tooltip, InfoHint };
+export { Tooltip, InfoHint, TooltipPopup };
 export type { TooltipProps, InfoHintProps };

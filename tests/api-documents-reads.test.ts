@@ -1,3 +1,4 @@
+import { retainFixtureAdmin } from "./helpers/retained-admin";
 /** Real routes, credentials and local storage. Supervisor runs this file against Postgres. */
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -229,6 +230,7 @@ describe("nested document REST reads", { timeout: READ_TIMEOUT_MS }, () => {
   });
 
   it("refuses a credential after its owner becomes a member, before resolving paths", async () => {
+    await retainFixtureAdmin(a.ctx.organizationId);
     await db.update(members).set({ role: "member" }).where(and(eq(members.organizationId, a.ctx.organizationId), eq(members.userId, a.ctx.userId)));
     for (const owner of ownerTypes) {
       const response = await call(owner, "get", { id: UNKNOWN_READ_ID, documentId: UNKNOWN_READ_ID });

@@ -15,10 +15,14 @@
 import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
+import { PLATFORM_HOME_HREF } from "@/lib/auth/home-path";
+import { PLATFORM_DIAGNOSTICS_HREF, PLATFORM_TEMPLATE_MAPPING_HREF } from "@/lib/settings/links";
 import { usePathname } from "next/navigation";
 import {
   HouseIcon,
   TreeStructureIcon,
+  PulseIcon,
+  FlowArrowIcon,
   LeafIcon,
   FactoryIcon,
   HandshakeIcon,
@@ -39,6 +43,9 @@ import {
   GearSixIcon,
   BuildingsIcon,
   SignOutIcon,
+  VanIcon,
+  UsersThreeIcon,
+  WarehouseIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import {
@@ -52,6 +59,12 @@ import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
 import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  SETTINGS_GENERAL_HREF,
+  CREW_HREF,
+  VEHICLES_HREF,
+  withFacilityParam,
+} from "@/lib/settings/links";
 
 interface NavItem {
   href: string;
@@ -70,29 +83,35 @@ interface NavSection {
 }
 
 const SECTION_ACCENTS = {
-  production: "var(--clr-orange)",
-  infrastructure: "var(--clr-purple)",
-  distribution: "var(--clr-rose)",
+  records: "var(--clr-orange)",
   verification: "var(--clr-pink)",
+  partners: "var(--clr-rose)",
   // Certification is its own first-class section (ADR 0007); it gets a distinct
   // accent key rather than reusing `verification`, even though both read pink.
   certification: "var(--clr-pink)",
+  setup: "var(--clr-purple)",
   admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
 
-// Certification is a conditional workspace (ADR 0007): its operational routes
-// only surface once the current facility is linked to a registry. Settings is
-// the lone exception — it's the only place that link gets created, so it stays
-// visible even when unlinked (otherwise an admin could never link a facility).
+// Certification is a conditional workspace (ADR 0007): its routes only surface
+// once the current facility is linked to a registry. Without a link the section
+// shows nothing; the link is made in Settings, Certification, and the registry
+// guard sends a direct visit there (#1277).
 const CERTIFICATION_SECTION_TITLE = "Certification";
-const CERTIFICATION_SETTINGS_HREF = "/certification/settings";
+
+// Screenshot mode: see next.config.ts and docs/testing.md#pr-screenshots.
+const SHOT_MODE = process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_SHOT_MODE === "true";
 
 // Dark vertical gradient shared by both the desktop aside and mobile drawer
 // so the two nav surfaces render identically.
 const SIDEBAR_BACKGROUND_GRADIENT =
   "linear-gradient(180deg, rgba(15, 2, 26, 1) 0%, rgba(10, 1, 18, 1) 100%)";
 
+// Groups follow how often a page is used (2026-10-28): Records are the daily
+// entries, Verification the checks on them, Certification the registry artifacts,
+// Partners the parties they name, Setup the things configured once.
 const navSections: NavSection[] = [
   {
     items: [
@@ -102,78 +121,85 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.default,
   },
   {
-    title: "Production",
-    accent: SECTION_ACCENTS.production,
+    title: "Records",
+    accent: SECTION_ACCENTS.records,
     items: [
-      { href: "/feedstocks", label: "Feedstocks", icon: LeafIcon },
-      { href: "/production-runs", label: "Production Runs", icon: FactoryIcon },
-      { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
-      { href: "/biochar-products", label: "Biochar Products", icon: CubeIcon },
-    ],
-  },
-  {
-    title: "Infrastructure",
-    accent: SECTION_ACCENTS.infrastructure,
-    items: [
-      { href: "/reactors", label: "Reactors", icon: FlaskIcon },
-      { href: "/storage-locations", label: "Storage Bins", icon: PackageIcon },
-      { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
-      { href: "/emissions", label: "Emissions", icon: CloudIcon },
-    ],
-  },
-  {
-    title: "Distribution",
-    accent: SECTION_ACCENTS.distribution,
-    items: [
-      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
-      { href: "/customers", label: "Customers", icon: UsersIcon },
+      { href: "/feedstock-intake", label: "Feedstock intake", icon: LeafIcon },
+      { href: "/production-runs", label: "Production runs", icon: FactoryIcon },
+      { href: "/biochar-products", label: "Biochar products", icon: CubeIcon },
       { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
       { href: "/deliveries", label: "Deliveries", icon: TruckIcon },
       { href: "/applications", label: "Applications", icon: MapPinIcon },
+      { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
   },
   {
     title: "Verification",
     accent: SECTION_ACCENTS.verification,
     items: [
-      { href: "/credit-batches", label: "Credit Batches", icon: CertificateIcon },
-      { href: "/samples", label: "Lab Samples", icon: TestTubeIcon },
+      { href: "/credit-batches", label: "Credit batches", icon: CertificateIcon },
+      { href: "/lab-samples", label: "Lab Samples", icon: TestTubeIcon },
     ],
   },
   {
     // First-class section (ADR 0007, amended 2026-06-13): surface only the
-    // concrete artifact/setup routes. The root `/certification` route redirects
-    // to Removals for old bookmarks and broad entry points.
-    //
+    // concrete artifact routes, /removals and /ghg-statements.
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification/removals", label: "Removals", icon: StackIcon },
-      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
-      { href: "/certification/settings", label: "Settings", icon: GearSixIcon },
+      { href: "/removals", label: "Removals", icon: StackIcon },
+      { href: "/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
+    ],
+  },
+  {
+    title: "Partners",
+    accent: SECTION_ACCENTS.partners,
+    items: [
+      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
+      { href: "/customers", label: "Customers", icon: UsersIcon },
+    ],
+  },
+  {
+    title: "Setup",
+    accent: SECTION_ACCENTS.setup,
+    items: [
+      { href: "/storage-bins", label: "Storage bins", icon: PackageIcon },
+      { href: "/feedstock-types", label: "Feedstock types", icon: TagIcon },
+      { href: "/reactors", label: "Reactors", icon: FlaskIcon },
+      { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
+      { href: VEHICLES_HREF, label: "Vehicles", icon: VanIcon },
+      { href: CREW_HREF, label: "Crew", icon: UsersThreeIcon },
+      // Organization-wide: the page lists every facility, so no `?facility=`.
+      { href: "/facilities", label: "Facilities", icon: WarehouseIcon, skipFacilityParam: true },
     ],
   },
 ];
 
 /**
- * Admin section — appended to the nav only for users with the admin role.
+ * Platform section — appended to the nav only for Platform Admins.
  *
- * One item, because the organization directory is the only surface that lives
- * under `/admin`. It used to point at an `/admin` hub whose other two tiles
- * were cross-links to pages already in this sidebar; the label now names the
- * destination instead of the gate. Cross-tenant by definition, so the
- * `?facility=` param is skipped.
+ * Organizations (the Platform home), Diagnostics and Template mapping, which
+ * moved here from Settings (#1373). Organizations and Diagnostics are not
+ * about one facility, so they skip the `?facility=` param; Template mapping
+ * shows the working facility, so it keeps it.
  */
 const adminSection: NavSection = {
-  title: "Admin",
+  title: "Platform",
   accent: SECTION_ACCENTS.admin,
   items: [
     {
-      href: "/admin/organizations",
+      href: PLATFORM_HOME_HREF,
       label: "Organizations",
       icon: BuildingsIcon,
       skipFacilityParam: true,
     },
+    {
+      href: PLATFORM_DIAGNOSTICS_HREF,
+      label: "Diagnostics",
+      icon: PulseIcon,
+      skipFacilityParam: true,
+    },
+    { href: PLATFORM_TEMPLATE_MAPPING_HREF, label: "Template mapping", icon: FlowArrowIcon },
   ],
 };
 
@@ -299,16 +325,16 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     window.location.replace("/login");
   }
 
-  // Append the Admin section only for admin users. `useIsAdmin()` is
+  // Append the Platform section only for Platform Admins. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
   // mounts after hydration). Server-side `requireAdmin()` in
-  // src/app/admin/layout.tsx remains the actual access boundary.
+  // src/app/(app)/platform/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
 
-  // Gate the Certification operational routes on the current facility having a
-  // registry link. The summary is DB-only (no Isometric API) and shared with
-  // the certification pages, so it's usually a cache hit. Until a link is
-  // confirmed, only Settings is shown — the entry point for creating one.
+  // Gate the Certification routes on the current facility having a registry
+  // link. The summary is DB-only (no Isometric API) and shared with the
+  // certification pages, so it's usually a cache hit. Until a link is
+  // confirmed the section is left out.
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityParam ?? "",
     !!facilityParam,
@@ -316,15 +342,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const hasRegistry = Boolean(certifierSummary?.mapping);
 
   const baseSections = isAdmin ? [...navSections, adminSection] : navSections;
-  const sections = baseSections.map((section) =>
-    section.title === CERTIFICATION_SECTION_TITLE && !hasRegistry
-      ? {
-          ...section,
-          items: section.items.filter(
-            (item) => item.href === CERTIFICATION_SETTINGS_HREF,
-          ),
-        }
-      : section,
+  const sections = baseSections.filter(
+    (section) => section.title !== CERTIFICATION_SECTION_TITLE || hasRegistry,
   );
 
   return (
@@ -387,25 +406,28 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="body-caption font-medium text-white truncate" suppressHydrationWarning>
-              {session?.user?.name ?? "User"}
-            </span>
-            <span className="text-[10px] text-[var(--color-white-25)] truncate" suppressHydrationWarning>
-              {session?.user?.email ?? " "}
-            </span>
+            {/* Screenshot mode (docs/testing.md#pr-screenshots) hides the
+                account text so PR evidence never shows a real email. */}
+            {!SHOT_MODE && (
+              <>
+                <span className="body-caption font-medium text-white truncate" suppressHydrationWarning>
+                  {session?.user?.name ?? "User"}
+                </span>
+                <span className="text-[10px] text-[var(--color-white-25)] truncate" suppressHydrationWarning>
+                  {session?.user?.email ?? " "}
+                </span>
+              </>
+            )}
           </div>
-          {/* Straight to Members rather than `/settings`, which only
-              redirects here — the settings rail is the index.
-
-              The name stays "Organization settings": the Certification section
-              already carries a link named exactly "Settings", and two links in
-              the same nav with one accessible name is ambiguous for screen
-              reader users and for any by-name lookup. */}
+          {/* Straight to General rather than `/settings`, which only
+              redirects there: the settings rail is the index, and General is
+              the pane every member can open (Q15). The only link in the nav
+              named "Settings" since Certification lost its own. */}
           <Link
-            href="/settings/organization"
+            href={withFacilityParam(SETTINGS_GENERAL_HREF, facilityParam)}
             onClick={onNavigate}
             className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-white transition-colors duration-150"
-            aria-label="Organization settings"
+            aria-label="Settings"
           >
             <GearSixIcon size={16} />
           </Link>

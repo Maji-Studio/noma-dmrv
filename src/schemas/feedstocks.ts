@@ -1,3 +1,4 @@
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 /**
  * Feedstock Validation Schemas
  * Unified schemas for the combined delivery + bin allocation workflow.
@@ -19,6 +20,9 @@ import {
   storedPercentSchema,
   uuidSchema,
 } from "./helpers";
+
+/** The most feedstocks one list request returns, and the exact-id chunk size. */
+export const MAX_FEEDSTOCK_LIST_SIZE = EXACT_ID_FILTER_MAX;
 
 // ============================================
 // Shared numeric field helpers
@@ -188,6 +192,7 @@ export const feedstockFilterSchema = z.object({
     .max(255, "Search query must be less than 255 characters")
     .optional(),
   facilityId: z.string().uuid().optional(),
+  ids: z.array(uuidSchema()).max(MAX_FEEDSTOCK_LIST_SIZE).optional(),
   supplierId: z.string().uuid().optional(),
   feedstockTypeId: z.string().uuid().optional(),
   status: z.enum(["missing_data", "complete"]).optional(),
@@ -195,7 +200,7 @@ export const feedstockFilterSchema = z.object({
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
+  pageSize: z.number().int().min(1).max(MAX_FEEDSTOCK_LIST_SIZE).default(20),
   sortBy: z
     .enum(["code", "deliveryDate", "massDryKg", "massWetKg", "createdAt", "updatedAt"])
     .default("deliveryDate"),

@@ -2,6 +2,7 @@ import type { GisBoundary } from "@/lib/geojson/types";
 import type { ProductSourceAllocationFact } from "./biochar-product-application-allocation";
 
 export interface BatchLineageFeedstockFact {
+  ownsTransport: boolean;
   id: string;
   code: string;
   status: string | null;
@@ -71,6 +72,7 @@ export interface BatchLineageApplicationFact {
     productionDate: string;
     massKg: number | null;
     moistureContentPercent: number | null;
+    composition?: unknown;
     formulationName: string | null;
     linkedProductionRunId: string;
   };
@@ -97,6 +99,7 @@ export interface BatchRunForwardProductFact {
   productionDate: string;
   massKg: number;
   moistureContentPercent: number;
+  composition?: unknown;
   formulationName: string | null;
   drawnWetMassKg: number;
   drawnDryMassKg: number;

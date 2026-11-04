@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { assert, afterAll, beforeAll, beforeEach, expect, it } from "vitest";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, creditBatches, emissionLineComments, organizations, removalTemplateObservations, users } from "@/db/schema";
@@ -12,12 +12,6 @@ import { loadFacilityEmissionsOverview } from "@/lib/read-models/facility-emissi
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
-
-const flag = vi.hoisted(() => ({ enabled: true }));
-vi.mock("@/config/env", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/config/env")>();
-  return { ...original, env: { ...original.env, get EMISSIONS_ENTRIES_ENABLED() { return flag.enabled; } } };
-});
 
 const userId = `line-comment-user-${crypto.randomUUID()}`;
 const editorId = `line-comment-editor-${crypto.randomUUID()}`;
@@ -72,7 +66,6 @@ beforeAll(async () => {
   ));
 });
 beforeEach(async () => {
-  flag.enabled = true;
   await db.delete(emissionLineComments).where(and(
     eq(emissionLineComments.organizationId, TEST_ORG_ID),
     inArray(emissionLineComments.creditBatchId, [lineage.batchId, otherBatch.batchId]),
@@ -126,7 +119,7 @@ it("creates, edits with a version, conflicts, and hard deletes while retaining w
   ]);
   const [gone, live] = [...records.values()];
   expect(gone).toMatchObject({ label: null, deleted: true });
-  expect(live).toMatchObject({ label: "Line comment", deleted: false, facilityId: lineage.facilityId });
+  expect(live).toMatchObject({ label: "Component comment", deleted: false, facilityId: lineage.facilityId });
 });
 
 it("serializes competing creates into one success and one conflict", async () => {
@@ -169,13 +162,17 @@ it("enforces uniqueness and a nonblank body in the database", async () => {
   await expect(db.insert(emissionLineComments).values({ ...created, id: crypto.randomUUID(), componentId: "other", body: "   " })).rejects.toThrow();
 });
 
-it("joins only matching current-template lines and keeps all derived emissions facts unchanged", async () => {
-  const before = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+it("joins only matching current-template components and keeps all derived emissions facts unchanged", async () => {
+  const beforeResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(beforeResult.status === "ready");
+  const before = beforeResult.lines;
   const overview = await loadFacilityEmissionsOverview(ctx, lineage.facilityId);
   const created = await setEmissionLineComment(ctx, input());
   const other = await setEmissionLineComment(ctx, input("other"));
   await setEmissionLineComment(ctx, { ...input(), facilityId: otherBatch.facilityId, creditBatchId: otherBatch.batchId, body: "Other batch" });
-  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  const linesResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  assert(linesResult.status === "ready");
+  const lines = linesResult.lines;
   expect(lines.find((line) => line.componentId === "energy")?.comment).toEqual({
     id: created.id, body: created.body, version: created.version, updatedAt: created.updatedAt, updatedBy: userId,
   });
@@ -187,7 +184,9 @@ it("joins only matching current-template lines and keeps all derived emissions f
   source.definition.groups[0].components = source.definition.groups[0].components.filter((component) => component.id !== "energy");
   await db.update(removalTemplateObservations).set({ definition: source.definition }).where(eq(removalTemplateObservations.id, observationId));
   try {
-    const after = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+    const afterResult = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+    assert(afterResult.status === "ready");
+    const after = afterResult.lines;
     expect(after.some((line) => line.comment?.id === created.id)).toBe(false);
     expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
     // Deletion still works after a template removes the component.
@@ -197,14 +196,7 @@ it("joins only matching current-template lines and keeps all derived emissions f
   }
 });
 
-it("reads saved comments with the flag off and refuses both writes", async () => {
+it("reads saved comments", async () => {
   const created = await setEmissionLineComment(ctx, input());
-  flag.enabled = false;
-  try {
-    expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
-    await expect(setEmissionLineComment(ctx, { ...input(), id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
-    await expect(deleteEmissionLineComment(ctx, { id: created.id, expectedVersion: created.version })).rejects.toThrow("not available");
-  } finally {
-    flag.enabled = true;
-  }
+  expect(await getEmissionLineComment(ctx, created.id)).toEqual(created);
 });

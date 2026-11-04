@@ -14,15 +14,19 @@
 "use client";
 
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
-import { isometricRegistry } from "@/lib/isometric/links";
 import { IsometricLink } from "./isometric-link";
+import {
+  formatRegistryRecord,
+  registryRecordUrl,
+  type RegistryRecordKind,
+} from "./registry-record";
 
 interface RegistryRecordLinkProps {
   facilityId: string;
   externalId: string;
   version: number | null;
   isProduction: boolean;
-  kind: "removal" | "ghgStatement";
+  kind: RegistryRecordKind;
 }
 
 export function RegistryRecordLink({
@@ -33,28 +37,17 @@ export function RegistryRecordLink({
   kind,
 }: RegistryRecordLinkProps) {
   const { data } = useFacilityCertifierSummary(facilityId);
-  const externalProjectId = data?.mapping?.externalProjectId ?? null;
-  const environment = isProduction ? "production" : "sandbox";
-
-  const url = externalProjectId
-    ? kind === "removal"
-      ? isometricRegistry.removal({
-          environment,
-          externalProjectId,
-          externalRemovalId: externalId,
-        })
-      : isometricRegistry.ghgStatement({
-          environment,
-          externalProjectId,
-          externalStatementId: externalId,
-        })
-    : null;
+  const url = registryRecordUrl({
+    kind,
+    externalId,
+    externalProjectId: data?.mapping?.externalProjectId ?? null,
+    isProduction,
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
       <span className="font-mono text-[var(--color-text-secondary)]">
-        {externalId}
-        {version != null && ` · v${version}`}
+        {formatRegistryRecord(externalId, version)}
       </span>
       {url && <IsometricLink href={url} />}
     </div>

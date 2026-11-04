@@ -33,10 +33,11 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(async () => ({
     userId: USER_ID,
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   })),
 }));
+vi.mock("@/fn/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: vi.fn(async () => undefined) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");

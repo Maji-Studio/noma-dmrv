@@ -1,3 +1,6 @@
+import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
+import { applyFeedstockMethodChange } from './feedstock-bin-method';
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
@@ -13,6 +16,7 @@ import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
+  feedstockBinMethodChanges,
   facilities,
   feedstockTypes,
   biocharProducts,
@@ -47,6 +51,7 @@ import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
+  FEEDSTOCK_METHOD_HISTORY_BLOCKER,
 } from "./storage-location-references";
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 import type {
@@ -137,20 +142,20 @@ export async function getStorageLocations(
   // nulls to the end in *either* direction rather than taking Postgres's
   // default (NULLS LAST on ASC, NULLS FIRST on DESC, which would lead the
   // "Largest capacity" board with every uncapped bin).
-  const direction = sortOrder === "desc" ? sql`DESC` : sql`ASC`;
+  const orderFn = sortOrder === "desc" ? desc : asc;
   const primaryOrder =
     sortBy === "lastActivityAt"
-      ? sql`${storageLocationLastActivityAt(ctx.organizationId)} ${direction} NULLS LAST`
+      ? sql`${orderFn(storageLocationLastActivityAt(ctx.organizationId))} NULLS LAST`
       : sortBy === "capacityKg"
-        ? sql`${storageLocations.capacityKg} ${direction} NULLS LAST`
-        : (sortOrder === "desc" ? desc : asc)(
-            SORT_COLUMNS[sortBy] ?? storageLocations.code,
-          );
+        ? sql`${orderFn(storageLocations.capacityKg)} NULLS LAST`
+        : orderFn(SORT_COLUMNS[sortBy] ?? storageLocations.code);
   // Code breaks every tie. Without it, rows sharing a sort value (every bin of
   // one type, every bin with no activity) come back in whatever order the plan
   // produced, and a row can repeat on page 2 after appearing on page 1.
-  const orderBy =
-    sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)];
+  const orderBy = [
+    ...(sortBy === "code" ? [primaryOrder] : [primaryOrder, asc(storageLocations.code)]),
+    asc(storageLocations.id),
+  ];
 
   // Count total for pagination
   // org-scope-ok: whereClause includes the active organization predicate.
@@ -323,11 +328,9 @@ export async function getStorageLocationWithFacility(
 // Create Operations
 // ============================================
 
-/**
- * Create a new storage bin
- */
-export async function createStorageLocation(
+export async function createStorageLocationInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   data: {
     code: string;
     name: string;
@@ -344,60 +347,58 @@ export async function createStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  return db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
-    if (data.feedstockTypeId) {
-      const [feedstockType] = await tx
-        .select({ id: feedstockTypes.id })
-        .from(feedstockTypes)
-        .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await tx
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
-      if (!feedstockType) {
-        throw new SafeError("Feedstock type not found");
-      }
+    if (!feedstockType) {
+      throw new SafeError("Feedstock type not found");
     }
+  }
 
-    // The Zod create schema enforces this for form/fn flows; repeat it here so
-    // direct data-access callers (seeds, scripts) can't create a bin the update
-    // path's invariant check would then refuse to touch.
-    if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
-      throw new SafeError(
-        "Feedstock bins must be restricted to one feedstock type"
-      );
-    }
-
-    // A formulation only makes sense on a product bin; ignore it for other types.
-    const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
-    if (formulationId) {
-      await lockFormulationReference(ctx, tx, formulationId);
-    }
-
-    const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
-      tx
-        .insert(storageLocations)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          name: data.name,
-          type: data.type,
-          facilityId: data.facilityId,
-          capacityKg: data.capacityKg ?? null,
-          // Only meaningful on feedstock bins, like formulationId below.
-          feedstockTypeId: isFeedstockBinType(data.type)
-            ? data.feedstockTypeId ?? null
-            : null,
-          formulationId,
-          stockMode: initialStockMode(data.type, data.stockMode),
-          drawOrder: data.drawOrder ?? "oldest_first",
-          storageMethod: data.storageMethod ?? null,
-          storageDescription: data.storageDescription ?? null,
-        })
-        .returning()
+  // The Zod create schema enforces this for form/fn flows; repeat it here so
+  // direct data-access callers (seeds, scripts) can't create a bin the update
+  // path's invariant check would then refuse to touch.
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    throw new SafeError(
+      "Feedstock bins must be restricted to one feedstock type"
     );
+  }
 
-    return storageLocation;
-  });
+  // A formulation only makes sense on a product bin; ignore it for other types.
+  const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
+  if (formulationId) {
+    await lockFormulationReference(ctx, tx, formulationId);
+  }
+
+  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
+    tx
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        // Only meaningful on feedstock bins, like formulationId below.
+        feedstockTypeId: isFeedstockBinType(data.type)
+          ? data.feedstockTypeId ?? null
+          : null,
+        formulationId,
+        stockMode: initialStockMode(data.type, data.stockMode),
+        drawOrder: data.drawOrder ?? "oldest_first",
+        storageMethod: data.storageMethod ?? null,
+        storageDescription: data.storageDescription ?? null,
+      })
+      .returning()
+  );
+
+  return storageLocation;
 }
 
 // ============================================
@@ -612,7 +613,13 @@ export async function updateStorageLocation(
     }
 
     assertRecordLockFields(recordLock, existing, data);
-    const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
+    const feedstockMethod = effectiveType === 'feedstock_bin' && existing.type === 'feedstock_bin'
+      ? await applyFeedstockMethodChange(ctx, tx, existing, data) : undefined;
+    const stockMode = effectiveType === 'feedstock_bin'
+      ? existing.type === 'feedstock_bin'
+        ? feedstockMethod!.stockMode
+        : initialStockMode('feedstock_bin', data.stockMode)
+      : await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
     const dataWithoutNormalized: Partial<typeof data> = { ...data };
     delete dataWithoutNormalized.expectedVersion;
@@ -652,6 +659,9 @@ export async function updateStorageLocation(
       );
     }
 
+    if (feedstockMethod?.effectiveAt) {
+      await reallocateRunsForBins(ctx, tx, [storageLocationId], { earliestEventAt: feedstockMethod.effectiveAt });
+    }
     return updated;
   });
 }
@@ -661,7 +671,8 @@ export async function updateStorageLocation(
 // ============================================
 
 function archiveResidualMaterialMessage(code: string): string {
-  return `Cannot archive storage bin ${code} while it still holds material. Record a stock count of zero to clear what is left, then archive it.`;
+  const base = `Cannot archive storage bin ${code} while it still holds material.`;
+  return stockAdjustmentsEnabled() ? `${base} Record a stock count of zero to clear what is left, then archive it.` : base;
 }
 
 /**
@@ -832,7 +843,7 @@ export async function deleteStorageLocation(
     assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
     const blockers = storageLocationBlockers(
-      await countStorageLocationReferences(ctx, tx, storageLocationId),
+      (await countStorageLocationReferences(ctx, tx, storageLocationId)).filter(reference => reference.blocker !== FEEDSTOCK_METHOD_HISTORY_BLOCKER),
     );
 
     if (blockers.length > 0) {
@@ -841,6 +852,9 @@ export async function deleteStorageLocation(
       );
     }
 
+    await tx.delete(feedstockBinMethodChanges).where(and(
+      eq(feedstockBinMethodChanges.organizationId, ctx.organizationId), eq(feedstockBinMethodChanges.storageLocationId, storageLocationId),
+    ));
     await tx
       .delete(storageLocations)
       .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));

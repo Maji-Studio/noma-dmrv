@@ -1,7 +1,9 @@
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
+import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { readRecordDependents } from "../record-lock-dependents";
 import { assertRecordLockFields } from "@/lib/record-lock-fields";
 import { recordLocks } from "@/lib/record-lock";
-import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
+import { assertProductionRunLineage } from "./lineage-refusal";
 /**
  * Production-run create / update / delete operations, including bin-based
  * feedstock allocation and storage-location validation.
@@ -33,14 +35,13 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
-import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertRowVersion, nextVersion } from "../row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "../code-generator";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
-import { lockActiveFacilityReference } from "../facility-reference-guards";
+import { lockActiveFacilityReference, lockFacilityReferences } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertProductionRunBiocharStockNotOverdrawn,
@@ -316,7 +317,7 @@ export async function createProductionRunInTransaction(
       cancellationReason: data.cancellationReason ?? null,
     });
 
-    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
+    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id, { mutation: "create" });
 
     const savedDraws = await readRunDrawSnapshot(ctx, tx, created.id);
     options.capture?.(created.id, null, { ...created, feedstockDraws: savedDraws });
@@ -397,10 +398,9 @@ export async function updateProductionRunInTransaction(
   const normalizedFeedstockDraws =
     inputFeedstockDraws === undefined
       ? undefined
-      : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
+      : normalizeProductionRunFeedstockDraws(inputFeedstockDraws, existingFeedstockStorageLocationIds);
 
-  // Moving the run to another facility requires that facility to be active
-  // (no children move under an archived parent — mirrors createProductionRun).
+  // Moving a run requires an active target facility.
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
@@ -533,8 +533,10 @@ export async function updateProductionRunInTransaction(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       async () => {
-    if (data.facilityId !== undefined) {
-      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    // Lock both facilities before stock, run or lineage locks.
+    await lockFacilityReferences(ctx, tx, [existing.facilityId, targetFacilityId]);
+    if (targetFacilityId !== existing.facilityId) {
+      await lockActiveFacilityReference(ctx, tx, targetFacilityId);
     }
 
     if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
@@ -570,6 +572,9 @@ export async function updateProductionRunInTransaction(
       expectedVersion: data.expectedVersion,
       actualVersion: locked.version,
     });
+    if (locked.facilityId !== existing.facilityId) {
+      throw staleRowVersion(PRODUCTION_RUN_CONFLICT_ENTITY, productionRunId);
+    }
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(
@@ -683,146 +688,153 @@ export async function updateProductionRunInTransaction(
       }
     }
 
-    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "update",
-    ), "certification_locked");
+    const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+      await getTransportFreezeFeedstockIds(ctx, tx, {
+        runIds: [productionRunId],
+        binIds: [...lockedFeedstockStorageLocationIds, ...(normalizedFeedstockDraws ?? []).map(draw => draw.storageLocationId)],
+      }), { mutation: "update", subject: "production run" });
+    await freeze(async transportOwnershipFreeze => {
+      await assertProductionRunLineage(ctx, tx, productionRunId, locked, data);
 
-    // A cancelled run frees its slot, so only an occupying run needs this guard.
-    if (statusOccupiesReactor(lockedTargetStatus)) {
-      await assertNoReactorRunOverlap(ctx, tx, {
-        reactorId: lockedTargetReactorId,
-        startTime: lockedTargetStartTime,
-        endTime: lockedTargetEndTime,
-        selfId: productionRunId,
-      });
-    }
+      // A cancelled run frees its slot, so only an occupying run needs this guard.
+      if (statusOccupiesReactor(lockedTargetStatus)) {
+        await assertNoReactorRunOverlap(ctx, tx, {
+          reactorId: lockedTargetReactorId,
+          startTime: lockedTargetStartTime,
+          endTime: lockedTargetEndTime,
+          selfId: productionRunId,
+        });
+      }
 
-    if (
-      effectiveBiocharStorageId &&
-      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
-    ) {
-      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
-    }
-    const biocharStockState =
-      await deriveProductionRunUpdateBiocharStockState(
-        ctx,
-        tx,
-        locked,
-        data,
-      );
+      if (
+        effectiveBiocharStorageId &&
+        (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+      ) {
+        await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
+      }
+      const biocharStockState =
+        await deriveProductionRunUpdateBiocharStockState(
+          ctx,
+          tx,
+          locked,
+          data,
+        );
 
-    if (data.facilityId !== undefined && normalizedFeedstockDraws === undefined) {
-      await validateProductionRunFeedstockDrawSources(
-        ctx,
-        tx,
-        lockedFeedstockStorageLocationIds.map((storageLocationId) => ({
-          storageLocationId,
-        })),
-        lockedTargetFacilityId,
-      );
-    }
+      if (data.facilityId !== undefined && normalizedFeedstockDraws === undefined) {
+        await validateProductionRunFeedstockDrawSources(
+          ctx,
+          tx,
+          lockedFeedstockStorageLocationIds.map((storageLocationId) => ({
+            storageLocationId,
+          })),
+          lockedTargetFacilityId,
+        );
+      }
 
-    await assertRunAdditionAfterSplit(ctx, tx, { status: lockedTargetStatus, biocharStorageLocationId: effectiveBiocharStorageId, facilityId: lockedTargetFacilityId, endTime: lockedTargetEndTime }, locked);
+      await assertRunAdditionAfterSplit(ctx, tx, { status: lockedTargetStatus, biocharStorageLocationId: effectiveBiocharStorageId, facilityId: lockedTargetFacilityId, endTime: lockedTargetEndTime }, locked);
 
-    const transactionUpdateData = { ...updateData };
-    if (
-      normalizedFeedstockDraws !== undefined ||
-      data.feedstockMoisturePercent !== undefined
-    ) {
-      const wetMass = normalizedFeedstockDraws !== undefined
-        ? normalizedFeedstockDraws.length > 0
-          ? sumProductionRunFeedstockDraws(normalizedFeedstockDraws)
-          : null
-        : locked.feedstockWetMassKg;
-      const moisture = data.feedstockMoisturePercent !== undefined
-        ? data.feedstockMoisturePercent
-        : locked.feedstockMoisturePercent;
-      transactionUpdateData.feedstockMassDryKg =
-        wetMass != null && moisture != null
-          ? deriveMassDryKg(wetMass, moisture)
-          : null;
-    }
-    if (
-      data.biocharOutputKg !== undefined ||
-      data.biocharMoisturePercent !== undefined
-    ) {
-      const wetMass = data.biocharOutputKg !== undefined
-        ? data.biocharOutputKg
-        : locked.biocharOutputKg;
-      const moisture = data.biocharMoisturePercent !== undefined
-        ? data.biocharMoisturePercent
-        : locked.biocharMoisturePercent;
-      transactionUpdateData.biocharDryMassKg = computeClampedDryMass(
-        wetMass,
-        moisture,
-      );
-    }
-
-    const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
-    const [saved] = await tx
-      .update(productionRuns)
-      .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId))).returning();
-
-    await assertProductionRunBiocharStockNotOverdrawn(
-      ctx,
-      tx,
-      biocharStockState,
-    );
-
-    if (feedstockDrawsChanged) {
-      await replaceProductionRunFeedstockDraws(ctx, tx, {
-        productionRunId,
-        facilityId: lockedTargetFacilityId,
-        draws: normalizedFeedstockDraws,
-      });
-    }
-
-    const savedDraws = feedstockDrawsChanged
-      ? await readRunDrawSnapshot(ctx, tx, productionRunId)
-      : previousDraws;
-    options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws }, { ...saved, feedstockDraws: savedDraws });
-
-    const consumedFeedstockWetKg =
-      await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);
-
-    // Recheck all outcome rules after allocation. Only untouched feedstock
-    // prerequisites are exempt for existing records, as in both preflights.
-    assertProductionRunOutcome({
-      status: lockedTargetStatus,
-      startTime: lockedTargetStartTime,
-      endTime: lockedTargetEndTime,
-      endTimePresent: lockedTargetEndTime !== null,
-      biocharOutputKg: lockedTargetBiocharOutput,
-      biocharStorageLocationId: effectiveBiocharStorageId,
-      biocharMoisturePercent:
-        data.biocharMoisturePercent !== undefined
-          ? data.biocharMoisturePercent
-          : locked.biocharMoisturePercent,
-      feedstockWetMassKg:
-        normalizedFeedstockDraws !== undefined
+      const transactionUpdateData = { ...updateData };
+      if (
+        normalizedFeedstockDraws !== undefined ||
+        data.feedstockMoisturePercent !== undefined
+      ) {
+        const wetMass = normalizedFeedstockDraws !== undefined
           ? normalizedFeedstockDraws.length > 0
             ? sumProductionRunFeedstockDraws(normalizedFeedstockDraws)
             : null
-          : locked.feedstockWetMassKg,
-      feedstockMoisturePercent:
-        data.feedstockMoisturePercent !== undefined
+          : locked.feedstockWetMassKg;
+        const moisture = data.feedstockMoisturePercent !== undefined
           ? data.feedstockMoisturePercent
-          : locked.feedstockMoisturePercent,
-      feedstock: {
-        basis: "consumed-mass",
-        consumedFeedstockWetKg,
-      },
-      cancellationReason: lockedTargetCancellationReason,
+          : locked.feedstockMoisturePercent;
+        transactionUpdateData.feedstockMassDryKg =
+          wetMass != null && moisture != null
+            ? deriveMassDryKg(wetMass, moisture)
+            : null;
+      }
+      if (
+        data.biocharOutputKg !== undefined ||
+        data.biocharMoisturePercent !== undefined
+      ) {
+        const wetMass = data.biocharOutputKg !== undefined
+          ? data.biocharOutputKg
+          : locked.biocharOutputKg;
+        const moisture = data.biocharMoisturePercent !== undefined
+          ? data.biocharMoisturePercent
+          : locked.biocharMoisturePercent;
+        transactionUpdateData.biocharDryMassKg = computeClampedDryMass(
+          wetMass,
+          moisture,
+        );
+      }
+
+      const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
+      const [saved] = await tx
+        .update(productionRuns)
+        .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
+        .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId))).returning();
+
+      await assertProductionRunBiocharStockNotOverdrawn(
+        ctx,
+        tx,
+        biocharStockState,
+      );
+
+      if (feedstockDrawsChanged) {
+        await replaceProductionRunFeedstockDraws(ctx, tx, {
+          productionRunId,
+          facilityId: lockedTargetFacilityId,
+          draws: normalizedFeedstockDraws,
+          earliestEventAt: new Date(Math.min(locked.startTime.getTime(), lockedTargetStartTime.getTime())),
+          transportOwnershipFreeze,
+        });
+      } else if (lockedTargetStartTime.getTime() !== locked.startTime.getTime() || lockedTargetFacilityId !== locked.facilityId || lockedTargetStatus !== locked.status) {
+        await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { onlyRunId: productionRunId, earliestEventAt: new Date(Math.min(locked.startTime.getTime(), lockedTargetStartTime.getTime())), transportOwnershipFreeze });
+      }
+
+      const savedDraws = feedstockDrawsChanged
+        ? await readRunDrawSnapshot(ctx, tx, productionRunId)
+        : previousDraws;
+      options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws }, { ...saved, feedstockDraws: savedDraws });
+
+      const consumedFeedstockWetKg =
+        await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);
+
+      // Recheck all outcome rules after allocation. Only untouched feedstock
+      // prerequisites are exempt for existing records, as in both preflights.
+      assertProductionRunOutcome({
+        status: lockedTargetStatus,
+        startTime: lockedTargetStartTime,
+        endTime: lockedTargetEndTime,
+        endTimePresent: lockedTargetEndTime !== null,
+        biocharOutputKg: lockedTargetBiocharOutput,
+        biocharStorageLocationId: effectiveBiocharStorageId,
+        biocharMoisturePercent:
+          data.biocharMoisturePercent !== undefined
+            ? data.biocharMoisturePercent
+            : locked.biocharMoisturePercent,
+        feedstockWetMassKg:
+          normalizedFeedstockDraws !== undefined
+            ? normalizedFeedstockDraws.length > 0
+              ? sumProductionRunFeedstockDraws(normalizedFeedstockDraws)
+              : null
+            : locked.feedstockWetMassKg,
+        feedstockMoisturePercent:
+          data.feedstockMoisturePercent !== undefined
+            ? data.feedstockMoisturePercent
+            : locked.feedstockMoisturePercent,
+        feedstock: {
+          basis: "consumed-mass",
+          consumedFeedstockWetKg,
+        },
+        cancellationReason: lockedTargetCancellationReason,
+      });
+      await attachProductionRunToMatchingCreditBatch(
+        ctx,
+        tx,
+        productionRunId,
+        { transportOwnershipFreeze },
+      );
     });
-    await attachProductionRunToMatchingCreditBatch(
-      ctx,
-      tx,
-      productionRunId,
-    );
       },
     );
   } catch (error) {

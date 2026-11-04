@@ -95,6 +95,12 @@
       "rule": "Tests must exercise the production path named by the requirement and assert observable outcomes against stable entity identity. Flag positional selectors, fixtures that leak persistent or object-storage data, mocks that bypass the behavior under test, assertions that pass on the wrong record, missing negative or boundary cases for changed invariants, and tests whose comments claim more than they prove.",
       "scope": ["tests/**", "src/**/*.test.*", "src/**/*.spec.*"],
       "severity": "medium"
+    },
+    {
+      "id": "ui-action-order",
+      "rule": "Dialog and form footers follow docs/design-system.md (Modal: actions bottom left, primary first) and docs/forms.md (FormActions). Flag a footer that breaks that order: action order is workflow semantics, since primary first is how the operator finds the safe path.",
+      "scope": ["src/components/**", "src/app/**", "src/features/**"],
+      "severity": "medium"
     }
   ]
 }

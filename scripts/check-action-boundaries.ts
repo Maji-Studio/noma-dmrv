@@ -47,6 +47,12 @@ export interface ActionBoundaryViolation {
 
 export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
   {
+    file: "src/fn/oauth-session.ts",
+    function: "withOAuthSession",
+    sites: { "action-failure": 1 },
+    reason: "OAuth picker and consent actions use a verified session without an active organization; signed query errors must not be logged.",
+  },
+  {
     file: "src/fn/invitation-bootstrap.ts",
     function: "toWarnableResult",
     sites: { "catch-failure": 2 },
@@ -89,28 +95,10 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
     reason: "Member removal surfaces Better Auth's own non-SafeError APIError message.",
   },
   {
-    file: "src/hooks/types.ts",
-    function: "unwrap",
-    sites: { "hook-unwrap": 1 },
-    reason: "Canonical unwrap implementation owns the shared ActionResult error throw.",
-  },
-  {
-    file: "src/hooks/use-bin-movements.ts",
-    function: "throwRecordLossError",
-    sites: { "hook-unwrap": 1 },
-    reason: "Loss failures preserve typed field and conflict errors before the generic fallback.",
-  },
-  {
     file: "src/hooks/use-bin-movements.ts",
     function: "useRecordStockTake",
     sites: { "hook-unwrap": 1 },
     reason: "Stock-take failures preserve a typed counted-field error before the generic fallback.",
-  },
-  {
-    file: "src/hooks/use-credit-batches.ts",
-    function: "useCreateCreditBatch",
-    sites: { "hook-unwrap": 1 },
-    reason: "Returns the committed credit batch together with its post-commit warning.",
   },
   {
     file: "src/hooks/use-production-run-readings.ts",

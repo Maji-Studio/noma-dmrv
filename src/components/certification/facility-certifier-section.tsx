@@ -7,13 +7,14 @@
  *    cross-facility link hints from the Isometric API).
  *  - read-only: a DB-only summary (no management payload on the wire) with no
  *    controls — for viewers who can read the current link but not change it.
- * Mounts in /certification/settings, which passes the server-computed
+ * Mounts in Settings, Facilities, which passes the server-computed
  * `viewerCanManage`. The facility side-sheet shows the lighter
  * `FacilityCertifierSummary` instead.
  */
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -22,8 +23,10 @@ import {
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { formatDate } from "@/lib/format-utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { removalTemplatesSettingsHref } from "@/lib/certification/links";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDay } from "@/lib/format-utils";
+import { MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
   FacilityCertifierDialog,
@@ -129,20 +132,25 @@ function CertifierActions({ children }: { children: ReactNode }) {
 
 /**
  * The mapping fields grid, shared by both modes. When `projectName` is
- * `undefined` the friendly name is unavailable (read-only path, which doesn't
- * fetch the project list) so the persisted identifiers stand in for it.
+ * `undefined` the app has not looked the names up (the read-only path does not
+ * fetch the project list, and without Isometric keys there is nothing to
+ * fetch), so the persisted identifiers stand in for them. `null` means a
+ * configured lookup ran and did not find the ID on Isometric.
  */
 function CertifierMappingFields({
+  facilityId,
   mapping,
   isProduction,
   projectName,
   templateName,
 }: {
+  facilityId: string;
   mapping: CertifierProjectRow;
   isProduction: boolean;
   projectName?: string | null;
   templateName?: string | null;
 }) {
+  const { timeZone } = useFacilityClock(facilityId);
   const resolvesNames = projectName !== undefined;
 
   return (
@@ -150,7 +158,8 @@ function CertifierMappingFields({
       <Field label="Project">
         {resolvesNames && (
           <span className="body-small">
-            {projectName ?? MISSING_VALUE.notAvailable}
+            {/* The saved project ID is not among Isometric's projects. */}
+            {projectName ?? NOT_FOUND_ON_ISOMETRIC}
           </span>
         )}
         <span
@@ -174,37 +183,44 @@ function CertifierMappingFields({
           View on Isometric ↗
         </a>
       </Field>
-      <Field label="Default Removal template">
+      <Field label="Removal template">
         {resolvesNames ? (
           <>
             <span className="body-small">
               {templateName ??
-                // A selected ID with no name is a failed lookup; no ID means no relation was chosen.
-                (mapping.defaultRemovalTemplateId
-                  ? MISSING_VALUE.notAvailable
+                // A selected ID with no name is not among Isometric's templates; no ID means no relation was chosen.
+                (mapping.removalTemplateId
+                  ? NOT_FOUND_ON_ISOMETRIC
                   : MISSING_VALUE.notSet)}
             </span>
-            {mapping.defaultRemovalTemplateId && (
+            {mapping.removalTemplateId && (
               <span className="body-caption text-[var(--color-text-tertiary)]">
-                {mapping.defaultRemovalTemplateId}
+                {mapping.removalTemplateId}
               </span>
             )}
           </>
         ) : (
           <span
             className={
-              mapping.defaultRemovalTemplateId
+              mapping.removalTemplateId
                 ? "body-small font-mono"
                 : "body-small text-[var(--color-text-tertiary)]"
             }
           >
-            {mapping.defaultRemovalTemplateId ?? MISSING_VALUE.notSet}
+            {mapping.removalTemplateId ?? MISSING_VALUE.notSet}
           </span>
         )}
+        {/* Chosen with its lines in Removal templates; shown here read-only. */}
+        <Link
+          href={removalTemplatesSettingsHref(facilityId)}
+          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+        >
+          Open Removal templates
+        </Link>
       </Field>
       <Field label="Linked at">
         <span className="body-small">
-          {formatDate(mapping.createdAt)}
+          {formatFacilityDay(mapping.createdAt, timeZone)}
         </span>
       </Field>
       <Field label="Isometric facility">
@@ -250,7 +266,7 @@ function FacilityCertifierReadOnly({
           <>
             <CertifierHeader isProduction={isProduction} embedded={embedded} />
             {mapping ? (
-              <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
+              <CertifierMappingFields facilityId={facilityId} mapping={mapping} isProduction={isProduction} />
             ) : (
               <p className="body-small text-[var(--color-text-secondary)]">
                 This facility has no Isometric project link. Ask an Admin to link one
@@ -290,9 +306,9 @@ function FacilityCertifierManage({
       )?.name ?? null)
     : null;
 
-  const templateName = data?.mapping?.defaultRemovalTemplateId
+  const templateName = data?.mapping?.removalTemplateId
     ? (data.availableTemplates.find(
-        (t) => t.id === data.mapping?.defaultRemovalTemplateId,
+        (t) => t.id === data.mapping?.removalTemplateId,
       )?.display_name ?? null)
     : null;
 
@@ -382,10 +398,13 @@ function FacilityCertifierManage({
                   />
                 ) : mapping ? (
                   <CertifierMappingFields
+                    facilityId={facilityId}
                     mapping={mapping}
                     isProduction={isProduction}
-                    projectName={projectName}
-                    templateName={templateName}
+                    // Without Isometric keys the app never looked the IDs up,
+                    // so it shows them as saved instead of claiming they are gone.
+                    projectName={data.isConfigured ? projectName : undefined}
+                    templateName={data.isConfigured ? templateName : undefined}
                   />
                 ) : data.isConfigured ? (
                   <p className="body-small text-[var(--color-text-secondary)]">

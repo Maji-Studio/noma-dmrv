@@ -1,0 +1,1 @@
+ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_complete_has_output" CHECK ("production_runs"."status" <> 'complete' or ("production_runs"."biochar_moisture_percent" is not null and "production_runs"."biochar_output_kg" is not null and "production_runs"."biochar_output_kg" > 0 and "production_runs"."biochar_storage_location_id" is not null));

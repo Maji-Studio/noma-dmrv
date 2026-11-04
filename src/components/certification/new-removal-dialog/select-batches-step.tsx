@@ -1,41 +1,27 @@
 /**
- * SelectBatchesStep — step 1 of the New-Removal wizard, reshaped as a readiness
- * workspace (design doc §4.1–4.2, Phase 2). Ready batches lead as selectable
- * cards; not-ready batches collapse under a "Not ready yet (N)" disclosure so the
- * happy path is what the operator sees first. Each gap on a not-ready batch is an
- * action that deep-links straight to where it's fixed (lab samples, production
- * runs, deliveries) — the same `batchHealthFixLinkFor` targets the batch page
- * uses, so the two never diverge — opened in a new tab so this workspace stays
- * put. No more diagnosis-only dead-end: even with zero ready batches the operator
- * has a concrete next click on every gap.
+ * SelectBatchesStep, step 1 of the New-Removal wizard. One compact box per
+ * credit batch (#1202): ready batches lead and can be selected; a batch that is
+ * not ready shows one status line and links to its open to-dos on the batch page,
+ * where every open item is listed and fixed. The selection step never repeats
+ * that list.
  *
  * When facility setup is incomplete a banner blocks grouping for the whole
- * facility — there's no registry to submit to without it (§8).
+ * facility; there's no registry to submit to without it (§8).
  */
 "use client";
 
-import { MultilineDetail } from "../multiline-detail";
 import Link from "next/link";
 import { formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
-import {
-  ArrowSquareOutIcon,
-  CaretDownIcon,
-  CheckCircleIcon,
-  WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
-import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
-import { certificationSettingsHref } from "@/lib/certification/links";
-import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
+import { removalTemplatesSettingsHref, facilityCertificationSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
 import {
   facilityBlueprintLabel,
   type FacilitySetupGap,
 } from "@/lib/certification/facility-setup-gaps";
-import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
 import { Notice } from "@/components/ui/notice";
+import { NotReadyBatchBox, ReadyBatchBox } from "./batch-box";
 
 interface SelectBatchesStepProps {
   batches: SelectableBatch[];
@@ -57,43 +43,45 @@ interface SelectBatchesStepProps {
 export function setupGapCopy(gap: FacilitySetupGap): {
   message: string;
   lines?: string[];
-  action: { label: string; toSettings: true } | null;
+  /** Certifier for the project link, Removal templates for anything about the template. */
+  action: { label: string; target: "certifier" | "removalTemplates" } | null;
 } {
   switch (gap.kind) {
     case "project_link":
       return {
         message:
           "This facility isn't linked to an Isometric project yet. Link it before grouping batches.",
-        action: { label: "Link facility in certification settings", toSettings: true },
+        action: { label: "Link facility in certification settings", target: "certifier" },
       };
     case "external_facility_id":
       return {
         message: "This facility is linked, but its Isometric facility ID is not set.",
-        action: { label: "Set Isometric facility ID in certification settings", toSettings: true },
+        action: { label: "Set Isometric facility ID in certification settings", target: "certifier" },
       };
     case "credentials":
       return {
         message:
-          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Owner or Admin to add them before linking this facility.",
+          "The organization's registry connection credentials are not set, so the registry cannot be reached. Ask an Admin to add them before linking this facility.",
         action: null,
       };
-    case "default_template":
+    case "removal_template":
       return {
         message:
-          "This facility is linked, but no default Removal template is set for it.",
-        action: { label: "Choose a template in certification settings", toSettings: true },
+          "This facility is linked, but no Removal template is set for it.",
+        action: { label: "Set the template in Settings", target: "removalTemplates" },
       };
     case "template_resolution":
       return {
-        message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
-        action: { label: "Re-select template in certification settings", toSettings: true },
+        message: `The Removal template (${gap.templateId}) is no longer available in the registry. Choose another one in Settings.`,
+        action: { label: "Set the template in Settings", target: "removalTemplates" },
       };
     case "template_unbindable": {
       const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
+      const toDecide = gap.inputs.some((input) => input.reason === "unassigned" || input.reason === "ambiguous");
       return {
         message: lead,
         lines,
-        action: { label: "Review certification settings", toSettings: true },
+        action: { label: toDecide ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL, target: "removalTemplates" },
       };
     }
     case "blueprint_keys": {
@@ -102,161 +90,11 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message:
           `The selected Removal template uses ${gap.keys.length} ` +
           `${gap.keys.length === 1 ? "component" : "components"} the registry cannot load: ` +
-          `${labels.join(", ")}. Choose another template or ask an Admin to update the Isometric project.`,
-        action: { label: "Review certification settings", toSettings: true },
+          `${labels.join(", ")}. Choose another Removal template in Settings.`,
+        action: { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, target: "removalTemplates" },
       };
     }
   }
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-2 min-w-0">
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {label}
-      </span>
-      <span className="body-small text-[var(--color-text-primary)] truncate">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-
-function ReadyCard({
-  batch,
-  selected,
-  disabled,
-  onToggle,
-}: {
-  batch: SelectableBatch;
-  selected: boolean;
-  disabled: boolean;
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <label
-      className={`flex flex-col gap-12 border bg-[var(--color-background-white)] p-16 transition-colors ${
-        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-      } ${
-        selected
-          ? "border-[var(--color-interaction)]"
-          : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)]"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-12">
-        <span className="body-small text-[var(--color-text-primary)]">
-          {formatDateRange(batch.startDate, batch.endDate)}
-        </span>
-        <input
-          type="checkbox"
-          className="mt-px size-16 shrink-0 accent-[var(--color-interaction)]"
-          checked={selected}
-          disabled={disabled}
-          onChange={() => onToggle(batch.id)}
-          aria-label={`Select credit batch for ${formatDateRange(batch.startDate, batch.endDate)}, ${batch.code}`}
-        />
-      </div>
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch {batch.code}
-      </span>
-      <div className="grid grid-cols-2 gap-8">
-        <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
-        <Metric
-          label="Durability"
-          value={formatDurabilityOption(batch.durabilityOption)}
-        />
-      </div>
-      <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
-        <CheckCircleIcon size={14} weight="fill" aria-hidden />
-        {CREDIT_BATCH_READY_LABEL}
-      </span>
-    </label>
-  );
-}
-
-function IncompleteCard({
-  batch,
-  facilityId,
-}: {
-  batch: SelectableBatch;
-  facilityId: string;
-}) {
-  // The unmet checks, each with the exact missing items — shown inline so the
-  // operator sees precisely what's outstanding without leaving the dialog. Every
-  // gap carries its own deep link to the exact fix, so there's forward motion on
-  // each one rather than a single "go fix it elsewhere" hop (design doc §4.1).
-  const gaps = batch.health.checks.filter((c) => c.status === "unmet");
-  return (
-    <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
-      <div className="flex items-start justify-between gap-12">
-        <span className="body-small text-[var(--color-text-secondary)]">
-          {formatDateRange(batch.startDate, batch.endDate)}
-        </span>
-        <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-orange-strong)]">
-          <WarningIcon size={14} weight="fill" aria-hidden />
-          {batch.health.issueCount}{" "}
-          {batch.health.issueCount === 1 ? "issue" : "issues"}
-        </span>
-      </div>
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        Credit batch {batch.code}
-      </span>
-      <ul className="flex flex-col gap-10">
-        {gaps.map((check, index) => {
-          // The exact fix workflow for this gap — the same target map the batch
-          // page's health strip uses (batch→samples, run→production data,
-          // application→deliveries), so a gap resolves identically wherever
-          // it's shown.
-          const fix = batchHealthFixLinkFor(check, facilityId, batch.id);
-          return (
-            <li
-              key={`${check.key}:${check.issueKey ?? index}`}
-              className="flex flex-col gap-4"
-            >
-              {/* One plain-language requirement string, identical to the batch
-                  page's checklist (Phase 0) — never the affirmative "…complete"
-                  label next to a "Missing:" line. Protocol reasoning sits behind
-                  the ⓘ "Why?" (Phase 1). */}
-              <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-text-secondary)]">
-                {check.requirementLabel}
-                {check.whyDetail && (
-                  <InfoHint label="Why is this required?">
-                    {check.whyDetail}
-                  </InfoHint>
-                )}
-              </span>
-              {check.detail && (
-                <div className="body-caption text-[var(--color-text-tertiary)]">
-                  <MultilineDetail>{check.detail}</MultilineDetail>
-                </div>
-              )}
-              {/* New tab: the fix opens alongside so this readiness workspace
-                  stays put — the operator resolves the gap and returns here. */}
-              <Link
-                href={fix.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-4 self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-              >
-                {fix.label}
-                <ArrowSquareOutIcon size={12} aria-hidden />
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      <Link
-        href={creditBatchDeepLinkHref(batch.id, facilityId)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-4 self-start body-caption text-[var(--color-text-tertiary)] underline-offset-2 hover:text-[var(--color-text-secondary)] hover:underline"
-      >
-        Open full checklist on batch page
-        <ArrowSquareOutIcon size={12} aria-hidden />
-      </Link>
-    </div>
-  );
 }
 
 export function SelectBatchesStep({
@@ -304,7 +142,7 @@ export function SelectBatchesStep({
               action={
                 copy.action && (
                   <Link
-                    href={certificationSettingsHref(facilityId)}
+                    href={copy.action.target === "removalTemplates" ? removalTemplatesSettingsHref(facilityId) : facilityCertificationSettingsHref(facilityId)}
                     className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
                   >
                     {copy.action.label}
@@ -336,61 +174,27 @@ export function SelectBatchesStep({
           No ungrouped credit batches in this facility.
         </p>
       ) : (
-        <div className="flex flex-col gap-16">
-          {/* Ready batches lead — the happy path (design doc §4.2). */}
-          {readyBatches.length > 0 && (
-            <div className="grid grid-cols-1 gap-12 sm:grid-cols-2">
-              {readyBatches.map((batch) => (
-                <ReadyCard
-                  key={batch.id}
-                  batch={batch}
-                  selected={selectedIds.has(batch.id)}
-                  disabled={
-                    is1000YearFacility &&
-                    hasSelectedBatch &&
-                    !selectedIds.has(batch.id)
-                  }
-                  onToggle={onToggle}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* With nothing ready this isn't a dead-end: name the situation and
-              point at the gaps, which are actionable one click each below. */}
-          {readyBatches.length === 0 && (
-            <p className="body-small text-[var(--color-text-secondary)]">
-              No batches have complete data yet. Resolve the gaps below and
-              they&apos;ll move up here.
-            </p>
-          )}
-
-          {/* Not-ready batches collapse away from the happy path, but open by
-              default when nothing is ready so the operator lands on the work. */}
-          {notReadyBatches.length > 0 && (
-            <details className="group flex flex-col" open={readyBatches.length === 0}>
-              <summary className="flex cursor-pointer list-none items-center gap-8 py-4 [&::-webkit-details-marker]:hidden">
-                <CaretDownIcon
-                  size={14}
-                  aria-hidden
-                  className="shrink-0 text-[var(--color-text-tertiary)] transition-transform duration-150 group-open:rotate-180"
-                />
-                <span className="body-small font-medium text-[var(--color-text-secondary)]">
-                  Not ready yet ({notReadyBatches.length})
-                </span>
-              </summary>
-              <div className="mt-12 grid grid-cols-1 gap-12 sm:grid-cols-2">
-                {notReadyBatches.map((batch) => (
-                  <IncompleteCard
-                    key={batch.id}
-                    batch={batch}
-                    facilityId={facilityId}
-                  />
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
+        // One compact box per batch (#1202): ready batches first, then the
+        // ones still open, each pointing at its open to-dos on the batch page.
+        <ul className="flex flex-col gap-8" aria-label="Credit batches">
+          {readyBatches.map((batch) => (
+            <ReadyBatchBox
+              key={batch.id}
+              batch={batch}
+              facilityId={facilityId}
+              selected={selectedIds.has(batch.id)}
+              disabled={
+                is1000YearFacility &&
+                hasSelectedBatch &&
+                !selectedIds.has(batch.id)
+              }
+              onToggle={onToggle}
+            />
+          ))}
+          {notReadyBatches.map((batch) => (
+            <NotReadyBatchBox key={batch.id} batch={batch} facilityId={facilityId} />
+          ))}
+        </ul>
       )}
     </div>
   );

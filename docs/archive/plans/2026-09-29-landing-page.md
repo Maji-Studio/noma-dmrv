@@ -41,7 +41,7 @@ Checked against the code on 2026-09-29. Copy must stay inside these.
 - **Energy** (partial): entered by hand per production run (electricity kWh, diesel litres). Never "live" or "metered".
 - **Registry** (partial): one action per Removal bundles sources, production batch, datapoints, applications, samples and GHG entry, after a readiness check. Only Isometric exists; there is no multi-registry adapter.
 - **Upcoming** (none built): document recognition, reactor readings as they happen, open API and MCP, Telegram, AI checks. Every tile carries the "Upcoming" chip.
-- **No uniqueness claims.** An earlier positioning study (see Prior work) found that Cula advertises split and recombined material tracking with origin kept. Don't write "only", "first" or "unlike others".
+- **No uniqueness claims.** An earlier positioning study (see Prior work) found that a competitor advertises split and recombined material tracking with origin kept. Don't write "only", "first" or "unlike others".
 - Follow [ux-writing.md](../../ux-writing.md): no en or em dashes, sentence case headings.
 
 ## Page, top to bottom
@@ -136,4 +136,4 @@ Slice 3 can run in parallel with 2.
 
 ## Prior work
 
-Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and a `website.md` doc. This plan replaces that approach (separate static site, one page). Don't merge or port its structure, but do take its visual language (see Visual language). Things worth reusing after checking, all on that branch only: the MAJI logo (`maji-logo.svg`), the Mafinga field trial photo (`mafinga-field-trial.jpg`; confirm the photo rights with DEC), and its archived positioning research note (`2026-09-23-dmrv-website-positioning.md`), which is the source of the Cula finding above. Whether to delete the branch is the owner's call.
+Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and a `website.md` doc. This plan replaces that approach (separate static site, one page). Don't merge or port its structure, but do take its visual language (see Visual language). Things worth reusing after checking, all on that branch only: the MAJI logo (`maji-logo.svg`), the Mafinga field trial photo (`mafinga-field-trial.jpg`; confirm the photo rights with DEC), and its archived positioning research note (`2026-09-23-dmrv-website-positioning.md`), which is the source of the competitor finding above. Whether to delete the branch is the owner's call.

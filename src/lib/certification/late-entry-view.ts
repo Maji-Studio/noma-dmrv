@@ -1,0 +1,130 @@
+/**
+ * What a late emissions entry shows (#1059): another credit batch's Removal
+ * reports or will report it, or it goes into the revision of its own returned
+ * Removal. It names where it goes, the Removal it was recorded after when one
+ * was sent, and the one action that clears a wait. Pure, so the entry row,
+ * the credit batch Overview and the to-do builder say the same words.
+ */
+
+import { recordHref } from "@/lib/record-links";
+import { createIntentHref } from "@/lib/create-intent";
+import { certificationRemovalsHref, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, removalTemplatesSettingsHref } from "@/lib/certification/links";
+import { formatDayString } from "@/lib/format-utils";
+import {
+  CARRY_WAITING_REASONS,
+  CARRY_WAITING_DETAILS,
+  READ_ONLY_CARRY_DETAILS,
+  TEMPLATE_UNKNOWN_COPY,
+  type CarryWaitingReason,
+  type EntryCarryDestination,
+  type EntryCarryDisposition,
+  type EntryRevisionDestination,
+} from "./emission-entry-carry";
+import type { BlockerCopy } from "./removal-template-blockers";
+
+const MEMBER_TEMPLATE_TEXT = "An Admin changes it in Settings, Removal templates.";
+
+export interface LateEntryFacts {
+  carry?: EntryCarryDisposition;
+  reportedIn?: EntryCarryDestination | null;
+  revisionOf?: EntryRevisionDestination | null;
+  recordedAfter?: { removalId: string; removalCode: string } | null;
+}
+
+export interface LateEntryAction { label: string; href: string }
+
+export interface LateEntryBatch { code: string; href: string }
+
+export type LateEntryDestination =
+  | { kind: "draft" | "reported"; removalCode: string; removalHref: string; creditBatches: LateEntryBatch[]; anotherCreditBatch: boolean }
+  | { kind: "revision"; removalCode: string; removalHref: string }
+  | { kind: "waiting"; reason: CarryWaitingReason; text: string; action: LateEntryAction | null };
+
+export interface LateEntryView {
+  /** The sent Removal of the entry's own batch, when there was one before the entry was recorded. */
+  recordedAfter: { removalCode: string; removalHref: string } | null;
+  destination: LateEntryDestination;
+}
+
+export interface LateEntryOptions {
+  /** Only an Admin changes Removal templates; anyone else reads who does. */
+  canManage?: boolean;
+}
+
+function destinationBatches(destination: EntryCarryDestination, facilityId: string): LateEntryBatch[] {
+  return destination.creditBatchCodes.map((code, index) => ({
+    code,
+    href: recordHref("creditBatch", destination.creditBatchIds[index] ?? "", { facilityId }),
+  })).filter((_, index) => destination.creditBatchIds[index]);
+}
+
+export function waitingAction(
+  reason: CarryWaitingReason,
+  facilityId: string,
+  draft?: { removalId: string } | null,
+): LateEntryAction {
+  if (reason === "noDraft") return { label: "New Removal", href: createIntentHref(certificationRemovalsHref(), facilityId) };
+  if (reason === "incompatibleTemplate") return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
+  if (draft) return { label: "Open Removal", href: recordHref("removal", draft.removalId, { facilityId }) };
+  return { label: "Open Removals", href: certificationRemovalsHref({ facility: facilityId }) };
+}
+
+/** Fact and repair step for a batch that may be read only. */
+export function waitingDetailCopy(reason: CarryWaitingReason, canManage = true): BlockerCopy {
+  if (reason === "templateUnknown") return TEMPLATE_UNKNOWN_COPY;
+  return { detail: CARRY_WAITING_DETAILS[reason],
+    ...(reason === "incompatibleTemplate" && !canManage ? { instruction: MEMBER_TEMPLATE_TEXT } : {}),
+  };
+}
+
+export function recordedAfterSentence(code: string): string {
+  return `Recorded after ${code} was sent.`;
+}
+
+/** The reason on a read-only batch, as a fact: "Recorded after RM-26-009 was sent. No later draft is available at this facility." */
+export function readOnlyWaitingDetail(reason: CarryWaitingReason, recordedAfterCode?: string): string {
+  const detail = READ_ONLY_CARRY_DETAILS[reason];
+  return recordedAfterCode ? `${recordedAfterSentence(recordedAfterCode)} ${detail}` : detail;
+}
+
+/**
+ * Includes late entries returning to their own Removal's revision. An entry
+ * already sent by a Removal of its own batch is not a late one.
+ */
+export function lateEntryView(entry: LateEntryFacts, facilityId: string, options: LateEntryOptions = {}): LateEntryView | null {
+  const canManage = options.canManage ?? false;
+  const after = entry.recordedAfter;
+  const sent = entry.reportedIn;
+  const receiver = entry.carry?.receiver;
+  const reason = entry.carry?.waitingReason;
+  const recordedAfter = after ? { removalCode: after.removalCode, removalHref: recordHref("removal", after.removalId, { facilityId }) } : null;
+  if (sent) {
+    if (!sent.anotherCreditBatch) return null;
+    return { recordedAfter, destination: { kind: "reported", removalCode: sent.removalCode, removalHref: recordHref("removal", sent.removalId, { facilityId }), creditBatches: destinationBatches(sent, facilityId), anotherCreditBatch: true } };
+  }
+  if (receiver) {
+    return { recordedAfter, destination: { kind: "draft", removalCode: receiver.removalCode, removalHref: recordHref("removal", receiver.removalId, { facilityId }), creditBatches: destinationBatches(receiver, facilityId), anotherCreditBatch: receiver.anotherCreditBatch } };
+  }
+  if (entry.revisionOf) {
+    return { recordedAfter, destination: { kind: "revision", removalCode: entry.revisionOf.removalCode,
+      removalHref: recordHref("removal", entry.revisionOf.removalId, { facilityId }) } };
+  }
+  if (reason) {
+    const memberOnly = reason === "incompatibleTemplate" && !canManage;
+    return { recordedAfter, destination: {
+      kind: "waiting", reason, text: `${CARRY_WAITING_REASONS[reason]}${memberOnly ? ` ${MEMBER_TEMPLATE_TEXT}` : ""}`,
+      action: memberOnly ? null : waitingAction(reason, facilityId, entry.carry?.waitingFor),
+    } };
+  }
+  return null;
+}
+
+/** "Diesel use of Sep 14, 2026 is waiting for a Removal". */
+export function waitingEntryTitle(componentName: string, occurredOn: string): string {
+  return `${componentName} of ${formatDayString(occurredOn)} is waiting for a Removal`;
+}
+
+/** "Diesel use of Sep 14, 2026 is not in any Removal": the read-only fact, no wait. */
+export function readOnlyWaitingEntryTitle(componentName: string, occurredOn: string): string {
+  return `${componentName} of ${formatDayString(occurredOn)} is not in any Removal`;
+}

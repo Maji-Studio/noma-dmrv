@@ -77,8 +77,8 @@ export interface Geometry {
     innerScrollers: { element: string; scrollWidth: number; clientWidth: number }[];
   };
   prose: { helperCaptions: number; paragraphs: number; samples: string[] };
-  /** Visible labels, titles and actions, split into content and explanation-block items. */
-  r1: { labels: string[]; sectionTitles: string[]; actions: string[]; explanation: string[] };
+  /** Headings and labelled regions, so a capture can assert a removed section title is gone. */
+  sectionTitles: string[];
 }
 
 export function measureFormGeometry(args: MeasureArgs): Geometry {
@@ -489,28 +489,10 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const paragraphs = all.filter((el) => el.tagName === "P" && !el.matches("[id$='-helper'], [id$='-cue'], [id$='-error'], [role=alert]") && !inControl(el) && !insideFormActions(el) && clean(el.textContent).length >= MIN_PARAGRAPH_CHARS);
   const proseSamples = [...helpers, ...paragraphs].slice(0, SAMPLE_LIMIT * 2).map((el) => clean(el.textContent));
 
-  /* ------------------------------------------------------ R1 inventories */
-  // Explanation blocks carry data-detail-explanation (DetailedOnly,
-  // CompositionCard and MoistureSplit detail regions); R1 lets only those differ.
-  const EXPLANATION = "[data-detail-explanation]";
-  const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
-  const explained = (el: Element) => Boolean(el.closest(EXPLANATION));
-  const labelEls: Element[] = [
-    ...all.filter((el) => (el.tagName === "LABEL" || el.tagName === "LEGEND") && !el.closest("[data-presentation-control]")),
-    ...fields.filter((field) => field.label.tagName !== "LABEL").map((field) => field.label),
-  ];
+  /* ------------------------------------------------- Section titles */
   const titleEls = all.filter((el) => /^H[1-6]$/.test(el.tagName) || el.matches("section[aria-label], [role=region][aria-label]"));
   const titleText = (el: Element) => (/^H[1-6]$/.test(el.tagName) ? ownText(el) : clean(el.getAttribute("aria-label")));
-  const actionEls = all.filter((el) => el.matches("button, a[href], [role=button]") && !el.closest("[data-presentation-control]:not(button)") && !el.matches("[data-presentation-control]:not(button)"));
-  const actionText = (el: Element) => clean(el.getAttribute("aria-label") || (el as HTMLElement).innerText);
-  const labels = unique(labelEls.filter((el) => !explained(el)).map(ownText));
-  const sectionTitles = unique(titleEls.filter((el) => !explained(el)).map(titleText));
-  const actions = unique(actionEls.filter((el) => !explained(el)).map(actionText));
-  const explanation = unique([
-    ...labelEls.filter(explained).map(ownText),
-    ...titleEls.filter(explained).map(titleText),
-    ...actionEls.filter(explained).map(actionText),
-  ]);
+  const sectionTitles = Array.from(new Set(titleEls.map(titleText).filter(Boolean)));
 
   /* ------------------------------------------------------ Trailing icons */
   const trailingIcons: TrailingIconGeometry[] = [];
@@ -561,6 +543,6 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
       innerScrollers,
     },
     prose: { helperCaptions: helpers.length, paragraphs: paragraphs.length, samples: proseSamples },
-    r1: { labels, sectionTitles, actions, explanation },
+    sectionTitles,
   };
 }

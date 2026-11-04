@@ -103,6 +103,7 @@ export function factsFromMockedLineages(
               : null,
             feedstocks: lineage.feedstocks.map((feedstock, index) => ({
               id: feedstock.id,
+              ownsTransport: feedstock.ownsTransport ?? true,
               code: feedstock.code ?? `FS-${index + 1}`,
               status: feedstock.status ?? "complete",
               deliveryDate: feedstock.deliveryDate ?? DEFAULT_FACT_DATE,

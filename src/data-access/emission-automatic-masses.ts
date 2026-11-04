@@ -2,14 +2,14 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 
 /** Numeric columns use mode:number elsewhere; cast before the driver decodes them. */
-export async function getEmissionAutomaticMasses(ctx: OrgContext, runIds: string[], legIds: string[]) {
+export async function getEmissionAutomaticMasses(ctx: OrgContext, runIds: string[], legIds: string[], executor: Executor = db) {
   requireOrgScope(ctx);
   const [runs, legs] = await Promise.all([
     runIds.length
-      ? db
+      ? executor
           .select({
             id: productionRuns.id,
             feedstockMassDryKg: sql<string | null>`${productionRuns.feedstockMassDryKg}::text`,
@@ -21,7 +21,7 @@ export async function getEmissionAutomaticMasses(ctx: OrgContext, runIds: string
           )
       : [],
     legIds.length
-      ? db
+      ? executor
           .select({ id: transportLegs.id, loadMassKg: sql<string | null>`${transportLegs.loadMassKg}::text` })
           .from(transportLegs)
           .where(and(eq(transportLegs.organizationId, ctx.organizationId), inArray(transportLegs.id, legIds)))

@@ -39,7 +39,7 @@ Status terms:
 | `GET /datapoints` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findDatapointBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /datapoints` | Create ordinary and direct durability Datapoints | `src/lib/isometric/submissions.ts` → `createDatapoint`; consumer in `src/fn/certification/submit-removal.ts` |
 | `GET /datapoints/{id}` | Verify an exact Source-to-input binding | `src/lib/isometric/submissions.ts` → `getDatapoint`; consumer in `src/lib/isometric/source-binding-verification.ts` |
-| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
+| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs (read first; skip when present; send the union; retried as idempotent) | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
 | `GET /components/{id}` | Resolve attributed component inputs for Source verification | `src/lib/isometric/submissions.ts` → `getComponent`; consumer in `src/lib/isometric/source-binding-verification.ts` |
 | `GET /ghg_entries` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findGhgEntryBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /ghg_entries` | Create the compiled Removal/GHG Entry | `src/lib/isometric/submissions.ts` → `createGhgEntry`; consumer in `src/fn/certification/submit-removal.ts` |
@@ -108,6 +108,26 @@ intentionally unwired; the DELETE operations above are wired only
 inside Removal deletion. Drift is surfaced for operator review. Both
 Storage Location and Biochar Application synchronization follow the configured
 Isometric environment.
+
+## GraphQL evidence read (outside OpenAPI)
+
+`POST /graphql` at the Certify origin is wired through
+`src/lib/isometric/biochar-application-source-readback.ts:readBiocharApplicationSources`,
+consumed by `src/fn/certification/biochar-application-source-readback.ts` on
+submission and Removal summary refresh. It reads
+`project.biocharSpreadEvents(first: 50, after: $after, filter: { idIn: $ids, storageLocationId: $storageLocationId })`
+with `nodes { id biocharSpreadEventSources { source { id } } }` and
+`pageInfo { hasNextPage endCursor }`. Variables include the requested Application
+id in `ids` and its registered external Storage Location id in `storageLocationId`.
+Verified on the sandbox (2026-10-30): `BiocharSpreadEventFilter.idIn` is ignored,
+`storageLocationId` narrows correctly, and the root has no `node(id:)` field.
+The client matches the node by id and follows cursors when absent, up to 10 pages.
+Duplicate matching ids are garbled; no match within that bound stays unconfirmed.
+Verified on the sandbox (2026-10-19): both Certify authentication headers are
+required, the REST Biochar Application id (`bse_...`) is the
+`BiocharSpreadEvent.id`, and the Source list matches the `source_ids` sent on
+create. This call is not generated from REST types; see
+[open questions](../open-questions-isometric.md).
 
 ## Present in generated types but not wired
 

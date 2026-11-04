@@ -10,7 +10,9 @@ import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biocha
 import { updateFormulationInTransaction } from "@/data-access/formulation-writes";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
-import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
+import { getOutputSubBins } from "@/data-access/output-sub-bins";
+import { getOutputStockHistory } from "@/data-access/output-stock-history";
+import { cleanupPostedStock, postedStockFixture, postProduct, productInput, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const VERSION_STEP = 1;
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
@@ -102,7 +104,7 @@ describe("posted product bin and formulation contract", () => {
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureEstimate: { moisturePercent: 20, wetMassKg: 100, dryMassKg: 80 } });
+    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureEstimate: { moisturePercent: 20, wetMassKg: 50, dryMassKg: 40 } });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
   });
   it("keeps posted ingredient moisture unchanged after a later dry intake", async () => {
@@ -116,10 +118,10 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
     const product = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 12 }) });
-    // The remaining-bin estimate is pro-rata over all eligible intakes:
-    // 200 kg wet / 180 kg dry keeps a 90% solids ratio after wet withdrawals.
-    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 108 });
-    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "26.400", moisturePercentUsed: 12, moistureEstimate: { moisturePercent: 10 } });
+    // Oldest first takes both draws (50 + 30) from intake 1, leaving 20 wet / 16 dry.
+    // Intake 2 retains 100 wet / 100 dry; B takes 30 wet / 24 dry at 20% moisture.
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 116 });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "26.400", moisturePercentUsed: 12, moistureEstimate: { moisturePercent: 20, wetMassKg: 30, dryMassKg: 24 } });
   });
   it("rejects changing a posted ingredient draw even when later stock is available", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 60, bin.id) });
@@ -154,6 +156,18 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
     expect(await snapshot(product.id)).toMatchObject({ sourceStorageLocationId: null, drySolidsKg: "18.000" });
     await expect(updateBiocharProduct(f.ctx, product.id, { expectedVersion: await productionVersion(f.ctx, "biocharProducts", product.id), massKg: 110 })).rejects.toThrow("immutable");
+  });
+  it("names each sub-bin's ingredient solids by material for the bin's cards", async () => {
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
+    const { subBins } = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME });
+    const subBin = subBins.find(s => s.layerId === product.id)!;
+    expect(subBin.ingredients).toEqual([{ name: f.ingredientType.name, solidsKg: 18 }]);
+    expect(subBin.solidsKg - subBin.dryMassKg).toBeCloseTo(18);
+  });
+  it("gives the bin's history each entry's ingredient solids by material", async () => {
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
+    const placed = (await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.kind === "intake" && entry.id === product.id)!;
+    expect(placed.ingredientSolidsDeltas).toEqual([{ name: f.ingredientType.name, solidsKg: 18 }]);
   });
   it("retains its ratio snapshot when the live formulation and metadata change", async () => {
     const f = await fixture(); const product = await blend(f); await db.transaction(async tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.recipe.id, expectedVersion: f.recipe.version, biocharRatio: 0.7 }));

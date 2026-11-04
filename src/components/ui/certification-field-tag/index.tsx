@@ -27,15 +27,22 @@ const STATUS_STYLES: Record<CertFieldStatus, string> = {
     "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
 };
 
+/** Wording appended to the requirement for each saved status. */
+const CERT_FIELD_STATUS_SUFFIX: Record<CertFieldStatus, string> = {
+  neutral: "",
+  missing: ". Not provided.",
+  satisfied: ". Provided.",
+};
+
 /**
  * The chip's own explanation. The same wording is the accessible name of the
  * chip and the tooltip on hover. There is no sheet legend (Kenji, 2026-09-30):
  * the chip explains itself.
  */
 export const CERT_FIELD_STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
-  neutral: "Required for certification",
-  missing: "Required for certification. Not provided.",
-  satisfied: "Required for certification. Provided.",
+  neutral: `Required for certification${CERT_FIELD_STATUS_SUFFIX.neutral}`,
+  missing: `Required for certification${CERT_FIELD_STATUS_SUFFIX.missing}`,
+  satisfied: `Required for certification${CERT_FIELD_STATUS_SUFFIX.satisfied}`,
 };
 
 
@@ -53,6 +60,11 @@ const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
 
 /** The chip's shape. */
 const CHIP_BASE = "body-caption inline-flex items-center border px-4 py-1";
+
+/** The chip's explanation for one requirement, e.g. "A lab report is required for certification". */
+export function certFieldStatusDescription(status: CertFieldStatus, requirement: string): string {
+  return `${requirement} is required for certification${CERT_FIELD_STATUS_SUFFIX[status]}`;
+}
 
 interface CertificationFieldTagProps {
   className?: string;

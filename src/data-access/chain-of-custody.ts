@@ -1,7 +1,9 @@
+import { ownedTransportFeedstockIds } from "@/lib/certification/feedstock-transport-ownership";
 /**
  * Chain of custody data access
  * Resolves the upstream lineage for a single application back to its feedstocks.
  */
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { db } from "@/db";
 import {
   applicationOutputAllocations,
@@ -38,7 +40,7 @@ export const CHAIN_HREFS = {
   biocharProduct: "/biochar-products",
   productionRun: "/production-runs",
   reactor: "/reactors",
-  feedstock: "/feedstocks",
+  feedstock: "/feedstock-intake",
 } as const;
 
 export interface ChainFacility {
@@ -97,12 +99,10 @@ export interface ChainBiocharProductLineage {
   status: string | null;
   productionDate: string;
   massKg: number | null;
-  /**
-   * Recorded moisture (%) of the lot's wet `massKg`. Lets the Sankey convert
-   * the lot to a dry basis so it balances against the runs' dry output
-   * (issue #361 F14).
-   */
+  /** Recorded moisture (%) used to derive dry source biochar without an allocation. */
   moistureContentPercent: number | null;
+  /** Recorded ingredients, excluded from the source biochar mass. */
+  composition?: unknown;
   /** Blend name (formulations.name); null = pure biochar (no formulation). */
   formulationName: string | null;
   linkedProductionRunId: string | null;
@@ -130,6 +130,7 @@ export interface ChainReactorLineage {
 }
 
 export interface ChainFeedstockLineage {
+  ownsTransport: boolean;
   id: string;
   code: string;
   status: string | null;
@@ -318,11 +319,12 @@ export async function getChainOfCustodyData(
       );
     }
   }
+  const transportOwners = new Set(ownedTransportFeedstockIds(sources));
   const feedstocksForSources = Array.from(
     new Map(
       sources
         .flatMap((source) => source.feedstocks)
-        .map((feedstock) => [feedstock.id, feedstock]),
+        .map((feedstock) => [feedstock.id, { ...feedstock, ownsTransport: transportOwners.has(feedstock.id) }]),
     ).values(),
   );
 
@@ -389,6 +391,7 @@ async function getBiocharProductLineage(
       productionDate: biocharProducts.productionDate,
       massKg: biocharProducts.massKg,
       moistureContentPercent: biocharProducts.moistureContentPercent,
+      composition: biocharProducts.composition,
       formulationName: formulations.name,
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
     })
@@ -417,7 +420,7 @@ async function getProductionRunLineage(
       id: productionRuns.id,
       code: productionRuns.code,
       status: productionRuns.status,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
@@ -516,11 +519,13 @@ async function getFeedstocksForRuns(
       ),
     );
 
+  const transportOwners = await getFeedstockTransportOwners(ctx, rows.map((row) => row.id));
   const byRun = new Map<string, ChainFeedstockLineage[]>();
   for (const { productionRunId, ...row } of rows) {
     const feedstocksForRun = byRun.get(productionRunId) ?? [];
     feedstocksForRun.push({
       ...row,
+      ownsTransport: transportOwners.get(row.id) === productionRunId,
       href: CHAIN_HREFS.feedstock,
     });
     byRun.set(productionRunId, feedstocksForRun);

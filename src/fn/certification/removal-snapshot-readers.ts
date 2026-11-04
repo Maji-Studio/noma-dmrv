@@ -105,6 +105,7 @@ const removalSourceBindingPlanSchema = z.array(
       "transport_evidence_ledger",
       "durability_evidence_ledger",
       "lab_report",
+      "emission_entry",
     ]),
     lineage: z.object({
       entityType: z.string().min(1),
@@ -130,6 +131,7 @@ const nomaEvidenceRoleSchema = z.enum([
   "transport_evidence_ledger",
   "durability_evidence_ledger",
   "lab_report",
+  "emission_entry",
 ] satisfies [NomaEvidenceRole, ...NomaEvidenceRole[]]);
 const removalSourceLineageSchema = z.object({
   entityType: z.string().min(1),
@@ -152,18 +154,25 @@ const ordinarySourceTargetSchema = z.object({
   inputKey: z.enum(REMOVAL_SOURCE_TARGET_VOCABULARY.ordinaryInputKeys),
   optionalInTemplate: z.boolean().optional(),
 });
+const explicitSourceTargetSchema = z.object({
+  kind: z.literal("explicit"),
+  componentId: z.string().min(1),
+  inputKey: z.string().min(1),
+});
 const classifiedRemovalSourceSchema: z.ZodType<ClassifiedRemovalSource> =
   z.object({
     nomaRole: nomaEvidenceRoleSchema,
     nomaRoleLabel: z.string().min(1),
     lineage: removalSourceLineageSchema,
     intendedTarget: z.discriminatedUnion("kind", [
+      explicitSourceTargetSchema,
       sequestrationSourceTargetSchema,
       ordinarySourceTargetSchema,
     ]),
     additionalIntendedTargets: z
       .array(
         z.discriminatedUnion("kind", [
+          explicitSourceTargetSchema,
           sequestrationSourceTargetSchema,
           ordinarySourceTargetSchema,
         ]),
@@ -337,3 +346,5 @@ export function readRemovalBiocharApplicationIntents(
   }
   return parsed.data as BiocharApplicationIntent[];
 }
+
+export { readRemovalEntrySnapshot } from "@/lib/certification/removal-entry-snapshot";

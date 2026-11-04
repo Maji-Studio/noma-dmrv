@@ -13,10 +13,13 @@ export async function chooseRunStatus(scope: Page | Locator, status: ProductionR
   await expectRunRequiredMarkers(scope, status);
 }
 
-/** Required markers follow the same terminal-state rules as submission. */
+/**
+ * Required markers follow the same terminal-state rules as submission. End date
+ * has none: a blank one defaults to the start date.
+ */
 export async function expectRunRequiredMarkers(scope: Page | Locator, status: ProductionRunStatus) {
   const terminal = isTerminalProductionRunStatus(status);
-  for (const field of ["endDate", "endTime", "feedstockMoisturePercent"]) {
+  for (const field of ["endTime", "feedstockMoisturePercent"]) {
     const label = scope.locator(`label[for="${field}"]`);
     if (terminal) await expect(label).toContainText("Required");
     else await expect(label).not.toContainText("Required");

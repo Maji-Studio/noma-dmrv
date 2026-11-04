@@ -136,7 +136,7 @@ export function deriveGhgStatementWorkflowState({
       hasMembership,
     generationUnavailableReason: canManageReports
       ? reportReady ? null : generationUnavailableReason
-      : "An Owner or Admin generates and approves reports.",
+      : "An Admin generates and approves reports.",
     verifierStep: deriveVerifierStep(
       remote,
       remoteUnavailable,

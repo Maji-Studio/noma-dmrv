@@ -5,4 +5,4 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export const GET = apiRoute("api.v1.reactors.list", "reactors:read", async (request, { ctx, headers }) =>
-  Response.json(await readReactorList(request, ctx), { headers }));
+  Response.json(await readReactorList(request, ctx), { headers }), { audience: "rest" });

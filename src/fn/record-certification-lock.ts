@@ -7,8 +7,9 @@ import { withAction } from "./with-action";
 const recordCertificationLockSchema = z.object({
   entityType: z.enum(DOCUMENT_ENTITY_TYPES),
   entityId: z.uuid(),
+  scope: z.literal("transport").optional(),
 });
 
-export async function loadRecordCertificationLock(entityType: DocumentEntityType, entityId: string) {
-  return withAction((ctx) => getRecordCertificationLock(ctx, recordCertificationLockSchema.parse({ entityType, entityId })));
+export async function loadRecordCertificationLock(entityType: DocumentEntityType, entityId: string, scope?: "transport") {
+  return withAction((ctx) => getRecordCertificationLock(ctx, recordCertificationLockSchema.parse({ entityType, entityId, scope })));
 }

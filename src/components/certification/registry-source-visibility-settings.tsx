@@ -1,9 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
-import { FormField, FormSelect, ServerError } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormActions, FormField, FormSelect, ServerError } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useToast } from "@/components/ui/toast";
 import {
   useRegistrySourceVisibility,
@@ -45,7 +46,7 @@ export function RegistrySourceVisibilitySettings() {
             : "Private: verifier only"}
         </span>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Organization Owners and Admins manage this policy.
+          Organization Admins manage this policy.
         </p>
         <PolicyTimingCopy />
       </div>
@@ -67,9 +68,14 @@ function RegistrySourceVisibilityForm({
 }) {
   const toast = useToast();
   const saveMutation = useSaveRegistrySourceVisibility();
+  const formId = useId();
+  const [serverError, setServerError] = useState("");
   const {
     register,
     handleSubmit,
+    control,
+    reset,
+    resetField,
     setError,
     formState: { errors },
   } = useForm<RegistrySourceVisibilityInput>({
@@ -77,23 +83,27 @@ function RegistrySourceVisibilityForm({
     defaultValues: { sourceVisibility },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+
   const onSubmit = async (input: RegistrySourceVisibilityInput) => {
+    setServerError("");
     try {
       await saveMutation.mutateAsync(input);
+      reset(input);
       toast.success("Registry Source visibility policy saved.");
     } catch (error) {
-      setError("root.serverError", {
-        type: "server",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Registry Source visibility was not saved. Try again.",
-      });
+      setServerError(refuseSave(
+        error,
+        error instanceof Error
+          ? error.message
+          : "Registry Source visibility was not saved. Try again.",
+      ) ?? "");
     }
   };
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-form flex flex-col gap-20"
     >
@@ -114,15 +124,14 @@ function RegistrySourceVisibilityForm({
 
       <PolicyTimingCopy />
 
-      {errors.root?.serverError?.message && (
-        <ServerError message={errors.root.serverError.message} />
-      )}
-
-      <div>
-        <Button type="submit" variant="primary" busy={saveMutation.isPending}>
-          Save policy
-        </Button>
-      </div>
+      {/* control reports the draft to the settings console's unsaved guard. */}
+      <FormActions
+        control={control}
+        isSubmitting={saveMutation.isPending}
+        errorMessage={serverError}
+        submitLabel="Save policy"
+        sticky={false}
+      />
     </form>
   );
 }

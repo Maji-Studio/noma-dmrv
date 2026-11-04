@@ -11,9 +11,11 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lte,
   ne,
+  or,
   sql,
   SQL,
   count,
@@ -113,18 +115,16 @@ export async function getProductionRuns(
   }
 
   if (startDate) {
-    // Inclusive-day range on the run's calendar date (derived from start_time).
-    conditions.push(gte(productionRunDateExpr(), formatLocalDate(startDate)));
+    conditions.push(gte(productionRunDateExpr(ctx.organizationId), formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRunDateExpr(), formatLocalDate(endDate)));
+    conditions.push(lte(productionRunDateExpr(ctx.organizationId), formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);
 
-  // Build sort clause. The "date" sort key now orders by start_time (the run's
-  // instant), which sorts identically to the old date column but breaks ties.
+  // Keep chronological instant ordering, including across facility time zones.
   const sortColumn = {
     code: productionRuns.code,
     date: productionRuns.startTime,
@@ -156,7 +156,7 @@ export async function getProductionRuns(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
@@ -197,7 +197,7 @@ export async function getProductionRuns(
     .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
     .leftJoin(biocharStorage, and(eq(productionRuns.biocharStorageLocationId, biocharStorage.id), eq(biocharStorage.organizationId, ctx.organizationId)))
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(productionRuns.code), orderFn(productionRuns.id))
     .limit(pageSize)
     .offset(offset);
 
@@ -217,6 +217,7 @@ export async function getProductionRuns(
         .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+        .orderBy(asc(productionRunFeedstocks.productionRunId), asc(feedstocks.code), asc(productionRunFeedstocks.id))
     : [];
   const allFeedstockDraws = runIds.length > 0
     ? await db
@@ -320,7 +321,8 @@ async function getProductionRunFeedstocks(
     .from(productionRunFeedstocks)
     .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+    .orderBy(asc(feedstocks.code), asc(productionRunFeedstocks.id));
 
   return result;
 }
@@ -376,12 +378,48 @@ export async function getProductionRunById(
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
 
+  return getProductionRunDetail(ctx, productionRunId, "active", executor);
+}
+
+/** Linked detail read; never use this to authorize a write.
+ * Facility archive stamps its active children with the same SQL timestamp.
+ * Matching that stamp keeps independently archived runs hidden, even when
+ * their facility is subsequently archived. Active links keep their usual shape.
+ */
+export async function getLinkedProductionRunById(
+  ctx: OrgContext,
+  productionRunId: string,
+  executor: Executor = db,
+): Promise<ProductionRunWithRelations> {
+  requireOrgScope(ctx);
+
+  return getProductionRunDetail(ctx, productionRunId, "facility-cascade", executor);
+}
+
+async function getProductionRunDetail(
+  ctx: OrgContext,
+  productionRunId: string,
+  archiveVisibility: "active" | "facility-cascade",
+  executor: Executor,
+): Promise<ProductionRunWithRelations> {
+  requireOrgScope(ctx);
+
+  const archivedPredicate = archiveVisibility === "active"
+    ? isNull(productionRuns.archivedAt)
+    : or(
+        isNull(productionRuns.archivedAt),
+        and(
+          isNotNull(facilities.archivedAt),
+          eq(productionRuns.archivedAt, facilities.archivedAt),
+        ),
+      );
+
   const [run] = await executor
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
@@ -422,7 +460,7 @@ export async function getProductionRunById(
       and(
         eq(productionRuns.id, productionRunId),
         eq(productionRuns.organizationId, ctx.organizationId),
-        isNull(productionRuns.archivedAt),
+        archivedPredicate,
       ),
     );
 
@@ -545,12 +583,13 @@ export async function getProductionRunStats(
 // Operational run facts for certification. Lab Samples are loaded by credit batch.
 export async function getProductionRunsForCertification(
   ctx: OrgContext,
-  runIds: string[]
+  runIds: string[],
+  executor: Executor = db,
 ): Promise<ProductionRunForCertification[]> {
   requireOrgScope(ctx);
   if (runIds.length === 0) return [];
 
-  const runs = await db
+  const runs = await executor
     .select({
       ...getTableColumns(productionRuns),
       hasReadingsFile: hasUploadedProductionReadingsFile(

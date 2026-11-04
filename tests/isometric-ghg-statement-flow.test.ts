@@ -71,6 +71,7 @@ function statement(overrides: Partial<GhgStatement>): GhgStatement {
     submitted_at: null,
     credits_issued_at: null,
     pending_total_co2e_removed_kg: null,
+    pending_total_co2e_reduced_kg: null,
     ...overrides,
   };
 }

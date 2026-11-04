@@ -9,12 +9,19 @@ import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { formatUtcDate } from "@/lib/date-utils";
 import { db } from "@/db";
 import {
   applications,
+  creditBatches,
+  creditBatchProductionRuns,
   facilities,
   feedstocks,
   productionRunFeedstocks,
+  productionRuns,
+  productionProcesses,
   transportLegs,
 } from "@/db/schema";
 import { getEnergyInputs } from "@/data-access/energy";
@@ -34,6 +41,8 @@ const LEG_KM = 12;
 type Fixture = Awaited<ReturnType<typeof postedStockFixture>>;
 let fixture: Fixture;
 let feedstockId: string;
+let ineligibleFeedstockIds: string[] = [];
+let extraRunIds: string[] = [];
 
 beforeAll(async () => {
   await ensureTestOrg();
@@ -61,28 +70,68 @@ beforeAll(async () => {
     loadMassKg: FEEDSTOCK_WET_KG,
     transportMethodType: "road",
   });
-  await db.insert(productionRunFeedstocks).values({
-    organizationId: orgId,
-    productionRunId: fixture.runs[0].id,
-    feedstockId,
-    wetMassUsedKg: FEEDSTOCK_DRAW_KG,
+  const site = { organizationId: orgId, facilityId: fixture.facility.id };
+  const [process] = await db.insert(productionProcesses).values({
+    ...site, feedstockTypeId: fixture.ingredientType.id, establishedAt: new Date("2026-09-01T00:00:00Z"),
+  }).returning();
+  const batches = await db.insert(creditBatches).values(fixture.runs.map((run, index) => ({
+    ...site, code: `E2E-ENERGY-CB-${index}-${fixture.tag}`,
+    feedstockTypeId: fixture.ingredientType.id, productionProcessId: process.id,
+    startDate: formatUtcDate(run.startTime),
+    endDate: formatUtcDate(run.endTime!),
+  }))).returning();
+  await db.insert(creditBatchProductionRuns).values(batches.map((batch, index) => ({
+    organizationId: orgId, creditBatchId: batch.id, productionRunId: fixture.runs[index].id,
+  })));
+  // Reverse the insertion order so chronology, rather than draw order, picks the owner.
+  await db.insert(productionRunFeedstocks).values([...fixture.runs].reverse().map((run) => ({
+    organizationId: orgId, productionRunId: run.id, feedstockId, wetMassUsedKg: FEEDSTOCK_DRAW_KG,
+  })));
+
+  // Earlier draws are ineligible: a complete unbatched run and a batched running run.
+  const extraRuns = await db.insert(productionRuns).values([
+    { ...site, reactorId: fixture.runs[0].reactorId, code: `E2E-ENERGY-UNBATCHED-${fixture.tag}`,
+      status: "complete", startTime: new Date("2026-09-02T08:00:00Z"), endTime: new Date("2026-09-02T12:00:00Z"),
+      feedstockWetMassKg: FEEDSTOCK_DRAW_KG, feedstockMoisturePercent: 0, feedstockMassDryKg: FEEDSTOCK_DRAW_KG,
+      biocharOutputKg: FEEDSTOCK_DRAW_KG, biocharMoisturePercent: 0, biocharDryMassKg: FEEDSTOCK_DRAW_KG,
+      biocharStorageLocationId: fixture.source.id },
+    { ...site, reactorId: fixture.runs[0].reactorId, code: `E2E-ENERGY-RUNNING-${fixture.tag}`,
+      status: "running", startTime: new Date("2026-09-01T08:00:00Z") },
+  ]).returning();
+  extraRunIds = extraRuns.map((run) => run.id);
+  await db.insert(creditBatchProductionRuns).values({
+    organizationId: orgId, creditBatchId: batches[0].id, productionRunId: extraRuns[1].id,
   });
+  const ineligibleStocks = await db.insert(feedstocks).values(await Promise.all(extraRuns.map((run) =>
+    feedstockFixtureValues(db, {
+      ...site, code: `E2E-ENERGY-INELIGIBLE-${run.id}`,
+      feedstockTypeId: fixture.ingredientType.id, massWetKg: FEEDSTOCK_WET_KG, massDryKg: FEEDSTOCK_WET_KG,
+    }),
+  ))).returning();
+  ineligibleFeedstockIds = ineligibleStocks.map((stock) => stock.id);
+  await db.insert(productionRunFeedstocks).values(extraRuns.flatMap((run, index) => [
+    { organizationId: orgId, productionRunId: run.id, feedstockId: ineligibleStocks[index].id, wetMassUsedKg: FEEDSTOCK_DRAW_KG },
+    { organizationId: orgId, productionRunId: run.id, feedstockId, wetMassUsedKg: FEEDSTOCK_DRAW_KG },
+  ]));
 });
 
 afterAll(async () => {
   if (!fixture) return;
   const orgId = fixture.ctx.organizationId;
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.organizationId, orgId));
+  await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.organizationId, orgId));
+  await db.delete(creditBatches).where(eq(creditBatches.organizationId, orgId));
+  await db.delete(productionProcesses).where(eq(productionProcesses.organizationId, orgId));
   await cleanupPostedStock(fixture);
 });
 
 describe.sequential("energy read", () => {
-  it("loads the facility's runs, legs, draws, deliveries and run shares", async () => {
+  it("loads the facility's runs, legs, transport owners, deliveries and run shares", async () => {
     const { inputs, timeZone } = await getEnergyInputs(fixture.ctx, fixture.facility.id);
 
     expect(timeZone).toBe("UTC");
     expect(inputs.runs.map((run) => run.id).sort()).toEqual(
-      fixture.runs.map((run) => run.id).sort(),
+      [...fixture.runs.map((run) => run.id), ...extraRunIds].sort(),
     );
     expect(inputs.runs.find((run) => run.id === fixture.runs[0].id)?.day).toBe("2026-09-09");
     // The shared output-stock fixture adds its own fuel intake for valid run draws.
@@ -90,12 +139,9 @@ describe.sequential("energy read", () => {
       expect.objectContaining({
         id: feedstockId,
         day: "2026-09-01",
-        wetMassKg: FEEDSTOCK_WET_KG,
+        transportOwnerRunId: fixture.runs[0].id,
         legs: [{ distanceKm: LEG_KM, loadMassKg: FEEDSTOCK_WET_KG, method: "road" }],
       }),
-    ]);
-    expect(inputs.feedstockDraws.filter((draw) => draw.feedstockId === feedstockId)).toEqual([
-      { runId: fixture.runs[0].id, feedstockId, wetMassKg: FEEDSTOCK_DRAW_KG },
     ]);
 
     expect(inputs.deliveries).toHaveLength(1);
@@ -109,6 +155,14 @@ describe.sequential("energy read", () => {
     expect(sharedDryKg).toBeCloseTo(delivery.massDryKg ?? Number.NaN, 3);
     expect(inputs.applications).toEqual([]);
     expect(inputs.applicationRunShares).toEqual([]);
+  });
+
+  it("resolves the earliest complete batched run and leaves only ineligible draws ownerless", async () => {
+    const { inputs } = await getEnergyInputs(fixture.ctx, fixture.facility.id);
+    expect(inputs.feedstocks.find((stock) => stock.id === feedstockId)?.transportOwnerRunId).toBe(fixture.runs[0].id);
+    for (const id of ineligibleFeedstockIds) {
+      expect(inputs.feedstocks.find((stock) => stock.id === id)).toMatchObject({ transportOwnerRunId: null });
+    }
   });
 
   it("reads application and feedstock calendar days as entered, west of UTC", async () => {
@@ -161,7 +215,7 @@ describe.sequential("energy read", () => {
     expect(delivery?.footprint.gaps.biocharTransport).toEqual({ missing: 1, of: 1, unit: "delivery", recorded: false });
     const run = breakdown.records.find((record) => record.id === fixture.runs[0].id);
     expect(run?.footprint.activity.feedstockTransport).toBeCloseTo(
-      2 * LEG_KM * (FEEDSTOCK_WET_KG / 1000) * (FEEDSTOCK_DRAW_KG / FEEDSTOCK_WET_KG),
+      countedRoundTripKm(LEG_KM) * (FEEDSTOCK_WET_KG / KG_PER_TONNE),
     );
   });
 });

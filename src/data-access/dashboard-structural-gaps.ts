@@ -1,27 +1,27 @@
 /**
  * Facility-scoped certification structure checks for the dashboard.
  *
- * These are deliberately separate from flow-station attention: GPS is a
- * cross-cutting certification input, so it blocks the dashboard's all-clear
- * state without changing any station badge.
+ * GPS is a cross-cutting certification input, so each gap is one grouped row
+ * in Needs attention (one form section fixes every affected record) and also
+ * lights the flow station its records belong to: supplier locations on
+ * Suppliers, feedstock routes on Feedstock, biochar distribution routes on
+ * Biochar, whose product form holds them (#1532 F5).
  */
+import { facilityListHref, plural } from "@/lib/dashboard-links";
+import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import {
   and,
   count,
   eq,
-  isNotNull,
   isNull,
   or,
   sql,
 } from "drizzle-orm";
-import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
   biocharProducts,
-  creditBatches,
   feedstocks,
-  samples,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -29,26 +29,28 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import {
-  buildEntityDeepLink,
   type EntityFocusTarget,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
+import type { DashboardStationKey } from "./dashboard-stations";
+
+type TransportGapEntityType = "feedstock" | "biochar";
 
 export interface DashboardStructuralGapCounts {
   missingFeedstockGps: number;
-  transportEndpointGpsGaps: number;
   missingFeedstockGpsSupplierId: string | null;
-  transportEndpointGpsTarget: TransportGapTarget | null;
-}
-
-export interface TransportGapTarget {
-  entityType: "feedstock" | "biochar" | "sample";
-  entityId: string;
+  /** Feedstock transport legs missing an endpoint GPS, and the first parent. */
+  feedstockRouteGpsGaps: number;
+  feedstockRouteGpsTargetId: string | null;
+  /** Biochar distribution legs missing an endpoint GPS, and the first parent product. */
+  biocharRouteGpsGaps: number;
+  biocharRouteGpsTargetId: string | null;
 }
 
 export type DashboardStructuralGapKey =
-  | "feedstockGps"
-  | "transportEndpointGps";
+  | "supplierGps"
+  | "feedstockRouteGps"
+  | "biocharRouteGps";
 
 export interface DashboardStructuralGap {
   key: DashboardStructuralGapKey;
@@ -56,12 +58,10 @@ export interface DashboardStructuralGap {
   metadata: string;
   count: number;
   href: string;
-}
-
-interface TransportGapRow {
-  entityType: TransportGapTarget["entityType"];
-  endpointGpsGaps: number;
-  endpointGpsTargetId: string | null;
+  /** The flow station whose records the gap belongs to. */
+  station: DashboardStationKey;
+  /** Station reason text, e.g. "3 routes missing GPS". */
+  stationReason: string;
 }
 
 const ENDPOINT_GPS_MISSING = sql`(
@@ -71,7 +71,7 @@ const ENDPOINT_GPS_MISSING = sql`(
     or ${transportLegs.destinationGpsLongitude} is null
   )`;
 
-function transportGapSelection(entityType: TransportGapTarget["entityType"]) {
+function transportGapSelection(entityType: TransportGapEntityType) {
   const gapOfType = and(
     eq(transportLegs.entityType, entityType),
     ENDPOINT_GPS_MISSING,
@@ -82,55 +82,17 @@ function transportGapSelection(entityType: TransportGapTarget["entityType"]) {
   };
 }
 
-function addTransportGapRows(rows: TransportGapRow[]) {
-  return {
-    endpointGpsGaps: rows.reduce(
-      (total, row) => total + Number(row.endpointGpsGaps ?? 0),
-      0,
-    ),
-    endpointGpsTarget: resolveTransportGapTarget(rows),
-  };
-}
-
-function resolveTransportGapTarget(
-  rows: TransportGapRow[],
-): TransportGapTarget | null {
-  const row = rows.find((candidate) => candidate.endpointGpsTargetId != null);
-  return row?.endpointGpsTargetId
-    ? { entityType: row.entityType, entityId: row.endpointGpsTargetId }
-    : null;
-}
-
-function parentEditorHref(
+function routeEditorHref(
   facilityId: string,
-  target: TransportGapTarget | null,
+  entityType: TransportGapEntityType,
+  targetId: string | null,
   focus: EntityFocusTarget,
 ): string {
-  const params = new URLSearchParams({ facility: facilityId });
-  if (!target) return `/feedstocks?${params.toString()}`;
-
-  const targetRoutes = {
-    feedstock: { path: "/feedstocks", queryKey: "feedstock" },
-    biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
-    sample: { path: "/samples", queryKey: "sample" },
-  } as const;
-  const route = targetRoutes[target.entityType];
-  return buildEntityDeepLink({
-    path: route.path,
-    facilityId,
-    entityQueryKey: route.queryKey,
-    entityId: target.entityId,
-    focus,
-  });
-}
-
-function transportTargetForm(target: TransportGapTarget | null): string {
-  const formNames: Record<TransportGapTarget["entityType"], string> = {
-    feedstock: "Feedstock form",
-    biochar: "Biochar product form",
-    sample: "Sample form",
-  };
-  return formNames[target?.entityType ?? "feedstock"];
+  if (!targetId) {
+    const list = entityType === "feedstock" ? RECORD_LINKS.feedstock : RECORD_LINKS.biocharProduct;
+    return facilityListHref(list.path, facilityId);
+  }
+  return recordHref(entityType === "feedstock" ? "feedstock" : "biocharProduct", targetId, { facilityId, mode: "edit", focus });
 }
 
 function structuralGapMetadata(
@@ -145,43 +107,40 @@ export function buildDashboardStructuralGaps(
   counts: DashboardStructuralGapCounts,
   facilityId: string,
 ): DashboardStructuralGap[] {
-  const facilityParams = new URLSearchParams({ facility: facilityId });
-  const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
-    ? `/suppliers?${new URLSearchParams({
-        facility: facilityId,
-        [SUPPLIER_QUERY_PARAM]: counts.missingFeedstockGpsSupplierId,
-        [ENTITY_DEEP_LINK_MODE_PARAM]: ENTITY_DEEP_LINK_EDIT_MODE,
-      }).toString()}`
-    : `/suppliers${facilityQuery}`;
-  return [
+    ? recordHref("supplier", counts.missingFeedstockGpsSupplierId, { facilityId, mode: "edit" })
+    : facilityListHref(RECORD_LINKS.supplier.path, facilityId);
+  const gaps: DashboardStructuralGap[] = [
     {
-      key: "feedstockGps" as const,
-      label: "Feedstock GPS missing",
-      metadata: structuralGapMetadata(
-        "Supplier form",
-        "Location",
-        counts.missingFeedstockGps,
-      ),
+      key: "supplierGps",
+      label: "Supplier location GPS missing",
+      metadata: structuralGapMetadata("Supplier form", "Location", counts.missingFeedstockGps),
       count: counts.missingFeedstockGps,
       href: supplierHref,
+      station: "suppliers",
+      stationReason: `${plural(counts.missingFeedstockGps, "feedstock")} without supplier GPS`,
     },
     {
-      key: "transportEndpointGps" as const,
-      label: "Transport endpoint GPS missing",
-      metadata: structuralGapMetadata(
-        transportTargetForm(counts.transportEndpointGpsTarget),
-        "Transport route",
-        counts.transportEndpointGpsGaps,
-      ),
-      count: counts.transportEndpointGpsGaps,
-      href: parentEditorHref(
-        facilityId,
-        counts.transportEndpointGpsTarget,
-        ENTITY_FOCUS_TARGETS.transportRoute,
-      ),
+      key: "feedstockRouteGps",
+      label: "Feedstock route GPS missing",
+      metadata: structuralGapMetadata("Feedstock form", "Transport route", counts.feedstockRouteGpsGaps),
+      count: counts.feedstockRouteGpsGaps,
+      href: routeEditorHref(facilityId, "feedstock", counts.feedstockRouteGpsTargetId, ENTITY_FOCUS_TARGETS.transportRoute),
+      station: "feedstock",
+      stationReason: `${plural(counts.feedstockRouteGpsGaps, "route")} missing GPS`,
     },
-  ].filter((gap) => gap.count > 0);
+    {
+      key: "biocharRouteGps",
+      label: "Biochar route GPS missing",
+      metadata: structuralGapMetadata("Biochar product form", "Transport route", counts.biocharRouteGpsGaps),
+      count: counts.biocharRouteGpsGaps,
+      href: routeEditorHref(facilityId, "biochar", counts.biocharRouteGpsTargetId, ENTITY_FOCUS_TARGETS.transportRoute),
+      // The route is fixed on the biochar product form, so it lights Biochar.
+      station: "products",
+      stationReason: `${plural(counts.biocharRouteGpsGaps, "route")} missing GPS`,
+    },
+  ];
+  return gaps.filter((gap) => gap.count > 0);
 }
 
 /**
@@ -237,7 +196,6 @@ export async function loadDashboardStructuralGapCounts(
       .select({
         feedstock: transportGapSelection("feedstock"),
         biochar: transportGapSelection("biochar"),
-        sample: transportGapSelection("sample"),
       })
       .from(transportLegs)
       .leftJoin(
@@ -256,21 +214,6 @@ export async function loadDashboardStructuralGapCounts(
           eq(biocharProducts.organizationId, orgId),
         ),
       )
-      .leftJoin(
-        samples,
-        and(
-          eq(transportLegs.entityType, "sample"),
-          eq(transportLegs.entityId, samples.id),
-          eq(samples.organizationId, orgId),
-        ),
-      )
-      .leftJoin(
-        creditBatches,
-        and(
-          eq(samples.creditBatchId, creditBatches.id),
-          eq(creditBatches.organizationId, orgId),
-        ),
-      )
       .where(
         and(
           eq(transportLegs.organizationId, orgId),
@@ -283,26 +226,17 @@ export async function loadDashboardStructuralGapCounts(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
             ),
-            and(
-              isNotNull(samples.id),
-              eq(creditBatches.facilityId, facilityId),
-              isNull(creditBatches.archivedAt),
-            ),
           ),
         ),
       ),
   ]);
 
-  const transport = addTransportGapRows([
-    { ...transportRow.feedstock, entityType: "feedstock" },
-    { ...transportRow.biochar, entityType: "biochar" },
-    { ...transportRow.sample, entityType: "sample" },
-  ]);
-
   return {
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
-    transportEndpointGpsGaps: transport.endpointGpsGaps,
     missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,
-    transportEndpointGpsTarget: transport.endpointGpsTarget,
+    feedstockRouteGpsGaps: Number(transportRow.feedstock.endpointGpsGaps ?? 0),
+    feedstockRouteGpsTargetId: transportRow.feedstock.endpointGpsTargetId ?? null,
+    biocharRouteGpsGaps: Number(transportRow.biochar.endpointGpsGaps ?? 0),
+    biocharRouteGpsTargetId: transportRow.biochar.endpointGpsTargetId ?? null,
   };
 }

@@ -14,7 +14,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
-import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { C, MONO, SANS, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type { LedgerCategory, LedgerModel } from "./types";
 
@@ -115,7 +115,7 @@ function masthead(model: LedgerModel): ReactElement {
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
     pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
-    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Facility", model.facilityName ?? FACILITY_NOT_FOUND),
     pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair("Legs reconciled", `${model.totalLegs} across 3 categories`),
   );

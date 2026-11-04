@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   formatRecordedMass,
+  isRecordedMass,
   MASS_MOISTURE_LABELS,
 } from "@/lib/mass-moisture";
 
@@ -25,8 +26,8 @@ export function MassPair({
   className,
 }: MassPairProps) {
   const figures = [
-    { label: wetLabel, value: formatRecordedMass(wetKg) },
-    { label: dryLabel, value: formatRecordedMass(dryKg) },
+    { label: wetLabel, value: formatRecordedMass(wetKg), recorded: isRecordedMass(wetKg) },
+    { label: dryLabel, value: formatRecordedMass(dryKg), recorded: isRecordedMass(dryKg) },
   ];
   const isCompact = variant === "compact";
 
@@ -57,9 +58,15 @@ export function MassPair({
             {figure.label}
           </dt>
           <dd
+            {...(figure.recorded ? {} : { "data-empty": true })}
             className={cn(
-              "m-0 whitespace-nowrap font-mono tabular-nums text-[var(--color-text-primary)]",
-              isCompact
+              "m-0 whitespace-nowrap",
+              figure.recorded
+                ? "font-mono tabular-nums text-[var(--color-text-primary)]"
+                : "text-[var(--color-text-tertiary)]",
+              // A missing figure is a placeholder, not a headline value: small
+              // regular text, so two of them never run into each other.
+              isCompact || !figure.recorded
                 ? "text-[length:var(--text-body-small)] leading-[var(--text-body-small--line-height)]"
                 : "text-[length:var(--text-body-large)] leading-[var(--text-body-large--line-height)] font-semibold",
             )}

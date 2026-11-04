@@ -16,6 +16,7 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import { createStorageLocationFn } from "@/fn/quick-add";
 import { StorageLocationForm } from "@/components/storage-locations/storage-location-form";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import { RecordLockFormFrame } from "@/components/record-locks/record-lock-sheet-props";
@@ -59,9 +60,9 @@ export function StorageLocationQuickAddDialog({
   defaultFormulationId,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
-  const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<StorageLocationFormData>({
+  const { error, isSubmitting, handleSubmit, startDraft } = useQuickAddSubmit<StorageLocationFormData>({
     entityType: "storageLocation",
-    serverFn: (data) =>
+    serverFn: (data, intentKey) =>
       createStorageLocationFn({
         name: data.name,
         type: data.type,
@@ -71,7 +72,7 @@ export function StorageLocationQuickAddDialog({
         formulationId: data.formulationId ?? null,
         stockMode: data.stockMode,
         drawOrder: data.drawOrder,
-      }),
+      }, { intentKey }),
     onSuccess,
     onClose,
   });
@@ -82,7 +83,7 @@ export function StorageLocationQuickAddDialog({
   const toast = useToast();
   const [editError, setEditError] = useState<string>();
   const archived = storageLocation?.archivedAt != null;
-  const handleUpdate = async (data: StorageLocationFormData) => {
+  const handleUpdate = async (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => {
     if (!storageLocation || archived) return;
     setEditError(undefined);
     try {
@@ -94,7 +95,7 @@ export function StorageLocationQuickAddDialog({
       toast.success("Storage bin updated.");
       onClose();
     } catch (error) {
-      setEditError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
+      setEditError(onRefusal(error, toSaveErrorMessage(error, "Storage bin was not saved. Try again.")) ?? undefined);
     }
   };
 
@@ -117,7 +118,7 @@ export function StorageLocationQuickAddDialog({
           isOpen={isOpen}
           onClose={onClose}
           title={title}
-          onOpen={() => setEditError(undefined)}
+          onOpen={() => { startDraft(); setEditError(undefined); }}
           testId="storage-location-quick-add-dialog"
         >
           {archived ? (

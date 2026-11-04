@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   certifierRemovals,
@@ -6,7 +6,7 @@ import {
 import { creditBatchApplications } from "@/db/schema/credits";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
-import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { isRemoteSubmission, recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -22,16 +22,19 @@ export class CreditBatchLineageChangedError extends SafeError {
   }
 }
 
-async function readCreditBatchRemovals(
+async function readCreditBatchesRemovalRows(
   ctx: OrgContext,
-  tx: DbTransaction,
-  creditBatchId: string,
+  tx: Pick<DbTransaction, "select">,
+  creditBatchIds: readonly string[],
   lock = false,
 ) {
   requireOrgScope(ctx);
+  if (!creditBatchIds.length) return [];
   const query = tx
     .select({
+      creditBatchId: creditBatchApplications.creditBatchId,
       id: certifierRemovals.id,
+      code: certifierRemovals.code,
       ghgStatementId: certifierRemovals.ghgStatementId,
     })
     .from(creditBatchApplications)
@@ -44,7 +47,7 @@ async function readCreditBatchRemovals(
     )
     .where(
       and(
-        eq(creditBatchApplications.creditBatchId, creditBatchId),
+        inArray(creditBatchApplications.creditBatchId, [...creditBatchIds]),
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     )
@@ -53,9 +56,16 @@ async function readCreditBatchRemovals(
   // that may hold its row while waiting for our artifact lock. An incomplete
   // result fails the snapshot comparison below and asks the caller to retry.
   const removalRows = await (lock ? query.for("update", { skipLocked: true }) : query);
-  const removals = [
-    ...new Map(removalRows.map((removal) => [removal.id, removal])).values(),
-  ];
+  return [...new Map(removalRows.map(row => [`${row.creditBatchId}:${row.id}`, row])).values()];
+}
+
+async function readCreditBatchRemovals(
+  ctx: OrgContext,
+  tx: Pick<DbTransaction, "select">,
+  creditBatchId: string,
+  lock = false,
+) {
+  const removals = await readCreditBatchesRemovalRows(ctx, tx, [creditBatchId], lock);
   const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })));
   return removals.map(row => ({ ...row, statementIds: [...new Set([
     ...(row.ghgStatementId ? [row.ghgStatementId] : []),
@@ -105,8 +115,51 @@ async function creditBatchMembershipLock(
     throw new CreditBatchLineageChangedError();
   }
 
-  const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), true);
+  return readMembershipLock(ctx, tx, removals, true);
+}
+
+async function readMembershipLock(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  removals: CreditBatchRemovals,
+  fresh = false,
+) {
+  const facts = await readRecordLockLineage(ctx, executor, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), fresh);
   return recordLocks.creditBatch({ removals: facts, dependents: [] });
+}
+
+/** Read cached submission lineage without row/advisory locks or registry calls. */
+export async function readCreditBatchMembershipSubmissionLock(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  creditBatchId: string,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  return (await readCreditBatchesMembershipSubmissionLocks(ctx, executor, [creditBatchId])).has(creditBatchId.toLowerCase());
+}
+
+/** Set-based version of the read-only membership lock, with the sent Removals. */
+export async function readCreditBatchesMembershipSubmissionLocks(
+  ctx: OrgContext,
+  executor: Pick<DbTransaction, "select">,
+  creditBatchIds: readonly string[],
+): Promise<Map<string, string[]>> {
+  requireOrgScope(ctx);
+  if (!creditBatchIds.length) return new Map();
+  const rows = await readCreditBatchesRemovalRows(ctx, executor, creditBatchIds);
+  const facts = await readRecordLockLineage(ctx, executor, rows.map(row => ({
+    removalId: row.id, ghgStatementId: row.ghgStatementId,
+  })));
+  const factsById = new Map(facts.map(fact => [fact.id, fact]));
+  const sentByBatch = new Map<string, string[]>();
+  for (const row of rows.sort((a, b) => a.code.localeCompare(b.code) || a.id.localeCompare(b.id))) {
+    const fact = factsById.get(row.id)!;
+    if (recordLocks.creditBatch({ removals: [fact], dependents: [] }).level !== "sent") continue;
+    const removals = sentByBatch.get(row.creditBatchId) ?? [];
+    removals.push(row.code);
+    sentByBatch.set(row.creditBatchId, removals);
+  }
+  return sentByBatch;
 }
 
 export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {
@@ -131,6 +184,26 @@ export async function assertRemovalAllowsCreditBatchMutation(
       subjectEntityType: "creditBatch",
       lineageEntityType: "creditBatch",
     }),
+  );
+}
+
+/** After lineage revalidation under the batch/artifact locks, remote ownership survives a return. */
+export async function assertNoRemoteRemovalHoldsCreditBatch(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  batch: { code: string; lockedRemovals: CreditBatchRemovals },
+): Promise<void> {
+  requireOrgScope(ctx);
+  const facts = await readRecordLockLineage(ctx, tx, batch.lockedRemovals.map(removal => ({
+    removalId: removal.id, ghgStatementId: removal.ghgStatementId,
+  })));
+  const remoteRemovalIds = new Set(facts.filter(removal => removal.submissions.some(isRemoteSubmission)).map(removal => removal.id));
+  const holder = batch.lockedRemovals.find(removal => remoteRemovalIds.has(removal.id));
+  if (!holder) return;
+
+  throw new DomainError(
+    "certification_locked",
+    `Credit batch ${batch.code} is in Removal ${holder.code}, which was sent to Isometric, so it cannot be deleted. Correct its records instead, then resubmit Removal ${holder.code}.`,
   );
 }
 

@@ -43,7 +43,6 @@ export function SubmitConfirmDialog({
       isProduction={isProduction}
       title={`Submit ${label} to production?`}
       confirmLabel={`Submit ${label}`}
-      busyLabel="Submitting…"
       body={
         <>
           <strong className="body-bold text-[var(--color-text-primary)]">

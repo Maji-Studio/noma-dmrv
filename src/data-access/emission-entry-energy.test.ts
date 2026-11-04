@@ -2,7 +2,6 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { loadFacilityEmissionEntryFlows } from "./emission-entry-energy";
-import { emissionsEntriesEnabled } from "@/lib/certification/emissions-entry-gate";
 import { requireOrgFacility } from "./utils";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
 import { listEmissionEntriesForBatches } from "./emission-entries";
@@ -13,22 +12,13 @@ vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("./utils", () => ({ requireOrgScope: vi.fn(), requireOrgFacility: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservations: vi.fn(), getTemplateObservationsByIds: vi.fn() }));
 vi.mock("./emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn() }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: vi.fn(() => true) }));
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(true);
   mocks.where.mockResolvedValue([]);
   mocks.select.mockReturnValue({ from: () => ({ where: mocks.where }) });
   vi.mocked(getLatestTemplateObservations).mockResolvedValue([observation] as never);
   vi.mocked(getTemplateObservationsByIds).mockResolvedValue([]);
   vi.mocked(listEmissionEntriesForBatches).mockResolvedValue([]);
-});
-it("performs no entry query with the flag off", async () => {
-  vi.mocked(emissionsEntriesEnabled).mockReturnValue(false);
-  expect(await loadFacilityEmissionEntryFlows(makeTestOrgContext(), "facility")).toEqual([]);
-  expect(mocks.select).not.toHaveBeenCalled();
-  expect(getLatestTemplateObservations).not.toHaveBeenCalled();
-  expect(listEmissionEntriesForBatches).not.toHaveBeenCalled();
 });
 it("filters the facility's batches by organization and archive state", async () => {
   const ctx = makeTestOrgContext();

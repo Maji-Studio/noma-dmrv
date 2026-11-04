@@ -22,10 +22,11 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
+import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -97,6 +98,7 @@ function CredentialsForm({
 }) {
   const toast = useToast();
   const setCredentials = useSetOrgCertifierCredentials(organizationId);
+  const formId = useId();
   const [serverError, setServerError] = useState("");
   const [verification, setVerification] =
     useState<CertifierCredentialsVerification | null>(null);
@@ -123,6 +125,8 @@ function CredentialsForm({
     register,
     handleSubmit,
     reset,
+    resetField,
+    setError,
     setValue,
     formState: { errors },
   } = useForm<CertifierCredentialsFormInput>({
@@ -138,6 +142,8 @@ function CredentialsForm({
         }
       : { accessToken: "", clientSecret: "" },
   });
+
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
 
   async function onSubmit(values: CertifierCredentialsFormInput) {
     setServerError("");
@@ -166,11 +172,12 @@ function CredentialsForm({
       // outcome, which is the part worth reading twice.
       toast.success("Isometric keys saved.");
     } catch (error) {
-      setServerError(
+      setServerError(refuseSave(
+        error,
         error instanceof Error
           ? error.message
           : "The Isometric keys were not saved. Try again.",
-      );
+      ) ?? "");
     } finally {
       onSavingChange?.(false);
     }
@@ -181,6 +188,7 @@ function CredentialsForm({
 
   return (
     <form
+      id={formId}
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-form flex flex-col gap-16"
     >
@@ -219,7 +227,6 @@ function CredentialsForm({
         errorMessage={serverError}
         showSubmit={!configured || replacing.accessToken || replacing.clientSecret}
         submitLabel="Save and test connection"
-        submittingLabel="Saving and connecting…"
         sticky={false}
       />
     </form>

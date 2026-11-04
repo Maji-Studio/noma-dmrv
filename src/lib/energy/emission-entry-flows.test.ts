@@ -29,7 +29,7 @@ it("converts supported energy scales to kWh", () => {
   expect(emissionEntryFlows([{ ...entry, total: { magnitude: "1000", unit: "Wh" } }], contracts)[0].activity).toBe(1);
 });
 it("adds entries to facility flows and retains per-batch totals and date filtering", () => {
-  const inputs = { runs: [], feedstocks: [], feedstockDraws: [], deliveries: [], deliveryRunShares: [],
+  const inputs = { runs: [], feedstocks: [], deliveries: [], deliveryRunShares: [],
     applications: [], applicationRunShares: [], creditBatches: [{ id: "batch", code: "CB", startDate: "2026-10-01", endDate: "2026-10-31", status: "active" }] };
   const period = { from: null, to: "2026-10-31" };
   expect(buildEnergyBreakdown(inputs, period).flows).toEqual([]);

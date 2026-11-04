@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
+import { roundDisplayedMassKg } from "./mass-precision";
 import {
   formatCo2e,
   formatCalendarDate,
@@ -21,8 +22,8 @@ import {
 
 describe("missing-value routing", () => {
   // The rule: a formatter that receives a value an operator records returns
-  // "Not recorded" for null; one that receives a value the app derives returns
-  // "Not available". See the vocabulary in ./copy-utils.
+  // "Not recorded" for null; one for a value the app derives takes a number
+  // only, so its caller leaves the figure out. See the vocabulary in ./copy-utils.
   it.each([
     ["formatMass", formatMass],
     ["formatMassKg", formatMassKg],
@@ -37,9 +38,8 @@ describe("missing-value routing", () => {
     ["formatCo2e", formatCo2e],
     ["formatTonnes", formatTonnes],
     ["formatFileSize", formatFileSize],
-  ])("%s reports a derived quantity as not available", (_name, format) => {
-    expect(format(null)).toBe(MISSING_VALUE.notAvailable);
-    expect(format(undefined)).toBe(MISSING_VALUE.notAvailable);
+  ])("%s formats a derived quantity and never a placeholder", (_name, format) => {
+    expect(format(0)).not.toMatch(/Not /);
   });
 
   it("still formats a measured zero rather than a placeholder", () => {
@@ -118,7 +118,7 @@ describe("facility clock under the viewer's daylight-saving change", () => {
 
   it("keeps the missing-value tokens", () => {
     expect(formatFacilityDateTime(null, DAR)).toBe(MISSING_VALUE.notRecorded);
-    expect(formatFacilityDateTime("not a time", DAR)).toBe(MISSING_VALUE.notAvailable);
+    expect(formatFacilityDateTime("not a time", DAR)).toBe("Unreadable date");
   });
 });
 
@@ -132,8 +132,8 @@ describe("formatDayString", () => {
     expect(formatDayString(null)).toBe("Not recorded");
     expect(formatDayString(undefined)).toBe("Not recorded");
     expect(formatDayString("")).toBe("Not recorded");
-    expect(formatDayString("2026-08-01T12:00:00Z")).toBe("Not available");
-    expect(formatDayString("2026-13-01")).toBe("Not available");
+    expect(formatDayString("2026-08-01T12:00:00Z")).toBe("Unreadable date");
+    expect(formatDayString("2026-13-01")).toBe("Unreadable date");
   });
 });
 
@@ -155,7 +155,7 @@ describe("formatCalendarDate", () => {
   it("preserves missing and invalid date feedback", () => {
     expect(formatCalendarDate(null)).toBe(MISSING_VALUE.notRecorded);
     expect(formatCalendarDate(undefined)).toBe(MISSING_VALUE.notRecorded);
-    expect(formatCalendarDate("invalid")).toBe(MISSING_VALUE.notAvailable);
+    expect(formatCalendarDate("invalid")).toBe("Unreadable date");
   });
 });
 
@@ -178,11 +178,6 @@ describe("formatCo2e", () => {
     expect(formatCo2e(3_704)).toBe("3.704 t CO₂e");
   });
 
-  it("returns the shared missing marker for null and undefined", () => {
-    expect(formatCo2e(null)).toBe("Not available");
-    expect(formatCo2e(undefined)).toBe("Not available");
-  });
-
   it("signs from the displayed magnitude so a rounded zero stays unsigned", () => {
     expect(formatCo2e(1_040, { signed: true })).toBe("+1.04 t CO₂e");
     expect(formatCo2e(-15.4, { signed: true })).toBe("−15 kg CO₂e");
@@ -197,6 +192,13 @@ describe("formatPercent", () => {
 });
 
 describe("formatMassKg explicit storage precision", () => {
+  it.each([0, 0.04, 0.05, 1.05, 1.15, 125.125, 1_234.55, -0.04, -0.05, -1.15])(
+    "agrees with displayed mass-balance rounding for %s kg",
+    (kg) => {
+      expect(formatMassKg(roundDisplayedMassKg(kg))).toBe(formatMassKg(kg));
+    },
+  );
+
   it("retains gram precision without changing the default display", () => {
     expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
     expect(formatMassKg(125.125)).toBe("125.1 kg");

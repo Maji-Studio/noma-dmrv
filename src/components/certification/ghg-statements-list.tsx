@@ -1,9 +1,9 @@
 /**
  * GhgStatementsList — the Certification → GHG Statements workspace tab (route:
- * /certification/ghg-statements). Replaces the card-grid GhgStatementsHub with
+ * /ghg-statements). Replaces the card-grid GhgStatementsHub with
  * the app-native DataTable idiom (cf. removals-list / production-runs): one
  * dense, scannable list of every GHG Statement for the selected facility. A row
- * opens a read-only centered Modal (`?statement=<id>`, nuqs); the
+ * opens a read-only side sheet (`?statement=<id>`, nuqs); the
  * "New GHG Statement" button opens the period-first create dialog.
  *
  * A GHG Statement is an independent, period-anchored artifact that rolls up
@@ -13,16 +13,17 @@
  * The status column derives from the persisted `metadata.remoteStatus` overlay
  * (`deriveSubmissionStatus(..., "ghgStatement")`) — NOT a per-row live verifier
  * fetch (P2-a, N+1). The selected statement's heavier detail (remote status,
- * sync events) loads once in the detail Modal.
+ * sync events) loads once in the detail side sheet.
  */
 "use client";
 
-import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
-import type { ColumnDef } from "@tanstack/react-table";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
+import { isSortedDescending } from "./undated-last-sort";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
-import { GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/ghg-statement-links";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowsClockwiseIcon,
   ClipboardTextIcon,
@@ -30,22 +31,27 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
+  useGhgStatementState,
   useSyncGhgStatementsFromRegistry,
 } from "@/hooks/use-certification";
 import { useToast } from "@/components/ui/toast";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
+import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submitted-on-cell";
+import { LastSyncedCell, lastSyncedSortingFn, lastSyncedText } from "./last-synced-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+import { IsometricLink } from "./isometric-link";
+import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import { Notice } from "@/components/ui/notice";
 
 // Which blocking notice (if any) the list shows above the table. Precedence:
@@ -105,6 +111,18 @@ export function deriveGhgCreateGate(summary: {
   };
 }
 
+/** The repair link both blocking notices point at: the facility's certification settings. */
+function SettingsLink({ facilityId }: { facilityId: string }) {
+  return (
+    <Link
+      href={facilityCertificationSettingsHref(facilityId)}
+      className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
+    >
+      Settings
+    </Link>
+  );
+}
+
 export function CreateGateNotice({
   notice,
   facilityId,
@@ -123,20 +141,15 @@ export function CreateGateNotice({
         </p>
       ) : notice === "unlinked" ? (
         <p>
-          Link this facility to an Isometric project in Settings before creating
-          a statement.
+          Link this facility to an Isometric project in{" "}
+          <SettingsLink facilityId={facilityId} /> before creating a statement.
         </p>
       ) : (
         <p>
           This Isometric project is linked to {linkedFacilityCount} noma
           facilities. A GHG Statement covers every facility on the project. Link
           each facility to a dedicated Isometric project in{" "}
-          <Link
-            href={certificationSettingsHref(facilityId)}
-            className="text-[var(--color-interaction)] underline underline-offset-2 hover:text-[var(--color-interaction-hover)]"
-          >
-            Settings
-          </Link>{" "}
+          <SettingsLink facilityId={facilityId} />{" "}
           before creating a statement.
         </p>
       )}
@@ -216,7 +229,13 @@ function LinkedRemovalsCell({ item }: { item: GhgStatementListItem }) {
   );
 }
 
-function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
+function RegistryRecordCell({
+  item,
+  registryHref,
+}: {
+  item: GhgStatementListItem;
+  registryHref: string | null;
+}) {
   const { latestSubmission } = item;
   if (!latestSubmission?.externalId) {
     return (
@@ -226,8 +245,11 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
     );
   }
   return (
-    <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
-      {latestSubmission.externalId} · v{latestSubmission.version}
+    <span className="inline-flex max-w-full min-w-0 items-center gap-4 align-top">
+      <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
+        {formatRegistryRecord(latestSubmission.externalId, latestSubmission.version)}
+      </span>
+      {registryHref && <IsometricLink href={registryHref} />}
     </span>
   );
 }
@@ -251,7 +273,11 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
   );
 }
 
-const columns: ColumnDef<GhgStatementListItem>[] = [
+const createColumns = (
+  registryHref: (externalId: string) => string | null,
+  sorting: { submittedOn: boolean; lastSynced: boolean },
+  timeZone: string,
+): ColumnDef<GhgStatementListItem>[] => [
   {
     id: "period",
     meta: { recordLink: true },
@@ -269,7 +295,31 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
     id: "registry",
     header: "Registry record",
     accessorFn: (item) => item.latestSubmission?.externalId ?? "",
-    cell: ({ row }) => <RegistryRecordCell item={row.original} />,
+    cell: ({ row }) => {
+      const externalId = row.original.latestSubmission?.externalId;
+      return (
+        <RegistryRecordCell
+          item={row.original}
+          registryHref={externalId ? registryHref(externalId) : null}
+        />
+      );
+    },
+  },
+  {
+    id: "submittedOn",
+    header: "Submitted on",
+    accessorFn: (item) => submittedOnText(item.submittedOn, timeZone),
+    sortingFn: submittedOnSortingFn<GhgStatementListItem>(sorting.submittedOn),
+    cell: ({ row }) => (
+      <SubmittedOnCell state={row.original.submittedOn} timeZone={timeZone} />
+    ),
+  },
+  {
+    id: "lastSynced",
+    header: "Last synced",
+    accessorFn: (item) => lastSyncedText(item.lastSyncedAt, timeZone),
+    sortingFn: lastSyncedSortingFn<GhgStatementListItem>(sorting.lastSynced),
+    cell: ({ row }) => <LastSyncedCell value={row.original.lastSyncedAt} timeZone={timeZone} />,
   },
   {
     id: "status",
@@ -288,6 +338,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
 ];
 
 function ListBody({ facilityId }: { facilityId: string }) {
+  const { timeZone } = useFacilityClock(facilityId);
   // DB-only summary — this page only needs link-presence + env. It must NOT pull
   // the management payload (available projects/templates, cross-facility link
   // hints, live Isometric API calls) that `useFacilityCertifierMapping` fetches.
@@ -297,12 +348,43 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [statementId, setStatementId] = useQueryState(
     GHG_STATEMENT_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
+  // A statement already on this facility's list opens at once (its sheet loads the registry detail);
+  // only a link from elsewhere waits for the detail read to learn its facility.
+  const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
+  const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
+  const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
+  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading).ready;
+  useEffect(() => {
+    // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
+    if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
+      toast.error("Linked GHG Statement could not be opened");
+      void setStatementId(null);
+    }
+  }, [lookupEnabled, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
+
   const isProduction = summaryQuery.data?.isProduction ?? false;
+  const externalProjectId =
+    summaryQuery.data?.mapping?.externalProjectId ?? null;
+  const columns = createColumns(
+    (externalId) =>
+      registryRecordUrl({
+        kind: "ghgStatement",
+        externalId,
+        externalProjectId,
+        isProduction,
+      }),
+    {
+      submittedOn: isSortedDescending(sorting, "submittedOn"),
+      lastSynced: isSortedDescending(sorting, "lastSynced"),
+    },
+    timeZone,
+  );
   const gate = deriveGhgCreateGate({
     isLoading: summaryQuery.isLoading,
     isError: summaryQuery.isError,
@@ -349,21 +431,21 @@ function ListBody({ facilityId }: { facilityId: string }) {
   }
 
   const statements = query.data ?? [];
-  const selected = statementId
+  const selected = statementId && (linkedInList || linkedFacilityReady)
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
 
   return (
     <>
       <section className="flex flex-col gap-16">
-        <div className="flex items-center justify-between gap-24">
+        <div className="flex flex-wrap items-center justify-between gap-x-24 gap-y-12">
           <h2 className="title-heading-3">
             Statements{" "}
             <span className="body-small text-[var(--color-text-tertiary)]">
               ({statements.length})
             </span>
           </h2>
-          <div className="flex flex-wrap items-center justify-end gap-12">
+          <div className="flex max-w-full flex-wrap items-center gap-12">
             <Button
               variant="default"
               onClick={syncFromRegistry}
@@ -417,10 +499,11 @@ function ListBody({ facilityId }: { facilityId: string }) {
           enablePagination
           globalFilter={searchQuery}
           onGlobalFilterChange={setSearchQuery}
+          onSortingChange={setSorting}
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
-          getRowHref={(row) => ghgStatementDeepLinkHref(row.statement.id, facilityId)}
+          getRowHref={(row) => recordHref("ghgStatement", row.statement.id, { facilityId })}
           aria-label="GHG Statements"
           emptyMessage={
             <EmptyState
@@ -433,20 +516,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Sync existing registry statements, or create one for submitted Removals in a reporting period."
-              }
-              action={
-                searchQuery ? undefined : (
-                  <Button
-                    variant="default"
-                    onClick={syncFromRegistry}
-                    busy={syncMutation.isPending}
-                    disabled={!gate.canSync}
-                  >
-                    <ArrowsClockwiseIcon size={20} weight="bold" />
-                    Sync from registry
-                  </Button>
-                )
+                  : "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
               }
               padding="md"
             />
@@ -457,9 +527,6 @@ function ListBody({ facilityId }: { facilityId: string }) {
               placeholder="Search GHG Statements..."
               aria-label="Search GHG Statements"
             />
-            <DataTable.Controls>
-              <DataTable.ColumnVisibility />
-            </DataTable.Controls>
           </DataTable.Toolbar>
           <DataTable.Pagination />
         </DataTable>

@@ -3,7 +3,8 @@
  * Main supplier listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
-import { entityViewHref } from "@/lib/entity-deep-link";
+
+import { recordHref } from "@/lib/record-links";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
@@ -21,6 +22,7 @@ import {
   useFetchSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
+  useSupplierStats,
 } from "@/hooks/use-suppliers";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -29,13 +31,16 @@ import {
 } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
-import { isInUseDeleteRefusal } from "@/components/ui/lifecycle-notices";
+import { inUseMoreCount, supplierInUseReferences, type InUseRecordLink } from "@/lib/in-use-references";
+import { isInUseDeleteRefusal } from "@/lib/delete-refusal";
+import { SUPPLIER_INTAKES_REASON } from "@/lib/party-domain-errors";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ArchivedSupplierNotice } from "@/components/parties";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
@@ -48,6 +53,12 @@ import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
+
+/** Record details an operator can add from the Columns menu. */
+const SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT = {
+  sourceRegion: false,
+  address: false,
+};
 
 // ============================================
 // Column Definitions
@@ -102,6 +113,24 @@ function createColumns(
       ),
     },
     {
+      accessorKey: "sourceRegion",
+      header: "Source region",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.sourceRegion || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "address",
+      header: "Address",
+      cell: ({ row }) => (
+        <span className="block max-w-xs truncate text-[var(--color-text-secondary)]">
+          {row.original.address || MISSING_VALUE.notRecorded}
+        </span>
+      ),
+    },
+    {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
@@ -151,6 +180,9 @@ export function SupplierList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<SupplierWithRelations | null>(null);
+  // The intakes the refusal names, so the in-use dialog can link each one.
+  const [conflictReferences, setConflictReferences] = useState<InUseRecordLink[]>([]);
+  const [conflictMore, setConflictMore] = useState(0);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -168,6 +200,7 @@ export function SupplierList() {
     page: currentPage,
     pageSize,
   });
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useSupplierStats(showArchived);
   const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
   // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
   // does: a later refetch (a location save, a refused stale save) must not move
@@ -235,7 +268,6 @@ export function SupplierList() {
   const suppliers = suppliersData?.items ?? [];
 
   // Computed stats
-  const totalSuppliers = suppliersData?.total ?? 0;
   const totalPages = suppliersData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -247,6 +279,7 @@ export function SupplierList() {
   // Handlers
   const handleCreate = async (
     data: SupplierFormData,
+    onRefusal: SaveRefusalHandler,
     pendingLocations?: PendingSupplierLocation[]
   ) => {
     setCreateError(null);
@@ -258,13 +291,14 @@ export function SupplierList() {
       closeSideSheet();
       toast.success("Supplier created.");
     } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Supplier was not created. Check the form."
-      );
+      setCreateError(onRefusal(
+        error,
+        error instanceof Error ? error.message : "Supplier was not created. Check the form.",
+      ));
     }
   };
 
-  const handleUpdate = async (data: SupplierFormData) => {
+  const handleUpdate = async (data: SupplierFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -280,7 +314,7 @@ export function SupplierList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Supplier was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Supplier was not saved. Try again.")));
     }
   };
 
@@ -299,9 +333,11 @@ export function SupplierList() {
       toast.success("Supplier deleted.");
     } catch (error) {
       const message = toDeleteErrorMessage(error, `Supplier ${deletingSupplier.code}`, "Supplier was not deleted. Try again.");
-      if (isInUseDeleteRefusal(message) && !deletingSupplier.archivedAt) {
-        // In use: the dialog gives way to the in-use dialog that offers Archive instead.
+      if (isInUseDeleteRefusal(error)) {
+        // In use: the dialog gives way to the in-use dialog (Archive instead for an active supplier, Close only for an archived one).
         setDeleteConflict(deletingSupplier);
+        setConflictReferences(supplierInUseReferences(error));
+        setConflictMore(inUseMoreCount(error, "feedstocks"));
         setDeletingSupplier(null);
         return;
       }
@@ -368,7 +404,7 @@ export function SupplierList() {
     setLifecycleError(null);
   };
 
-  const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => { createSupplier.startDraft(); clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
   const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); setLifecycleError(null); };
@@ -400,9 +436,8 @@ export function SupplierList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="distribution"
+        area="partners"
         title="Suppliers"
-        subtitle="Biomass suppliers and their source sites"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -415,15 +450,16 @@ export function SupplierList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title={showArchived ? "Archived suppliers" : "Active suppliers"}
-          value={totalSuppliers}
+          value={statsData?.totalSuppliers ?? 0}
           icon={<UsersIcon size={24} weight="bold" />}
-          description="Biomass feedstock providers"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
       {/* Data Table */}
       <DataTable
+        defaultColumnVisibility={SUPPLIER_COLUMNS_HIDDEN_BY_DEFAULT}
         columns={columns}
         data={suppliers}
         enableSorting={false}
@@ -442,7 +478,7 @@ export function SupplierList() {
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
-        getRowHref={(row) => entityViewHref("/suppliers", SUPPLIER_QUERY_PARAM, row.id)}
+        getRowHref={(row) => recordHref("supplier", row.id)}
         emptyMessage={
           <EmptyState
             padding="md"
@@ -494,7 +530,10 @@ export function SupplierList() {
       {deleteConflict && (
         <InUseDeleteDialog
           label={deleteConflict.code}
-          onArchive={() => handleArchive(deleteConflict)}
+          onArchive={deleteConflict.archivedAt ? undefined : () => handleArchive(deleteConflict)}
+          reason={SUPPLIER_INTAKES_REASON}
+          references={conflictReferences}
+          moreReferences={conflictMore}
           onClose={() => {
             setDeleteConflict(null);
             setLifecycleError(null);

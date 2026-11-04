@@ -9,17 +9,18 @@
  * and moisture.
  *
  * The composition is the form's `ProductCompositionPreview` fed the saved
- * parts, so one split rule serves both. Both detail levels show every saved
- * field, the dry figures as a secondary line under each wet mass and the
- * composition picture. Detailed adds only the ledger and arithmetic behind
- * Show calculation. Masses read at save precision. No transport here: goods
+ * parts, so one split rule serves both. The view shows every saved field, the
+ * dry figures as a secondary line under each wet mass and the composition
+ * picture. The ledger and arithmetic open from the composition's (i). Masses read at save precision. No transport here: goods
  * move on deliveries, so the route reads on each delivery.
  */
 "use client";
 
+import Link from "next/link";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
@@ -29,14 +30,14 @@ import {
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatDayString, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
 } from "@/lib/mass-moisture";
 import { sumNullable } from "@/lib/nullable-sum";
+import { recordHref } from "@/lib/record-links";
 import {
   ingredientComponents,
   productCompositionComponents,
@@ -59,11 +60,6 @@ const INGREDIENT_BASIS =
 
 export function formatSavedMassKg(mass: number | null | undefined): string {
   return formatMassKg(mass, { digits: MASS_KG_STORAGE_DECIMALS });
-}
-
-/** A composition part is derived, so a missing one is not available rather than not recorded. */
-function formatSavedPart(mass: number | null): string {
-  return mass === null ? MISSING_VALUE.notAvailable : formatSavedMassKg(mass);
 }
 
 /**
@@ -108,7 +104,7 @@ function SavedProductComposition({ product, composition }: {
       sources={composition.productSources}
       wetLabel={WET_PRODUCT_LABEL}
       note={COMPOSITION_HINT}
-      formatMass={formatSavedPart}
+      formatMass={formatSavedMassKg}
       headline={<DerivedHeadline label={WET_PRODUCT_LABEL} value={total === null ? null : formatSavedMassKg(total)} />}
       basis={
         <p className="body-caption text-[var(--color-text-tertiary)]">
@@ -117,6 +113,25 @@ function SavedProductComposition({ product, composition }: {
         </p>
       }
     />
+  );
+}
+
+/** One line per source run: its linked code, then the day it was made. */
+function SourceRunLines({ runs, facilityId }: {
+  runs: NonNullable<BiocharProductWithRelations["sourceRuns"]>;
+  facilityId: string;
+}) {
+  return (
+    <ul className="flex flex-col" data-testid="product-source-runs">
+      {runs.map(run => (
+        <li key={run.id} className="flex min-h-44 min-w-0 items-center gap-8 md:min-h-0">
+          <Link href={recordHref("productionRun", run.id, { facilityId })} className={`${RECORD_CODE_LINK} inline-flex min-h-44 items-center md:min-h-0`}>
+            {run.code}
+          </Link>
+          <span className="text-[var(--color-text-tertiary)]">{formatDayString(run.date)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -132,6 +147,12 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
           label: "Source biochar bin",
           value: product.sourceBiocharStorageLocation?.name ?? product.linkedProductionRun?.biocharStorageLocationName,
         },
+        ...(product.sourceRuns?.length
+          ? [{
+              label: "Source production runs",
+              value: <SourceRunLines runs={product.sourceRuns} facilityId={product.facilityId} />,
+            }]
+          : []),
         {
           label: "Source biochar wet mass (kg)",
           value: formatSavedMassKg(composition.sourceWetKg),

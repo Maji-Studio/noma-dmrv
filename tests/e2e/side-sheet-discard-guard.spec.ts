@@ -26,7 +26,7 @@ test.describe("Side-sheet discard guard", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     const row = page
       .locator("tr", { hasText: seededData.feedstock.code })
       .first();
@@ -75,7 +75,7 @@ test.describe("Side-sheet discard guard", () => {
     const secondSupplier = await createTestSupplier();
 
     try {
-      await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+      await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
       const row = page
         .locator("tr", { hasText: seededData.feedstock.code })
         .first();

@@ -3,9 +3,19 @@
  * Provides sidebar navigation and authenticated layout wrapper
  */
 import { getOrgContext, requireAuth } from "@/lib/auth/server";
+import { getActiveOrganization } from "@/data-access/organizations";
 import { getOrganizationDefaults } from "@/data-access/organization-settings";
-import { AppSidebar, MobileNav } from "@/components/navigation";
+import {
+  AppSidebar,
+  MobileNav,
+  OrgSwitchToast,
+  PlatformAdminColumn,
+  ViewerOrgProvider,
+  type ViewerOrg,
+} from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
+import { FeatureSwitchesProvider } from "@/components/providers/feature-switches-provider";
+import { multiBinRunsEnabled, stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
 export default async function AppLayout({
@@ -33,17 +43,37 @@ export default async function AppLayout({
         defaults: await getOrganizationDefaults(orgContext),
         viewerCanManage:
           orgContext.isPlatformAdmin ||
-          orgContext.orgRole === "owner" ||
           orgContext.orgRole === "admin",
       }
     : undefined;
 
+  // Where the viewer is and as whom, for the sidebar chip, the mobile top bar
+  // and the Platform Admin bar. Resolved here so all three agree on first paint.
+  const activeOrganization = orgContext ? await getActiveOrganization(orgContext) : null;
+  const viewerOrg: ViewerOrg | null =
+    orgContext && activeOrganization
+      ? {
+          organizationId: orgContext.organizationId,
+          organizationName: activeOrganization.name,
+          orgRole: orgContext.orgRole,
+          isPlatformAdmin: orgContext.isPlatformAdmin,
+        }
+      : null;
+
+  const featureSwitches = {
+    stockAdjustments: stockAdjustmentsEnabled(),
+    multiBinRuns: multiBinRunsEnabled(),
+  };
+
   return (
+    <FeatureSwitchesProvider value={featureSwitches}>
+    <ViewerOrgProvider value={viewerOrg}>
     <FacilityProvider
       initialOrganizationId={orgContext?.organizationId ?? null}
       initialOrganizationDefaults={organizationDefaults}
     >
       <SessionSignOutListener />
+      <OrgSwitchToast />
       {/* Desktop: sidebar + main side by side. Mobile: a sticky top bar
           stacks above a full-width main (the sidebar is hidden, its nav lives
           in the drawer that MobileNav opens).
@@ -68,10 +98,10 @@ export default async function AppLayout({
         </a>
         <AppSidebar />
         <MobileNav />
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 overflow-auto focus:outline-none">
-          {children}
-        </main>
+        <PlatformAdminColumn>{children}</PlatformAdminColumn>
       </div>
     </FacilityProvider>
+    </ViewerOrgProvider>
+    </FeatureSwitchesProvider>
   );
 }

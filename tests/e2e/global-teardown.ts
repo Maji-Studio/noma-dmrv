@@ -18,6 +18,7 @@
  */
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { APP_FORM_CREDENTIAL_PREFIX } from "@/config/operations";
 import { isLocalHost } from "../helpers/local-host";
 import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
@@ -289,6 +290,58 @@ export default async function globalTeardown() {
           )
       `);
 
+      // ─── Emissions entries of E2E credit batches (FK to credit_batches) ───
+      // A re-entered entry points at the sent one it replaces (replaces_entry_id
+      // self-FK), so the links go first. Template observations are referenced by
+      // entries, so they follow.
+      await client.query(`
+        DELETE FROM emission_entry_values
+        WHERE entry_id IN (
+          SELECT id FROM emission_entries
+          WHERE credit_batch_id IN (
+            SELECT id FROM credit_batches
+            WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+          )
+        )
+      `);
+      await client.query(`
+        UPDATE emission_entries SET replaces_entry_id = NULL
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+        )
+      `);
+      await client.query(`
+        DELETE FROM emission_entries
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+        )
+      `);
+      // The returned Removal spec's template (tests/e2e/fixtures/returned-removal-seed.ts).
+      await client.query(`DELETE FROM removal_template_observations WHERE external_template_id LIKE 'e2e-%'`);
+
       // ─── Credit batches ───
       // Delete by code prefix AND by facility reference (UI-created batches have auto-generated codes)
       await client.query(`
@@ -437,7 +490,7 @@ export default async function globalTeardown() {
       `);
 
       // ─── Formulations ───
-      await client.query(`DELETE FROM formulations WHERE code LIKE 'E2E-%'`);
+      await client.query(`DELETE FROM formulations WHERE code LIKE 'E2E-%' OR name LIKE 'E2E %'`);
 
       // ─── Customer locations (references customers) ───
       await client.query(`
@@ -553,6 +606,22 @@ export default async function globalTeardown() {
         )
       `);
 
+      // ─── GHG statement submission ledger rows (local_entity_id is a plain uuid) ───
+      await client.query(`
+        DELETE FROM certification_submissions
+        WHERE local_entity_type = 'ghgStatement'
+          AND local_entity_id IN (
+            SELECT id FROM certifier_ghg_statements
+            WHERE facility_id IN (
+              SELECT id FROM facilities
+              WHERE code LIKE 'E2E-%'
+                 OR name LIKE 'UI %'
+                 OR name LIKE 'Chain %'
+                 OR name LIKE 'Duplicate Test %'
+            )
+          )
+      `);
+
       // ─── Certifier GHG statements (FK to facilities) ───
       await client.query(`
         DELETE FROM certifier_ghg_statements
@@ -612,6 +681,48 @@ export default async function globalTeardown() {
 
       // ─── Auth data: sessions, accounts, users ───
 
+      // Attempts do not cascade from clients; remove them before the registry sweep.
+      await client.query(`
+        DELETE FROM oauth_authorization_attempts
+        WHERE client_id IN (SELECT client_id FROM oauth_clients WHERE name LIKE 'E2E %')
+      `);
+      // Client deletion cascades grants, consents, tokens, assertions and resource links.
+      await client.query(`DELETE FROM oauth_clients WHERE name LIKE 'E2E %'`);
+      await client.query(`DELETE FROM oauth_resources WHERE id LIKE 'e2e-oauth-resource-%'`);
+      // Organization deletion also cascades any attempts not yet bound to a client.
+      await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E OAuth Organization %'`);
+
+      // App create intents (#1238) saved by E2E users in the test organization.
+      // The credential uses APP_FORM_CREDENTIAL_PREFIX and E2E user ids start `e2e-`. The
+      // worker fixtures delete their users first, so match the id, not a join.
+      // Nothing outside DEC_ORG_ID is touched.
+      await client.query(`
+        DELETE FROM api_idempotency_records
+        WHERE organization_id = $1
+          AND credential_id LIKE $2 || 'e2e-%'
+      `, [DEC_ORG_ID, APP_FORM_CREDENTIAL_PREFIX]);
+
+      // Credential and dedicated-org fixtures (tests/e2e/fixtures/dedicated-org.ts).
+      // Credentials go before their organization (no cascade). The organizations
+      // go before the users: an org's membership cascades with it, while deleting
+      // its only Admin user first is refused by the last-Admin trigger.
+      await client.query(`
+        DELETE FROM certifier_credentials
+        WHERE organization_id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      await client.query(`
+        DELETE FROM organizations
+        WHERE id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      // Organizations created through Platform Organizations (platform-organizations.spec.ts)
+      // get random ids, so they are found by name. Their starter catalog
+      // (seedOrgDefaults) and invitations go first.
+      const platformSpecOrgs = `SELECT id FROM organizations WHERE name LIKE 'E2E Platform %'`;
+      await client.query(`DELETE FROM formulations WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM feedstock_types WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM invitations WHERE organization_id IN (${platformSpecOrgs})`);
+      await client.query(`DELETE FROM organizations WHERE name LIKE 'E2E Platform %'`);
+
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
 
@@ -621,16 +732,6 @@ export default async function globalTeardown() {
       // Users
       await client.query(`DELETE FROM users WHERE id LIKE 'e2e-%' OR email LIKE '%@e2e.local'`);
 
-      // Self-service credential fixtures create no memberships or other children.
-      // Credentials must go before their organization (no cascade).
-      await client.query(`
-        DELETE FROM certifier_credentials
-        WHERE organization_id LIKE $1 || '%'
-      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
-      await client.query(`
-        DELETE FROM organizations
-        WHERE id LIKE $1 || '%'
-      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
 
       await client.query("COMMIT");
       console.log("[global-teardown] E2E test data cleanup complete.");

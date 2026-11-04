@@ -1,17 +1,15 @@
+import { recordHref } from "@/lib/record-links";
 import type {
   BatchHealthCheck,
   BatchHealthCheckKey,
   BatchHealthFixTarget,
 } from "./batch-health";
 import {
-  buildEntityDeepLink,
-  buildFeedstockTypeEditDeepLink,
   ENTITY_FOCUS_TARGETS,
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
+import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -25,9 +23,9 @@ export interface BatchHealthFixLink {
   href: string;
 }
 
-// Note: the problem-phrased "open check headline" was retired in Phase 0 — every
-// readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
-// (see `requirement-labels.ts`), so the batch page and the removal wizard can't
+// Note: every readiness surface labels a check through `certCheckLabel`
+// (`requirement-labels.ts`): the named problem while unmet, the neutral
+// requirement otherwise. The batch page and the removal wizard therefore can't
 // phrase the same gap differently.
 
 export function fallbackBatchHealthFixTarget(
@@ -36,7 +34,8 @@ export function fallbackBatchHealthFixTarget(
   switch (key) {
     case "emissions":
       return "emissions";
-    case "template":
+    case "templateSet":
+    case "templateLines":
       return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
@@ -89,15 +88,16 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "emissions":
-      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review emissions", href: creditBatchId ? recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" }) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
-      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
-    case "creditBatchTemplate":
-      return creditBatchId
-        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
-        : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+      return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
+    case "templateSetup":
+    case "templateReplacement":
+      return { label: "Set template", href: removalTemplateSetupHref(facilityId) };
+    case "templateLines":
+      return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":
-      return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
+      return { label: DECIDE_LINES_LINK_LABEL, href: removalTemplateSetupHref(facilityId) };
     case "batchDetails":
       return {
         label: BATCH_DETAILS_FIX_LABEL,
@@ -111,12 +111,12 @@ export function batchHealthFixLinkFor(
             : "Add Sample data",
         href: creditBatchId
           ? sampleCreateHref(facilityId, creditBatchId)
-          : `/samples?${query(undefined, false)}`,
+          : `/lab-samples?${query(undefined, false)}`,
       };
     case "certificationEmissions":
       return {
-        label: "Open emission estimates",
-        href: certificationEmissionEstimatesHref(facilityId),
+        label: "Open Settings, Facilities",
+        href: facilityCertificationSettingsHref(facilityId),
       };
     case "applications":
       // Applications auto-match by crediting period — there is no manual "link"
@@ -152,39 +152,40 @@ export function batchHealthFixLinkFor(
       const feedstockId = affectedIds[0];
       return {
         label: "Review feedstock transport",
-        href: feedstockId
-          ? buildEntityDeepLink({
-              path: "/feedstocks",
-              facilityId,
-              entityQueryKey: "feedstock",
-              entityId: feedstockId,
-              focus: ENTITY_FOCUS_TARGETS.transportEvidence,
-            })
-          : `/feedstocks?facility=${facilityId}`,
+        href: affectedCount === 1
+          ? recordHref("feedstock", feedstockId, { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence })
+          : `/feedstock-intake?${query()}`,
       };
     }
     case "feedstockTypes": {
       const feedstockTypeId = affectedIds[0];
       return {
         label: FEEDSTOCK_TYPE_EDIT_LABEL,
-        href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
+        href: feedstockTypeId ? recordHref("feedstockType", feedstockTypeId, { facilityId, mode: "edit" }) : `/feedstock-types?${new URLSearchParams({ facility: facilityId })}`,
       };
     }
     case "orders":
+      // One order opens its sheet, like one feedstock or one delivery's proof.
+      if (affectedCount === 1) return {
+        label: `Review ${check.affectedRecords![0].code}`,
+        href: recordHref("order", affectedIds[0], { facilityId }),
+      };
       return {
         label: "Review orders",
-        href: `/orders?${query(undefined, false)}`,
+        href: `/orders?${query()}`,
       };
     case "deliveryEvidence":
       if (affectedCount === 1) return {
         label: `Review ${check.affectedRecords![0].code} evidence`,
-        href: buildEntityDeepLink({
-          path: "/deliveries", facilityId, entityQueryKey: "delivery",
-          entityId: affectedIds[0], focus: ENTITY_FOCUS_TARGETS.transportEvidence,
-        }),
+        href: recordHref("delivery", affectedIds[0], { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence }),
+      };
+    case "deliveryDistances":
+      // A counted proof or distance to-do lists exactly its blocked deliveries.
+      return {
+        label: "Review deliveries",
+        href: `/deliveries?${query(creditBatchId ? { creditBatch: creditBatchId } : undefined)}`,
       };
     case "deliveries":
-    case "deliveryDistances":
       return {
         label: "Review deliveries",
         href: `/deliveries?${query(

@@ -4,11 +4,12 @@
  *
  * The product form no longer draws a stock preview per bin: the movement rides
  * inside the selector as a stock change label. Refusals, blockers and
- * discrepancies are not optional, so they stay visible at both detail levels,
+ * discrepancies are not optional, so they stay visible,
  * next to the bin they concern.
  */
 "use client";
 
+import { recordHref } from "@/lib/record-links";
 import { formatMassKg } from "@/lib/format-utils";
 import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview } from "@/types/output-stock";
@@ -22,11 +23,11 @@ function blockerHref(blocker: Blocker): string | null {
     case "binMovement":
       return null;
     case "application":
-      return `/applications?ids=${blocker.id}`;
+      return recordHref("application", blocker.id);
     case "ghgStatement":
-      return `/certification/ghg-statements?statement=${blocker.id}`;
+      return recordHref("ghgStatement", blocker.id);
     default:
-      return `/certification/removals?removal=${blocker.id}`;
+      return recordHref("removal", blocker.id);
   }
 }
 

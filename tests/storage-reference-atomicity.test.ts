@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { lockBinStock } from "@/data-access/bin-stock-guards";
 import { archiveFacility } from "@/data-access/facilities";
 import { createStorageLocation } from "@/data-access/quick-add";
-import { createReactor, updateReactor } from "@/data-access/reactors";
+import { createReactorInTransaction, updateReactor } from "@/data-access/reactors";
 import {
   createFeedstockInTransaction,
   updateFeedstockInTransaction,
@@ -740,12 +740,12 @@ describe(
       const outcome = await archiveFacilityBeforeReferenceWrite(
         fixture,
         () =>
-          createReactor(ctx, {
+          db.transaction((tx) => createReactorInTransaction(ctx, tx, {
             code: `R-SRA-RACE-${fixture.tag}`,
             identifier,
             facilityId: fixture.facilityId,
             reactorType: "auger",
-          }),
+          })),
       );
 
       expectArchivedReferenceRejected(outcome);

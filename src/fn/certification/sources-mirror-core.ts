@@ -261,7 +261,7 @@ async function mirrorDerivedCandidate(
   );
   if (!mapping) {
     throw new SafeError(
-      "This facility isn't linked to an Isometric project. Link it in facility settings before submitting.",
+      "This facility isn't linked to an Isometric project. Link it in Settings, Facilities before submitting.",
     );
   }
   if (options.enforceRemovalLifecycle) {

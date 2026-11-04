@@ -76,6 +76,10 @@ the root workspace, and its files follow its own conventions. See
 - **Before creating a doc, ask:** is it evergreen, and does it duplicate an
   existing one? If it duplicates, update the existing doc — a second copy is how
   the two drift apart and start contradicting each other.
+- `docs/design-decisions.md` is the per-surface design decisions log (tried,
+  replaced, rejected); it stays in /docs because agents read it before UI work
+  so they never re-propose a rejected pattern. Rules themselves still live in
+  their owning docs.
 - Every doc opens with a one-paragraph "what this covers / when to read it".
 - One topic, one owner. If a doc needs a fact another doc owns, link to it
   rather than restating it.
