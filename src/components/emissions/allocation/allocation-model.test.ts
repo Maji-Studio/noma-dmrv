@@ -114,6 +114,19 @@ describe("feedstockHint", () => {
     expect(feedstockHint(byId("fs-1"), focusA.notYet, focusA.owners, codes)).toBeNull();
   });
 
+  it("says Counted on for a Removal whose batches drew from a delivery another Removal carries", () => {
+    const input = structuredClone(allocation);
+    input.removals.push({ id: "removal-2", code: "RM-26-002", status: "draft", creditBatchIds: [BATCH_B] });
+    const focus = buildFocus(input, { removalId: "removal-2" })!;
+    const record = input.records.find((r) => r.id === "fs-1")!;
+    expect(feedstockHint(record, focus.owner, focus.owners, codes)).toMatchObject({ kind: "countedOn", usedKg: 3000, ownerLabel: "RM-26-001", batchUsage: true });
+    const loose = buildFocus(input, { removalId: REMOVAL_1 })!;
+    loose.owners = loose.owners.filter((owner) => owner.key !== REMOVAL_1);
+    // With no Removal holding the share, the batch that carries it is named.
+    record.removalParts = [{ key: NOT_YET, fraction: 1, basis: [] }];
+    expect(feedstockHint(record, focus.owner, focus.owners, codes)).toMatchObject({ kind: "countedOn", ownerLabel: "CB-26-001" });
+  });
+
   it("shows hint A on a Removal as batch usage next to the Removal's own share", () => {
     const removalFocus = buildFocus(allocation, { removalId: REMOVAL_1 })!;
     expect(fractionFor(byId("fs-1"), removalFocus.owner)).toBe(1);

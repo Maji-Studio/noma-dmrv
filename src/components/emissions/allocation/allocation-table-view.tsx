@@ -11,12 +11,14 @@
 
 import { CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
+import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { AllocationRecord, EmissionAllocation, GroupKey } from "@/types/emission-allocation";
 import { CountedOnNote, HintMarker } from "./allocation-hint";
 import { formatAmounts, formatValue, recordName } from "./allocation-format";
 import {
   GROUP_ORDER,
+  PERCENT_WHOLE,
   allOwners,
   amountsOf,
   batchCodesOf,
@@ -47,6 +49,8 @@ const OWNER_COL_PX = 104;
 const MIN_FOLD = 2;
 const RECORD_NAME_COL_PX = 240;
 const CARET_PX = 14;
+/** The disclosure keeps its two-line text: no label styling, left aligned, 44px tall. */
+const FOLD_BUTTON_CLASS = "-my-6 h-auto min-h-44 w-full items-start justify-start gap-6 whitespace-normal px-0 text-left";
 
 /** Short nouns for the narrow record column on phones and in the sheet. */
 const FOLD_NOUNS_SHORT: Record<GroupKey, [string, string]> = {
@@ -170,7 +174,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
             <td key={owner.key} className={cn(td, focused && FOCUS_COL)}>
               {share && (
                 <span className="flex flex-col items-end">
-                  <span className={cn("body-small", focused || share.percent < 100 ? "font-medium" : "", owner.notYet && MUTED)}>{share.percent}%</span>
+                  <span className={cn("body-small", focused || share.percent < PERCENT_WHOLE ? "font-medium" : "", owner.notYet && MUTED)}>{share.percent}%</span>
                   <AmountLines derived amounts={amountsOf(record, share.fraction)} className={cn("body-caption", MUTED)} />
                 </span>
               )}
@@ -238,16 +242,16 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
           const foldRow = (
             <tr key={`fold-${row.owner.key}`} className="[border-top:var(--row-divider)]">
               <th scope="row" className={cn(td, STICKY, "font-normal")}>
-                <button type="button" aria-expanded={isOpen} onClick={toggle} className="-my-6 flex min-h-44 w-full items-start gap-6 text-left">
+                <Button variant="noOutline" aria-expanded={isOpen} onClick={toggle} className={FOLD_BUTTON_CLASS}>
                   <CaretRightIcon size={CARET_PX} aria-hidden className={cn("mt-4 shrink-0 transition-transform", FAINT, isOpen && "rotate-90")} />
-                  <span className="flex min-w-0 flex-col">
+                  <span className="flex min-w-0 flex-col normal-case tracking-normal">
                     <span className="body-small font-medium">{row.records.length} {row.records.length === 1 ? one : many}</span>
                     {compact && <span className={cn("body-caption", MUTED)}>{formatAmounts(sum, true)}</span>}
                     {focus.surface === "removal" && row.records.every(record => basisFor(record, row.owner).some(basis => basis.kind === "wouldClaim")) && (
                       <span className={cn("body-caption", MUTED)}>Would be sent with {row.owner.label}</span>
                     )}
                   </span>
-                </button>
+                </Button>
               </th>
               {!compact && <td className={cn(TD, "body-small")}><AmountLines derived amounts={sum} /></td>}
               {columns.map((owner) => {
@@ -256,7 +260,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                   <td key={owner.key} className={cn(td, focused && FOCUS_COL)}>
                     {owner.key === row.owner.key && (
                       <span className="flex flex-col items-end">
-                        <span className={cn("body-small", focused && "font-medium")}>100%</span>
+                        <span className={cn("body-small", focused && "font-medium")}>{PERCENT_WHOLE}%</span>
                         <AmountLines derived amounts={sum} className={cn("body-caption", MUTED)} />
                       </span>
                     )}
@@ -264,7 +268,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                 );
               })}
               {compact && (
-                <td className={td}>{row.owner.key !== focus.owner.key && <ElsewhereCell shares={[{ owner: row.owner, percent: 100 }]} />}</td>
+                <td className={td}>{row.owner.key !== focus.owner.key && <ElsewhereCell shares={[{ owner: row.owner, percent: PERCENT_WHOLE }]} />}</td>
               )}
             </tr>
           );
@@ -311,7 +315,7 @@ function GroupTable({ group, records, ctx }: { group: GroupKey; records: Allocat
   return (
     <section className={cn(PANEL, "flex min-w-0 flex-col")}>
       <div className="flex flex-wrap items-center justify-between gap-x-16 gap-y-4 px-16 py-12">
-        <GroupTitle group={group} />
+        <GroupTitle group={group} surface={focus.surface} />
       </div>
       <div className={cn("min-w-0 [border-top:var(--row-divider)]", !sheet && "md:hidden")}>
         <Matrix group={group} records={records} ctx={{ ...ctx, compact: true }} />

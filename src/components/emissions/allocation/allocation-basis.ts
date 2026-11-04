@@ -16,7 +16,7 @@ export function basisSentence(record: AllocationRecord, owner: Owner): string | 
       case "wouldClaim":
         return owner.surface === "removal" ? [`Would be sent with ${owner.label}`] : [];
       case "claim":
-        return ["Claims the production of its batch"];
+        return [record.group === "manual" ? `Sent with ${owner.label}` : "Claims the production of its batch"];
       case "notYet":
         if (record.group === "feedstockTransport") return ["No completed run has drawn from it"];
         if (record.group === "deliveryTransport" && basis.kg !== null) return [`${formatKg(basis.kg)} ${owner.surface === "removal" ? "not in a Removal" : "not on a credit batch"}`];

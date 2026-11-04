@@ -15,6 +15,8 @@ export interface Stream {
   label: string;
   /** What the figures are, for a sentence: "transport", "diesel". */
   noun: string;
+  /** What a page carries of it, for a sentence: "feedstock transport", "diesel". */
+  phrase: string;
   /** Where the figure comes from: the next step for an empty quantity. */
   emptyHint: string;
   unit: Unit;
@@ -29,11 +31,11 @@ const hasUnit = (record: AllocationRecord, unit: Unit) => record.quantities.some
 const inGroupWithUnit = (group: AllocationRecord["group"], unit: Unit) => (record: AllocationRecord) => record.group === group && hasUnit(record, unit);
 
 export const STREAMS: Stream[] = [
-  { key: "feedstock", label: "Feedstock", noun: "transport", emptyHint: "Feedstock transport shows here once a feedstock delivery has its distance and load recorded.", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "feedstockTransport" },
-  { key: "delivery", label: "Delivery", noun: "transport", emptyHint: "Delivery transport shows here once a biochar delivery has its distance and mass recorded.", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "deliveryTransport" },
-  { key: "diesel", label: "Diesel", noun: "diesel", emptyHint: "Diesel shows here once a production run or a manual entry records it.", unit: "L", pick: (r) => unitAmount(r, "L"), has: (r) => hasUnit(r, "L") },
-  { key: "electricity", label: "Electricity", noun: "electricity", emptyHint: "Electricity shows here once a production run or a manual entry records it.", unit: "kWh", pick: (r) => unitAmount(r, "kWh"), has: (r) => hasUnit(r, "kWh") },
-  { key: "manual", label: "Manual transport", noun: "transport", emptyHint: "Manual transport shows here once a manual entry records t·km.", unit: "t·km", pick: (r) => (r.group === "manual" ? unitAmount(r, "t·km") : null), has: inGroupWithUnit("manual", "t·km") },
+  { key: "feedstock", phrase: "feedstock transport", label: "Feedstock", noun: "transport", emptyHint: "Feedstock transport shows here once a feedstock delivery has its distance and load recorded.", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "feedstockTransport" },
+  { key: "delivery", phrase: "delivery transport", label: "Delivery", noun: "transport", emptyHint: "Delivery transport shows here once a biochar delivery has its distance and mass recorded.", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "deliveryTransport" },
+  { key: "diesel", phrase: "diesel", label: "Diesel", noun: "diesel", emptyHint: "Diesel shows here once a production run or a manual entry records it.", unit: "L", pick: (r) => unitAmount(r, "L"), has: (r) => hasUnit(r, "L") },
+  { key: "electricity", phrase: "electricity", label: "Electricity", noun: "electricity", emptyHint: "Electricity shows here once a production run or a manual entry records it.", unit: "kWh", pick: (r) => unitAmount(r, "kWh"), has: (r) => hasUnit(r, "kWh") },
+  { key: "manual", phrase: "manual transport", label: "Manual transport", noun: "transport", emptyHint: "Manual transport shows here once a manual entry records t·km.", unit: "t·km", pick: (r) => (r.group === "manual" ? unitAmount(r, "t·km") : null), has: inGroupWithUnit("manual", "t·km") },
 ];
 
 /** Streams worth a tab: the four standing ones, and manual transport only when an entry has it. */
@@ -89,9 +91,14 @@ export function buildGraph(stream: Stream, records: AllocationRecord[], owners: 
   return { nodes, bands, owners, notYet, undrawn };
 }
 
-/** The first stream that has anything to draw, so the section never opens on an empty chart. */
-export function firstStreamWithData(records: AllocationRecord[]): StreamKey {
-  return STREAMS.find((stream) => records.some((record) => (stream.pick(record) ?? 0) > 0))?.key ?? "feedstock";
+/** The first stream that has something to draw and, when asked, something the page has a stake in. */
+export function firstStreamWithData(records: AllocationRecord[], hasStake: (record: AllocationRecord) => boolean = () => true): StreamKey {
+  const drawable = (record: AllocationRecord, stream: Stream) => (stream.pick(record) ?? 0) > 0;
+  return (
+    STREAMS.find((stream) => records.some((record) => drawable(record, stream) && hasStake(record)))?.key ??
+    STREAMS.find((stream) => records.some((record) => drawable(record, stream)))?.key ??
+    "feedstock"
+  );
 }
 
 /** The bands and nodes a node lights: its own paths through the graph. */

@@ -1,7 +1,7 @@
 /** Display helpers for the allocation: figures, days and the one-line description of each record. */
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDayString, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { formatDayString, formatLegDistanceCompactKm, formatMassKg } from "@/lib/format-utils";
 import { MASS_KG_FORMAT_OPTIONS } from "@/lib/mass-precision";
 import type { AllocationRecord, Unit } from "@/types/emission-allocation";
 import type { Amount } from "./allocation-model";
@@ -50,12 +50,12 @@ export function recordName(record: AllocationRecord): string {
 export function recordFacts(record: AllocationRecord): string[] {
   const { detail } = record;
   if (detail.kind === "feedstockTransport") {
-    const km = detail.legs.length === 1 ? [formatDistanceKm(detail.legs[0].oneWayKm)] : detail.legs.length > 1 ? [`${detail.legs.length} legs`] : [];
+    const km = detail.legs.length === 1 ? [formatLegDistanceCompactKm(detail.legs[0].oneWayKm)] : detail.legs.length > 1 ? [`${detail.legs.length} legs`] : [];
     return [detail.binName, `${formatKg(detail.wetKg)} wet`, ...km];
   }
   if (detail.kind === "production") return detail.reactorCode ? [detail.reactorCode] : ["Production run"];
   if (detail.kind === "deliveryTransport") {
-    const facts = [detail.wetKg === null ? null : `${formatKg(detail.wetKg)} wet`, detail.oneWayKm === null ? null : formatDistanceKm(detail.oneWayKm)];
+    const facts = [detail.wetKg === null ? null : `${formatKg(detail.wetKg)} wet`, detail.oneWayKm === null ? null : formatLegDistanceCompactKm(detail.oneWayKm)];
     return facts.some(Boolean) ? facts.filter((fact): fact is string => fact !== null) : ["Biochar delivery"];
   }
   return ["Manual entry"];

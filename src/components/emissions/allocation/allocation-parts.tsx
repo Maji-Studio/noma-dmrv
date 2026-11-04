@@ -5,7 +5,7 @@ import { HATCH_BACKGROUND } from "@/components/chain-of-custody/sankey";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
 import type { AllocationRecord, GroupKey } from "@/types/emission-allocation";
-import { GROUP_COPY } from "./allocation-copy";
+import { GROUP_COPY, groupRule } from "./allocation-copy";
 import { recordLine, recordName } from "./allocation-format";
 import type { Owner } from "./allocation-model";
 
@@ -14,12 +14,12 @@ export const MUTED = "text-[var(--color-text-secondary)]";
 export const FAINT = "text-[var(--color-text-tertiary)]";
 
 /** "Feedstock transport" with its one (i): the rule that splits it. */
-export function GroupTitle({ group }: { group: GroupKey }) {
+export function GroupTitle({ group, surface }: { group: GroupKey; surface: "batch" | "removal" }) {
   const copy = GROUP_COPY[group];
   return (
     <span className="inline-flex min-w-0 items-center gap-6">
       <h3 className="body-medium font-medium">{copy.title}</h3>
-      <ExplanationInfo title={copy.title} hint={copy.rule} />
+      <ExplanationInfo title={copy.title} hint={groupRule(group, surface)} />
     </span>
   );
 }

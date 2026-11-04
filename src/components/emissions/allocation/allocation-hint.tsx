@@ -36,7 +36,7 @@ export function markerText(hint: FeedstockHint): string {
 export function whySentence(hint: FeedstockHint, viewer: Owner): string {
   const { use, record, ownerLabel } = hint;
   const whole = use.tonneKm === null ? "transport" : formatValue(use.tonneKm, "t·km");
-  if (hint.batchUsage) {
+  if (hint.batchUsage && hint.kind === "partly") {
     const batch = use.used.find((entry) => entry.creditBatchId === use.owner)?.code;
     const through = batch && use.firstRun ? ` through ${batch}, whose run ${use.firstRun.code} was the first completed run to draw from ${record.code}, on ${formatDay(use.firstRun.date)}` : "";
     return `${viewer.label} carries the whole ${whole}${through}. Its credit batches used ${formatKg(hint.usedKg)} of the delivery. Lost mass never counts.`;
@@ -45,6 +45,7 @@ export function whySentence(hint: FeedstockHint, viewer: Owner): string {
     ? `${ownerLabel} carries the whole ${whole} because its run ${use.firstRun.code} was the first completed run to draw from ${record.code}, on ${formatDay(use.firstRun.date)}.`
     : `${ownerLabel} carries the whole ${whole} of ${record.code}.`;
   if (hint.kind === "partly") return `${lead} Batches that drew from it later show Counted on ${ownerLabel}. Lost mass never counts.`;
+  if (hint.batchUsage) return `${lead} ${viewer.label}'s credit batches used ${formatKg(hint.usedKg)} of it. That is counted on ${ownerLabel}, so ${viewer.label} carries none of it.`;
   return `${lead} The ${formatKg(hint.usedKg)} ${viewer.label} drew is counted on ${ownerLabel}, so ${viewer.label} carries none of it.`;
 }
 

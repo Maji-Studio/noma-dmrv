@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EmissionAllocation } from "@/types/emission-allocation";
-import { BATCH_A, BATCH_B, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
+import { BATCH_A, BATCH_B, BATCH_C, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
 
 const state = vi.hoisted(() => ({ data: undefined as unknown, error: null as Error | null, refetch: vi.fn() }));
 vi.mock("@/hooks/use-emission-allocation", () => ({
@@ -117,6 +117,44 @@ describe("EmissionAllocationSection, hint A on a Removal", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "About FS-26-001 transport" })[0]);
     expect(document.body.textContent).toContain("RM-26-001 carries the whole 1,000 t·km through CB-26-001");
     expect(screen.getByText("Where the 10,000 kg went")).toBeTruthy();
+  });
+});
+
+describe("EmissionAllocationSection, a second Removal that only counts", () => {
+  const SECOND = "removal-2";
+  beforeEach(() => {
+    const data = allocationFixture();
+    data.removals.push({ id: SECOND, code: "RM-26-002", status: "draft", creditBatchIds: [BATCH_B] });
+    state.data = data;
+  });
+
+  it("shows Counted on RM-26-001 and the batch usage marker in the Table", () => {
+    show({ removalId: SECOND }, "?allocation=table");
+    expect(screen.getAllByText("Counted on").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RM-26-001").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Batches used 3,000 of 10,000 kg").length).toBeGreaterThan(0);
+  });
+
+  it("shows the same in Flow, which opens on the feedstock quantity", () => {
+    show({ removalId: SECOND });
+    expect(screen.getByRole("button", { name: "Feedstock" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Counted on")).toBeTruthy();
+    expect(screen.getByText("Batches used 3,000 of 10,000 kg")).toBeTruthy();
+  });
+});
+
+describe("EmissionAllocationSection, Flow when the page carries nothing in a quantity", () => {
+  it("opens on a quantity the page has a stake in", () => {
+    show({ creditBatchId: BATCH_C });
+    expect(screen.getByRole("button", { name: "Diesel" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("says what is missing and where to look, never an empty table", () => {
+    show({ creditBatchId: BATCH_C });
+    fireEvent.click(screen.getByRole("button", { name: "Delivery" }));
+    expect(screen.getByText("CB-26-003 carries no delivery transport")).toBeTruthy();
+    expect(screen.getByText(/Try .*Diesel/)).toBeTruthy();
+    expect(screen.queryByText("Total")).toBeNull();
   });
 });
 

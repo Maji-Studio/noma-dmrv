@@ -12,6 +12,7 @@ import { useId } from "react";
 import { HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE, useMeasuredWidth } from "@/components/chain-of-custody/sankey";
 import { cn } from "@/lib/utils";
 import { formatDay, formatValue, recordFacts } from "./allocation-format";
+import { PERCENT_WHOLE } from "./allocation-model";
 import { LANE_W, bandPath, litSet, ownerPercent, place, spread, type Graph, type Stream } from "./allocation-flow-graph";
 import { MUTED } from "./allocation-parts";
 
@@ -25,7 +26,6 @@ const QUIET_BAND_FILL = "var(--clr-dark-purple-10)";
 const QUIET_BAND_STROKE = "var(--clr-dark-purple-20)";
 const LIT_BAND_OPACITY = 0.5;
 const QUIET_BAND_STROKE_W = 0.75;
-const PERCENT_WHOLE = 100;
 
 export function FlowChart({ graph, stream, focusKey, activeKey, onHover, onToggle }: {
   graph: Graph;

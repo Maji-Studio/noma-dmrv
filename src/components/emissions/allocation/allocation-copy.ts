@@ -20,6 +20,18 @@ export const GROUP_COPY: Record<GroupKey, { title: string; rule: string }> = {
   },
 };
 
+/** On a Removal the shares come from what it claims or sends, not from batch splits. */
+const REMOVAL_RULES: Record<GroupKey, string> = {
+  feedstockTransport: "A feedstock delivery's whole transport goes with the Removal that claims the production of the batch whose first completed run drew from it. Lost mass never counts.",
+  production: "A production run goes with the Removal that claims the production of its credit batch.",
+  deliveryTransport: "A biochar delivery is split by the biochar each Removal's applications took from the load.",
+  manual: "A manual entry goes with the Removal that sends it for its credit batch.",
+};
+
+export function groupRule(group: GroupKey, surface: "batch" | "removal"): string {
+  return surface === "removal" ? REMOVAL_RULES[group] : GROUP_COPY[group].rule;
+}
+
 export const SECTION_TITLE = "Allocation";
 
 export function sectionHint(surface: "batch" | "removal"): string {

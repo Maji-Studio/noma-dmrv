@@ -17,7 +17,8 @@ import { formatDateRange } from "@/lib/format-utils";
 import { sumNullable } from "@/lib/nullable-sum";
 
 export const NOT_YET_LABEL = "Not yet allocated";
-const PERCENT = 100;
+/** One whole share, in percent. */
+export const PERCENT_WHOLE = 100;
 /** Kilograms closer than this count as equal when a delivery is compared with what a page used. */
 const KG_TOLERANCE = 0.001;
 
@@ -100,9 +101,9 @@ export function basisFor(record: AllocationRecord, owner: Owner): PartBasis[] {
 
 /** Whole percents that always add to 100 (largest remainder), so a row never reads 99% or 101%. */
 export function wholePercents(fractions: number[]): number[] {
-  const raw = fractions.map((fraction) => fraction * PERCENT);
+  const raw = fractions.map((fraction) => fraction * PERCENT_WHOLE);
   const floors = raw.map(Math.floor);
-  let left = PERCENT - floors.reduce((sum, value) => sum + value, 0);
+  let left = PERCENT_WHOLE - floors.reduce((sum, value) => sum + value, 0);
   const order = raw.map((value, index) => ({ index, rest: value - Math.floor(value) })).sort((a, b) => b.rest - a.rest);
   for (const { index } of order) {
     if (left <= 0) break;
@@ -173,7 +174,7 @@ export type FeedstockHint =
   /** Carries the whole leg, but its runs drew only part of the delivery. On a Removal, `batchUsage` says the figure is its batches' usage. */
   | { kind: "partly"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string; batchUsage: boolean }
   /** Receiving side: its runs drew from the delivery, another batch carries it. */
-  | { kind: "countedOn"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string; batchUsage: false };
+  | { kind: "countedOn"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string; batchUsage: boolean };
 
 export function usedBy(use: FeedstockUse, owner: Owner): number {
   const batches = owner.batchIds ?? owner.members;
@@ -200,8 +201,11 @@ export function feedstockHint(record: AllocationRecord, owner: Owner, labelOwner
   const usedKg = usedBy(use, owner);
   const ownerLabel = carrierLabel(use.owner, labelOwners, batchCodes);
   if (owner.surface === "removal") {
-    const carries = fractionFor(record, owner) > 0;
-    return carries && usedKg < use.wetKg - KG_TOLERANCE ? { kind: "partly", record, use, usedKg, ownerLabel: owner.label, batchUsage: true } : null;
+    if (fractionFor(record, owner) > 0) return usedKg < use.wetKg - KG_TOLERANCE ? { kind: "partly", record, use, usedKg, ownerLabel: owner.label, batchUsage: true } : null;
+    if (usedKg <= 0) return null;
+    // Its batches drew from a delivery another Removal (or, failing that, another batch) carries.
+    const holder = labelOwners.find((candidate) => fractionFor(record, candidate) > 0);
+    return { kind: "countedOn", record, use, usedKg, ownerLabel: holder?.label ?? carrierLabel(use.owner, [], batchCodes), batchUsage: true };
   }
   if (!owner.members.includes(use.owner)) return usedKg > 0 ? { kind: "countedOn", record, use, usedKg, ownerLabel, batchUsage: false } : null;
   if (usedKg >= use.wetKg - KG_TOLERANCE) return null;

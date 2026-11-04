@@ -84,8 +84,7 @@ function nodeSub(node: GraphNode, focus: Focus, allocation: EmissionAllocation):
   return holding.length ? `In ${holding.join(", ")}` : "Not in a Removal yet";
 }
 
-function DetailList({ graph, node, stream, codes, sub }: { graph: Graph; node: GraphNode; stream: Stream; codes: ReadonlyMap<string, string>; sub: string }) {
-  const rows = detailRows(graph, node, stream, codes);
+function DetailList({ rows, node, stream, sub }: { rows: DetailRow[]; node: GraphNode; stream: Stream; sub: string }) {
   const viewer = node.kind === "owner" ? node.owner : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-8" aria-live="polite">
@@ -135,7 +134,9 @@ export function FlowView({ allocation, focus }: { allocation: EmissionAllocation
   const [pinned, setPinned] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const streams = visibleStreams(allocation.records);
-  const streamKey = chosen ?? firstStreamWithData(allocation.records);
+  const hasStake = (record: EmissionAllocation["records"][number]) =>
+    fractionFor(record, focus.owner) > 0 || feedstockHint(record, focus.owner, focus.owners, batchCodesOf(allocation)) !== null;
+  const streamKey = chosen ?? firstStreamWithData(allocation.records, hasStake);
   const stream = STREAMS.find((candidate) => candidate.key === streamKey) ?? STREAMS[0];
   const graph = buildGraph(stream, allocation.records, focus.owners, focus.notYet);
   const codes = batchCodesOf(allocation);
@@ -146,6 +147,9 @@ export function FlowView({ allocation, focus }: { allocation: EmissionAllocation
   // another batch carries). It still gets its list, so its Counted on rows and hints stay reachable.
   const focusNode: GraphNode = { key: focusKey, col: 1, kind: "owner", label: focus.owner.label, value: 0, owner: focus.owner };
   const activeNode = graph.nodes.find((node) => node.key === activeKey) ?? (graph.nodes.length > 0 ? focusNode : undefined);
+  const activeRows = activeNode ? detailRows(graph, activeNode, stream, codes) : [];
+  // Streams where the page has a stake, to point an operator with nothing here at the right tab.
+  const otherStreams = streams.filter((candidate) => candidate.key !== stream.key && allocation.records.some((record) => (candidate.pick(record) ?? 0) > 0 && hasStake(record)));
   return (
     <div data-allocation-flow-panel className="flex min-w-0 flex-col gap-20 border border-[var(--color-border-secondary)] bg-[var(--paper)] p-16 sm:p-24">
       <SegmentSwitch
@@ -169,10 +173,18 @@ export function FlowView({ allocation, focus }: { allocation: EmissionAllocation
           {graph.undrawn} {graph.undrawn === 1 ? "record has" : "records have"} no recorded {stream.noun} and {graph.undrawn === 1 ? "is" : "are"} not drawn. The table lists {graph.undrawn === 1 ? "it" : "them"}.
         </p>
       )}
-      {activeNode && (
+      {activeNode && activeRows.length > 0 && (
         <div className="border-t border-[var(--clr-dark-purple-10)] pt-16 lg:max-w-[640px]">
-          <DetailList graph={graph} node={activeNode} stream={stream} codes={codes} sub={nodeSub(activeNode, focus, allocation)} />
+          <DetailList rows={activeRows} node={activeNode} stream={stream} sub={nodeSub(activeNode, focus, allocation)} />
         </div>
+      )}
+      {activeNode && activeRows.length === 0 && (
+        <EmptyState
+          padding="sm"
+          icon={<ChartBarIcon size={EMPTY_ICON_PX} aria-hidden />}
+          title={`${focus.owner.label} carries no ${stream.phrase}`}
+          description={otherStreams.length ? `Try ${otherStreams.map((candidate) => candidate.label).join(" or ")} above.` : "Nothing else is recorded for it yet."}
+        />
       )}
     </div>
   );
