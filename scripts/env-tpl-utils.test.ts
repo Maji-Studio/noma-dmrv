@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkflowOpReferences } from "./env-tpl-utils";
+import { filterTemplateToItem, parseWorkflowOpReferences, REQUIRED_DEPLOYED_VARS } from "./env-tpl-utils";
+
+describe("required deployed variables", () => {
+  it.each(["staging", "production"])("requires the Isometric environment when syncing %s", (env) => {
+    const template = `ISOMETRIC_ENVIRONMENT="op://Environment Variables/noma-dmrv env ${env}/ISOMETRIC_ENVIRONMENT"`;
+
+    expect(REQUIRED_DEPLOYED_VARS.has("ISOMETRIC_ENVIRONMENT")).toBe(true);
+    expect(filterTemplateToItem(template, new Set(), REQUIRED_DEPLOYED_VARS)).toEqual({
+      filtered: template,
+      skipped: [],
+      missingRequired: ["ISOMETRIC_ENVIRONMENT"],
+    });
+    expect(filterTemplateToItem(template, new Set(["ISOMETRIC_ENVIRONMENT"]), REQUIRED_DEPLOYED_VARS)).toEqual({
+      filtered: template,
+      skipped: [],
+      missingRequired: [],
+    });
+  });
+});
 
 describe("parseWorkflowOpReferences", () => {
   it("groups quoted and unquoted references by env and deduplicates fields", () => {

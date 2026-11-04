@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@/db/schema';
-import { getPgPoolConfig } from '@/lib/pg-pool-config';
+import { getPgPoolConfig, isLocalDatabaseTarget } from '@/lib/pg-pool-config';
 import { organizations } from '@/db/schema';
 import { requireOrgContext } from '@/lib/auth/server';
 import { DomainError } from '@/lib/domain-errors';
@@ -13,9 +13,19 @@ import { resolveCliAdminIdentity, runWithCliOrgContext } from './org-context';
 const DRY_RUN_ROLLBACK = new Error('Dry run rollback');
 
 async function main() {
-  const { values } = parseArgs({ options: { 'dry-run': { type: 'boolean', default: false }, 'include-sent': { type: 'boolean', default: false } }, strict: true });
+  const { values } = parseArgs({
+    options: {
+      'dry-run': { type: 'boolean', default: false },
+      'include-sent': { type: 'boolean', default: false },
+      'allow-remote-include-sent': { type: 'boolean', default: false },
+    },
+    strict: true,
+  });
   if (values['include-sent'] && process.env.NODE_ENV === 'production') throw new SafeError('--include-sent is not allowed in production.');
   if (!process.env.DATABASE_URL) throw new SafeError('DATABASE_URL is required');
+  if (values['include-sent'] && !values['allow-remote-include-sent'] && !isLocalDatabaseTarget(process.env.DATABASE_URL)) {
+    throw new SafeError('--include-sent requires a local database. Use --allow-remote-include-sent only for the documented staging rebuild in docs/database.md.');
+  }
   const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
   const db = drizzle(pool, { schema });
   try {

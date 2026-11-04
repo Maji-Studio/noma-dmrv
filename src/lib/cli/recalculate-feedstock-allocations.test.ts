@@ -1,12 +1,22 @@
-import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ recalculate: vi.fn(), end: vi.fn(), select: vi.fn(), bins: vi.fn(), values: { 'dry-run': false, 'include-sent': false } }));
-vi.mock('node:util', () => ({ parseArgs: () => ({ values: mocks.values }) }));
-vi.mock('pg', () => ({ Pool: class { end = mocks.end; } }));
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+const ORIGINAL_ARGV = process.argv;
+const mocks = vi.hoisted(() => ({ recalculate: vi.fn(), pool: vi.fn(), end: vi.fn(), select: vi.fn(), bins: vi.fn() }));
+vi.mock('pg', () => ({ Pool: class { constructor() { mocks.pool(); } end = mocks.end; } }));
 vi.mock('drizzle-orm/node-postgres', () => ({ drizzle: () => ({ select: mocks.select, transaction: (work: (tx: object) => unknown) => work({}) }) }));
 vi.mock('@/lib/auth/server', () => ({ requireOrgContext: async () => ({ organizationId: 'org' }) }));
 vi.mock('./org-context', () => ({ resolveCliAdminIdentity: async () => ({}), runWithCliOrgContext: (_identity: unknown, work: () => unknown) => work() }));
 vi.mock('@/data-access/feedstock-recalculation', () => ({ recalculateFeedstockBin: mocks.recalculate, listFeedstockRecalculationBins: mocks.bins }));
-beforeEach(() => { vi.resetModules(); mocks.end.mockClear(); mocks.select.mockReset(); mocks.recalculate.mockReset(); mocks.bins.mockReset(); mocks.values['include-sent'] = false; });
+beforeEach(() => {
+  vi.resetModules();
+  mocks.pool.mockClear();
+  mocks.end.mockClear();
+  mocks.select.mockReset();
+  mocks.recalculate.mockReset();
+  mocks.bins.mockReset();
+  vi.stubEnv('DATABASE_URL', 'postgresql://localhost/app_template_test');
+  process.argv = ['node', 'recalculate-feedstock-allocations.ts'];
+});
+afterEach(() => { vi.unstubAllEnvs(); process.argv = ORIGINAL_ARGV; });
 it('reports safe per-bin failures and continues to later bins', async () => {
   const { DomainError } = await import('@/lib/domain-errors');
   const { SafeError } = await import('@/lib/errors');
@@ -64,27 +74,62 @@ it('closes the pool and redacts a fatal inventory failure', async () => {
   } finally { process.exitCode = oldExitCode; }
 });
 
-it('rejects include-sent in production before opening a pool or enumerating organizations', async () => {
+it.each([
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://production.example.invalid/app' },
+  { nodeEnv: 'development', dryRun: true, databaseUrl: 'postgresql://production.example.invalid/app' },
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://localhost/app?host=production.example.invalid' },
+  { nodeEnv: 'development', dryRun: false, databaseUrl: 'postgresql://127.0.0.1/app?hostaddr=203.0.113.7' },
+])('rejects remote include-sent before opening a pool ($databaseUrl, dryRun=$dryRun)', async ({ nodeEnv, dryRun, databaseUrl }) => {
   const oldExitCode = process.exitCode;
-  vi.stubEnv('NODE_ENV', 'production');
-  mocks.values['include-sent'] = true;
+  vi.stubEnv('NODE_ENV', nodeEnv);
+  vi.stubEnv('DATABASE_URL', databaseUrl);
+  process.argv.push('--include-sent', ...(dryRun ? ['--dry-run'] : []));
   const fatal = vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
     await import('./recalculate-feedstock-allocations');
     await vi.waitFor(() => expect(fatal).toHaveBeenCalledOnce());
-    expect(fatal).toHaveBeenCalledWith(expect.stringContaining('--include-sent is not allowed in production'));
+    expect(fatal).toHaveBeenCalledWith(expect.stringContaining('--include-sent requires a local database'));
+    expect(fatal).toHaveBeenCalledWith(expect.stringContaining('--allow-remote-include-sent'));
+    expect(mocks.pool).not.toHaveBeenCalled();
     expect(mocks.select).not.toHaveBeenCalled();
     expect(mocks.end).not.toHaveBeenCalled();
     expect(mocks.recalculate).not.toHaveBeenCalled();
-  } finally { vi.unstubAllEnvs(); process.exitCode = oldExitCode; }
+    expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = oldExitCode; }
 });
-it('passes include-sent explicitly to the bin recalculation', async () => {
-  mocks.values['include-sent'] = true;
+it.each([
+  { databaseUrl: 'postgresql://127.0.0.1/app_template_test', override: false },
+  { databaseUrl: 'postgresql://staging.example.invalid/app', override: true },
+])('rejects include-sent in production before opening a pool ($databaseUrl, override=$override)', async ({ databaseUrl, override }) => {
+  const oldExitCode = process.exitCode;
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('DATABASE_URL', databaseUrl);
+  process.argv.push('--include-sent', ...(override ? ['--allow-remote-include-sent'] : []));
+  const fatal = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await import('./recalculate-feedstock-allocations');
+    await vi.waitFor(() => expect(fatal).toHaveBeenCalledOnce());
+    expect(fatal).toHaveBeenCalledWith(expect.stringContaining('not allowed in production'));
+    expect(mocks.pool).not.toHaveBeenCalled();
+    expect(mocks.recalculate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = oldExitCode; }
+});
+it.each([
+  { databaseUrl: 'postgresql://localhost/app_template_test', nodeEnv: 'development', override: false, includeSent: true },
+  { databaseUrl: 'postgresql://staging.example.invalid/app', nodeEnv: 'development', override: true, includeSent: true },
+  { databaseUrl: 'postgresql://staging.example.invalid/app', nodeEnv: 'development', override: false, includeSent: false },
+])('allows recalculation for $databaseUrl ($nodeEnv, override=$override, includeSent=$includeSent)', async ({ databaseUrl, nodeEnv, override, includeSent }) => {
+  vi.stubEnv('DATABASE_URL', databaseUrl);
+  vi.stubEnv('NODE_ENV', nodeEnv);
+  if (includeSent) process.argv.push('--include-sent');
+  if (override) process.argv.push('--allow-remote-include-sent');
   mocks.select.mockReturnValueOnce({ from: async () => [{ id: 'org' }] });
   mocks.bins.mockResolvedValue([{ id: 'bin', code: 'B1' }]);
   mocks.recalculate.mockResolvedValue({ runsRefused: 0, keptSentRuns: [] });
   vi.spyOn(console, 'log').mockImplementation(() => {});
   await import('./recalculate-feedstock-allocations');
   await vi.waitFor(() => expect(mocks.end).toHaveBeenCalledOnce());
-  expect(mocks.recalculate).toHaveBeenCalledWith({ organizationId: 'org' }, {}, 'bin', { allowSentRewrite: true });
+  expect(mocks.pool).toHaveBeenCalledOnce();
+  expect(mocks.recalculate).toHaveBeenCalledWith({ organizationId: 'org' }, {}, 'bin', { allowSentRewrite: includeSent });
 });

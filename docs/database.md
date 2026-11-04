@@ -288,9 +288,16 @@ runs separately from refused runs. Certification refusals identify the blocking
 run and Removal codes when the guard supplies them, or the blocked feedstock for
 a transport ownership refusal.
 
-For the one-off pre-production staging rebuild, run
-`pnpm feedstock:recalculate --include-sent --dry-run`, review the per-bin report,
-then `pnpm feedstock:recalculate --include-sent`. This explicitly rebuilds from each
+`--include-sent` requires a local database target, checked from `DATABASE_URL`
+regardless of `NODE_ENV`; a `host` or `hostaddr` query parameter makes it non-local. Remote targets require the explicit
+`--allow-remote-include-sent` override, including for dry runs.
+
+For the one-off pre-production staging rebuild, confirm `DATABASE_URL` targets
+staging, then run
+`pnpm feedstock:recalculate --include-sent --allow-remote-include-sent --dry-run`,
+review the per-bin report, then
+`pnpm feedstock:recalculate --include-sent --allow-remote-include-sent`.
+This explicitly rebuilds from each
 bin's first event, including shares under sent RM-26-001. The report lists rewritten
 Sent runs with their Removal codes. Only this CLI path may opt out of the Sent
 lineage refusal and transport ownership freeze. The option is rejected when
