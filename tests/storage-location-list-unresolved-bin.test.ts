@@ -132,6 +132,7 @@ describe("storage location list with an unresolved output bin", () => {
     expect(result.laneSummary.biochar_bin).toEqual({
       binCount: 1,
       onHandKg: null,
+      basis: "wet",
     });
     // Other lanes are unaffected.
     expect(result.laneSummary.feedstock_bin.onHandKg).toBe(0);

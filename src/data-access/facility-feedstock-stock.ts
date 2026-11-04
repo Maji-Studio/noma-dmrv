@@ -1,3 +1,4 @@
+import { isMassEmpty } from "@/lib/stock-display";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { storageLocations } from "@/db/schema";
@@ -30,6 +31,8 @@ export async function getFacilityFeedstockWetStock(
   for (const stock of stocks) {
     const facilityId = facilityByBinId.get(stock.storageLocationId);
     if (!facilityId) continue;
+    // A bin that reads Empty on its card adds nothing, as in the feedstock lane total.
+    if (isMassEmpty(stock.feedstockStockWetKg)) continue;
     stockByFacility.set(
       facilityId,
       (stockByFacility.get(facilityId) ?? 0) + stock.feedstockStockWetKg,

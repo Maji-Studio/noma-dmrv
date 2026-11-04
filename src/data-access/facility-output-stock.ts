@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { isOutputStockEmpty } from "@/lib/stock-display";
 import { withStockSnapshot } from "./output-bin-stock";
 import { getOutputBinStocks } from "./output-stock";
 import { requireOrgFacility, requireOrgScope } from "./utils";
@@ -43,6 +44,8 @@ export async function getFacilityOutputStock(
         total[field] = null;
         continue;
       }
+      // A residue below the display minimum reads Empty on its card, so it adds nothing here.
+      if (isOutputStockEmpty(stock.estimatedWetMassKg, stock.availableDryKg)) continue;
       // Only layers placed by now, as the bin cards and the wet estimate count them.
       group.dryBiocharKg += stock.availableDryKg;
       group.wetKg = group.wetKg === null || stock.estimatedWetMassKg === null
