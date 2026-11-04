@@ -123,6 +123,10 @@ it("releases a carried claim when its receiving Removal is deleted", async () =>
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ creditBatchId: origin.batchId, sendReservedBySubmissionId: null, sentByRemovalId: null });
 });
 it("allows a carried entry correction only after the receiver's statement is returned", async () => {
+  const [receiver] = await db.update(creditBatches).set({ startDate: "2026-06-11" }).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+  )).returning();
+  expect(entry.occurredOn < receiver.startDate).toBe(true);
   const row = await attempt();
   await reserve(row);
   await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!, productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
@@ -132,7 +136,7 @@ it("allows a carried entry correction only after the receiver's statement is ret
   await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "ghg_statement", localEntityType: "ghgStatement",
     localEntityId: statement.id, version: 1, status: "submitted", externalId: "returned", submittedAt: new Date(), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: ["carried"] } });
   const sent = await getEmissionEntry(ctx, entry.id);
-  const correction = { id: entry.id, expectedVersion: sent.version, note: "correction",
+  const correction = { id: entry.id, expectedVersion: sent.version, occurredOn: sent.occurredOn, note: "correction",
     values: [{ inputKey: "electricity_use", quantityKind: "energy" as const, magnitude: "125", unit: "kWh" }] };
   registry.getGhgStatement.mockResolvedValue({ status: "AWAITING_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
   await expect(updateEmissionEntry(ctx, correction)).rejects.toMatchObject({ code: "certification_locked" });

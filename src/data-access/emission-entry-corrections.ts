@@ -10,7 +10,8 @@ import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifi
 import { requireOrgScope, type Executor } from "./utils";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 
-type CorrectionScope = { batchIds: string[]; artifactIds: Set<string>; windows: Map<string, RemovalEntryWindow> };
+type CorrectionWindow = { window: RemovalEntryWindow; carried: boolean };
+type CorrectionScope = { batchIds: string[]; artifactIds: Set<string>; windows: Map<string, CorrectionWindow> };
 const scopes = new WeakMap<DbTransaction, Map<string, CorrectionScope>>();
 const scopeKey = (ctx: OrgContext, batchId: string) => `${ctx.organizationId}:${batchId}`;
 
@@ -23,16 +24,16 @@ export async function lockEmissionCorrectionScope(ctx: OrgContext, tx: DbTransac
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batchIds);
   const facts = lineage.map((row) => row.recordLockRemoval);
   const ids = facts.filter((fact) => isRemovalCorrectionWindowOpen(fact, facts)).map((fact) => fact.id);
-  const members = ids.length ? await tx.select({ removalId: creditBatchApplications.removalId, startDate: creditBatches.startDate, applicationDate: applications.applicationDate })
+  const members = ids.length ? await tx.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId, startDate: creditBatches.startDate, applicationDate: applications.applicationDate })
     .from(creditBatchApplications)
     .innerJoin(creditBatches, and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchApplications.creditBatchId)))
     .innerJoin(applications, and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, creditBatchApplications.applicationId)))
     .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ids))) : [];
-  const windows = new Map<string, RemovalEntryWindow>();
+  const windows = new Map<string, CorrectionWindow>();
   for (const id of ids) {
     const group = members.filter((row) => row.removalId === id);
     const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
-    if (window) windows.set(id, window);
+    if (window) windows.set(id, { window, carried: !group.some((row) => row.creditBatchId === batchId) });
   }
   const cache = scopes.get(tx) ?? new Map<string, CorrectionScope>();
   cache.set(key, { batchIds, windows, artifactIds: new Set(facts.flatMap((fact) => [`removal:${fact.id}`, ...fact.statements.map((statement) => `statement:${statement.id}`)])) });
@@ -59,7 +60,13 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
 /** Only a scope acquired before the batch lock may authorize a sent-entry write. */
 export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
   requireOrgScope(ctx);
-  return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId);
+  return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId)?.window;
+}
+
+/** Membership is captured under the same artifact locks as correction eligibility. */
+export function isCarriedEmissionCorrection(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
+  requireOrgScope(ctx);
+  return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId)?.carried === true;
 }
 
 export function assertSentEntryInCorrectionWindow(
@@ -67,7 +74,7 @@ export function assertSentEntryInCorrectionWindow(
 ) {
   requireOrgScope(ctx);
   const window = emissionCorrectionWindow(ctx, tx, batchId, removalId);
-  if (!window || !inWindow({ occurredOn }, window))
+  if (!window || !(isCarriedEmissionCorrection(ctx, tx, batchId, removalId) ? occurredOn <= window.end : inWindow({ occurredOn }, window)))
     throw new SafeError(EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW);
 }
 

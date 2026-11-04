@@ -1,8 +1,15 @@
+import type { SQL } from "drizzle-orm";
 import { expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 vi.mock("@/db", () => ({ db: {} }));
+vi.mock("./certification-lineage-guards", () => ({
+  getLockedCertifiedLineageForBatches: vi.fn(async () => [{
+    recordLockRemoval: { id: "receiver", submissions: [], statements: [] },
+  }]),
+}));
+vi.mock("@/lib/record-lock", () => ({ isRemovalCorrectionWindowOpen: () => true }));
 
 it("discovers the same full batch union from every owner of the edited batch", async () => {
   const { emissionCorrectionBatchIds } = await import("./emission-entry-corrections");
@@ -76,4 +83,39 @@ it.each(["sent", "reserved", "held"])("includes a %s carry receiver's batches", 
   const query = new PgDialect().sqlToQuery(where.mock.calls[1][0]);
   expect(query.params).toContain(receiver);
   expect(query.params).toContain(makeTestOrgContext().organizationId);
+});
+
+
+it.each([
+  ["carried", "2026-06-10", true],
+  ["carried", "2026-06-16", true],
+  ["carried", "2026-06-17", false],
+  ["member", "2026-06-10", false],
+  ["member", "2026-06-11", true],
+  ["member", "2026-06-16", true],
+  ["member", "2026-06-17", false],
+] as const)("%s correction on %s has eligibility %s", async (kind, occurredOn, allowed) => {
+  const { lockEmissionCorrectionScope, assertSentEntryInCorrectionWindow, isCarriedEmissionCorrection } =
+    await import("./emission-entry-corrections");
+  const ctx = makeTestOrgContext();
+  const members = [{ removalId: "receiver", creditBatchId: "member", startDate: "2026-06-11", applicationDate: "2026-06-16" }];
+  const memberWhere = vi.fn(async (_condition: SQL) => members);
+  const tx = { select: () => ({ from: () => ({
+    where: async () => [],
+    leftJoin: () => ({ where: async () => [] }),
+    innerJoin: () => ({ innerJoin: () => ({ where: memberWhere }) }),
+  }) }) } as unknown as DbTransaction;
+  await lockEmissionCorrectionScope(ctx, tx, kind);
+  expect(isCarriedEmissionCorrection(ctx, tx, kind, "receiver")).toBe(kind === "carried");
+  const check = () => assertSentEntryInCorrectionWindow(ctx, tx, kind, "receiver", occurredOn);
+  if (allowed) expect(check).not.toThrow();
+  else expect(check).toThrow("Keep the entry date within this Removal's period.");
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  expect(new PgDialect().sqlToQuery(memberWhere.mock.calls[0][0]).params).toContain(ctx.organizationId);
+});
+
+it("refuses a date without a locked correction window", async () => {
+  const { assertSentEntryInCorrectionWindow } = await import("./emission-entry-corrections");
+  expect(() => assertSentEntryInCorrectionWindow(makeTestOrgContext(), {} as DbTransaction, "carried", "receiver", "2026-06-10"))
+    .toThrow("Keep the entry date within this Removal's period.");
 });

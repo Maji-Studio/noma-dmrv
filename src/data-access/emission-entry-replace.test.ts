@@ -10,7 +10,8 @@ vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
 vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(),
-  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow }));
+  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow,
+  isCarriedEmissionCorrection: () => false }));
 import { replaceEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
