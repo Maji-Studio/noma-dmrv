@@ -23,7 +23,7 @@ import {
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
-import { canTransferProductionReservation } from "@/lib/certification/production-reservation-policy";
+import { canTransferProductionReservation, hasPossibleExternalMutation } from "@/lib/certification/production-reservation-policy";
 import { rejectDraftSubmission } from "./submission-rejection";
 import { requireOrgScope } from "./utils";
 
@@ -40,14 +40,6 @@ type SubmissionRow = Pick<
   | "metadata"
 >;
 
-function hasPossibleExternalMutation(row: SubmissionRow): boolean {
-  const mutation = getMetadataValue(
-    row.metadata,
-    SUBMISSION_METADATA_KEYS.externalMutation,
-  );
-  return mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible ||
-    mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed;
-}
 
 /**
  * Atomically reserves every unclaimed batch before the first registry write.

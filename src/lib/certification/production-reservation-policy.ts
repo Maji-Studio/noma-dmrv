@@ -11,9 +11,16 @@ export interface ProductionReservation {
   metadata: unknown;
 }
 
-function hasPossibleExternalMutation(row: ProductionReservation): boolean {
+/** A possible or confirmed registry write protects the submission's reservations. */
+export function hasPossibleExternalMutation(row: Pick<ProductionReservation, "metadata">): boolean {
   const mutation = getMetadataValue(row.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
   return mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible || mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed;
+}
+
+export function isIsometricRemovalSubmission(
+  row: Pick<ProductionReservation, "provider" | "submissionType" | "localEntityType">,
+): boolean {
+  return row.provider === "isometric" && row.submissionType === "removal" && row.localEntityType === "removal";
 }
 
 /** Shared by the reservation writer and allocation reads; unknown reservations stay protected. */
@@ -22,13 +29,7 @@ export function canTransferProductionReservation(
   nowMs: number,
 ): boolean {
   if (!row) return false;
-  if (
-    row.provider !== "isometric" ||
-    row.submissionType !== "removal" ||
-    row.localEntityType !== "removal"
-  ) {
-    return false;
-  }
+  if (!isIsometricRemovalSubmission(row)) return false;
   if (hasPossibleExternalMutation(row)) return false;
   if (row.status === "rejected" || row.status === "superseded") return true;
   if (row.status !== "draft") return false;

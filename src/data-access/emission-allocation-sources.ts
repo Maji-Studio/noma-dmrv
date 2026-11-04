@@ -6,7 +6,7 @@ import type { CreditBatchLineageFacts } from "./credit-batch-lineage-types";
 import type { AllocationDeliveryFact, AllocationManualFact } from "@/lib/certification/emission-allocation-facts";
 import { buildAllocationManualFacts } from "@/lib/certification/emission-allocation-manual";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate } from "@/lib/date-utils";
 import { loadBiocharDeliveryTransportLegs } from "./biochar-delivery-transport";
 import { listEmissionEntriesForBatches } from "./emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
@@ -18,7 +18,7 @@ import { requireOrgScope, type Executor } from "./utils";
 /** `sliceDeliveryIds` adds deliveries a Removal's application slices reach outside batch lineage. */
 export async function loadAllocationDeliveries(ctx: OrgContext,
   batches: { id: string; code: string; lineageFacts: CreditBatchLineageFacts }[], reader: Executor,
-  sliceDeliveryIds: readonly string[] = [],
+  timezone: string, sliceDeliveryIds: readonly string[] = [],
 ): Promise<AllocationDeliveryFact[]> {
   requireOrgScope(ctx);
   const loads = new Map<string, AllocationDeliveryFact["loads"]>();
@@ -35,7 +35,7 @@ export async function loadAllocationDeliveries(ctx: OrgContext,
     .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, ids)));
   const legs = await loadBiocharDeliveryTransportLegs(ctx, rows.map(row => ({ deliveryId: row.id, loadMassKg: Number(row.deliveredWetMassKg ?? 0) })), reader);
   const byId = new Map(legs.map(leg => [leg.id, leg]));
-  return rows.map(row => ({ id: row.id, code: row.code, date: formatUtcDate(row.deliveryDate),
+  return rows.map(row => ({ id: row.id, code: row.code, date: formatFacilityDate(row.deliveryDate, timezone),
     wetKg: row.deliveredWetMassKg, oneWayKm: (byId.get(row.id)?.distanceKm ?? 0) > 0 ? byId.get(row.id)!.distanceKm : null,
     loads: loads.get(row.id) ?? [] }));
 }

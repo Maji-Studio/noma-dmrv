@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { db, DbTransaction } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { canTransferProductionReservation } from "@/lib/certification/production-reservation-policy";
+import { canTransferProductionReservation, isIsometricRemovalSubmission } from "@/lib/certification/production-reservation-policy";
 import { listProductionClaimDraftContenders } from "./certifier-removals";
 import { requireOrgScope } from "./utils";
 
@@ -29,8 +29,7 @@ export async function loadAllocationProductionClaims(ctx: OrgContext,
     if (!id) continue;
     const row = reservations.find(row => row.id === id);
     if (canTransferProductionReservation(row, nowMs)) continue;
-    productionReservations[batch.id] = row?.provider === "isometric" && row.submissionType === "removal" && row.localEntityType === "removal"
-      ? row.localEntityId : null;
+    productionReservations[batch.id] = row && isIsometricRemovalSubmission(row) ? row.localEntityId : null;
   }
   return { productionReservations, productionContenders };
 }

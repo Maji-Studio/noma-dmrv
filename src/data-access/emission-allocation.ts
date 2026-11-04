@@ -63,7 +63,7 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
         eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE), eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
         inArray(certificationSubmissions.localEntityId, removalIds))).orderBy(desc(certificationSubmissions.version)) : [],
     loadAllocationFeedstocks(ctx, facilityId, [...new Set([...memberIds, ...runs.map(({ run }) => run.id)])], facility.timezone, executor),
-    loadAllocationDeliveries(ctx, batches.map(batch => ({ ...batch, lineageFacts: rollups[batch.id].lineageFacts })), executor,
+    loadAllocationDeliveries(ctx, batches.map(batch => ({ ...batch, lineageFacts: rollups[batch.id].lineageFacts })), executor, facility.timezone,
       [...removalLoads.keys(), ...appliedDeliveryIds]),
     loadAllocationManualEntries(ctx, batchIds, facilityId, executor),
   ]);
