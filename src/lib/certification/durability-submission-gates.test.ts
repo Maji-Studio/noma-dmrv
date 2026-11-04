@@ -216,6 +216,7 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
 
   it("passes an empty batch set (nothing to gate)", () => {
     expect(evaluateDurabilitySubmissionGates([])).toEqual({
+      blockerMessages: [],
       ok: true,
       blockers: [],
       warnings: [],
@@ -279,4 +280,22 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.blockers).toEqual([]);
     expect(r.warnings).toEqual([]);
   });
+});
+
+it("keeps authored facts separate while preserving every joined blocker", () => {
+  const result = evaluateDurabilitySubmissionGates([
+    gateBatch({}),
+    gateBatch({ replicates: [{ hToCOrgRatio: 0.3, oToCOrgRatio: null }],
+      replicateProvenance: [{ sampleCode: "S-1", samplingDay: "2026-01-01" }] }),
+    gateBatch({ replicates: [{ hToCOrgRatio: 0.8, oToCOrgRatio: 0.3 }] }),
+  ]);
+  expect(result.blockerMessages.length).toBeGreaterThan(5);
+  for (const copy of result.blockerMessages) {
+    expect(copy.message).toBe(copy.instruction ? `${copy.fact} ${copy.instruction}` : copy.fact);
+    expect(copy.fact).not.toMatch(/Add |Record |Correct /);
+  }
+  expect(result.blockers).toEqual(result.blockerMessages.map((copy) => copy.message));
+  expect(result.blockerMessages[0].fact).toBe("Credit batch CB-1 is marked as sampled but has no Samples.");
+  expect(result.blockerMessages[1].fact).toBe("Sample S-1 was taken on 2026-01-01, before credit batch CB-1's production window, 2026-06-01 to 2026-06-30.");
+  expect(result.blockerMessages.find((copy) => copy.fact.includes("unchecked"))?.fact).toBe("Credit batch CB-1 has 1 Sample with H/C_org but no O/C_org: S-1. Eligibility is judged only on Samples with both ratios, so this H/C_org goes unchecked.");
 });

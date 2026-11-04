@@ -91,6 +91,7 @@ function projectUiContext(
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
+    durabilityConfigurationFacts: ctx.durabilityConfigurationFacts,
     templateTierBlocker: ctx.templateTierBlocker,
     futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,

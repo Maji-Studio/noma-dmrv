@@ -1,6 +1,6 @@
 import { deliveryDistanceSnapshot } from "@/data-access/delivery-distance-snapshot";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
-import { deliveryDistanceBlocker } from "@/lib/certification/submission-readiness";
+import { deliveryDistanceBlockerMessage } from "@/lib/certification/submission-readiness";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
@@ -38,14 +38,14 @@ describe("location facility distances", () => {
     const { delivery } = await db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, f.input));
     expect(delivery.recordedDistanceKm).toBeNull();
     const legs = await loadBiocharDeliveryTransportLegs(f.ctx, [{ deliveryId: delivery.id, loadMassKg: 100 }]);
-    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: legs[0].distanceKm })).toContain("no positive transport distance");
+    expect(deliveryDistanceBlockerMessage({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: legs[0].distanceKm })?.message).toContain("no positive transport distance");
     const links = await getTransportDistanceFixLinks(f.ctx, [], [delivery.id]);
     expect(links.get(delivery.id)).toBe(`/customers?facility=${f.facility.id}&customer=${f.customer.id}&mode=edit&location=${f.location.id}`);
     await updateCustomerLocation(f.ctx, f.location.id, { expectedVersion: f.location.version,
       facilityDistances: [{ facilityId: f.facility.id, distanceKm: 25, distanceSource: "manual" }] });
     const repaired = await loadBiocharDeliveryTransportLegs(f.ctx, [{ deliveryId: delivery.id, loadMassKg: 100 }]);
     expect(repaired[0].distanceKm).toBe(25);
-    expect(deliveryDistanceBlocker({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: repaired[0].distanceKm })).toBeNull();
+    expect(deliveryDistanceBlockerMessage({ deliveryCode: delivery.code, deliveryStatus: delivery.status, distanceKmOverride: null, recordedDistanceKm: repaired[0].distanceKm })).toBeNull();
   });
 
   it("keeps distinct distances for the same location at two facilities (DEF-003)", async () => {

@@ -74,14 +74,14 @@ describe("toBatchHealthFacts", () => {
     ["deliveryDistances", "/deliveries?"],
   ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path) => {
     const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, submissionLineageBlockers: [{
-      detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" },
+      fact: "Submission evidence is missing.", detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" },
     }] }, "batch-1"));
     const check = health.checks.find((check) => check.status === "unmet")!;
     expect(health.issueCount).toBe(1);
     expect(check.fixTarget).toBe(fixTarget);
     expect(batchHealthFixLinkFor(check, "facility-1").href).toContain(path);
     expect(buildRemovalRequirementsChecklist(toRemovalReadinessFacts({ ...readyContext,
-      submissionLineageBlockers: [{ detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" } }],
+      submissionLineageBlockers: [{ fact: "Submission evidence is missing.", detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" } }],
     }))).toContainEqual(expect.objectContaining({ key: "entityReadiness", lineageIssues: [
       expect.objectContaining({ fixTarget, record: { id: "record-1", code: "RE-1" } }),
     ] }));
