@@ -73,20 +73,22 @@ function overrideNodeEnv(template: string, nodeEnv: string | null): string {
     : `${template}${template.endsWith("\n") ? "" : "\n"}${assignment}\n`;
 }
 
-/** Variable names declared in .env.local; values are never kept or printed. */
+/** Names assigned in a template or env file; values are never kept or printed. */
+function assignedNames(text: string): string[] {
+  return [...text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/gm)].map(([, name]) => name);
+}
+
+/** Best effort: the fallback warning never blocks a run. */
 function localEnvNames(): Set<string> {
-  let text: string;
   try {
-    text = readFileSync(join(process.cwd(), ".env.local"), "utf-8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
-    throw new Error("Could not read variable names from .env.local.");
+    return new Set(assignedNames(readFileSync(join(process.cwd(), ".env.local"), "utf-8")));
+  } catch {
+    return new Set();
   }
-  return new Set([...text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/gm)].map(([, name]) => name));
 }
 
 function warnLocalEnvFallback(filtered: string): void {
-  const provided = new Set([...filtered.matchAll(/^[ \t]*([A-Z_][A-Z0-9_]*)=/gm)].map(([, name]) => name));
+  const provided = new Set(assignedNames(filtered));
   const names = [...localEnvNames()].filter((name) => name !== "NODE_ENV" && !provided.has(name)).sort();
   if (names.length > 0) {
     console.warn(`Commands that load .env.local will use your local values for: ${names.join(", ")}`);
@@ -95,9 +97,7 @@ function warnLocalEnvFallback(filtered: string): void {
 
 function inheritedEnvForTemplate(template: string): NodeJS.ProcessEnv {
   const env = { ...process.env };
-  for (const [, name] of template.matchAll(/^[ \t]*([A-Z_][A-Z0-9_]*)=/gm)) {
-    delete env[name];
-  }
+  for (const name of assignedNames(template)) delete env[name];
   return env;
 }
 
