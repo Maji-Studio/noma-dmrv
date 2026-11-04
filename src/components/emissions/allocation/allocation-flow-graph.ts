@@ -15,6 +15,8 @@ export interface Stream {
   label: string;
   /** What the figures are, for a sentence: "transport", "diesel". */
   noun: string;
+  /** Where the figure comes from: the next step for an empty quantity. */
+  emptyHint: string;
   unit: Unit;
   /** The record's figure in this stream, or null when it has none recorded. */
   pick: (record: AllocationRecord) => number | null;
@@ -27,11 +29,11 @@ const hasUnit = (record: AllocationRecord, unit: Unit) => record.quantities.some
 const inGroupWithUnit = (group: AllocationRecord["group"], unit: Unit) => (record: AllocationRecord) => record.group === group && hasUnit(record, unit);
 
 export const STREAMS: Stream[] = [
-  { key: "feedstock", label: "Feedstock", noun: "transport", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "feedstockTransport" },
-  { key: "delivery", label: "Delivery", noun: "transport", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "deliveryTransport" },
-  { key: "diesel", label: "Diesel", noun: "diesel", unit: "L", pick: (r) => unitAmount(r, "L"), has: (r) => hasUnit(r, "L") },
-  { key: "electricity", label: "Electricity", noun: "electricity", unit: "kWh", pick: (r) => unitAmount(r, "kWh"), has: (r) => hasUnit(r, "kWh") },
-  { key: "manual", label: "Manual transport", noun: "transport", unit: "t·km", pick: (r) => (r.group === "manual" ? unitAmount(r, "t·km") : null), has: inGroupWithUnit("manual", "t·km") },
+  { key: "feedstock", label: "Feedstock", noun: "transport", emptyHint: "Feedstock transport shows here once a feedstock delivery has its distance and load recorded.", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "feedstockTransport" },
+  { key: "delivery", label: "Delivery", noun: "transport", emptyHint: "Delivery transport shows here once a biochar delivery has its distance and mass recorded.", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "deliveryTransport" },
+  { key: "diesel", label: "Diesel", noun: "diesel", emptyHint: "Diesel shows here once a production run or a manual entry records it.", unit: "L", pick: (r) => unitAmount(r, "L"), has: (r) => hasUnit(r, "L") },
+  { key: "electricity", label: "Electricity", noun: "electricity", emptyHint: "Electricity shows here once a production run or a manual entry records it.", unit: "kWh", pick: (r) => unitAmount(r, "kWh"), has: (r) => hasUnit(r, "kWh") },
+  { key: "manual", label: "Manual transport", noun: "transport", emptyHint: "Manual transport shows here once a manual entry records t·km.", unit: "t·km", pick: (r) => (r.group === "manual" ? unitAmount(r, "t·km") : null), has: inGroupWithUnit("manual", "t·km") },
 ];
 
 /** Streams worth a tab: the four standing ones, and manual transport only when an entry has it. */

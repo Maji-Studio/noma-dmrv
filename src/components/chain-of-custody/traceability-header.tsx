@@ -3,12 +3,11 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { Button } from "@/components/ui/button";
-import { SEGMENT_ACTIVE_CLASS, SEGMENT_BUTTON_CLASS, SEGMENT_GROUP_CLASS, SEGMENT_IDLE_CLASS } from "@/components/ui/segment-switch";
+import { SegmentSwitch } from "@/components/ui/segment-switch";
 import { cn } from "@/lib/utils";
 import { BatchPicker } from "./batch-picker";
 import { RunPicker, type RunPickerOption } from "./run-picker";
 
-const CONTROL_HEIGHT_CLASS = "h-40";
 const FACILITY_MAX_WIDTH_CLASS = "max-w-[180px]";
 
 // The h1 rule in styles/typography.css is unlayered, so it outranks Tailwind
@@ -121,56 +120,23 @@ export function TraceabilityHeader({
 
       <div className="ml-auto flex flex-wrap items-center gap-8">
         {anchor !== "none" && showMassToggle ? (
-          <div
-            className={cn(SEGMENT_GROUP_CLASS, CONTROL_HEIGHT_CLASS)}
-            role="group"
-            aria-label="Edge label unit"
-            data-testid="chain-mass-toggle"
-          >
-            {MASS_UNIT_MODES.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                aria-pressed={massUnit === mode.value}
-                onClick={() => onMassUnitChange(mode.value)}
-                title={mode.title}
-                className={cn(
-                  SEGMENT_BUTTON_CLASS,
-                  massUnit === mode.value
-                    ? SEGMENT_ACTIVE_CLASS
-                    : SEGMENT_IDLE_CLASS
-                )}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
+          <SegmentSwitch
+            label="Edge label unit"
+            testId="chain-mass-toggle"
+            options={MASS_UNIT_MODES}
+            value={massUnit}
+            onChange={onMassUnitChange}
+          />
         ) : null}
 
         {anchor !== "none" ? (
-          <div
-            className={cn(SEGMENT_GROUP_CLASS, CONTROL_HEIGHT_CLASS)}
-            role="group"
-            aria-label="View mode"
-            data-testid="chain-view-segment"
-          >
-            {viewModes.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                aria-pressed={activeView === mode.value}
-                onClick={() => onViewChange(mode.value, defaultView)}
-                className={cn(
-                  SEGMENT_BUTTON_CLASS,
-                  activeView === mode.value
-                    ? SEGMENT_ACTIVE_CLASS
-                    : SEGMENT_IDLE_CLASS
-                )}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
+          <SegmentSwitch
+            label="View mode"
+            testId="chain-view-segment"
+            options={viewModes}
+            value={activeView}
+            onChange={(value) => onViewChange(value, defaultView)}
+          />
         ) : null}
 
         {facility ? (

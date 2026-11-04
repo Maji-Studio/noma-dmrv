@@ -23,6 +23,6 @@ export const GROUP_COPY: Record<GroupKey, { title: string; rule: string }> = {
 export const SECTION_TITLE = "Allocation";
 
 export function sectionHint(surface: "batch" | "removal"): string {
-  const across = surface === "batch" ? "a credit batch" : "a Removal";
-  return `Each record that causes emissions is counted once. A feedstock delivery's whole transport goes to the credit batch whose first completed run drew from it; a biochar delivery is split by the biochar each batch has on the load. What ${across} carries adds up here. Hatched is not yet allocated. noma sends the quantities and Isometric works out the emissions.`;
+  const owner = surface === "batch" ? "credit batch" : "Removal";
+  return `Each record that causes emissions is counted once, on the ${owner} that carries it. noma sends the quantities and Isometric works out the emissions.`;
 }

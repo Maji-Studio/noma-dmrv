@@ -29,6 +29,8 @@ export interface Owner {
   /** Second line: the batch month, or the Removal's credit batch codes. */
   sub: string;
   surface?: Surface;
+  /** A Removal's credit batches, for batch usage only. Shares never come from them. */
+  batchIds?: string[];
   /** Keys in the corresponding server-owned parts array. */
   members: string[];
   notYet?: boolean;
@@ -65,6 +67,7 @@ export function removalOwners(allocation: EmissionAllocation): Owner[] {
     label: removal.code,
     sub: removal.creditBatchIds.map((id) => codes.get(id) ?? id).join(", "),
     members: [removal.id],
+    batchIds: removal.creditBatchIds,
     surface: "removal",
   }));
 }
@@ -167,13 +170,14 @@ export function totalAmounts(records: AllocationRecord[], owner?: Owner): Amount
 // ---------------------------------------------------------------------------
 
 export type FeedstockHint =
-  /** Carries the whole leg, but its runs drew only part of the delivery. */
-  | { kind: "partly"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string }
+  /** Carries the whole leg, but its runs drew only part of the delivery. On a Removal, `batchUsage` says the figure is its batches' usage. */
+  | { kind: "partly"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string; batchUsage: boolean }
   /** Receiving side: its runs drew from the delivery, another batch carries it. */
-  | { kind: "countedOn"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string };
+  | { kind: "countedOn"; record: AllocationRecord; use: FeedstockUse; usedKg: number; ownerLabel: string; batchUsage: false };
 
 export function usedBy(use: FeedstockUse, owner: Owner): number {
-  return use.used.filter((entry) => owner.members.includes(entry.creditBatchId)).reduce((sum, entry) => sum + entry.kg, 0);
+  const batches = owner.batchIds ?? owner.members;
+  return use.used.filter((entry) => batches.includes(entry.creditBatchId)).reduce((sum, entry) => sum + entry.kg, 0);
 }
 
 /** The label of whoever carries a delivery: the Removal or batch column (of `labelOwners`) that holds it. */
@@ -185,13 +189,21 @@ export function batchCodesOf(allocation: EmissionAllocation): Map<string, string
   return new Map(allocation.batches.map((batch) => [batch.id, batch.code]));
 }
 
-/** Hint A for one delivery seen from one owner, or null when nothing needs saying. */
+/**
+ * Hint A for one delivery seen from one owner, or null when nothing needs saying.
+ * A Removal that carries the whole leg shows its batches' usage of the delivery,
+ * labelled as batch usage, next to its own share.
+ */
 export function feedstockHint(record: AllocationRecord, owner: Owner, labelOwners: Owner[], batchCodes: ReadonlyMap<string, string>): FeedstockHint | null {
   const use = record.feedstock;
-  if (!use || owner.surface === "removal" || owner.notYet || !use.owner) return null;
+  if (!use || owner.notYet || !use.owner) return null;
   const usedKg = usedBy(use, owner);
   const ownerLabel = carrierLabel(use.owner, labelOwners, batchCodes);
-  if (!owner.members.includes(use.owner)) return usedKg > 0 ? { kind: "countedOn", record, use, usedKg, ownerLabel } : null;
+  if (owner.surface === "removal") {
+    const carries = fractionFor(record, owner) > 0;
+    return carries && usedKg < use.wetKg - KG_TOLERANCE ? { kind: "partly", record, use, usedKg, ownerLabel: owner.label, batchUsage: true } : null;
+  }
+  if (!owner.members.includes(use.owner)) return usedKg > 0 ? { kind: "countedOn", record, use, usedKg, ownerLabel, batchUsage: false } : null;
   if (usedKg >= use.wetKg - KG_TOLERANCE) return null;
-  return { kind: "partly", record, use, usedKg, ownerLabel };
+  return { kind: "partly", record, use, usedKg, ownerLabel, batchUsage: false };
 }

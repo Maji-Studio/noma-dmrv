@@ -110,6 +110,16 @@ describe("EmissionAllocationSection, Removal surface", () => {
   });
 });
 
+describe("EmissionAllocationSection, hint A on a Removal", () => {
+  it("labels the marker as batch usage and opens the breakdown", () => {
+    show({ removalId: REMOVAL_1 }, "?allocation=table");
+    expect(screen.getAllByText("Batches used 5,000 of 10,000 kg").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "About FS-26-001 transport" })[0]);
+    expect(document.body.textContent).toContain("RM-26-001 carries the whole 1,000 t·km through CB-26-001");
+    expect(screen.getByText("Where the 10,000 kg went")).toBeTruthy();
+  });
+});
+
 describe("EmissionAllocationSection, states", () => {
   it("shows an error with a retry", () => {
     state.data = undefined;

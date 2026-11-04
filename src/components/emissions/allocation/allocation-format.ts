@@ -1,15 +1,22 @@
 /** Display helpers for the allocation: figures, days and the one-line description of each record. */
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDayString, formatMassKg } from "@/lib/format-utils";
+import { formatDayString, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { MASS_KG_FORMAT_OPTIONS } from "@/lib/mass-precision";
 import type { AllocationRecord, Unit } from "@/types/emission-allocation";
 import type { Amount } from "./allocation-model";
 
-const amountFormat = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+const AMOUNT_FRACTION_DIGITS = 1;
+const amountFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: AMOUNT_FRACTION_DIGITS });
 
 /** Saved masses at their stored precision, through the shared formatter. */
 export function formatKg(kg: number | null): string {
   return formatMassKg(kg, { digits: MASS_KG_STORAGE_DECIMALS });
+}
+
+/** A saved mass without its unit ("2,000"), at the same precision and locale as `formatKg`. */
+export function formatKgNumber(kg: number): string {
+  return kg.toLocaleString(undefined, { ...MASS_KG_FORMAT_OPTIONS, maximumFractionDigits: MASS_KG_STORAGE_DECIMALS });
 }
 
 /** The number without its unit, for a table column that names the unit in its head. */
@@ -43,12 +50,12 @@ export function recordName(record: AllocationRecord): string {
 export function recordFacts(record: AllocationRecord): string[] {
   const { detail } = record;
   if (detail.kind === "feedstockTransport") {
-    const km = detail.legs.length === 1 ? [`${amountFormat.format(detail.legs[0].oneWayKm)} km`] : detail.legs.length > 1 ? [`${detail.legs.length} legs`] : [];
+    const km = detail.legs.length === 1 ? [formatDistanceKm(detail.legs[0].oneWayKm)] : detail.legs.length > 1 ? [`${detail.legs.length} legs`] : [];
     return [detail.binName, `${formatKg(detail.wetKg)} wet`, ...km];
   }
   if (detail.kind === "production") return detail.reactorCode ? [detail.reactorCode] : ["Production run"];
   if (detail.kind === "deliveryTransport") {
-    const facts = [detail.wetKg === null ? null : `${formatKg(detail.wetKg)} wet`, detail.oneWayKm === null ? null : `${amountFormat.format(detail.oneWayKm)} km`];
+    const facts = [detail.wetKg === null ? null : `${formatKg(detail.wetKg)} wet`, detail.oneWayKm === null ? null : formatDistanceKm(detail.oneWayKm)];
     return facts.some(Boolean) ? facts.filter((fact): fact is string => fact !== null) : ["Biochar delivery"];
   }
   return ["Manual entry"];

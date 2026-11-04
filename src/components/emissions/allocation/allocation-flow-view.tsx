@@ -11,13 +11,14 @@ import { useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SegmentSwitch } from "@/components/ui/segment-switch";
 import { cn } from "@/lib/utils";
-import type { AllocationRecord, EmissionAllocation } from "@/types/emission-allocation";
+import type { EmissionAllocation } from "@/types/emission-allocation";
 import { HintMarker } from "./allocation-hint";
 import { STREAMS, buildGraph, firstStreamWithData, visibleStreams, type Graph, type GraphNode, type Stream, type StreamKey } from "./allocation-flow-graph";
 import { FlowChart } from "./allocation-flow-chart";
 import { formatKg, formatNumber, recordLine, recordName } from "./allocation-format";
-import { basisFor, batchCodesOf, feedstockHint, fractionFor, percentFor, type FeedstockHint, type Focus, type Owner } from "./allocation-model";
+import { basisFor, batchCodesOf, feedstockHint, fractionFor, percentFor, type FeedstockHint, type Focus } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
+import { basisSentence } from "./allocation-basis";
 
 const EMPTY_ICON_PX = 32;
 
@@ -32,12 +33,6 @@ interface DetailRow {
   hint?: FeedstockHint;
 }
 
-function basisText(record: AllocationRecord, owner: Owner): string {
-  const basis = basisFor(record, owner);
-  if (owner.surface === "removal" && basis.some(part => part.kind === "wouldClaim")) return `Would be sent with ${owner.label}`;
-  return basis.map(part => part.label).join(", ");
-}
-
 function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: ReadonlyMap<string, string>): DetailRow[] {
   const columnOwners = [...graph.owners, graph.notYet];
   if (node.kind === "record" && node.record) {
@@ -49,7 +44,7 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: Readon
         key: owner.key,
         name: owner.notYet ? graph.notYet.label : owner.label,
         code: !owner.notYet,
-        sub: basisText(record, owner),
+        sub: basisSentence(record, owner) ?? undefined,
         percent: percentFor(record, owner, columnOwners),
         value: node.value * fraction,
       }));
@@ -68,7 +63,7 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: Readon
     .map((record) => ({
       key: record.id,
       name: recordName(record),
-      sub: owner.surface === "removal" && basisFor(record, owner).some(basis => basis.kind === "wouldClaim") ? basisText(record, owner) : recordLine(record),
+      sub: owner.surface === "removal" && basisFor(record, owner).some((basis) => basis.kind === "wouldClaim") ? basisSentence(record, owner) ?? recordLine(record) : recordLine(record),
       percent: percentFor(record, owner, columnOwners),
       value: (stream.pick(record) ?? 0) * fractionFor(record, owner),
       hint: feedstockHint(record, owner, graph.owners, codes) ?? undefined,
@@ -95,29 +90,29 @@ function DetailList({ graph, node, stream, codes, sub }: { graph: Graph; node: G
   return (
     <div className="flex min-w-0 flex-col gap-8" aria-live="polite">
       <span className="flex min-w-0 flex-col">
-        <span className={cn("body-medium font-medium", node.kind === "owner" && "font-mono")}>{node.label}</span>
+        <span className="body-medium font-medium">{node.kind === "owner" ? <span className="font-mono">{node.label}</span> : node.label}</span>
         <span className={cn("body-caption", MUTED)}>{sub}</span>
       </span>
       <table className="w-full border-collapse">
         <thead>
           <tr className="text-left">
-            <th scope="col" className={cn("py-6 pr-12 body-caption font-medium", MUTED)}>{node.kind === "record" ? "Goes to" : "Record"}</th>
-            <th scope="col" className={cn("w-[56px] py-6 pr-12 text-right body-caption font-medium sm:w-[72px]", MUTED)}>Share</th>
-            <th scope="col" className={cn("w-[64px] py-6 text-right body-caption font-medium sm:w-[112px]", MUTED)}>{stream.unit}</th>
+            <th scope="col" className={cn("py-6 pr-12 body-small font-medium", MUTED)}>{node.kind === "record" ? "Goes to" : "Record"}</th>
+            <th scope="col" className={cn("w-[56px] py-6 pr-12 text-right body-small font-medium sm:w-[72px]", MUTED)}>Share</th>
+            <th scope="col" className={cn("w-[64px] py-6 text-right body-small font-medium sm:w-[112px]", MUTED)}>{stream.unit}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.key} className="[border-top:var(--row-divider)] align-top">
               <th scope="row" className="py-6 pr-12 text-left font-normal">
-                <span className={cn("block body-small", row.code && "font-mono")}>{row.name}</span>
+                <span className="block body-small">{row.code ? <span className="font-mono">{row.name}</span> : row.name}</span>
                 {row.sub && <span className={cn("block body-caption", MUTED)}>{row.sub}</span>}
                 {row.hint && viewer && node.kind !== "record" && <HintMarker hint={row.hint} viewer={viewer} className="pt-2" />}
               </th>
               <td className="py-6 pr-12 text-right align-top body-small tabular-nums">
                 {row.percent != null ? `${row.percent}%` : ""}
                 {row.hint?.kind === "countedOn" && <span className={cn("block whitespace-nowrap body-caption", MUTED)}>Counted on</span>}
-                {row.hint?.kind === "countedOn" && <span className="block whitespace-nowrap body-caption font-mono">{row.hint.ownerLabel}</span>}
+                {row.hint?.kind === "countedOn" && <span className="block whitespace-nowrap body-caption"><span className="font-mono">{row.hint.ownerLabel}</span></span>}
               </td>
               <td className="py-6 text-right body-small tabular-nums">{formatNumber(row.value)}</td>
             </tr>
@@ -165,7 +160,7 @@ export function FlowView({ allocation, focus }: { allocation: EmissionAllocation
         className="w-full sm:w-max"
       />
       {graph.nodes.length === 0 ? (
-        <EmptyState padding="sm" icon={<ChartBarIcon size={EMPTY_ICON_PX} aria-hidden />} title={`No ${stream.label.toLowerCase()} figures recorded`} description="Nothing to draw for this quantity yet." />
+        <EmptyState padding="sm" icon={<ChartBarIcon size={EMPTY_ICON_PX} aria-hidden />} title={`No ${stream.label.toLowerCase()} figures recorded`} description={stream.emptyHint} />
       ) : (
         <FlowChart graph={graph} stream={stream} focusKey={focusKey} activeKey={activeKey} onHover={setHovered} onToggle={(key) => setPinned(pinned === key || key === focusKey ? null : key)} />
       )}

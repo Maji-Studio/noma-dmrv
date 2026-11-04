@@ -10,27 +10,37 @@ import { CircleHalfIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ReactNode } from "react";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
-import { formatDay, formatKg, formatValue } from "./allocation-format";
+import { formatDay, formatKg, formatKgNumber, formatValue } from "./allocation-format";
 import type { FeedstockHint, Owner } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
 
 const ICON_PX = 14;
-const CODE_PATTERN = /((?:CB|RM|FS|PR)-\d{2}-\d{3})/;
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-/** Keeps record codes whole when a line wraps ("CB-26-001", never "CB-" and "26-001"). */
-function keepCodes(text: string): ReactNode {
-  return text.split(CODE_PATTERN).map((part, index) => (index % 2 ? <span key={index} className="whitespace-nowrap">{part}</span> : part));
+/** Keeps the record codes named in a sentence whole when it wraps ("CB-26-001", never "CB-" and "26-001"). */
+function keepCodes(text: string, codes: string[]): ReactNode {
+  const known = [...new Set(codes.filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!known.length) return text;
+  const pattern = new RegExp(`(${known.map(escapeRegExp).join("|")})`);
+  return text.split(pattern).map((part, index) => (index % 2 ? <span key={index} className="whitespace-nowrap">{part}</span> : part));
 }
 
 /** "Used 2,000 of 10,000 kg": what the page's runs drew, of the delivery. */
 export function markerText(hint: FeedstockHint): string {
-  return `Used ${formatKg(hint.usedKg).replace(" kg", "")} of ${formatKg(hint.use.wetKg)}`;
+  return `${hint.batchUsage ? "Batches used" : "Used"} ${formatKgNumber(hint.usedKg)} of ${formatKg(hint.use.wetKg)}`;
 }
 
 /** The (i) sentence: who carries the whole leg and why. */
 export function whySentence(hint: FeedstockHint, viewer: Owner): string {
   const { use, record, ownerLabel } = hint;
   const whole = use.tonneKm === null ? "transport" : formatValue(use.tonneKm, "t·km");
+  if (hint.batchUsage) {
+    const batch = use.used.find((entry) => entry.creditBatchId === use.owner)?.code;
+    const through = batch && use.firstRun ? ` through ${batch}, whose run ${use.firstRun.code} was the first completed run to draw from ${record.code}, on ${formatDay(use.firstRun.date)}` : "";
+    return `${viewer.label} carries the whole ${whole}${through}. Its credit batches used ${formatKg(hint.usedKg)} of the delivery. Lost mass never counts.`;
+  }
   const lead = use.firstRun
     ? `${ownerLabel} carries the whole ${whole} because its run ${use.firstRun.code} was the first completed run to draw from ${record.code}, on ${formatDay(use.firstRun.date)}.`
     : `${ownerLabel} carries the whole ${whole} of ${record.code}.`;
@@ -98,7 +108,7 @@ export function HintMarker({ hint, viewer, className }: { hint: FeedstockHint; v
     <span className={cn("block body-caption text-[var(--color-text-primary)]", className)}>
       <CircleHalfIcon size={ICON_PX} aria-hidden className="mr-4 inline-block align-[-2px] text-[var(--clr-dark-purple-60)]" />
       {markerText(hint)}
-      <ExplanationInfo title={`${hint.record.code} transport`} hint={keepCodes(whySentence(hint, viewer))} className="-my-6 ml-2">
+      <ExplanationInfo title={`${hint.record.code} transport`} hint={keepCodes(whySentence(hint, viewer), [hint.record.code, hint.ownerLabel, viewer.label, hint.use.firstRun?.code ?? "", ...hint.use.used.map((entry) => entry.code)])} className="-my-6 ml-2">
         <WhereItWent hint={hint} />
       </ExplanationInfo>
     </span>

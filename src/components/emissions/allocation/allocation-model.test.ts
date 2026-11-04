@@ -114,10 +114,12 @@ describe("feedstockHint", () => {
     expect(feedstockHint(byId("fs-1"), focusA.notYet, focusA.owners, codes)).toBeNull();
   });
 
-  it("does not equate batch feedstock draws with a Removal's frozen slices", () => {
+  it("shows hint A on a Removal as batch usage next to the Removal's own share", () => {
     const removalFocus = buildFocus(allocation, { removalId: REMOVAL_1 })!;
     expect(fractionFor(byId("fs-1"), removalFocus.owner)).toBe(1);
     expect(basisFor(byId("fs-1"), removalFocus.owner)).toEqual([{ kind: "claim", label: "CB-26-001", kg: null }]);
-    expect(feedstockHint(byId("fs-1"), removalFocus.owner, removalFocus.owners, codes)).toBeNull();
+    // Both of the Removal's batches drew: 2,000 + 3,000 of 10,000.
+    expect(feedstockHint(byId("fs-1"), removalFocus.owner, removalFocus.owners, codes)).toMatchObject({ kind: "partly", usedKg: 5000, batchUsage: true, ownerLabel: "RM-26-001" });
+    expect(feedstockHint(byId("fs-2"), removalFocus.owner, removalFocus.owners, codes)).toBeNull();
   });
 });

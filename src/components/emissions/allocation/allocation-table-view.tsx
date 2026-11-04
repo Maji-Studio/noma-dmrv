@@ -242,7 +242,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                   <CaretRightIcon size={CARET_PX} aria-hidden className={cn("mt-4 shrink-0 transition-transform", FAINT, isOpen && "rotate-90")} />
                   <span className="flex min-w-0 flex-col">
                     <span className="body-small font-medium">{row.records.length} {row.records.length === 1 ? one : many}</span>
-                    <span className={cn("body-caption", MUTED)}>{compact ? formatAmounts(sum, true) : `all on ${row.owner.label}`}</span>
+                    {compact && <span className={cn("body-caption", MUTED)}>{formatAmounts(sum, true)}</span>}
                     {focus.surface === "removal" && row.records.every(record => basisFor(record, row.owner).some(basis => basis.kind === "wouldClaim")) && (
                       <span className={cn("body-caption", MUTED)}>Would be sent with {row.owner.label}</span>
                     )}
