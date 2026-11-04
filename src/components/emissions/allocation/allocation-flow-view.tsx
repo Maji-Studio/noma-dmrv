@@ -33,7 +33,9 @@ interface DetailRow {
 }
 
 function basisText(record: AllocationRecord, owner: Owner): string {
-  return basisFor(record, owner).map((basis) => basis.label).join(", ");
+  const basis = basisFor(record, owner);
+  if (owner.surface === "removal" && basis.some(part => part.kind === "wouldClaim")) return `Would be sent with ${owner.label}`;
+  return basis.map(part => part.label).join(", ");
 }
 
 function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: ReadonlyMap<string, string>): DetailRow[] {
@@ -66,7 +68,7 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: Readon
     .map((record) => ({
       key: record.id,
       name: recordName(record),
-      sub: recordLine(record),
+      sub: owner.surface === "removal" && basisFor(record, owner).some(basis => basis.kind === "wouldClaim") ? basisText(record, owner) : recordLine(record),
       percent: percentFor(record, owner, columnOwners),
       value: (stream.pick(record) ?? 0) * fractionFor(record, owner),
       hint: feedstockHint(record, owner, graph.owners, codes) ?? undefined,

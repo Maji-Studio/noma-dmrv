@@ -20,6 +20,7 @@ import {
   allOwners,
   amountsOf,
   batchCodesOf,
+  basisFor,
   feedstockHint,
   recordsOf,
   sharesOf,
@@ -155,6 +156,9 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
           ) : (
             <RecordLabel record={record} />
           )}
+          {focus.surface === "removal" && shares.filter(share => basisFor(record, share.owner).some(basis => basis.kind === "wouldClaim")).map(share => (
+            <span key={share.owner.key} className={cn("block body-caption", MUTED)}>Would be sent with {share.owner.label}</span>
+          ))}
           {rowHint && <HintMarker hint={rowHint} viewer={focus.owner} className="pt-4" />}
         </th>
         {!compact && <td className={cn(TD, "body-small")}><AmountLines amounts={amountsOf(record)} /></td>}
@@ -239,6 +243,9 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                   <span className="flex min-w-0 flex-col">
                     <span className="body-small font-medium">{row.records.length} {row.records.length === 1 ? one : many}</span>
                     <span className={cn("body-caption", MUTED)}>{compact ? formatAmounts(sum, true) : `all on ${row.owner.label}`}</span>
+                    {focus.surface === "removal" && row.records.every(record => basisFor(record, row.owner).some(basis => basis.kind === "wouldClaim")) && (
+                      <span className={cn("body-caption", MUTED)}>Would be sent with {row.owner.label}</span>
+                    )}
                   </span>
                 </button>
               </th>

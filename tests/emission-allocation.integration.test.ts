@@ -30,6 +30,8 @@ const FEEDSTOCK_KG = 1_000;
 const FIRST_DRAW_KG = 600;
 const SECOND_DRAW_KG = 400;
 const HALF_LOAD_WET_KG = 150;
+const DRAFT_APPLIED_KG = 200;
+const DRAFT_DELIVERY_KG = 300;
 const HALF_LOAD_DRY_KG = 142.5;
 const EXPECTED_FEEDSTOCK_TONNE_KM = 20;
 const EXPECTED_DELIVERY_PART_TONNE_KM = 3;
@@ -171,6 +173,38 @@ describe("manual allocation names (real database)", () => {
 
 
 describe("Removal allocation parity with submission (real database)", () => {
+  it("previews an unclaimed draft's production and its assigned delivery slice", async () => {
+    await withLineageFixture(async fixture => {
+      await expect(db.transaction(async tx => {
+        const [batch] = await tx.select().from(creditBatches).where(and(
+          eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, fixture.batchId)));
+        expect(batch.productionEmissionsClaimedByRemovalId).toBeNull();
+        expect(batch.productionEmissionsClaimReservedBySubmissionId).toBeNull();
+        await tx.insert(transportLegs).values({ organizationId: ctx.organizationId, entityType: "feedstock",
+          entityId: fixture.feedstockId, distanceKm: DISTANCE_KM, loadMassKg: FEEDSTOCK_KG, transportMethodType: "road" });
+        await tx.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+          .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, fixture.productionRunId)));
+        const allocation = await getEmissionAllocation(ctx, { removalId: fixture.removalId }, tx);
+        for (const id of [fixture.productionRunId, fixture.feedstockId]) {
+          const record = allocation.records.find(record => record.id === id)!;
+          expect(record.removalParts).toEqual([{ key: fixture.removalId, fraction: 1,
+            basis: [{ kind: "wouldClaim", label: record.code, kg: null }] }]);
+        }
+        const delivery = allocation.records.find(record => record.id === fixture.deliveryId)!;
+        expect(delivery.removalParts.find(part => part.key === fixture.removalId)).toMatchObject({
+          fraction: DRAFT_APPLIED_KG / DRAFT_DELIVERY_KG, basis: [{ kind: "wouldClaim", kg: DRAFT_APPLIED_KG }],
+        });
+        for (const record of allocation.records) expect(record.removalParts.reduce((sum, part) => sum + part.fraction, 0)).toBe(1);
+        await tx.update(creditBatchApplications).set({ removalId: null }).where(and(
+          eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, fixture.batchId)));
+        const unassigned = await getEmissionAllocation(ctx, { removalId: fixture.removalId }, tx);
+        expect(unassigned.records.find(record => record.id === fixture.deliveryId)!.removalParts)
+          .toEqual([{ key: NOT_YET, fraction: 1, basis: [{ kind: "notYet", label: delivery.code, kg: DRAFT_DELIVERY_KG }] }]);
+        throw ROLLBACK;
+      })).rejects.toBe(ROLLBACK);
+    }, "none");
+  });
+
   it("claims production once and attributes one batch's delivery to two frozen Removal slices", async () => {
     await withLineageFixture(async fixture => {
       await expect(db.transaction(async tx => {

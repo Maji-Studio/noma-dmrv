@@ -12,8 +12,9 @@ export interface Quantity {
   label: string;
 }
 
+/** wouldClaim marks a pending production claim, entry send, or frozen delivery slice. */
 export interface PartBasis {
-  kind: "firstRun" | "run" | "load" | "recordedOnBatch" | "notYet" | "claim" | "slice";
+  kind: "firstRun" | "run" | "load" | "recordedOnBatch" | "notYet" | "claim" | "slice" | "wouldClaim";
   /** Stored code or input label, without a prebuilt explanatory sentence. */
   label: string;
   kg: number | null;

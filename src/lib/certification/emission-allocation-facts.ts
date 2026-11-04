@@ -37,7 +37,7 @@ export interface AllocationDeliveryFact {
   /** Existing emissionDeliveryShares, grouped once per batch and delivery. */
   loads: { creditBatchId: string; code: string; kg: number | null }[];
   /** Each Removal's applied wet load on this delivery, from its frozen application slices. */
-  removalLoads?: { removalId: string; code: string; kg: number }[];
+  removalLoads?: { removalId: string; code: string; kg: number; pending?: boolean }[];
 }
 
 export interface AllocationManualFact {
@@ -50,11 +50,16 @@ export interface AllocationManualFact {
   quantities: Quantity[];
   omittedInputKeys: string[];
   removalId?: string | null;
+  pending?: boolean;
 }
 
 export interface EmissionAllocationFacts extends Omit<EmissionAllocation, "records"> {
   /** Persisted production claim, independent of slice membership. */
   productionClaims?: Record<string, string | null>;
+  /** Non-transferable reservation owner; null means the pointer could not be resolved safely. */
+  productionReservations?: Record<string, string | null>;
+  /** Ordered by the submit gate (reporting quarter, attempt creation, attempt ID). */
+  productionContenders?: { creditBatchId: string; removalId: string }[];
   feedstocks: AllocationFeedstockFact[];
   runs: AllocationRunFact[];
   deliveries: AllocationDeliveryFact[];

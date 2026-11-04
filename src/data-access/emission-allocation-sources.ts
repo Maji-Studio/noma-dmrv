@@ -65,7 +65,7 @@ export async function loadAllocationManualEntries(
     };
     const removalId = removalEntryOwner(fact, contenders) ?? carried?.carry.receiver?.removalId ??
       (entry.kind === "zero" && fact.reservationKnownInactive ? entry.confirmedForRemovalId : null);
-    return [entry.id, removalId] as const;
+    return [entry.id, { removalId, pending: !entry.sentByRemovalId }] as const;
   }));
-  return buildAllocationManualFacts(entries, current, previous).map(entry => ({ ...entry, removalId: owners.get(entry.id) ?? null }));
+  return buildAllocationManualFacts(entries, current, previous).map(entry => ({ ...entry, ...owners.get(entry.id) }));
 }

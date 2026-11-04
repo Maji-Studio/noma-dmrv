@@ -72,10 +72,46 @@ describe("Removal allocation follows submission ownership", () => {
     }
   });
 
+  it("previews all production in the only draft before a persisted claim exists", () => {
+    const input = facts();
+    input.productionClaims = {};
+    input.removals = input.removals.slice(0, 1);
+    for (const record of shares(input).filter(record => ["production", "feedstockTransport"].includes(record.group))) {
+      expect(record.removalParts).toEqual([{ key: FIRST, fraction: 1,
+        basis: [{ kind: "wouldClaim", label: record.code, kg: null }] }]);
+      expect(record.removalParts.reduce((sum, part) => sum + part.fraction, 0)).toBe(1);
+    }
+  });
+
   it("does not elect a production claimer from draft membership", () => {
     const input = facts();
     input.productionClaims = {};
     expect(shares(input).find(record => record.group === "production")?.removalParts[0]).toMatchObject({ key: NOT_YET, fraction: 1 });
+  });
+
+  it("uses the submit gate's ordered active attempts and preserves reserved or persisted owners", () => {
+    const input = facts();
+    input.productionClaims = {};
+    input.productionContenders = [{ creditBatchId: BATCH, removalId: FOLLOWUP }, { creditBatchId: BATCH, removalId: FIRST }];
+    const production = () => shares(input).filter(record => ["production", "feedstockTransport"].includes(record.group));
+    for (const record of production()) expect(record.removalParts[0]).toMatchObject({ key: FOLLOWUP, fraction: 1, basis: [{ kind: "wouldClaim" }] });
+    input.productionReservations = { [BATCH]: FIRST };
+    for (const record of production()) expect(record.removalParts[0]).toMatchObject({ key: FIRST, fraction: 1, basis: [{ kind: "wouldClaim" }] });
+    input.productionClaims = { [BATCH]: FOLLOWUP };
+    for (const record of production()) expect(record.removalParts[0]).toMatchObject({ key: FOLLOWUP, fraction: 1, basis: [{ kind: "claim" }] });
+    input.productionClaims = {};
+    input.productionReservations = { [BATCH]: null };
+    for (const record of production()) expect(record.removalParts[0]).toMatchObject({ key: NOT_YET, fraction: 1 });
+  });
+
+  it("marks pending manual entries and frozen delivery slices without changing their shares", () => {
+    const input = facts();
+    input.manual[0].pending = true;
+    input.deliveries[0].removalLoads![0].pending = true;
+    const records = shares(input);
+    expect(records.find(record => record.group === "manual")!.removalParts[0]).toMatchObject({ key: FOLLOWUP, basis: [{ kind: "wouldClaim" }] });
+    expect(records.find(record => record.group === "deliveryTransport")!.removalParts[0])
+      .toMatchObject({ key: FIRST, fraction: INITIAL_KG / LOAD_KG, basis: [{ kind: "wouldClaim", kg: INITIAL_KG }] });
   });
 
   it("conserves repeating shares exactly and rejects slices above the whole load", () => {

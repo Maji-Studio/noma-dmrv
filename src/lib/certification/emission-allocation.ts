@@ -1,3 +1,4 @@
+import { allocationProductionOwner } from "./emission-allocation-production";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { massGrams } from "@/lib/calculations/gram-allocation";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -8,8 +9,13 @@ function wholePart(creditBatchId: string | null, basis: PartBasis): Part[] {
   return [{ key: creditBatchId ?? NOT_YET, fraction: 1, basis: [basis] }];
 }
 
-function claimedPart(removalId: string | null | undefined, label: string): Part[] {
-  return wholePart(removalId ?? null, { kind: removalId ? "claim" : "notYet", label, kg: null });
+function claimedPart(removalId: string | null | undefined, label: string, pending = false): Part[] {
+  return wholePart(removalId ?? null, { kind: removalId ? pending ? "wouldClaim" : "claim" : "notYet", label, kg: null });
+}
+
+function productionParts(facts: EmissionAllocationFacts, batchId: string | null, label: string): Part[] {
+  const owner = allocationProductionOwner(facts, batchId);
+  return claimedPart(owner.removalId, label, owner.pending);
 }
 
 /** Loads already come from the submission's frozen application lineage. */
@@ -23,7 +29,7 @@ function deliveryRemovalParts(fact: AllocationDeliveryFact): Part[] {
     }
     assigned += load.kg;
     parts.push({ key: load.removalId, fraction: total > 0 ? load.kg / total : 0,
-      basis: [{ kind: "slice", label: load.code, kg: load.kg, recordId: fact.id }] });
+      basis: [{ kind: load.pending ? "wouldClaim" : "slice", label: load.code, kg: load.kg, recordId: fact.id }] });
   }
   if (massGrams(assigned) < massGrams(total) || total <= 0 || !parts.length) {
     parts.push({ key: NOT_YET, fraction: total > 0 ? (total - assigned) / total : 1,
@@ -34,7 +40,7 @@ function deliveryRemovalParts(fact: AllocationDeliveryFact): Part[] {
   return parts;
 }
 
-function feedstockRecord(fact: AllocationFeedstockFact, claims: EmissionAllocationFacts["productionClaims"]): AllocationRecord {
+function feedstockRecord(fact: AllocationFeedstockFact, facts: EmissionAllocationFacts): AllocationRecord {
   const { usage } = fact;
   const owner = usage.owningBatch?.creditBatchId ?? null;
   const tonneKm = !fact.legs.length || fact.legs.some(leg => leg.loadKg === null || leg.loadKg <= 0 || leg.oneWayKm <= 0)
@@ -51,7 +57,7 @@ function feedstockRecord(fact: AllocationFeedstockFact, claims: EmissionAllocati
     id: fact.id, code: fact.code, group: "feedstockTransport", date: fact.date,
     detail: { kind: "feedstockTransport", binId: fact.binId, binName: fact.binName, wetKg: usage.intakeWetKg, legs: fact.legs },
     quantities: [{ value: tonneKm, unit: "t·km", label: "Transport" }], parts,
-    removalParts: claimedPart(owner ? claims?.[owner] : null, fact.code),
+    removalParts: productionParts(facts, owner, fact.code),
     basisWord: "the first run that drew from it",
     feedstock: {
       bin: fact.binName, binId: fact.binId, wetKg: usage.intakeWetKg, tonneKm,
@@ -96,7 +102,7 @@ function deliveryRecord(fact: AllocationDeliveryFact): AllocationRecord {
 /** Pure projection of saved facts. Ownership and physical stock replay stay in their existing seams. */
 export function buildEmissionAllocation(facts: EmissionAllocationFacts): EmissionAllocation {
   const records: AllocationRecord[] = [
-    ...facts.feedstocks.map(fact => feedstockRecord(fact, facts.productionClaims)),
+    ...facts.feedstocks.map(fact => feedstockRecord(fact, facts)),
     ...facts.runs.map((run): AllocationRecord => ({
       id: run.id, code: run.code, group: "production", date: run.date,
       detail: { kind: "production", reactorId: run.reactorId, reactorCode: run.reactorCode },
@@ -107,7 +113,7 @@ export function buildEmissionAllocation(facts: EmissionAllocationFacts): Emissio
         { value: run.electricityKwh, unit: "kWh", label: "Electricity" },
       ],
       parts: wholePart(run.creditBatchId, { kind: run.creditBatchId ? "run" : "notYet", label: run.code, recordId: run.id, kg: null }),
-      removalParts: claimedPart(run.creditBatchId ? facts.productionClaims?.[run.creditBatchId] : null, run.code),
+      removalParts: productionParts(facts, run.creditBatchId, run.code),
       basisWord: "the run",
     })),
     ...facts.deliveries.map(deliveryRecord),
@@ -117,7 +123,7 @@ export function buildEmissionAllocation(facts: EmissionAllocationFacts): Emissio
         componentName: entry.componentName, kindOfEntry: entry.kind, omittedInputKeys: entry.omittedInputKeys },
       quantities: entry.quantities,
       parts: wholePart(entry.creditBatchId, { kind: "recordedOnBatch", label: entry.componentId, recordId: entry.id, kg: null }),
-      removalParts: claimedPart(entry.removalId, entry.componentId),
+      removalParts: claimedPart(entry.removalId, entry.componentId, entry.pending),
       basisWord: "the batch it was recorded on",
     })),
   ];
