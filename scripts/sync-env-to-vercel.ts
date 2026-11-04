@@ -181,7 +181,6 @@ function checkVercelProject(): void {
 }
 
 function fetchFromOnePassword(opEnv: string): Map<string, string> {
-  const itemSuffix = itemEnvironment(opEnv);
   const itemName = itemNameForEnvironment(opEnv);
   console.log(`\nFetching from 1Password (${itemName})...`);
 
@@ -208,7 +207,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
   // fail only when a var the deployment cannot boot without is missing.
   let injectTemplate = modifiedTemplate;
   try {
-    const itemFields = fetchItemFieldNames(itemSuffix);
+    const itemFields = fetchItemFieldNames(opEnv);
     const { filtered, skipped, missingRequired } = filterTemplateToItem(
       modifiedTemplate,
       itemFields,
@@ -314,10 +313,9 @@ function warnUntrackedOnePasswordVars(
   opEnv: string,
   syncedNames: Set<string>
 ): void {
-  const itemSuffix = itemEnvironment(opEnv);
   let itemFields: Set<string>;
   try {
-    itemFields = fetchItemFieldNames(itemSuffix);
+    itemFields = fetchItemFieldNames(opEnv);
   } catch (error) {
     console.warn(
       `\n  (Could not check for untracked 1Password vars: ${

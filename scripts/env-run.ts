@@ -19,9 +19,10 @@ const SIGNAL_EXIT_CODE_BASE = 128;
 const FAILURE_EXIT_CODE = 1;
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 const ENVIRONMENTS = {
-  local: { templateFile: ".env.local.tpl", required: REQUIRED_LOCAL_VARS, nodeEnvOverride: null },
-  staging: { templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS, nodeEnvOverride: null },
-  prod: { templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS, nodeEnvOverride: "production" },
+  // nodeEnvDefault applies only when neither the template nor the caller's shell sets NODE_ENV.
+  local: { templateFile: ".env.local.tpl", required: REQUIRED_LOCAL_VARS, nodeEnvOverride: null, nodeEnvDefault: "development" },
+  staging: { templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS, nodeEnvOverride: null, nodeEnvDefault: null },
+  prod: { templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS, nodeEnvOverride: "production", nodeEnvDefault: null },
 } as const;
 export const ENV_RUN_USAGE =
   `Usage: pnpm env:run --1p-env=<${Object.keys(ENVIRONMENTS).join("|")}> [--allow-production] -- <command...>`;
@@ -109,6 +110,8 @@ async function runWithTemplate(template: string, inheritedTemplate: string, comm
   const receivedSignals = new Set<NodeJS.Signals>();
   const interrupt = (signal: NodeJS.Signals) => {
     if (receivedSignals.has(signal)) {
+      // Never leave op and the command running unsupervised after giving up.
+      child?.kill("SIGKILL");
       cleanup();
       process.exit(signalExitCode(signal));
     }
@@ -147,10 +150,12 @@ export async function runEnvCommand(args: string[]): Promise<number> {
       throw new Error("Production commands can change live data. Pass --allow-production to continue.");
     }
 
-    const { templateFile, required, nodeEnvOverride } = ENVIRONMENTS[environment];
-    const template = overrideNodeEnv(templateForEnvironment(
+    const { templateFile, required, nodeEnvOverride, nodeEnvDefault } = ENVIRONMENTS[environment];
+    const declared = overrideNodeEnv(templateForEnvironment(
       readFileSync(join(process.cwd(), templateFile), "utf-8"), environment
     ), nodeEnvOverride);
+    const needsDefault = nodeEnvDefault !== null && !process.env.NODE_ENV && !assignedNames(declared).includes("NODE_ENV");
+    const template = needsDefault ? overrideNodeEnv(declared, nodeEnvDefault) : declared;
     const { filtered, skipped, missingRequired } = filterTemplateToItem(
       template, fetchItemFieldNames(environment), required
     );

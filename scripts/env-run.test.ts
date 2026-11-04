@@ -313,7 +313,7 @@ describe("runEnvCommand", () => {
     expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Commands that load .env.local"));
   });
 
-  it("scans names across buffer boundaries without retaining long values", async () => {
+  it("warns with .env.local names only and never prints their values", async () => {
     const fixtureValue = "x".repeat(LONG_FIXTURE_VALUE_LENGTH);
     fs.writeFileSync(join(fixtureDirectory, ".env.local"), `DATABASE_URL=${fixtureValue}\nADMIN_PASSWORD=fixture-password`);
     expect(await runEnvCommand(argsFor("staging"))).toBe(0);
@@ -321,6 +321,13 @@ describe("runEnvCommand", () => {
       "Commands that load .env.local will use your local values for: ADMIN_PASSWORD"
     );
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(fixtureValue);
+  });
+
+  it("defaults local runs to NODE_ENV=development only when the shell has none", async () => {
+    vi.stubEnv("NODE_ENV", "");
+    listFields(REQUIRED_LOCAL_VARS);
+    expect(await runEnvCommand(argsFor("local"))).toBe(0);
+    expect(templateDuringRun).toMatch(/^NODE_ENV=development$/m);
   });
 
   it("does not inspect local fallback names for local runs", async () => {
@@ -412,7 +419,7 @@ describe("runEnvCommand", () => {
     expect(exit).not.toHaveBeenCalled();
     expect(() => handler()).toThrow("mock process exit");
     expect(exit).toHaveBeenCalledExactlyOnceWith(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
-    expect(child.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(vi.mocked(child.kill).mock.calls).toEqual([[signal], ["SIGKILL"]]);
     expect(fs.existsSync(writtenFile!)).toBe(false);
     child.emit("exit", null, signal);
     expect(await running).toBe(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
