@@ -14,7 +14,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { recordHref } from "@/lib/record-links";
-import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import {
   CREDIT_BATCH_DETAILS_ROW,
   LATE_PRODUCTION_RUN_ITEM_PREFIX,
@@ -26,7 +26,7 @@ import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
-import { FOCUS_RING, FocusRow, MUTED_TEXT, PagePanel, ROW_RULE, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
+import { FOCUS_RING, FocusRow, MUTED_TEXT, DetailRow, PagePanel, ROW_RULE, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
 import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { CreditBatchLateEntries } from "./credit-batch-late-entries";
 import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
@@ -225,27 +225,6 @@ function RemovalsPanel() {
   );
 }
 
-function DetailRow({ label, value, locked }: { label: string; value: string | null; locked?: boolean }) {
-  return (
-    <div className={cn("grid grid-cols-[128px_minmax(0,1fr)] items-baseline gap-12 py-10", ROW_RULE)}>
-      <dt className={cn("body-small", MUTED_TEXT)}>{label}</dt>
-      <dd className="flex min-w-0 items-center gap-6 body-medium">
-        {value == null ? (
-          <span data-empty className="text-[var(--color-text-tertiary)]">{MISSING_VALUE.notRecorded}</span>
-        ) : (
-          <span className="min-w-0 break-words">{value}</span>
-        )}
-        {locked && (
-          <>
-            <LockSimpleIcon size={16} className="shrink-0 text-[var(--color-text-secondary)]" aria-hidden />
-            <span className="sr-only">(locked)</span>
-          </>
-        )}
-      </dd>
-    </div>
-  );
-}
-
 const MEMBERSHIP_LOCK_TEXT =
   "A Removal holds biochar from this credit batch, so its feedstock type and dates are locked. Notes stay open.";
 const SENT_LOCK_TEXT = "This credit batch was sent with its Removal, so every field is locked.";
@@ -260,7 +239,7 @@ function LockMark({ text }: { text: string }) {
   );
 }
 
-/** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
+/** Batch details: the definition, sampling, notes and the Removal template (its own `<dl>` inside its focus target). Edit starts from the header. */
 function DetailsPanel() {
   const { batch, lock, canManage, focus, linesToDecide, readOnly } = useCreditBatchPage();
   const sent = lock?.level === "sent";
@@ -272,16 +251,17 @@ function DetailsPanel() {
   return (
     <FocusRow rowId={CREDIT_BATCH_DETAILS_ROW}>
       <PagePanel title="Batch details" labelledBy="credit-batch-details" titleAddon={lockText ? <LockMark text={lockText} /> : undefined}>
-        <dl className="flex flex-col">
-          <DetailRow label="Feedstock type" value={batch.feedstockTypeName} locked={rowLock} />
-          <DetailRow label="Durability" value={durabilityLabel(batch.durabilityOption)} />
-          <DetailRow label="Start date" value={formatDate(batch.startDate)} locked={rowLock} />
-          <DetailRow label="End date" value={formatDate(batch.endDate)} locked={rowLock} />
-          <DetailRow label="Sampling" value={batch.sampling === "unsampled" ? "Unsampled" : "Sampled"} />
-          <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
-        </dl>
-        <div className="border-t border-[var(--color-border-secondary)] pt-16">
-          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={sent} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} />
+        {/* One run of rows: the template's row sits flush under Notes, as the others do. */}
+        <div className="flex flex-col">
+          <dl className="flex flex-col">
+            <DetailRow label="Feedstock type" value={batch.feedstockTypeName} locked={rowLock} />
+            <DetailRow label="Durability" value={durabilityLabel(batch.durabilityOption)} />
+            <DetailRow label="Start date" value={formatDate(batch.startDate)} locked={rowLock} />
+            <DetailRow label="End date" value={formatDate(batch.endDate)} locked={rowLock} />
+            <DetailRow label="Sampling" value={batch.sampling === "unsampled" ? "Unsampled" : "Sampled"} />
+            <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
+          </dl>
+          <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} asDetailRow />
         </div>
       </PagePanel>
     </FocusRow>

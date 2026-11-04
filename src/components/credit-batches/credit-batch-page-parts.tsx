@@ -2,6 +2,9 @@
 
 /** Small building blocks shared by the credit batch page's header and tabs. */
 import type { ReactNode } from "react";
+import { LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import { DetailValueSkeleton } from "@/components/ui/detail-panel";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 
@@ -48,12 +51,12 @@ export function PagePanel({
 /** The to-do colors, defined once: Blocking is red, Check is orange. Dots, the tab count and the group headings read from here. */
 export const TODO_TONE = { blocking: "bg-[var(--st-bad)]", check: "bg-[var(--st-wait)]" } as const;
 
-/** The 8px status dot: the Open to-dos group headings and the unselected tabs share it. `tone` is a status color token, e.g. `bg-[var(--st-bad)]`. */
+/** The 8px status dot: the Open to-dos group headings use it. `tone` is a status color token, e.g. `bg-[var(--st-bad)]`. */
 export function StatusDot({ tone, label }: { tone: string; label?: string }) {
   return <span className={cn("size-8 shrink-0 rounded-full", tone)} {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })} />;
 }
 
-/** Round count: red when the count blocks, orange when it only needs a check. The selected tab and the data milestone share it. */
+/** Round count: red when the count blocks, orange when it only needs a check. Every tab with to-dos and the data milestone share it. */
 export function CountBadge({ count, blocking, label }: { count: number; blocking: boolean; label: string }) {
   return (
     <span
@@ -111,5 +114,29 @@ export function FocusRow({ rowId, className, children, as: Tag = "div" }: { rowI
     <Tag {...props} className={cn(className, props.className)}>
       {children}
     </Tag>
+  );
+}
+
+/** One Batch details row: label left, value right; a missing value reads "Not recorded" unless `emptyText` says why, and a loading one shows the detail skeleton. */
+export function DetailRow({ label, value, locked, pending, emptyText = MISSING_VALUE.notRecorded }: { label: string; value: string | null; locked?: boolean; pending?: boolean; emptyText?: string }) {
+  return (
+    <div className={cn("grid grid-cols-[128px_minmax(0,1fr)] items-baseline gap-12 py-10", ROW_RULE)}>
+      <dt className={cn("body-small", MUTED_TEXT)}>{label}</dt>
+      <dd className="flex min-w-0 items-center gap-6 body-medium" aria-busy={pending || undefined}>
+        {value == null && pending ? (
+          <DetailValueSkeleton />
+        ) : value == null ? (
+          <span data-empty className="text-[var(--color-text-tertiary)]">{emptyText}</span>
+        ) : (
+          <span className="min-w-0 break-words">{value}</span>
+        )}
+        {locked && (
+          <>
+            <LockSimpleIcon size={16} className="shrink-0 text-[var(--color-text-secondary)]" aria-hidden />
+            <span className="sr-only">(locked)</span>
+          </>
+        )}
+      </dd>
+    </div>
   );
 }

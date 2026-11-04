@@ -34,6 +34,8 @@ describe("submission lineage blockers", () => {
   it("requires proof on every delivery even without transport categories, deduplicating applications", () => {
     const missing = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", proofOfDeliveryCount: 0 } };
     expect(buildSubmissionLineageBlockers([missing, { ...missing, application: { ...missing.application, id: "app-2", code: "AP-2" } }], [], {}, [])).toEqual([{
+      kind: "deliveryProof",
+      instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.",
       fact: "Delivery DL-1 has no proof of delivery.",
       detail: "Delivery DL-1 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.",
       fixTarget: "deliveryEvidence", record: { id: "delivery-1", code: "DL-1" },

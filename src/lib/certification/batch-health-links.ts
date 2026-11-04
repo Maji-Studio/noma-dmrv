@@ -174,8 +174,13 @@ export function batchHealthFixLinkFor(
         label: `Review ${check.affectedRecords![0].code} evidence`,
         href: recordHref("delivery", affectedIds[0], { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence }),
       };
-    case "deliveries":
     case "deliveryDistances":
+      // A counted proof or distance to-do lists exactly its blocked deliveries.
+      return {
+        label: "Review deliveries",
+        href: `/deliveries?${query(creditBatchId ? { creditBatch: creditBatchId } : undefined)}`,
+      };
+    case "deliveries":
       return {
         label: "Review deliveries",
         href: `/deliveries?${query(

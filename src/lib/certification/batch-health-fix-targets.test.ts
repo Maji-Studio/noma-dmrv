@@ -232,10 +232,10 @@ describe("batchHealthFixLinkFor", () => {
   });
 
   it.each(["same delivery proofs", "multiple proofs", "distance", "production", "transport"] as const)(
-    "routes merged %s gaps to the appropriate delivery destination",
+    "routes %s gaps to their own delivery destinations",
     (kind) => {
       const proof = {
-        fact: "Missing proof", detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
+        kind: "deliveryProof" as const, instruction: "", fact: "Missing proof", detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
         record: { id: "delivery-1", code: "D-1" },
       };
       const facts: BatchHealthFacts = {
@@ -247,18 +247,26 @@ describe("batchHealthFixLinkFor", () => {
           proof,
           ...(kind === "same delivery proofs" ? [proof] : []),
           ...(kind === "multiple proofs" ? [{ ...proof, record: { id: "delivery-2", code: "D-2" } }] : []),
-          ...(kind === "distance" ? [{ fact: "Missing distance", detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
+          ...(kind === "distance" ? [{ kind: "deliveryDistance" as const, instruction: "", fact: "Missing distance", detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
         ],
         ...(kind === "production" ? { productionReadinessGap: {
           kind: "noApplications", detail: "Missing delivery", fixTarget: "deliveries",
         } } : {}),
       };
-      const row = deriveBatchHealth(facts).checks.find((item) => item.status === "unmet" &&
-        (item.fixTarget === "deliveryEvidence" || item.fixTarget === "deliveries" || item.fixTarget === "deliveryDistances"))!;
-      expect(batchHealthFixLinkFor(row, "facility-1", "batch-1").href)
-        .toBe(kind === "same delivery proofs"
-          ? "/deliveries?facility=facility-1&delivery=delivery-1&mode=edit&focus=transport-evidence"
-          : "/deliveries?facility=facility-1&creditBatch=batch-1");
+      const rows = deriveBatchHealth(facts).checks.filter((item) => item.status === "unmet");
+      const hasSeparateDestination = kind === "distance" || kind === "production" || kind === "transport";
+      expect(rows).toHaveLength(hasSeparateDestination ? 2 : 1);
+      const proofRow = rows.find((item) => item.fixTarget === "deliveryEvidence")!;
+      expect(batchHealthFixLinkFor(proofRow, "facility-1", "batch-1").href)
+        .toBe(kind === "multiple proofs"
+          ? "/deliveries?facility=facility-1&creditBatch=batch-1&ids=delivery-1%2Cdelivery-2"
+          : "/deliveries?facility=facility-1&delivery=delivery-1&mode=edit&focus=transport-evidence");
+      if (hasSeparateDestination) {
+        const otherTarget = kind === "distance" ? "deliveryDistances" : "deliveries";
+        const otherRow = rows.find((item) => item.fixTarget === otherTarget)!;
+        expect(batchHealthFixLinkFor(otherRow, "facility-1", "batch-1").href)
+          .toBe(`/deliveries?facility=facility-1&creditBatch=batch-1${kind === "distance" ? "&ids=delivery-1" : ""}`);
+      }
     },
   );
 });

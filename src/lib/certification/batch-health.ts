@@ -20,7 +20,13 @@ import type { RemovalCorrection } from "./removal-entry-correction";
 import { templateLineFixTarget } from "./template-fix-targets";
 import type { BatchEmissionLine } from "./emission-lines";
 import type { SampleDocumentWarningKey } from "./sample-document-warnings";
-import type { SubmissionLineageBlocker } from "./submission-readiness";
+import {
+  isCountedSubmissionBlocker,
+  submissionBlockerGroupFact,
+  type CountedSubmissionBlockerKind,
+  type SubmissionLineageBlocker,
+} from "./submission-readiness";
+import { blockerMessage } from "./blocker-message";
 import type { TransportCategory } from "./readiness";
 import {
   defaultProductionReadinessGap,
@@ -376,12 +382,9 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       }));
 }
 
+/** deliveryEvidence and deliveryDistances resolve to themselves (default): their to-dos link to their own filtered lists, so they keep their own rows. */
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
-    case "deliveries":
-    case "deliveryEvidence":
-    case "deliveryDistances":
-      return "deliveries";
     case "productionRuns":
     case "sourceData":
       return "productionRuns";
@@ -441,11 +444,6 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
-      fixTarget: destination === "deliveries"
-        ? existing.fixTarget === "deliveryEvidence" && check.fixTarget === "deliveryEvidence"
-          ? "deliveryEvidence"
-          : "deliveries"
-        : existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
@@ -519,19 +517,51 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }];
 }
 
+/**
+ * Lineage blockers as to-dos. Proof and distance blockers, whose link filters
+ * the deliveries list to the blocked records, become one check per kind: the
+ * fact with a count (the coded fact for one record) and the repair step once.
+ * Feedstock transport and customer location blockers stay one per record,
+ * since their links open a single record or an unfiltered list.
+ */
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
-  const lineageChecks: BatchHealthCheckBase[] = (facts.submissionLineageBlockers ?? []).map((blocker) => ({
-    key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
-    issueKey: `submission-${blocker.fixTarget}`,
-    label: "Submission requirements complete",
-    requirementLabel: SUBMISSION_BLOCKERS_LABEL,
-    unmetLabel: SUBMISSION_BLOCKERS_LABEL,
-    status: "unmet",
-    detail: blocker.detail,
-    readOnlyDetail: blocker.fact,
-    fixTarget: blocker.fixTarget,
-    affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
-  }));
+  const lineageChecks: BatchHealthCheckBase[] = [];
+  const counted = new Map<CountedSubmissionBlockerKind, SubmissionLineageBlocker[]>();
+  for (const blocker of facts.submissionLineageBlockers ?? []) {
+    if (isCountedSubmissionBlocker(blocker)) {
+      counted.set(blocker.kind, [...(counted.get(blocker.kind) ?? []), blocker]);
+      continue;
+    }
+    lineageChecks.push({
+      key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+      issueKey: `submission-${blocker.fixTarget}`,
+      label: "Submission requirements complete",
+      requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+      unmetLabel: SUBMISSION_BLOCKERS_LABEL,
+      status: "unmet",
+      detail: blocker.detail,
+      readOnlyDetail: blocker.fact,
+      fixTarget: blocker.fixTarget,
+      affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+    });
+  }
+  for (const [kind, group] of counted) {
+    const [first] = group;
+    const fact = group.length === 1 ? first.fact : submissionBlockerGroupFact(kind, group.length);
+    lineageChecks.push({
+      key: "entityReadiness",
+      issueKey: `submission-${first.fixTarget}`,
+      label: "Submission requirements complete",
+      requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+      unmetLabel: SUBMISSION_BLOCKERS_LABEL,
+      status: "unmet",
+      detail: blockerMessage(fact, first.instruction).message,
+      copy: { detail: fact, instruction: first.instruction },
+      readOnlyDetail: fact,
+      fixTarget: first.fixTarget,
+      affectedRecords: mergeAffectedRecords(undefined, group.map((member) => ({ ...member.record, missing: [member.fact] }))),
+    });
+  }
   const blockers = facts.durabilityConfigurationBlockers ?? [];
   if (blockers.length > 0) lineageChecks.push({
     key: "entityReadiness",
