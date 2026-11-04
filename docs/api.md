@@ -775,6 +775,11 @@ requires the method/path (or `components`) and change description on each line.
 
 ### MCP tools on API keys
 
+With `MCP_ENABLED=false` (the default), POST, GET and DELETE at `/api/mcp`
+return a bare 404 before origin checks, authentication or rate limiting. MCP
+protected-resource discovery, including the root alias, also returns 404.
+REST, API keys, REST discovery and the OAuth provider remain available.
+
 `src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
 `mcp-handler` and MCP server SDK. GET and DELETE authenticate before returning
 405 with `Allow: POST` (decision 132); missing credentials return 401. These
@@ -835,6 +840,21 @@ request deadline before each tool. `API_WRITES_DISABLED` returns an in-MCP
 `isError` result with code `api_writes_disabled`; reads keep working. No sessions
 are exposed. Initialize returns short server instructions built from the domain
 section shared with `llms.txt`, plus MCP grounding and retry guidance.
+
+### Unfinished write features
+
+With `STOCK_ADJUSTMENTS_ENABLED=false` (the default), recording output `loss`
+or `count` movements returns HTTP 409 `conflict` (the same code in MCP):
+"Lost mass and stock counts are turned off on this server." App feedstock
+stock takes and losses, plus lost mass edits and deletes, are also refused.
+Stock reads and other ledger writes remain available.
+
+With `MULTI_BIN_RUNS_ENABLED=false` (the default), new runs cannot draw from
+several bins. Updates may keep or reduce saved bins and change their masses,
+but cannot add a bin when the result has several bins. Updates omitting
+`feedstockDraws` are unchanged. Refusals use HTTP 422 `validation_failed` with
+an issue on `/feedstockDraws`: "Runs take feedstock from one bin. Several source
+bins are turned off on this server." MCP and Server Actions share this error.
 
 ### Record-lock refusals
 

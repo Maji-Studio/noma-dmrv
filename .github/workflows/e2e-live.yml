@@ -51,6 +51,9 @@ jobs:
           --health-retries 10
 
     env:
+      MCP_ENABLED: "true"
+      STOCK_ADJUSTMENTS_ENABLED: "true"
+      MULTI_BIN_RUNS_ENABLED: "true"
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       DISABLE_RATE_LIMIT: "true"
@@ -133,6 +136,9 @@ jobs:
           NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          MCP_ENABLED=${MCP_ENABLED}
+          STOCK_ADJUSTMENTS_ENABLED=${STOCK_ADJUSTMENTS_ENABLED}
+          MULTI_BIN_RUNS_ENABLED=${MULTI_BIN_RUNS_ENABLED}
           EOF
 
       # Migrations, not `drizzle-kit push`: hand-written trigger migrations

@@ -41,6 +41,7 @@ import {
   binTypeFilterLabel,
   type StorageBinTypeFilter,
 } from "./bin-display";
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
 import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations";
 
@@ -181,6 +182,7 @@ function binRowActions(
     "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
   >,
   lock: RecordLockView | undefined,
+  stockAdjustments: boolean,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
     return [
@@ -192,11 +194,13 @@ function binRowActions(
     ];
   }
   return [
-    {
-      label: "Adjust stock",
-      icon: <ArrowsClockwiseIcon size={16} />,
-      onSelect: () => handlers.onReconcile(bin),
-    },
+    ...(stockAdjustments
+      ? [{
+          label: "Adjust stock",
+          icon: <ArrowsClockwiseIcon size={16} />,
+          onSelect: () => handlers.onReconcile(bin),
+        }]
+      : []),
     // Edit and Delete wait for the lock read to answer.
     ...(isRecordEditable(lock)
       ? [{
@@ -243,6 +247,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
     onView,
     onReconcile,
   } = props;
+  const { stockAdjustments } = useFeatureSwitches();
   const binLocks = useRecordLocks("storageLocation", bins.map((bin) => bin.id));
 
   return (
@@ -403,7 +408,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               <StorageBinTile
                 key={bin.id}
                 bin={bin}
-                actions={binRowActions(bin, props, binLocks.locks[bin.id])}
+                actions={binRowActions(bin, props, binLocks.locks[bin.id], stockAdjustments)}
                 lock={binLocks.locks[bin.id]}
                 onView={onView}
                 onReconcile={onReconcile}

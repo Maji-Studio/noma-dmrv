@@ -14,6 +14,8 @@ import {
   type ViewerOrg,
 } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
+import { FeatureSwitchesProvider } from "@/components/providers/feature-switches-provider";
+import { multiBinRunsEnabled, stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
 export default async function AppLayout({
@@ -58,7 +60,13 @@ export default async function AppLayout({
         }
       : null;
 
+  const featureSwitches = {
+    stockAdjustments: stockAdjustmentsEnabled(),
+    multiBinRuns: multiBinRunsEnabled(),
+  };
+
   return (
+    <FeatureSwitchesProvider value={featureSwitches}>
     <ViewerOrgProvider value={viewerOrg}>
     <FacilityProvider
       initialOrganizationId={orgContext?.organizationId ?? null}
@@ -94,5 +102,6 @@ export default async function AppLayout({
       </div>
     </FacilityProvider>
     </ViewerOrgProvider>
+    </FeatureSwitchesProvider>
   );
 }

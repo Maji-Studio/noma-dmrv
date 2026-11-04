@@ -1,3 +1,4 @@
+import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import type { DbTransaction } from '@/db';
 import { feedstockBinMethodChanges, type StorageLocation } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -33,7 +34,7 @@ export async function applyFeedstockMethodChange(ctx: OrgContext, tx: DbTransact
     if (last && last > now.toISOString())
       throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last)}. Change its draw method after that time.`);
     if (existing.stockMode === 'mix' && target.stockMode === 'split' && stock.currentWetKg !== 0)
-      throw new SafeError('Empty this bin before switching it to In order. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into deliveries.');
+      throw new SafeError(`Empty this bin before switching it to In order.${stockAdjustmentsEnabled() ? ' If nothing is left, record a stock count of zero first.' : ''} A mixed pile cannot be sorted back into deliveries.`);
   }
   await tx.insert(feedstockBinMethodChanges).values({ organizationId: ctx.organizationId, storageLocationId: existing.id,
     ...target, previousStockMode: existing.stockMode, previousDrawOrder: existing.drawOrder, effectiveAt, createdBy: ctx.userId });

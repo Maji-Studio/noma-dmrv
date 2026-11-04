@@ -398,7 +398,7 @@ export async function updateProductionRunInTransaction(
   const normalizedFeedstockDraws =
     inputFeedstockDraws === undefined
       ? undefined
-      : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
+      : normalizeProductionRunFeedstockDraws(inputFeedstockDraws, existingFeedstockStorageLocationIds);
 
   // Moving a run requires an active target facility.
   if (data.facilityId && data.facilityId !== existing.facilityId) {

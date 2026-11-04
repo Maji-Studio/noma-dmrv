@@ -1,3 +1,4 @@
+import { requireStockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { randomUUID } from "node:crypto";
 import { readOutputStockBin, recordOutputStockMovementInTransaction, type RecordedOutputStockMovement } from "@/data-access/output-stock-post";
 import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
@@ -32,6 +33,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
   supportsDryRun: true,
   describe: (input, output) => describeRecordedMovement(input, output.movementId),
   execute: ({ ctx, tx, snapshotStock, activity }, { idempotencyKey, occurredAt, facilityId, checkFormEditLock, ...command }) => withOutputStockErrors(async () => {
+    if (command.kind === "loss" || command.kind === "count") requireStockAdjustmentsEnabled();
     // The bin supplies the facility and the zone a facility-local time is read in.
     const bin = await readOutputStockBin(ctx, tx, { storageLocationId: command.storageLocationId, facilityId });
     const result = await recordOutputStockMovementInTransaction(ctx, tx, {

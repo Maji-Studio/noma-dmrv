@@ -49,6 +49,9 @@ jobs:
       # The OAuth consent and Connected apps specs need the provider; the
       # production gate allows a loopback origin only for hermetic CI.
       OAUTH_PROVIDER_ENABLED: "true"
+      MCP_ENABLED: "true"
+      STOCK_ADJUSTMENTS_ENABLED: "true"
+      MULTI_BIN_RUNS_ENABLED: "true"
       # Playwright builds + serves a production bundle on CI
       # (playwright.config.ts), but the suite is hermetic and localhost-only.
       # Use local-fs so upload specs can round-trip bytes without external
@@ -141,6 +144,9 @@ jobs:
           NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          MCP_ENABLED=${MCP_ENABLED}
+          STOCK_ADJUSTMENTS_ENABLED=${STOCK_ADJUSTMENTS_ENABLED}
+          MULTI_BIN_RUNS_ENABLED=${MULTI_BIN_RUNS_ENABLED}
           OAUTH_PROVIDER_ENABLED=${OAUTH_PROVIDER_ENABLED}
           STORAGE_PROVIDER=${STORAGE_PROVIDER}
           STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}

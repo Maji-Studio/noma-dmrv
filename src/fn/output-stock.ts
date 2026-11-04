@@ -1,5 +1,6 @@
 'use server';
 
+import { requireStockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { getMatchingOutputBins, getOutputStockHistory, previewOutputStock } from '@/data-access/output-stock-operations';
 import { getLinkedOutputBinInventory, getOutputSubBins } from '@/data-access/output-sub-bins';
 import { matchingOutputBinsSchema, outputStockFormPostSchema, outputStockPreviewSchema, outputSubBinsSchema } from '@/schemas/output-stock';
@@ -23,6 +24,7 @@ export async function getMatchingOutputBinsFn(input: { facilityId: string; formu
 /** New losses and counts share the API operation; only Lost mass has a stock form edit. */
 export async function postOutputStockFn(input: OutputStockPostInput) {
   return withAction(ctx => {
+    requireStockAdjustmentsEnabled();
     const data = outputStockFormPostSchema.parse(input);
     return data.correctsMovementId
       ? correctOutputStockEntry(ctx, data)
@@ -34,7 +36,10 @@ export async function getOutputSubBinsFn(input: OutputSubBinsInput) {
 }
 
 export async function removeOutputLossFn(data: RemoveLossData) {
-  return withAction(ctx => runOperationInProcess(deleteOutputStockLoss, ctx, removeLossSchema.parse(data)), {
+  return withAction(ctx => {
+    requireStockAdjustmentsEnabled();
+    return runOperationInProcess(deleteOutputStockLoss, ctx, removeLossSchema.parse(data));
+  }, {
     fallbackMessage: 'Failed to remove Lost mass',
     log: { message: 'Failed to remove Lost mass', context: { op: 'output-stock:remove-loss' } },
   });
