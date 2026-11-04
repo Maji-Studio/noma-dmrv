@@ -165,6 +165,11 @@ export function batchHealthFixLinkFor(
       };
     }
     case "orders":
+      // One order opens its sheet, like one feedstock or one delivery's proof.
+      if (affectedCount === 1) return {
+        label: `Review ${check.affectedRecords![0].code}`,
+        href: recordHref("order", affectedIds[0], { facilityId }),
+      };
       return {
         label: "Review orders",
         href: `/orders?${query()}`,

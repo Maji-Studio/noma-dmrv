@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { recordHref } from "@/lib/record-links";
 import { batchHealthFixLinkFor, fallbackBatchHealthFixTarget } from "./batch-health-links";
 
 const records = [
@@ -60,7 +61,9 @@ it("keeps the feedstock location shortcut when every affected record shares it",
     .toBe("/feedstock-intake?facility=facility&ids=one%2Ctwo");
 });
 
-it.each([1, 2])("includes exactly the %i affected order ids", (count) => {
-  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "orders", affectedRecords: records.slice(0, count) }, "facility", "batch"))
-    .toEqual({ label: "Review orders", href: `/orders?facility=facility&ids=${count === 1 ? "one" : "one%2Ctwo"}` });
+it("opens one blocked order's sheet and lists several by exact ids", () => {
+  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "orders", affectedRecords: records.slice(0, 1) }, "facility", "batch"))
+    .toEqual({ label: "Review DL-1", href: recordHref("order", "one", { facilityId: "facility" }) });
+  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "orders", affectedRecords: records }, "facility", "batch"))
+    .toEqual({ label: "Review orders", href: "/orders?facility=facility&ids=one%2Ctwo" });
 });

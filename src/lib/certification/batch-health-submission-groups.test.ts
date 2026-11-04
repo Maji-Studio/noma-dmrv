@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
 import { deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
+import { recordHref } from "@/lib/record-links";
 import { batchHealthFixLinkFor } from "./batch-health-links";
 import {
   applicationDestinationMessage,
@@ -213,7 +214,7 @@ describe("submission blocker groups", () => {
       detail: `Order OR-1 has no customer location. ${blockers[0].instruction}`,
       affectedRecords: [{ id: "order-1", code: "OR-1", missing: blockers.map((blocker) => blocker.fact) }],
     });
-    expect(batchHealthFixLinkFor(check, "facility").href).toBe("/orders?facility=facility&ids=order-1");
+    expect(batchHealthFixLinkFor(check, "facility")).toEqual({ label: "Review OR-1", href: recordHref("order", "order-1", { facilityId: "facility" }) });
     expect(blockers.map((blocker) => blocker.fact)).toEqual([
       "Application AP-0 has no customer location.", "Application AP-1 has no customer location.",
     ]);
