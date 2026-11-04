@@ -23,7 +23,6 @@ import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 import {
   isCountedSubmissionBlocker,
   submissionBlockerGroupFact,
-  type CountedSubmissionBlockerKind,
   type SubmissionLineageBlocker,
 } from "./submission-readiness";
 import { blockerMessage } from "./blocker-message";
@@ -524,7 +523,7 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
  */
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   const lineageChecks: BatchHealthCheckBase[] = [];
-  const counted = new Map<CountedSubmissionBlockerKind, SubmissionLineageBlocker[]>();
+  const counted = new Map<SubmissionLineageBlocker["kind"], SubmissionLineageBlocker[]>();
   for (const blocker of facts.submissionLineageBlockers ?? []) {
     if (isCountedSubmissionBlocker(blocker)) {
       counted.set(blocker.kind, [...(counted.get(blocker.kind) ?? []), blocker]);
@@ -543,12 +542,9 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
     });
   }
-  for (const [kind, group] of counted) {
+  for (const group of counted.values()) {
     const [first] = group;
-    const recordCount = new Set(group.map((blocker) => blocker.record.id)).size;
-    const fact = group.length === 1
-      ? first.fact
-      : submissionBlockerGroupFact(kind, recordCount, first.record.code);
+    const fact = submissionBlockerGroupFact(group);
     lineageChecks.push({
       key: first.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
       issueKey: `submission-${first.fixTarget}`,

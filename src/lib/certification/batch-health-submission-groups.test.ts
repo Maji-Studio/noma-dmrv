@@ -108,9 +108,10 @@ describe("submission blocker groups", () => {
   });
 
   it.each([
-    { kind: "feedstockTransport", fixTarget: "feedstocks", key: "transport", messageFor: feedstockTransportMessage, fact: "2 feedstocks have no usable transport leg." },
-    { kind: "applicationDestination", fixTarget: "orders", key: "entityReadiness", messageFor: applicationDestinationMessage, fact: "2 orders have no customer location." },
-  ] as const)("counts $kind while retaining the coded fact for one record", ({ kind, fixTarget, key, messageFor, fact }) => {
+    { kind: "feedstockTransport", fixTarget: "feedstocks", key: "transport", messageFor: feedstockTransportMessage, fact: "2 feedstocks have no usable transport leg.", singleFact: undefined },
+    // One application still names its order: the link opens the orders list.
+    { kind: "applicationDestination", fixTarget: "orders", key: "entityReadiness", messageFor: applicationDestinationMessage, fact: "2 orders have no customer location.", singleFact: (code: string) => `Order ${code} has no customer location.` },
+  ] as const)("counts $kind and states one record's fact on its repair record", ({ kind, fixTarget, key, messageFor, fact, singleFact }) => {
     const blockers = ["one", "two"].map((id) => {
       const message = messageFor(kind === "feedstockTransport" ? `Feedstock FS-${id}` : `AP-${id}`);
       return {
@@ -120,10 +121,11 @@ describe("submission blocker groups", () => {
     });
     for (const blocker of blockers) {
       const [check] = unmet([blocker]);
+      const one = singleFact ? singleFact(blocker.record.code) : blocker.fact;
       expect(check).toMatchObject({
         key, issueKey: `submission-${fixTarget}`, fixTarget,
-        detail: blocker.detail, readOnlyDetail: blocker.fact,
-        copy: { detail: blocker.fact, instruction: blocker.instruction },
+        detail: `${one} ${blocker.instruction}`, readOnlyDetail: one,
+        copy: { detail: one, instruction: blocker.instruction },
         affectedRecords: [{ ...blocker.record, missing: [blocker.fact] }],
       });
     }

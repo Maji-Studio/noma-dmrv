@@ -63,8 +63,6 @@ export const deliveryDistanceMessage = (code: string) => blockerMessage(
   "Set the customer location distance or a delivery distance override before submitting.",
 );
 
-export type CountedSubmissionBlockerKind = SubmissionLineageBlocker["kind"];
-
 /** Count blockers with exact-list repair links; customer locations without an order stay per record. */
 export function isCountedSubmissionBlocker(blocker: SubmissionLineageBlocker): boolean {
   return blocker.kind === "deliveryProof" || blocker.kind === "deliveryDistance" ||
@@ -72,19 +70,27 @@ export function isCountedSubmissionBlocker(blocker: SubmissionLineageBlocker): b
     (blocker.kind === "applicationDestination" && blocker.fixTarget === "orders");
 }
 
-/** Count distinct repair records; the repair step is the members' own. */
-export function submissionBlockerGroupFact(kind: CountedSubmissionBlockerKind, count: number, recordCode: string): string {
-  switch (kind) {
+/**
+ * The fact for one counted group, all of one kind. It counts distinct repair
+ * records; one record keeps its own coded fact. Customer locations always name
+ * the order, where the fix is made. The repair step is the members' own.
+ */
+export function submissionBlockerGroupFact(group: readonly SubmissionLineageBlocker[]): string {
+  const [first] = group;
+  const count = new Set(group.map((blocker) => blocker.record.id)).size;
+  if (first.kind === "applicationDestination") {
+    return count === 1
+      ? `Order ${first.record.code} has no customer location.`
+      : `${count} orders have no customer location.`;
+  }
+  if (count === 1) return first.fact;
+  switch (first.kind) {
     case "deliveryProof":
       return `${count} deliveries have no proof of delivery.`;
     case "deliveryDistance":
       return `${count} deliveries have no positive transport distance.`;
     case "feedstockTransport":
       return `${count} feedstocks have no usable transport leg.`;
-    case "applicationDestination":
-      return count === 1
-        ? `Order ${recordCode} has no customer location.`
-        : `${count} orders have no customer location.`;
   }
 }
 
