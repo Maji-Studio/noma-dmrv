@@ -11,7 +11,7 @@ import {
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { sampleDocumentWarningKeys } from "@/lib/certification/sample-document-warnings";
 import { deriveBatchHealth, type BatchHealthFixTarget } from "@/lib/certification/batch-health";
-import { deliveryDistanceMessage, deliveryProofMessage } from "@/lib/certification/submission-readiness";
+import { applicationDestinationMessage, deliveryDistanceMessage, deliveryProofMessage, feedstockTransportMessage } from "@/lib/certification/submission-readiness";
 import {
   buildCreditBatchOpenItems as buildItems,
   CREDIT_BATCH_DETAILS_ROW,
@@ -676,29 +676,34 @@ it("links an interrupted Removal to Review & submit, but adds no submitted to-do
   }]);
 });
 
-it("states the grouped submission count without an instruction on a read-only batch", () => {
-  const blockedDeliveryCount = 11;
+it.each([
+  { kind: "deliveryProof", fixTarget: "deliveryEvidence", messageFor: deliveryProofMessage, fact: "11 deliveries have no proof of delivery." },
+  { kind: "deliveryDistance", fixTarget: "deliveryDistances", messageFor: deliveryDistanceMessage, fact: "11 deliveries have no positive transport distance." },
+  { kind: "feedstockTransport", fixTarget: "feedstocks", messageFor: feedstockTransportMessage, fact: "11 feedstocks have no usable transport leg." },
+  { kind: "applicationDestination", fixTarget: "orders", messageFor: applicationDestinationMessage, fact: "11 applications have no customer location." },
+] as const)("states the grouped $kind count without an instruction on a read-only batch", ({ kind, fixTarget, messageFor, fact }) => {
+  const blockedRecordCount = 11;
   const health = deriveBatchHealth({
     carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
     entityReadinessGaps: [], hasSubmittableRuns: true, facilitySetupComplete: true, requiredTransport: [],
-    submissionLineageBlockers: Array.from({ length: blockedDeliveryCount }, (_, index) => {
-      const code = `DL-${index}`;
-      const message = deliveryProofMessage(code);
+    submissionLineageBlockers: Array.from({ length: blockedRecordCount }, (_, index) => {
+      const code = `record-${index}`;
+      const message = messageFor(code);
       return {
-        kind: "deliveryProof", instruction: message.instruction!, fact: message.fact, detail: message.message,
-        fixTarget: "deliveryEvidence", record: { id: `delivery-${index}`, code },
+        kind, instruction: message.instruction!, fact: message.fact, detail: message.message,
+        fixTarget, record: { id: `record-${index}`, code },
       };
     }),
   });
   const editable = buildItems({ ...batchContext, health });
   expect(editable.blocking).toHaveLength(1);
   const [editableItem] = editable.blocking;
-  expect(editableItem.detail).toBe("11 deliveries have no proof of delivery.");
-  expect(editableItem.instruction).toBe(deliveryProofMessage("").instruction);
+  expect(editableItem.detail).toBe(fact);
+  expect(editableItem.instruction).toBe(messageFor("").instruction);
   const [item] = readOnlyOpenItems({ ...editable, waiting: [] }).blocking;
-  expect(item.detail).toBe("11 deliveries have no proof of delivery.");
+  expect(item.detail).toBe(fact);
   expect(item.instruction).toBeUndefined();
-  expect(openItemText(item)).toBe("11 deliveries have no proof of delivery.");
+  expect(openItemText(item)).toBe(fact);
 });
 
 it("shows separate blocking items for proof and distance with each kind's detail and instruction", () => {

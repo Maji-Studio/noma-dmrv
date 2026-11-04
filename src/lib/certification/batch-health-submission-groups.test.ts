@@ -8,6 +8,7 @@ import {
   deliveryDistanceMessage,
   deliveryProofMessage,
   feedstockTransportMessage,
+  isCountedSubmissionBlocker,
   type SubmissionLineageBlocker,
 } from "./submission-readiness";
 
@@ -107,38 +108,69 @@ describe("submission blocker groups", () => {
   });
 
   it.each([
-    { kind: "feedstockTransport", fixTarget: "feedstocks", messageFor: feedstockTransportMessage },
-    { kind: "applicationDestination", fixTarget: "orders", messageFor: applicationDestinationMessage },
-  ] as const)("retains each $kind record's full detail without a count fact", ({ kind, fixTarget, messageFor }) => {
+    { kind: "feedstockTransport", fixTarget: "feedstocks", key: "transport", messageFor: feedstockTransportMessage, fact: "2 feedstocks have no usable transport leg." },
+    { kind: "applicationDestination", fixTarget: "orders", key: "entityReadiness", messageFor: applicationDestinationMessage, fact: "2 applications have no customer location." },
+  ] as const)("counts $kind while retaining the coded fact for one record", ({ kind, fixTarget, key, messageFor, fact }) => {
     const blockers = ["one", "two"].map((id) => {
-      const message = messageFor(id);
+      const message = messageFor(kind === "feedstockTransport" ? `Feedstock FS-${id}` : `AP-${id}`);
       return {
         kind, fixTarget, instruction: message.instruction!, detail: message.message,
         fact: message.fact, record: { id, code: id },
       };
     });
-    // Each record contributes its original check before destination merging.
     for (const blocker of blockers) {
-      const checks = unmet([blocker]);
-      expect(checks).toHaveLength(1);
-      expect(checks[0]).toMatchObject({
-        issueKey: `submission-${fixTarget}`, fixTarget,
+      const [check] = unmet([blocker]);
+      expect(check).toMatchObject({
+        key, issueKey: `submission-${fixTarget}`, fixTarget,
         detail: blocker.detail, readOnlyDetail: blocker.fact,
-        affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+        copy: { detail: blocker.fact, instruction: blocker.instruction },
+        affectedRecords: [{ ...blocker.record, missing: [blocker.fact] }],
       });
-      expect(checks[0].copy).toBeUndefined();
     }
     const checks = unmet(blockers);
     expect(checks).toHaveLength(1);
-    expect(checks[0].copy).toBeUndefined();
-    expect(checks[0].detail).toBe(blockers.map((blocker) => blocker.detail).join(" · "));
-    expect(checks[0].readOnlyDetail).toBe(blockers.map((blocker) => blocker.fact).join(" · "));
+    expect(checks[0]).toMatchObject({
+      key, issueKey: `submission-${fixTarget}`, fixTarget,
+      copy: { detail: fact, instruction: blockers[0].instruction },
+      detail: `${fact} ${blockers[0].instruction}`, readOnlyDetail: fact,
+    });
     expect(checks[0].affectedRecords).toEqual(blockers.map((blocker) => ({
-      ...blocker.record, missing: [blocker.detail],
+      ...blocker.record, missing: [blocker.fact],
     })));
+    const link = new URL(batchHealthFixLinkFor(checks[0], "facility", "batch").href, "https://noma.test");
+    expect(link.pathname).toBe(fixTarget === "feedstocks" ? "/feedstock-intake" : "/orders");
+    expect(link.searchParams.get("ids")).toBe("one,two");
+    // Grouping changes the to-do projection only, never the original blockers.
+    expect(blockers[0].detail).toContain(blockers[0].fact);
+    expect(blockers[0].detail).toContain(blockers[0].instruction);
   });
 
-  it("keeps first-seen groups and separates the same kind at different targets", () => {
+  it("keeps feedstock, order and delivery-distance groups separate despite shared check keys", () => {
+    const blockers: SubmissionLineageBlocker[] = ["one", "two"].flatMap((id) => [
+      { kind: "feedstockTransport" as const, fixTarget: "feedstocks" as const, message: feedstockTransportMessage(`Feedstock FS-${id}`) },
+      { kind: "deliveryDistance" as const, fixTarget: "deliveryDistances" as const, message: deliveryDistanceMessage(`DL-${id}`) },
+      { kind: "applicationDestination" as const, fixTarget: "orders" as const, message: applicationDestinationMessage(`AP-${id}`) },
+    ].map(({ kind, fixTarget, message }) => ({
+      kind, fixTarget, fact: message.fact, detail: message.message, instruction: message.instruction!,
+      record: { id: `${fixTarget}-${id}`, code: id },
+    })));
+    const checks = unmet(blockers);
+    expect(checks).toHaveLength(3);
+    expect(checks.map(({ key, fixTarget }) => ({ key, fixTarget }))).toEqual([
+      { key: "transport", fixTarget: "feedstocks" },
+      { key: "entityReadiness", fixTarget: "deliveryDistances" },
+      { key: "entityReadiness", fixTarget: "orders" },
+    ]);
+    for (const check of checks) {
+      expect(check.issueKey).toBe(`submission-${check.fixTarget}`);
+      expect(check.affectedRecords?.map((record) => record.id))
+        .toEqual([`${check.fixTarget}-one`, `${check.fixTarget}-two`]);
+      expect(check.readOnlyDetail).toBe(check.copy?.detail);
+      expect(check.readOnlyDetail).not.toContain(check.copy!.instruction);
+    }
+  });
+
+  it("counts only order destinations and keeps delivery fallback facts per record", () => {
     const blockers: SubmissionLineageBlocker[] = ["orders", "deliveries", "orders"].map((fixTarget, index) => {
       const message = applicationDestinationMessage(`AP-${index}`);
       return {
@@ -149,15 +181,66 @@ describe("submission blocker groups", () => {
     });
     const checks = unmet(blockers);
     expect(checks).toHaveLength(2);
-    expect(checks.map((check) => check.fixTarget)).toEqual(["orders", "deliveries"]);
+    expect(checks.map((check) => check.fixTarget)).toEqual(["deliveries", "orders"]);
     expect(checks.map((check) => check.issueKey)).toEqual([
-      "submission-orders+submission-orders", "submission-deliveries",
+      "submission-deliveries", "submission-orders",
     ]);
     expect(checks.map((check) => check.detail)).toEqual([
-      `${blockers[0].detail} · ${blockers[2].detail}`, blockers[1].detail,
+      blockers[1].detail, `2 applications have no customer location. ${blockers[0].instruction}`,
     ]);
-    expect(checks.map((check) => check.copy)).toEqual([undefined, undefined]);
+    expect(checks[0].copy).toBeUndefined();
+    expect(isCountedSubmissionBlocker(blockers[1])).toBe(false);
+    expect(checks[0].readOnlyDetail).toBe(blockers[1].fact);
+    expect(checks[1].copy).toEqual({ detail: "2 applications have no customer location.", instruction: blockers[0].instruction });
     expect(checks.map((check) => check.affectedRecords?.map((record) => record.id)))
-      .toEqual([["record-0", "record-2"], ["record-1"]]);
+      .toEqual([["record-1"], ["record-0", "record-2"]]);
   });
+
+  it("counts applications sharing an order while linking to that order once", () => {
+    const applications = lineages.slice(0, 2).map((lineage) => ({
+      ...lineage,
+      delivery: { ...lineage.delivery, proofOfDeliveryCount: 1, customerLocationId: null },
+      order: { id: "order-1", code: "OR-1" },
+    } as ChainOfCustodyData));
+    const blockers = buildSubmissionLineageBlockers(applications, [], {}, []);
+    const [check] = unmet(blockers);
+    expect(blockers).toHaveLength(2);
+    expect(check).toMatchObject({
+      fixTarget: "orders", readOnlyDetail: "2 applications have no customer location.",
+      affectedRecords: [{ id: "order-1", code: "OR-1", missing: blockers.map((blocker) => blocker.fact) }],
+    });
+    expect(batchHealthFixLinkFor(check, "facility").href).toBe("/orders?facility=facility&ids=order-1");
+    expect(blockers.map((blocker) => blocker.fact)).toEqual([
+      "Application AP-0 has no customer location.", "Application AP-1 has no customer location.",
+    ]);
+  });
+
+  it("leaves delivery fallback blockers uncounted with every original record's copy", () => {
+    const applications = lineages.slice(0, 2).map((lineage) => ({
+      ...lineage,
+      delivery: { ...lineage.delivery, proofOfDeliveryCount: 1, customerLocationId: null },
+    }));
+    const blockers = buildSubmissionLineageBlockers(applications, [], {}, []);
+    expect(blockers).toHaveLength(2);
+    for (const blocker of blockers) {
+      expect(blocker.fixTarget).toBe("deliveries");
+      expect(isCountedSubmissionBlocker(blocker)).toBe(false);
+      const checks = unmet([blocker]);
+      expect(checks).toHaveLength(1);
+      expect(checks[0]).toMatchObject({
+        fixTarget: "deliveries", detail: blocker.detail, readOnlyDetail: blocker.fact,
+        affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+      });
+      expect(checks[0].copy).toBeUndefined();
+    }
+    // Preserve the existing destination merge, without replacing the coded facts with a count.
+    const [merged] = unmet(blockers);
+    expect(merged.detail).toBe(blockers.map((blocker) => blocker.detail).join(" · "));
+    expect(merged.readOnlyDetail).toBe(blockers.map((blocker) => blocker.fact).join(" · "));
+    expect(merged.affectedRecords).toEqual(blockers.map((blocker) => ({
+      ...blocker.record, missing: [blocker.detail],
+    })));
+    expect(merged.copy).toBeUndefined();
+  });
+
 });

@@ -38,3 +38,29 @@ it.each(["deliveries", "deliveryEvidence", "deliveryDistances"] as const)("scope
   expect(params.get("facility")).toBe("facility");
   expect(params.get("creditBatch")).toBe("batch");
 });
+
+
+it("filters multiple feedstocks exactly and preserves the single-record edit link", () => {
+  const affectedRecords = records.map(({ id, code, missing }) => ({ id, code, missing }));
+  const check = { key: "transport" as const, fixTarget: "feedstocks" as const, affectedRecords };
+  expect(batchHealthFixLinkFor(check, "facility", "batch")).toEqual({
+    label: "Review feedstock transport", href: "/feedstock-intake?facility=facility&ids=one%2Ctwo",
+  });
+  expect(batchHealthFixLinkFor({ ...check, affectedRecords: affectedRecords.slice(0, 1) }, "facility").href)
+    .toBe("/feedstock-intake?facility=facility&feedstock=one&mode=edit&focus=transport-evidence");
+  expect(batchHealthFixLinkFor({ ...check, affectedRecords: [] }, "facility").href)
+    .toBe("/feedstock-intake?facility=facility");
+});
+
+it("keeps the feedstock location shortcut when every affected record shares it", () => {
+  expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "feedstocks", affectedRecords: records }, "facility"))
+    .toEqual({ label: "Edit location distances", href: records[0].href });
+  expect(batchHealthFixLinkFor({ key: "transport", fixTarget: "feedstocks",
+    affectedRecords: [records[0], { ...records[1], href: undefined }] }, "facility").href)
+    .toBe("/feedstock-intake?facility=facility&ids=one%2Ctwo");
+});
+
+it.each([1, 2])("includes exactly the %i affected order ids", (count) => {
+  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "orders", affectedRecords: records.slice(0, count) }, "facility", "batch"))
+    .toEqual({ label: "Review orders", href: `/orders?facility=facility&ids=${count === 1 ? "one" : "one%2Ctwo"}` });
+});

@@ -55,14 +55,17 @@ describe("read-only batch health facts", () => {
     expect(check.readOnlyDetail).toBe(fact);
     const editable = buildCreditBatchOpenItems({ ...pageContext, health });
     const id = `health:${check.key}:${check.issueKey ?? check.fixTarget}`;
-    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
-    if (target === "feedstocks") expect(editable.blocking.find((item) => item.id === id)?.instruction).toBeUndefined();
+    const editableItem = editable.blocking.find((item) => item.id === id)!;
+    expect(openItemText(editableItem)).toBe(detail);
+    if (target === "feedstocks") {
+      expect(editableItem.detail).toBe(fact);
+      expect(editableItem.instruction).toBe("Record a positive distance and load mass before submitting.");
+    }
     const item = readOnlyOpenItems({ ...editable, waiting: [] }).blocking.find((item) => item.id === id)!;
     expect(item.detail).toBe(fact);
     expect(item.instruction).toBeUndefined();
     expect(item.target).toEqual(target === "labSamples" ? { tab: "samples" } : null);
-    expect(editable.blocking.find((item) => item.id === id)?.detail).toBe(detail);
-    if (target === "feedstocks") expect(editable.blocking.find((item) => item.id === id)?.instruction).toBeUndefined();
+    expect(openItemText(editableItem)).toBe(detail);
   });
 
   it("joins multiple producer facts like merged check text, each once", () => {
@@ -87,7 +90,7 @@ describe("read-only batch health facts", () => {
     });
   });
 
-  it("merges lineage facts for one destination without their repair steps", () => {
+  it("counts application destination facts without their repair steps", () => {
     const first = applicationDestinationMessage("AP-1");
     const second = applicationDestinationMessage("AP-2");
     const health = deriveBatchHealth({ ...healthy, submissionLineageBlockers: [
@@ -98,9 +101,9 @@ describe("read-only batch health facts", () => {
     expect(unmet).toHaveLength(1);
     const [check] = unmet;
     expect(check.fixTarget).toBe("orders");
-    expect(check.issueKey).toBe("submission-orders+submission-orders");
-    expect(check.detail).toBe(`${first.message} · ${second.message}`);
-    expect(check.readOnlyDetail).toBe(`${first.fact} · ${second.fact}`);
+    expect(check.issueKey).toBe("submission-orders");
+    expect(check.detail).toBe(`2 applications have no customer location. ${first.instruction}`);
+    expect(check.readOnlyDetail).toBe("2 applications have no customer location.");
     const [item] = readOnlyOpenItems({ ...buildCreditBatchOpenItems({ ...pageContext, health }), waiting: [] }).blocking;
     expect(item.detail).toBe(check.readOnlyDetail);
   });

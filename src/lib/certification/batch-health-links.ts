@@ -152,9 +152,9 @@ export function batchHealthFixLinkFor(
       const feedstockId = affectedIds[0];
       return {
         label: "Review feedstock transport",
-        href: feedstockId
+        href: affectedCount === 1
           ? recordHref("feedstock", feedstockId, { facilityId, mode: "edit", focus: ENTITY_FOCUS_TARGETS.transportEvidence })
-          : `/feedstock-intake?facility=${facilityId}`,
+          : `/feedstock-intake?${query()}`,
       };
     }
     case "feedstockTypes": {
@@ -167,7 +167,7 @@ export function batchHealthFixLinkFor(
     case "orders":
       return {
         label: "Review orders",
-        href: `/orders?${query(undefined, false)}`,
+        href: `/orders?${query()}`,
       };
     case "deliveryEvidence":
       if (affectedCount === 1) return {

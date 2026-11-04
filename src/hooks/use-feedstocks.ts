@@ -6,7 +6,8 @@ import { invalidateRecordedTransport } from "./transport-distance-query-keys";
  */
 
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MAX_FEEDSTOCK_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/feedstocks";
 import type {
   FeedstockFilterData,
   FeedstockStatsFilterData,
@@ -59,12 +60,42 @@ export function useFeedstocks(
   filters?: Partial<FeedstockFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: feedstockKeys.list(filters),
-    queryFn: async () => unwrap(await getFeedstocksFn(filters)),
-    staleTime: 30000,
-    enabled: options?.enabled,
+  const exactIds = filters?.ids ?? [];
+  const requests = exactIds.length > 0
+    ? Array.from(
+        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
+        (_, index) => {
+          const ids = exactIds.slice(
+            index * EXACT_ID_CHUNK_SIZE,
+            (index + 1) * EXACT_ID_CHUNK_SIZE,
+          );
+          return { ...filters, ids, page: 1, pageSize: ids.length };
+        },
+      )
+    : [filters];
+  const results = useQueries({
+    queries: requests.map((request) => ({
+      queryKey: feedstockKeys.list(request),
+      queryFn: async () => unwrap(await getFeedstocksFn(request)),
+      staleTime: 30000,
+      enabled: options?.enabled,
+    })),
   });
+
+  const items = results.flatMap((result) => result.data?.items ?? []);
+  return {
+    data: exactIds.length > 0
+      ? {
+          items,
+          total: items.length,
+          page: 1,
+          pageSize: Math.max(items.length, 1),
+          totalPages: items.length > 0 ? 1 : 0,
+        }
+      : results[0]?.data,
+    isLoading: results.some((result) => result.isLoading),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 export function useFeedstock(feedstockId: string, enabled = true) {

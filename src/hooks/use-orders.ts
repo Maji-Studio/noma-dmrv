@@ -7,8 +7,9 @@ import { patchListCachesWithSavedRow } from "./list-cache-utils";
  * Client-side state management for order operations
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Order } from "@/db/schema";
+import { MAX_ORDER_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/orders";
 import type {
   OrderFilterData,
   CreateOrderData,
@@ -73,12 +74,42 @@ export function useOrders(
   filters?: Partial<OrderFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: orderKeys.list(filters),
-    queryFn: async () => unwrap(await getOrdersFn(filters)),
-    staleTime: 30000, // 30 seconds
-    enabled: options?.enabled,
+  const exactIds = filters?.ids ?? [];
+  const requests = exactIds.length > 0
+    ? Array.from(
+        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
+        (_, index) => {
+          const ids = exactIds.slice(
+            index * EXACT_ID_CHUNK_SIZE,
+            (index + 1) * EXACT_ID_CHUNK_SIZE,
+          );
+          return { ...filters, ids, page: 1, pageSize: ids.length };
+        },
+      )
+    : [filters];
+  const results = useQueries({
+    queries: requests.map((request) => ({
+      queryKey: orderKeys.list(request),
+      queryFn: async () => unwrap(await getOrdersFn(request)),
+      staleTime: 30000,
+      enabled: options?.enabled,
+    })),
   });
+
+  const items = results.flatMap((result) => result.data?.items ?? []);
+  return {
+    data: exactIds.length > 0
+      ? {
+          items,
+          total: items.length,
+          page: 1,
+          pageSize: Math.max(items.length, 1),
+          totalPages: items.length > 0 ? 1 : 0,
+        }
+      : results[0]?.data,
+    isLoading: results.some((result) => result.isLoading),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 /**
