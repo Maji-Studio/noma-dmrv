@@ -40,6 +40,7 @@ import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
 import { selectActiveOrganizationId } from "@/lib/auth/organization-selection";
 import { logger } from "@/lib/log";
+import { authRateLimitEnabled } from "./rate-limit-policy";
 
 /**
  * Build the list of origins Better Auth accepts on auth requests.
@@ -229,7 +230,7 @@ export const auth = betterAuth({
     },
   },
   rateLimit: {
-    enabled: process.env.DISABLE_RATE_LIMIT !== "true",
+    enabled: authRateLimitEnabled(env.NODE_ENV, env.NEXT_PUBLIC_APP_URL),
     window: 60,
     max: 100,
     customRules: {

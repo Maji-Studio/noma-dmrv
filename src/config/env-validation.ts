@@ -7,7 +7,7 @@ const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOCAL_APP_PROTOCOLS = new Set(["http:", "https:"]);
 const HERMETIC_CI_MARKER = "true";
 
-function isLocalAppUrl(value: string): boolean {
+export function isLocalAppUrl(value: string): boolean {
   try {
     const url = new URL(value);
     if (!LOCAL_APP_PROTOCOLS.has(url.protocol)) return false;

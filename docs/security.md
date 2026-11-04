@@ -233,11 +233,11 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   telemetry with the compute region. `VERCEL` also controls whether
   `src/lib/api/client-ip.ts:clientIpBucketKey` trusts forwarded IP headers.
   Absent locally; never set by hand.
-- `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
-  `process.env.DISABLE_RATE_LIMIT !== "true"` read
-  (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
-  the literal string `"true"` disables them; E2E fixtures depend on that exact
-  literal ([testing.md](./testing.md)). API guards reuse this flag but ignore it
+- `DISABLE_RATE_LIMIT` — only the literal string `"true"` disables auth rate
+  limits in development/test, or in a CI production build that serves a loopback origin
+  (`src/lib/auth/rate-limit-policy.ts`). Production deployments always keep
+  auth limits on. A typo fails safe; E2E fixtures depend on that exact literal
+  ([testing.md](./testing.md)). API guards reuse this flag but ignore it
   in production. Their PostgreSQL token buckets charge pre-auth IPs (hashed,
   never stored raw), credentials and organizations before business transactions,
   including failures and dry runs. Forwarded IP headers are trusted only on Vercel.
