@@ -2,8 +2,8 @@
  * The credit batch's Removal template, read-only, in its view sheet. Removals of
  * the batch compile against it, so a batch with no template (or one Isometric
  * no longer lists) cannot be submitted until an Admin sets the facility's
- * Removal template in Settings. Nothing is changed here: the template reads as
- * a plain Batch details row, and only the notices below it link to Settings.
+ * Removal template in Settings. Nothing is changed here, and there is no link
+ * to Settings: the template reads as a plain Batch details row (#1424).
  *
  * Readiness blockers deep-link to this block (`?focus=removal-template`), and
  * the shared focus target scrolls to it. The block says why the operator landed
@@ -26,14 +26,12 @@ import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hoo
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { DECIDE_LINES_LINK_LABEL, SET_TEMPLATE_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
+import { DECIDE_LINES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { linesDecidedByAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { DetailRow } from "./credit-batch-page-parts";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
-
-const NOTICE_LINK_CLASS = "inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline";
 
 export interface CreditBatchRemovalTemplateProps {
   creditBatch: Pick<CreditBatchWithRelations, "id" | "code" | "facilityId" | "version" | "removalTemplateId">;
@@ -90,14 +88,6 @@ function useRemovalTemplateName(snapshot: Pick<CreditBatchWithRelations, "id" | 
   return { batch, pinnedId, summary, pinned, pinnedMissing, namePending, reason, value: pinned?.display_name ?? reason };
 }
 
-/** An Admin's way to Settings from a notice about an unset or vanished template. */
-function SetTemplateLink({ facilityId }: { facilityId: string }) {
-  return (
-    <Link href={removalTemplateSetupHref(facilityId)} className={NOTICE_LINK_CLASS}>
-      {SET_TEMPLATE_LINK_LABEL}
-    </Link>
-  );
-}
 
 export function CreditBatchRemovalTemplate({
   creditBatch: snapshot,
@@ -142,7 +132,7 @@ export function CreditBatchRemovalTemplate({
       )}
 
       {pinnedMissing && (
-        <Notice tone="warning" action={canManage && !readOnly ? <SetTemplateLink facilityId={batch.facilityId} /> : undefined}>
+        <Notice tone="warning">
           {readOnly
             ? "Template no longer exists in Isometric."
             : canManage
@@ -151,7 +141,7 @@ export function CreditBatchRemovalTemplate({
         </Notice>
       )}
       {!pinnedId && (
-        <Notice tone="warning" action={canManage && !readOnly ? <SetTemplateLink facilityId={batch.facilityId} /> : undefined}>
+        <Notice tone="warning">
           {readOnly
             ? "This credit batch has no Removal template."
             : canManage
@@ -165,7 +155,7 @@ export function CreditBatchRemovalTemplate({
           action={canManage && pinIsFacilityTemplate ? (
             <Link
               href={removalTemplateSetupHref(batch.facilityId, { templateId: pinnedId, step: "check" })}
-              className={NOTICE_LINK_CLASS}
+              className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
             >
               {DECIDE_LINES_LINK_LABEL}
             </Link>

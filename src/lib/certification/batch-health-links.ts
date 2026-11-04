@@ -9,7 +9,7 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL, SET_TEMPLATE_LINK_LABEL } from "./links";
+import { facilityCertificationSettingsHref, removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "./links";
 
 export const BATCH_DETAILS_FIX_LABEL = "Edit details";
 
@@ -93,7 +93,7 @@ export function batchHealthFixLinkFor(
       return { label: "Review Removal templates", href: removalTemplatesSettingsHref(facilityId) };
     case "templateSetup":
     case "templateReplacement":
-      return { label: SET_TEMPLATE_LINK_LABEL, href: removalTemplateSetupHref(facilityId) };
+      return { label: "Set template", href: removalTemplateSetupHref(facilityId) };
     case "templateLines":
       return { label: OPEN_REMOVAL_TEMPLATES_LINK_LABEL, href: removalTemplatesSettingsHref(facilityId) };
     case "templateLineReview":

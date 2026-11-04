@@ -15,8 +15,6 @@ import {
 export const OPEN_REMOVAL_TEMPLATES_LINK_LABEL = "Open Removal templates";
 /** The link text for template components without a saved decision. */
 export const DECIDE_LINES_LINK_LABEL = "Answer in Settings";
-/** The link text to Settings for a credit batch with no usable Removal template. */
-export const SET_TEMPLATE_LINK_LABEL = "Set template";
 
 /** Narrows the Removal templates pane to one template, even one not yet in use. */
 export const REMOVAL_TEMPLATES_TEMPLATE_PARAM = "template";

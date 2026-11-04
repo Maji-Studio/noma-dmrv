@@ -382,11 +382,9 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       }));
 }
 
+/** deliveryEvidence and deliveryDistances resolve to themselves (default): their to-dos link to their own filtered lists, so they keep their own rows. */
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
-    // Proof and distance to-dos link to their own filtered lists, so they keep their own rows.
-    case "deliveries":
-      return "deliveries";
     case "productionRuns":
     case "sourceData":
       return "productionRuns";
@@ -446,7 +444,6 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
-      fixTarget: existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??

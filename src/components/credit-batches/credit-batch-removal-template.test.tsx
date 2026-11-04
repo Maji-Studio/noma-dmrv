@@ -88,10 +88,10 @@ describe("CreditBatchRemovalTemplate", () => {
     );
     const reason = screen.getByText(NOT_FOUND_ON_ISOMETRIC);
     expect(reason.hasAttribute("data-empty")).toBe(true);
-    expect(screen.getByRole("link", { name: "Set template" })).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("links Admins to Settings from an unset template's notice, and no one else", () => {
+  it("shows an unset template as Not set with its notice and no link to Settings", () => {
     mocks.pin = null;
     render(
       <CreditBatchRemovalTemplate
@@ -103,13 +103,7 @@ describe("CreditBatchRemovalTemplate", () => {
     );
     expect(screen.getByText("Not set").hasAttribute("data-empty")).toBe(true);
     expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toContain("/settings/removal-templates");
-    cleanup();
-    mount(false);
-    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
-    cleanup();
-    mount(true, undefined, false, true);
-    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
   it("says an unset batch has no template and who can set one", () => {
