@@ -490,7 +490,8 @@ on a deployment.
 vars belong in `.env.test`. `.env.test` is untracked; a worktree made with
 `scripts/worktree.sh` gets both files (see [Worktrees](#worktrees)).
 
-- `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/better-auth.ts`),
+- `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/rate-limit-policy.ts`;
+  a production build honours it only in CI on a loopback origin),
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
   workflow env. See [security.md](./security.md).
 - `GEO_PROVIDER=stub` is an **app-server** var too (read via `src/config/env.ts` by
