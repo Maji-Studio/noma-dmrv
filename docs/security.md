@@ -98,22 +98,15 @@ sync). The app refuses to boot on an invalid or missing required var.
 Non-obvious semantics only:
 
 - **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and
-  its protected-resource discovery return 404 before admission. MCP is not ready
-  yet: it still lacks testing and concept work, so it is off on staging and
-  production until it is finished. Enable locally and in CI.
-- **`STOCK_ADJUSTMENTS_ENABLED`**: `true` or `false`, default `false`. Controls
-  lost mass, stock counts and lost mass edits/deletes; reads remain available.
-  Stock adjustments are not ready yet: they still lack testing and concept work,
-  so they are off on staging and production until they are finished. Enable
-  locally and in CI.
-- **`MULTI_BIN_RUNS_ENABLED`**: `true` or `false`, default `false`. Controls new
-  multi-bin feedstock draws; older runs may keep or reduce their saved bins.
-  Multi-bin runs are not ready yet: they still lack testing and concept work,
-  so they are off on staging and production until they are finished. Enable
-  locally and in CI.
-
-The three private switches share validation in `src/config/feature-switches.ts`.
-Accessors parse `process.env` directly and read off in browser bundles.
+  its protected-resource discovery return 404 before admission.
+- **`STOCK_ADJUSTMENTS_ENABLED`**: `true` or `false`, default `false`. When off,
+  lost mass, stock counts and lost mass edits/deletes are refused; reads remain.
+- **`MULTI_BIN_RUNS_ENABLED`**: `true` or `false`, default `false`. When off, a
+  run takes one source bin; older runs may keep or reduce their saved bins.
+- The three switches above share validation in `src/config/feature-switches.ts`,
+  read off in browser bundles, and are set `true` locally and in CI. The features
+  are not ready yet (they lack testing and concept work), so staging and
+  production leave them unset; see [open questions](./open-questions.md#unfinished-features-behind-env-switches).
 
 - **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
   builds and runtimes, including staging, except hermetic CI. Optional in

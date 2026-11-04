@@ -4,7 +4,7 @@ import { layersHoldMaterial } from "@/lib/output-stock";
 import { postedStockFixture, postMeasurement, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import {
   archiveStorageLocation,
@@ -240,6 +240,13 @@ describe("storage location archive", () => {
       expect(layersHoldMaterial(layers)).toBe(true);
 
       await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id, await masterDataVersion(fixture.ctx, "storageLocations", fixture.bin.id))).rejects.toThrow(/record a stock count of zero/i);
+      // With stock adjustments switched off, the refusal no longer points at a stock count.
+      vi.stubEnv("STOCK_ADJUSTMENTS_ENABLED", "false");
+      try {
+        await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id, await masterDataVersion(fixture.ctx, "storageLocations", fixture.bin.id))).rejects.toThrow(/^(?![\s\S]*stock count)[\s\S]*still holds material\.$/);
+      } finally {
+        vi.unstubAllEnvs();
+      }
 
       await postMeasurement(fixture, { kind: "count", storageLocationId: fixture.bin.id, wetMassKg: 0, moisturePercent: undefined });
       const cleared = await readOutputBinAllLayers(fixture.ctx, fixture.bin.id);

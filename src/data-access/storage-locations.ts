@@ -1,3 +1,4 @@
+import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { applyFeedstockMethodChange } from './feedstock-bin-method';
 import { reallocateRunsForBins } from './feedstock-run-allocations';
 import { assertProtectedChangesLocked, changesProtectedStorageLocationField, lockStorageLocationRecordsWithoutWaiting, readStorageLocationRecordLock } from './storage-location-record-lock';
@@ -670,7 +671,8 @@ export async function updateStorageLocation(
 // ============================================
 
 function archiveResidualMaterialMessage(code: string): string {
-  return `Cannot archive storage bin ${code} while it still holds material. Record a stock count of zero to clear what is left, then archive it.`;
+  const base = `Cannot archive storage bin ${code} while it still holds material.`;
+  return stockAdjustmentsEnabled() ? `${base} Record a stock count of zero to clear what is left, then archive it.` : base;
 }
 
 /**
