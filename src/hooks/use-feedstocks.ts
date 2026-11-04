@@ -1,3 +1,4 @@
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
 import { useIntentMutation } from "./use-create-intent-key";
 import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 /**
@@ -7,6 +8,7 @@ import { invalidateRecordedTransport } from "./transport-distance-query-keys";
 
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MAX_FEEDSTOCK_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/feedstocks";
 import type {
   FeedstockFilterData,
   FeedstockStatsFilterData,
@@ -59,9 +61,11 @@ export function useFeedstocks(
   filters?: Partial<FeedstockFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: feedstockKeys.list(filters),
-    queryFn: async () => unwrap(await getFeedstocksFn(filters)),
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: feedstockKeys.list,
+    fetcher: async (request) => unwrap(await getFeedstocksFn(request)),
     staleTime: 30000,
     enabled: options?.enabled,
   });

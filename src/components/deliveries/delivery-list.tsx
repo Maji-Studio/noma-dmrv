@@ -1,6 +1,7 @@
 "use client";
 
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
 import { recordHref, DELIVERY_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 /**
@@ -265,29 +266,11 @@ export function DeliveryList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const [affectedDeliveryIdsParam, setAffectedDeliveryIdsParam] =
-    useQueryState(
-      "ids",
-      parseAsString.withOptions({ shallow: true, history: "replace" }),
-    );
-  const affectedDeliveryFilter = parseExactIdFilter(
-    affectedDeliveryIdsParam,
-  );
-  const affectedDeliveryIds = affectedDeliveryFilter.ids;
-  useEffect(() => {
-    if (
-      affectedDeliveryIdsParam &&
-      affectedDeliveryFilter.normalized !== affectedDeliveryIdsParam
-    ) {
-      void setAffectedDeliveryIdsParam(
-        affectedDeliveryFilter.normalized,
-      );
-    }
-  }, [
-    affectedDeliveryFilter.normalized,
-    affectedDeliveryIdsParam,
-    setAffectedDeliveryIdsParam,
-  ]);
+  const {
+    ids: affectedDeliveryIds,
+    normalized: affectedDeliveryNormalized,
+    clear: clearAffectedDeliveryIds,
+  } = useExactIdFilterParam();
   const [focusedDeliveryId, setFocusedDeliveryId] = useQueryState(
     DELIVERY_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -315,7 +298,7 @@ export function DeliveryList() {
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   const [searchQuery, setSearchQuery] = useState("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedDeliveryFilter.normalized ?? ""}`);
+    useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedDeliveryNormalized ?? ""}`);
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // Data fetching — scope to selected facility (only query when facility is selected)
@@ -539,7 +522,7 @@ export function DeliveryList() {
   const clearFilters = () => {
     setSearchQuery("");
     setCreditBatchFilter(null);
-    setAffectedDeliveryIdsParam(null);
+    void clearAffectedDeliveryIds();
     setCurrentPage(1);
   };
 
@@ -722,12 +705,11 @@ export function DeliveryList() {
       >
         <DataTable.Toolbar>
           {affectedDeliveryIds.length > 0 && (
-            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
-              {affectedDeliveryIds.length} affected{" "}
-              {affectedDeliveryIds.length === 1
-                ? "delivery"
-                : "deliveries"}
-            </span>
+            <AffectedRecordsChip
+                count={affectedDeliveryIds.length}
+                singular="delivery"
+                plural="deliveries"
+              />
           )}
           <DataTable.Search
             placeholder="Search by delivery code..."

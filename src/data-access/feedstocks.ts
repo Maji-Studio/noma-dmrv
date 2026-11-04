@@ -308,6 +308,7 @@ export async function getFeedstocks(
 
   const {
     search,
+    ids,
     facilityId,
     supplierId,
     feedstockTypeId,
@@ -326,6 +327,8 @@ export async function getFeedstocks(
     eq(feedstocks.organizationId, ctx.organizationId),
     isNull(feedstocks.archivedAt),
   ];
+
+  if (ids?.length) conditions.push(inArray(feedstocks.id, ids));
 
   if (search) {
     const searchPattern = `%${search}%`;
