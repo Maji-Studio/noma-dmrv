@@ -1,0 +1,290 @@
+import { EventEmitter } from "events";
+import { spawn, spawnSync, type ChildProcess } from "child_process";
+import * as fs from "fs";
+import { constants, tmpdir } from "os";
+import { join } from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ENV_RUN_USAGE, parseEnvRunArgs, runEnvCommand } from "./env-run";
+import {
+  REQUIRED_DEPLOYED_VARS,
+  REQUIRED_LOCAL_VARS,
+  VAULT,
+  itemNameForEnvironment,
+  templateForEnvironment,
+} from "./env-tpl-utils";
+
+// No test can launch op or another process, including on an unexpected code path.
+vi.mock("child_process", () => ({ spawn: vi.fn(), spawnSync: vi.fn() }));
+// ESM namespaces cannot be spied on; wrap the real writer so one test can fail it.
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs")>();
+  return { ...actual, writeFileSync: vi.fn(actual.writeFileSync) };
+});
+vi.mock("os", async (importOriginal) => ({
+  ...await importOriginal<typeof import("os")>(),
+  tmpdir: vi.fn(),
+}));
+
+const PRIVATE_FILE_MODE = 0o600;
+const FILE_PERMISSION_MASK = 0o777;
+const SIGNAL_EXIT_CODE_BASE = 128;
+const COMMAND_FAILURE_CODE = 23;
+const ENVIRONMENTS = ["local", "staging", "prod"] as const;
+const OPTIONAL_TIMEOUTS = [
+  "DB_POOL_IDLE_TIMEOUT_MS",
+  "DB_POOL_CONNECTION_TIMEOUT_MS",
+  "DB_POOL_LOCK_TIMEOUT_MS",
+];
+
+describe("parseEnvRunArgs", () => {
+  it.each(ENVIRONMENTS)("parses %s and preserves command arguments verbatim", (environment) => {
+    const command = ["pnpm", "-s", "task", "--", "space here", "$(example)", ";", ""];
+    expect(parseEnvRunArgs([`--1p-env=${environment}`, "--", ...command])).toEqual({
+      environment, allowProduction: false, command,
+    });
+  });
+
+  it("accepts the production flag before the separator", () => {
+    expect(parseEnvRunArgs(["--allow-production", "--1p-env=prod", "--", "task"]))
+      .toMatchObject({ environment: "prod", allowProduction: true });
+  });
+
+  it.each([
+    [],
+    ["--1p-env=local", "task"],
+    ["--1p-env=local", "--"],
+    ["--1p-env=local", "--", ""],
+    ["--", "task"],
+    ["--1p-env=production", "--", "task"],
+    ["--1p-env=unknown", "--", "task"],
+    ["--1p-env=", "--", "task"],
+    ["--1p-env=local", "--1p-env=staging", "--", "task"],
+    ["--1p-env=local", "--unknown", "--", "task"],
+  ])("rejects invalid arguments: %j", (...args) => {
+    expect(() => parseEnvRunArgs(args)).toThrow();
+  });
+});
+
+describe("runEnvCommand", () => {
+  let testDirectory: string;
+  let child: ChildProcess;
+  let writtenFile: string | undefined;
+  let templateDuringRun: string;
+
+  function listFields(fields: Iterable<string>) {
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0, signal: null, pid: 0, output: [], stderr: "",
+      stdout: JSON.stringify({ fields: [...fields].map((label) => ({ label })) }),
+    });
+  }
+
+  function argsFor(environment: typeof ENVIRONMENTS[number]): string[] {
+    return [
+      `--1p-env=${environment}`,
+      ...(environment === "prod" ? ["--allow-production"] : []),
+      "--", "pnpm", "-s", "feedstock:recalculate", "--dry-run",
+    ];
+  }
+
+  function captureTempFile(argv: readonly string[]) {
+    writtenFile = argv[1].slice("--env-file=".length);
+    // tmpdir is mocked into the repository, so tests never read outside it.
+    templateDuringRun = fs.readFileSync(writtenFile, "utf-8");
+    expect(fs.statSync(writtenFile).mode & FILE_PERMISSION_MASK).toBe(PRIVATE_FILE_MODE);
+    expect(writtenFile.startsWith(testDirectory + "/noma-dmrv-env-run-")).toBe(true);
+  }
+
+  beforeEach(() => {
+    vi.mocked(spawn).mockReset();
+    vi.mocked(spawnSync).mockReset();
+    fs.mkdirSync(join(process.cwd(), ".cache"), { recursive: true });
+    testDirectory = fs.mkdtempSync(join(process.cwd(), ".cache", "env-run-tests-"));
+    vi.mocked(tmpdir).mockReturnValue(testDirectory);
+    child = Object.assign(new EventEmitter(), { kill: vi.fn(() => true) }) as unknown as ChildProcess;
+    writtenFile = undefined;
+    templateDuringRun = "";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    listFields(REQUIRED_DEPLOYED_VARS);
+    vi.mocked(spawn).mockImplementation((_file, argv) => {
+      captureTempFile(argv as readonly string[]);
+      queueMicrotask(() => child.emit("exit", 0, null));
+      return child;
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(testDirectory, { recursive: true, force: true });
+  });
+
+  it("prints usage and fails without reading an item for invalid arguments", async () => {
+    expect(await runEnvCommand(["--1p-env=staging", "task"])).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(ENV_RUN_USAGE);
+    expect(spawnSync).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["--1p-env=prod", "--", "task"],
+    ["--1p-env=prod", "--", "task", "--allow-production"],
+  ])("refuses production before item access: %j", async (...args) => {
+    expect(await runEnvCommand(args)).toBe(1);
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      "Production commands can change live data. Pass --allow-production to continue."
+    );
+    expect(spawnSync).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it.each(ENVIRONMENTS)("filters optional fields for %s and uses its template and item", async (environment) => {
+    const required = environment === "local" ? REQUIRED_LOCAL_VARS : REQUIRED_DEPLOYED_VARS;
+    listFields(required);
+    expect(await runEnvCommand(argsFor(environment))).toBe(0);
+    const itemName = itemNameForEnvironment(environment);
+    const expectedItemName = `noma-dmrv env ${environment === "prod" ? "production" : environment}`;
+    expect(itemName).toBe(expectedItemName);
+    expect(spawnSync).toHaveBeenCalledExactlyOnceWith(
+      "op", ["item", "get", expectedItemName, "--vault", VAULT, "--format", "json"],
+      { encoding: "utf-8" }
+    );
+    expect(templateDuringRun).toContain(`DATABASE_URL="op://${VAULT}/${itemName}/DATABASE_URL"`);
+    for (const name of OPTIONAL_TIMEOUTS) {
+      expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
+      expect(console.warn).toHaveBeenCalledWith(`        ${name}`);
+    }
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(
+      `optional variable(s) with no field in "${itemName}":`
+    ));
+    if (environment === "local") {
+      expect(templateDuringRun).toContain("# CRON_SECRET skipped");
+      expect(templateDuringRun).toContain("# ADMIN_PASSWORD skipped");
+    } else {
+      expect(templateDuringRun).toContain(`CRON_SECRET="op://${VAULT}/${itemName}/CRON_SECRET"`);
+      expect(templateDuringRun).not.toContain("ADMIN_PASSWORD");
+    }
+    expect(fs.existsSync(writtenFile!)).toBe(false);
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  const missingRequiredCases = ENVIRONMENTS.flatMap((environment) =>
+    [...(environment === "local" ? REQUIRED_LOCAL_VARS : REQUIRED_DEPLOYED_VARS)]
+      .map((field) => ({ environment, field }))
+  );
+  it.each(missingRequiredCases)("aborts on missing $field for $environment", async ({ environment, field }) => {
+    const fields = new Set(environment === "local" ? REQUIRED_LOCAL_VARS : REQUIRED_DEPLOYED_VARS);
+    fields.delete(field);
+    listFields(fields);
+    expect(await runEnvCommand(argsFor(environment))).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(
+      `Required field(s) missing from 1Password item "${itemNameForEnvironment(environment)}": ${field}`
+    ));
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it("names all missing required fields", async () => {
+    listFields([]);
+    expect(await runEnvCommand(argsFor("local"))).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining([...REQUIRED_LOCAL_VARS].join(", ")));
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("passes exact op run argv without a shell and inherits stdio", async () => {
+    const command = ["pnpm", "-s", "feedstock:recalculate", "--dry-run", "space here", "$(example)", ";"];
+    expect(await runEnvCommand(["--1p-env=staging", "--", ...command])).toBe(0);
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      "op", ["run", `--env-file=${writtenFile}`, "--", ...command], { stdio: "inherit" }
+    );
+    expect(templateDuringRun).toContain("NODE_ENV=development");
+  });
+
+  it("keeps available optional references and emits no warning for a complete item", async () => {
+    const template = fs.readFileSync(join(process.cwd(), ".env.tpl"), "utf-8");
+    const fields = [...template.matchAll(/^([A-Z_][A-Z0-9_]*)="op:\/\//gm)].map((match) => match[1]);
+    listFields(fields);
+    expect(await runEnvCommand(argsFor("prod"))).toBe(0);
+    expect(templateDuringRun).toBe(templateForEnvironment(template, "prod"));
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("fails closed if field listing fails", async () => {
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 1, signal: null, pid: 0, output: [], stderr: "approval denied", stdout: "",
+    });
+    expect(await runEnvCommand(argsFor("staging"))).toBe(1);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it("fails closed if the item response is malformed", async () => {
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0, signal: null, pid: 0, output: [], stderr: "", stdout: "not json",
+    });
+    expect(await runEnvCommand(argsFor("staging"))).toBe(1);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it.each(["exit", "error", "throw"])("cleans up on child %s and preserves failure status", async (failure) => {
+    vi.mocked(spawn).mockImplementation((_file, argv) => {
+      captureTempFile(argv as readonly string[]);
+      if (failure === "throw") throw new Error("mock launch failure");
+      queueMicrotask(() => failure === "exit"
+        ? child.emit("exit", COMMAND_FAILURE_CODE, null)
+        : child.emit("error", new Error("mock launch failure")));
+      return child;
+    });
+    expect(await runEnvCommand(argsFor("staging"))).toBe(failure === "exit" ? COMMAND_FAILURE_CODE : 1);
+    expect(fs.existsSync(writtenFile!)).toBe(false);
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it("cleans up if writing the template fails", async () => {
+    vi.mocked(fs.writeFileSync).mockImplementationOnce(() => { throw new Error("mock disk failure"); });
+    expect(await runEnvCommand(argsFor("staging"))).toBe(1);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it.each(["SIGINT", "SIGTERM"] as const)("cleans up and forwards %s on interruption", async (signal) => {
+    const once = vi.spyOn(process, "once");
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("mock process exit"); });
+    vi.mocked(spawn).mockImplementation((_file, argv) => {
+      captureTempFile(argv as readonly string[]);
+      return child;
+    });
+    const running = runEnvCommand(argsFor("staging"));
+    const handler = once.mock.calls.find(([event]) => event === signal)![1];
+    expect(() => handler()).toThrow("mock process exit");
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(exit).toHaveBeenCalledExactlyOnceWith(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
+    expect(fs.existsSync(writtenFile!)).toBe(false);
+    child.emit("exit", null, signal);
+    expect(await running).toBe(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
+    expect(process.listeners(signal)).not.toContain(handler);
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it("cleans up on process exit and removes its lifecycle listeners after completion", async () => {
+    const once = vi.spyOn(process, "once");
+    vi.mocked(spawn).mockImplementation((_file, argv) => {
+      captureTempFile(argv as readonly string[]);
+      return child;
+    });
+    const running = runEnvCommand(argsFor("staging"));
+    const exitHandler = once.mock.calls.find(([event]) => event === "exit")![1];
+    exitHandler();
+    expect(fs.existsSync(writtenFile!)).toBe(false);
+    child.emit("exit", 0, null);
+    expect(await running).toBe(0);
+    for (const [event, handler] of once.mock.calls) {
+      if (event === "exit") {
+        expect(process.listeners("exit")).not.toContain(handler);
+      } else if (event === "SIGINT" || event === "SIGTERM") {
+        expect(process.listeners(event)).not.toContain(handler);
+      }
+    }
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+});

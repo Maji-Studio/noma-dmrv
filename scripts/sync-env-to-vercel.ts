@@ -29,12 +29,15 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { pathToFileURL } from "url";
 import {
+  ITEM_PREFIX,
   REQUIRED_DEPLOYED_VARS,
   fetchItemFieldNames,
   filterTemplateToItem,
+  itemEnvironment,
+  itemNameForEnvironment,
+  templateForEnvironment,
+  warnSkippedOptionalVars,
 } from "./env-tpl-utils";
-
-const ITEM_PREFIX = "noma-dmrv env";
 
 // CLI flags
 interface CliFlags {
@@ -95,7 +98,7 @@ function parseFlags(): CliFlags {
     process.exit(1);
   }
 
-  const normalizedOpEnv = opEnv === "prod" ? "production" : opEnv;
+  const normalizedOpEnv = itemEnvironment(opEnv);
   const expectedOpEnv = vercelEnv === "preview" ? "staging" : "production";
   if (normalizedOpEnv !== expectedOpEnv) {
     console.error(
@@ -179,8 +182,8 @@ function checkVercelProject(): void {
 }
 
 function fetchFromOnePassword(opEnv: string): Map<string, string> {
-  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
-  const itemName = `${ITEM_PREFIX} ${itemSuffix}`;
+  const itemSuffix = itemEnvironment(opEnv);
+  const itemName = itemNameForEnvironment(opEnv);
   console.log(`\nFetching from 1Password (${itemName})...`);
 
   const templatePath = join(process.cwd(), ".env.tpl");
@@ -194,13 +197,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
   }
 
   // Replace any checked-in item environment with the requested one.
-  const modifiedTemplate = template.replace(
-    new RegExp(
-      `${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`,
-      "g"
-    ),
-    itemName
-  );
+  const modifiedTemplate = templateForEnvironment(template, opEnv);
 
   if (!modifiedTemplate.trim()) {
     console.error("Template is empty after modification");
@@ -226,12 +223,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
       console.error("Add them to the item before syncing to Vercel.");
       process.exit(1);
     }
-    if (skipped.length > 0) {
-      console.warn(
-        `  ⚠️  Skipping ${skipped.length} optional variable(s) with no field in "${itemName}":`
-      );
-      for (const name of skipped) console.warn(`        ${name}`);
-    }
+    warnSkippedOptionalVars(skipped, itemName);
     injectTemplate = filtered;
   } catch (error) {
     console.warn(
@@ -323,7 +315,7 @@ function warnUntrackedOnePasswordVars(
   opEnv: string,
   syncedNames: Set<string>
 ): void {
-  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
+  const itemSuffix = itemEnvironment(opEnv);
   let itemFields: Set<string>;
   try {
     itemFields = fetchItemFieldNames(itemSuffix);
@@ -574,7 +566,7 @@ async function main() {
 
   const flags = parseFlags();
 
-  const itemSuffix = flags.opEnv === "prod" ? "production" : flags.opEnv;
+  const itemSuffix = itemEnvironment(flags.opEnv);
   console.log("Configuration:");
   console.log(`  1Password item: ${ITEM_PREFIX} ${itemSuffix}`);
   console.log(`  Vercel environment: ${flags.vercelEnv}`);
