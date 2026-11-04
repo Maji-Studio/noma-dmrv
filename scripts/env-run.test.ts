@@ -33,6 +33,7 @@ const PRIVATE_FILE_MODE = 0o600;
 const FILE_PERMISSION_MASK = 0o777;
 const SIGNAL_EXIT_CODE_BASE = 128;
 const COMMAND_FAILURE_CODE = 23;
+const LONG_FIXTURE_VALUE_LENGTH = 5000;
 const ENVIRONMENTS = ["local", "staging", "prod"] as const;
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 const OPTIONAL_TIMEOUTS = [
@@ -72,6 +73,7 @@ describe("parseEnvRunArgs", () => {
 
 describe("runEnvCommand", () => {
   let testDirectory: string;
+  let fixtureDirectory: string;
   let child: ChildProcess;
   let writtenFile: string | undefined;
   let templateDuringRun: string;
@@ -104,6 +106,11 @@ describe("runEnvCommand", () => {
     vi.mocked(spawnSync).mockReset();
     fs.mkdirSync(join(process.cwd(), ".cache"), { recursive: true });
     testDirectory = fs.mkdtempSync(join(process.cwd(), ".cache", "env-run-tests-"));
+    fixtureDirectory = fs.mkdtempSync(join(process.cwd(), ".cache", "env-run-fixtures-"));
+    for (const templateFile of [".env.tpl", ".env.local.tpl"]) {
+      fs.copyFileSync(join(process.cwd(), templateFile), join(fixtureDirectory, templateFile));
+    }
+    vi.spyOn(process, "cwd").mockReturnValue(fixtureDirectory);
     vi.mocked(tmpdir).mockReturnValue(testDirectory);
     child = Object.assign(new EventEmitter(), { kill: vi.fn(() => true) }) as unknown as ChildProcess;
     writtenFile = undefined;
@@ -121,6 +128,8 @@ describe("runEnvCommand", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     fs.rmSync(testDirectory, { recursive: true, force: true });
+    fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
   it("prints usage and fails without reading an item for invalid arguments", async () => {
@@ -160,14 +169,15 @@ describe("runEnvCommand", () => {
       environment === "local" ? undefined : environment === "prod" ? "production" : "development"
     );
     for (const name of OPTIONAL_TIMEOUTS) {
-      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
+      expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
       expect(console.warn).toHaveBeenCalledWith(`        ${name}`);
     }
-    for (const [, name] of templateDuringRun.matchAll(/^# ([A-Z_][A-Z0-9_]*) skipped /gm)) {
-      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
+    const skippedNames = [...templateDuringRun.matchAll(/^# ([A-Z_][A-Z0-9_]*) skipped /gm)].map(([, name]) => name);
+    for (const name of skippedNames) {
+      expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
     }
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(
-      `optional variable(s) with no field in "${itemName}":`
+      `Skipping ${skippedNames.length} optional variable(s) with no field in "${itemName}":`
     ));
     if (environment === "local") {
       expect(templateDuringRun).toContain("# CRON_SECRET skipped");
@@ -248,9 +258,77 @@ describe("runEnvCommand", () => {
     }
     expect(childEnv.ENV_RUN_TEST_INHERITED).toBe("mock-unrelated-value");
     if (environment === "local") expect(childEnv.NODE_ENV).toBe("mock-parent-value");
-    for (const name of ["ISOMETRIC_CLIENT_SECRET", "ISOMETRIC_ACCESS_TOKEN"]) {
-      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
+    for (const name of ["ADMIN_EMAIL", "ISOMETRIC_ENVIRONMENT", "ISOMETRIC_CLIENT_SECRET", "ISOMETRIC_ACCESS_TOKEN"]) {
+      expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
     }
+  });
+
+  it.each(["staging", "prod"] as const)("warns before %s runs about local fallback names without values", async (environment) => {
+    const fixtureValue = "env-run-fixture-value-must-stay-private";
+    const fallbackNames = ["ADMIN_EMAIL", "ADMIN_PASSWORD", "GEO_PROVIDER", "ISOMETRIC_ENVIRONMENT"];
+    fs.writeFileSync(join(fixtureDirectory, ".env.local"), [
+      ...fallbackNames.map((name) => `${name}=${fixtureValue}`),
+      `DATABASE_URL=${fixtureValue}`,
+      `NODE_ENV=${fixtureValue}`,
+      `ADMIN_EMAIL=${fixtureValue}`,
+      `# COMMENTED_OUT=${fixtureValue}`,
+      `  # INDENTED_COMMENT=${fixtureValue}`,
+      `INVALID-NAME=${fixtureValue}`,
+      `NOT_AN_ASSIGNMENT ${fixtureValue}`,
+    ].join("\r\n"));
+    vi.stubEnv("ADMIN_PASSWORD", "mock-parent-value");
+
+    expect(await runEnvCommand(argsFor(environment))).toBe(0);
+    expect(console.warn).toHaveBeenLastCalledWith(
+      `Commands that load .env.local will use your local values for: ${fallbackNames.join(", ")}`
+    );
+    const warnings = vi.mocked(console.warn);
+    expect(warnings.mock.invocationCallOrder.at(-1)).toBeLessThan(vi.mocked(spawn).mock.invocationCallOrder[0]);
+    const output = JSON.stringify([...warnings.mock.calls, ...vi.mocked(console.error).mock.calls]);
+    expect(output).not.toContain(fixtureValue);
+    for (const name of ["DATABASE_URL", "NODE_ENV", "COMMENTED_OUT", "INDENTED_COMMENT", "INVALID-NAME"]) {
+      expect(warnings.mock.calls.at(-1)![0]).not.toContain(name);
+    }
+  });
+
+  it("excludes provided optional names but includes item fields outside the template", async () => {
+    listFields([...REQUIRED_DEPLOYED_VARS, "ISOMETRIC_ENVIRONMENT", "GEO_PROVIDER", "LOCAL_ONLY_VAR"]);
+    fs.writeFileSync(join(fixtureDirectory, ".env.local"), [
+      "ISOMETRIC_ENVIRONMENT=fixture-environment",
+      "GEO_PROVIDER=fixture-provider",
+      "DATABASE_URL=fixture-database",
+      "NODE_ENV=fixture-mode",
+      "  export LOCAL_ONLY_VAR =fixture-local-only",
+    ].join("\n"));
+
+    expect(await runEnvCommand(argsFor("staging"))).toBe(0);
+    expect(console.warn).toHaveBeenLastCalledWith(
+      "Commands that load .env.local will use your local values for: GEO_PROVIDER, LOCAL_ONLY_VAR"
+    );
+  });
+
+  it("does not warn about local fallback when every local name is provided", async () => {
+    fs.writeFileSync(join(fixtureDirectory, ".env.local"), "DATABASE_URL=fixture-database\nNODE_ENV=fixture-mode\n");
+    expect(await runEnvCommand(argsFor("staging"))).toBe(0);
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Commands that load .env.local"));
+  });
+
+  it("scans names across buffer boundaries without retaining long values", async () => {
+    const fixtureValue = "x".repeat(LONG_FIXTURE_VALUE_LENGTH);
+    fs.writeFileSync(join(fixtureDirectory, ".env.local"), `DATABASE_URL=${fixtureValue}\nADMIN_PASSWORD=fixture-password`);
+    expect(await runEnvCommand(argsFor("staging"))).toBe(0);
+    expect(console.warn).toHaveBeenLastCalledWith(
+      "Commands that load .env.local will use your local values for: ADMIN_PASSWORD"
+    );
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(fixtureValue);
+  });
+
+  it("does not inspect local fallback names for local runs", async () => {
+    // A directory would fail the names reader if local runs tried to inspect it.
+    fs.mkdirSync(join(fixtureDirectory, ".env.local"));
+    listFields(REQUIRED_LOCAL_VARS);
+    expect(await runEnvCommand(argsFor("local"))).toBe(0);
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Commands that load .env.local"));
   });
 
   it("fails closed if field listing fails", async () => {

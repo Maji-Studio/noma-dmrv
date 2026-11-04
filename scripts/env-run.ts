@@ -73,9 +73,24 @@ function overrideNodeEnv(template: string, nodeEnv: string | null): string {
     : `${template}${template.endsWith("\n") ? "" : "\n"}${assignment}\n`;
 }
 
-/** Empty skipped names block both inherited shell values and later dotenv loading. */
-function templateForRun(filtered: string, skipped: string[]): string {
-  return [filtered, ...skipped.map((name) => `${name}=`)].join("\n");
+/** Variable names declared in .env.local; values are never kept or printed. */
+function localEnvNames(): Set<string> {
+  let text: string;
+  try {
+    text = readFileSync(join(process.cwd(), ".env.local"), "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw new Error("Could not read variable names from .env.local.");
+  }
+  return new Set([...text.matchAll(/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/gm)].map(([, name]) => name));
+}
+
+function warnLocalEnvFallback(filtered: string): void {
+  const provided = new Set([...filtered.matchAll(/^[ \t]*([A-Z_][A-Z0-9_]*)=/gm)].map(([, name]) => name));
+  const names = [...localEnvNames()].filter((name) => name !== "NODE_ENV" && !provided.has(name)).sort();
+  if (names.length > 0) {
+    console.warn(`Commands that load .env.local will use your local values for: ${names.join(", ")}`);
+  }
 }
 
 function inheritedEnvForTemplate(template: string): NodeJS.ProcessEnv {
@@ -86,7 +101,7 @@ function inheritedEnvForTemplate(template: string): NodeJS.ProcessEnv {
   return env;
 }
 
-async function runWithTemplate(template: string, command: string[]): Promise<number> {
+async function runWithTemplate(template: string, inheritedTemplate: string, command: string[]): Promise<number> {
   const directory = mkdtempSync(join(tmpdir(), "noma-dmrv-env-run-"));
   const tempFile = join(directory, "template.tpl");
   let child: ChildProcess | undefined;
@@ -110,7 +125,7 @@ async function runWithTemplate(template: string, command: string[]): Promise<num
     return await new Promise<number>((resolve, reject) => {
       child = spawn("op", ["run", `--env-file=${tempFile}`, "--", ...command], {
         stdio: "inherit",
-        env: inheritedEnvForTemplate(template),
+        env: inheritedEnvForTemplate(inheritedTemplate),
       });
       child.once("error", () => reject(new Error("Could not start op run. Check the 1Password CLI installation.")));
       child.once("exit", (code, signal) => resolve(
@@ -147,7 +162,8 @@ export async function runEnvCommand(args: string[]): Promise<number> {
       );
     }
     warnSkippedOptionalVars(skipped, itemName);
-    return await runWithTemplate(templateForRun(filtered, skipped), command);
+    if (environment !== "local") warnLocalEnvFallback(filtered);
+    return await runWithTemplate(filtered, template, command);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     if (error instanceof UsageError) console.error(ENV_RUN_USAGE);
