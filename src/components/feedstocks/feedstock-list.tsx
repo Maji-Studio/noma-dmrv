@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { recordHref, FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
@@ -265,6 +266,25 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
+  const [affectedFeedstockIdsParam, setAffectedFeedstockIdsParam] = useQueryState(
+    "ids",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const affectedFeedstockFilter = parseExactIdFilter(affectedFeedstockIdsParam);
+  const affectedFeedstockIds = affectedFeedstockFilter.ids;
+  useEffect(() => {
+    if (
+      affectedFeedstockIdsParam &&
+      affectedFeedstockFilter.normalized !== affectedFeedstockIdsParam
+    ) {
+      void setAffectedFeedstockIdsParam(affectedFeedstockFilter.normalized);
+    }
+  }, [
+    affectedFeedstockFilter.normalized,
+    affectedFeedstockIdsParam,
+    setAffectedFeedstockIdsParam,
+  ]);
+
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: FeedstockWithRelations | null;
@@ -284,7 +304,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const [searchInput, setSearchInput] = useState("");
   const { feedstockTypeId, setFeedstockTypeId } = useFeedstockTypeFilter();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination(`${contextFacilityId ?? ""}:${feedstockTypeId}`);
+    useListPagination(
+      `${contextFacilityId ?? ""}:${feedstockTypeId}:${affectedFeedstockFilter.normalized ?? ""}`,
+    );
   const normalizedSearch = searchInput.trim();
   const debouncedSearch = useDebounce(
     normalizedSearch,
@@ -298,6 +320,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
       ...(feedstockTypeId ? { feedstockTypeId } : {}),
+      ...(affectedFeedstockIds.length > 0 ? { ids: affectedFeedstockIds } : {}),
       page: currentPage,
       pageSize,
     },
@@ -454,10 +477,13 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const clearFilters = () => {
     setSearchInput("");
     void setFeedstockTypeId(null);
+    void setAffectedFeedstockIdsParam(null);
     setCurrentPage(1);
   };
   const hasActiveFilters =
-    normalizedSearch.length > 0 || feedstockTypeId.length > 0;
+    normalizedSearch.length > 0 ||
+    feedstockTypeId.length > 0 ||
+    affectedFeedstockIds.length > 0;
   useEffect(() => {
     if (!focusedFeedstockId) return;
     if (focusedFeedstock.error || (focusedFeedstock.isSuccess && !focusedFeedstock.data)) {
@@ -696,6 +722,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
       >
         <DataTable.Toolbar>
+          {affectedFeedstockIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedFeedstockIds.length} affected{" "}
+              {affectedFeedstockIds.length === 1 ? "feedstock" : "feedstocks"}
+            </span>
+          )}
           <DataTable.Search
             placeholder="Search feedstocks..."
             aria-label="Search feedstocks"

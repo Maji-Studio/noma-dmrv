@@ -1,5 +1,6 @@
 "use client";
 
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { recordHref, ORDER_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
@@ -179,8 +180,28 @@ export function OrderList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderFulfillmentStatus | "">("");
   const [customerFilter, setCustomerFilter] = useState("");
+  const [affectedOrderIdsParam, setAffectedOrderIdsParam] = useQueryState(
+    "ids",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const affectedOrderFilter = parseExactIdFilter(affectedOrderIdsParam);
+  const affectedOrderIds = affectedOrderFilter.ids;
+  useEffect(() => {
+    if (
+      affectedOrderIdsParam &&
+      affectedOrderFilter.normalized !== affectedOrderIdsParam
+    ) {
+      void setAffectedOrderIdsParam(affectedOrderFilter.normalized);
+    }
+  }, [
+    affectedOrderFilter.normalized,
+    affectedOrderIdsParam,
+    setAffectedOrderIdsParam,
+  ]);
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination(facilityId);
+    useListPagination(
+      `${facilityId ?? ""}:${affectedOrderFilter.normalized ?? ""}`,
+    );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // `?order=<id>` deep-links the view sheet (customer and credit-batch
@@ -212,6 +233,7 @@ export function OrderList() {
     facilityId: facilityId || undefined,
     status: statusFilter || undefined,
     customerId: customerFilter || undefined,
+    ids: affectedOrderIds.length > 0 ? affectedOrderIds : undefined,
     page: currentPage,
     pageSize,
     sortBy: "orderDate",
@@ -364,9 +386,14 @@ export function OrderList() {
     setSearchQuery("");
     setStatusFilter("");
     setCustomerFilter("");
+    void setAffectedOrderIdsParam(null);
     setCurrentPage(1);
   };
-  const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
+  const hasActiveFilters =
+    !!searchQuery ||
+    !!statusFilter ||
+    !!customerFilter ||
+    affectedOrderIds.length > 0;
 
   const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
 
@@ -489,6 +516,12 @@ export function OrderList() {
         }
       >
         <DataTable.Toolbar>
+          {affectedOrderIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedOrderIds.length} affected{" "}
+              {affectedOrderIds.length === 1 ? "order" : "orders"}
+            </span>
+          )}
           <DataTable.Search
             placeholder="Search by order code..."
             aria-label="Search orders by code"
