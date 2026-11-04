@@ -28,6 +28,7 @@ import type {
   DeleteDeliveryData,
 } from "@/schemas/deliveries";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MAX_DELIVERY_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/deliveries";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 import { biocharProductKeys } from "./use-biochar-products";
@@ -38,8 +39,6 @@ import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-
-const EXACT_ID_CHUNK_SIZE = 100;
 
 // ============================================
 // Query Keys

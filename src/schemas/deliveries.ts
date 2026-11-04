@@ -31,7 +31,8 @@ import {
 } from "./helpers";
 import { deliveryDryMassSchema } from "./isometric";
 
-const MAX_DELIVERY_LIST_SIZE = 100;
+/** The most deliveries one list request returns, and the exact-id chunk size. */
+export const MAX_DELIVERY_LIST_SIZE = 100;
 
 // ============================================
 // Constants and Enums
@@ -262,7 +263,7 @@ export const deliveryFilterSchema = z.object({
   // Filter through production-run membership in a credit batch
   creditBatchId: z.string().uuid().optional(),
 
-  ids: z.array(z.uuid()).max(MAX_DELIVERY_LIST_SIZE).optional(),
+  ids: z.array(uuidSchema()).max(MAX_DELIVERY_LIST_SIZE).optional(),
 
   // Filter by status
   status: z.enum(deliveryStatuses).optional(),

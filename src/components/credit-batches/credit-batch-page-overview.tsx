@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { isCreditBatchMembershipLocked } from "./credit-batch-update-patch";
 import { useCreditBatchPage } from "./credit-batch-page-context";
 import { FOCUS_RING, FocusRow, MUTED_TEXT, DetailRow, PagePanel, ROW_RULE, StatusDot, TODO_TONE } from "./credit-batch-page-parts";
-import { CreditBatchRemovalTemplate, CreditBatchRemovalTemplateRow } from "./credit-batch-removal-template";
+import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { CreditBatchLateEntries } from "./credit-batch-late-entries";
 import { CompactRemovalBar, tonnesFromKg } from "./credit-batch-removal-bar";
 import { durabilityLabel } from "./credit-batch-view";
@@ -239,7 +239,7 @@ function LockMark({ text }: { text: string }) {
   );
 }
 
-/** Batch details: the definition, sampling, notes and the Removal template. Edit starts from the header. */
+/** Batch details: the definition, sampling, notes and the Removal template (its own `<dl>` inside its focus target). Edit starts from the header. */
 function DetailsPanel() {
   const { batch, lock, canManage, focus, linesToDecide, readOnly } = useCreditBatchPage();
   const sent = lock?.level === "sent";
@@ -258,9 +258,8 @@ function DetailsPanel() {
           <DetailRow label="End date" value={formatDate(batch.endDate)} locked={rowLock} />
           <DetailRow label="Sampling" value={batch.sampling === "unsampled" ? "Unsampled" : "Sampled"} />
           <DetailRow label="Notes" value={batch.siteManagementNotes?.trim() || null} />
-          <CreditBatchRemovalTemplateRow creditBatch={batch} />
         </dl>
-        <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} fieldShown />
+        <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} activeFocusTarget={focus} linesToDecide={linesToDecide} inRemoval={membershipLocked} readOnly={!!readOnly} asDetailRow />
       </PagePanel>
     </FocusRow>
   );

@@ -13,6 +13,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { PreviewCard } from "@base-ui/react/preview-card";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { TooltipPopup } from "@/components/ui/tooltip";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import {
   applyTooltipOpenChange,
   pressToggletip,
@@ -87,7 +88,13 @@ const TOUCH_POINTERS = new Set(["touch", "pen"]);
  * One application in the Removals bar: a link to its Removal (a plain button
  * when it is in none) that opens a tooltip on hover, keyboard focus and tap.
  * A tap on a touch screen pins the tooltip instead of following the link; the
- * key list below the bar links to the Removal. Base UI's own "trigger-press"
+ * key list below the bar links to the Removal. Enter on a focused link still
+ * follows it (a keyboard click has `detail` 0), and the touch flag is spent on
+ * the click it came with. Each segment's hit area is 44px tall (the drawn bar
+ * stays 24px); its width stays proportional, so on a phone a sliver's facts are
+ * also in the delivery list below. A segment in no Removal is a raw
+ * `<button>`: see the bar segment exception under Button in
+ * docs/design-system.md. Base UI's own "trigger-press"
  * close is ignored (see `applyTooltipOpenChange`), or a tap would open and
  * close it at once.
  */
@@ -109,7 +116,9 @@ function BarSegment({ part, removalCode, href, className, style }: { part: Remov
             {...common}
             href={href}
             onClick={(event) => {
-              if (!touched) return;
+              const tap = touched && event.detail !== 0;
+              setTouched(false);
+              if (!tap) return;
               event.preventDefault();
               setState(pressToggletip);
             }}
@@ -286,7 +295,7 @@ export function DetailedRemovalBar({ groups, facilityId }: { groups: RemovalBarG
                     part={part}
                     removalCode={group.removal?.code ?? null}
                     href={href}
-                    className={cn("block h-full border border-[var(--st-off-border)]", href && "hover:opacity-80")}
+                    className={cn("block h-full border border-[var(--st-off-border)]", INLINE_HIT_AREA, href && "hover:opacity-80")}
                     style={{ flexGrow: part.dryKg, flexBasis: 0, minWidth: MIN_PART_PX, backgroundColor: SEGMENT_FILLS[group.segment] }}
                   />
                 ))}

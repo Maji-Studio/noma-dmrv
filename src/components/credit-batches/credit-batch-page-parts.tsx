@@ -3,6 +3,7 @@
 /** Small building blocks shared by the credit batch page's header and tabs. */
 import type { ReactNode } from "react";
 import { LockSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import { DetailValueSkeleton } from "@/components/ui/detail-panel";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { useCreditBatchPage } from "./credit-batch-page-context";
@@ -116,14 +117,16 @@ export function FocusRow({ rowId, className, children, as: Tag = "div" }: { rowI
   );
 }
 
-/** One Batch details row: label left, value right; a missing value reads "Not recorded" unless `emptyText` says why. */
+/** One Batch details row: label left, value right; a missing value reads "Not recorded" unless `emptyText` says why, and a loading one shows the detail skeleton. */
 export function DetailRow({ label, value, locked, pending, emptyText = MISSING_VALUE.notRecorded }: { label: string; value: string | null; locked?: boolean; pending?: boolean; emptyText?: string }) {
   return (
     <div className={cn("grid grid-cols-[128px_minmax(0,1fr)] items-baseline gap-12 py-10", ROW_RULE)}>
       <dt className={cn("body-small", MUTED_TEXT)}>{label}</dt>
       <dd className="flex min-w-0 items-center gap-6 body-medium" aria-busy={pending || undefined}>
-        {value == null ? (
-          <span data-empty className="text-[var(--color-text-tertiary)]">{pending ? "Loading…" : emptyText}</span>
+        {value == null && pending ? (
+          <DetailValueSkeleton />
+        ) : value == null ? (
+          <span data-empty className="text-[var(--color-text-tertiary)]">{emptyText}</span>
         ) : (
           <span className="min-w-0 break-words">{value}</span>
         )}

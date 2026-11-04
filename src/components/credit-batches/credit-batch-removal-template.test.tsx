@@ -2,7 +2,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { CreditBatchRemovalTemplate, CreditBatchRemovalTemplateRow } from "./credit-batch-removal-template";
+import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
+import { NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
+import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 
 const mocks = vi.hoisted(() => ({ pin: "rvt_new" as string | null, listed: ["rvt_new"] as string[], linesToDecide: 0, facilityTemplate: "rvt_new" as string | null }));
 vi.mock("@/hooks/use-credit-batches", () => ({
@@ -55,26 +57,59 @@ describe("CreditBatchRemovalTemplate", () => {
     }
   });
 
-  it("shows the name as a Batch details row, and the notices alone when the row is shown", () => {
+  it("shows the name as a Batch details row inside the deep-link focus target", () => {
     render(
-      <dl>
-        <CreditBatchRemovalTemplateRow creditBatch={{ id: "batch-1", facilityId: "facility-1", removalTemplateId: "rvt_new" }} />
-      </dl>,
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: "rvt_new" }}
+        canManage
+        activeFocusTarget={ENTITY_FOCUS_TARGETS.removalTemplate}
+        linesToDecide={0}
+        asDetailRow
+      />,
     );
-    expect(screen.getByText("Removal template").tagName).toBe("DT");
-    expect(screen.getByText("Dark Earth Carbon Template").closest("dd")).not.toBeNull();
-    cleanup();
+    const label = screen.getByText("Removal template");
+    expect(label.tagName).toBe("DT");
+    const name = screen.getByText("Dark Earth Carbon Template");
+    expect(name.closest("dd")).not.toBeNull();
+    // The highlighted callout holds the row, so a deep link lands on the name.
+    expect(landingLine()).not.toBeNull();
+    expect(name.closest(`[data-focus-target="${ENTITY_FOCUS_TARGETS.removalTemplate}"]`)).not.toBeNull();
+  });
+
+  it("states why a pinned name cannot be read in the row's empty style", () => {
+    mocks.listed = [];
+    render(
+      <CreditBatchRemovalTemplate
+        creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: "rvt_new" }}
+        canManage
+        linesToDecide={0}
+        asDetailRow
+      />,
+    );
+    const reason = screen.getByText(NOT_FOUND_ON_ISOMETRIC);
+    expect(reason.hasAttribute("data-empty")).toBe(true);
+    expect(screen.getByRole("link", { name: "Set template" })).toBeTruthy();
+  });
+
+  it("links Admins to Settings from an unset template's notice, and no one else", () => {
     mocks.pin = null;
     render(
       <CreditBatchRemovalTemplate
         creditBatch={{ id: "batch-1", code: "CB-26-001", facilityId: "facility-1", version: 2, removalTemplateId: null }}
         canManage
         linesToDecide={0}
-        fieldShown
+        asDetailRow
       />,
     );
-    expect(screen.queryByText("Removal template")).toBeNull();
+    expect(screen.getByText("Not set").hasAttribute("data-empty")).toBe(true);
     expect(screen.getByText("Set a Removal template in Settings before adding this credit batch to a Removal.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set template" }).getAttribute("href")).toContain("/settings/removal-templates");
+    cleanup();
+    mount(false);
+    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
+    cleanup();
+    mount(true, undefined, false, true);
+    expect(screen.queryByRole("link", { name: "Set template" })).toBeNull();
   });
 
   it("says an unset batch has no template and who can set one", () => {

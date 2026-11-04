@@ -63,13 +63,20 @@ export const deliveryDistanceMessage = (code: string) => blockerMessage(
   "Set the customer location distance or a delivery distance override before submitting.",
 );
 
-export function submissionBlockerGroupFact(kind: SubmissionLineageBlocker["kind"], count: number): string {
-  switch (kind) {
-    case "feedstockTransport": return `${count} feedstocks have no usable transport leg.`;
-    case "deliveryProof": return `${count} deliveries have no proof of delivery.`;
-    case "applicationDestination": return `${count} applications have no customer location.`;
-    case "deliveryDistance": return `${count} deliveries have no positive transport distance.`;
-  }
+export type CountedSubmissionBlockerKind = "deliveryProof" | "deliveryDistance";
+
+/** Proof and distance blockers are counted on a credit batch's to-dos; the others stay one per record. */
+export function isCountedSubmissionBlocker(
+  blocker: SubmissionLineageBlocker,
+): blocker is SubmissionLineageBlocker & { kind: CountedSubmissionBlockerKind } {
+  return blocker.kind === "deliveryProof" || blocker.kind === "deliveryDistance";
+}
+
+/** The fact for several records of one counted kind; its repair step is the members' own. */
+export function submissionBlockerGroupFact(kind: CountedSubmissionBlockerKind, count: number): string {
+  return kind === "deliveryProof"
+    ? `${count} deliveries have no proof of delivery.`
+    : `${count} deliveries have no positive transport distance.`;
 }
 
 export function applicationDestinationBlockerMessage(input: {

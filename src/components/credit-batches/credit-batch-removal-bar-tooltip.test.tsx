@@ -71,8 +71,18 @@ describe("DetailedRemovalBar segments", () => {
     render(<DetailedRemovalBar groups={GROUPS} facilityId="facility-1" />);
     const link = screen.getByRole("link", { name: FIRST });
     fireEvent.pointerDown(link, { pointerType: "touch" });
-    expect(fireEvent.click(link)).toBe(false);
+    expect(fireEvent.click(link, { detail: 1 })).toBe(false);
     fireEvent.pointerDown(link, { pointerType: "mouse" });
-    expect(fireEvent.click(link)).toBe(true);
+    expect(fireEvent.click(link, { detail: 1 })).toBe(true);
+  });
+
+  it("follows the link on Enter after a tap, since a keyboard click has detail 0 and the tap is spent", () => {
+    render(<DetailedRemovalBar groups={GROUPS} facilityId="facility-1" />);
+    const link = screen.getByRole("link", { name: FIRST });
+    fireEvent.pointerDown(link, { pointerType: "touch" });
+    expect(fireEvent.click(link, { detail: 0 })).toBe(true);
+    fireEvent.pointerDown(link, { pointerType: "touch" });
+    expect(fireEvent.click(link, { detail: 1 })).toBe(false);
+    expect(fireEvent.click(link, { detail: 0 })).toBe(true);
   });
 });

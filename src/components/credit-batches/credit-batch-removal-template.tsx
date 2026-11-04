@@ -2,8 +2,8 @@
  * The credit batch's Removal template, read-only, in its view sheet. Removals of
  * the batch compile against it, so a batch with no template (or one Isometric
  * no longer lists) cannot be submitted until an Admin sets the facility's
- * Removal template in Settings. Nothing is changed here, and there is no link
- * to Settings: the template reads as a plain Batch details row.
+ * Removal template in Settings. Nothing is changed here: the template reads as
+ * a plain Batch details row, and only the notices below it link to Settings.
  *
  * Readiness blockers deep-link to this block (`?focus=removal-template`), and
  * the shared focus target scrolls to it. The block says why the operator landed
@@ -26,12 +26,14 @@ import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hoo
 import { useCreditBatch } from "@/hooks/use-credit-batches";
 import { LOAD_FAILED, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
 import { REMOVAL_TEMPLATE_LANDING_LINE } from "@/lib/certification/removal-template-blockers";
-import { DECIDE_LINES_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
+import { DECIDE_LINES_LINK_LABEL, SET_TEMPLATE_LINK_LABEL, removalTemplateSetupHref } from "@/lib/certification/links";
 import { linesDecidedByAdmin, linesToDecideLabel } from "@/lib/certification/requirement-labels";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { ENTITY_FOCUS_TARGETS } from "@/lib/entity-deep-link";
 import { DetailRow } from "./credit-batch-page-parts";
 import { RawIdentifiers } from "@/components/certification/removal-template-mapping-view";
+
+const NOTICE_LINK_CLASS = "inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline";
 
 export interface CreditBatchRemovalTemplateProps {
   creditBatch: Pick<CreditBatchWithRelations, "id" | "code" | "facilityId" | "version" | "removalTemplateId">;
@@ -48,8 +50,8 @@ export interface CreditBatchRemovalTemplateProps {
   inRemoval?: boolean;
   /** A read-only batch states the fact alone, with no instruction to fix it. */
   readOnly?: boolean;
-  /** The template name is already shown as a Batch details row (`CreditBatchRemovalTemplateRow`): render the notices only. */
-  fieldShown?: boolean;
+  /** Show the template as a Batch details row (the page's `<dl>` rows), not as a detail field. */
+  asDetailRow?: boolean;
 }
 
 /** Why a credit batch with components to decide can't go into a Removal, and who decides them. */
@@ -88,10 +90,13 @@ function useRemovalTemplateName(snapshot: Pick<CreditBatchWithRelations, "id" | 
   return { batch, pinnedId, summary, pinned, pinnedMissing, namePending, reason, value: pinned?.display_name ?? reason };
 }
 
-/** The Removal template as a Batch details row, inside the page's `<dl>`: the template's full name, "Not set" when none is pinned. */
-export function CreditBatchRemovalTemplateRow({ creditBatch }: { creditBatch: Pick<CreditBatchWithRelations, "id" | "facilityId" | "removalTemplateId"> }) {
-  const { value, namePending } = useRemovalTemplateName(creditBatch);
-  return <DetailRow label="Removal template" value={value} pending={namePending} emptyText={MISSING_VALUE.notSet} />;
+/** An Admin's way to Settings from a notice about an unset or vanished template. */
+function SetTemplateLink({ facilityId }: { facilityId: string }) {
+  return (
+    <Link href={removalTemplateSetupHref(facilityId)} className={NOTICE_LINK_CLASS}>
+      {SET_TEMPLATE_LINK_LABEL}
+    </Link>
+  );
 }
 
 export function CreditBatchRemovalTemplate({
@@ -101,9 +106,9 @@ export function CreditBatchRemovalTemplate({
   linesToDecide: undecidedLines,
   inRemoval = false,
   readOnly = false,
-  fieldShown = false,
+  asDetailRow = false,
 }: CreditBatchRemovalTemplateProps) {
-  const { batch, pinnedId, summary, pinnedMissing, namePending, reason, value } = useRemovalTemplateName(snapshot);
+  const { batch, pinnedId, summary, pinned, pinnedMissing, namePending, reason, value } = useRemovalTemplateName(snapshot);
   // Answering in Settings makes the picked template the facility's and switches every
   // open batch, so a kept batch on an older template gets text, not that link.
   const pinIsFacilityTemplate = summary.data?.mapping?.removalTemplateId === pinnedId;
@@ -120,7 +125,12 @@ export function CreditBatchRemovalTemplate({
       actionLabel={landingLabel}
       className="flex flex-col gap-12"
     >
-      {!fieldShown && (
+      {asDetailRow ? (
+        // Inside the focus target, so a deep link highlights the name with its notices.
+        <dl className="flex flex-col">
+          <DetailRow label="Removal template" value={pinned?.display_name ?? null} pending={namePending} emptyText={reason ?? MISSING_VALUE.notSet} />
+        </dl>
+      ) : (
         <DetailField
           label="Removal template"
           value={value}
@@ -132,7 +142,7 @@ export function CreditBatchRemovalTemplate({
       )}
 
       {pinnedMissing && (
-        <Notice tone="warning">
+        <Notice tone="warning" action={canManage && !readOnly ? <SetTemplateLink facilityId={batch.facilityId} /> : undefined}>
           {readOnly
             ? "Template no longer exists in Isometric."
             : canManage
@@ -141,7 +151,7 @@ export function CreditBatchRemovalTemplate({
         </Notice>
       )}
       {!pinnedId && (
-        <Notice tone="warning">
+        <Notice tone="warning" action={canManage && !readOnly ? <SetTemplateLink facilityId={batch.facilityId} /> : undefined}>
           {readOnly
             ? "This credit batch has no Removal template."
             : canManage
@@ -155,7 +165,7 @@ export function CreditBatchRemovalTemplate({
           action={canManage && pinIsFacilityTemplate ? (
             <Link
               href={removalTemplateSetupHref(batch.facilityId, { templateId: pinnedId, step: "check" })}
-              className="inline-flex min-h-44 items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+              className={NOTICE_LINK_CLASS}
             >
               {DECIDE_LINES_LINK_LABEL}
             </Link>

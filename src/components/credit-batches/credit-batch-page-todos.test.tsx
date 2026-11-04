@@ -45,7 +45,7 @@ vi.mock("@/components/record-locks", async () => (await import("../../../tests/h
 vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
 vi.mock("./credit-batch-page-header", () => ({ CreditBatchPageHeader: () => null, CreditBatchKeyNumbers: () => null }));
-vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => null, CreditBatchRemovalTemplateRow: () => null }));
+vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => null }));
 vi.mock("./credit-batch-view", () => ({ durabilityLabel: () => "Standard" }));
 
 const TODOS = {

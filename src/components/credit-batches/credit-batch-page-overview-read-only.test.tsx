@@ -24,7 +24,7 @@ vi.mock("./credit-batch-page-context", () => ({
       : { blocking: [], check: [], waiting: [] },
   }),
 }));
-vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => null, CreditBatchRemovalTemplateRow: () => null }));
+vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => null }));
 vi.mock("./credit-batch-late-entries", () => ({ CreditBatchLateEntries: () => null }));
 vi.mock("./credit-batch-view", () => ({ durabilityLabel: () => "1000 year" }));
 vi.mock("./credit-batch-page-parts", async (importOriginal) => ({
