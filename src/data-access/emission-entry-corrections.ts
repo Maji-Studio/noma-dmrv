@@ -5,13 +5,13 @@ import type { DbTransaction } from "@/db";
 import { applications, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deriveRemovalEntryWindow, inWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
-import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
+import { isRemovalCorrectionWindowOpen, type RecordLockRemoval } from "@/lib/record-lock";
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { requireOrgScope, type Executor } from "./utils";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 
 type CorrectionWindow = { window: RemovalEntryWindow; carried: boolean };
-type CorrectionScope = { batchIds: string[]; artifactIds: Set<string>; windows: Map<string, CorrectionWindow> };
+type CorrectionScope = { batchIds: string[]; receiverIds: Set<string>; artifactIds: Set<string>; windows: Map<string, CorrectionWindow> };
 const scopes = new WeakMap<DbTransaction, Map<string, CorrectionScope>>();
 const scopeKey = (ctx: OrgContext, batchId: string) => `${ctx.organizationId}:${batchId}`;
 
@@ -20,23 +20,13 @@ export async function lockEmissionCorrectionScope(ctx: OrgContext, tx: DbTransac
   requireOrgScope(ctx);
   const key = scopeKey(ctx, batchId);
   if (scopes.get(tx)?.has(key)) return;
-  const batchIds = await emissionCorrectionBatchIds(ctx, tx, batchId);
+  const discovery = await discoverEmissionCorrectionScope(ctx, tx, batchId);
+  const { batchIds } = discovery;
   const lineage = await getLockedCertifiedLineageForBatches(ctx, tx, batchIds);
   const facts = lineage.map((row) => row.recordLockRemoval);
-  const ids = facts.filter((fact) => isRemovalCorrectionWindowOpen(fact, facts)).map((fact) => fact.id);
-  const members = ids.length ? await tx.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId, startDate: creditBatches.startDate, applicationDate: applications.applicationDate })
-    .from(creditBatchApplications)
-    .innerJoin(creditBatches, and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchApplications.creditBatchId)))
-    .innerJoin(applications, and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, creditBatchApplications.applicationId)))
-    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ids))) : [];
-  const windows = new Map<string, CorrectionWindow>();
-  for (const id of ids) {
-    const group = members.filter((row) => row.removalId === id);
-    const window = deriveRemovalEntryWindow(group, group.map((row) => row.applicationDate));
-    if (window) windows.set(id, { window, carried: !group.some((row) => row.creditBatchId === batchId) });
-  }
+  const windows = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
   const cache = scopes.get(tx) ?? new Map<string, CorrectionScope>();
-  cache.set(key, { batchIds, windows, artifactIds: new Set(facts.flatMap((fact) => [`removal:${fact.id}`, ...fact.statements.map((statement) => `statement:${statement.id}`)])) });
+  cache.set(key, { batchIds, receiverIds: new Set(discovery.receiverUnions.keys()), windows, artifactIds: new Set(facts.flatMap((fact) => [`removal:${fact.id}`, ...fact.statements.map((statement) => `statement:${statement.id}`)])) });
   scopes.set(tx, cache);
 }
 
@@ -45,15 +35,17 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
   requireOrgScope(ctx);
   const scope = scopes.get(tx)?.get(scopeKey(ctx, batchId));
   if (!scope) return;
-  const batchIds = await emissionCorrectionBatchIds(ctx, tx, batchId);
+  const discovery = await discoverEmissionCorrectionScope(ctx, tx, batchId);
+  const { batchIds } = discovery;
+  if ([...discovery.receiverUnions.keys()].some(id => !scope.receiverIds.has(id))) throw new CertificationLineageChangedError();
   const lineage = (await Promise.all([...new Set([...scope.batchIds, ...batchIds])].map((id) => getCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: id })))).flat();
   const facts = lineage.map((row) => row.recordLockRemoval);
   if (facts.some((fact) => !scope.artifactIds.has(`removal:${fact.id}`) || fact.statements.some((statement) => !scope.artifactIds.has(`statement:${statement.id}`)))) {
     throw new CertificationLineageChangedError();
   }
+  const windows = await loadCorrectionWindows(ctx, tx, batchId, discovery, facts);
   for (const id of scope.windows.keys()) {
-    const fact = facts.find((item) => item.id === id);
-    if (!fact || !isRemovalCorrectionWindowOpen(fact, facts)) scope.windows.delete(id);
+    if (!windows.has(id)) scope.windows.delete(id);
   }
 }
 
@@ -99,8 +91,26 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 
-/** One-hop union through application owners and carried-entry receivers, shared by reads and locks. */
+/** The base one-hop union follows application owners only, as advisory reads require. */
 export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Executor, batchId: string) {
+  requireOrgScope(ctx);
+  const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
+  ));
+  const ownerIds = owners.flatMap(row => row.id ? [row.id] : []);
+  return [...new Set([batchId, ...await emissionCorrectionMemberBatchIds(ctx, executor, ownerIds)])];
+}
+
+async function emissionCorrectionMemberBatchIds(ctx: OrgContext, executor: Executor, removalIds: string[]) {
+  requireOrgScope(ctx);
+  const members = removalIds.length ? await executor.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds),
+  )) : [];
+  return [...new Set(members.map(row => row.id))];
+}
+
+/** Sent, reserved and held receivers, excluding the batch's application owners. */
+async function emissionCorrectionReceiverIds(ctx: OrgContext, executor: Executor, batchId: string) {
   requireOrgScope(ctx);
   const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
@@ -115,14 +125,49 @@ export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Exec
     eq(certificationSubmissions.localEntityType, "removal"),
   )).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, batchId)));
   const holds = await loadEmissionEntryHolds(ctx, entries, executor);
-  const ownerIds = [...new Set([
-    ...owners.map((row) => row.id),
-    ...entries.flatMap((entry) => [entry.sentByRemovalId, entry.reservedByRemovalId, holds.get(entry.id)]),
-  ].filter((id): id is string => !!id))];
-  const shared = ownerIds.length ? await executor.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
-    eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ownerIds),
-  )) : [];
-  return [...new Set([batchId, ...shared.map((row) => row.id)])];
+  const ownerIds = new Set(owners.map(row => row.id));
+  return [...new Set(entries.flatMap(entry => [entry.sentByRemovalId, entry.reservedByRemovalId, holds.get(entry.id)])
+    .filter((id): id is string => !!id && !ownerIds.has(id)))];
+}
+
+/** Fence every group's artifacts together, but retain each group's own eligibility union. */
+export async function discoverEmissionCorrectionScope(ctx: OrgContext, executor: Executor, batchId: string) {
+  requireOrgScope(ctx);
+  const baseBatchIds = await emissionCorrectionBatchIds(ctx, executor, batchId);
+  const receiverIds = await emissionCorrectionReceiverIds(ctx, executor, batchId);
+  const receiverUnions = new Map<string, string[]>();
+  for (const receiverId of receiverIds) {
+    const members = await emissionCorrectionMemberBatchIds(ctx, executor, [receiverId]);
+    const unions = await Promise.all(members.map(id => emissionCorrectionBatchIds(ctx, executor, id)));
+    receiverUnions.set(receiverId, [...new Set(unions.flat())]);
+  }
+  return { baseBatchIds, receiverUnions, batchIds: [...new Set([...baseBatchIds, ...[...receiverUnions.values()].flat()])] };
+}
+
+async function loadCorrectionWindows(
+  ctx: OrgContext, executor: Executor, batchId: string,
+  discovery: Awaited<ReturnType<typeof discoverEmissionCorrectionScope>>, facts: RecordLockRemoval[],
+) {
+  requireOrgScope(ctx);
+  const ids = facts.map(fact => fact.id);
+  const members = ids.length ? await executor.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId, startDate: creditBatches.startDate, applicationDate: applications.applicationDate })
+    .from(creditBatchApplications)
+    .innerJoin(creditBatches, and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchApplications.creditBatchId)))
+    .innerJoin(applications, and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, creditBatchApplications.applicationId)))
+    .where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ids))) : [];
+  const holders = (union: string[]) => new Set(members.filter(row => union.includes(row.creditBatchId)).map(row => row.removalId));
+  const baseHolders = holders(discovery.baseBatchIds);
+  const windows = new Map<string, CorrectionWindow>();
+  for (const fact of facts) {
+    const union = baseHolders.has(fact.id) ? discovery.baseBatchIds : discovery.receiverUnions.get(fact.id);
+    if (!union) continue;
+    const groupHolders = holders(union);
+    if (!isRemovalCorrectionWindowOpen(fact, facts.filter(holder => groupHolders.has(holder.id)))) continue;
+    const group = members.filter(row => row.removalId === fact.id);
+    const window = deriveRemovalEntryWindow(group, group.map(row => row.applicationDate));
+    if (window) windows.set(fact.id, { window, carried: !group.some(row => row.creditBatchId === batchId) });
+  }
+  return windows;
 }
 
 /** Read once per correction union, retaining a result for each distinct batch. */

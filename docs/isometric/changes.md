@@ -10,6 +10,7 @@ and refuses artifacts that were not fenced. The shared scope also applies to
 recorded-zero writes. A carried entry's corrected date is checked against the
 receiving Removal's end only, as carry election does; "Enter again" is refused
 for a carried entry. No binding, revision or schema change.
+Each Removal's correction window is judged against its own lineage, so a carry receiver in verification does not close the origin Removal's window.
 
 ## 2026-10-30: Match Application Source readback by id
 
