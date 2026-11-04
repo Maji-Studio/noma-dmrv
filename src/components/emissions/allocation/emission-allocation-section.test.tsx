@@ -34,10 +34,23 @@ describe("EmissionAllocationSection, Flow view", () => {
     expect(screen.getByText("Total")).toBeTruthy();
   });
 
-  it("opens the table from the detail list", () => {
+  it("has no second Open table link beside the Flow | Table switch", () => {
     show({ creditBatchId: BATCH_A });
-    fireEvent.click(screen.getByRole("button", { name: "Open table" }));
-    expect(screen.getByRole("button", { name: "Table" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Open table" })).toBeNull();
+  });
+
+  it("keeps a later-touching batch's Counted on row and hint reachable when it carries no transport", () => {
+    show({ creditBatchId: BATCH_B });
+    expect(screen.getByText("Counted on")).toBeTruthy();
+    expect(screen.getByText("Used 3,000 of 10,000 kg").closest("span")).toBeTruthy();
+  });
+
+  it("lists manual transport as its own quantity", () => {
+    const data = allocationFixture();
+    data.records.push({ ...data.records.find((r) => r.id === "me-1")!, id: "me-2", detail: { kind: "manual", creditBatchId: BATCH_A, componentId: "c2", componentName: "Hauling", kindOfEntry: "value", omittedInputKeys: [] }, quantities: [{ value: 90, unit: "t·km", label: "Transport" }] });
+    state.data = data;
+    show({ creditBatchId: BATCH_A });
+    expect(screen.getByRole("button", { name: "Manual transport" })).toBeTruthy();
   });
 });
 
@@ -55,7 +68,7 @@ describe("EmissionAllocationSection, Table view on a batch", () => {
     show({ creditBatchId: BATCH_A }, "?allocation=table");
     expect(screen.getAllByText("Used 2,000 of 10,000 kg").length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole("button", { name: "About FS-26-001 transport" })[0]);
-    expect(document.body.textContent).toContain("CB-26-001 carries the whole 1,000 t·km because its run PR-26-001 drew from FS-26-001 first, on 4 Feb.");
+    expect(document.body.textContent).toContain("CB-26-001 carries the whole 1,000 t·km because its run PR-26-001 was the first completed run to draw from FS-26-001, on Feb 4, 2026.");
     const table = screen.getByText("Where the 10,000 kg went").closest("table")!;
     expect(within(table).getByText("Drawn by PR-26-001, carries the transport")).toBeTruthy();
     expect(within(table).getByText("Drawn by PR-26-004")).toBeTruthy();
@@ -94,7 +107,6 @@ describe("EmissionAllocationSection, Removal surface", () => {
     expect(within(delivery).getAllByText("50%").length).toBeGreaterThan(0);
     // A run on a batch no Removal lists, and an untouched delivery, are not allocated to RM-26-001.
     expect(screen.getAllByText("not yet allocated").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("RM-26-001:", { exact: false }).length).toBeGreaterThan(0);
   });
 });
 

@@ -13,6 +13,8 @@ import {
   type PartBasis,
   type Unit,
 } from "@/types/emission-allocation";
+import { formatDateRange } from "@/lib/format-utils";
+import { sumNullable } from "@/lib/nullable-sum";
 
 export const NOT_YET_LABEL = "Not yet allocated";
 const PERCENT = 100;
@@ -44,12 +46,6 @@ export interface Focus {
 
 export const GROUP_ORDER: GroupKey[] = ["feedstockTransport", "production", "deliveryTransport", "manual"];
 
-const monthFormat = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
-
-function monthOf(date: string): string {
-  return monthFormat.format(new Date(`${date}T00:00:00Z`));
-}
-
 export const NOT_YET_OWNER: Owner = { key: NOT_YET, label: NOT_YET_LABEL, sub: "Nothing used yet", members: [NOT_YET], notYet: true };
 
 function sortedBatches(allocation: EmissionAllocation) {
@@ -58,7 +54,7 @@ function sortedBatches(allocation: EmissionAllocation) {
 
 /** One owner per credit batch in the response, in time order. */
 export function batchOwners(allocation: EmissionAllocation): Owner[] {
-  return sortedBatches(allocation).map((batch) => ({ key: batch.id, label: batch.code, sub: monthOf(batch.startDate), members: [batch.id] }));
+  return sortedBatches(allocation).map((batch) => ({ key: batch.id, label: batch.code, sub: formatDateRange(batch.startDate, batch.endDate), members: [batch.id] }));
 }
 
 /** Membership is a caption only; shares come from removalParts. */
@@ -73,11 +69,6 @@ export function removalOwners(allocation: EmissionAllocation): Owner[] {
   }));
 }
 
-/** Removal unassigned shares are explicit in the server response. */
-export function removalNotYet(_allocation: EmissionAllocation): Owner {
-  return { ...NOT_YET_OWNER, surface: "removal" };
-}
-
 /** Build the owners for a surface. Null when the page's own batch or Removal is not in the response. */
 export function buildFocus(allocation: EmissionAllocation, input: EmissionAllocationInput): Focus | null {
   if ("creditBatchId" in input) {
@@ -87,7 +78,7 @@ export function buildFocus(allocation: EmissionAllocation, input: EmissionAlloca
   }
   const owners = removalOwners(allocation);
   const owner = owners.find((candidate) => candidate.key === input.removalId);
-  return owner ? { surface: "removal", owner, owners, notYet: removalNotYet(allocation) } : null;
+  return owner ? { surface: "removal", owner, owners, notYet: { ...NOT_YET_OWNER, surface: "removal" } } : null;
 }
 
 /** Every column of the allocation, Not yet allocated last. */
@@ -150,35 +141,25 @@ export interface Amount {
   value: number | null;
 }
 
-function addAmount(byUnit: Map<Unit, number | null>, unit: Unit, value: number | null) {
-  const previous = byUnit.get(unit);
-  if (value === null) {
-    if (previous === undefined) byUnit.set(unit, null);
-    return;
-  }
-  byUnit.set(unit, (previous ?? 0) + value);
+/** Sum quantities per unit with the shared nullable sum: a unit nobody recorded stays null, never zero. */
+function sumByUnit(entries: { unit: Unit; value: number | null }[]): Amount[] {
+  const byUnit = new Map<Unit, (number | null)[]>();
+  for (const entry of entries) byUnit.set(entry.unit, [...(byUnit.get(entry.unit) ?? []), entry.value]);
+  return [...byUnit.entries()].map(([unit, values]) => ({ unit, value: sumNullable(values) }));
 }
 
-/** Sum a record's quantities per unit. A unit with no recorded reading stays null, never zero. */
+/** A record's own quantities per unit, scaled by a share. A unit with no recorded reading stays null. */
 export function amountsOf(record: AllocationRecord, fraction = 1): Amount[] {
-  const byUnit = new Map<Unit, number | null>();
-  for (const quantity of record.quantities) {
-    addAmount(byUnit, quantity.unit, quantity.value === null ? null : quantity.value * fraction);
-  }
-  return [...byUnit.entries()].map(([unit, value]) => ({ unit, value }));
+  return sumByUnit(record.quantities.map((quantity) => ({ unit: quantity.unit, value: quantity.value === null ? null : quantity.value * fraction })));
 }
 
 /** Totals per unit across records, each record scaled by the owner's share (or whole when no owner). */
 export function totalAmounts(records: AllocationRecord[], owner?: Owner): Amount[] {
-  const byUnit = new Map<Unit, number | null>();
-  for (const record of records) {
+  const entries = records.flatMap((record) => {
     const fraction = owner ? fractionFor(record, owner) : 1;
-    if (fraction <= 0) continue;
-    for (const amount of amountsOf(record, fraction)) {
-      addAmount(byUnit, amount.unit, amount.value);
-    }
-  }
-  return [...byUnit.entries()].map(([unit, value]) => ({ unit, value }));
+    return fraction > 0 ? amountsOf(record, fraction) : [];
+  });
+  return sumByUnit(entries);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,36 +1,49 @@
 /**
  * The Flow view's model and layout, pure. One quantity at a time flows from
- * the source records into credit batches (or Not yet allocated) and on into
- * Removals. Every node and band is drawn to scale in that quantity.
+ * the source records into the page's owners (credit batches on a batch page,
+ * Removals on a Removal sheet) and Not yet allocated. A record's bands come
+ * from its own parts, so they always add to the record and never exceed it.
  */
 import type { AllocationRecord, Unit } from "@/types/emission-allocation";
 import { recordName } from "./allocation-format";
-import { NOT_YET_LABEL, NOT_YET_OWNER, amountsOf, fractionFor, percentFor, type Owner } from "./allocation-model";
+import { NOT_YET_LABEL, amountsOf, fractionFor, percentFor, type Owner } from "./allocation-model";
 
-export type StreamKey = "feedstock" | "delivery" | "diesel" | "electricity";
+export type StreamKey = "feedstock" | "delivery" | "diesel" | "electricity" | "manual";
 
 export interface Stream {
   key: StreamKey;
   label: string;
+  /** What the figures are, for a sentence: "transport", "diesel". */
+  noun: string;
   unit: Unit;
   /** The record's figure in this stream, or null when it has none recorded. */
   pick: (record: AllocationRecord) => number | null;
+  /** Whether the record belongs in this stream at all, recorded or not. */
+  has: (record: AllocationRecord) => boolean;
 }
 
 const unitAmount = (record: AllocationRecord, unit: Unit) => amountsOf(record).find((amount) => amount.unit === unit)?.value ?? null;
+const hasUnit = (record: AllocationRecord, unit: Unit) => record.quantities.some((quantity) => quantity.unit === unit);
+const inGroupWithUnit = (group: AllocationRecord["group"], unit: Unit) => (record: AllocationRecord) => record.group === group && hasUnit(record, unit);
 
 export const STREAMS: Stream[] = [
-  { key: "feedstock", label: "Feedstock", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null) },
-  { key: "delivery", label: "Delivery", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null) },
-  { key: "diesel", label: "Diesel", unit: "L", pick: (r) => unitAmount(r, "L") },
-  { key: "electricity", label: "Electricity", unit: "kWh", pick: (r) => unitAmount(r, "kWh") },
+  { key: "feedstock", label: "Feedstock", noun: "transport", unit: "t·km", pick: (r) => (r.group === "feedstockTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "feedstockTransport" },
+  { key: "delivery", label: "Delivery", noun: "transport", unit: "t·km", pick: (r) => (r.group === "deliveryTransport" ? unitAmount(r, "t·km") : null), has: (r) => r.group === "deliveryTransport" },
+  { key: "diesel", label: "Diesel", noun: "diesel", unit: "L", pick: (r) => unitAmount(r, "L"), has: (r) => hasUnit(r, "L") },
+  { key: "electricity", label: "Electricity", noun: "electricity", unit: "kWh", pick: (r) => unitAmount(r, "kWh"), has: (r) => hasUnit(r, "kWh") },
+  { key: "manual", label: "Manual transport", noun: "transport", unit: "t·km", pick: (r) => (r.group === "manual" ? unitAmount(r, "t·km") : null), has: inGroupWithUnit("manual", "t·km") },
 ];
 
-type NodeKind = "record" | "batch" | "notYet" | "removal";
+/** Streams worth a tab: the four standing ones, and manual transport only when an entry has it. */
+export function visibleStreams(records: AllocationRecord[]): Stream[] {
+  return STREAMS.filter((stream) => stream.key !== "manual" || records.some(stream.has));
+}
+
+type NodeKind = "record" | "owner" | "notYet";
 
 export interface GraphNode {
   key: string;
-  col: 0 | 1 | 2;
+  col: 0 | 1;
   kind: NodeKind;
   label: string;
   value: number;
@@ -47,18 +60,18 @@ export interface Band {
 export interface Graph {
   nodes: GraphNode[];
   bands: Band[];
-  batches: Owner[];
-  removals: Owner[];
-  /** Records that have this quantity in their group but no recorded figure, so they are not drawn. */
+  owners: Owner[];
+  notYet: Owner;
+  /** Records in this stream that have no recorded figure, so they are not drawn. */
   undrawn: number;
 }
 
-export function buildGraph(stream: Stream, records: AllocationRecord[], batches: Owner[], removals: Owner[]): Graph {
+export function buildGraph(stream: Stream, records: AllocationRecord[], owners: Owner[], notYet: Owner): Graph {
   const picked = records.map((record) => ({ record, value: stream.pick(record) }));
   const items = picked.filter((item): item is { record: AllocationRecord; value: number } => item.value !== null && item.value > 0);
+  const columnOne = [...owners, notYet];
   const nodes: GraphNode[] = [];
   const bands: Band[] = [];
-  const columnOne = [...batches, NOT_YET_OWNER];
   for (const { record, value } of items) {
     nodes.push({ key: record.id, col: 0, kind: "record", label: recordName(record), value, record });
     for (const owner of columnOne) {
@@ -66,30 +79,12 @@ export function buildGraph(stream: Stream, records: AllocationRecord[], batches:
       if (part > 0) bands.push({ from: record.id, to: owner.key, value: part });
     }
   }
-  const valueOf = (owner: Owner) => items.reduce((sum, item) => sum + item.value * fractionFor(item.record, owner), 0);
   for (const owner of columnOne) {
-    const value = valueOf(owner);
-    if (value > 0) nodes.push({ key: owner.key, col: 1, kind: owner.notYet ? "notYet" : "batch", label: owner.notYet ? NOT_YET_LABEL : owner.label, value, owner });
+    const value = items.reduce((sum, item) => sum + item.value * fractionFor(item.record, owner), 0);
+    if (value > 0) nodes.push({ key: owner.key, col: 1, kind: owner.notYet ? "notYet" : "owner", label: owner.notYet ? NOT_YET_LABEL : owner.label, value, owner });
   }
-  for (const removal of removals) {
-    const value = valueOf(removal);
-    if (value <= 0) continue;
-    nodes.push({ key: removal.key, col: 2, kind: "removal", label: removal.label, value, owner: removal });
-    for (const id of removal.members) {
-      const batch = batches.find((owner) => owner.key === id);
-      const batchValue = batch ? valueOf(batch) : 0;
-      if (batchValue > 0) bands.push({ from: id, to: removal.key, value: batchValue });
-    }
-  }
-  const undrawn = picked.filter((item) => item.value === null && recordsInStream(stream, item.record)).length;
-  return { nodes, bands, batches, removals, undrawn };
-}
-
-/** A record belongs to a stream when its group or one of its units does. */
-function recordsInStream(stream: Stream, record: AllocationRecord): boolean {
-  if (stream.key === "feedstock") return record.group === "feedstockTransport";
-  if (stream.key === "delivery") return record.group === "deliveryTransport";
-  return record.quantities.some((quantity) => quantity.unit === stream.unit);
+  const undrawn = picked.filter((item) => item.value === null && stream.has(item.record)).length;
+  return { nodes, bands, owners, notYet, undrawn };
 }
 
 /** The first stream that has anything to draw, so the section never opens on an empty chart. */
@@ -104,29 +99,18 @@ export function litSet(graph: Graph, key: string | null): { bands: Set<number>; 
   const node = graph.nodes.find((candidate) => candidate.key === key);
   if (!node) return { bands, nodes };
   nodes.add(node.key);
-  const light = (predicate: (band: Band) => boolean) =>
-    graph.bands.forEach((band, index) => {
-      if (!predicate(band)) return;
-      bands.add(index);
-      nodes.add(band.from);
-      nodes.add(band.to);
-    });
-  if (node.kind === "record") light((band) => band.from === node.key);
-  if (node.kind === "batch") light((band) => band.to === node.key || band.from === node.key);
-  if (node.kind === "notYet") light((band) => band.to === node.key);
-  if (node.kind === "removal") {
-    const members = node.owner?.members ?? [];
-    light((band) => band.to === node.key || members.includes(band.to));
-  }
+  graph.bands.forEach((band, index) => {
+    if (band.from !== node.key && band.to !== node.key) return;
+    bands.add(index);
+    nodes.add(band.from);
+    nodes.add(band.to);
+  });
   return { bands, nodes };
 }
 
-/** The percent a lit node carries of one record, matching the record's table row. */
-export function ownerPercent(record: AllocationRecord, node: GraphNode, graph: Graph, removalNotYet: Owner): number {
-  if (!node.owner) return 0;
-  if (node.kind === "notYet") return percentFor(record, NOT_YET_OWNER, [...graph.batches, NOT_YET_OWNER]);
-  if (node.kind === "removal") return percentFor(record, node.owner, [...graph.removals, removalNotYet]);
-  return percentFor(record, node.owner, [...graph.batches, NOT_YET_OWNER]);
+/** The percent a node carries of one record, matching the record's table row. */
+export function ownerPercent(record: AllocationRecord, node: GraphNode, graph: Graph): number {
+  return node.owner ? percentFor(record, node.owner, [...graph.owners, graph.notYet]) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +126,7 @@ const MIN_BLOCK_W = 64;
 const MIN_BAND_W = 40;
 const TARGET_HEIGHT_WIDE = 440;
 const TARGET_HEIGHT_NARROW = 380;
-/** Two caption lines inside a block. */
+/** Two caption lines inside a block: a small quantity is drawn this tall, never smaller. */
 const MIN_NODE_H = 42;
 /** "Not yet allocated" wraps to two lines in a narrow block, plus the figure. */
 const MIN_NOT_YET_H_NARROW = 60;
@@ -158,41 +142,46 @@ export interface Placed extends GraphNode {
   h: number;
 }
 
+/**
+ * Heights follow the quantity, scaled so the tallest column fills the target.
+ * A node never goes below its label height, so a tiny quantity beside a huge
+ * one costs at most that minimum, and the chart stays bounded by the target
+ * plus one minimum per small node. Bands are cut from each node in proportion
+ * to its height, so they always fit inside both ends.
+ */
 export function place(graph: Graph, width: number) {
   const lane = width >= LANE_FROM_PX ? LANE_W + LANE_GAP : 0;
   const avail = width - lane;
-  // Without any Removal the chart is two columns, so the bands get the room a third column would take.
-  const columns = graph.nodes.some((node) => node.col === 2) ? 3 : 2;
-  const blockW = Math.max(MIN_BLOCK_W, Math.min(MAX_BLOCK_W, Math.floor((avail - (columns - 1) * MIN_BAND_W) / columns)));
-  const bandW = (avail - columns * blockW) / (columns - 1);
-  const colX = [lane, lane + blockW + bandW, lane + 2 * (blockW + bandW)];
+  const blockW = Math.max(MIN_BLOCK_W, Math.min(MAX_BLOCK_W, Math.floor((avail - MIN_BAND_W) / 2)));
+  const bandW = avail - 2 * blockW;
+  const colX = [lane, lane + blockW + bandW];
   const narrow = blockW < NARROW_BLOCK_W;
-  const cols = [0, 1, 2].map((col) => graph.nodes.filter((node) => node.col === col));
+  const cols = [0, 1].map((col) => graph.nodes.filter((node) => node.col === col));
   const totals = cols.map((nodes) => nodes.reduce((sum, node) => sum + node.value, 0));
   const target = lane ? TARGET_HEIGHT_WIDE : TARGET_HEIGHT_NARROW;
-  const need = (node: GraphNode) => (node.kind === "notYet" && narrow ? MIN_NOT_YET_H_NARROW : MIN_NODE_H) / node.value;
-  // The tallest column fills the target height; then every block grows to hold its two label lines.
-  const fit = Math.min(...cols.map((nodes, index) => (nodes.length && totals[index] > 0 ? (target - (nodes.length - 1) * MIN_GAP) / totals[index] : Infinity)));
-  const scale = Math.max(fit, ...graph.nodes.map(need));
-  const heightOf = (nodes: GraphNode[]) => nodes.reduce((sum, node) => sum + node.value * scale, 0) + Math.max(0, nodes.length - 1) * MIN_GAP;
-  const height = Math.max(...cols.map(heightOf)) + PAD_Y * 2;
+  const scale = Math.min(...cols.map((nodes, index) => (nodes.length && totals[index] > 0 ? (target - (nodes.length - 1) * MIN_GAP) / totals[index] : Infinity)));
+  const minH = (node: GraphNode) => (node.kind === "notYet" && narrow ? MIN_NOT_YET_H_NARROW : MIN_NODE_H);
+  const heightOf = (node: GraphNode) => Math.max(node.value * scale, minH(node));
+  const colHeight = (nodes: GraphNode[]) => nodes.reduce((sum, node) => sum + heightOf(node), 0) + Math.max(0, nodes.length - 1) * MIN_GAP;
+  const height = Math.max(...cols.map(colHeight)) + PAD_Y * 2;
   const placed: Placed[] = [];
   cols.forEach((nodes, col) => {
-    const used = nodes.reduce((sum, node) => sum + node.value * scale, 0);
+    const used = nodes.reduce((sum, node) => sum + heightOf(node), 0);
     const gap = nodes.length > 1 ? Math.min(MAX_GAP, (height - PAD_Y * 2 - used) / (nodes.length - 1)) : 0;
     let y = PAD_Y + (height - PAD_Y * 2 - (used + gap * Math.max(0, nodes.length - 1))) / 2;
     for (const node of nodes) {
-      const h = node.value * scale;
+      const h = heightOf(node);
       placed.push({ ...node, x: colX[col], y, h });
       y += h + gap;
     }
   });
-  return { placed, scale, height, blockW, lane };
+  return { placed, height, blockW, lane };
 }
 
-export function bandPath(x0: number, y0: number, x1: number, y1: number, h: number): string {
+/** A ribbon from a source of height h0 to a target of height h1. */
+export function bandPath(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number): string {
   const xm = (x0 + x1) / 2;
-  return `M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + h} C${xm},${y1 + h} ${xm},${y0 + h} ${x0},${y0 + h} Z`;
+  return `M${x0},${y0} C${xm},${y0} ${xm},${y1} ${x1},${y1} L${x1},${y1 + h1} C${xm},${y1 + h1} ${xm},${y0 + h0} ${x0},${y0 + h0} Z`;
 }
 
 /** Labels at one x never closer than a line: push later ones down. */

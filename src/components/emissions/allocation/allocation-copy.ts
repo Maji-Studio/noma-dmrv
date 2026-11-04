@@ -4,7 +4,7 @@ import type { GroupKey } from "@/types/emission-allocation";
 export const GROUP_COPY: Record<GroupKey, { title: string; rule: string }> = {
   feedstockTransport: {
     title: "Feedstock transport",
-    rule: "A feedstock delivery's whole transport goes to the credit batch whose production run drew from it first. Other batches that drew from it show Counted on. Lost mass never counts. A delivery no run drew from is not yet allocated.",
+    rule: "A feedstock delivery's whole transport goes to the credit batch whose first completed production run drew from it. Other batches that drew from it show Counted on. Lost mass never counts. A delivery no run drew from is not yet allocated.",
   },
   production: {
     title: "Production runs",
@@ -24,5 +24,5 @@ export const SECTION_TITLE = "Allocation";
 
 export function sectionHint(surface: "batch" | "removal"): string {
   const across = surface === "batch" ? "a credit batch" : "a Removal";
-  return `Each record that causes emissions is counted once. A feedstock delivery's whole transport goes to the credit batch whose run drew from it first; a biochar delivery is split by the biochar each batch has on the load. What ${across} carries adds up here. Hatched is not yet allocated. noma sends the quantities and Isometric works out the emissions.`;
+  return `Each record that causes emissions is counted once. A feedstock delivery's whole transport goes to the credit batch whose first completed run drew from it; a biochar delivery is split by the biochar each batch has on the load. What ${across} carries adds up here. Hatched is not yet allocated. noma sends the quantities and Isometric works out the emissions.`;
 }

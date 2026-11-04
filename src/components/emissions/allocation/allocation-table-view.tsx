@@ -44,6 +44,8 @@ const RECORD_COLS_PX = 380;
 const OWNER_COL_PX = 104;
 /** Fold only where it saves rows: two or more whole records on one owner. */
 const MIN_FOLD = 2;
+const RECORD_NAME_COL_PX = 240;
+const CARET_PX = 14;
 
 /** Short nouns for the narrow record column on phones and in the sheet. */
 const FOLD_NOUNS_SHORT: Record<GroupKey, [string, string]> = {
@@ -99,19 +101,19 @@ function OwnerHeader({ owner, focused, compact }: { owner: Owner; focused: boole
       <span className="flex flex-col items-end">
         <span className={cn("inline-flex items-center gap-6 whitespace-nowrap", focused && "font-medium")}>
           <NotYetSwatch owner={owner} />
-          {owner.label}
+          <span className={cn(!owner.notYet && "font-mono")}>{owner.label}</span>
         </span>
-        {!owner.notYet && <span className={cn("whitespace-nowrap body-caption font-normal", FAINT)}>{owner.sub}</span>}
+        {!owner.notYet && <span className={cn("body-caption font-normal", FAINT)}>{owner.sub}</span>}
       </span>
     </th>
   );
 }
 
 /** One figure per line, so "63 L, 513 kWh" never clips in a narrow column. */
-function AmountLines({ amounts, className }: { amounts: Amount[]; className?: string }) {
+function AmountLines({ amounts, derived = false, className }: { amounts: Amount[]; /** Shares and totals leave out a unit nobody recorded; the record's own cell says so. */ derived?: boolean; className?: string }) {
   return (
     <span className={cn("flex flex-col items-end", className)}>
-      {amounts.map((amount) => <span key={amount.unit} className="whitespace-nowrap">{formatValue(amount.value, amount.unit)}</span>)}
+      {amounts.filter((amount) => !derived || amount.value !== null).map((amount) => <span key={amount.unit} className="whitespace-nowrap">{formatValue(amount.value, amount.unit)}</span>)}
     </span>
   );
 }
@@ -165,7 +167,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
               {share && (
                 <span className="flex flex-col items-end">
                   <span className={cn("body-small", focused || share.percent < 100 ? "font-medium" : "", owner.notYet && MUTED)}>{share.percent}%</span>
-                  <AmountLines amounts={amountsOf(record, share.fraction)} className={cn("body-caption", MUTED)} />
+                  <AmountLines derived amounts={amountsOf(record, share.fraction)} className={cn("body-caption", MUTED)} />
                 </span>
               )}
               {countedOn && (
@@ -196,8 +198,8 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
         </colgroup>
       ) : (
         <colgroup>
-          <col style={{ width: 240 }} />
-          <col style={{ width: RECORD_COLS_PX - 240 }} />
+          <col style={{ width: RECORD_NAME_COL_PX }} />
+          <col style={{ width: RECORD_COLS_PX - RECORD_NAME_COL_PX }} />
           {columns.map((owner) => <col key={owner.key} style={{ width: OWNER_COL_PX }} />)}
         </colgroup>
       )}
@@ -233,14 +235,14 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
             <tr key={`fold-${row.owner.key}`} className="[border-top:var(--row-divider)]">
               <th scope="row" className={cn(td, STICKY, "font-normal")}>
                 <button type="button" aria-expanded={isOpen} onClick={toggle} className="-my-6 flex min-h-44 w-full items-start gap-6 text-left">
-                  <CaretRightIcon size={14} aria-hidden className={cn("mt-4 shrink-0 transition-transform", FAINT, isOpen && "rotate-90")} />
+                  <CaretRightIcon size={CARET_PX} aria-hidden className={cn("mt-4 shrink-0 transition-transform", FAINT, isOpen && "rotate-90")} />
                   <span className="flex min-w-0 flex-col">
                     <span className="body-small font-medium">{row.records.length} {row.records.length === 1 ? one : many}</span>
-                    <span className={cn("body-caption", MUTED)}>{compact ? formatAmounts(sum) : `all on ${row.owner.label}`}</span>
+                    <span className={cn("body-caption", MUTED)}>{compact ? formatAmounts(sum, true) : `all on ${row.owner.label}`}</span>
                   </span>
                 </button>
               </th>
-              {!compact && <td className={cn(TD, "body-small")}><AmountLines amounts={sum} /></td>}
+              {!compact && <td className={cn(TD, "body-small")}><AmountLines derived amounts={sum} /></td>}
               {columns.map((owner) => {
                 const focused = owner.key === focus.owner.key;
                 return (
@@ -248,7 +250,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                     {owner.key === row.owner.key && (
                       <span className="flex flex-col items-end">
                         <span className={cn("body-small", focused && "font-medium")}>100%</span>
-                        <AmountLines amounts={sum} className={cn("body-caption", MUTED)} />
+                        <AmountLines derived amounts={sum} className={cn("body-caption", MUTED)} />
                       </span>
                     )}
                   </td>
@@ -266,17 +268,17 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
         <tr className="[border-top:var(--hair-2)]">
           <th scope="row" className={cn(td, STICKY, "body-small font-medium")}>
             Total
-            {compact && <span className={cn("block body-caption font-normal", MUTED)}>{formatAmounts(totalAmounts(records))}</span>}
+            {compact && <span className={cn("block body-caption font-normal", MUTED)}>{formatAmounts(totalAmounts(records), true)}</span>}
           </th>
-          {!compact && <td className={cn(TD, "body-small font-medium")}><AmountLines amounts={totalAmounts(records)} /></td>}
+          {!compact && <td className={cn(TD, "body-small font-medium")}><AmountLines derived amounts={totalAmounts(records)} /></td>}
           {columns.map((owner) => (
             <td key={owner.key} className={cn(td, "body-small font-medium", owner.key === focus.owner.key && FOCUS_COL, owner.notYet && MUTED)}>
-              <AmountLines amounts={totalAmounts(records, owner)} />
+              <AmountLines derived amounts={totalAmounts(records, owner)} />
             </td>
           ))}
           {compact && (
             <td className={cn(td, "body-caption", MUTED)}>
-              <AmountLines amounts={elsewhereTotals(records, focus)} />
+              <AmountLines derived amounts={elsewhereTotals(records, focus)} />
             </td>
           )}
         </tr>
@@ -297,17 +299,12 @@ function elsewhereTotals(records: AllocationRecord[], focus: Focus): Amount[] {
 
 function GroupTable({ group, records, ctx }: { group: GroupKey; records: AllocationRecord[]; ctx: Ctx }) {
   const { focus } = ctx;
-  const carried = totalAmounts(records, focus.owner);
-  const carriesAny = records.some((record) => sharesOf(record, [focus.owner]).length > 0);
   // The Removal sheet is phone-narrow at every width: compact there.
   const sheet = focus.surface === "removal";
   return (
     <section className={cn(PANEL, "flex min-w-0 flex-col")}>
       <div className="flex flex-wrap items-center justify-between gap-x-16 gap-y-4 px-16 py-12">
         <GroupTitle group={group} />
-        <span className={cn("body-small", MUTED)}>
-          {focus.owner.label}: <span className="font-medium text-[var(--ink)] tabular-nums">{carriesAny ? formatAmounts(carried) : "None"}</span>
-        </span>
       </div>
       <div className={cn("min-w-0 [border-top:var(--row-divider)]", !sheet && "md:hidden")}>
         <Matrix group={group} records={records} ctx={{ ...ctx, compact: true }} />

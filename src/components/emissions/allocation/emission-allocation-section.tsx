@@ -9,16 +9,17 @@
 
 import { TreeStructureIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
+import { useId } from "react";
 import { Button, Notice } from "@/components/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { SegmentSwitch } from "@/components/ui/segment-switch";
 import { useEmissionAllocation } from "@/hooks/use-emission-allocation";
 import type { EmissionAllocationInput } from "@/types/emission-allocation";
 import { SECTION_TITLE, sectionHint } from "./allocation-copy";
 import { FlowView } from "./allocation-flow-view";
 import { buildFocus } from "./allocation-model";
-import { SegmentGroup } from "./allocation-parts";
 import { TableView } from "./allocation-table-view";
 
 const VIEWS = ["flow", "table"] as const;
@@ -33,6 +34,7 @@ const BODY_SKELETON = "h-320 w-full";
 const EMPTY_ICON_PX = 32;
 
 export function EmissionAllocationSection(props: EmissionAllocationInput) {
+  const headingId = useId();
   const input: EmissionAllocationInput = "creditBatchId" in props ? { creditBatchId: props.creditBatchId } : { removalId: props.removalId };
   const query = useEmissionAllocation(input);
   const [view, setView] = useQueryState(ALLOCATION_VIEW_PARAM, parseAsStringLiteral(VIEWS).withDefault("flow").withOptions(QUERY_OPTIONS));
@@ -72,18 +74,18 @@ export function EmissionAllocationSection(props: EmissionAllocationInput) {
       view === "table" ? (
         <TableView key={focus.owner.key} allocation={allocation} focus={focus} />
       ) : (
-        <FlowView key={focus.owner.key} allocation={allocation} focus={focus} onOpenTable={() => void setView("table")} />
+        <FlowView key={focus.owner.key} allocation={allocation} focus={focus} />
       );
   }
 
   return (
-    <section aria-labelledby="allocation" data-testid="emission-allocation" className="flex min-w-0 flex-col gap-16">
+    <section aria-labelledby={headingId} data-testid="emission-allocation" className="flex min-w-0 flex-col gap-16">
       <div className="flex flex-wrap items-center justify-between gap-12">
         <span className="inline-flex items-center gap-6">
-          <h2 id="allocation" className="title-heading-3">{SECTION_TITLE}</h2>
+          <h2 id={headingId} className="title-heading-3">{SECTION_TITLE}</h2>
           <ExplanationInfo title={SECTION_TITLE} hint={sectionHint(surface)} />
         </span>
-        <SegmentGroup label="View mode" options={VIEW_OPTIONS} value={view} onChange={(next) => void setView(next === "flow" ? null : next)} />
+        <SegmentSwitch label="View mode" options={VIEW_OPTIONS} value={view} onChange={(next) => void setView(next === "flow" ? null : next)} />
       </div>
       {body}
     </section>

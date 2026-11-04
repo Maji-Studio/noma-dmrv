@@ -32,7 +32,7 @@ export function whySentence(hint: FeedstockHint, viewer: Owner): string {
   const { use, record, ownerLabel } = hint;
   const whole = use.tonneKm === null ? "transport" : formatValue(use.tonneKm, "t·km");
   const lead = use.firstRun
-    ? `${ownerLabel} carries the whole ${whole} because its run ${use.firstRun.code} drew from ${record.code} first, on ${formatDay(use.firstRun.date)}.`
+    ? `${ownerLabel} carries the whole ${whole} because its run ${use.firstRun.code} was the first completed run to draw from ${record.code}, on ${formatDay(use.firstRun.date)}.`
     : `${ownerLabel} carries the whole ${whole} of ${record.code}.`;
   if (hint.kind === "partly") return `${lead} Batches that drew from it later show Counted on ${ownerLabel}. Lost mass never counts.`;
   return `${lead} The ${formatKg(hint.usedKg)} ${viewer.label} drew is counted on ${ownerLabel}, so ${viewer.label} carries none of it.`;

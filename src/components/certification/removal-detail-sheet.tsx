@@ -388,13 +388,13 @@ export function RemovalDetailSheet({
               isEditable={isActionable}
             />
 
+            <EmissionAllocationSection removalId={summary.removalId} />
             <SubmissionHistory
               attempts={summary.submissionAttempts}
               events={summary.recentSyncEvents}
               facilityId={facilityId}
               timeZone={timeZone}
             />
-            <EmissionAllocationSection removalId={summary.removalId} />
           </SlideOverPanel.Body>
 
           <SlideOverPanel.Footer>

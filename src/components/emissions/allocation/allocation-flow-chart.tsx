@@ -9,11 +9,10 @@
 "use client";
 
 import { useId } from "react";
-import { HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE, useMeasuredWidth } from "@/components/chain-of-custody/sankey/waterfall-parts";
+import { HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE, useMeasuredWidth } from "@/components/chain-of-custody/sankey";
 import { cn } from "@/lib/utils";
 import { formatDay, formatValue, recordFacts } from "./allocation-format";
 import { LANE_W, bandPath, litSet, ownerPercent, place, spread, type Graph, type Stream } from "./allocation-flow-graph";
-import type { Owner } from "./allocation-model";
 import { MUTED } from "./allocation-parts";
 
 const HIT_MIN_H = 44;
@@ -28,18 +27,17 @@ const LIT_BAND_OPACITY = 0.5;
 const QUIET_BAND_STROKE_W = 0.75;
 const PERCENT_WHOLE = 100;
 
-export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, onHover, onToggle }: {
+export function FlowChart({ graph, stream, focusKey, activeKey, onHover, onToggle }: {
   graph: Graph;
   stream: Stream;
   focusKey: string;
   activeKey: string | null;
-  removalNotYet: Owner;
   onHover: (key: string | null) => void;
   onToggle: (key: string) => void;
 }) {
   const hatchId = `alloc-hatch-${useId().replace(/:/g, "")}`;
   const [width, measure] = useMeasuredWidth();
-  const { placed, scale, height, blockW, lane } = place(graph, width);
+  const { placed, height, blockW, lane } = place(graph, width);
   const byKey = new Map(placed.map((node) => [node.key, node]));
   const lit = litSet(graph, activeKey);
   const active = activeKey ? byKey.get(activeKey) : undefined;
@@ -51,12 +49,14 @@ export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, o
     const from = byKey.get(band.from);
     const to = byKey.get(band.to);
     if (!from || !to) return null;
-    const h = band.value * scale;
+    // A band takes its share of each end's height, so it always fits inside both.
+    const h0 = (band.value / from.value) * from.h;
+    const h1 = (band.value / to.value) * to.h;
     const y0 = from.y + (outAt.get(from.key) ?? 0);
     const y1 = to.y + (inAt.get(to.key) ?? 0);
-    outAt.set(from.key, (outAt.get(from.key) ?? 0) + h);
-    inAt.set(to.key, (inAt.get(to.key) ?? 0) + h);
-    return { band, index, from, to, h, y0, y1 };
+    outAt.set(from.key, (outAt.get(from.key) ?? 0) + h0);
+    inAt.set(to.key, (inAt.get(to.key) ?? 0) + h1);
+    return { band, index, from, to, h0, h1, y0, y1 };
   });
 
   // Share labels: one per record, never two at one spot.
@@ -66,15 +66,15 @@ export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, o
       const own = drawn.filter((d) => d && lit.bands.has(d.index) && d.from.key === record.key);
       if (!own.length || !record.record) continue;
       const top = Math.min(...own.map((d) => d!.y0));
-      const bottom = Math.max(...own.map((d) => d!.y0 + d!.h));
-      const percent = ownerPercent(record.record, active, graph, removalNotYet);
+      const bottom = Math.max(...own.map((d) => d!.y0 + d!.h0));
+      const percent = ownerPercent(record.record, active, graph);
       if (percent > 0 && percent < PERCENT_WHOLE) pct.push({ key: record.key, x: record.x + blockW + PCT_GAP, y: (top + bottom) / 2, text: `${percent}%`, anchor: "start" });
     }
   } else if (active?.record) {
     for (const d of drawn) {
       if (!d || d.from.key !== active.key) continue;
-      const percent = ownerPercent(active.record, d.to, graph, removalNotYet);
-      pct.push({ key: d.to.key, x: d.to.x - PCT_GAP, y: d.y1 + d.h / 2, text: `${percent}%`, anchor: "end" });
+      const percent = ownerPercent(active.record, d.to, graph);
+      pct.push({ key: d.to.key, x: d.to.x - PCT_GAP, y: d.y1 + d.h1 / 2, text: `${percent}%`, anchor: "end" });
     }
   }
   spread(pct);
@@ -91,16 +91,16 @@ export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, o
           </defs>
           {drawn.map((d) =>
             d && !lit.bands.has(d.index) ? (
-              <path key={d.index} d={bandPath(d.from.x + blockW, d.y0, d.to.x, d.y1, d.h)} fill={QUIET_BAND_FILL} stroke={QUIET_BAND_STROKE} strokeWidth={QUIET_BAND_STROKE_W} />
+              <path key={d.index} d={bandPath(d.from.x + blockW, d.y0, d.h0, d.to.x, d.y1, d.h1)} fill={QUIET_BAND_FILL} stroke={QUIET_BAND_STROKE} strokeWidth={QUIET_BAND_STROKE_W} />
             ) : null,
           )}
           {drawn.map((d) =>
             d && lit.bands.has(d.index) ? (
-              <path key={d.index} d={bandPath(d.from.x + blockW, d.y0, d.to.x, d.y1, d.h)} fill={LIT_FILL} fillOpacity={LIT_BAND_OPACITY} stroke={LIT_FILL} strokeWidth={QUIET_BAND_STROKE_W} />
+              <path key={d.index} d={bandPath(d.from.x + blockW, d.y0, d.h0, d.to.x, d.y1, d.h1)} fill={LIT_FILL} fillOpacity={LIT_BAND_OPACITY} stroke={LIT_FILL} strokeWidth={QUIET_BAND_STROKE_W} />
             ) : null,
           )}
           {placed.map((node) => {
-            const isLit = lit.nodes.has(node.key) && node.kind !== "record" && node.kind !== "notYet";
+            const isLit = lit.nodes.has(node.key) && node.kind === "owner";
             return (
               <rect
                 key={node.key}
@@ -115,7 +115,7 @@ export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, o
             );
           })}
           {pct.map((label) => (
-            <text key={label.key} x={label.x} y={label.y} textAnchor={label.anchor} dominantBaseline="middle" className="font-medium tabular-nums text-[12px]" fill={LIT_INK}>
+            <text key={label.key} x={label.x} y={label.y} textAnchor={label.anchor} dominantBaseline="middle" className="body-caption font-medium tabular-nums" fill={LIT_INK}>
               {label.text}
             </text>
           ))}
@@ -141,17 +141,17 @@ export function FlowChart({ graph, stream, focusKey, activeKey, removalNotYet, o
 
         {/* Labels inside the blocks. */}
         {placed.map((node) => {
-          const isLit = lit.nodes.has(node.key) && node.kind !== "record" && node.kind !== "notYet";
+          const isLit = lit.nodes.has(node.key) && node.kind === "owner";
           return (
             <div
               key={`label-${node.key}`}
-              className="pointer-events-none absolute flex flex-col justify-center overflow-hidden px-6 leading-[16px]"
+              className="pointer-events-none absolute flex flex-col justify-center overflow-hidden px-6"
               style={{ left: node.x, top: node.y, width: blockW, height: node.h }}
             >
-              <span className={cn("text-[12px] font-medium", node.kind === "notYet" ? "bg-[var(--paper)] self-start px-2" : "truncate")} style={{ color: isLit ? LIT_INK : "var(--color-text-primary)" }}>
+              <span className={cn("body-caption font-medium", node.kind === "notYet" ? "bg-[var(--paper)] self-start px-2" : "truncate")} style={{ color: isLit ? LIT_INK : "var(--color-text-primary)" }}>
                 {node.label}
               </span>
-              <span className={cn("truncate text-[12px] tabular-nums", node.kind === "notYet" && "bg-[var(--paper)] self-start px-2")} style={{ color: isLit ? LIT_INK : "var(--color-text-secondary)" }}>
+              <span className={cn("truncate body-caption tabular-nums", node.kind === "notYet" && "bg-[var(--paper)] self-start px-2")} style={{ color: isLit ? LIT_INK : "var(--color-text-secondary)" }}>
                 {formatValue(node.value, stream.unit)}
               </span>
             </div>

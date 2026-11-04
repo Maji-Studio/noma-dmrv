@@ -3,6 +3,7 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { Button } from "@/components/ui/button";
+import { SEGMENT_ACTIVE_CLASS, SEGMENT_BUTTON_CLASS, SEGMENT_GROUP_CLASS, SEGMENT_IDLE_CLASS } from "@/components/ui/segment-switch";
 import { cn } from "@/lib/utils";
 import { BatchPicker } from "./batch-picker";
 import { RunPicker, type RunPickerOption } from "./run-picker";
@@ -18,16 +19,6 @@ const FACILITY_MAX_WIDTH_CLASS = "max-w-[180px]";
 const EYEBROW_CLASS =
   "shrink-0 !font-mono !text-[10px] !font-medium uppercase !tracking-[0.14em] " +
   "text-[var(--clr-dark-purple-40)]";
-
-const SEGMENT_GROUP_CLASS =
-  "flex items-stretch border-[1.5px] border-[var(--clr-dark-purple-20)]";
-const SEGMENT_BUTTON_CLASS =
-  "flex cursor-pointer items-center border-r-[1.5px] border-[var(--clr-dark-purple-20)] " +
-  "px-12 text-[11px] font-medium last:border-r-0";
-const SEGMENT_ACTIVE_CLASS =
-  "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]";
-const SEGMENT_IDLE_CLASS =
-  "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]";
 
 const MASS_UNIT_MODES: Array<{
   value: "kg" | "pct";
