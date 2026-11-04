@@ -1,5 +1,17 @@
 # Isometric Docs Change Log
 
+## 2026-11-04: Correct carried entries under their receiving Removal (#1572)
+
+Emissions correction scopes include the member batches of Removals that sent,
+reserved, or hold entries from the origin batch. A returned receiving Removal
+can therefore authorize corrections even when it has no applications from that
+batch. Artifact locks still precede batch rows; revalidation rediscovers receivers
+and refuses artifacts that were not fenced. The shared scope also applies to
+recorded-zero writes. A carried entry's corrected date is checked against the
+receiving Removal's end only, as carry election does; "Enter again" is refused
+for a carried entry. No binding, revision or schema change.
+Each Removal's correction window is judged against its own lineage, so a carry receiver in verification does not close the origin Removal's window.
+
 ## 2026-10-30: Match Application Source readback by id
 
 The sandbox ignores `BiocharSpreadEventFilter.idIn` (verified 2026-10-30), while

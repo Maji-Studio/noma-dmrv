@@ -647,6 +647,9 @@ fresh returned-statement facts under the shared
 certification lineage locks. Unknown or stale statuses and in-flight lineage
 submissions keep the correction window closed. The window also controls date
 edits and sent-zero replacement; dates must stay within the Removal's entry window.
+An entry carried into a later Removal is corrected under that receiving Removal's
+window, which applies only its end date, as carry election does.
+"Enter again" is refused for a carried entry (#1580).
 Correction state compares the last submitted contribution manifest with the
 current contribution and is never stored. A new attempt reserves the current set
 and supersedes the prior attempt without transferring its entry claims.
