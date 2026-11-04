@@ -10,6 +10,7 @@ import {
 } from "@/config/env-validation";
 import { CRON_SECRET_MIN_LENGTH } from "@/config/operations";
 import { z } from "zod";
+import { featureEnabledSchema } from "./feature-switches";
 import { isValidCredentialsEncryptionKey } from "@/lib/crypto/secrets";
 
 const DIGITALOCEAN_SPACES_REGIONS = new Set([
@@ -43,6 +44,9 @@ function isValidStoragePrefix(value: string): boolean {
  * Ensures all required env vars are present and valid
  */
 const envSchema = z.object({
+  MCP_ENABLED: featureEnabledSchema,
+  STOCK_ADJUSTMENTS_ENABLED: featureEnabledSchema,
+  MULTI_BIN_RUNS_ENABLED: featureEnabledSchema,
   // Database
   DATABASE_URL: z.string().url(),
 

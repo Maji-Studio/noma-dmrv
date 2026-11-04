@@ -1,3 +1,4 @@
+import { requireStockAdjustmentsEnabled } from "@/lib/feature-switches";
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { outputStockPostSchema } from '@/schemas/output-stock';
@@ -14,6 +15,7 @@ import type { Operation } from './runner';
 /** Browser stock edits use the same dependency contract as API corrections. */
 export async function correctOutputStockEntry(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);
+  requireStockAdjustmentsEnabled();
   const input = outputStockPostSchema.parse(raw);
   if (input.kind !== 'loss' || !input.correctsMovementId) throw new SafeError('Choose a Lost mass entry to edit.');
   return runOperationInProcess(recordOutputStockMovement, ctx, { ...input, checkFormEditLock: true });
@@ -25,6 +27,8 @@ export const deleteOutputStockLoss: Operation<typeof removeLossSchema, RemovedOu
   input: removeLossSchema,
   supportsDryRun: false,
   describe: (input, output) => describeRecordedMovement(input, output.movementId),
-  execute: ({ ctx, tx, activity }, input) => withOutputStockErrors(() =>
-    removeOutputStockLossInTransaction(ctx, tx, input, { capture: activity.capture, onReplay: activity.skip, link: activity.link })),
+  execute: ({ ctx, tx, activity }, input) => withOutputStockErrors(() => {
+    requireStockAdjustmentsEnabled();
+    return removeOutputStockLossInTransaction(ctx, tx, input, { capture: activity.capture, onReplay: activity.skip, link: activity.link });
+  }),
 };

@@ -1,5 +1,6 @@
 import { metadataResponse, oauthProviderAuthServerMetadata, type AuthServerMetadata } from "@better-auth/oauth-provider";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
+import { mcpEnabled } from "@/lib/feature-switches";
 import { env } from "@/config/env";
 import { OAUTH_DISCOVERY_CACHE_CONTROL } from "@/config/oauth";
 import { auth } from "./better-auth";
@@ -26,6 +27,7 @@ export async function oauthAuthorizationServerDiscovery(request: Request) {
 }
 
 export async function oauthProtectedResourceDiscovery(audience: "mcp" | "rest") {
+  if (audience === "mcp" && !mcpEnabled()) return new Response(null, { status: 404 });
   if (!env.OAUTH_PROVIDER_ENABLED) return new Response(null, { status: 404 });
   const config = getOAuthConfig();
   const metadata = await oauthProviderResourceClient(auth).getActions().getProtectedResourceMetadata({

@@ -37,6 +37,15 @@ ADMIN_PASSWORD="op://Environment Variables/noma-dmrv env local/ADMIN_PASSWORD"
 DISABLE_RATE_LIMIT="op://Environment Variables/noma-dmrv env local/DISABLE_RATE_LIMIT"
 
 # -----------------------------------------------------------------------------
+# Unfinished features (src/config/feature-switches.ts)
+# -----------------------------------------------------------------------------
+# Not ready yet: these still lack testing and concept work. Set "true" in the
+# local item; staging and production leave them unset, which means off.
+MCP_ENABLED="op://Environment Variables/noma-dmrv env local/MCP_ENABLED"
+STOCK_ADJUSTMENTS_ENABLED="op://Environment Variables/noma-dmrv env local/STOCK_ADJUSTMENTS_ENABLED"
+MULTI_BIN_RUNS_ENABLED="op://Environment Variables/noma-dmrv env local/MULTI_BIN_RUNS_ENABLED"
+
+# -----------------------------------------------------------------------------
 # Resend (Email Service)
 # -----------------------------------------------------------------------------
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env local/RESEND_API_KEY"

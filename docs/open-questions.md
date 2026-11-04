@@ -9,6 +9,11 @@ Two rules bind this file:
 
 Deferred work lives here, never as a `TODO` in code.
 
+- MCP, stock adjustments (lost mass and stock counts), and multi-bin runs are
+  switched off on staging and production pending testing and concept work.
+  Finish them before enabling the private switches in
+  `src/config/feature-switches.ts:featureEnabledSchema`.
+
 **Anchor every entry on a `file:symbol` it depends on.** This file's recurring failure mode is entries whose code was renamed or deleted underneath them (`safeAppendSyncEvent`, `deleteDocumentsForEntity`, `insertDraftSubmissionWithMappingLockAndLocks`, all gone, all still cited here for weeks). A named symbol makes a rename break the entry visibly under grep; prose alone rots silently.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.

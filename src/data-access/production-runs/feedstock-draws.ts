@@ -1,3 +1,4 @@
+import { requireMultiBinRunsEnabled } from "@/lib/feature-switches";
 import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
 import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
@@ -25,6 +26,7 @@ import { requireOrgScope } from "../utils";
 const drawValidationError = (message: string, index?: number, field?: keyof ProductionRunFeedstockDrawInput) =>
   productionRunValidationError(message, index === undefined ? ["feedstockDraws"] : ["feedstockDraws", index, ...(field ? [field] : [])]);
 
+const SINGLE_SOURCE_BIN_COUNT = 1;
 const MASS_PRECISION_FACTOR = 1 / MASS_KG_INPUT_STEP;
 
 export interface ProductionRunFeedstockDrawInput {
@@ -35,6 +37,7 @@ export interface ProductionRunFeedstockDrawInput {
 /** Validate the data-access boundary independently of action/schema callers. */
 export function normalizeProductionRunFeedstockDraws(
   draws: readonly ProductionRunFeedstockDrawInput[],
+  existingStorageLocationIds: readonly string[] = [],
 ): ProductionRunFeedstockDrawInput[] {
   const seenStorageLocationIds = new Set<string>();
   let totalMassUnits = 0;
@@ -76,6 +79,12 @@ export function normalizeProductionRunFeedstockDraws(
 
   if (totalMassUnits / MASS_PRECISION_FACTOR > MASS_INPUT_MAX_KG) {
     throw drawValidationError("Total feedstock wet mass is too large");
+  }
+
+  // Older runs may keep their bins, change masses or remove bins while off.
+  if (normalized.length > SINGLE_SOURCE_BIN_COUNT &&
+    normalized.some(draw => !existingStorageLocationIds.includes(draw.storageLocationId))) {
+    requireMultiBinRunsEnabled();
   }
 
   // Keep request positions for field errors; lockBinStocks sorts lock keys itself.
@@ -207,7 +216,7 @@ export async function replaceProductionRunFeedstockDraws(
     .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, params.productionRunId)));
   const previousTie = earliestFeedstockEventTie(previousTies);
   const previousBins = await getProductionRunFeedstockDrawStorageIds(ctx, tx, params.productionRunId);
-  const draws = normalizeProductionRunFeedstockDraws(params.draws);
+  const draws = normalizeProductionRunFeedstockDraws(params.draws, previousBins);
   await validateProductionRunFeedstockDrawSources(
     ctx,
     tx,
