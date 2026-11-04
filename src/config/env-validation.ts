@@ -6,6 +6,12 @@ export const emptyToUndefined = (value: unknown) =>
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOCAL_APP_PROTOCOLS = new Set(["http:", "https:"]);
 const HERMETIC_CI_MARKER = "true";
+const CI_TRUTHY_VALUES = ["1", "true"];
+
+/** True when the CI flag is set the way GitHub Actions and docs/testing.md define it. */
+export function isCiRun(): boolean {
+  return CI_TRUTHY_VALUES.includes((process.env.CI ?? "").toLowerCase());
+}
 
 export function isLocalAppUrl(value: string): boolean {
   try {
@@ -25,10 +31,9 @@ export function isLocalAppUrl(value: string): boolean {
 // explicit marker, CI flag, and an HTTP(S) loopback URL keeps live CI workflows
 // and every real deployment out of this exception.
 export function isHermeticCiBuildFor(appUrl: string): boolean {
-  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
   return (
     process.env.NOMA_HERMETIC_CI === HERMETIC_CI_MARKER &&
-    isCI &&
+    isCiRun() &&
     isLocalAppUrl(appUrl)
   );
 }

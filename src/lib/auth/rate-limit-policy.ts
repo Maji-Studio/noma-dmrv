@@ -1,4 +1,4 @@
-import { isLocalAppUrl } from "@/config/env-validation";
+import { isCiRun, isLocalAppUrl } from "@/config/env-validation";
 
 /**
  * Auth rate limits are opt-out with DISABLE_RATE_LIMIT=true, except in a
@@ -8,6 +8,5 @@ import { isLocalAppUrl } from "@/config/env-validation";
 export function authRateLimitEnabled(nodeEnv: string, appUrl: string): boolean {
   if (process.env.DISABLE_RATE_LIMIT !== "true") return true;
   if (nodeEnv !== "production") return false;
-  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
-  return !(isCI && isLocalAppUrl(appUrl));
+  return !(isCiRun() && isLocalAppUrl(appUrl));
 }
