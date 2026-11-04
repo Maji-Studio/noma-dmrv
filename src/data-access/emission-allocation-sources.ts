@@ -1,5 +1,5 @@
+import type { db, DbTransaction } from "@/db";
 import { and, eq, inArray } from "drizzle-orm";
-import type { db } from "@/db";
 import { deliveries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CreditBatchLineageFacts } from "./credit-batch-lineage-types";
@@ -10,10 +10,15 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { loadBiocharDeliveryTransportLegs } from "./biochar-delivery-transport";
 import { listEmissionEntriesForBatches } from "./emission-entries";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
+import { removalEntryOwner, isLiveEntryReservation } from "@/lib/certification/removal-emission-contributions";
+import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
+import { listEmissionEntryDraftContenders, loadEmissionEntryReservations } from "./emission-entry-contenders";
 import { requireOrgScope, type Executor } from "./utils";
 
+/** `sliceDeliveryIds` adds deliveries a Removal's application slices reach outside batch lineage. */
 export async function loadAllocationDeliveries(ctx: OrgContext,
   batches: { id: string; code: string; lineageFacts: CreditBatchLineageFacts }[], reader: Executor,
+  sliceDeliveryIds: readonly string[] = [],
 ): Promise<AllocationDeliveryFact[]> {
   requireOrgScope(ctx);
   const loads = new Map<string, AllocationDeliveryFact["loads"]>();
@@ -24,7 +29,7 @@ export async function loadAllocationDeliveries(ctx: OrgContext,
       loads.set(share.id, group);
     }
   }
-  const ids = [...loads.keys()];
+  const ids = [...new Set([...loads.keys(), ...sliceDeliveryIds])];
   if (!ids.length) return [];
   const rows = await reader.select().from(deliveries)
     .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, ids)));
@@ -32,18 +37,35 @@ export async function loadAllocationDeliveries(ctx: OrgContext,
   const byId = new Map(legs.map(leg => [leg.id, leg]));
   return rows.map(row => ({ id: row.id, code: row.code, date: formatUtcDate(row.deliveryDate),
     wetKg: row.deliveredWetMassKg, oneWayKm: (byId.get(row.id)?.distanceKm ?? 0) > 0 ? byId.get(row.id)!.distanceKm : null,
-    loads: loads.get(row.id)! }));
+    loads: loads.get(row.id) ?? [] }));
 }
 
 /** Entries retain their recorded batch even while their template needs reconfirmation. */
 export async function loadAllocationManualEntries(
-  ctx: OrgContext, batchIds: string[], reader: Pick<typeof db, "select" | "selectDistinctOn">,
+  ctx: OrgContext, batchIds: string[], facilityId: string, reader: typeof db | DbTransaction,
 ): Promise<AllocationManualFact[]> {
   requireOrgScope(ctx);
   const entries = await listEmissionEntriesForBatches(ctx, batchIds, reader);
-  const [current, previous] = await Promise.all([
+  if (!entries.length) return [];
+  const [current, previous, carry, contenders, reservations] = await Promise.all([
     getLatestTemplateObservations(ctx, "isometric", [...new Set(entries.map(entry => entry.removalTemplateId))], reader),
     getTemplateObservationsByIds(ctx, entries.map(entry => entry.observationId), reader),
+    loadFacilityEmissionEntryCarry(ctx, facilityId, reader, undefined, { ownedBatchIds: batchIds }),
+    listEmissionEntryDraftContenders(ctx, batchIds, reader),
+    loadEmissionEntryReservations(ctx, entries.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), reader),
   ]);
-  return buildAllocationManualFacts(entries, current, previous);
+  const nowMs = Date.now();
+  const owners = new Map(entries.map(entry => {
+    const carried = carry.entries.find(fact => fact.id === entry.id);
+    const reservation = reservations.find(row => row.submissionId === entry.sendReservedBySubmissionId);
+    const live = reservation && isLiveEntryReservation(reservation, nowMs);
+    const fact = { ...entry, counts: true, evidenceDocumentIds: [], ...carried,
+      reservedByRemovalId: carried?.reservedByRemovalId ?? (live ? reservation.removalId : null),
+      reservationKnownInactive: carried?.reservationKnownInactive ?? (!entry.sendReservedBySubmissionId || !!reservation && !live),
+    };
+    const removalId = removalEntryOwner(fact, contenders) ?? carried?.carry.receiver?.removalId ??
+      (entry.kind === "zero" && fact.reservationKnownInactive ? entry.confirmedForRemovalId : null);
+    return [entry.id, removalId] as const;
+  }));
+  return buildAllocationManualFacts(entries, current, previous).map(entry => ({ ...entry, removalId: owners.get(entry.id) ?? null }));
 }

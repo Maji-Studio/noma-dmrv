@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { NOT_YET } from "@/types/emission-allocation";
-import { BATCH_A, BATCH_B, BATCH_C, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
+import { BATCH_A, BATCH_B, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
 import {
-  allOwners, amountsOf, batchCodesOf, buildFocus, feedstockHint, fractionFor, percentFor, sharesOf, totalAmounts, wholePercents,
+  allOwners, amountsOf, basisFor, batchCodesOf, buildFocus, feedstockHint, fractionFor, percentFor, sharesOf, totalAmounts, wholePercents,
 } from "./allocation-model";
 
 const allocation = allocationFixture();
@@ -32,18 +32,19 @@ describe("buildFocus", () => {
     expect(buildFocus(allocation, { removalId: "gone" })).toBeNull();
   });
 
-  it("sums each batch's parts into the Removal that holds it", () => {
+  it("reads server Removal parts independently of batch membership", () => {
     const focus = buildFocus(allocation, { removalId: REMOVAL_1 })!;
-    expect(focus.owner.members).toEqual([BATCH_A, BATCH_B]);
+    expect(focus.owner.members).toEqual([REMOVAL_1]);
     expect(focus.owner.sub).toBe("CB-26-001, CB-26-002");
-    // The delivery splits 60/40 across two batches of one Removal: the Removal carries all of it.
-    expect(fractionFor(byId("dl-1"), focus.owner)).toBeCloseTo(1);
-    expect(sharesOf(byId("dl-1"), allOwners(focus)).map((share) => share.percent)).toEqual([100]);
+    // The batch shares are 60/40, but this Removal owns only half the applied load.
+    expect(fractionFor(byId("dl-1"), focus.owner)).toBe(0.5);
+    expect(basisFor(byId("dl-1"), focus.owner)).toEqual([{ kind: "slice", label: "RM-26-001", kg: 2500 }]);
+    expect(sharesOf(byId("dl-1"), allOwners(focus)).map((share) => share.percent)).toEqual([50, 50]);
   });
 
-  it("puts NOT_YET parts and parts of batches in no Removal under Not yet allocated", () => {
+  it("reads explicit NOT_YET Removal parts, including batches without a Removal", () => {
     const focus = buildFocus(allocation, { removalId: REMOVAL_1 })!;
-    expect(focus.notYet.members).toEqual([NOT_YET, BATCH_C]);
+    expect(focus.notYet.members).toEqual([NOT_YET]);
     expect(fractionFor(byId("run-9"), focus.owner)).toBe(0);
     expect(fractionFor(byId("run-9"), focus.notYet)).toBe(1);
     expect(fractionFor(byId("fs-2"), focus.notYet)).toBe(1);
@@ -51,6 +52,22 @@ describe("buildFocus", () => {
     for (const record of allocation.records) {
       expect(sharesOf(record, allOwners(focus)).reduce((sum, share) => sum + share.percent, 0)).toBe(100);
     }
+  });
+
+  it("does not double-count two Removals listing the same credit batches", () => {
+    const input = structuredClone(allocation);
+    input.removals.push({ ...input.removals[0], id: "followup", code: "RM-26-002" });
+    const delivery = input.records.find(record => record.id === "dl-1")!;
+    delivery.removalParts = [
+      { key: REMOVAL_1, fraction: 0.5, basis: [{ kind: "slice", label: "RM-26-001", kg: 2500 }] },
+      { key: "followup", fraction: 0.3, basis: [{ kind: "slice", label: "RM-26-002", kg: 1500 }] },
+      { key: NOT_YET, fraction: 0.2, basis: [{ kind: "notYet", label: delivery.code, kg: 1000 }] },
+    ];
+    const focus = buildFocus(input, { removalId: "followup" })!;
+    expect(fractionFor(delivery, focus.owner)).toBe(0.3);
+    expect(sharesOf(delivery, allOwners(focus)).map(share => share.percent)).toEqual([50, 30, 20]);
+    expect(fractionFor(input.records.find(record => record.id === "run-1")!, focus.owner)).toBe(0);
+    expect(totalAmounts([delivery], focus.owner)).toEqual([{ unit: "t·km", value: 108 }]);
   });
 
   it("keeps a zero-fraction touching batch out of the share list", () => {
@@ -97,10 +114,10 @@ describe("feedstockHint", () => {
     expect(feedstockHint(byId("fs-1"), focusA.notYet, focusA.owners, codes)).toBeNull();
   });
 
-  it("names the Removal as carrier on the Removal surface", () => {
+  it("does not equate batch feedstock draws with a Removal's frozen slices", () => {
     const removalFocus = buildFocus(allocation, { removalId: REMOVAL_1 })!;
-    const hint = feedstockHint(byId("fs-1"), removalFocus.owner, removalFocus.owners, codes)!;
-    // Both batches sit in RM-26-001: used 2,000 + 3,000 of 10,000.
-    expect(hint).toMatchObject({ kind: "partly", usedKg: 5000, ownerLabel: "RM-26-001" });
+    expect(fractionFor(byId("fs-1"), removalFocus.owner)).toBe(1);
+    expect(basisFor(byId("fs-1"), removalFocus.owner)).toEqual([{ kind: "claim", label: "CB-26-001", kg: null }]);
+    expect(feedstockHint(byId("fs-1"), removalFocus.owner, removalFocus.owners, codes)).toBeNull();
   });
 });

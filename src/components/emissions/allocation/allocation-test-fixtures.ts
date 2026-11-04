@@ -16,6 +16,7 @@ const feedstock: AllocationRecord = {
     { key: BATCH_A, fraction: 1, basis: [{ kind: "firstRun", label: "PR-26-001", kg: null, recordId: "run-1" }] },
     { key: BATCH_B, fraction: 0, basis: [{ kind: "run", label: "CB-26-002", kg: 3000 }] },
   ],
+  removalParts: [{ key: REMOVAL_1, fraction: 1, basis: [{ kind: "claim", label: "CB-26-001", kg: null }] }],
   basisWord: "the first run that drew from it",
   feedstock: {
     bin: "North bay", binId: "bin", wetKg: INTAKE_KG, tonneKm: WHOLE_LEG_TONNE_KM,
@@ -34,6 +35,7 @@ const untouched: AllocationRecord = {
   detail: { kind: "feedstockTransport", binId: "bin", binName: "South bay", wetKg: 4000, legs: [{ id: "leg2", oneWayKm: 30, loadKg: 4000 }] },
   quantities: [{ value: 240, unit: "t·km", label: "Transport" }],
   parts: [{ key: NOT_YET, fraction: 1, basis: [{ kind: "notYet", label: "South bay", kg: 4000 }] }],
+  removalParts: [{ key: NOT_YET, fraction: 1, basis: [{ kind: "notYet", label: "South bay", kg: 4000 }] }],
   basisWord: "the first run that drew from it",
   feedstock: {
     bin: "South bay", binId: "bin2", wetKg: 4000, tonneKm: 240, used: [], out: [], lostKg: 0, stillKg: 4000,
@@ -50,6 +52,7 @@ const run = (id: string, code: string, batch: string, diesel: number | null): Al
     { value: 168, unit: "kWh", label: "Electricity" },
   ],
   parts: [{ key: batch, fraction: 1, basis: [{ kind: "run", label: code, kg: null, recordId: id }] }],
+  removalParts: [{ key: batch === BATCH_A ? REMOVAL_1 : NOT_YET, fraction: 1, basis: [{ kind: batch === BATCH_A ? "claim" : "notYet", label: code, kg: null }] }],
   basisWord: "the run",
 });
 
@@ -61,6 +64,8 @@ const delivery: AllocationRecord = {
     { key: BATCH_A, fraction: 0.6, basis: [{ kind: "load", label: "CB-26-001", kg: 3000 }] },
     { key: BATCH_B, fraction: 0.4, basis: [{ kind: "load", label: "CB-26-002", kg: 2000 }] },
   ],
+  removalParts: [{ key: REMOVAL_1, fraction: 0.5, basis: [{ kind: "slice", label: "RM-26-001", kg: 2500 }] },
+    { key: NOT_YET, fraction: 0.5, basis: [{ kind: "notYet", label: "DL-26-001", kg: 2500 }] }],
   basisWord: "biochar on the load",
 };
 
@@ -69,6 +74,7 @@ const manual: AllocationRecord = {
   detail: { kind: "manual", creditBatchId: BATCH_A, componentId: "component-9", componentName: "Chipper electricity", kindOfEntry: "value", omittedInputKeys: [] },
   quantities: [{ value: null, unit: "kWh", label: "Electricity" }],
   parts: [{ key: BATCH_A, fraction: 1, basis: [{ kind: "recordedOnBatch", label: "component-9", kg: null }] }],
+  removalParts: [{ key: REMOVAL_1, fraction: 1, basis: [{ kind: "claim", label: "component-9", kg: null }] }],
   basisWord: "the batch it was recorded on",
 };
 

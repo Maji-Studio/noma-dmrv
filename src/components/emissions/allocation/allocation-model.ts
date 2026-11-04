@@ -1,8 +1,7 @@
 /**
  * The allocation view model: who carries each record. Pure, no React. One
  * "owner" is a column of the allocation, either a credit batch, a Removal, or
- * Not yet allocated. The server sends parts per credit batch; the Removal
- * surface sums the parts of the batches a Removal holds.
+ * Not yet allocated. The server sends independent batch and Removal parts.
  */
 import {
   NOT_YET,
@@ -27,7 +26,8 @@ export interface Owner {
   label: string;
   /** Second line: the batch month, or the Removal's credit batch codes. */
   sub: string;
-  /** Part keys this owner carries: its batch ids, or NOT_YET plus orphan batches. */
+  surface?: Surface;
+  /** Keys in the corresponding server-owned parts array. */
   members: string[];
   notYet?: boolean;
 }
@@ -61,22 +61,21 @@ export function batchOwners(allocation: EmissionAllocation): Owner[] {
   return sortedBatches(allocation).map((batch) => ({ key: batch.id, label: batch.code, sub: monthOf(batch.startDate), members: [batch.id] }));
 }
 
-/** One owner per Removal in the response. Each holds the batches it lists, so its parts are the sum of theirs. */
+/** Membership is a caption only; shares come from removalParts. */
 export function removalOwners(allocation: EmissionAllocation): Owner[] {
   const codes = new Map(allocation.batches.map((batch) => [batch.id, batch.code]));
   return allocation.removals.map((removal) => ({
     key: removal.id,
     label: removal.code,
     sub: removal.creditBatchIds.map((id) => codes.get(id) ?? id).join(", "),
-    members: removal.creditBatchIds,
+    members: [removal.id],
+    surface: "removal",
   }));
 }
 
-/** Not yet allocated on the Removal surface also holds the parts of batches no Removal lists. */
-export function removalNotYet(allocation: EmissionAllocation): Owner {
-  const inRemoval = new Set(allocation.removals.flatMap((removal) => removal.creditBatchIds));
-  const orphans = allocation.batches.map((batch) => batch.id).filter((id) => !inRemoval.has(id));
-  return { ...NOT_YET_OWNER, members: [NOT_YET, ...orphans] };
+/** Removal unassigned shares are explicit in the server response. */
+export function removalNotYet(_allocation: EmissionAllocation): Owner {
+  return { ...NOT_YET_OWNER, surface: "removal" };
 }
 
 /** Build the owners for a surface. Null when the page's own batch or Removal is not in the response. */
@@ -98,11 +97,11 @@ export function allOwners(focus: Focus): Owner[] {
 
 /** The share of a record one owner carries (0 to 1). */
 export function fractionFor(record: AllocationRecord, owner: Owner): number {
-  return record.parts.filter((part) => owner.members.includes(part.key)).reduce((sum, part) => sum + part.fraction, 0);
+  return (owner.surface === "removal" ? record.removalParts : record.parts).filter((part) => owner.members.includes(part.key)).reduce((sum, part) => sum + part.fraction, 0);
 }
 
 export function basisFor(record: AllocationRecord, owner: Owner): PartBasis[] {
-  return record.parts.filter((part) => owner.members.includes(part.key)).flatMap((part) => part.basis);
+  return (owner.surface === "removal" ? record.removalParts : record.parts).filter((part) => owner.members.includes(part.key)).flatMap((part) => part.basis);
 }
 
 /** Whole percents that always add to 100 (largest remainder), so a row never reads 99% or 101%. */
@@ -208,7 +207,7 @@ export function batchCodesOf(allocation: EmissionAllocation): Map<string, string
 /** Hint A for one delivery seen from one owner, or null when nothing needs saying. */
 export function feedstockHint(record: AllocationRecord, owner: Owner, labelOwners: Owner[], batchCodes: ReadonlyMap<string, string>): FeedstockHint | null {
   const use = record.feedstock;
-  if (!use || owner.notYet || !use.owner) return null;
+  if (!use || owner.surface === "removal" || owner.notYet || !use.owner) return null;
   const usedKg = usedBy(use, owner);
   const ownerLabel = carrierLabel(use.owner, labelOwners, batchCodes);
   if (!owner.members.includes(use.owner)) return usedKg > 0 ? { kind: "countedOn", record, use, usedKg, ownerLabel } : null;

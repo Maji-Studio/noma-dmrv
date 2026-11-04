@@ -36,6 +36,8 @@ export interface AllocationDeliveryFact {
   oneWayKm: number | null;
   /** Existing emissionDeliveryShares, grouped once per batch and delivery. */
   loads: { creditBatchId: string; code: string; kg: number | null }[];
+  /** Each Removal's applied wet load on this delivery, from its frozen application slices. */
+  removalLoads?: { removalId: string; code: string; kg: number }[];
 }
 
 export interface AllocationManualFact {
@@ -47,9 +49,12 @@ export interface AllocationManualFact {
   kind: "value" | "zero";
   quantities: Quantity[];
   omittedInputKeys: string[];
+  removalId?: string | null;
 }
 
 export interface EmissionAllocationFacts extends Omit<EmissionAllocation, "records"> {
+  /** Persisted production claim, independent of slice membership. */
+  productionClaims?: Record<string, string | null>;
   feedstocks: AllocationFeedstockFact[];
   runs: AllocationRunFact[];
   deliveries: AllocationDeliveryFact[];

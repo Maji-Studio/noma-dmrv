@@ -86,12 +86,12 @@ describe("EmissionAllocationSection, Table view on a batch", () => {
 });
 
 describe("EmissionAllocationSection, Removal surface", () => {
-  it("sums the Removal's batches and puts the rest under Not yet allocated", () => {
+  it("shows server-owned Removal shares and their unassigned remainder", () => {
     show({ removalId: REMOVAL_1 }, "?allocation=table");
-    // The 60/40 delivery is one whole record on the Removal.
+    // Half the delivery belongs to this Removal despite membership in both batches.
     const delivery = screen.getAllByText("DL-26-001")[0].closest("tr")!;
-    expect(within(delivery).getAllByText("360 t·km").length).toBeGreaterThan(0);
-    expect(within(delivery).getAllByText("100%").length).toBeGreaterThan(0);
+    expect(within(delivery).getAllByText("180 t·km").length).toBeGreaterThan(0);
+    expect(within(delivery).getAllByText("50%").length).toBeGreaterThan(0);
     // A run on a batch no Removal lists, and an untouched delivery, are not allocated to RM-26-001.
     expect(screen.getAllByText("not yet allocated").length).toBeGreaterThan(0);
     expect(screen.getAllByText("RM-26-001:", { exact: false }).length).toBeGreaterThan(0);

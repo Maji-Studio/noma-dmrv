@@ -11,6 +11,7 @@ import type { EmissionAllocation, EmissionAllocationInput } from "@/types/emissi
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { loadAllocationFeedstocks } from "./emission-allocation-feedstocks";
 import { loadAllocationDeliveries, loadAllocationManualEntries } from "./emission-allocation-sources";
+import { loadAllocationRemovalLoads, loadAppliedDeliveryIds } from "./emission-allocation-removals";
 import { requireOrgScope } from "./utils";
 
 /** Facility-wide preview, read consistently with the same saved lineage as Emissions. */
@@ -41,15 +42,17 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
     executor.select({ run: productionRuns, reactorCode: reactors.code }).from(productionRuns)
       .leftJoin(reactors, and(eq(reactors.organizationId, ctx.organizationId), eq(reactors.id, productionRuns.reactorId)))
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, facilityId))),
-    batchIds.length ? executor.selectDistinct({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals)
-      .innerJoin(creditBatchApplications, and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, certifierRemovals.id)))
-      .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId), inArray(creditBatchApplications.creditBatchId, batchIds)))
-      .orderBy(asc(certifierRemovals.code), asc(certifierRemovals.id)) : [],
+    executor.select({ id: certifierRemovals.id, code: certifierRemovals.code }).from(certifierRemovals)
+      .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId)))
+      .orderBy(asc(certifierRemovals.code), asc(certifierRemovals.id)),
   ]);
   // Include unbatched completed runs so their recorded activity has a not-yet column.
   // Members follow the exact lineage selection, including incomplete member runs.
   const runs = runRows.filter(({ run }) => batchByRun.has(run.id) || (run.status === COMPLETED_PRODUCTION_RUN_STATUS && !run.archivedAt));
   const removalIds = removalRows.map(row => row.id);
+  const [removalLoads, appliedDeliveryIds] = await Promise.all([
+    loadAllocationRemovalLoads(ctx, batchIds, removalRows, executor), loadAppliedDeliveryIds(ctx, batchIds, executor),
+  ]);
   const [memberships, submissions, feedstocks, deliveries, manual] = await Promise.all([
     removalIds.length ? executor.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId })
       .from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [],
@@ -58,13 +61,15 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
         eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE), eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
         inArray(certificationSubmissions.localEntityId, removalIds))).orderBy(desc(certificationSubmissions.version)) : [],
     loadAllocationFeedstocks(ctx, facilityId, [...new Set([...memberIds, ...runs.map(({ run }) => run.id)])], facility.timezone, executor),
-    loadAllocationDeliveries(ctx, batches.map(batch => ({ ...batch, lineageFacts: rollups[batch.id].lineageFacts })), executor),
-    loadAllocationManualEntries(ctx, batchIds, executor),
+    loadAllocationDeliveries(ctx, batches.map(batch => ({ ...batch, lineageFacts: rollups[batch.id].lineageFacts })), executor,
+      [...removalLoads.keys(), ...appliedDeliveryIds]),
+    loadAllocationManualEntries(ctx, batchIds, facilityId, executor),
   ]);
   return buildEmissionAllocation({ facilityId, batches,
     removals: removalRows.map(removal => ({ ...removal, status: submissions.find(row => row.removalId === removal.id)?.status ?? "draft",
       creditBatchIds: [...new Set(memberships.filter(row => row.removalId === removal.id).map(row => row.creditBatchId))].sort() })),
-    feedstocks, deliveries, manual,
+    productionClaims: Object.fromEntries(Object.values(rollups).map(({ batch }) => [batch.id, batch.productionEmissionsClaimedByRemovalId])),
+    feedstocks, deliveries: deliveries.map(delivery => ({ ...delivery, removalLoads: removalLoads.get(delivery.id) ?? [] })), manual,
     runs: runs.map(({ run, reactorCode }) => ({ id: run.id, code: run.code, date: formatFacilityDate(run.startTime, facility.timezone),
       creditBatchId: batchByRun.get(run.id) ?? null, reactorId: run.reactorId, reactorCode,
       dieselOperationLiters: run.dieselOperationLiters, dieselGensetLiters: run.dieselGensetLiters,

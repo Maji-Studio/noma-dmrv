@@ -13,7 +13,7 @@ export interface Quantity {
 }
 
 export interface PartBasis {
-  kind: "firstRun" | "run" | "load" | "recordedOnBatch" | "notYet";
+  kind: "firstRun" | "run" | "load" | "recordedOnBatch" | "notYet" | "claim" | "slice";
   /** Stored code or input label, without a prebuilt explanatory sentence. */
   label: string;
   kg: number | null;
@@ -21,7 +21,7 @@ export interface PartBasis {
 }
 
 export interface Part {
-  /** creditBatchId, or NOT_YET. */
+  /** creditBatchId or removalId (for removalParts), or NOT_YET. */
   key: PartKey;
   fraction: number;
   basis: PartBasis[];
@@ -79,6 +79,8 @@ export interface AllocationRecord {
   quantities: Quantity[];
   /** Ordered parts sum to exactly one. Zero-share touching batches remain visible. */
   parts: Part[];
+  /** Explicit submission ownership; ordered fractions sum to exactly one. */
+  removalParts: Part[];
   basisWord: string;
   feedstock?: FeedstockUse;
 }
@@ -86,7 +88,7 @@ export interface AllocationRecord {
 export interface EmissionAllocation {
   facilityId: string;
   batches: { id: string; code: string; startDate: string; endDate: string }[];
-  /** Membership only: the client aggregates batch parts into Removals. */
+  /** Membership for captions only; never use it to derive a Removal share. */
   removals: { id: string; code: string; status: string; creditBatchIds: string[] }[];
   records: AllocationRecord[];
 }

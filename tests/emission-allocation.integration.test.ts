@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  biocharProductSourceAllocations, creditBatchProductionRuns, creditBatches, deliveries,
+  biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, creditBatches, deliveries,
   emissionEntries, emissionEntryValues, removalTemplateObservations,
   outputStockAllocations, outputStockRunAllocations, productionRunFeedstockDraws,
   productionRunFeedstocks, productionRuns, transportLegs,
@@ -15,6 +15,13 @@ import { getEmissionAllocation } from "@/data-access/emission-allocation";
 import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import type { EmissionAllocation, GroupKey } from "@/types/emission-allocation";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
+import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import { aggregateBiocharTransportMassDistance } from "@/lib/isometric/utils/aggregation";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { NOT_YET } from "@/types/emission-allocation";
+import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
@@ -156,6 +163,71 @@ describe("manual allocation names (real database)", () => {
         }
         expect(allocation.records.find(record => record.id === entries[0].id)?.detail)
           .toMatchObject({ componentName: "Loader diesel usage" });
+        throw ROLLBACK;
+      })).rejects.toBe(ROLLBACK);
+    }, "none");
+  });
+});
+
+
+describe("Removal allocation parity with submission (real database)", () => {
+  it("claims production once and attributes one batch's delivery to two frozen Removal slices", async () => {
+    await withLineageFixture(async fixture => {
+      await expect(db.transaction(async tx => {
+        const org = { organizationId: ctx.organizationId };
+        const [followup] = await insertRemovalFixture(tx, { ...org, facilityId: fixture.facilityId });
+        const FOLLOWUP_TONS = 0.05;
+        const FOLLOWUP_DRY_TONS = 0.0475;
+        const [application] = await insertOutputApplicationFixture(tx, { ...org,
+          code: `E2E-ALLOC-AP-${crypto.randomUUID()}`, deliveryId: fixture.deliveryId,
+          applicationDate: new Date("2026-06-17T00:00:00Z"), biocharAppliedTons: FOLLOWUP_TONS,
+          biocharAppliedDryTons: FOLLOWUP_DRY_TONS, fieldSizeHa: 1,
+        }, row => ({ id: row.id }), true);
+        await tx.insert(creditBatchApplications).values({ ...org, creditBatchId: fixture.batchId,
+          applicationId: application.id, removalId: followup.id,
+          allocatedWetMassKg: tonnesToKg(FOLLOWUP_TONS), allocatedDryMassKg: tonnesToKg(FOLLOWUP_DRY_TONS) });
+        await tx.update(creditBatches).set({ productionEmissionsClaimedByRemovalId: fixture.removalId })
+          .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, fixture.batchId)));
+        await tx.update(deliveries).set({ recordedDistanceKm: DISTANCE_KM, recordedDistanceSource: "manual" })
+          .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, fixture.deliveryId)));
+        await tx.insert(transportLegs).values({ ...org, entityType: "feedstock", entityId: fixture.feedstockId,
+          distanceKm: DISTANCE_KM, loadMassKg: FEEDSTOCK_KG, transportMethodType: "road" });
+        await tx.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+          .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, fixture.productionRunId)));
+        const allocation = await getEmissionAllocation(ctx, { removalId: followup.id }, tx);
+        const record = allocation.records.find(record => record.id === fixture.deliveryId)!;
+        expect(record.group).toBe("deliveryTransport");
+        expect(allocation.removals).toEqual(expect.arrayContaining([fixture.removalId, followup.id].map(id =>
+          expect.objectContaining({ id, creditBatchIds: [fixture.batchId] }))));
+        for (const removalId of [fixture.removalId, followup.id]) {
+          // Exact submission path: Removal-filtered accounting application lineage ->
+          // applied wet transport legs -> the production compiler's biochar aggregator.
+          const rollups = await loadCreditBatchRollups(ctx, [fixture.batchId], { removalId }, tx);
+          const slices = Object.values(rollups).flatMap(rollup => rollup.lineageFacts.applications.map(application => ({
+            deliveryId: application.delivery.id, loadMassKg: tonnesToKg(application.biocharAppliedTons),
+          })));
+          const legs = await loadBiocharDeliveryTransportLegs(ctx, slices, tx);
+          const submitted = aggregateBiocharTransportMassDistance(legs).massDistanceTonneKm;
+          expect(submitted).not.toBeNull();
+          const fraction = record.removalParts.find(part => part.key === removalId)!.fraction;
+          expect(fraction * record.quantities[0].value!).toBeCloseTo(submitted!);
+          expect(submitted).toBe(removalId === fixture.removalId ? 4 : 1);
+        }
+        expect(record.removalParts.find(part => part.key === NOT_YET)!.fraction * record.quantities[0].value!).toBeCloseTo(1);
+        for (const source of allocation.records) {
+          expect(source.removalParts.reduce((sum, part) => sum + part.fraction, 0)).toBe(1);
+        }
+        for (const id of [fixture.productionRunId, fixture.feedstockId]) {
+          expect(allocation.records.find(record => record.id === id)!.removalParts)
+            .toEqual([{ key: fixture.removalId, fraction: 1, basis: [{ kind: "claim",
+              label: allocation.records.find(record => record.id === id)!.code, kg: null }] }]);
+        }
+        // Already-applied mass becomes unassigned when no Removal owns its slice.
+        await tx.update(creditBatchApplications).set({ removalId: null }).where(and(
+          eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, fixture.batchId)));
+        const unassigned = await getEmissionAllocation(ctx, { creditBatchId: fixture.batchId }, tx);
+        expect(unassigned.records.find(record => record.id === fixture.deliveryId)!.removalParts)
+          .toEqual([{ key: NOT_YET, fraction: 1, basis: [{ kind: "notYet", label: record.code, kg: 300 }] }]);
         throw ROLLBACK;
       })).rejects.toBe(ROLLBACK);
     }, "none");
