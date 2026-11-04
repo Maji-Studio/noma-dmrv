@@ -39,7 +39,7 @@ test.describe("Feedstock UI CRUD", () => {
     try {
       await db.insert(schema.feedstockTypes).values(blendType);
 
-      await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+      await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
       await expect(
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),
       ).toBeVisible({ timeout: 15000 });
@@ -77,7 +77,7 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     // Navigate to feedstocks list with facility context
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     // Open the create side sheet
@@ -155,7 +155,7 @@ test.describe("Feedstock UI CRUD", () => {
       });
 
       for (const wetMass of [150, 80]) {
-        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await page.goto(`/feedstock-intake?facility=${seededData.facility.id}&feedstock=${id}`);
         await expect(
           page.locator("aside").getByText(seededData.facility.name, { exact: false }),
         ).toBeVisible();
@@ -173,7 +173,7 @@ test.describe("Feedstock UI CRUD", () => {
         expect(saved.massDryKg).toBe(wetMass * MASS_EDIT_DRY_MASS_FACTOR);
 
         // Reload from persistence so query-cache state cannot hide a lost edit.
-        await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
+        await page.goto(`/feedstock-intake?facility=${seededData.facility.id}&feedstock=${id}`);
         await waitForSideSheet(page);
         await page.getByRole("button", { name: "Edit feedstock" }).click();
         await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue(String(wetMass));
@@ -194,7 +194,7 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New feedstock")');
@@ -226,7 +226,7 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
@@ -286,7 +286,7 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New feedstock")');
@@ -309,7 +309,7 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New feedstock")');
@@ -353,7 +353,7 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     // Open the seeded feedstock's row into VIEW mode (rows are clickable via

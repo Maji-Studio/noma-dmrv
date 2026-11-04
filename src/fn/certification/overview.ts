@@ -1,5 +1,9 @@
 "use server";
 
+import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+
+
+import { correctionForRemoval, type RemovalCorrection } from "@/lib/certification/removal-entry-correction";
 import { getRemovalCodes } from "@/data-access/removal-codes";
 import { z } from "zod";
 import { getRecordLocksForTargets } from "@/data-access/record-certification-lock";
@@ -9,6 +13,7 @@ import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-ce
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
+  listRemovalAttemptEvents,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
@@ -57,6 +62,16 @@ import {
   resolveScopeForRemoval,
 } from "./certify-context-core";
 
+import { heldMissingRuns } from "@/lib/credit-batches/open-items";
+import { loadCreditBatchTodos } from "./credit-batch-todos-core";
+import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
+
+import { logger } from "@/lib/log";
+import { deriveSubmissionAttempts, type SubmissionAttempt } from "@/lib/certification/submission-attempts";
+import { refreshRemovalEvidenceLinks, type RemovalEvidenceLinks } from "./biochar-application-source-readback";
+
+const evidenceLinksLog = logger.child({ mod: "application-source-readback" });
+
 // Per-removal readiness rebuilds the submission context (DB-only — the facility
 // half is resolved once up front). Bound how many run at once so a facility with
 // many removals can't fan out an unbounded burst of query chains at the pool.
@@ -76,12 +91,18 @@ export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
+  /** Template components without a saved decision, from the Components decided check (`batchLinesToDecide`); 0 when none. */
+  linesToDecide: number;
+  /** Non-blocking Check items, using the batch page's open-items builder. */
+  checkCount: number;
   /** The latest Removal containing this batch, or null before its first one. */
   removalId: string | null;
   removalCode: string | null;
   productionEmissionsClaimedByRemovalCode: string | null;
   /** The Removal's own registry-submission status. */
   removalStatus: DerivedStatus | null;
+  /** Any Removal holding this batch is interrupted, not only the newest (`findInterruptedRemoval`). */
+  removalInterrupted: boolean;
   recordLock?: RecordLock;
   /** The downstream GHG Statement, once the submitted Removal is rolled up. */
   ghgStatementId: string | null;
@@ -89,15 +110,27 @@ export interface CreditBatchHealthSummary {
   ghgStatementStatus: DerivedStatus | null;
 }
 
+export interface RemovalMissingProductionRuns {
+  creditBatchId: string;
+  creditBatchCode: string;
+  runs: { id: string; code: string; canAdd: boolean; sameDayEntryDate?: string }[];
+}
+
 // One removal's place in the Removals hub: its identity, member batches, latest
 // submission identity, and the readiness verdict (the same one the table hint
 // and wizard submit step render).
 export interface RemovalPreflightSummary {
+  correction?: RemovalCorrection;
   removalId: string;
   code: string;
   startedOn: string | null;
   completedOn: string | null;
   memberBatchCodes: string[];
+  /**
+   * Member credit batches missing completed runs that fit them, so their
+   * emissions are not counted. Only batches no sent Removal holds appear.
+   */
+  missingProductionRuns: RemovalMissingProductionRuns[];
   externalId: string | null;
   version: number | null;
   local: LocalSubmissionStatus | null;
@@ -107,14 +140,20 @@ export interface RemovalPreflightSummary {
   hasFinalizedSubmission: boolean;
   /** A submit attempt opened the registry boundary before any ledger row. */
   registryBoundaryOpened: boolean;
+  /** A fresh Removal deletion lease hides Delete for every viewer. */
+  deletionInProgress: boolean;
   readiness: RemovalReadiness;
   /** Post-submit verification of Sources on their intended registry targets. */
   evidenceHealth: RemovalEvidenceHealth | null;
+  /** Application Source readback counts and latest attempted check time. */
+  evidenceLinks: RemovalEvidenceLinks;
   // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
   // active template cannot carry. Shown alongside readiness; never gates submit.
   submissionWarnings: string[];
   /** Removal-scoped submit/upload attempts, newest first. */
   recentSyncEvents: CertifierSyncEventRow[];
+  /** One entry per submit attempt, newest first. */
+  submissionAttempts: SubmissionAttempt[];
 }
 
 export interface CertificationOverviewData {
@@ -136,17 +175,37 @@ async function buildRemovalPreflightSummary(
   orgCtx: Parameters<typeof resolveScopeForRemoval>[0],
   removalId: string,
   facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
+  carryReads?: Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>,
 ): Promise<RemovalPreflightSummary> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   if (!scope.removal) throw new SafeError("Removal not found.");
-  const [ctx, recentSyncEvents] = await Promise.all([
-    buildRemovalContext(orgCtx, scope, facilityFacts),
+  const [ctx, recentSyncEvents, attemptEvents] = await Promise.all([
+    buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads }),
     listRecentSyncEvents(orgCtx, {
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,
       limit: RECENT_SYNC_EVENTS_LIMIT,
     }),
+    listRemovalAttemptEvents(orgCtx, { removalId }),
   ]);
+  const missingByBatch = await loadCreditBatchesMissingProductionRuns(
+    orgCtx,
+    ctx.memberBatches.map((batch) => batch.id),
+  );
+  const missingProductionRuns = ctx.memberBatches.flatMap((batch) => {
+    const missing = missingByBatch.get(batch.id);
+    // A Sent batch keeps its own late-run Check; this notice is for the gap before sending.
+    const runs = missing ? heldMissingRuns(missing) : [];
+    if (runs.length === 0) return [];
+    return [{
+      creditBatchId: batch.id,
+      creditBatchCode: batch.code,
+      runs: runs.map((run) => ({
+        id: run.id, code: run.code, canAdd: run.heldByRemovalCode === null,
+        ...(run.sameDayEntry ? { sameDayEntryDate: run.entryDate } : {}),
+      })),
+    }];
+  });
   const facts = toRemovalReadinessFacts(ctx);
   const startedOn = scope.removal.startedOn ?? null;
   const completedOn = scope.removal.completedOn ?? null;
@@ -155,12 +214,16 @@ async function buildRemovalPreflightSummary(
       startedOn,
       completedOn,
     });
+  // The batch context already evaluated correction windows from the loaded lineage.
+  const correction = correctionForRemoval(removalId, Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat());
   return {
     removalId,
+    correction,
     code: scope.removal.code,
     startedOn,
     completedOn,
     memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
+    missingProductionRuns,
     externalId: ctx.latestSubmission?.externalId ?? null,
     version: ctx.latestSubmission?.version ?? null,
     local: facts.local,
@@ -168,6 +231,7 @@ async function buildRemovalPreflightSummary(
     submissionInterrupted,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     registryBoundaryOpened: ctx.registryBoundaryOpened,
+    deletionInProgress: ctx.deletionInProgress,
     readiness: deriveRemovalReadiness(facts),
     evidenceHealth: deriveRemovalEvidenceHealth({
       submissionId: ctx.latestSubmission?.id ?? null,
@@ -175,8 +239,10 @@ async function buildRemovalPreflightSummary(
       submissionStatus: ctx.latestSubmission?.status ?? null,
       removalMetadata: scope.removal.metadata ?? null,
     }),
+    evidenceLinks: await refreshRemovalEvidenceLinks(orgCtx, ctx.latestSubmission?.id ?? null, evidenceLinksLog),
     submissionWarnings: ctx.submissionWarnings,
     recentSyncEvents,
+    submissionAttempts: deriveSubmissionAttempts(attemptEvents),
   };
 }
 
@@ -235,13 +301,14 @@ export async function loadCertificationOverview(
 
     // Process in bounded chunks (order-preserving) rather than one unbounded
     // Promise.all over every removal — see READINESS_CONCURRENCY above.
+    const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
     const removals: RemovalPreflightSummary[] = [];
     for (let i = 0; i < removalRows.length; i += READINESS_CONCURRENCY) {
       const summaries = await Promise.all(
         removalRows
           .slice(i, i + READINESS_CONCURRENCY)
           .map((removal) =>
-            buildRemovalPreflightSummary(orgCtx, removal.id, facilityFacts),
+            buildRemovalPreflightSummary(orgCtx, removal.id, facilityFacts, carryReads),
           ),
       );
       removals.push(...summaries);
@@ -256,7 +323,7 @@ export async function loadCertificationOverview(
       orgCtx,
       readyBatchIds,
       facilityFacts,
-      { unassignedOnly: true },
+      { unassignedOnly: true, carryReads },
     );
     const readyToStartBatchCount = readyBatchIds.filter((batchId) => {
       const health = deriveBatchHealth(
@@ -276,9 +343,9 @@ export async function loadCertificationOverview(
 
 /**
  * Per-batch certification-readiness verdicts for the Credit Batches overview,
- * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the detail
- * page's submission gate (`CreditBatchHealthStrip`) and the New-Removal wizard
- * use, so a card's cert tag can never disagree with the gate it links into.
+ * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the credit
+ * batch page's open items and the New-Removal wizard use, so a card's cert tag
+ * can never disagree with the gate it links into.
  *
  * The caller passes the visible page's batch ids (all belonging to `facilityId`,
  * since the list is facility-scoped). The facility certifier facts are resolved
@@ -339,9 +406,9 @@ export async function loadCreditBatchHealthSummaries(
         ),
       ),
     );
-    const [facilityFacts, removalSubmissions, ghgStatementSubmissions] =
+    const [todosByBatch, removalSubmissions, ghgStatementSubmissions] =
       await Promise.all([
-        loadFacilityCertifierFacts(orgCtx, validFacilityId),
+        loadCreditBatchTodos(orgCtx, validFacilityId, ids.map((id) => batchRowById.get(id)!)),
         getLatestSubmissionsForEntities(
           orgCtx,
           {
@@ -363,20 +430,11 @@ export async function loadCreditBatchHealthSummaries(
           validFacilityId,
         ),
       ]);
-    const { contextsByBatch } = await buildCreditBatchContexts(
-      orgCtx,
-      ids,
-      facilityFacts,
-    );
     const locks = await getRecordLocksForTargets(orgCtx, ids.map(entityId => ({ entityType: "creditBatch", entityId })));
     const locksById = new Map(ids.map((id, index) => [id, locks[index]]));
     const summaries: Record<string, CreditBatchHealthSummary> = {};
     for (const batchId of ids) {
-      const ctx = contextsByBatch[batchId];
-      if (ctx.facilityId !== validFacilityId) {
-        throw new SafeError("Batch does not belong to requested facility");
-      }
-      const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+      const todos = todosByBatch.get(batchId)!;
       const batchRow = batchRowById.get(batchId);
       const removalId = batchRow?.removalId ?? null;
       const ghgStatementId = batchRow?.ghgStatementId ?? null;
@@ -388,8 +446,11 @@ export async function loadCreditBatchHealthSummaries(
         : null;
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
-        state: health.state,
-        issueCount: health.issueCount,
+        state: todos.state,
+        issueCount: todos.blocking.length,
+        linesToDecide: todos.linesToDecide,
+        checkCount: todos.check.length,
+        removalInterrupted: todos.removalInterrupted,
         removalId,
         removalCode: batchRow?.removalCode ?? null,
         productionEmissionsClaimedByRemovalCode: claimCodes.get(batchRow?.productionEmissionsClaimedByRemovalId ?? "") ?? null,

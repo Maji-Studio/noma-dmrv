@@ -85,12 +85,12 @@ async function fillFeedstockDistances(ctx: OrgContext, tx: DbTransaction, locati
     .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, candidates.map(row => row.id)), isNull(feedstocks.archivedAt)))
     .orderBy(asc(feedstocks.id)).for("update");
   const lockedKeys = await lockCertifiedLineageArtifacts(ctx, tx,
-    locked.map(row => ({ entityType: "feedstock", entityId: row.id })));
+    locked.map(row => ({ entityType: "feedstock", entityId: row.id, transportOnly: true })));
   for (const candidate of candidates) {
     const current = locked.find(row => row.id === candidate.id);
     if (!current) { result.skipped.concurrent++; continue; }
     if (current.supplierId !== candidate.supplierId || current.facilityId !== candidate.facilityId) { result.skipped.repointed++; continue; }
-    const target = { entityType: "feedstock" as const, entityId: candidate.id };
+    const target = { entityType: "feedstock" as const, entityId: candidate.id, transportOnly: true };
     if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) { result.skipped.submitted++; continue; }
     await assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, [{ target, mutation: "update" }]);
     const [leg] = await tx.select({ distanceKm: transportLegs.distanceKm }).from(transportLegs)

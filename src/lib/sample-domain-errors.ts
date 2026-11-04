@@ -2,7 +2,7 @@ import { SampleRatioCapError } from "@/lib/calculations/sample-ratios";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { RATIO_INPUT_MAX } from "@/schemas/helpers";
-import { COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE, ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE } from "@/schemas/samples";
+import { COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE, ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE, type SampleCarbonRefusalField } from "@/schemas/samples";
 
 /**
  * Lab Sample guard refusals and how they cross the runner boundary.
@@ -29,7 +29,7 @@ const SAMPLE_CARBON_RECONCILIATION_MESSAGES = {
 } as const;
 
 export type SampleCarbonField = keyof typeof SAMPLE_CARBON_RECONCILIATION_MESSAGES;
-export type SampleRefusalField = SampleCarbonField | "samplingTime";
+export type SampleRefusalField = SampleCarbonRefusalField | "samplingTime";
 
 export interface SampleBatchWindow {
   code: string;

@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { getCreditBatchPageModelFn } from "@/fn/credit-batch-page-model";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
@@ -14,6 +15,7 @@ import {
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
   getCreditBatchProductionRunOptionsFn,
+  getNextCreditBatchCodeFn,
   createCreditBatchFn,
   updateCreditBatchFn,
   deleteCreditBatchFn,
@@ -26,6 +28,7 @@ import type {
 } from "@/schemas/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
@@ -61,6 +64,15 @@ export function useCreditBatches(facilityId?: string) {
       return unwrap(await getCreditBatchesRead(facilityId, { signal }));
     },
     enabled: !!facilityId,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
+  });
+}
+
+export function useNextCreditBatchCode(enabled: boolean) {
+  return useQuery({
+    queryKey: creditBatchKeys.nextCode(),
+    queryFn: async () => unwrap(await getNextCreditBatchCodeFn()),
+    enabled,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }
@@ -175,17 +187,19 @@ export function useCreditBatchProductionRunOptions(params: {
 export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.creditBatch),
     // The batch and the warning are two facts about one committed write: the
     // batch is saved either way, and `warning` says its accounting roll-up did
     // not load with it (issue #769).
-    mutationFn: async (data: CreditBatchFormData) => {
-      const result = await createCreditBatchFn(data);
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (data: CreditBatchFormData, intentKey) => {
+      const result = await createCreditBatchFn(data, { intentKey });
+      if (!result.success) throwActionError(result);
       return { creditBatch: result.data, warning: result.warning };
     },
     onSuccess: ({ creditBatch }) => {
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       // The created row is not an authoritative detail: when its post-commit
       // roll-up did not load, its applied tonnage and application slices are
       // unknown, and seeding it would serve those unknowns for the whole
@@ -219,11 +233,15 @@ export function useUpdateCreditBatch() {
       return result;
     },
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       if (result.success) patchArrayListCachesByPrefixWithSavedRow(queryClient, creditBatchKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      // A rename changes the picker label (name and dates) in the by-id and option caches.
+      invalidateEntityTypeQueries(queryClient, "creditBatch");
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
       });
@@ -257,6 +275,8 @@ export function useDeleteCreditBatch() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.runPreviewPrefix() });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() });
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       invalidateCertificationReadiness(queryClient);
     },

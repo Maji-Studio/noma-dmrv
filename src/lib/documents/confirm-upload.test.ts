@@ -8,7 +8,7 @@ vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
 import { confirmDocumentUpload } from "./confirm-upload";
 import { mapConfirmOutcome } from "./confirm-outcome";
 import { representDocument } from "@/lib/representations/documents";
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const documentId = "12345678-1234-4234-8234-123456789abc";
 const ownerId = "22345678-1234-4234-8234-123456789abc";
 const row = { id: documentId, entityId: ownerId, entityType: "delivery", documentType: "delivery_receipt", uploadStatus: "pending", fileName: "report.pdf", mimeType: "application/pdf", fileSizeBytes: 8, checksumSha256: null, description: null, version: 1, createdAt: new Date(), updatedAt: new Date(), metadata: {} } as DocumentRow;

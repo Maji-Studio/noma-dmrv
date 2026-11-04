@@ -16,7 +16,7 @@ const REGISTRY_AT = "2026-10-14T10:00:00Z";
 let ctx: OrgContext;
 beforeEach(async () => {
   const id = `org_status_${crypto.randomUUID()}`;
-  ctx = { organizationId: id, userId: "status-actor", orgRole: "owner", isPlatformAdmin: false };
+  ctx = { organizationId: id, userId: "status-actor", orgRole: "admin", isPlatformAdmin: false };
   await db.insert(organizations).values({ id, name: "Status fixture", slug: id });
 });
 afterEach(async () => {
@@ -102,7 +102,7 @@ it.each(["VERIFIED", "CREDITS_ISSUED", "FAILED_VERIFICATION", "DRAFT"] as const)
   const row = await submission({ status: "accepted", metadata: { remoteStatus: "AWAITING_VERIFICATION" } });
   const remote: GhgStatement = {
     project_id: "prj_fixture", verifier: null, removal_ids: [], credit_allocation: null,
-    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null,
+    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null, pending_total_co2e_reduced_kg: null,
     id: "ghg_fixture", status, submitted_at: REGISTRY_AT,
     credits_issued_at: status === "CREDITS_ISSUED" ? REGISTRY_AT : null,
     ghg_entry_ids: [], reporting_period_start_at: null, reporting_period_end_at: null,
@@ -121,7 +121,7 @@ it("records a nonterminal remote refresh with no invented registry time", async 
   const row = await submission({ status: "submitted" });
   const remote: GhgStatement = {
     project_id: "prj_fixture", verifier: null, removal_ids: [], credit_allocation: null,
-    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null,
+    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null, pending_total_co2e_reduced_kg: null,
     id: "ghg_fixture", status: "AWAITING_VERIFICATION", submitted_at: null, credits_issued_at: null,
     ghg_entry_ids: [], reporting_period_start_at: null, reporting_period_end_at: null,
   };
@@ -222,7 +222,7 @@ it("retains Certify submission evidence when a returned draft has no current sub
   const row = await submission({ status: "submitted", metadata: { submittedToVerifierAt: REGISTRY_AT } });
   const remote: GhgStatement = {
     project_id: "prj_fixture", verifier: null, removal_ids: [], credit_allocation: null,
-    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null,
+    ghg_statement_report_url: null, pending_total_co2e_removed_kg: null, pending_total_co2e_reduced_kg: null,
     id: "ghg_fixture", status: "DRAFT", submitted_at: null, credits_issued_at: null,
     ghg_entry_ids: [], reporting_period_start_at: null, reporting_period_end_at: null,
   };

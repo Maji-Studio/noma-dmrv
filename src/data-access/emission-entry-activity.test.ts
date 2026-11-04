@@ -3,7 +3,7 @@ import type { DbTransaction } from "@/db";
 import type { emissionEntries, emissionEntryValues } from "@/db/schema";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
 
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const entry: typeof emissionEntries.$inferSelect & { values: (typeof emissionEntryValues.$inferSelect)[] } = {
   id: "entry",
   organizationId: "org",
@@ -21,7 +21,7 @@ const entry: typeof emissionEntries.$inferSelect & { values: (typeof emissionEnt
   version: 1,
   contentRevision: 1,
   deletedAt: null,
-  sentByRemovalId: null,
+  sentByRemovalId: null, replacesEntryId: null,
   sendReservedBySubmissionId: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),

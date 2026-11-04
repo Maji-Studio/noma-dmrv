@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import { operators, type Operator } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { DomainError } from "@/lib/domain-errors";
 import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import { countOperatorUsage } from "./fleet-usage";
@@ -99,7 +100,7 @@ export async function deleteOperator(
       assertRowVersion({ entity: OPERATOR_CONFLICT_ENTITY, id: operatorId, expectedVersion, actualVersion: locked.version });
 
       const blocker = formatFleetDeleteBlocker("operator", null, await countOperatorUsage(ctx, tx, operatorId));
-      if (blocker) throw new DomainError("conflict", blocker);
+      if (blocker) throw inUseDeleteRefusal(blocker, ["operatorId"]);
 
       await tx
         .delete(operators)
@@ -107,7 +108,7 @@ export async function deleteOperator(
     });
   } catch (error) {
     if (OPERATOR_FK_CONSTRAINTS.some((constraint) => isPgForeignKeyViolation(error, constraint))) {
-      throw new DomainError("conflict", OPERATOR_IN_USE);
+      throw inUseDeleteRefusal(OPERATOR_IN_USE, ["operatorId"]);
     }
     throw error;
   }

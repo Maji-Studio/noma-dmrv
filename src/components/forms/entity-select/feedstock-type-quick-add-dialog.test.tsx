@@ -13,6 +13,7 @@ vi.mock("@/components/feedstock-types/feedstock-type-form", () => ({
     <form data-guard-dialog-cancel={guardDialogCancel} onSubmit={(event) => { event.preventDefault(); void onSubmit(selection); }}><p>{errorMessage}</p></form>
   ),
 }));
+import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 
 beforeAll(() => {
@@ -38,7 +39,7 @@ describe("feedstock type quick-add payload", () => {
     expect(renderer!.root.findByType("form").props["data-guard-dialog-cancel"]).toBe(true);
     await act(async () => { await renderer.root.findByType("form").props.onSubmit({ preventDefault: () => undefined }); });
     const expected = { ...selection, name: "Selected feedstock", description: "Description", isometricFeedstockTypeId: "ft_selected" };
-    expect(mocks.create).toHaveBeenCalledWith(expected);
+    expect(mocks.create).toHaveBeenCalledWith(expected, { intentKey: expect.any(String) });
     // The exact dialog payload survives the schema used by the real action.
     expect(feedstockTypeQuickAddSchema.parse(mocks.create.mock.calls[0][0])).toEqual(expected);
     if (success) {
@@ -52,4 +53,21 @@ describe("feedstock type quick-add payload", () => {
     await act(async () => renderer.unmount());
     queryClient.clear();
   });
+});
+
+it("rotates on open, retaining failed retries within the draft", async () => {
+  mocks.create.mockResolvedValue({ success: false, error: "Save again" });
+  const client = new QueryClient();
+  let renderer: ReactTestRenderer;
+  await act(async () => { renderer = create(<QueryClientProvider client={client}><FeedstockTypeQuickAddDialog isOpen onClose={vi.fn()} /></QueryClientProvider>); });
+  const submit = () => act(async () => { await renderer.root.findByType("form").props.onSubmit({ preventDefault: vi.fn() }); });
+  await submit();
+  await submit();
+  await act(async () => renderer.root.findByType(QuickAddDialogShell).props.onOpen());
+  await submit();
+  const keys = mocks.create.mock.calls.map(([, options]) => options.intentKey);
+  expect(keys[1]).toBe(keys[0]);
+  expect(keys[2]).not.toBe(keys[0]);
+  await act(async () => renderer.unmount());
+  client.clear();
 });

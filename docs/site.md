@@ -97,8 +97,9 @@ Two Vercel projects build from this one repository:
 Both projects read the root `vercel.json`, whose `ignoreCommand` runs
 `scripts/vercel-ignore-build.sh` and overrides any Ignored Build Step set in the
 dashboard. The script picks the rule by `VERCEL_PROJECT_ID` and builds whenever it
-cannot tell: an unknown project, no previous deployment, or a previous commit
-outside Vercel's shallow clone (a branch that merged in many staging commits).
+cannot tell: an unknown project, no previous deployment, a previous commit
+outside Vercel's shallow clone (a branch that merged in many staging commits),
+or a redeploy of the same commit.
 Because both projects read it, any key added to the root `vercel.json` (crons,
 functions, headers) applies to the site as well as the app. Both daily crons, `/api/cron/purge-api-records` and
 `/api/cron/sweep-document-uploads`, therefore also fire against the site's

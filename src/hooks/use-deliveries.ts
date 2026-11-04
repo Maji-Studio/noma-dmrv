@@ -1,9 +1,9 @@
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
 import { invalidateRecordedTransport } from "./transport-distance-query-keys";
-import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
-import { StaleVersionError } from "@/lib/stale-version";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import { outputStockKeys } from "./use-output-stock";
+import { invalidateAfterFailedStockSave, outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
  * Client-side state management for delivery operations
@@ -29,6 +29,7 @@ import type {
   DeleteDeliveryData,
 } from "@/schemas/deliveries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MAX_DELIVERY_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/deliveries";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 import { biocharProductKeys } from "./use-biochar-products";
@@ -80,10 +81,12 @@ export function useDeliveries(
   filters?: Partial<DeliveryFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: deliveryKeys.list(filters),
-    queryFn: async () => unwrap(await getDeliveriesFn(filters)),
-    staleTime: 30000, // 30 seconds
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: deliveryKeys.list,
+    fetcher: async (request) => unwrap(await getDeliveriesFn(request)),
+    staleTime: 30000,
     enabled: options?.enabled,
   });
 }
@@ -149,7 +152,7 @@ export function useCreateDelivery(
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.delivery),
     mutationFn: async (data: CreateDeliveryData) => {
       const result = await createDeliveryFn(data);
-      if (!result.success) throwDeliveryActionError(result);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -161,6 +164,7 @@ export function useCreateDelivery(
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
       }
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
@@ -182,7 +186,7 @@ export function useCreateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -204,7 +208,7 @@ export function useUpdateDelivery(
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -300,7 +304,7 @@ export function useUpdateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -345,7 +349,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     mutationFn: async (variables: DeleteDeliveryData) => {
       const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throwDeliveryActionError(result);
+        throwActionError(result);
       }
       return;
     },
@@ -393,6 +397,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       void invalidateRecordedTransport(queryClient);
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.statsPrefix() });
       void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       void queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
@@ -407,7 +412,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     },
     onError: async (error, variables, context) => {
       const { deliveryId } = variables;
-      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+      invalidateAfterFailedStockSave(queryClient);
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {

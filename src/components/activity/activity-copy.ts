@@ -4,30 +4,30 @@
  */
 import { ACTIVITY_RECORDING_STARTED_AT } from "@/config/activity";
 import { pluralize } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatFacilityDay } from "@/lib/format-utils";
 
 export const ACTIVITY_TITLE = "Activities";
 
-export function activityRecordingStartLabel(): string {
-  return formatDate(ACTIVITY_RECORDING_STARTED_AT);
+export function activityRecordingStartLabel(timeZone: string): string {
+  return formatFacilityDay(ACTIVITY_RECORDING_STARTED_AT, timeZone);
 }
 
 export const ACTIVITY_EMPTY_TITLE = "No activity recorded yet";
 
-export function activityEmptyDescription(): string {
-  return `Activity is recorded from ${activityRecordingStartLabel()}. Changes to this credit batch and its records appear here.`;
+export function activityEmptyDescription(timeZone: string): string {
+  return `Activity is recorded from ${activityRecordingStartLabel(timeZone)}. Changes to this credit batch and its records appear here.`;
 }
 
 /** Closes a complete list: nothing older exists to load. */
-export function activityHistoryStartNote(): string {
-  return `Activity is recorded from ${activityRecordingStartLabel()}. Earlier changes are not listed.`;
+export function activityHistoryStartNote(timeZone: string): string {
+  return `Activity is recorded from ${activityRecordingStartLabel(timeZone)}. Earlier changes are not listed.`;
 }
 
 export const ACTIVITY_FILTERED_EMPTY_TITLE = "No matching activity";
 export const ACTIVITY_FILTERED_EMPTY_DESCRIPTION = "Change or clear the filters to see more activity.";
 export const ACTIVITY_CLEAR_FILTERS_LABEL = "Clear filters";
 
-export const ACTIVITY_LOAD_ERROR = "Activity could not be loaded. Retry to load it.";
+export const ACTIVITY_LOAD_ERROR = "Activity could not be loaded. Try again to load it.";
 export const ACTIVITY_LOADING = "Loading activity…";
 export const ACTIVITY_SHOW_MORE_LABEL = "Show older activity";
 export const ACTIVITY_DELETED_RECORD_LABEL = "Deleted record";
@@ -40,3 +40,18 @@ export function activityChangeCount(count: number): string {
 export function activityLoadedMessage(count: number): string {
   return `${activityChangeCount(count)} loaded.`;
 }
+
+/** The tag on a row that stands for several identical events in a row: "10 times". */
+export function activityRepeatLabel(count: number): string {
+  return `${count} times`;
+}
+
+/** Older events loaded that read the same as an existing row, so only its count grew. */
+export const ACTIVITY_REPEATS_LOADED_MESSAGE = "Older repeats were added to an existing row.";
+
+/** Older events loaded, but none of them is shown in the feed. */
+export const ACTIVITY_NO_NEW_CHANGES_MESSAGE = "No new changes were found.";
+
+/** The empty card above "Show older activity" when the loaded activity holds no visible change. */
+export const ACTIVITY_NO_VISIBLE_CHANGES_TITLE = "No changes to show yet";
+export const ACTIVITY_NO_VISIBLE_CHANGES_DESCRIPTION = "Older activity may have some.";

@@ -33,6 +33,7 @@ export function PartyFacilityDistances({ value = [], savedValue = [], isEditMode
       const draftRow = value[valueIndex];
       return <div key={item.id} data-testid={`facility-distance-${item.id}`}><DistanceCalcField
         id={`${idPrefix}-${item.id}`}
+        fieldName={valueIndex >= 0 ? `facilityDistances.${valueIndex}.distanceKm` : undefined}
         label={`Distance ${fromFacility ? "from" : "to"} ${item.name}`}
         helperText="One-way road distance. GPS estimates are editable estimates. Every delivery counts the round trip."
         cue={draftRow?.distanceKm != null ? formatRoundTripKm(draftRow.distanceKm) : undefined}

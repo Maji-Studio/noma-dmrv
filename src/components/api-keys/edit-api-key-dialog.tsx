@@ -14,7 +14,7 @@ export function EditApiKeyDialog({ apiKey, onClose, organizationId }: {
   return (
     <Modal isOpen={!!apiKey} onClose={close} ariaLabelledBy="edit-api-key-title" width="lg" dismissible={!update.isPending} dismissOnClickOutside={false}>
       <div className="flex flex-col gap-20">
-        <h2 id="edit-api-key-title" className="title-heading-3 pr-32">Edit API key</h2>
+        <h2 id="edit-api-key-title" className="title-heading-3">Edit API key</h2>
         {apiKey && <EditApiKeyForm key={apiKey.id} apiKey={apiKey} isPending={update.isPending} onCancel={close} onSubmit={async (values) => { await update.mutateAsync(values); onClose(); }} />}
       </div>
     </Modal>

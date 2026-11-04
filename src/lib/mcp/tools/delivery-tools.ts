@@ -21,7 +21,7 @@ const guidance = `${REQUEST_KEY_RULE} ${UNTRUSTED_TEXT}`;
 
 export const deliveryWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "record_delivery", scope: "deliveries:write", input: createInput, output: deliveryCreateEnvelopeSchema,
+    kind: "write", name: "record_delivery", scope: "deliveries:write", requiredScopes: () => ["deliveries:write"], input: createInput, output: deliveryCreateEnvelopeSchema,
     annotations: { ...annotations, destructiveHint: false },
     description: `Record one finished-product delivery against an order; this is not feedstock intake (use log_feedstock_delivery). Call find_orders and get_order_balance for remaining wet kg, then find_storage_locations with type=product_bin and the order's formulationId, then get_bin_stock for drawOrder and sub-bins. This deducts from the product bin. Mass is wet kg; moisture is percent of wet mass. Distances are one-way km; the server counts the round trip. Omit distanceKmOverride to use the customer location's distance; an override must be above 0. Without sources, a split bin draws in its drawOrder. A dry run's stockEffects and allocations show which products would be drawn; pass its basisFingerprint on the real write. deliveredAt is resolved in the order facility's zone, accepts { date, time }, and cannot be in the future. Never invent moisture readings: ask the operator. A top-level moisturePercent is ignored when sources is sent; each source carries its own reading and the stored overall moisture is 100 times (1 minus solids divided by wet mass), including ingredient solids. Without sources, moisturePercent is the recorded reading. Upload the bill of lading with request_document_upload (ownerType delivery, documentType bill_of_lading); the result includes a non-blocking warning until then. ${guidance}`,
     async execute(context, raw) {
@@ -37,7 +37,7 @@ export const deliveryWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "update_delivery", scope: "deliveries:write", input: updateInput, output: deliveryUpdateEnvelopeSchema,
+    kind: "write", name: "update_delivery", scope: "deliveries:write", requiredScopes: () => ["deliveries:write"], input: updateInput, output: deliveryUpdateEnvelopeSchema,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update delivery metadata only: code, driver, vehicle and distance. Send only changed fields; omission preserves fields and null clears clearable fields. Mass, moisture and time fixes are corrections made in the app. Call get_delivery first and pass version as expectedVersion; a stale version returns the current record. Distance is one-way km; the server counts the round trip, and distanceKmOverride must be above 0 or null to clear it. ${guidance}`,
     async execute(context, raw) {

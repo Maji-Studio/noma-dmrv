@@ -5,8 +5,10 @@
  * one quiet date bar per credit batch (all the same height), year navigation, and
  * a dashed "+" slot in every gap that opens "New credit batch" for that month.
  * Hover (or focus, or a first tap) on a bar shows its facts; pressing a bar
- * opens the batch.
+ * (the second tap on touch) opens the batch page, so each bar is a real link.
  */
+import { creditBatchName, creditBatchNameWithCode } from "@/lib/credit-batch-label";
+import { recordHref } from "@/lib/record-links";
 import { useState } from "react";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import { useCreditBatchTimelineFacts } from "@/hooks/use-credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { creditBatchStateOf, type CreditBatchStateView } from "@/lib/credit-batches/batch-state";
+import { todosLabel } from "@/lib/credit-batches/batch-page";
 import {
   groupByFeedstock,
   dayPercentOfYear,
@@ -27,7 +30,7 @@ import {
   type DateWindow,
 } from "@/lib/credit-batches/timeline";
 import { formatDateRange } from "@/lib/format-utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { LOAD_FAILED } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import { BatchHoverCard } from "./credit-batch-timeline-hover-card";
 import {
@@ -61,6 +64,7 @@ export interface NewBatchRequest extends DateWindow {
 interface TimelineBatch extends DateWindow {
   id: string;
   code: string;
+  name: string | null;
   feedstockTypeId: string;
   feedstockTypeName: string | null;
   source: CreditBatchWithRelations;
@@ -70,7 +74,7 @@ type BatchView = CreditBatchStateView;
 
 /** What the bar's label says while its state is not known. */
 function pendingStateLabel(readinessFailed: boolean): string {
-  return readinessFailed ? MISSING_VALUE.notAvailable : "Loading";
+  return readinessFailed ? LOAD_FAILED : "Loading";
 }
 
 /** Opens a scroll box with today in the middle, once per year shown. */
@@ -108,9 +112,9 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
         ) : (
           <>
             {spot.cutStart && <CutMark side="start" />}
-            {/* Every bar is a credit batch, so the shared "CB-" prefix is dropped; the control's label carries the full code. */}
+            {/* An unnamed bar drops the shared "CB-" prefix; a named one shows its name. The control's label carries the full code. */}
             {view.state === "issued" && <StateMark state="issued" size={BAR_MARK_PX} />}
-            <span className="truncate body-caption font-medium tabular-nums">{batch.code.replace(/^CB-/, "")}</span>
+            <span className="truncate body-caption font-medium tabular-nums">{batch.name ?? batch.code.replace(/^CB-/, "")}</span>
             {spot.cutEnd && (
               <span className="ml-auto">
                 <CutMark side="end" />
@@ -120,12 +124,12 @@ function Bar({ batch, spot, view }: { batch: TimelineBatch; spot: BarPlacement; 
         )}
       </span>
       {/* The count sits on the corner so the code keeps the bar's width. */}
-      {view.blockingCount > 0 && (
+      {view.openTodoCount > 0 && (
         <BlockingCount
-          count={view.blockingCount}
+          count={view.openTodoCount}
           className="absolute -top-8 right-0 z-10"
           role="img"
-          aria-label={`Missing data ${view.blockingCount}`}
+          aria-label={todosLabel(view.openTodoCount)}
         />
       )}
     </span>
@@ -156,14 +160,12 @@ export function CreditBatchTimeline({
   batches,
   facilityId,
   today,
-  onOpenBatch,
   onNewBatch,
 }: {
   batches: CreditBatchWithRelations[];
   facilityId: string;
   /** YYYY-MM-DD. */
   today: string;
-  onOpenBatch: (batch: CreditBatchWithRelations) => void;
   onNewBatch: (request: NewBatchRequest) => void;
 }) {
   const [year, setYear] = useState(() => Number(today.slice(0, 4)));
@@ -178,6 +180,7 @@ export function CreditBatchTimeline({
   const timelineBatches: TimelineBatch[] = batches.map((batch) => ({
     id: batch.id,
     code: batch.code,
+    name: creditBatchName(batch),
     start: batch.startDate,
     end: batch.endDate,
     feedstockTypeId: batch.feedstockTypeId,
@@ -202,6 +205,7 @@ export function CreditBatchTimeline({
 
   const inYear = timelineBatches.filter((batch) => placeOnYear(batch, year));
   const openCount = inYear.filter((batch) => viewOf(batch).state === "blocking").length;
+  const anyInterrupted = inYear.some((batch) => viewOf(batch).state === "interrupted");
   const todayPct = monthIndexIn(year, today) >= 0 ? dayPercentOfYear(today) : null;
 
   return (
@@ -239,7 +243,7 @@ export function CreditBatchTimeline({
             {openCount > 0 && `, ${openCount} open`}
           </p>
         </div>
-        <StateLegend />
+        <StateLegend interrupted={anyInterrupted} />
       </div>
       {/* Scrolls inside the panel on narrow screens; the page itself never scrolls sideways. */}
       <div ref={centerOnToday(year, todayPct)} className="relative -mx-20 overflow-x-auto px-20 sm:mx-0 sm:px-0">
@@ -269,17 +273,18 @@ export function CreditBatchTimeline({
                           <BatchHoverCard
                             batch={{
                               code: batch.code,
+                              name: batch.name,
                               feedstockName: row.feedstockName,
                               startDate: batch.start,
                               endDate: batch.end,
                               state: view.state,
-                              blockingCount: view.blockingCount,
+                              todoCount: view.openTodoCount,
                               facts: facts[batch.id],
                               factsStatus: factsFailed ? "failed" : factsQuery.isLoading ? "loading" : "ready",
                             }}
-                            label={`${batch.code}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.blockingCount > 0 ? `, Missing data ${view.blockingCount}` : ""}`}
+                            label={`${creditBatchNameWithCode(batch)}, ${row.feedstockName}, ${formatDateRange(batch.start, batch.end)}, ${stateLabel}${view.openTodoCount > 0 ? `, ${todosLabel(view.openTodoCount)}` : ""}`}
                             className="group absolute inset-0 block outline-offset-2"
-                            onOpenBatch={() => onOpenBatch(batch.source)}
+                            href={recordHref("creditBatch", batch.id, { facilityId: batch.source.facilityId })}
                           >
                             <Bar batch={batch} spot={spot} view={view} />
                           </BatchHoverCard>

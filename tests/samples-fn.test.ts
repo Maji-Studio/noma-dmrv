@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
     userId: "user-123",
     organizationId: "org_test_fixtures",
-    orgRole: "owner",
+    orgRole: "admin",
     isPlatformAdmin: false,
   }),
 }));

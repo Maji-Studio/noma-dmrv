@@ -34,7 +34,7 @@ function guidedText(headline: string, body: Record<string, unknown>) {
 
 export const labSampleWriteTools: WriteTool[] = [
   {
-    kind: "write", name: "record_lab_sample", scope: "lab-samples:write", input: createInput, output: itemOutput,
+    kind: "write", name: "record_lab_sample", scope: "lab-samples:write", requiredScopes: () => ["lab-samples:write"], input: createInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: false },
     description: `Record one lab sample, a single replicate of one credit batch. Call whoami and find_credit_batches first. Take at least three replicates per batch. Total and organic carbon are required. ${LAB_SAMPLE_GUIDANCE} ${guidance}`,
     async execute(context, raw) {
@@ -48,7 +48,7 @@ export const labSampleWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "update_lab_sample", scope: "lab-samples:write", input: updateInput, output: itemOutput,
+    kind: "write", name: "update_lab_sample", scope: "lab-samples:write", requiredScopes: () => ["lab-samples:write"], input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Update a lab sample by UUID. Send only what changes; null clears an optional result, and the carbon totals cannot be cleared. Send another creditBatchId to move it. ${versionGuidance} ${LAB_SAMPLE_GUIDANCE} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
@@ -58,7 +58,7 @@ export const labSampleWriteTools: WriteTool[] = [
     },
   },
   {
-    kind: "write", name: "delete_lab_sample", scope: "lab-samples:delete", input: deleteInput, output: deleteOutput,
+    kind: "write", name: "delete_lab_sample", scope: "lab-samples:delete", requiredScopes: () => ["lab-samples:delete"], input: deleteInput, output: deleteOutput,
     annotations: { ...annotations, destructiveHint: true },
     description: `Delete a lab sample by UUID, with its transport legs and documents. A sample in a certified output cannot be deleted. Returns deleted id and code, or data on a dry run. ${versionGuidance} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "delete"),

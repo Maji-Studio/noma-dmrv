@@ -12,13 +12,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  AmbiguousLocalTimeError,
-  combineDateAndTime,
   formatFacilityWallClock,
-  NonexistentLocalTimeError,
   facilityTimeHelperText,
 } from "@/lib/date-utils";
-import { makeProductionRunFormSchema, type ProductionRunStatus } from "@/schemas/production-runs";
+import { resolveRunWindow, type RunWindowValues } from "@/lib/production-runs/run-window";
+import { makeProductionRunFormSchema, START_TIME_INVALID_MESSAGE, type ProductionRunStatus } from "@/schemas/production-runs";
 
 /** date-fns pattern matching what `<input type="time">` accepts and emits. */
 export const TIME_INPUT_FORMAT = "HH:mm";
@@ -114,51 +112,24 @@ export type ProductionRunWindow =
  *
  * A DST rejection is returned rather than thrown so the form can pin it to the
  * offending field. In practice the schema's `superRefine` — which shares the
- * same combiner — has already blocked submit, so this is the second line of the
+ * same resolver — has already blocked submit, so this is the second line of the
  * same defence.
  */
-export function buildProductionRunWindow(input: {
-  startDateStr: string;
-  startTimeStr: string;
-  endDateStr: string;
-  endTimeStr: string | undefined;
+export function buildProductionRunWindow(input: RunWindowValues & {
   includeEndTime: boolean;
   clearEndTime: boolean;
   timeZone: string;
 }): ProductionRunWindow {
-  let startTime: Date;
-  try {
-    startTime = combineDateAndTime(input.startDateStr, input.startTimeStr, input.timeZone);
-  } catch (error) {
-    if (
-      error instanceof NonexistentLocalTimeError ||
-      error instanceof AmbiguousLocalTimeError
-    ) {
-      return { ok: false, field: "startTime", message: error.message };
-    }
-    throw error;
+  const { start, end, startError, endError } = resolveRunWindow({
+    ...input,
+    endTime: input.includeEndTime && !input.clearEndTime ? input.endTime : undefined,
+  }, input.timeZone);
+  if (!start) {
+    return { ok: false, field: "startTime", message: startError ?? START_TIME_INVALID_MESSAGE };
   }
-
-  if (input.clearEndTime) return { ok: true, startTime, endTime: null };
-  if (!input.endTimeStr || !input.includeEndTime) {
-    return { ok: true, startTime, endTime: undefined };
-  }
-
-  try {
-    return {
-      ok: true,
-      startTime,
-      endTime: combineDateAndTime(input.endDateStr, input.endTimeStr, input.timeZone),
-    };
-  } catch (error) {
-    if (
-      error instanceof NonexistentLocalTimeError ||
-      error instanceof AmbiguousLocalTimeError
-    ) {
-      return { ok: false, field: "endTime", message: error.message };
-    }
-    throw error;
-  }
+  if (input.clearEndTime) return { ok: true, startTime: start, endTime: null };
+  if (endError) return { ok: false, field: "endTime", message: endError };
+  return { ok: true, startTime: start, endTime: end ?? undefined };
 }
 
 /**

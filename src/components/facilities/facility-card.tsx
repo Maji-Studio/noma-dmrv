@@ -1,5 +1,7 @@
 "use client";
 
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { EMPTY_STOCK_LABEL, isMassEmpty } from "@/lib/stock-display";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -10,8 +12,9 @@ import {
 import { RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import { formatMass } from "@/lib/format-utils";
+import { formatMass, formatMassKg } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatFacilityLocation } from "@/lib/location-display";
 
 interface FacilityCardProps {
   facility: FacilityWithRelations;
@@ -29,6 +32,7 @@ export function FacilityCard({
   onRestore,
 }: FacilityCardProps) {
   const isArchived = facility.archivedAt != null;
+  const location = formatFacilityLocation(facility);
   return (
     <article
       className="flex flex-col bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors hover:[border-color:var(--edge-soft)] cursor-pointer"
@@ -63,10 +67,10 @@ export function FacilityCard({
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
             {facility.name?.trim() || facility.code}
           </h3>
-          {facility.location && (
+          {location && (
             <p className="mt-6 flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
               <MapPinIcon size={12} />
-              {facility.location}
+              {location}
             </p>
           )}
         </div>
@@ -83,9 +87,13 @@ export function FacilityCard({
           </div>
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">Feedstock, wet</p>
-            <p className="body-small text-[var(--color-text-primary)]">
-              {formatMass(facility.inventorySummary.feedstockWetKg)}
-            </p>
+            {isMassEmpty(facility.inventorySummary.feedstockWetKg) ? (
+              <p className="body-small text-[var(--color-text-tertiary)]">{EMPTY_STOCK_LABEL}</p>
+            ) : (
+              <p className="body-small text-[var(--color-text-primary)]">
+                {facility.inventorySummary.feedstockWetKg >= KG_PER_TONNE ? formatMass(facility.inventorySummary.feedstockWetKg) : formatMassKg(facility.inventorySummary.feedstockWetKg)}
+              </p>
+            )}
           </div>
         </div>
       </div>

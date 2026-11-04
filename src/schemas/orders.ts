@@ -1,3 +1,4 @@
+import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 /**
  * Orders Validation Schemas
  * Zod schemas for order forms, server actions, and filtering
@@ -10,8 +11,12 @@ import {
   MASS_KG_INPUT_STEP,
   MASS_MIN_KG_MESSAGE,
   requiredPositiveMassKgSchema,
+  uuidSchema,
 } from "@/schemas/helpers";
 import { z } from "zod";
+
+/** The most orders one list request returns, and the exact-id chunk size. */
+export const MAX_ORDER_LIST_SIZE = EXACT_ID_FILTER_MAX;
 
 // ============================================
 // Constants and Enums
@@ -113,6 +118,7 @@ export const orderFilterSchema = z.object({
 
   // Filter by facility
   facilityId: z.string().uuid().optional(),
+  ids: z.array(uuidSchema()).max(MAX_ORDER_LIST_SIZE).optional(),
 
   // Filter by customer
   customerId: z.string().uuid().optional(),
@@ -126,7 +132,7 @@ export const orderFilterSchema = z.object({
 
   // Pagination
   page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
+  pageSize: z.number().int().min(1).max(MAX_ORDER_LIST_SIZE).default(20),
 
   // Sorting
   sortBy: z

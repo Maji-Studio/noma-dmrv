@@ -7,6 +7,10 @@ import {
 } from "@/schemas/production-runs";
 
 const originalTz = process.env.TZ;
+const FRACTIONAL_RESIDENCE_MINUTES = 1.5;
+const VALID_RESIDENCE_MINUTES = 30;
+const ZERO_RESIDENCE_MINUTES = 0;
+const NEGATIVE_RESIDENCE_MINUTES = -1;
 
 afterEach(() => {
   process.env.TZ = originalTz;
@@ -39,6 +43,49 @@ const completeProductionRunInput = {
   biocharOutputKg: 10,
 };
 
+describe("productionRunFormSchema residence time", () => {
+  it.each(["1.5", FRACTIONAL_RESIDENCE_MINUTES])(
+    "rejects fractional minutes %s with a whole-number message",
+    residenceTimeMinutes => {
+      const result = productionRunFormSchema.safeParse({
+        ...completeProductionRunInput, residenceTimeMinutes,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({
+          path: ["residenceTimeMinutes"],
+          message: "Enter residence time as a whole number of minutes.",
+        }));
+      }
+    },
+  );
+
+  it.each([ZERO_RESIDENCE_MINUTES, NEGATIVE_RESIDENCE_MINUTES])(
+    "rejects non-positive minutes %s with the minimum message",
+    residenceTimeMinutes => {
+      const result = productionRunFormSchema.safeParse({
+        ...completeProductionRunInput, residenceTimeMinutes,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(expect.objectContaining({
+          path: ["residenceTimeMinutes"],
+          message: "Residence time must be at least 1 minute.",
+        }));
+      }
+    },
+  );
+
+  it.each([
+    { input: "30", expected: VALID_RESIDENCE_MINUTES },
+    { input: "", expected: null },
+  ])("parses residence time '$input' as $expected", ({ input, expected }) => {
+    expect(productionRunFormSchema.parse({
+      ...completeProductionRunInput, residenceTimeMinutes: input,
+    }).residenceTimeMinutes).toBe(expected);
+  });
+});
+
 describe("running end time validation", () => {
   it.each([
     ["form", productionRunFormSchema],
@@ -63,6 +110,61 @@ describe("running end time validation", () => {
 });
 
 describe("productionRunFormSchema mass balance", () => {
+  for (const [schemaName, schema] of [
+    ["form", productionRunFormSchema],
+    ["create", createProductionRunSchema],
+  ] as const) {
+    for (const status of ["complete", "running"] as const) {
+      const base = {
+        ...completeProductionRunInput,
+        status,
+        endTime: status === "complete" ? completeProductionRunInput.endTime : undefined,
+        feedstockDraws: [{
+          ...completeProductionRunInput.feedstockDraws[0],
+          wetMassKg: 1_500,
+        }],
+        biocharOutputKg: 300,
+        biocharMoisturePercent: 20,
+      };
+
+      describe(`${schemaName} schema with ${status} status`, () => {
+        it("starts from a valid fixture", () => {
+          expect(schema.safeParse(base).success).toBe(true);
+        });
+
+        it.each([
+          {
+            label: "negative feedstock draw mass",
+            overrides: { feedstockDraws: [{ ...base.feedstockDraws[0], wetMassKg: -1_500 }] },
+            path: ["feedstockDraws", 0, "wetMassKg"],
+          },
+          {
+            label: "negative biochar output",
+            overrides: { biocharOutputKg: -300 },
+            path: ["biocharOutputKg"],
+          },
+          ...["feedstockMoisturePercent", "biocharMoisturePercent"].flatMap(field =>
+            [-1, 101].map(value => ({
+              label: `${field} ${value}`,
+              overrides: { [field]: value },
+              path: [field],
+            })),
+          ),
+        ])("returns a field issue without throwing for $label", ({ overrides, path }) => {
+          const result = schema.safeParse({ ...base, ...overrides });
+
+          expect(result.success).toBe(false);
+          if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+            expect(result.error.issues).not.toContainEqual(expect.objectContaining({
+              message: expect.stringMatching(/dry.*output.*dry.*input/i),
+            }));
+          }
+        });
+      });
+    }
+  }
+
   it("rejects dry biochar output above dry feedstock input", () => {
     const result = productionRunFormSchema.safeParse(validProductionRunInput);
 
@@ -325,7 +427,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
     ]);
     // Exactly one message, on the field the operator typed into: an unresolved
     // start must not also fire "End must be after start" or the terminal-run
-    // "needs an end date and time" check.
+    // "needs an end time" check.
     expect(messagesFor(result, "endTime")).toEqual([]);
   });
 
@@ -506,5 +608,26 @@ describe("complete run output requirements", () => {
     expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status,
       endTime: status === "running" ? undefined : completeProductionRunInput.endTime,
       cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
+  });
+});
+
+// The schema reads times with the same wall-clock rule as `resolveRunWindow`,
+// so a time it accepts always resolves to an instant the window checks see.
+describe("makeProductionRunFormSchema wall-clock times", () => {
+  it.each([
+    ["startTime", "24:00", "Enter a valid start time."],
+    ["endTime", "24:00", "Enter a valid end time."],
+  ])("refuses %s %s", (field, value, message) => {
+    const result = makeProductionRunFormSchema("UTC").safeParse({
+      ...completeProductionRunInput,
+      [field]: value,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: [field], message })]),
+      );
+    }
   });
 });

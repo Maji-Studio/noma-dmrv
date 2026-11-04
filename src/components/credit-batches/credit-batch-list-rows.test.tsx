@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { recordHref } from "@/lib/record-links";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeline-facts";
 import type { RecordLockView } from "@/lib/record-lock-view";
+import { creditBatchStateOf } from "@/lib/credit-batches/batch-state";
 import {
   appliedDryLabel,
   creditBatchRowActions,
@@ -41,12 +43,12 @@ const lockAt = (level: RecordLockView["level"]): RecordLockView => ({
 function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> = {}) {
   const props = {
     creditBatch,
-    view: { state: "blocking" as const, blockingCount: 3 },
+    view: { state: "blocking" as const, blockingCount: 2, openTodoCount: 3 },
     readinessStatus: "ready" as const,
     facts,
     factsStatus: "ready" as const,
     lock: lockAt("open"),
-    onView: vi.fn(),
+    onOpen: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
@@ -56,30 +58,57 @@ function renderRow(overrides: Partial<Parameters<typeof CreditBatchListRow>[0]> 
 }
 
 describe("CreditBatchListRow", () => {
+  it("keeps the interrupted status and the batch page's open to-do count together", () => {
+    const view = creditBatchStateOf({
+      state: "incomplete", issueCount: 2, checkCount: 1, linesToDecide: 0,
+      removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true,
+      productionEmissionsClaimedByRemovalCode: null, ghgStatementId: null, ghgStatementStatus: null,
+    });
+    const { row } = renderRow({ view });
+    expect(within(row).getByText("Submission interrupted")).toBeTruthy();
+    expect(within(row).getByLabelText("3 open to-dos").textContent).toBe("3");
+  });
+
   it("shows code, feedstock, dates, the timeline state and the dry applied figure", () => {
     const { row } = renderRow();
-    for (const text of ["Chicken manure", "Open", "Missing data", "Applied (dry)", "0.32 t"]) {
+    for (const text of ["Chicken manure", "Open to-dos", "Applied (dry)", "0.32 t"]) {
       expect(within(row).getAllByText(text).length).toBeGreaterThan(0);
     }
-    // A phone drops the shared "CB-" prefix; the code stays whole in the text and the button's name.
-    expect(within(row).getByRole("button", { name: "Open credit batch CB-26-009" }).textContent).toBe("CB-26-009");
+    // A phone drops the shared "CB-" prefix; the code stays whole in the text and the link's name.
+    expect(within(row).getByRole("link", { name: "Open credit batch CB-26-009" }).textContent).toBe("CB-26-009");
     expect(row.textContent).toContain("Aug 1 to Aug 31, 2026");
     expect(row.textContent).not.toContain("0.70");
+    expect(row.textContent).not.toContain("Missing data");
+    expect(within(row).getByLabelText("3 open to-dos").textContent).toBe("3");
   });
 
-  it("opens the batch from the row and from the code button", () => {
+  it("shows the name in place of the code, and keeps the code out of a second line", () => {
+    const { row } = renderRow({ creditBatch: { ...creditBatch, name: "September maize" } });
+    const link = within(row).getByRole("link", { name: "Open credit batch September maize (CB-26-009)" });
+    expect(link.textContent).toBe("September maize");
+    expect(row.textContent).not.toContain("CB-26-009");
+  });
+
+  it("opens the batch page from the row, and the code is a real link to it", () => {
     const { props, row } = renderRow();
     fireEvent.click(row);
-    fireEvent.click(within(row).getByRole("button", { name: "Open credit batch CB-26-009" }));
-    expect(props.onView).toHaveBeenCalledTimes(2);
-    expect(props.onView).toHaveBeenCalledWith(creditBatch);
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(props.onOpen).toHaveBeenCalledWith(creditBatch);
+    const link = within(row).getByRole("link", { name: "Open credit batch CB-26-009" });
+    expect(link.getAttribute("href")).toBe(recordHref("creditBatch", creditBatch.id, { facilityId: creditBatch.facilityId }));
+    // The link navigates itself; the row does not push a second time.
+    fireEvent.click(link);
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("shows In use and Sent, but not the default Open lock", () => {
+  it("shows only the Sent lock, not Open or In use", () => {
     renderRow();
     expect(document.querySelector("[data-record-lock]")).toBeNull();
     cleanup();
-    renderRow({ lock: lockAt("sent"), view: { state: "submitted", blockingCount: 0 } });
+    renderRow({ lock: lockAt("inUse") });
+    expect(document.querySelector("[data-record-lock]")).toBeNull();
+    cleanup();
+    renderRow({ lock: lockAt("sent"), view: { state: "submitted", blockingCount: 0, openTodoCount: 0 } });
     expect(document.querySelector("[data-record-lock='sent']")?.textContent).toContain("Sent");
   });
 });
@@ -87,19 +116,20 @@ describe("CreditBatchListRow", () => {
 describe("appliedDryLabel", () => {
   it("waits while loading and never falls back to a figure it does not have", () => {
     expect(appliedDryLabel(facts, "loading")).toBeNull();
-    expect(appliedDryLabel(facts, "failed")).toBe("Not available");
-    expect(appliedDryLabel(undefined, "ready")).toBe("Not available");
-    expect(appliedDryLabel(facts, "ready")).toBe("0.32 t");
+    // The list Notice carries a failed read, so the row leaves the figure out.
+    expect(appliedDryLabel(facts, "failed")).toEqual({ leftOut: true });
+    expect(appliedDryLabel(undefined, "ready")).toEqual({ leftOut: true });
+    expect(appliedDryLabel(facts, "ready")).toEqual({ figure: "0.32 t" });
   });
 });
 
 describe("creditBatchRowActions", () => {
-  const handlers = { onView: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+  const handlers = { onOpen: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
 
   it("marks only Delete as destructive", () => {
     const actions = creditBatchRowActions({ creditBatch, lock: lockAt("open"), ...handlers });
     actions.forEach((action) => action.onSelect());
-    expect(handlers.onView).toHaveBeenCalledWith(creditBatch);
+    expect(handlers.onOpen).toHaveBeenCalledWith(creditBatch);
     expect(handlers.onEdit).toHaveBeenCalledWith(creditBatch);
     expect(handlers.onDelete).toHaveBeenCalledWith(creditBatch.id);
     expect(actions.map(({ label, destructive }) => [label, destructive])).toEqual([
@@ -112,5 +142,21 @@ describe("creditBatchRowActions", () => {
   it("offers only Open details when Sent or before the lock answers", () => {
     expect(creditBatchRowActions({ creditBatch, lock: lockAt("sent"), ...handlers }).map(({ label }) => label)).toEqual(["Open details"]);
     expect(creditBatchRowActions({ creditBatch, lock: undefined, ...handlers }).map(({ label }) => label)).toEqual(["Open details"]);
+  });
+
+  it("keeps Edit but hides Delete after Isometric returns the Removal", () => {
+    const lock = lockAt("inUse");
+    lock.returnedBy = [{
+      removal: { kind: "removal", id: "removal-1", label: "R-12", facilityId: creditBatch.facilityId },
+      statement: { kind: "ghgStatement", id: "statement-1", label: null, facilityId: creditBatch.facilityId },
+      statementStatus: "FAILED_VERIFICATION",
+    }];
+    expect(creditBatchRowActions({ creditBatch, lock, ...handlers }).map(({ label }) => label)).toEqual(["Open details", "Edit"]);
+  });
+
+  it("offers Delete when only a draft Removal uses the batch", () => {
+    const lock = lockAt("inUse");
+    lock.usedBy = [{ kind: "removal", id: "draft-removal", label: "R-13", facilityId: creditBatch.facilityId }];
+    expect(creditBatchRowActions({ creditBatch, lock, ...handlers }).map(({ label }) => label)).toEqual(["Open details", "Edit", "Delete"]);
   });
 });

@@ -18,10 +18,10 @@ interface DeleteConfirmDialogProps {
   message: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Spinner on the confirm button; its label stays. Hold it until the result shows (docs/design-system.md, Button). */
   isPending?: boolean;
   errorMessage?: string;
   confirmLabel?: string;
-  pendingLabel?: string;
   /** What else the delete takes with it, shown under the message. */
   children?: ReactNode;
   /** Holds Delete while the dialog is still loading what it removes. */
@@ -39,7 +39,6 @@ export function DeleteConfirmDialog({
   isPending = false,
   errorMessage,
   confirmLabel = "Delete",
-  pendingLabel = "Deleting...",
   children,
   confirmDisabled = false,
   width = "sm",
@@ -51,6 +50,8 @@ export function DeleteConfirmDialog({
     <Modal
       isOpen={isOpen}
       onClose={onCancel}
+      // A request in flight, or the navigation that follows it, cannot be dismissed.
+      dismissible={!isPending}
       ariaLabelledBy={titleId}
       ariaDescribedBy={descId}
       width={width}
@@ -72,16 +73,16 @@ export function DeleteConfirmDialog({
         <div className="flex gap-16 justify-start">
           <Button
             size="large"
-            variant="default"
-            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
+            variant="danger"
             onClick={onConfirm}
-            disabled={isPending || confirmDisabled}
+            disabled={confirmDisabled}
+            busy={isPending}
           >
-            {isPending ? pendingLabel : confirmLabel}
+            {confirmLabel}
           </Button>
           <Button
             size="large"
-            variant="default"
+            variant="weak"
             onClick={onCancel}
             disabled={isPending}
           >

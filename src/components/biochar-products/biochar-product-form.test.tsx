@@ -7,7 +7,6 @@ import {
   ProductCompositionBlock,
 } from "./biochar-product-form";
 import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
-import { FormDetailProvider } from "@/components/forms/form-detail-context";
 import { formProductComposition } from "./form-product-composition";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 
@@ -53,26 +52,20 @@ describe("ProductCompositionBlock", () => {
   const block = (massKg: number | null, ingredientBins: Array<{ massKg?: unknown }> = []) => (
     <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} />
   );
-  // A provider starts in Simple; outside one the form reads as Detailed.
-  const simple = (node: ReturnType<typeof block>) =>
-    renderToStaticMarkup(<FormDetailProvider scope="form">{node}</FormDetailProvider>);
+  const markup = (node: ReturnType<typeof block>) => renderToStaticMarkup(node);
 
-  it("stays out of Simple until the biochar or an ingredient has a mass", () => {
-    expect(simple(block(null))).not.toContain("Product composition");
-    expect(simple(block(null, [{ massKg: undefined }]))).not.toContain("Product composition");
+  it("stays out until the biochar or an ingredient has a mass", () => {
+    expect(markup(block(null))).toBe("");
+    expect(markup(block(null, [{ massKg: undefined }]))).toBe("");
   });
 
-  it("draws in Simple once a mass is set", () => {
-    expect(simple(block(100))).toContain("Product composition");
-    expect(simple(block(null, [{ massKg: 20 }]))).toContain("Product composition");
+  it("draws once a mass is set", () => {
+    expect(markup(block(100))).toContain("Product composition");
+    expect(markup(block(null, [{ massKg: 20 }]))).toContain("Product composition");
   });
 
   it("offers no stock history; that lives on the storage bin", () => {
     expect(renderToStaticMarkup(block(100))).not.toContain("Stock history");
-  });
-
-  it("always draws in Detailed", () => {
-    expect(renderToStaticMarkup(block(null))).toContain("Product composition");
   });
 });
 

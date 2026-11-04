@@ -81,7 +81,7 @@ export async function createIntakeFixture(
     ctx: {
       userId: `user_op_${label}`,
       organizationId,
-      orgRole: "owner",
+      orgRole: "admin",
       isPlatformAdmin: false,
     },
     facilityId: facility.id,

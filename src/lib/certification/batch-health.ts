@@ -1,4 +1,3 @@
-import type { BatchEmissionLine } from "./emission-lines";
 /**
  * Per-credit-batch health classifier — the pure decision behind "is this batch
  * complete enough to group into a removal, and if not, what's missing?" It is
@@ -16,19 +15,31 @@ import type { BatchEmissionLine } from "./emission-lines";
  * overview hint can never disagree on whether a batch is "ready".
  */
 
-import type { SubmissionLineageBlocker } from "./submission-readiness";
+import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
+import type { RemovalCorrection } from "./removal-entry-correction";
+import { templateLineFixTarget } from "./template-fix-targets";
+import type { BatchEmissionLine } from "./emission-lines";
+import type { SampleDocumentWarningKey } from "./sample-document-warnings";
+import {
+  isCountedSubmissionBlocker,
+  submissionBlockerGroupFact,
+  type SubmissionLineageBlocker,
+} from "./submission-readiness";
+import { blockerMessage } from "./blocker-message";
 import type { TransportCategory } from "./readiness";
 import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, entityFieldUnmetLabel, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
 import {
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
+  type BlockerCopy,
 } from "./removal-template-blockers";
 import {
   describeFeedstockTypeMappingGap,
+  feedstockTypeMappingGapCopy,
   type FeedstockTypeMappingGap,
 } from "./feedstock-type-mapping";
 
@@ -38,7 +49,8 @@ export type BatchHealthState =
 
 export type BatchHealthCheckKey =
   | "emissions"
-  | "template"
+  | "templateSet"
+  | "templateLines"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -49,8 +61,10 @@ export type BatchHealthCheckKey =
 export type BatchHealthFixTarget =
   | "emissions"
   | "certificationTemplates"
-  | "creditBatchTemplate"
+  | "templateSetup"
   | "templateLineReview"
+  | "templateLines"
+  | "templateReplacement"
   | "batchDetails"
   | "orders"
   | "deliveries"
@@ -81,11 +95,19 @@ export interface BatchHealthCheck {
    * `deriveBatchHealth` from `CERT_REQUIREMENT_META`.
    */
   requirementLabel: string;
+  /** The problem, named; rendered instead of `requirementLabel` while unmet (`certCheckLabel`). */
+  unmetLabel: string;
+  /** Template components without a saved decision; set on the templateLines check only, and only when above zero. */
+  linesToDecide?: number;
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
+  /** The facts alone, for read-only surfaces, when detail mixes facts with repair steps. */
+  readOnlyDetail?: string;
+  /** Fact/instruction split; detail above preserves the full copy for existing consumers. */
+  copy?: BlockerCopy;
   /** UI hint for the most specific workflow that resolves an unmet check. */
   fixTarget?: BatchHealthFixTarget;
   /** Stable discriminator when one requirement expands into workflow issues. */
@@ -115,9 +137,10 @@ export interface BatchEntityReadinessIssue {
  */
 type BatchHealthCheckBase = Omit<
   BatchHealthCheck,
-  "requirementLabel" | "whyDetail"
+  "requirementLabel" | "unmetLabel" | "whyDetail"
 > & {
   requirementLabel?: string;
+  unmetLabel?: string;
 };
 
 export interface BatchTransportFact {
@@ -127,14 +150,18 @@ export interface BatchTransportFact {
 }
 
 export interface BatchHealthFacts {
+  entryCorrections?: import("./removal-entry-correction").EntryCorrectionState[];
   emissionLines?: BatchEmissionLine[] | null;
   warnings?: string[];
+  /** The same Sample document warnings as typed keys, for surfaces with their own wording. */
+  documentWarnings?: SampleDocumentWarningKey[];
   /**
    * Raw carbon and durability lab-input blockers (sample carbon content,
    * H/C_org, O/C_org, total carbon, s_fraction, and replicate coverage).
    * No local CO₂e preview is involved; empty means the raw gates are complete.
    */
   carbonMissingInputs: string[];
+  carbonBlockerFacts?: string[];
   /**
    * Facility-level emission-estimate blockers that apply to this batch's
    * durability tier, such as a missing reference soil temperature.
@@ -152,6 +179,7 @@ export interface BatchHealthFacts {
   entityReadinessGaps: string[];
   submissionLineageBlockers?: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers?: string[];
+  durabilityConfigurationFacts?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
@@ -165,6 +193,8 @@ export interface BatchHealthFacts {
    */
   facilitySetupComplete: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  /** Current template components without a saved, unambiguous decision. */
+  undecidedLineIds?: readonly string[];
   /**
    * Transport coverage for the categories the facility's default template
    * requires. Empty when the template requires none — or when facility setup is
@@ -174,7 +204,12 @@ export interface BatchHealthFacts {
 }
 
 export interface BatchHealth {
+  /** Advisory actions belong to the returned Removal and never affect batch eligibility. */
+  advisories?: { message: string; fixTarget: "removal"; removalId: string; removalCode?: string }[];
+  removalCorrections?: RemovalCorrection[];
   warnings?: string[];
+  /** Non-blocking Sample document gaps behind `warnings`, as typed keys. */
+  documentWarnings?: SampleDocumentWarningKey[];
   state: BatchHealthState;
   /** Count of `unmet` checks; `skipped` checks do not count. */
   issueCount: number;
@@ -189,6 +224,28 @@ const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 const MERGED_CHECK_SEPARATOR = " · ";
+const LINK_PRODUCTION_INSTRUCTION = "Link production data before reviewing transport coverage";
+const COMPLETE_FACILITY_INSTRUCTION = "Complete facility setup to evaluate transport coverage";
+/** One open item for lineage and configuration blockers found by the submit-time build. */
+const SUBMISSION_BLOCKERS_LABEL = "Submission blockers";
+
+/** Each producer fact once, joined like merged check text. */
+function uniqueFacts(facts: readonly string[] | undefined): string | undefined {
+  return [...new Set(facts?.filter(Boolean))].join(MERGED_CHECK_SEPARATOR) || undefined;
+}
+
+/** The fact a check states on a read-only batch; undefined when its detail may hold a repair step. */
+function batchHealthReadOnlyFact(check: Pick<BatchHealthCheck, "readOnlyDetail" | "copy">): string | undefined {
+  return check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail;
+}
+
+function emissionCheckDetail(line: BatchEmissionLine): { message: string; copy?: BlockerCopy } {
+  if (line.blocker?.code === "entryHasNoRemoval") return line.blocker;
+  const instruction = line.blocker?.code === "entryMissingEvidence"
+    ? `Add a file for ${line.displayName}.`
+    : `Check the manual entry on ${line.displayName}.`;
+  return { message: instruction, copy: { instruction } };
+}
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   const missingInputs = Array.from(
@@ -202,6 +259,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: CARBON_LABEL,
     status: "unmet",
     detail: `Missing: ${missingInputs.join(", ")}`,
+    readOnlyDetail: uniqueFacts(facts.carbonBlockerFacts),
     fixTarget: "labSamples",
   };
 }
@@ -232,6 +290,7 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: PRODUCTION_LABEL,
     status: "unmet",
     detail: gap.detail,
+    copy: gap.copy,
     fixTarget: gap.fixTarget,
   };
 }
@@ -260,6 +319,10 @@ function feedstockTypeMappingCheck(
     detail: facts.feedstockTypeMappingGaps
       .map(describeFeedstockTypeMappingGap)
       .join(MERGED_CHECK_SEPARATOR),
+    copy: {
+      detail: facts.feedstockTypeMappingGaps.map((gap) => feedstockTypeMappingGapCopy(gap).detail).join(MERGED_CHECK_SEPARATOR),
+      instruction: facts.feedstockTypeMappingGaps.map((gap) => feedstockTypeMappingGapCopy(gap).instruction).join(MERGED_CHECK_SEPARATOR),
+    },
     fixTarget: "feedstockTypes",
     affectedRecords: facts.feedstockTypeMappingGaps.map((gap) => ({
       id: gap.feedstockTypeId,
@@ -278,7 +341,8 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
-      detail: "Link production data before reviewing transport coverage",
+      detail: LINK_PRODUCTION_INSTRUCTION,
+      copy: { instruction: LINK_PRODUCTION_INSTRUCTION },
     }];
   }
   // Required categories come from the facility's default template; without a
@@ -290,7 +354,8 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
-      detail: "Complete facility setup to evaluate transport coverage",
+      detail: COMPLETE_FACILITY_INSTRUCTION,
+      copy: { instruction: COMPLETE_FACILITY_INSTRUCTION },
     }];
   }
   if (facts.requiredTransport.length === 0) {
@@ -311,16 +376,14 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
         label: TRANSPORT_LABEL,
         status: "unmet",
         detail: `Missing ${category} transport legs`,
+        readOnlyDetail: `Missing ${category} transport legs`,
         fixTarget: category === "feedstock" ? "feedstocks" : "deliveries",
       }));
 }
 
+/** Counted submission targets resolve to themselves: their filtered repair lists keep separate rows, regardless of the check key. */
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
-    case "deliveries":
-    case "deliveryEvidence":
-    case "deliveryDistances":
-      return "deliveries";
     case "productionRuns":
     case "sourceData":
       return "productionRuns";
@@ -380,19 +443,28 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
-      fixTarget: destination === "deliveries"
-        ? existing.fixTarget === "deliveryEvidence" && check.fixTarget === "deliveryEvidence"
-          ? "deliveryEvidence"
-          : "deliveries"
-        : existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
         existing.requirementLabel,
+      unmetLabel:
+        mergeCheckText(existing.unmetLabel, check.unmetLabel) ??
+        existing.unmetLabel,
       whyDetail: mergeCheckText(existing.whyDetail, check.whyDetail),
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
+      // Read only, a merged item states every side's fact or none: a bare detail may hold a repair step.
+      readOnlyDetail: (existing.readOnlyDetail || check.readOnlyDetail) && batchHealthReadOnlyFact(existing) && batchHealthReadOnlyFact(check)
+        ? mergeCheckText(batchHealthReadOnlyFact(existing), batchHealthReadOnlyFact(check))
+        : undefined,
+      copy: existing.copy && check.copy ? {
+        detail: mergeCheckText(existing.copy.detail, check.copy.detail),
+        instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),
+        // A side with only a repair step contributes its fact; one with a detail already is one.
+        ...(existing.copy.readOnlyDetail || check.copy.readOnlyDetail ? { readOnlyDetail: mergeCheckText(
+          existing.copy.readOnlyDetail ?? existing.copy.detail, check.copy.readOnlyDetail ?? check.copy.detail) } : {}),
+      } : undefined,
       affectedRecords: mergeAffectedRecords(
         existing.affectedRecords,
         check.affectedRecords,
@@ -413,16 +485,22 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }
   const issues = facts.entityReadinessIssues;
   if (issues && issues.length > 0) {
-    return issues.map((issue) => ({
+    return issues.map((issue) => {
+      // A count of records, no repair step: read only states it too.
+      const detail = `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`;
+      return {
       key: "entityReadiness",
       issueKey: issue.key,
       label: ENTITY_READINESS_LABEL,
       requirementLabel: issue.label,
+      unmetLabel: entityFieldUnmetLabel(issue.label),
       status: "unmet",
-      detail: `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`,
+      detail,
+      readOnlyDetail: detail,
       fixTarget: issue.fixTarget,
       affectedRecords: issue.affectedRecords,
-    }));
+    } satisfies BatchHealthCheckBase;
+    });
   }
   const suffix =
     facts.entityReadinessGaps.length > ENTITY_READINESS_PREVIEW_LIMIT
@@ -438,25 +516,59 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }];
 }
 
+/**
+ * Lineage blockers with exact-list repair links become one check per kind:
+ * the fact with a count (the coded fact for one record) and the repair step once.
+ * Customer location blockers without an order retain their per-record checks.
+ */
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
-  const lineageChecks: BatchHealthCheckBase[] = (facts.submissionLineageBlockers ?? []).map((blocker) => ({
-    key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
-    issueKey: `submission-${blocker.fixTarget}`,
-    label: "Submission requirements complete",
-    requirementLabel: "Resolve submission blockers",
-    status: "unmet",
-    detail: blocker.detail,
-    fixTarget: blocker.fixTarget,
-    affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
-  }));
+  const lineageChecks: BatchHealthCheckBase[] = [];
+  const counted = new Map<SubmissionLineageBlocker["kind"], SubmissionLineageBlocker[]>();
+  for (const blocker of facts.submissionLineageBlockers ?? []) {
+    if (isCountedSubmissionBlocker(blocker)) {
+      counted.set(blocker.kind, [...(counted.get(blocker.kind) ?? []), blocker]);
+      continue;
+    }
+    lineageChecks.push({
+      key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+      issueKey: `submission-${blocker.fixTarget}`,
+      label: "Submission requirements complete",
+      requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+      unmetLabel: SUBMISSION_BLOCKERS_LABEL,
+      status: "unmet",
+      detail: blocker.detail,
+      readOnlyDetail: blocker.fact,
+      fixTarget: blocker.fixTarget,
+      affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+    });
+  }
+  for (const group of counted.values()) {
+    const [first] = group;
+    const fact = submissionBlockerGroupFact(group);
+    lineageChecks.push({
+      key: first.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+      issueKey: `submission-${first.fixTarget}`,
+      label: "Submission requirements complete",
+      requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+      unmetLabel: SUBMISSION_BLOCKERS_LABEL,
+      status: "unmet",
+      detail: blockerMessage(fact, first.instruction).message,
+      copy: { detail: fact, instruction: first.instruction },
+      readOnlyDetail: fact,
+      fixTarget: first.fixTarget,
+      affectedRecords: mergeAffectedRecords(undefined, group.map((member) => ({ ...member.record, missing: [member.fact] }))),
+    });
+  }
   const blockers = facts.durabilityConfigurationBlockers ?? [];
   if (blockers.length > 0) lineageChecks.push({
     key: "entityReadiness",
     issueKey: "submission-batchDetails",
     label: "Submission requirements complete",
-    requirementLabel: "Resolve submission blockers",
+    requirementLabel: SUBMISSION_BLOCKERS_LABEL,
+    unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
+    readOnlyDetail: uniqueFacts(facts.durabilityConfigurationFacts),
     fixTarget: "batchDetails",
   });
   return lineageChecks;
@@ -474,23 +586,52 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
+  const advisories = facts.entryCorrections?.flatMap((state) => (state.message || state.correction?.windowOpen) && state.removalId
+    ? [{ message: state.message ?? RETURNED_BY_ISOMETRIC_LABEL, fixTarget: "removal" as const, removalId: state.removalId, removalCode: state.removalCode }] : []) ?? [];
   const emissionIssues = new Map(facts.emissionLines
     ?.filter((line) => line.blocker?.fixTarget === "emissions")
     .map((line) => [line.componentId, line]));
+  const emissionDetails = [...emissionIssues.values()].map(emissionCheckDetail);
+  const emissionCopies = emissionDetails.map((detail) => detail.copy);
+  const emissionCopy = emissionCopies.every((copy) => copy != null) ? {
+    detail: emissionCopies.map((copy) => copy.detail).filter(Boolean).join(" ") || undefined,
+    instruction: emissionCopies.map((copy) => copy.instruction).filter(Boolean).join(" ") || undefined,
+  } : undefined;
+  const linesToDecide = new Set(facts.undecidedLineIds).size;
+  const pinBlockers = (facts.templateBlockers ?? []).filter(
+    (blocker) => removalTemplateBlockerDestination(blocker.code) === "templateSetup",
+  );
+  const onlyUnpinned = pinBlockers.length > 0 &&
+    pinBlockers.every((blocker) => blocker.code === "unpinnedTemplate");
+  // Batch health keeps its blockers (template blockers only); the shared
+  // undecided set only names the count, so batch selection is unchanged.
+  const templateBlockers = facts.templateBlockers ?? [];
   const checks = mergeUnmetChecksByDestination(
     [
       // A pin problem is fixed on the batch; a line problem in the template review.
-      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
-        key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
-        fixTarget: removalTemplateBlockerDestination(blocker.code),
-      })),
+      ...templateBlockers.map((blocker): BatchHealthCheckBase => {
+        const fixTarget = templateLineFixTarget(blocker);
+        const key = fixTarget === "templateSetup" ? "templateSet" : "templateLines";
+        return {
+          key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
+          detail: blocker.message, fixTarget,
+          // The title "No Removal template chosen" already states the unpinned fact.
+          copy: blocker.code === "unpinnedTemplate" && onlyUnpinned && blocker.copy
+            ? { instruction: blocker.copy.instruction } : blocker.copy,
+          unmetLabel: key === "templateLines"
+            ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
+            : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,
+          // Only the check whose label counts the lines carries the count.
+          ...(fixTarget === "templateLineReview" && linesToDecide > 0 ? { linesToDecide } : {}),
+        };
+      }),
       ...(facts.emissionLines != null ? [{
         key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
         status: emissionIssues.size ? "unmet" as const : "met" as const,
-        detail: [...emissionIssues.values()].map((line) => line.blocker?.code === "entryMissingEvidence"
-          ? `Add a file for ${line.displayName}.` : `Check the manual entry on ${line.displayName}.`).join(" ") || undefined,
+        detail: emissionDetails.map((detail) => detail.message).join(" ") || undefined,
+        ...(emissionIssues.size && emissionCopy ? { copy: emissionCopy } : {}),
       }] : []),
-      // Template line blockers (no source, unassigned, needs setup) are
+      // Template line blockers (no source, unassigned, not set up) are
       // facility-level and stay in Removal readiness, like the rest of coverage.
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
@@ -506,8 +647,16 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     state: issueCount > 0 ? "incomplete" : "ready",
     issueCount,
     checks,
+    advisories,
+    removalCorrections: facts.entryCorrections?.flatMap((state) => state.correction ? [state.correction] : []) ?? [],
     warnings: facts.warnings ?? [],
+    documentWarnings: facts.documentWarnings ?? [],
   };
+}
+
+/** The lines-to-decide count behind the batch's Components decided check, or 0. One source with the check's label. */
+export function batchLinesToDecide(health: BatchHealth | undefined | null): number {
+  return health?.checks.find((check) => check.status === "unmet" && check.linesToDecide)?.linesToDecide ?? 0;
 }
 
 // Attach the one plain-language requirement label (+ why) every readiness
@@ -519,6 +668,7 @@ function withRequirementMeta(check: BatchHealthCheckBase): BatchHealthCheck {
   return {
     ...check,
     requirementLabel: check.requirementLabel ?? meta.requirementLabel,
+    unmetLabel: check.unmetLabel ?? meta.unmetLabel,
     whyDetail: meta.whyDetail,
   };
 }

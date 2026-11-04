@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { feedstockTransportMessage } from "@/lib/certification/submission-readiness";
 
 const lineage = {
   application: { id: "app-1", code: "AP-1" },
@@ -33,6 +34,9 @@ describe("submission lineage blockers", () => {
   it("requires proof on every delivery even without transport categories, deduplicating applications", () => {
     const missing = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", proofOfDeliveryCount: 0 } };
     expect(buildSubmissionLineageBlockers([missing, { ...missing, application: { ...missing.application, id: "app-2", code: "AP-2" } }], [], {}, [])).toEqual([{
+      kind: "deliveryProof",
+      instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.",
+      fact: "Delivery DL-1 has no proof of delivery.",
       detail: "Delivery DL-1 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.",
       fixTarget: "deliveryEvidence", record: { id: "delivery-1", code: "DL-1" },
     }]);
@@ -45,4 +49,10 @@ describe("submission lineage blockers", () => {
       { fixTarget: "deliveryEvidence", record: { id: "delivery-2", code: "DL-2" } },
     ]);
   });
+});
+
+it.each(["A feedstock", "Feedstock FS-1"])("joins the transport fact and instruction for %s", (label) => {
+  const copy = feedstockTransportMessage(label);
+  expect(copy.fact).toBe(`${label} has no usable transport leg.`);
+  expect(copy.message).toBe(`${copy.fact} ${copy.instruction}`);
 });

@@ -10,6 +10,8 @@ const harness = vi.hoisted(() => ({
   onConfirm: undefined as (() => Promise<void>) | undefined,
   batch: { id: "batch-1", version: 3, code: "CB-1", facilityId: "facility-1", startDate: "2026-09-01", endDate: "2026-09-30" },
 }));
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("nuqs", () => ({ parseAsString: { withOptions: () => ({}) }, useQueryState: () => [null, vi.fn()] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility-1" }), useFacilityClock: () => ({ timeZone: "UTC" }) }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }) }));
@@ -19,12 +21,14 @@ vi.mock("@/hooks/use-credit-batches", () => ({
   useCreditBatch: () => ({}),
   useCreditBatchCo2eStoredPreviews: () => ({ data: {} }),
   useCreditBatchProductionRunOptions: () => ({ data: [] }),
+  useCreditBatchPageModel: () => ({}),
   useCreditBatchTimelineFacts: () => ({ data: {}, isLoading: false, isFetching: false, error: null, refetch: vi.fn() }),
   useCreateCreditBatch: () => ({}),
   useUpdateCreditBatch: () => ({}),
   useDeleteCreditBatch: () => ({ mutateAsync: harness.remove }),
 }));
-vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }) }));
+vi.mock("@/hooks/use-linked-credit-batch-members", () => ({ useLinkedCreditBatchMembers: () => ({ data: undefined, isLoading: false, error: null, isFetching: false, refetch: vi.fn() }) }));
+vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }), useCreditBatchTodos: () => ({ data: undefined, isError: false }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: harness.error, success: harness.success }) }));
 vi.mock("@/components/ui", () => ({ Button: () => null, EmptyState: () => null, ListPagination: () => null, PageHeader: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message, action }: { message?: string; action?: ReactNode }) =>
@@ -40,7 +44,6 @@ vi.mock("@/components/record-locks", async () => (await import("../../../tests/h
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
 vi.mock("./credit-batch-timeline", () => ({ CreditBatchTimeline: () => null }));
 vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
-vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));
 vi.mock("./credit-batch-durability-panel", () => ({ CreditBatchDurabilityPanel: () => null }));
 vi.mock("./credit-batch-view", () => ({ creditBatchSheetSections: () => [] }));
 vi.mock("./credit-batch-list-rows", () => ({
@@ -87,7 +90,7 @@ it("shows a blocked delete with a link to the Sample and clears it for the next 
     const alert = renderer!.root.findByProps({ role: "alert" });
     expect(alert.children).toContain(reason);
     const link = alert.findByType("a");
-    expect(link.props.href).toBe("/samples?facility=facility-1&sample=sample-1");
+    expect(link.props.href).toBe("/lab-samples?facility=facility-1&sample=sample-1");
     expect(link.children.join("")).toBe("Open SAM-1");
     expect(harness.error).not.toHaveBeenCalled();
     expect(harness.success).not.toHaveBeenCalled();

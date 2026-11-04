@@ -1,3 +1,4 @@
+import { getFeedstockTransportOwners } from "./feedstock-transport-ownership";
 import { getDeliveryProofCounts } from "./delivery-proof";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -127,7 +128,7 @@ async function loadLineageWithExecutor(
       runId: productionRuns.id,
       runCode: productionRuns.code,
       runStatus: productionRuns.status,
-      runDate: productionRunDateExpr(),
+      runDate: productionRunDateExpr(ctx.organizationId),
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
@@ -205,6 +206,7 @@ async function loadLineageWithExecutor(
           productionDate: biocharProducts.productionDate,
           productMassKg: biocharProducts.massKg,
           productMoisturePercent: biocharProducts.moistureContentPercent,
+          productComposition: biocharProducts.composition,
           formulationName: formulations.name,
           linkedProductionRunId: applicationOutputAllocations.productionRunId,
         })
@@ -310,10 +312,12 @@ async function loadLineageWithExecutor(
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
 
+  const transportOwners = await getFeedstockTransportOwners(ctx, feedstockRows.map((row) => row.id), executor);
+
   const feedstocksByRun = new Map<string, BatchLineageFeedstockFact[]>();
   for (const row of feedstockRows) {
     const facts = feedstocksByRun.get(row.runId) ?? [];
-    facts.push({ ...row });
+    facts.push({ ...row, ownsTransport: transportOwners.get(row.id) === row.runId });
     feedstocksByRun.set(row.runId, facts);
   }
   const runById = new Map<string, BatchLineageRunFact>();
@@ -361,7 +365,7 @@ async function loadLineageWithExecutor(
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
       delivery: { proofOfDeliveryCount: proofCounts.get(row.deliveryId) ?? 0, id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, recordedDistanceKm: row.recordedDistanceKm, customerLocationId: row.customerLocationId },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
-      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
+      biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, composition: row.productComposition, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
     };
     const key = `${row.creditBatchId}:${effectiveRunId}`;
     const facts = applicationsByBatchRun.get(key) ?? [];
@@ -740,10 +744,16 @@ export async function loadCreditBatchRollups(
     /** Also load each member run's product layers and shipments (roll-forwards). */
     includeRunForwards?: boolean;
   },
+  executor: Executor = db,
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
+  if (executor !== db) {
+    return loadCreditBatchRollupsWithExecutor(
+      ctx, ids, executor, options?.removalId, options?.unassignedOnly, options?.includeRunForwards,
+    );
+  }
   return db.transaction((tx) =>
     loadCreditBatchRollupsWithExecutor(
       ctx,

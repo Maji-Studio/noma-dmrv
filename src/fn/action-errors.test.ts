@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { ActionError } from "@/lib/action-error";
+import { inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { ActionConflictError, SafeError } from "@/lib/errors";
@@ -24,11 +26,36 @@ beforeEach(() => {
 });
 
 describe("toActionFailure", () => {
+  it.each([
+    { code: "22021", message: 'invalid byte sequence for encoding "UTF8": 0x00' },
+    { code: "22P05", message: "unsupported Unicode escape sequence", detail: "\\u0000 cannot be converted to text." },
+  ])("maps wrapped PostgreSQL NUL refusals ($code) without logging", (cause) => {
+    expect(toActionFailure(new Error("Failed query", { cause }), options)).toEqual({
+      success: false,
+      error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
+      code: "validation_failed",
+    });
+    expect(logError).not.toHaveBeenCalled();
+  });
+
   it("preserves domain code, issue paths and business conflict references", () => {
     const issues = [{ path: ["allocations", 0, "mass"], code: "too_small", message: "Too small", meta: { minimum: 0 } }];
     expect(toActionFailure(new DomainError("insufficient_stock", "Stock is insufficient.", {
       issues, conflict, blockers: [conflict],
     }), options)).toEqual({ success: false, error: "Stock is insufficient.", code: "insufficient_stock", issues, conflict, blockers: [conflict] });
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, conflict])("preserves the in-use reason through serialization and the client throw (conflict=%j)", (ref) => {
+    const error = inUseDeleteRefusal("This record is still used.", ["feedstockTypeId"], { meta: { recordCodes: ["FS-001"] }, conflict: ref });
+    const failure = JSON.parse(JSON.stringify(toActionFailure(error, options)));
+    let caught: unknown;
+    try { throwActionError(failure); } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(ActionError);
+    expect(caught).toMatchObject({
+      code: "conflict", conflict: ref,
+      issues: [{ code: "conflict", path: ["feedstockTypeId"], meta: { recordCodes: ["FS-001"], reason: "in_use" } }],
+    });
     expect(logError).not.toHaveBeenCalled();
   });
 

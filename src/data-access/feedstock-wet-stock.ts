@@ -1,8 +1,10 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { feedstocks } from "@/db/schema";
+import { storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
+import { FeedstockReplayOverdrawError } from "@/lib/feedstock-draw-replay";
+import { getOutputStockFacilityTimezone } from "./output-stock-dates";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { lockBinStock } from "./lock-bin-stocks";
@@ -11,9 +13,8 @@ import { requireOrgScope } from "./utils";
 
 type FeedstockStockReader = Pick<typeof db, "select">;
 
-const MASS_PRECISION_FACTOR = 1_000;
 const EMPTY_FEEDSTOCK_BIN_MESSAGE =
-  "Selected feedstock bin has no complete feedstock batches with wet mass";
+  "held no wet feedstock. Move the run’s start or correct the intake’s delivery date.";
 
 export interface FeedstockWetAllocation {
   feedstockId: string;
@@ -66,63 +67,35 @@ export async function assertFeedstockWetDrawWithinStock(
   }
 }
 
-function toMassUnits(value: number): number {
-  const units = Math.round(value * MASS_PRECISION_FACTOR);
-  if (!Number.isSafeInteger(units)) {
-    throw new SafeError("Feedstock mass is too large to allocate safely");
-  }
-  return units;
-}
-
-/**
- * Allocate a run's wet withdrawal across complete intake batches in proportion
- * to their recorded wet mass. Integer gram arithmetic keeps the persisted
- * allocations exact at numeric(14,3) precision.
- */
-export async function allocateFeedstockWetMass(
+async function readFeedstockBinCode(
   ctx: OrgContext,
   executor: FeedstockStockReader,
   storageLocationId: string,
-  totalWetMassKg: number,
-): Promise<FeedstockWetAllocation[]> {
+): Promise<string | undefined> {
   requireOrgScope(ctx);
-  const batches = await executor
-    .select({
-      id: feedstocks.id,
-      massWetKg: feedstocks.massWetKg,
-    })
-    .from(feedstocks)
-    .where(
-      and(
-        eq(feedstocks.storageLocationId, storageLocationId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-        eq(feedstocks.status, "complete"),
-        gt(feedstocks.massWetKg, 0),
-      ),
-    )
-    .orderBy(asc(feedstocks.id));
+  const [bin] = await executor.select({ code: storageLocations.code }).from(storageLocations).where(and(
+    eq(storageLocations.id, storageLocationId),
+    eq(storageLocations.organizationId, ctx.organizationId),
+  ));
+  return bin?.code;
+}
 
-  if (batches.length === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
+/** Convert the pure replay refusal at the data-access boundary. */
+export async function throwFeedstockReplayOverdraw(ctx: OrgContext, executor: FeedstockStockReader,
+  storageLocationId: string, error: FeedstockReplayOverdrawError): Promise<never> {
+  requireOrgScope(ctx);
+  const code = await readFeedstockBinCode(ctx, executor, storageLocationId);
+  const label = code === undefined ? 'This bin' : `Bin ${code}`;
+  if (error.event.kind !== 'run_draw') {
+    const [bin] = await executor.select({ facilityId: storageLocations.facilityId }).from(storageLocations).where(and(
+      eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId),
+    ));
+    const when = formatFacilityDateTime(new Date(error.event.occurredAt), await getOutputStockFacilityTimezone(ctx, bin.facilityId, executor));
+    const kind = { loss: 'Lost mass', ingredient_draw: 'Ingredient draw', count: 'Stock count', intake: 'Intake' }[error.event.kind];
+    throw new StockOverdrawError(`${kind}${error.event.code ? ` ${error.event.code}` : ''} at ${when}: ${label} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Correct the withdrawal or the earlier stock change.`,
+      { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
   }
-
-  const totalUnits = toMassUnits(totalWetMassKg);
-  const weights = batches.map((batch) => toMassUnits(batch.massWetKg ?? 0));
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-  if (totalWeight === 0) {
-    throw new StockOverdrawError(EMPTY_FEEDSTOCK_BIN_MESSAGE, { storageLocationId, availableWetKg: 0, requestedWetKg: totalWetMassKg });
-  }
-
-  let allocatedUnits = 0;
-  return batches.map((batch, index) => {
-    const units =
-      index === batches.length - 1
-        ? totalUnits - allocatedUnits
-        : Math.floor((weights[index] / totalWeight) * totalUnits);
-    allocatedUnits += units;
-    return {
-      feedstockId: batch.id,
-      wetMassUsedKg: units / MASS_PRECISION_FACTOR,
-    };
-  });
+  const message = error.availableWetKg === 0 ? `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} ${EMPTY_FEEDSTOCK_BIN_MESSAGE}`
+    : `At the run’s start ${code === undefined ? 'this bin' : `bin ${code}`} held ${formatMassKg(error.availableWetKg)}, less than the ${formatMassKg(error.requestedWetKg)} drawn. Lower the draw or move the run’s start.`;
+  throw new StockOverdrawError(message, { storageLocationId, availableWetKg: error.availableWetKg, requestedWetKg: error.requestedWetKg });
 }

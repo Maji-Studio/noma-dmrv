@@ -12,8 +12,9 @@ import {
   useUpdateCustomerLocation,
 } from "@/hooks/use-customers";
 import { useToast } from "@/components/ui/toast";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
-import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
+import { facilityDistanceChanges, withFormDistanceRows } from "@/lib/facility-distance-changes";
 import type { CustomerLocationFormData } from "@/schemas/customers";
 import type { Facility } from "@/db/schema";
 import {
@@ -57,13 +58,16 @@ export function CustomerLocationDialog({
 
   // Modal unmounts its children while closed, so the embedded form resets on
   // every open. Only the dialog-level server error needs clearing.
+  // Closing ends the draft, so the next open never reuses a key from a failed save.
   const handleClose = () => {
     setError(null);
+    createLocation.startDraft();
     onClose();
   };
 
-  const handleSubmit = async (data: CustomerLocationFormData) => {
+  const handleSubmit = async (data: CustomerLocationFormData, onRefusal: SaveRefusalHandler) => {
     setError(null);
+    const submitted = facilityDistanceChanges(data.facilityDistances, location?.facilityDistances);
     try {
       const locationData = {
         name: data.name,
@@ -73,7 +77,7 @@ export function CustomerLocationDialog({
         address: data.address,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
-        facilityDistances: facilityDistanceChanges(data.facilityDistances, location?.facilityDistances),
+        facilityDistances: submitted,
         defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         isDefault: data.isDefault,
       };
@@ -101,11 +105,14 @@ export function CustomerLocationDialog({
       // The dialog stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
       setError(
-        toSaveErrorMessage(
-          err,
-          isEditing
-            ? "Location was not saved. Try again."
-            : "Location was not created. Check the form.",
+        onRefusal(
+          withFormDistanceRows(err, submitted, data.facilityDistances),
+          toSaveErrorMessage(
+            err,
+            isEditing
+              ? "Location was not saved. Try again."
+              : "Location was not created. Check the form.",
+          ),
         ),
       );
     }
@@ -122,6 +129,8 @@ export function CustomerLocationDialog({
       }
     >
       <CustomerLocationForm
+        // A new location starts a fresh form, so a lock on the last one does not carry over.
+        key={location?.id ?? "new"}
         idPrefix={CUSTOMER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         facility={facility}

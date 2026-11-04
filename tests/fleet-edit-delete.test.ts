@@ -4,7 +4,7 @@ import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helper
  * the real test database: org scoping, the delete guard, and the vehicle evidence
  * snapshots while a submitted credit batch uses the vehicle.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -20,6 +20,7 @@ import {
   vehicles,
   type Vehicle,
 } from "@/db/schema";
+import * as fleetUsage from "@/data-access/fleet-usage";
 import { deleteDriver, getDriver, listDrivers, updateDriver } from "@/data-access/drivers";
 import { deleteOperator, getOperator, listOperators, updateOperator } from "@/data-access/operators";
 import { deleteVehicle, getVehicle, listVehicles, updateVehicle } from "@/data-access/vehicles";
@@ -39,7 +40,7 @@ const OTHER_ORG_ID = `org_fleet_other_${crypto.randomUUID().slice(0, 8)}`;
 const otherCtx: OrgContext = {
   userId: "user_fleet_other",
   organizationId: OTHER_ORG_ID,
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 
@@ -301,15 +302,73 @@ describe("delete guard", () => {
       await db.update(deliveries).set({ vehicleId: vehicle.id, driverId: driver.id }).where(eq(deliveries.id, fixture.deliveryId));
       await db.update(productionRuns).set({ operatorId: operator.id }).where(eq(productionRuns.id, fixture.productionRunId));
 
-      await expect(deleteVehicle(ctx, vehicle.id, vehicle.version)).rejects.toThrow(
+      const vehicleRefusal = deleteVehicle(ctx, vehicle.id, vehicle.version);
+      await expect(vehicleRefusal).rejects.toThrow(
         `Vehicle ${vehicle.code} was not deleted because 1 feedstock intake and 1 delivery use it.`,
       );
-      await expect(deleteDriver(ctx, driver.id, driver.version)).rejects.toThrow(
+      const driverRefusal = deleteDriver(ctx, driver.id, driver.version);
+      await expect(driverRefusal).rejects.toThrow(
         `Driver ${driver.code} was not deleted because 1 delivery uses it.`,
       );
-      await expect(deleteOperator(ctx, operator.id, operator.version)).rejects.toThrow(
+      const operatorRefusal = deleteOperator(ctx, operator.id, operator.version);
+      await expect(operatorRefusal).rejects.toThrow(
         "This operator was not deleted because 1 production run uses it.",
       );
+
+      await expect(vehicleRefusal).rejects.toMatchObject({
+        code: "conflict",
+        issues: [{ path: ["vehicleId"], code: "conflict", meta: { reason: "in_use" } }],
+      });
+      await expect(driverRefusal).rejects.toMatchObject({
+        code: "conflict",
+        issues: [{ path: ["driverId"], code: "conflict", meta: { reason: "in_use" } }],
+      });
+      await expect(operatorRefusal).rejects.toMatchObject({
+        code: "conflict",
+        issues: [{ path: ["operatorId"], code: "conflict", meta: { reason: "in_use" } }],
+      });
+      expect(await getVehicle(ctx, vehicle.id)).not.toBeNull();
+      expect(await getDriver(ctx, driver.id)).not.toBeNull();
+      expect(await getOperator(ctx, operator.id)).not.toBeNull();
+    }, "none");
+  });
+
+  it("marks foreign-key fallback refusals when the usage check misses a reference", async () => {
+    await withFleetFixture(async (fixture) => {
+      const vehicle = await insertVehicle();
+      const driver = await insertDriver();
+      const operator = await insertOperator();
+      await db.update(feedstocks).set({ vehicleId: vehicle.id }).where(eq(feedstocks.id, fixture.feedstockId));
+      await db.update(deliveries).set({ driverId: driver.id }).where(eq(deliveries.id, fixture.deliveryId));
+      await db.update(productionRuns).set({ operatorId: operator.id }).where(eq(productionRuns.id, fixture.productionRunId));
+
+      // Simulate missed usage while retaining the real DELETE and PostgreSQL FK checks.
+      vi.spyOn(fleetUsage, "countVehicleUsage").mockResolvedValueOnce([]);
+      vi.spyOn(fleetUsage, "countDriverUsage").mockResolvedValueOnce([]);
+      vi.spyOn(fleetUsage, "countOperatorUsage").mockResolvedValueOnce([]);
+
+      for (const { remove, path, message } of [
+        {
+          remove: () => deleteVehicle(ctx, vehicle.id, vehicle.version),
+          path: ["vehicleId"],
+          message: "Vehicle was not deleted because records still use it. Choose another vehicle on those records, or keep this one.",
+        },
+        {
+          remove: () => deleteDriver(ctx, driver.id, driver.version),
+          path: ["driverId"],
+          message: "Driver was not deleted because deliveries still use it. Choose another driver on those records, or keep this one.",
+        },
+        {
+          remove: () => deleteOperator(ctx, operator.id, operator.version),
+          path: ["operatorId"],
+          message: "Operator was not deleted because production records still use it. Choose another operator on those records, or keep this one.",
+        },
+      ]) {
+        await expect(remove()).rejects.toMatchObject({
+          code: "conflict", message,
+          issues: [{ path, code: "conflict", message, meta: { reason: "in_use" } }],
+        });
+      }
 
       expect(await getVehicle(ctx, vehicle.id)).not.toBeNull();
       expect(await getDriver(ctx, driver.id)).not.toBeNull();

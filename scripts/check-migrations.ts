@@ -1,10 +1,12 @@
 /** Check migration file/journal consistency without connecting to a database. */
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIGRATION_FILE = /^(\d{4})_.*\.sql$/;
-const TAG_PREFIX = /^(\d{4})_/;
+export const TAG_PREFIX = /^(\d{4})_/;
+export const MIGRATION_PREFIX_WIDTH = 4;
 // Preserve only the existing idx 9 -> 10 inversion; new timestamps must increase.
 export const HISTORIC_TIMESTAMP_INVERSION = {
   previousIdx: 9,
@@ -13,13 +15,49 @@ export const HISTORIC_TIMESTAMP_INVERSION = {
   when: 1775474419206,
 };
 
-interface MigrationEntry {
+export interface MigrationEntry {
   idx: number;
   tag: string;
   when: number;
 }
 
-export function checkMigrations(entries: readonly MigrationEntry[], files: readonly string[]): string[] {
+export function checkStagingCollisions(
+  entries: readonly MigrationEntry[],
+  stagingEntries: readonly MigrationEntry[],
+): string[] {
+  const stagingTags = new Set(stagingEntries.map((entry) => entry.tag));
+  const stagingPrefixes = new Map(stagingEntries.map((entry) => [entry.tag.match(TAG_PREFIX)?.[1], entry.tag]));
+  const failures: string[] = [];
+  for (const entry of entries) {
+    if (stagingTags.has(entry.tag)) continue;
+    const prefix = entry.tag.match(TAG_PREFIX)?.[1];
+    const stagingTag = prefix === undefined ? undefined : stagingPrefixes.get(prefix);
+    if (stagingTag) {
+      failures.push(`${prefix} already exists on staging as ${stagingTag}. Run pnpm db:renumber`);
+    }
+  }
+  return failures;
+}
+
+export function readStagingJournal(): MigrationEntry[] | undefined {
+  try {
+    const journal: { entries: MigrationEntry[] } = JSON.parse(execFileSync(
+      "git", ["show", "origin/staging:drizzle/meta/_journal.json"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    ));
+    if (!Array.isArray(journal.entries)) throw new Error("Invalid staging journal");
+    return journal.entries;
+  } catch {
+    console.warn("Warning: origin/staging migration journal unavailable; skipping staging comparison.");
+    return undefined;
+  }
+}
+
+export function checkMigrations(
+  entries: readonly MigrationEntry[],
+  files: readonly string[],
+  stagingEntries?: readonly MigrationEntry[],
+): string[] {
   const failures: string[] = [];
   const fileNames = new Set(files);
   const tags = new Set(entries.map((entry) => entry.tag));
@@ -63,6 +101,7 @@ export function checkMigrations(entries: readonly MigrationEntry[], files: reado
       prefixes.set(prefix, file);
     }
   }
+  if (stagingEntries) failures.push(...checkStagingCollisions(entries, stagingEntries));
   return failures;
 }
 
@@ -71,7 +110,7 @@ function main(): void {
   const journal: { entries: MigrationEntry[] } = JSON.parse(
     readFileSync(join(directory, "meta/_journal.json"), "utf8"),
   );
-  const failures = checkMigrations(journal.entries, readdirSync(directory).sort());
+  const failures = checkMigrations(journal.entries, readdirSync(directory).sort(), readStagingJournal());
   if (failures.length === 0) {
     console.log(`check:migrations: ${journal.entries.length} entries, all consistent.`);
     return;

@@ -60,12 +60,12 @@ test.describe("Storage-bin archive", () => {
     adminPage,
   }) => {
     const page = adminPage;
-    await page.goto(`/storage-locations?facility=${facility.id}`);
-    await expect(page.getByRole("heading", { name: "Storage" })).toBeVisible();
+    await page.goto(`/storage-bins?facility=${facility.id}`);
+    await expect(page.getByRole("heading", { name: "Storage bins" })).toBeVisible();
     const filteredListResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/storage-locations",
+        new URL(response.url()).pathname === "/storage-bins",
     );
     await page.getByLabel("Search storage").fill(bin.name);
     await filteredListResponse;
@@ -77,7 +77,8 @@ test.describe("Storage-bin archive", () => {
 
     // A bin with movement history is In use (#1119), so the menu never
     // offers the delete the server would refuse; Archive is the way out.
-    await expect(binCard.locator('[data-record-lock="inUse"]')).toHaveText("In use");
+    // Tiles show only Sent (#1162), so In use leaves no chip on the card.
+    await expect(binCard.locator('[data-record-lock]')).toHaveCount(0);
     await expect(async () => {
       await binCard
         .getByRole("button", { name: `Actions for ${bin.code}` })

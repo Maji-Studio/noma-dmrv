@@ -55,6 +55,8 @@ export interface SampleWithRelations {
   oToCOrgRatio: number | null;
   durabilityOption: "200_year" | "1000_year";
   sampling: CreditBatchSampling;
+  /** Undefined means document evidence was not loaded; list reads populate it. */
+  hasLabReport?: boolean;
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;
@@ -78,6 +80,8 @@ export interface SampleWithRelations {
   version: number;
 
   // Relations
+  /** Owning batch's facility, used to reconcile record links with the working facility. */
+  facilityId: string;
   creditBatchCode: string | null;
   facilityCode: string | null;
   facilityName: string | null;
@@ -128,6 +132,7 @@ export const sampleWithRelationsColumns = {
   createdAt: samples.createdAt,
   updatedAt: samples.updatedAt,
   version: samples.version,
+  facilityId: creditBatches.facilityId,
   creditBatchCode: creditBatches.code,
   sampling: creditBatches.sampling,
   batchDurabilityOption: sampleBatchFacilities.durabilityOption,

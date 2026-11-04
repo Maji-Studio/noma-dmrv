@@ -1,7 +1,8 @@
+import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { createStorageLocation } from "@/data-access/storage-locations";
-import { createFeedstockType } from "@/data-access/feedstock-types";
-import { createReactor } from "@/data-access/reactors";
+import { createStorageLocationInTransaction } from "@/data-access/storage-locations";
+import { createFeedstockTypeInTransaction } from "@/data-access/feedstock-types";
+import { createReactorInTransaction } from "@/data-access/reactors";
 import { logFeedstockDelivery } from "@/lib/operations/feedstocks";
 import { startProductionRun } from "@/lib/operations/production-runs";
 import { makeBiocharProduct } from "@/lib/operations/biochar-products";
@@ -36,22 +37,22 @@ export async function seedApplications(ctx: OrgContext, input: {
   const now = Date.now();
   const instant = (hoursAgo: number) => new Date(now - hoursAgo * MS_PER_HOUR).toISOString();
   const applicationDate = formatFacilityDate(new Date(now), input.timeZone);
-  const feedstockType = await createFeedstockType(ctx, {
+  const feedstockType = await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, {
     code: "FUZZ-APP-WOOD", name: "API fuzz application wood", category: "forestry", usage: "pyrolysis",
-  });
-  const feedstockBin = await createStorageLocation(ctx, {
+  }));
+  const feedstockBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-APP-IN", name: "API fuzz application feedstock", type: "feedstock_bin",
     facilityId: input.facilityId, feedstockTypeId: feedstockType.id,
-  });
-  const biocharBin = await createStorageLocation(ctx, {
+  }));
+  const biocharBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-APP-BC", name: "API fuzz application biochar", type: "biochar_bin", facilityId: input.facilityId,
-  });
-  const productBin = await createStorageLocation(ctx, {
+  }));
+  const productBin = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, {
     code: "FUZZ-APP-PB", name: "API fuzz application product", type: "product_bin", facilityId: input.facilityId,
-  });
-  const reactor = await createReactor(ctx, {
+  }));
+  const reactor = await db.transaction((tx) => createReactorInTransaction(ctx, tx, {
     code: "FUZZ-APP-RX", identifier: "FUZZ-APP-RX-1", facilityId: input.facilityId, reactorType: "fixed-bed",
-  });
+  }));
   await runOperation(logFeedstockDelivery, ctx, {
     facilityId: input.facilityId, supplierId: input.supplierId, feedstockTypeId: feedstockType.id,
     deliveryDate: applicationDate, totalWetMassKg: FEEDSTOCK_WET_MASS_KG, moisturePercent: FEEDSTOCK_MOISTURE_PERCENT,

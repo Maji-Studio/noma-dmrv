@@ -5,9 +5,14 @@ import { deriveSetupProgress } from "@/components/onboarding/use-setup-steps";
 import { DashboardView } from "./dashboard-view";
 import { RegistryConnectionDialog } from "@/components/certification/registry-connection-dialog";
 import type { OnboardingStatus } from "@/data-access/onboarding";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+
+/** The form's refusal handler with nothing to route: the sheet shows its own fallback. */
+const keepFallback: SaveRefusalHandler = (_error, fallback) => fallback;
 
 const mocks = vi.hoisted(() => ({
   facilityId: null as string | null,
+  generatedAt: undefined as string | undefined,
   mode: "takeover-guide",
   reactors: 0,
   setFacilityId: vi.fn(),
@@ -18,7 +23,7 @@ vi.mock("@/components/onboarding", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/onboarding")>(),
   useSetupGuide: () => {
     const status: OnboardingStatus = {
-      isOwnerOrAdmin: true, isOrgOwnerOrAdmin: true,
+      canManage: true, isOrgAdmin: true,
       facilityCount: mocks.facilityId ? 1 : 0, supplierCount: 0,
       facility: mocks.facilityId ? {
         reactorCount: mocks.reactors, registryConnected: false, feedstockCount: 0,
@@ -29,21 +34,22 @@ vi.mock("@/components/onboarding", async (importOriginal) => ({
   },
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
   useFacilityContext: () => ({ facilityId: mocks.facilityId, activeOrganizationId: "org-1", setFacilityId: mocks.setFacilityId }),
 }));
-vi.mock("@/hooks/use-dashboard-overview", () => ({ useDashboardOverview: () => ({ data: undefined, isLoading: false }) }));
-vi.mock("@/hooks/use-facilities", () => ({ useCreateFacility: () => ({ mutateAsync: mocks.createFacility, isPending: false }) }));
-vi.mock("@/hooks/use-reactors", () => ({ useCreateReactor: () => ({ mutateAsync: mocks.createReactor, isPending: false }) }));
+vi.mock("@/hooks/use-dashboard-overview", () => ({ useDashboardOverview: () => ({ data: mocks.generatedAt ? { generatedAt: mocks.generatedAt } : undefined, isLoading: false }) }));
+vi.mock("@/hooks/use-facilities", () => ({ useCreateFacility: () => ({ startDraft: vi.fn(), mutateAsync: mocks.createFacility, isPending: false }) }));
+vi.mock("@/hooks/use-reactors", () => ({ useCreateReactor: () => ({ startDraft: vi.fn(), mutateAsync: mocks.createReactor, isPending: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/components/ui/entity-side-sheet", () => ({
   EntitySideSheet: ({ title, children }: { title: string; children: ReactNode }) => <section aria-label={title}>{children}</section>,
 }));
 vi.mock("@/components/facilities/facility-form", () => ({
-  FacilityForm: ({ onSubmit, errorMessage }: { onSubmit: (data: object) => void; errorMessage?: string }) => <><button onClick={() => onSubmit({ name: "Facility", timezone: "UTC" })}>Create facility</button><p role="alert">{errorMessage}</p></>,
+  FacilityForm: ({ onSubmit, errorMessage }: { onSubmit: (data: object, onRefusal: SaveRefusalHandler) => void; errorMessage?: string }) => <><button onClick={() => onSubmit({ name: "Facility", timezone: "UTC" }, keepFallback)}>Create facility</button><p role="alert">{errorMessage}</p></>,
 }));
 vi.mock("@/components/reactors/reactor-form", () => ({
-  ReactorForm: ({ onSubmit }: { onSubmit: (data: object) => void }) => <button onClick={() => onSubmit({ identifier: "Reactor", facilityId: mocks.facilityId })}>Create reactor</button>,
+  ReactorForm: ({ onSubmit }: { onSubmit: (data: object, onRefusal: SaveRefusalHandler) => void }) => <button onClick={() => onSubmit({ identifier: "Reactor", facilityId: mocks.facilityId }, keepFallback)}>Create reactor</button>,
 }));
 vi.mock("@/components/certification/registry-connection-dialog", () => ({ RegistryConnectionDialog: () => <section aria-label="Registry connection" /> }));
 let renderer: ReactTestRenderer;
@@ -52,6 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.facilityId = null;
   mocks.mode = "takeover-guide";
+  mocks.generatedAt = undefined;
   mocks.reactors = 0;
   mocks.setFacilityId.mockImplementation((id: string) => { mocks.facilityId = id; });
   mocks.createFacility.mockResolvedValue({ id: "facility-1" });
@@ -106,5 +113,14 @@ describe("DashboardView setup surfaces", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("Setup in progress");
     expect(sheets()).toHaveLength(0);
     expect(renderer.root.findAllByType("button").some((node) => node.children.includes("Add facility"))).toBe(false);
+  });
+});
+
+describe("DashboardView updated time", () => {
+  it("shows the active facility date and time", async () => {
+    mocks.facilityId = "facility-1";
+    mocks.generatedAt = "2026-10-21T21:30:00Z";
+    await mount();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Live operations · updated Oct 22, 2026, 00:30");
   });
 });

@@ -30,6 +30,7 @@ loadEnv({ path: ".env.local", override: false });
 import * as crypto from "crypto";
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
 import {
   createTestFacility,
   deleteTestFacility,
@@ -41,8 +42,7 @@ import * as schema from "../../src/db/schema";
 
 const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
 
-const UNLINK_GUARD_MESSAGE =
-  "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.";
+const UNLINK_GUARD_MESSAGE = formatCertifierMappingLockMessage("unlink");
 
 const RUN_ID = crypto.randomUUID().slice(0, 8);
 
@@ -78,7 +78,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             externalProjectId: sharedProjectId,
             protocolSlug: "biochar",
             protocolVersion: "1.2",
-            defaultRemovalTemplateId: null,
+            removalTemplateId: null,
           },
           {
             externalFacilityId: `fcl_test_${facilityF2.id}`,
@@ -88,7 +88,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             externalProjectId: sharedProjectId,
             protocolSlug: "biochar",
             protocolVersion: "1.2",
-            defaultRemovalTemplateId: null,
+            removalTemplateId: null,
           },
         ]);
       });
@@ -150,7 +150,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
           externalProjectId: sandboxProjectId,
           protocolSlug: "biochar",
           protocolVersion: "1.2",
-          defaultRemovalTemplateId: null,
+          removalTemplateId: null,
         });
         // The unlink guard (hasBlockingFacilitySubmission) matches a
         // facility-scoped Removal: a certifierRemovals row carrying facilityId
@@ -221,15 +221,12 @@ async function openCertificationSettings(
   page: import("@playwright/test").Page,
   facilityId: string,
 ) {
-  // Certifier is the console's default pane, so no `?section=` is needed —
-  // and asserting the default here keeps that contract covered.
-  await page.goto(`/certification/settings?facility=${facilityId}`);
+  // The project link lives on Settings, Facilities (#1277), which needs the
+  // organization's registry keys saved, as every test here does.
+  await page.goto(`/settings/facilities?facility=${facilityId}`);
   await expect(
-    page.getByRole("heading", { name: "Settings", level: 1 }),
+    page.getByRole("heading", { name: "Facilities", level: 1 }),
   ).toBeVisible({ timeout: 15000 });
-  await expect(
-    page.getByRole("heading", { name: "Certifier", level: 2 }),
-  ).toBeVisible();
 }
 
 async function assertCertifierLinked(

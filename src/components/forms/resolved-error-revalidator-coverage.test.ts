@@ -10,12 +10,14 @@ const CROSS_FIELD_FORM_FILES = {
   "credit-batches/credit-batch-form.tsx": 1,
   "deliveries/delivery-form.tsx": 1,
   "facilities/facility-form.tsx": 1,
+  "emissions/emission-line-comment.tsx": 1,
+  "emissions/manual-entry-form.tsx": 1,
   "feedstock-types/feedstock-type-form.tsx": 1,
   "feedstocks/feedstock-form.tsx": 1,
   "formulations/formulation-form.tsx": 1,
   "production-runs/production-run-form.tsx": 1,
   "samples/sample-form.tsx": 1,
-  "storage-locations/bin-reconcile-sheet.tsx": 1,
+  "storage-locations/feedstock-loss-form.tsx": 1,
   "storage-locations/storage-location-form.tsx": 1,
 } as const;
 

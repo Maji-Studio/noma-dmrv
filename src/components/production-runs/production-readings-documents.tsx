@@ -13,7 +13,6 @@ import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
@@ -22,7 +21,7 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 import { isProductionReadingsCsvFormat } from "@/schemas/documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -146,7 +145,7 @@ export function ProductionReadingsDocuments({
           retryable={!locked}
         />
       )}
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind="productionRun" lockId={productionRunId} />}
       <header className="flex items-center justify-between">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
@@ -187,7 +186,7 @@ export function ProductionReadingsDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  Readings CSV · {formatFileSize(doc.fileSizeBytes)}
+                  {doc.fileSizeBytes == null ? "Readings CSV" : `Readings CSV · ${formatFileSize(doc.fileSizeBytes)}`}
                 </span>
               </div>
               <a
@@ -232,7 +231,6 @@ export function ProductionReadingsDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -244,6 +242,7 @@ export function ProductionReadingsDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </section>

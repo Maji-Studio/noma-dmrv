@@ -12,6 +12,8 @@ import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { recordHref } from "@/lib/record-links";
+import { entryFieldName, isDecimal } from "@/schemas/emission-entry-form";
 
 /* ---------- types ---------- */
 
@@ -25,18 +27,9 @@ export interface EmissionBatch { creditBatchId: string; code: string; startDate:
 
 const MAX_FRACTION_DIGITS = 3;
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: MAX_FRACTION_DIGITS });
-export const DECIMAL_MESSAGE = "Enter a non-negative decimal value.";
-export const DATE_BEFORE_START_MESSAGE = "Entry date cannot be before the credit batch start date.";
-export const DATE_IN_FUTURE_MESSAGE = "Entry date cannot be in the future at this facility.";
-export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
-export const NEEDS_SETUP_COPY = "noma cannot fill this template line yet. An admin sets it up in the template review.";
+export const NEEDS_SETUP_COPY = "noma cannot fill this component from its records yet. Its decision and the template are in Removal templates.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
-/**
- * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).
- * That module imports node-only rules, so the client mirrors the number.
- */
-export const MAX_NOTE_LENGTH = 4000;
-export const NOTE_TOO_LONG_MESSAGE = `Use ${NUMBER_FORMAT.format(MAX_NOTE_LENGTH)} characters or fewer.`;
+export const CALCULATED_BY_ISOMETRIC = "Calculated by Isometric";
 
 const OPEN_STATES: readonly EmissionLineState[] = ["needsSetup", "missingEvidence", "needsReview", "empty"];
 const DONE_STATES: readonly EmissionLineState[] = ["filled", "confirmedZero"];
@@ -49,9 +42,12 @@ const UNIT_ATOM_DISPLAY: Record<string, string> = { tonne: "t", "m^3": "m³" };
 const MASS_ATOMS = new Set(["mg", "g", "kg", "tonne"]);
 const DISTANCE_ATOMS = new Set(["m", "km", "mi"]);
 
+/** What a stored magnitude that will not parse as a number shows in its place. */
+export const UNREADABLE_FIGURE = "Unreadable figure";
+
 export function formatMagnitude(magnitude: string | number): string {
   const value = Number(magnitude);
-  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : MISSING_VALUE.notAvailable;
+  return Number.isFinite(value) ? NUMBER_FORMAT.format(value) : UNREADABLE_FIGURE;
 }
 
 /** "km * tonne" reads "t·km"; "mg / kg" reads "mg/kg"; "tonne" reads "t". */
@@ -84,17 +80,11 @@ export function massDistanceUnits(unit: string | null): { mass: string; distance
 }
 
 /**
- * The server's entry decimal rule (ENTRY_DECIMAL_PATTERN and
- * multiplyEntryDecimals in emission-entry-rules). That module pulls node-only
- * template comparison code, so the client keeps this small mirror; the server
+ * Exact product of two entry decimals, as the server checks it for mass × distance.
+ * multiplyEntryDecimals in emission-entry-rules pulls node-only template
+ * comparison code, so the client keeps this small mirror and the server
  * re-validates every value.
  */
-const DECIMAL_PATTERN = /^\d+(?:\.\d+)?$/;
-export function isDecimal(raw: string): boolean {
-  return DECIMAL_PATTERN.test(raw.trim());
-}
-
-/** Exact product of two entry decimals, as the server checks it for mass × distance. */
 export function multiplyDecimals(a: string, b: string): string {
   const left = canonicalDecimal(a) ?? "0";
   const right = canonicalDecimal(b) ?? "0";
@@ -149,9 +139,26 @@ export function hasRecordsFigure(records: LineRecords | null): records is LineRe
   return !!records?.figure && Number(records.figure.magnitude) > 0;
 }
 
+/** A recorded zero whose legs other credit batches count. */
+export function isCountedElsewhere(records: LineRecords | null): records is LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> } {
+  return !!records?.countedOn?.length;
+}
+
+export const COUNTED_ON_PREFIX = "Counted on";
+
+/** "Counted on CB-26-001, CB-26-002". */
+export function countedOnText(records: LineRecords & { countedOn: NonNullable<LineRecords["countedOn"]> }): string {
+  return `${COUNTED_ON_PREFIX} ${records.countedOn.map((batch) => batch.code).join(", ")}`;
+}
+
+/** The registry calculates this line, so the records hold no figure of their own. */
+export function isCalculatedByRegistry(records: LineRecords | null | undefined): boolean {
+  return records?.calculatedBy === "isometric" && !hasRecordsFigure(records);
+}
+
 /** The source exists but holds nothing for this line. */
 export function isRecordsGap(records: LineRecords | null): boolean {
-  return !!records && !hasRecordsFigure(records);
+  return !!records && !hasRecordsFigure(records) && !isCountedElsewhere(records) && !isCalculatedByRegistry(records);
 }
 
 function countWords(count: number, one: string, many: string): string {
@@ -164,32 +171,47 @@ export function openSourceLabel(source: RecordsSource): string {
 
 /** Records chip label: "22 runs", "None on 22 runs", "No deliveries yet". */
 export function recordsChipText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
-  if (hasRecordsFigure(records)) return countWords(records.count, words.shortOne, words.shortMany);
+  if (hasRecordsFigure(records) || isCalculatedByRegistry(records)) return countWords(records.count, words.shortOne, words.shortMany);
   if (records.count > 0) return `None on ${countWords(records.count, words.shortOne, words.shortMany)}`;
   return `No ${words.many} yet`;
 }
 
 /** Full sentence: "120 L from 22 production runs", "Not recorded on 22 production runs", "No deliveries yet". */
 export function recordsText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   const counted = countWords(records.count, words.one, words.many);
+  if (isCalculatedByRegistry(records)) return counted;
   if (hasRecordsFigure(records)) return `${formatFigure(records.figure)} from ${counted}`;
   if (records.count === 0) return `No ${words.many} yet`;
   return `Not recorded on ${counted}`;
 }
 
+/** The records row's amount, including figures calculated by the registry. */
+export function recordsFigureText(records: LineRecords): string {
+  if (isCalculatedByRegistry(records)) return CALCULATED_BY_ISOMETRIC;
+  return hasRecordsFigure(records) || isCountedElsewhere(records) ? formatFigure(records.figure) : MISSING_VALUE.notRecorded;
+}
+
 /** Where the figure comes from, without repeating it: "3 production runs", "Not recorded on 22 production runs". */
 export function recordsSourceText(records: LineRecords): string {
+  if (isCountedElsewhere(records)) return countedOnText(records);
   const words = SOURCE_WORDS[records.source];
   return hasRecordsFigure(records) ? countWords(records.count, words.one, words.many) : recordsText(records);
+}
+
+/** The credit batch that counts the legs, on its Emissions tab. */
+export function countedOnHref(creditBatchId: string, facilityId: string): string {
+  return recordHref("creditBatch", creditBatchId, { facilityId, tab: "emissions" });
 }
 
 /** Where the records are made, filtered to the batch where the page supports it. */
 export function recordsHref(records: LineRecords, ids: { facilityId: string; creditBatchId: string }): string {
   const params = new URLSearchParams({ facility: ids.facilityId });
   if (records.source !== "transportLegs") params.set("creditBatch", ids.creditBatchId);
-  const path = { productionRuns: "/production-runs", transportLegs: "/feedstocks", deliveries: "/deliveries", applications: "/applications" }[records.source];
+  const path = { productionRuns: "/production-runs", transportLegs: "/feedstock-intake", deliveries: "/deliveries", applications: "/applications" }[records.source];
   return `${path}?${params.toString()}`;
 }
 
@@ -203,7 +225,7 @@ export function manualEntriesText(count: number): string {
 export function valueEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => entry.kind === "value" && entry.counts);
 }
-/** Entries that stopped counting after a template change (Needs review). */
+/** Entries that stopped counting after a template change (Check entry). */
 export function stoppedEntries(line: EmissionLine): EmissionEntry[] {
   return line.entries.filter((entry) => !entry.counts);
 }
@@ -218,21 +240,34 @@ function entryFigureText(entry: EmissionEntry): string {
     .join(", ");
 }
 
-/** The row Total: the server total, the single entry's pair, a zero, or a missing token. */
-export function lineTotalText(line: EmissionLine): string {
+/**
+ * The row Total: the server total, the single entry's pair, a zero, or a
+ * missing token. A line that holds figures the server could not add up (units
+ * that differ, an entry that stopped counting) has no sum, so the Total is
+ * left out (null), never Not recorded: something was recorded, and the
+ * line's state already says it needs review.
+ */
+export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
   if (line.total) return formatFigure(line.total);
+  if (isCalculatedByRegistry(line.records)) return CALCULATED_BY_ISOMETRIC;
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
   if (line.state === "confirmedZero") return `0 ${displayUnit(line.unit)}`.trim();
-  return MISSING_VALUE.notRecorded;
+  const recorded = hasRecordsFigure(line.records) || line.entries.some((entry) => entry.kind === "value");
+  return recorded ? null : MISSING_VALUE.notRecorded;
+}
+
+/** The Total is a missing token, not a figure: phones drop it, since the state already says so. */
+export function isTotalMissing(line: EmissionLine): boolean {
+  return !line.total && !isCalculatedByRegistry(line.records) && line.state !== "confirmedZero" && valueEntries(line).every((entry) => entry.values.length < 2);
 }
 
 /* ---------- what the operator may do ---------- */
 
 /** Why Add manual entry is not offered, or null when it is. */
 export function addEntryRefusal(line: EmissionLine): string | null {
-  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This line takes no manual entries";
+  if (line.state === "needsSetup" || line.entryPolicy === "none" || line.contract?.scope !== "operating") return "This component takes no manual entries";
   if (line.entryPolicy === "single" && line.entries.some((entry) => entry.kind === "value")) return "One manual entry per credit batch";
   if (!line.inputShape.length || line.inputShape.some((input) => !input.unit)) return "The template units are not read yet";
   return null;
@@ -324,6 +359,23 @@ export function entryFields(line: EmissionLine): EntryFieldSpec[] {
 }
 
 /**
+ * Where the server's issue paths land in the form: its nth value field is
+ * named `entryFieldName(n)`. A mass-distance input's computed total
+ * (`values.N.magnitude`) belongs to neither part, so it stays unmapped and
+ * reads in the footer.
+ */
+export function entryRefusalAliases(line: EmissionLine): Record<string, string> {
+  const aliases: Record<string, string> = { occurredOn: "date", note: "note" };
+  entryFields(line).forEach((field, index) => {
+    const inputIndex = line.inputShape.findIndex((input) => input.key === field.inputKey);
+    const name = entryFieldName(index);
+    if (field.part === "value") aliases[`values.${inputIndex}.magnitude`] = name;
+    else aliases[`values.${inputIndex}.massDistanceDetail.${field.part}.magnitude`] = name;
+  });
+  return aliases;
+}
+
+/**
  * Draft field values from an existing entry (edit, enter again). A value whose
  * unit no longer matches the line's input stays empty: after a template change
  * from kWh to Wh, "2" must be typed again, never carried over as 2 Wh.
@@ -344,12 +396,6 @@ export function draftFromEntry(entry: EmissionEntry, line: EmissionLine): Record
   return draft;
 }
 
-export function validateFields(line: EmissionLine, draft: Record<string, string>): Record<string, string> {
-  const errors: Record<string, string> = {};
-  for (const field of entryFields(line)) if (!isDecimal(draft[field.key] ?? "")) errors[field.key] = DECIMAL_MESSAGE;
-  return errors;
-}
-
 /** The figure a mass-distance draft computes ("55.2 t·km"), or null until both parts are numbers. */
 export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string, string>): string | null {
   const input = line.inputShape.find((candidate) => candidate.quantityKind === "mass_distance");
@@ -361,7 +407,6 @@ export function draftMassDistanceFigure(line: EmissionLine, draft: Record<string
   return formatFigure({ magnitude: multiplyDecimals(tonnes, distance.trim()), unit: input.unit ?? "" });
 }
 
-/** Wire values for create and update. Call after validateFields passes. */
 /** The template units a draft is typed in. A change means the typed numbers no longer mean the same. */
 export function inputShapeKey(line: EmissionLine): string {
   return line.inputShape.map((input) => `${input.key}:${input.quantityKind}:${input.unit ?? ""}`).join("|");
@@ -369,6 +414,7 @@ export function inputShapeKey(line: EmissionLine): string {
 
 export const UNITS_CHANGED_MESSAGE = "The template units changed while you typed. Enter the values again in the units shown.";
 
+/** Wire values for create and update. Call after the form schema passes. */
 export function entryValues(line: EmissionLine, draft: Record<string, string>) {
   return line.inputShape.map((input) => {
     const unit = input.unit ?? "";
@@ -396,13 +442,6 @@ export function defaultEntryDate(today: string, batch: { startDate: string; endD
   if (today < batch.startDate) return batch.startDate;
   if (batch.endDate && today > batch.endDate) return batch.endDate;
   return today;
-}
-
-export function validateEntryDate(date: string, today: string, startDate: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return DATE_INVALID_MESSAGE;
-  if (date < startDate) return DATE_BEFORE_START_MESSAGE;
-  if (date > today) return DATE_IN_FUTURE_MESSAGE;
-  return null;
 }
 
 /* ---------- files ---------- */

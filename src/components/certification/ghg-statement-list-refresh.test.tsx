@@ -33,11 +33,13 @@ const state = vi.hoisted(() => ({
   toastWarning: vi.fn(),
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: () => useState<string | null>(null),
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/components/ui/data-table", () => {
@@ -65,7 +67,7 @@ vi.mock("@/components/ui/slide-over-panel", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { SlideOverPanel: {
     Root: Wrapper, Content: Wrapper, Header: Wrapper, Title: Wrapper,
-    Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper,
+    Description: Wrapper, Body: Wrapper, Footer: Wrapper, Close: Wrapper, FooterClose: () => null,
   } };
 });
 vi.mock("./ghg-statement-carbon-breakdown", () => ({
@@ -78,6 +80,11 @@ vi.mock("./registry-record-link", () => ({ RegistryRecordLink: () => null }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: state.refresh }),
+}));
+
+// No DOM here, which the refusal hook needs: show the failure in the footer as before.
+vi.mock("@/components/forms/use-save-refusal", () => ({
+  useSaveRefusal: () => (_error: unknown, fallback: string) => fallback,
 }));
 
 vi.mock("react-hook-form", () => ({
@@ -416,6 +423,7 @@ describe("GHG Statement parent list refreshes", () => {
     latestSubmission: null, linkedRemovalCount: 1,
   };
   const detail = {
+    statement: listItem.statement,
     statementSubmission: { id: "submission-1", externalId: "registry-1", status: "submitted" },
     statementSubmissionForStatus: null,
     linkedRemovals: [], recentSyncEvents: [],

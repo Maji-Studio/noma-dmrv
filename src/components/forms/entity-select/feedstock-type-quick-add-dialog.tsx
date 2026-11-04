@@ -32,9 +32,9 @@ export function FeedstockTypeQuickAddDialog({
         ? "Choose a certified Isometric feedstock first, then finish the local category and save. Unregistered feedstock will block verification."
         : "Choose Pyrolysis for production inputs or Blend for formulation materials. Blend feedstock types are internal-only and are not submitted to the registry.";
 
-  const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FeedstockTypeFormData>({
+  const { error, isSubmitting, handleSubmit, startDraft } = useQuickAddSubmit<FeedstockTypeFormData>({
     entityType: "feedstockType",
-    serverFn: (data) =>
+    serverFn: (data, intentKey) =>
       createFeedstockTypeFn({
         name: data.name.trim(),
         category: data.category,
@@ -42,7 +42,7 @@ export function FeedstockTypeQuickAddDialog({
         description: data.description?.trim() || null,
         registryUrl: data.registryUrl?.trim() || null,
         isometricFeedstockTypeId: data.isometricFeedstockTypeId?.trim() || null,
-      }),
+      }, { intentKey }),
     onSuccess,
     onClose,
   });
@@ -51,6 +51,7 @@ export function FeedstockTypeQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
+      onOpen={startDraft}
       title="New feedstock type"
       testId="feedstock-type-quick-add-dialog"
     >

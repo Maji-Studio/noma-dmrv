@@ -36,6 +36,8 @@ export const creditBatches = pgTable(
       .notNull()
       .references(() => organizations.id),
     code: text('code').notNull(), // e.g., "CB-2025-043"
+    // Optional operator-facing name. The code stays the immutable system identifier.
+    name: text('name'),
     facilityId: uuid('facility_id')
       .notNull(),
     // --- Production-batch identity (ADR 0016) ---

@@ -6,8 +6,8 @@ import { feedstockTypes, formulationIngredients, formulations, members, orders, 
   outputStockAllocations, outputStockRunAllocations, outputStockMoistureReadings, productIngredientSnapshots } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { createCustomerInTransaction } from "@/data-access/customer-writes";
-import { createStorageLocation } from "@/data-access/storage-locations";
-import { createFeedstockType } from "@/data-access/feedstock-types";
+import { createStorageLocationInTransaction } from "@/data-access/storage-locations";
+import { createFeedstockTypeInTransaction } from "@/data-access/feedstock-types";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { archiveFormulation, createFormulation } from "@/lib/operations/formulations";
@@ -34,8 +34,8 @@ export async function seedFormulationFixture(caseId: FormulationCaseId): Promise
   const { ctx } = fixture;
   try {
     await db.insert(users).values({ id: ctx.userId, email: `${ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "owner" });
-    const compost = await createFeedstockType(ctx, { code: "COMPOST", name: "Compost", category: "compost", usage: "blend" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: ctx.organizationId, userId: ctx.userId, role: "admin" });
+    const compost = await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, { code: "COMPOST", name: "Compost", category: "compost", usage: "blend" }));
     const formulation = await runOperationInProcess(createFormulation, ctx, { name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions);
     await runOperationInProcess(createFormulation, ctx, { name: "Other formulation", biocharRatio: PURE_BIOCHAR_RATIO }, scriptOptions);
     // Only an order references this row: no product or bin can mask the order guard.
@@ -49,10 +49,10 @@ export async function seedFormulationFixture(caseId: FormulationCaseId): Promise
       }, scriptOptions);
     }
     if (caseId === "formulation-archived") {
-      const source = await createStorageLocation(ctx, { code: "BC-EVAL", name: "Evaluation biochar source",
-        facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" });
-      await createStorageLocation(ctx, { code: "PB-EVAL", name: "Evaluation product bin",
-        facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id });
+      const source = await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, { code: "BC-EVAL", name: "Evaluation biochar source",
+        facilityId: fixture.facilityId, type: "biochar_bin", stockMode: "mix" }));
+      await db.transaction((tx) => createStorageLocationInTransaction(ctx, tx, { code: "PB-EVAL", name: "Evaluation product bin",
+        facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id }));
       const reactorId = await addFixtureReactor(fixture, caseId);
       await db.insert(productionRuns).values({ organizationId: ctx.organizationId, facilityId: fixture.facilityId,
         reactorId, code: "PR-EVAL", status: "complete", startTime: new Date(SOURCE_START), endTime: new Date(SOURCE_END),

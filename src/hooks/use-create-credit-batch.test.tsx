@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react
 import { useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ActionError } from "@/lib/action-error";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import { creditBatchKeys, useCreateCreditBatch } from "./use-credit-batches";
 import { onboardingKeys } from "./use-onboarding";
@@ -48,6 +49,8 @@ describe("useCreateCreditBatch", () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(mutation.isError).toBe(true);
     expect(mutation.error?.message).toBe("Credit batch was not created.");
+    // A refusal, so the list's catch shows its text without logging an error.
+    expect(mutation.error).toBeInstanceOf(ActionError);
     expect(setData).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
     expect(mocks.readiness).not.toHaveBeenCalled();

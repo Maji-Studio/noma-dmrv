@@ -1,5 +1,5 @@
 import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
-import { IN_USE_DELETE_MARKER } from "@/lib/delete-refusal";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { SafeError } from "@/lib/errors";
 import { RATIO_SUM_EXCEEDED_MESSAGE } from "./formulation-ratios";
 
@@ -33,10 +33,18 @@ export function formulationRatioExceeded(): DomainError {
 export function formulationLineInUse(formulationIngredientId: string, feedstockTypeId: string, productCodes: string[]): DomainError {
   return refusal("conflict", "This line is used by saved biochar products, so it cannot be removed. Keep the line or create a new formulation.", ["lines"], { formulationIngredientId, feedstockTypeId, productCodes });
 }
-export function formulationInUse(kind: "biochar products" | "product bins" | "orders", codes: string[]): DomainError {
-  const key = kind === "biochar products" ? "productCodes" : kind === "product bins" ? "binCodes" : "orderCodes";
-  return refusal("conflict", `${FORMULATION_IN_USE_PREFIX} ${kind} use it. Keep this formulation.`, ["formulationId"], { [key]: codes });
+/** What uses a formulation, and the refusal meta key that names the codes. */
+export const FORMULATION_IN_USE_KINDS = {
+  "biochar products": "productCodes",
+  "product bins": "binCodes",
+  orders: "orderCodes",
+} as const;
+export type FormulationInUseKind = keyof typeof FORMULATION_IN_USE_KINDS;
+
+export function formulationInUse(kind: FormulationInUseKind, codes: string[]): DomainError {
+  return inUseDeleteRefusal(`${FORMULATION_IN_USE_PREFIX} ${kind} use it. Keep this formulation.`, ["formulationId"], { meta: { [FORMULATION_IN_USE_KINDS[kind]]: codes } });
 }
+
 export function formulationFreezesTypeUsage(name: string): DomainError {
   return refusal("conflict", `This feedstock type is used by formulation ${name}, so its usage cannot change.`, ["usage"]);
 }

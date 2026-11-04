@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { getFacilityById } from "@/data-access/facilities";
 import { logger } from "@/lib/log";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
@@ -10,6 +11,7 @@ import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "../../../tests/fixtures/isometric/sandbox-enrichment-2026-10-15.json";
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn() }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ hasCertifierCredentials: vi.fn(), resolveIsometricClient: vi.fn(async () => ({})) }));
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn() }));
@@ -21,9 +23,10 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
 const ctx = makeTestOrgContext();
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getFacilityById).mockResolvedValue({ timezone: "Africa/Dar_es_Salaam" } as never);
   vi.spyOn(logger, "warn").mockImplementation(() => {});
   vi.mocked(hasCertifierCredentials).mockResolvedValue(true);
-  vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: null } as never);
+  vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, removalTemplateId: null } as never);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([fixture.id]);
   vi.mocked(listGhgEntryTemplates).mockResolvedValue([fixture as IsometricGhgEntryTemplate]);
   vi.mocked(listProjects).mockResolvedValue([{ id: fixture.project_id } as never]);
@@ -32,9 +35,8 @@ beforeEach(() => {
 });
 it("observes a pinned template even when the facility has no default", async () => {
   const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
-  expect(facts.defaultTemplate).toBeNull();
+  expect(facts.currentTemplate).toBeNull();
   expect(facts.templatesById[fixture.id]!.template.id).toBe(fixture.id);
-  expect(facts.removalTemplateIds).toEqual([fixture.id]);
   expect(listPinnedRemovalTemplateIds).toHaveBeenCalledOnce();
   expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ template: fixture }));
 });
@@ -52,4 +54,13 @@ it("keeps the read available but fails closed when observation persistence fails
 it.each([false, true])("threads the explicit enrichment refresh option (%s)", async (refreshEnrichment) => {
   await loadFacilityCertifierFacts(ctx, "facility-id", { refreshEnrichment });
   expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ refreshEnrichment }));
+});
+
+it.each(["connected", "missing-mapping", "missing-credentials", "no-template"])("loads the facility zone once when %s", async (state) => {
+  if (state === "missing-mapping") vi.mocked(getCertifierProjectByFacility).mockResolvedValue(null);
+  if (state === "missing-credentials") vi.mocked(hasCertifierCredentials).mockResolvedValue(false);
+  if (state === "no-template") vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([]);
+  const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
+  expect(facts.facilityTimezone).toBe("Africa/Dar_es_Salaam");
+  expect(getFacilityById).toHaveBeenCalledExactlyOnceWith(ctx, "facility-id");
 });

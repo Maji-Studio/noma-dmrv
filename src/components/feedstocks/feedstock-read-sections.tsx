@@ -6,6 +6,7 @@ import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
 import { distanceReadFields, isOverrideDistance } from "@/components/transport-legs/distance-override";
 import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -22,6 +23,8 @@ export interface FeedstockRecordedDistance {
 export function feedstockSheetSections(
   feedstock: FeedstockWithRelations,
   recordedDistance: FeedstockRecordedDistance = { distanceKm: null, pending: false },
+  /** Read only (a link into an archived facility): no write actions. */
+  options: { readOnly?: boolean } = {},
 ): DetailPanelSection[] {
   const overrideKm = feedstock.distanceKmOverride;
   const overridden = isOverrideDistance(overrideKm);
@@ -45,12 +48,13 @@ export function feedstockSheetSections(
           locationName: feedstock.supplierName,
           derivedSource: recordedDistance.source,
           locationDefaultKm: recordedDistance.locationDefaultKm,
+          certify: certificationDetailField("feedstock", "transportDistanceKm"),
         }),
       ],
       // The saved leg reads in the step that records it, as on the form.
       content: (
         <div className="flex flex-col gap-16">
-          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} />
+          <TransportDistanceDriftNotice target={{ entityType: "feedstock", entityId: feedstock.id }} recordCode={feedstock.code} readOnly={options.readOnly} />
           <TransportLegsSummary entityType="feedstock" entityId={feedstock.id} />
         </div>
       ),
@@ -80,7 +84,7 @@ export function feedstockSheetSections(
     {
       title: "Bin allocations",
       fields: [
-        { label: "Storage bin", value: feedstock.storageLocationCode ?? feedstock.storageLocationName },
+        { label: "Storage bin", value: feedstock.storageLocationName ?? feedstock.storageLocationCode },
         { label: "Allocated wet mass (kg)", value: formatMassKg(feedstock.massWetKg) },
         { label: "Over-allocation justification", value: feedstock.overrideJustification },
       ],

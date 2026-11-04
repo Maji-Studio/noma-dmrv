@@ -160,7 +160,7 @@ export async function getSuppliers(
     })
     .from(suppliers)
     .where(whereClause)
-    .orderBy(orderFn(sortColumn))
+    .orderBy(orderFn(sortColumn), orderFn(suppliers.code), orderFn(suppliers.id))
     .limit(pageSize)
     .offset(offset);
 

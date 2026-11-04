@@ -312,31 +312,12 @@ describe("certification lineage", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 describe("certification lineage of children", { timeout: SUITE_TIMEOUT_MS }, () => {
-  /** Holds `batch` and assigns its submitted Removal; `write` must queue behind the barrier. */
-  async function assignWhileQueued(f: LabSampleFixture, batch: LabSampleBatch, write: () => Promise<unknown>) {
-    const barrier = await openOperationBarrier(barrierPool);
-    let pending: Promise<unknown> | undefined;
-    try {
-      await barrier.tx.select({ id: creditBatches.id }).from(creditBatches)
-        .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, f.ctx.organizationId))).for("update");
-      await assignRemoval(f, batch, { submitted: true, executor: barrier.tx });
-      pending = write();
-      await waitForBlockedOperations(barrierPool, barrier.pid, 1);
-      await barrier.commit();
-    } catch (error) {
-      await barrier.rollback();
-      await Promise.allSettled([pending]);
-      throw error;
-    }
-    return pending!;
-  }
-
-  it("refuses a transport leg when the Sample's lineage is assigned while the leg waits", async () => {
+  it("refuses sample transport before attempting to lock its lineage", async () => {
     const f = await fixture();
     const created = (await record(f)).data.sample;
     const leg = () => createTransportLeg(f.ctx, { entityType: "sample", entityId: created.id, distanceKm: 10, loadMassKg: 1,
       transportMethodType: "road", calculationMethodType: "distance_based" });
-    await expect(assignWhileQueued(f, f.batchA, leg)).rejects.toThrow(LINEAGE_CHANGED);
+    await expect(leg()).rejects.toThrow("Record sample shipping as an emissions entry on a credit batch.");
     expect(await legRows(f)).toEqual([]);
   });
 
@@ -509,15 +490,16 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 describe("delete", { timeout: SUITE_TIMEOUT_MS }, () => {
-  it("retires the lab report and the transport legs, draining storage only after commit and never on a dry run", async () => {
+  it("retires the lab report and legacy transport legs, draining storage only after commit and never on a dry run", async () => {
     const f = await fixture();
     const provider = new RetirementStorageProvider();
     __setStorageProviderForTests(provider);
     const created = (await record(f)).data.sample;
     const key = `sample/${created.id}/pdf/lab-report.pdf`;
     await insertManagedDocument(provider, "sample", created.id, key, f.ctx.organizationId);
-    await createTransportLeg(f.ctx, { entityType: "sample", entityId: created.id, distanceKm: 10, loadMassKg: 1,
-      transportMethodType: "road", calculationMethodType: "distance_based" });
+    // New sample legs are refused; a leg saved before retirement can still exist.
+    await db.insert(transportLegs).values({ organizationId: f.ctx.organizationId, entityType: "sample", entityId: created.id,
+      distanceKm: 10, loadMassKg: 1, transportMethodType: "road", calculationMethodType: "distance_based" });
 
     await runOperation(deleteLabSample, f.ctx, { labSampleId: created.id, expectedVersion: 1 }, { dryRun: true });
     expect(provider.deleteCalls).toEqual([]);

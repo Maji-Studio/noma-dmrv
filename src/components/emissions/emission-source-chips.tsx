@@ -4,6 +4,10 @@
  *   wash (sea fill)         records made on another page; links upstream
  *   dashed warning outline  the records source exists but holds nothing
  *   plain outline           manual entries typed on this page
+ *
+ * Phones drop the boxes: each source reads as icon and text (records keep
+ * their link underline and ↗), so the line's state badge stays the only box
+ * on the row's meta line.
  */
 "use client";
 
@@ -20,9 +24,13 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EMISSION_LINE_STATE_LABELS } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
-import { TOUCH_TARGET } from "./emission-line-grid";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { CENTRED_HIT_AREA, INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import {
-  hasRecordsFigure,
+  COUNTED_ON_PREFIX,
+  countedOnHref,
+  isCountedElsewhere,
+  isRecordsGap,
   lineRecords,
   manualEntriesText,
   openSourceLabel,
@@ -32,6 +40,7 @@ import {
   stoppedEntries,
   valueEntries,
   type EmissionLine,
+  type LineRecords,
   type RecordsSource,
 } from "./emission-line-display";
 
@@ -42,7 +51,9 @@ export const SOURCE_ICON: Record<RecordsSource, Icon> = {
   applications: PlantIcon,
 };
 
-const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap px-8 body-caption";
+const CHIP = "inline-flex min-h-28 items-center gap-6 whitespace-nowrap body-caption md:px-8";
+/** Phones: the records link reads like the open row's records link, underlined. */
+const PHONE_LINK = "max-md:underline max-md:decoration-[color:var(--color-border-primary)] max-md:underline-offset-4";
 const ICON_SIZE = 14;
 const ARROW_SIZE = 12;
 
@@ -53,10 +64,35 @@ interface SourceChipsProps {
   onEntries?: () => void;
   /** Read-only chips: no links, no buttons. */
   interactive?: boolean;
-  /** Show "No records source" when there are no chips at all. */
+  /** Show "No automatic datapoints" when there are no chips at all. */
   quietText?: boolean;
   /** Shown in place of the quiet text when there are no chips, such as Add manual entry. */
   emptyAction?: ReactNode;
+}
+
+/** "Counted on CB-26-001", the code a link to that credit batch's Emissions tab. */
+export function CountedOnLink({ batch, facilityId, interactive = true, wrap = false }: {
+  batch: { creditBatchId: string; code: string };
+  facilityId: string;
+  interactive?: boolean;
+  /** Narrow cells let the code drop under "Counted on" rather than split the words. */
+  wrap?: boolean;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-x-6", wrap && "flex-wrap")}>
+      <span className="whitespace-nowrap">{COUNTED_ON_PREFIX}</span>
+      {interactive ? (
+        <Link
+          href={countedOnHref(batch.creditBatchId, facilityId)}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Open credit batch ${batch.code}`}
+          className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}
+        >
+          {batch.code}
+        </Link>
+      ) : <span className="font-mono whitespace-nowrap">{batch.code}</span>}
+    </span>
+  );
 }
 
 export function SourceChips({ line, ids, onEntries, interactive = true, quietText = true, emptyAction }: SourceChipsProps) {
@@ -67,25 +103,32 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
   const chips: ReactNode[] = [];
   if (records) {
     const SourceIcon = SOURCE_ICON[records.source];
-    const gap = !hasRecordsFigure(records);
+    const gap = isRecordsGap(records);
     const look = gap
-      ? "border border-dashed border-[var(--st-wait-border)] text-[var(--st-wait)]"
-      : "border border-transparent bg-[var(--sea)] text-[var(--color-text-primary)]";
+      ? "text-[var(--st-wait)] md:border md:border-dashed md:border-[var(--st-wait-border)]"
+      : "text-[var(--color-text-primary)] md:border md:border-transparent md:bg-[var(--sea)]";
     const body = (
       <>
         <SourceIcon size={ICON_SIZE} aria-hidden="true" />
         {recordsChipText(records)}
-        {interactive && <ArrowUpRightIcon size={ARROW_SIZE} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />}
+        {interactive && !isCountedElsewhere(records) && <ArrowUpRightIcon size={ARROW_SIZE} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />}
       </>
     );
     chips.push(
-      interactive ? (
+      isCountedElsewhere(records) ? (
+        <span key="records" className={cn(CHIP, look)} aria-label={recordsText(records)}>
+          <SourceIcon size={ICON_SIZE} aria-hidden="true" />
+          {records.countedOn.length === 1 ? (
+            <CountedOnLink batch={records.countedOn[0]} facilityId={ids.facilityId} interactive={interactive} />
+          ) : `${COUNTED_ON_PREFIX} ${records.countedOn.length} credit batches`}
+        </span>
+      ) : interactive ? (
         <Link
           key="records"
           href={recordsHref(records, ids)}
           onClick={(event) => event.stopPropagation()}
           aria-label={`${recordsText(records)}. ${openSourceLabel(records.source)}`}
-          className={cn(CHIP, look, TOUCH_TARGET, "hover:border-[var(--color-border-primary)]")}
+          className={cn(CHIP, look, CENTRED_HIT_AREA, PHONE_LINK, "md:hover:border-[var(--color-border-primary)]")}
         >
           {body}
         </Link>
@@ -123,17 +166,26 @@ export function SourceChips({ line, ids, onEntries, interactive = true, quietTex
     );
   }
   if (chips.length && entryChips.length) {
-    chips.push(<span key="plus" aria-hidden="true" className="body-caption text-[var(--color-text-tertiary)]">+</span>);
+    // The + travels with the chip after it, so a wrap never leaves it at a line end.
+    const [first, ...rest] = entryChips;
+    chips.push(
+      <span key="plus" className="inline-flex items-center gap-x-8 md:gap-x-6">
+        <span aria-hidden="true" className="body-caption text-[var(--color-text-tertiary)]">+</span>
+        {first}
+      </span>,
+      ...rest,
+    );
+  } else {
+    chips.push(...entryChips);
   }
-  chips.push(...entryChips);
 
   if (!chips.length) {
     if (emptyAction) return emptyAction;
     if (!quietText) return null;
-    const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No records source";
+    const text = line.entryPolicy === "single" ? "One manual entry per credit batch" : "No automatic datapoints";
     return <span className="body-caption text-[var(--color-text-tertiary)]">{text}</span>;
   }
-  return <span className="flex flex-wrap items-center gap-x-6 gap-y-4">{chips}</span>;
+  return <span className="flex flex-wrap items-center gap-x-8 md:gap-x-6 md:gap-y-4">{chips}</span>;
 }
 
 interface EntryChipProps {
@@ -145,7 +197,7 @@ interface EntryChipProps {
 }
 
 function EntryChip({ children, label, interactive, onClick, dim }: EntryChipProps) {
-  const look = cn(CHIP, "border border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]", dim && "text-[var(--color-text-tertiary)]");
+  const look = cn(CHIP, "md:border md:border-[var(--color-border-tertiary)] md:bg-[var(--color-background-white)]", dim && "text-[var(--color-text-tertiary)]");
   if (!interactive || !onClick) {
     return <span className={look} aria-label={label}>{children}</span>;
   }
@@ -157,7 +209,7 @@ function EntryChip({ children, label, interactive, onClick, dim }: EntryChipProp
         event.stopPropagation();
         onClick();
       }}
-      className={cn(look, TOUCH_TARGET, "hover:border-[var(--color-border-primary)]")}
+      className={cn(look, CENTRED_HIT_AREA, "md:hover:border-[var(--color-border-primary)]")}
     >
       {children}
     </button>

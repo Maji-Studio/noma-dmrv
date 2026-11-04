@@ -27,7 +27,7 @@ const probe = new Client({ connectionString: url, connectionTimeoutMillis: CONNE
 const available = await probe.connect().then(() => true, () => false);
 await probe.end();
 if (!available && process.env.CI) throw new Error("Provenance tests require PostgreSQL in CI");
-const ctx: OrgContext = { organizationId: "provenance-org", userId: "provenance-user", orgRole: "owner", isPlatformAdmin: false };
+const ctx: OrgContext = { organizationId: "provenance-org", userId: "provenance-user", orgRole: "admin", isPlatformAdmin: false };
 const other: OrgContext = { ...ctx, organizationId: "other-org" };
 const ids = Object.fromEntries(["formulation", "facility", "A", "B", "C", "runA", "runB", "delivery", "order", "app", "batchA", "batchB", "removal", "bin"].map(key => [key, randomUUID()]));
 const org = { organizationId: ctx.organizationId };

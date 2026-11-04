@@ -10,6 +10,8 @@
  * aggregates for every count, one `union all` for the newest rows per entity;
  * the merge sort and labelling happen in JS.
  */
+import { facilityListHref, plural } from "@/lib/dashboard-links";
+import { recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
@@ -22,7 +24,6 @@ import {
   samples,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { StatusStateClass } from "@/lib/status-state";
 import {
   and,
@@ -38,7 +39,6 @@ import {
 import { unionAll } from "drizzle-orm/pg-core";
 import {
   applicationEvidenceGapWhere,
-  overdueBatchesWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { requireOrgScope } from "./utils";
@@ -72,6 +72,10 @@ export type DashboardStationState = Extract<
 export interface DashboardStationReason {
   state: DashboardStationState;
   text: string;
+  /** Where this reason is fixed, when that is not the station's own list. */
+  href?: string;
+  /** Marks the running-runs reason, so views find it by source, not by state. */
+  source?: "runningRuns";
 }
 
 export interface DashboardStation {
@@ -94,6 +98,8 @@ export interface DashboardActivityItem {
   title: string;
   /** ISO date the event happened (date-only precision is fine). */
   dateIso: string;
+  /** UTC-midnight business dates carry a calendar, rather than a physical time. */
+  calendarDay?: boolean;
   href: string;
 }
 
@@ -127,13 +133,6 @@ export interface DashboardStationsData {
   certification: DashboardCertification;
 }
 
-function facilityHref(path: string, facilityId: string): string {
-  return `${path}?facility=${encodeURIComponent(facilityId)}`;
-}
-
-function plural(n: number, singular: string, pluralWord?: string): string {
-  return `${n} ${n === 1 ? singular : (pluralWord ?? `${singular}s`)}`;
-}
 
 /**
  * Milliseconds since the epoch for a `timestamp` column: the one shape that
@@ -149,13 +148,11 @@ export function epochMs(column: SQLWrapper): SQL<number | null> {
 /**
  * Every station and certification count in one statement: each entity is one
  * filtered-aggregate subquery scanned once, and the cross join of their
- * single rows is the snapshot. `overdueBatches` feeds the attention total in
- * `dashboard-overview.ts`; it is not a station badge.
+ * single rows is the snapshot.
  */
 async function loadStationAggregates(
   ctx: OrgContext,
   facilityId: string,
-  todayStr: string,
 ) {
   const orgId = ctx.organizationId;
   const feedstockAgg = db
@@ -260,9 +257,6 @@ async function loadStationAggregates(
       withoutSamples: countRows(
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
       ).as("batch_without_samples"),
-      overdue: countRows(
-        overdueBatchesWhere(orgId, facilityId, todayStr),
-      ).as("batch_overdue"),
     })
     .from(creditBatches)
     .leftJoin(sampleCounts, eq(sampleCounts.creditBatchId, creditBatches.id))
@@ -290,7 +284,6 @@ async function loadStationAggregates(
       batchTotal: batchAgg.total,
       pendingBatches: batchAgg.pending,
       batchesWithoutSamples: batchAgg.withoutSamples,
-      overdueBatches: batchAgg.overdue,
     })
     .from(feedstockAgg)
     .crossJoin(runAgg)
@@ -458,15 +451,15 @@ function activityHref(
 ): string {
   switch (kind) {
     case "feedstock":
-      return facilityHref("/feedstocks", facilityId);
+      return recordHref("feedstock", id, { facilityId });
     case "run":
-      return facilityHref("/production-runs", facilityId);
+      return recordHref("productionRun", id, { facilityId });
     case "delivery":
-      return facilityHref("/deliveries", facilityId);
+      return recordHref("delivery", id, { facilityId });
     case "application":
-      return facilityHref("/applications", facilityId);
+      return recordHref("application", id, { facilityId });
     case "batch":
-      return creditBatchDeepLinkHref(id, facilityId);
+      return recordHref("creditBatch", id, { facilityId });
   }
 }
 
@@ -489,6 +482,7 @@ function buildActivity(
       code: row.code,
       title: ACTIVITY_TITLES[row.kind],
       dateIso: new Date(row.sortMs).toISOString(),
+      calendarDay: row.kind === "feedstock" || row.kind === "application",
       href: activityHref(row.kind, row.id, facilityId),
     }));
 }
@@ -507,25 +501,14 @@ function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] 
 // Aggregate
 // ============================================
 
-/** Station snapshot plus the batch-only attention count the overview adds to the queue size. */
-export interface DashboardStationsSnapshot extends DashboardStationsData {
-  /** Pending credit batches whose measurement period has closed (uncapped). */
-  overdueBatches: number;
-}
-
-/**
- * `todayStr` ('YYYY-MM-DD', UTC) is the overdue-batch cutoff; the overview
- * passes the same value to its attention list so count and list agree.
- */
 export async function getDashboardStations(
   ctx: OrgContext,
   facilityId: string,
-  todayStr: string,
-): Promise<DashboardStationsSnapshot> {
+): Promise<DashboardStationsData> {
   requireOrgScope(ctx);
 
   const [counts, activityRows] = await Promise.all([
-    loadStationAggregates(ctx, facilityId, todayStr),
+    loadStationAggregates(ctx, facilityId),
     loadActivityRows(ctx, facilityId),
   ]);
 
@@ -550,7 +533,7 @@ export async function getDashboardStations(
       totalLabel: plural(supplierCount, "supplier"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/suppliers", facilityId),
+      href: facilityListHref("/suppliers", facilityId),
     },
     {
       key: "feedstock",
@@ -562,7 +545,7 @@ export async function getDashboardStations(
         feedstockMissing > 0
           ? [{ state: "warning", text: `${plural(feedstockMissing, "record")} missing data` }]
           : [],
-      href: facilityHref("/feedstocks", facilityId),
+      href: facilityListHref("/feedstock-intake", facilityId),
     },
     {
       key: "production",
@@ -575,10 +558,10 @@ export async function getDashboardStations(
           ? [{ state: "warning" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
           : []),
         ...(runningRuns > 0
-          ? [{ state: "in-progress" as const, text: `${runningRuns} running now` }]
+          ? [{ state: "in-progress" as const, text: `${runningRuns} running now`, source: "runningRuns" as const }]
           : []),
       ],
-      href: facilityHref("/production-runs", facilityId),
+      href: facilityListHref("/production-runs", facilityId),
     },
     {
       key: "products",
@@ -587,7 +570,7 @@ export async function getDashboardStations(
       totalLabel: plural(productTotal, "product"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/biochar-products", facilityId),
+      href: facilityListHref("/biochar-products", facilityId),
     },
     {
       key: "deliveries",
@@ -596,7 +579,7 @@ export async function getDashboardStations(
       totalLabel: plural(deliveryTotal, "delivery", "deliveries"),
       attention: 0,
       reasons: [],
-      href: facilityHref("/deliveries", facilityId),
+      href: facilityListHref("/deliveries", facilityId),
     },
     {
       key: "applications",
@@ -608,7 +591,7 @@ export async function getDashboardStations(
         evidenceGaps > 0
           ? [{ state: "warning", text: `${plural(evidenceGaps, "evidence gap")}` }]
           : [],
-      href: facilityHref("/applications", facilityId),
+      href: facilityListHref("/applications", facilityId),
     },
   ];
 
@@ -622,6 +605,5 @@ export async function getDashboardStations(
       batches: buildRecentBatches(activityRows),
       batchesWithoutSamples: counts.batchesWithoutSamples,
     },
-    overdueBatches: counts.overdueBatches,
   };
 }

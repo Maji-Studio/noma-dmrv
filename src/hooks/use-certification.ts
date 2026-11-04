@@ -19,7 +19,7 @@ import {
   createRemovalWithBatchesAction,
   deleteRemovalAction,
   deleteFacilityCertifierMapping,
-  loadBatchHealth,
+  loadCreditBatchTodosFn,
   loadCreditBatchDurabilitySummary,
   loadCertificationHealth,
   loadCertificationOverview,
@@ -74,6 +74,7 @@ import type {
 } from "@/schemas/certification";
 import type { StatusHistoryEntityType } from "@/lib/certification/status-history";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { unwrap } from "@/hooks/types";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
@@ -88,12 +89,16 @@ const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
 type RemovalCertifyPollingData = {
   latestSubmission?: { lockedAt?: Date | string | null } | null;
   futureDatedMeasurements?: readonly string[];
+  // A Removal deletion lease hides Delete; polling brings it back if the
+  // deletion fails or the lease expires.
+  deletionInProgress?: boolean;
 };
 
 export function getRemovalCertifyRefetchInterval(
   data: RemovalCertifyPollingData | undefined,
 ): number | false {
   return data?.latestSubmission?.lockedAt ||
+    data?.deletionInProgress ||
     (data?.futureDatedMeasurements?.length ?? 0) > 0
     ? LOCKED_REFETCH_INTERVAL_MS
     : false;
@@ -101,21 +106,29 @@ export function getRemovalCertifyRefetchInterval(
 
 type RemovalPreflightPollingData = {
   lockInFlight: boolean;
+  deletionInProgress?: boolean;
 };
 
 export function getRemovalPreflightRefetchInterval(
   data: RemovalPreflightPollingData | undefined,
 ): number | false {
-  return data?.lockInFlight ? LOCKED_REFETCH_INTERVAL_MS : false;
+  return data?.lockInFlight || data?.deletionInProgress
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
 }
 
 export const certificationKeys = {
-  removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
-  removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
+  removalCarriedEntries: (removalId: string) => ["certification", "removal-carried-entries", removalId] as const,
+  removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
+  removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
-  recordLock: (entityType: string, entityId?: string) =>
-    [...certificationKeys.all, "record-lock", entityType, entityId] as const,
+  recordLocks: () => [...certificationKeys.all, "record-lock"] as const,
+  /** A scoped read appends its scope, so invalidating the unscoped key (a prefix) reaches both. */
+  recordLock: (entityType: string, entityId?: string, scope?: "transport") =>
+    (scope
+      ? [...certificationKeys.all, "record-lock", entityType, entityId, scope]
+      : [...certificationKeys.all, "record-lock", entityType, entityId]) as readonly unknown[],
   facilityMapping: (facilityId: string) =>
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
   facilitySummary: (facilityId: string) =>
@@ -131,8 +144,8 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
-  batchHealth: (creditBatchId: string) =>
-    [...certificationKeys.all, "batch-health", creditBatchId] as const,
+  batchTodos: (facilityId: string, creditBatchId: string) =>
+    [...certificationKeys.all, "batch-todos", facilityId, creditBatchId] as const,
   batchDurabilitySummary: (creditBatchId: string) =>
     [
       ...certificationKeys.all,
@@ -244,6 +257,17 @@ export function useCertificationOverview(facilityId: string, enabled = true) {
     queryFn: async () => unwrap(await loadCertificationOverview(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+/** The Removal's submit attempts, fetched fresh so a surface can name the outcome of the attempt that just ended. */
+export function useRemovalSubmissionAttempts(facilityId: string, removalId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: certificationKeys.removalPreflight(facilityId, removalId),
+    queryFn: async () => unwrap(await loadRemovalPreflight(facilityId, removalId)),
+    enabled: enabled && Boolean(facilityId && removalId),
+    staleTime: 0,
+    select: (data) => data.submissionAttempts,
   });
 }
 
@@ -377,6 +401,7 @@ export function useFacilityCertifierMapping(
 export function useFacilityCertifierSummary(
   facilityId: string,
   enabled = true,
+  options: { readCacheOnly?: boolean } = {},
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
@@ -388,6 +413,11 @@ export function useFacilityCertifierSummary(
       ),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    // readCacheOnly: observe what another observer loaded; never fetch again
+    // on mount, window focus or reconnect.
+    ...(options.readCacheOnly
+      ? { refetchOnMount: false, refetchOnWindowFocus: false, refetchOnReconnect: false }
+      : {}),
   });
 }
 
@@ -419,6 +449,7 @@ export function useIsometricFeedstockTypes(enabled = true) {
 export function useSaveFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (input: SaveMappingInput) =>
       unwrap(await saveFacilityCertifierMapping(input)),
     onSuccess: (_data, variables) => {
@@ -466,16 +497,16 @@ export function useCertifyContextForCreditBatch(
   });
 }
 
-// Per-batch data-completeness verdict for the credit-batch detail page's
-// health-check panel. Reuses the single-batch certify context server-side and
-// runs the shared classifier. Mutations to the batch / its lineage invalidate
-// `certificationKeys.all`, which covers this key.
-export function useBatchHealth(creditBatchId: string, enabled = true) {
+// The credit batch page's to-dos (Blocking and Check items), built on the
+// server from the same core the batch list counts from. Refetched on every mount
+// (`staleTime: 0`), like the emission lines it replaced. Mutations that affect readiness invalidate `certificationKeys.all`,
+// which covers this key.
+export function useCreditBatchTodos(scope: { facilityId: string; creditBatchId: string } | null) {
   return useQuery({
-    queryKey: certificationKeys.batchHealth(creditBatchId),
-    queryFn: async () => unwrap(await loadBatchHealth(creditBatchId)),
-    enabled: enabled && !!creditBatchId,
-    staleTime: DEFAULT_STALE_MS,
+    queryKey: certificationKeys.batchTodos(scope?.facilityId ?? "", scope?.creditBatchId ?? ""),
+    queryFn: async () => unwrap(await loadCreditBatchTodosFn(scope!.facilityId, scope!.creditBatchId)),
+    enabled: !!scope,
+    staleTime: 0,
   });
 }
 
@@ -548,19 +579,26 @@ export function useCreditBatchHealthSummaries(
 // credit-batch variant it refetches while a submission is locked in flight.
 // It also polls while a clock-derived future-date blocker exists so an open
 // dialog becomes ready when that timestamp passes, without broad idle polling.
+/** One definition of the Removal context read, shared by the hook and any prefetch. */
+export function removalCertifyContextQueryOptions(
+  facilityId: string,
+  removalId: string,
+) {
+  return {
+    queryKey: certificationKeys.certifyContextForRemoval(facilityId, removalId),
+    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    staleTime: DEFAULT_STALE_MS,
+  };
+}
+
 export function useRemovalCertifyContext(
   facilityId: string,
   removalId: string,
   enabled = true,
 ) {
   return useQuery({
-    queryKey: certificationKeys.certifyContextForRemoval(
-      facilityId,
-      removalId,
-    ),
-    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
+    ...removalCertifyContextQueryOptions(facilityId, removalId),
     enabled: enabled && !!facilityId && !!removalId,
-    staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       getRemovalCertifyRefetchInterval(query.state.data),
   });
@@ -593,12 +631,24 @@ export function useRemovalTemplateDiagnostic(
 
 // Removals hub listing for a facility — removals + members + status, plus
 // the pool of credit batches not yet grouped into a removal.
+// The list falls back to these rows' deletion lease while a preflight read is
+// loading or failed, so the hub polls on its own until every lease clears.
+export function getRemovalsHubRefetchInterval(
+  data: { removals: readonly { deletionInProgress: boolean }[] } | undefined,
+): number | false {
+  return data?.removals.some((entry) => entry.deletionInProgress)
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
+
 export function useRemovalsForFacility(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalsForFacility(facilityId),
     queryFn: async () => unwrap(await loadRemovalsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      getRemovalsHubRefetchInterval(query.state.data),
   });
 }
 
@@ -637,8 +687,13 @@ export function useSubmitRemoval() {
       invalidateCertificationReadiness(queryClient);
     },
     // Claim reservation and release record activity even when the registry
-    // call fails afterwards.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
+    // call fails afterwards. The dashboard's Needs attention rows read the
+    // Removal's submission state (#1528), so a sent, failed or resumed attempt
+    // refreshes them too; batch to-dos and list states sit under certification.
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: activityKeys.all }),
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
+    ]),
   });
 }
 
@@ -665,16 +720,20 @@ export function useDeleteRemoval() {
   return useMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry),
     mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
-    onSuccess: () =>
+    // Deleting an interrupted Removal drops its Needs attention row (#1528).
+    onSuccess: () => Promise.all([
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
       }),
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
+    ]),
   });
 }
 
 export function useDeleteFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.registry, { onRefusalOnly: true }),
     mutationFn: async (facilityId: string) =>
       unwrap(await deleteFacilityCertifierMapping(facilityId)),
     onSuccess: (_data, facilityId) => {

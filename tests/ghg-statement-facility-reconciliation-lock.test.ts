@@ -10,6 +10,13 @@ import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } fr
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Keep the statement guard real. Lock fixtures have no semantic snapshots, so
+// stub only the shared content comparison.
+vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+  compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
+    state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
+  })),
+}));
 vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
   (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
 );

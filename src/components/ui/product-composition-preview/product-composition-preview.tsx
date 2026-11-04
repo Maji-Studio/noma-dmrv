@@ -7,15 +7,16 @@
  * rules. The bar sits flat under the inputs that produce it, inside the same
  * form section, with one key line of swatches beneath it. No card, no tint, no
  * frame: the hierarchy comes from the bar and its key, never from a background.
- * Both levels show the bar and its key, because those are what the fields
- * mean; Detailed adds the explanation: the composition ledger and the
- * arithmetic behind `Show calculation`.
+ * The bar and its key are always visible, because those are what the fields
+ * mean; the explanation, the composition ledger and the arithmetic, opens from
+ * the caption's (i).
  *
  * Three levels of knowledge, one component, most specific first:
  * - `components`: the surface already split every part into solids and water
  *   (`productCompositionComponents` in `@/components/biochar-products`), so an
  *   ingredient's own water joins the water part instead of counting as solids.
- *   Missing parts read "Not available" and the bar stays unresolved. The form
+ *   A part that cannot be derived keeps its name with no figure, and the bar
+ *   stays unresolved. The form
  *   passes live parts; the product read view passes the saved snapshot with
  *   its total as `headline`, `formatMass` at save precision and the saved
  *   basis under the arithmetic.
@@ -68,7 +69,7 @@ export type ProductCompositionPartKind = "biochar" | "ingredient" | "water" | "a
 
 /**
  * One part of the product, already split. `massKg` is null when the part
- * cannot be derived, and the key then reads "Not available" for it.
+ * cannot be derived, and the key then names the part with no figure.
  */
 export interface ProductCompositionPart {
   label: string;
@@ -110,7 +111,7 @@ interface ProductCompositionPreviewProps {
   headline?: ReactNode;
   /** Mass formatter for the bar, its key and the arithmetic. Defaults to kilograms at display precision. */
   formatMass?: SegmentFormat;
-  /** Where the figures come from, shown under the arithmetic behind Show calculation. */
+  /** Where the figures come from, shown under the arithmetic in the (i) panel. */
   basis?: ReactNode;
   /** Other controls for the block's action row, such as a stock history. */
   actions?: ReactNode;
@@ -291,7 +292,7 @@ function productFlowDiagram(
     const kg = segments.reduce((total, segment) => total + segment.kg, 0);
     if (kg <= 0) return [];
     const wet = source.parts.some((part) => part.kind !== "addedWater");
-    return [{ id: `source-${sourceIndex}`, column: 0, name: source.label, caption: wet ? `${format(kg)} wet` : format(kg), segments }];
+    return [{ id: `source-${sourceIndex}`, column: 0, name: source.label, caption: wet ? `${format(kg)} wet mass` : format(kg), segments }];
   });
 
   return {
@@ -306,9 +307,12 @@ function formatCompositionArithmetic(
   wetMassKg: number | null | undefined,
   segments: readonly MassSegment[],
   format: SegmentFormat,
-): string {
-  const parts = segments.map((segment) => format(segment.mass)).join(" + ");
-  return `${wetLabel} is the sum of its parts: ${parts} = ${format(resolvedMass(wetMassKg))}.`;
+): string | null {
+  const totalKg = resolvedMass(wetMassKg);
+  const masses = segments.map((segment) => segment.mass);
+  if (totalKg === null || masses.some((mass) => mass === null)) return null;
+  const parts = (masses as number[]).map(format).join(" + ");
+  return `${wetLabel} is the sum of its parts: ${parts} = ${format(totalKg)}.`;
 }
 
 function UnresolvedBar() {
@@ -343,11 +347,12 @@ export function ProductCompositionPreview({
   const segments = split
     ? (partsResolve(split, resolvedMass(wetMassKg)) ? split : null)
     : resolveSegments({ wetMassKg, dryBiocharKg, ingredients, addedWaterKg, dryLabel, remainderLabel });
-  // A split with some parts known still names each part, so a missing one
-  // reads "Not available" instead of vanishing from the product.
+  // A split with some parts known still names each part, so a part whose mass
+  // cannot be derived keeps its label in the key, with no figure.
   const partlyKnown = split !== null && split.some((segment) => segment.mass !== null);
 
   const totalKg = resolvedMass(wetMassKg);
+  const knownDryKg = resolvedMass(dryBiocharKg);
   const flow = segments && sources && components && totalKg !== null
     ? productFlowDiagram(sources, components, wetLabel, totalKg, formatMass)
     : null;
@@ -370,9 +375,9 @@ export function ProductCompositionPreview({
     // the rest of the product is still missing.
     <div className="flex flex-col gap-6">
       <UnresolvedBar />
-      {!split && resolvedMass(dryBiocharKg) !== null && (
+      {!split && knownDryKg !== null && (
         <p className="body-caption tabular-nums text-[var(--color-text-secondary)]">
-          {dryLabel} {formatMass(resolvedMass(dryBiocharKg))}
+          {dryLabel} {formatMass(knownDryKg)}
         </p>
       )}
       <p className="body-caption text-[var(--color-text-tertiary)]">{UNRESOLVED_COPY}</p>
@@ -388,7 +393,7 @@ export function ProductCompositionPreview({
         hint={note ?? COMPOSITION_HINT}
         headline={headline}
         actions={actions}
-        calculation={ledgerSegments ? (
+        explanation={ledgerSegments ? (
           <div className="flex flex-col gap-8">
             <CompositionLedger
               label={BLOCK_TITLE}

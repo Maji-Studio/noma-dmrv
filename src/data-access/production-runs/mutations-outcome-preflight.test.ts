@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { createProductionRunInTransaction, updateProductionRunInTransaction } from "./mutations";
 
 vi.mock("@/db", () => ({ db: {} }));
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false } satisfies OrgContext;
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const BIN_ID = "11111111-1111-4111-8111-111111111111";
 const START = new Date("2026-01-01T10:00:00Z");
 const END = new Date("2026-01-01T11:00:00Z");
@@ -146,5 +146,27 @@ it.each(OUTPUT_PRIORITY_CASES)("preserves merged update outcome priority: $messa
   await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
     expectedVersion: 1, status: "complete", endTime, biocharOutputKg,
   }, { now: NOW })).rejects.toThrow(message);
+  expect(state.update).not.toHaveBeenCalled();
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("refuses multi-bin create before any insert while off", async () => {
+  vi.stubEnv("MULTI_BIN_RUNS_ENABLED", "false");
+  const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+  await expect(createProductionRunInTransaction(ctx, state.tx, {
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", startTime: START, endTime: null,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: 1 }, { storageLocationId: "22222222-2222-4222-8222-222222222222", wetMassKg: 1 }],
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["feedstockDraws"] }] });
+  expect(state.insert).not.toHaveBeenCalled();
+});
+
+it("refuses a multi-bin update that adds a bin before any write while off", async () => {
+  vi.stubEnv("MULTI_BIN_RUNS_ENABLED", "false");
+  const state = preflightTransaction([[{ id: "run", facilityId: "facility", startTime: START, endTime: null, status: "running" }], [{ storageLocationId: BIN_ID }]]);
+  await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
+    expectedVersion: 1,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: 1 }, { storageLocationId: "22222222-2222-4222-8222-222222222222", wetMassKg: 1 }],
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["feedstockDraws"] }] });
   expect(state.update).not.toHaveBeenCalled();
 });

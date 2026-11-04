@@ -10,6 +10,7 @@ import { archiveCustomerLocation, restoreCustomerLocation, addCustomerLocation, 
 import { runWithCascadePreview } from "@/lib/operations/cascade-preview";
 import { keylessOutcomeUnknown, runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
+import { getCustomerStats as getCustomerStatsData, type CustomerStats } from "@/data-access/customer-stats";
 import { type Customer, type CustomerLocation } from "@/db/schema";
 import {
   getCustomers as getCustomersData,
@@ -31,6 +32,8 @@ import { customerLocationVersionInput } from "@/schemas/customer-location-input"
 import { customerVersionInput, deleteCustomerInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 const LOG_MESSAGE = "customer action failed";
 
@@ -55,6 +58,23 @@ export async function getCustomersFn(
     fallbackMessage: "Failed to load customers",
     zodErrorPrefix: "Invalid filter parameters",
     log: { message: LOG_MESSAGE, context: { op: "customer:list" } },
+  });
+}
+
+const customerStatsFilterSchema = z.object({
+  archived: z.boolean().optional(),
+}).optional();
+
+export async function getCustomerStatsFn(
+  filters?: { archived?: boolean },
+): Promise<ActionResult<CustomerStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = customerStatsFilterSchema.parse(filters);
+    return getCustomerStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load customer stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "customer:stats" } },
   });
 }
 
@@ -114,13 +134,14 @@ export async function getCustomerLocationsFn(
 
 /** Create the customer and its locations in one transaction; any failure rolls back both. */
 export async function createCustomerWithLocationsFn(
-  data: z.infer<typeof createCustomerWithLocationsSchema>
+  data: z.infer<typeof createCustomerWithLocationsSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {
-  return withAction(
-    async (ctx) => {
+  return withCreate(
+    async (_ctx, create) => {
       const validated = createCustomerWithLocationsSchema.parse(data);
 
-      const result = await runOperationInProcess(createCustomer, ctx, {
+      const result = await create(createCustomer, {
         name: validated.customer.name,
         cropType: validated.customer.cropType || null,
         address: validated.customer.address || null,
@@ -140,7 +161,7 @@ export async function createCustomerWithLocationsFn(
         })),
       });
       return result;
-    },
+    }, options,
     {
       fallbackMessage:
         "The customer and its locations were not created. Try again.",
@@ -218,12 +239,13 @@ export async function previewDeleteCustomerFn(data: z.infer<typeof deleteCustome
  * Create a new customer location
  */
 export async function createCustomerLocationFn(
-  data: z.infer<typeof createCustomerLocationSchema>
+  data: z.infer<typeof createCustomerLocationSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createCustomerLocationSchema.parse(data);
 
-    const location = await runOperationInProcess(addCustomerLocation, ctx, {
+    const location = await create(addCustomerLocation, {
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
@@ -239,7 +261,7 @@ export async function createCustomerLocationFn(
     });
 
     return location;
-  }, {
+  }, options, {
     fallbackMessage: "Failed to create customer location",
     log: { message: LOG_MESSAGE, context: { op: "customer-location:create" } },
   });

@@ -6,6 +6,8 @@
  */
 "use client";
 
+import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
+import { useIntentMutation } from "./use-create-intent-key";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   confirmEmissionEntryFn,
@@ -17,14 +19,19 @@ import {
   updateEmissionEntryFn,
 } from "@/fn/emission-entries";
 import { throwActionError } from "@/lib/stale-version";
+import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { EmissionLinesBlockedError } from "@/lib/certification/emission-lines-blocked-error";
 import type { ActionResult } from "@/types/actions";
-import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
+import { withoutRegistryCalculatedLines, type EmissionLineRecords, type EmissionRecordSource } from "@/lib/certification/emission-lines";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { energyKeys } from "./use-energy";
 
 type LinesResult = Awaited<ReturnType<typeof getBatchEmissionLinesFn>>;
-type ServerLine = Extract<LinesResult, { success: true }>["data"][number];
+type LinesData = Extract<LinesResult, { success: true }>["data"];
+type ServerLine = Extract<LinesData, { status: "ready" }>["lines"][number];
+
+const EMISSION_LINES_RETRY_LIMIT = 3;
 
 export type RecordsSource = EmissionRecordSource;
 export type LineRecords = EmissionLineRecords;
@@ -47,8 +54,19 @@ export function useBatchEmissionLines(scope: EmissionBatchScope | null) {
     queryKey: scope
       ? creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId)
       : creditBatchKeys.emissionLines("", ""),
-    queryFn: async (): Promise<EmissionLine[]> => unwrapEntry(await getBatchEmissionLinesFn(scope!)),
+    queryFn: async (): Promise<EmissionLine[]> => {
+      const result = unwrapEntry(await getBatchEmissionLinesFn(scope!));
+      if (result.status === "blocked") {
+        // Other reads may write the missing observation; retain the normal retry path.
+        if (result.blocker === "templateNotFullyRead") throw new Error(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
+        throw new EmissionLinesBlockedError(removalTemplateBlocker(result.blocker));
+      }
+      return result.lines;
+    },
+    retry: (failureCount, error) => !(error instanceof EmissionLinesBlockedError) && failureCount < EMISSION_LINES_RETRY_LIMIT,
     enabled: !!scope,
+    // Every display reads the lines without the one Isometric calculates.
+    select: withoutRegistryCalculatedLines,
     // Records come from runs, legs, deliveries and applications edited on
     // other pages; refetch on every visit rather than wiring all of them here.
     staleTime: 0,
@@ -69,6 +87,7 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
 function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input: TInput) => Promise<ActionResult<TData>>) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
     mutationFn: async (input: TInput) => unwrapEntry(await run(input)),
     // Refresh after failures too: a stale version means the lines moved.
     onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
@@ -76,7 +95,13 @@ function useEntryMutation<TInput, TData>(scope: EmissionBatchScope, run: (input:
 }
 
 export function useCreateEmissionEntry(scope: EmissionBatchScope) {
-  return useEntryMutation(scope, createEmissionEntryFn);
+  const queryClient = useQueryClient();
+  return useIntentMutation({
+    meta: recordLockMeta(RECORD_LOCK_TOUCHES.emission, { onRefusalOnly: true }),
+    mutationFn: async (input: Parameters<typeof createEmissionEntryFn>[0], intentKey) =>
+      unwrapEntry(await createEmissionEntryFn(input, { intentKey })),
+    onSettled: () => invalidateEmissionEntryReads(queryClient, scope),
+  });
 }
 export function useUpdateEmissionEntry(scope: EmissionBatchScope) {
   return useEntryMutation(scope, updateEmissionEntryFn);

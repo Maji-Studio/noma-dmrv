@@ -1,13 +1,12 @@
 /**
- * DOM factories for the Carbon Viewer's MapLibre-managed elements — site
- * markers, distance chips, and popup cards. Built with createElement +
+ * DOM factories for the Carbon Viewer's MapLibre-managed elements: site
+ * markers and popup cards. Built with createElement +
  * textContent only (codes, supplier names, and field identifiers are user
  * data — never injected as HTML). Styled by carbon-viewer.css, imported here
  * so every surface that builds these elements gets their styles.
  */
 
 import "./carbon-viewer.css";
-import { formatLegDistanceCompactKm, formatLegDistanceKm } from "@/lib/format-utils";
 import { STATUS_STATE_BADGE_CLASSES, getStatusState } from "@/lib/status-state";
 import { statusLabels } from "@/components/ui/status-badge";
 import { toBadgeProps } from "../chain-status-badge";
@@ -20,6 +19,9 @@ export interface SiteMarkerInput {
   kind: ViewerMarkerKind;
   code: string;
   sub: string | null;
+  /** Where the marker sits, exposed as `data-position` for the renderer E2E checks. */
+  lat?: number;
+  lng?: number;
 }
 
 export function createSiteMarkerElement(input: SiteMarkerInput): HTMLDivElement {
@@ -27,6 +29,7 @@ export function createSiteMarkerElement(input: SiteMarkerInput): HTMLDivElement 
   el.className = `cvm-mk cvm-mk--${input.kind}`;
   el.dataset.nodeId = input.nodeId;
   el.dataset.testid = "carbon-viewer-marker";
+  if (input.lat !== undefined && input.lng !== undefined) el.dataset.position = JSON.stringify([input.lng, input.lat]);
   el.setAttribute("role", "button");
   el.setAttribute("tabindex", "0");
   el.setAttribute(
@@ -59,22 +62,13 @@ export function createSiteMarkerElement(input: SiteMarkerInput): HTMLDivElement 
   return el;
 }
 
-export function createDistanceChipElement(distanceKm: number | null | undefined): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "cvm-dist";
-  el.dataset.testid = "carbon-viewer-distance-chip";
-  el.textContent = formatLegDistanceCompactKm(distanceKm);
-  el.setAttribute("aria-label", formatLegDistanceKm(distanceKm));
-  return el;
-}
-
 export interface PopupCardInput {
   kind: ViewerMarkerKind;
   /** Mono-uppercase entity type label (e.g. "Feedstock"). */
   typeLabel: string;
   code: string;
   status: string | null;
-  /** Label/value rows — same grammar as the lineage cards. */
+  /** Label/value rows: same grammar as the Flow record sheet. */
   details: LineageDetailRow[];
 }
 

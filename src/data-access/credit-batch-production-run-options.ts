@@ -5,8 +5,11 @@ import {
   gte,
   inArray,
   isNull,
+  isNotNull,
+  type SQL,
   lte,
   or,
+  sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
@@ -14,7 +17,7 @@ import {
   creditBatches,
   creditBatchProductionRuns,
 } from "@/db/schema/credits";
-import { storageLocations } from "@/db/schema/facilities";
+import { facilities, storageLocations } from "@/db/schema/facilities";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -28,7 +31,10 @@ import {
 import { requireOrgScope } from "./utils";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
-import { productionRunDateExpr } from "./production-runs/date-expr";
+import {
+  productionRunDateExpr,
+  productionRunMembershipDateExpr,
+} from "./production-runs/date-expr";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
   "running",
@@ -94,9 +100,12 @@ export async function getCreditBatchProductionRunOptions(
       params.endDate,
       certifier,
     );
+    // Use facility-local days for the window, including the start-day fallback
+    // for running runs without an end time. The returned display date is the local start day.
+    const previewDate = sql<string>`coalesce(${productionRunMembershipDateExpr(ctx.organizationId)}, ${productionRunDateExpr(ctx.organizationId)})`;
     conditions.push(
-      gte(productionRunDateExpr(), startStr),
-      lte(productionRunDateExpr(), endStr),
+      gte(previewDate, startStr),
+      lte(previewDate, endStr),
     );
   }
 
@@ -108,11 +117,31 @@ export async function getCreditBatchProductionRunOptions(
     if (assignmentScope) conditions.push(assignmentScope);
   }
 
+  return readCreditBatchProductionRuns(ctx, and(...conditions));
+}
+
+/** Persisted members only, including facility-cascade archives. Never authorizes writes. */
+export async function getLinkedCreditBatchMembers(ctx: OrgContext, creditBatchId: string): Promise<CreditBatchProductionRunOption[]> {
+  requireOrgScope(ctx);
+  const matchingFacility = db.select({ id: facilities.id }).from(facilities).where(and(
+    eq(facilities.organizationId, ctx.organizationId),
+    eq(facilities.id, creditBatches.facilityId),
+    or(isNull(productionRuns.archivedAt), and(isNotNull(facilities.archivedAt), eq(productionRuns.archivedAt, facilities.archivedAt))),
+    or(isNull(creditBatches.archivedAt), and(isNotNull(facilities.archivedAt), eq(creditBatches.archivedAt, facilities.archivedAt))),
+  ));
+  return readCreditBatchProductionRuns(ctx, and(
+    eq(creditBatches.id, creditBatchId),
+    inArray(productionRuns.facilityId, matchingFacility),
+  ));
+}
+
+async function readCreditBatchProductionRuns(ctx: OrgContext, rowFilter: SQL | undefined): Promise<CreditBatchProductionRunOption[]> {
+  requireOrgScope(ctx);
   const rows = await db
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       biocharStorageName: storageLocations.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
@@ -141,7 +170,7 @@ export async function getCreditBatchProductionRunOptions(
       creditBatches,
       and(eq(creditBatches.id, creditBatchProductionRuns.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)),
     )
-    .where(and(...conditions))
+    .where(and(eq(productionRuns.organizationId, ctx.organizationId), rowFilter))
     .orderBy(desc(productionRuns.startTime));
 
   // Resolve each run's DISTINCT feedstock-type set in a SEPARATE query — joining

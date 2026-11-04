@@ -1,3 +1,4 @@
+import { isTransportEvidenceDocumentType } from "@/lib/certification/transport-evidence";
 import { lockEmissionEntryDocumentOwner, lockWritableEmissionEntry } from "./emission-entry-lock";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { and, eq, sql } from "drizzle-orm";
@@ -65,13 +66,13 @@ async function discover(ctx: OrgContext, tx: DbTransaction, type: DocumentEntity
   }
   return parentType && parentId ? [...await discover(ctx, tx, parentType, parentId), row] : [row];
 }
-export interface DocumentWriteScope { links: OwnerLink[]; targets: CertifiedLineageTarget[]; keys: ReadonlySet<string>; field: string }
-function targetsFor(links: OwnerLink[]): CertifiedLineageTarget[] {
+export interface DocumentWriteScope { links: OwnerLink[]; targets: CertifiedLineageTarget[]; keys: ReadonlySet<string>; field: string; documentType?: string }
+function targetsFor(links: OwnerLink[], documentType?: string): CertifiedLineageTarget[] {
   // The owner's own target includes its ancestors. Internal children inherit theirs.
   const link = [...links].reverse().find((entry) => OWNERS[entry.type].target);
-  return link ? [{ entityType: OWNERS[link.type].target!, entityId: link.id }] : [];
+  return link ? [{ entityType: OWNERS[link.type].target!, entityId: link.id, ...(link.type === "feedstock" && documentType && isTransportEvidenceDocumentType(documentType) ? { transportOnly: true } : {}) }] : [];
 }
-export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string): Promise<DocumentWriteScope> {
+export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string, documentType?: string): Promise<DocumentWriteScope> {
   requireOrgScope(ctx);
   if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocumentEntityType)) throw documentNotFound("entityId");
   const type = entityType as DocumentEntityType;
@@ -80,7 +81,7 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
     return { links: [{ type, id: entityId, archived, parentId: null, legacyId: null, parentType: null }], targets: [], keys: new Set(), field: OWNER_FIELDS[type] };
   }
   const links = await discover(ctx, tx, type, entityId);
-  const targets = targetsFor(links);
+  const targets = targetsFor(links, documentType);
   const keys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
   const locked: OwnerLink[] = [];
   for (const link of links) {
@@ -89,13 +90,13 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
     if (row.parentId !== link.parentId || row.parentType !== link.parentType || row.legacyId !== link.legacyId) throw changedOwner();
     locked.push(row);
   }
-  return { links: locked, targets, keys, field: OWNER_FIELDS[type] };
+  return { links: locked, targets, keys, field: OWNER_FIELDS[type], documentType };
 }
 export async function assertDocumentOwnerWritable(ctx: OrgContext, tx: DbTransaction, scope: DocumentWriteScope, allowArchived = false): Promise<void> {
   requireOrgScope(ctx);
   if (!allowArchived && scope.links.some((row) => row.archived)) throw documentNotFound(scope.field);
   for (const link of scope.links) if (link.type === "emission_entry") await lockWritableEmissionEntry(ctx, tx, link.id);
-  const currentTargets = targetsFor(scope.links);
+  const currentTargets = targetsFor(scope.links, scope.documentType);
   if (JSON.stringify(currentTargets) !== JSON.stringify(scope.targets)) throw changedOwner();
   try {
     await assertLockedLineagesAllowMutation(ctx, tx, scope.keys, scope.targets.map((target) => ({ target, mutation: "update" })));
@@ -118,11 +119,11 @@ export async function documentOwnerLineageTargets(ctx: OrgContext, tx: DbTransac
   return targetsFor(await discoverOwner(ctx, tx, entityType, entityId));
 }
 /** Preparation only. The locked writer repeats this decision after storage inspection. */
-export async function inspectDocumentOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string): Promise<boolean> {
+export async function inspectDocumentOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string, documentType?: string): Promise<boolean> {
   requireOrgScope(ctx);
   const links = await discoverOwner(ctx, tx, entityType, entityId);
   if (links.some((link) => link.archived)) throw documentNotFound(OWNER_FIELDS[entityType as DocumentEntityType]);
-  return ownerHasSubmittedLineage(ctx, tx, targetsFor(links));
+  return ownerHasSubmittedLineage(ctx, tx, targetsFor(links, documentType));
 }
 export async function ownerHasSubmittedLineage(ctx: OrgContext, tx: DbTransaction, targets: CertifiedLineageTarget[]): Promise<boolean> {
   requireOrgScope(ctx);

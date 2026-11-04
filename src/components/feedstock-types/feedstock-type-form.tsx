@@ -1,8 +1,9 @@
 "use client";
 
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
-import { useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { DatabaseIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +17,7 @@ import {
 import { FormSelect } from "@/components/forms/form-select";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 import { FormActions } from "@/components/forms/form-actions";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import {
   feedstockTypeFormSchema,
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
@@ -25,12 +27,19 @@ import {
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useFacilityCertifierSummary, useIsometricFeedstockTypes } from "@/hooks/use-certification";
+import { useFeedstockTypeLinkLock } from "@/hooks/use-feedstock-types";
+import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
+import { FeedstockTypeLinkLockedNote } from "./feedstock-type-link-locked-note";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
   LOCAL_CATEGORY_HINT,
+  isometricLinkAction,
+  linkedRegistryName,
+  shouldOverwriteNameOnIsometricSelection,
   feedstockTypeUsageOptionsFor,
   initialFeedstockTypeUsage,
   shouldClearCategoryForIsometricSelection,
@@ -53,12 +62,16 @@ const SECTIONS = [
     key: "general",
     label: "General",
     description: "Create the local type used by bins, deliveries, and production runs.",
+    editDescription: "The local type used by bins, deliveries and production runs.",
+    editLinkedDescription: "The local type used by bins, deliveries and production runs.",
     icon: DatabaseIcon,
   },
   {
     key: "isometric",
     label: "Isometric",
     description: "Choose a certified registry feedstock to prefill the local type.",
+    editDescription: "Link this type to its Isometric registry entry.",
+    editLinkedDescription: "Change the Isometric registry entry this type links to.",
     icon: SealCheckIcon,
   },
 ] as const;
@@ -73,7 +86,8 @@ const CERTIFIED_FEEDSTOCK_WARNING =
 
 interface FeedstockTypeFormProps {
   feedstockType?: FeedstockType;
-  onSubmit: (data: FeedstockTypeFormData) => Promise<void> | void;
+  /** `onRefusal` shows a refused save at the fields it names (#1327). */
+  onSubmit: (data: FeedstockTypeFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   errorMessage?: string;
@@ -102,6 +116,8 @@ export function FeedstockTypeForm({
   stickyActions = true,
   guardDialogCancel,
 }: FeedstockTypeFormProps) {
+  const latched = useLatchedSubmit();
+  const formId = useId();
   const isEditMode = !!feedstockType;
   const certStatus = makeCertFieldStatus(feedstockType);
   const { facilityId } = useFacilityContext();
@@ -117,11 +133,21 @@ export function FeedstockTypeForm({
   // Fetch the registry browser lazily on first open; React Query keeps the
   // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
-  const showIsometricSection = shouldShowIsometricFeedstockSection(
-    hasIsometricCertifier,
-    lockUsage,
-    defaultUsage,
+  const savedIsometricId = feedstockType?.isometricFeedstockTypeId ?? "";
+  const linkLock = useFeedstockTypeLinkLock(
+    feedstockType?.id,
+    isEditMode && hasIsometricCertifier && !!savedIsometricId,
   );
+  // A saved link a sent Removal holds can no longer be picked again.
+  const linkIsLocked = !!savedIsometricId && !!linkLock.data?.locked && !linkLock.isError;
+  // A saved link is not offered for change until the lock read has answered, so
+  // a replacement picked meanwhile can never meet a lock that arrives late.
+  // An errored read fails closed even when an older answer is cached.
+  const linkLockUnresolved =
+    isEditMode && !!savedIsometricId && hasIsometricCertifier && (!linkLock.data || linkLock.isError);
+  const showIsometricSection =
+    shouldShowIsometricFeedstockSection(hasIsometricCertifier, lockUsage, defaultUsage) &&
+    !linkIsLocked && !linkLockUnresolved;
   const sections = showIsometricSection
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
@@ -156,6 +182,8 @@ export function FeedstockTypeForm({
     control,
     trigger,
     setValue,
+    setError,
+    resetField,
     formState: { errors },
   } = useForm<FeedstockTypeFormData>({
     resolver: zodResolver(feedstockTypeFormSchema),
@@ -171,9 +199,21 @@ export function FeedstockTypeForm({
     },
   });
 
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
+
+  // Create: the picked entry goes when the Isometric source closes. Edit: a lock
+  // that arrives after a replacement was picked puts the saved link back.
   useClearOnDependencyChange(
-    isEditMode ? undefined : showIsometricSection ? "available" : "unavailable",
+    isEditMode
+      ? savedIsometricId ? (linkIsLocked ? "locked" : "open") : undefined
+      : showIsometricSection ? "available" : "unavailable",
     () => {
+      if (isEditMode) {
+        if (!linkIsLocked) return;
+        setSelectedIsometricFeedstock(null);
+        setValue("isometricFeedstockTypeId", savedIsometricId, { shouldDirty: false, shouldValidate: true });
+        return;
+      }
       if (showIsometricSection) return;
       setSelectedIsometricFeedstock(null);
       setValue("isometricFeedstockTypeId", "", {
@@ -190,6 +230,17 @@ export function FeedstockTypeForm({
   const registryMappingRequired = hasIsometricCertifier && isCertifyFormField(
     "feedstockType", "isometricFeedstockTypeId", { usage: selectedUsage },
   );
+  const linkAction = linkLockUnresolved ? null : isometricLinkAction({
+    isEditMode,
+    hasIsometricCertifier,
+    usage: selectedUsage,
+    isLinked: !!savedIsometricId,
+    isLocked: linkIsLocked,
+  });
+  const catalogue = useIsometricFeedstockTypes(
+    hasIsometricCertifier && !!selectedIsometricId,
+  );
+  const linkedIsometricName = linkedRegistryName(selectedIsometricFeedstock, selectedIsometricId ?? "", catalogue.data);
   const categoryOptions =
     selectedUsage === "blend"
       ? BLEND_FEEDSTOCK_CATEGORY_OPTIONS
@@ -223,11 +274,13 @@ export function FeedstockTypeForm({
         });
       }
     }
-    setValue("name", type.name, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
+    if (shouldOverwriteNameOnIsometricSelection(isEditMode)) {
+      setValue("name", type.name, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
     setValue("isometricFeedstockTypeId", type.id, {
       shouldDirty: true,
       shouldTouch: true,
@@ -243,7 +296,7 @@ export function FeedstockTypeForm({
         isometricFeedstockTypeId: selectedIsometricFeedstock.id,
       })
     : null;
-  const selectedIsometricSummary = selectedIsometricFeedstock && (
+  const selectedIsometricSummary = !isEditMode && selectedIsometricFeedstock && (
     <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
         <p className="body-caption flex items-center gap-4 font-mono text-[var(--color-text-tertiary)]">
@@ -272,7 +325,7 @@ export function FeedstockTypeForm({
         role="radiogroup"
         aria-label="Feedstock type source"
       >
-        {sections.map(({ key, label, description, icon: Icon }, index) => {
+        {sections.map(({ key, label, description, editDescription, editLinkedDescription, icon: Icon }, index) => {
           const isActive = key === visibleActiveSection;
           return (
             <button
@@ -308,7 +361,7 @@ export function FeedstockTypeForm({
                   {label}
                 </span>
                 <span className="body-small text-[var(--color-text-secondary)]">
-                  {description}
+                  {isEditMode ? (linkAction === "change" ? editLinkedDescription : editDescription) : description}
                 </span>
               </span>
             </button>
@@ -318,8 +371,8 @@ export function FeedstockTypeForm({
       )}
 
       <form
-        onSubmit={handleSubmit((data) => onSubmit(data))}
-        className="space-y-20"
+        id={formId}
+        onSubmit={latched(handleSubmit((data) => onSubmit(data, refuseSave)))}
       >
         <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div
@@ -338,10 +391,30 @@ export function FeedstockTypeForm({
                   certifyRequired={registryMappingRequired}
                   certifyStatus={certStatus("isometricFeedstockTypeId")}
                 >
-                  <output id="isometricFeedstockTypeId" className="body-small">
-                    {selectedIsometricId || MISSING_VALUE.notSet}
+                  <output id="isometricFeedstockTypeId" className="body-small inline-flex items-center gap-4">
+                    {selectedIsometricId
+                      ? isEditMode && linkedIsometricName
+                        ? linkedIsometricName
+                        : selectedIsometricId
+                      : MISSING_VALUE.notSet}
+                    {isEditMode && selectedIsometricId && linkedIsometricName && (
+                      <ExplanationInfo title="Isometric registry ID">
+                        <span className="font-mono">{selectedIsometricId}</span>
+                      </ExplanationInfo>
+                    )}
                   </output>
                   {selectedIsometricSummary}
+                  {linkLockUnresolved && (
+                    <RecordLockNotice
+                      lock={undefined}
+                      status={linkLock.isError ? "error" : "pending"}
+                      onRetry={() => void linkLock.refetch()}
+                      retrying={linkLock.isFetching}
+                    />
+                  )}
+                  {linkAction === "locked" && (
+                    <FeedstockTypeLinkLockedNote removals={linkLock.data?.removals ?? []} />
+                  )}
                   {showCertifiedFeedstockWarning && (
                     <Notice tone="warning">{CERTIFIED_FEEDSTOCK_WARNING}</Notice>
                   )}

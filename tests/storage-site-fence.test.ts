@@ -20,7 +20,9 @@ import { withStorageLocationRegistrationLocks } from "@/data-access/certifier-st
 import { getCustomerLocations } from "@/data-access/customers";
 import { certifierStorageSiteLockKey } from "@/lib/certification/certifier-storage-site-lock";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
-import { updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
+import { updateCustomerLocation, deleteCustomerLocation, archiveCustomerLocation } from "@/lib/operations/customer-locations";
+import { deleteCustomerLocationInTransaction } from "@/data-access/customer-location-writes";
+import { createOrderDestination } from "./helpers/order-operation-fixture";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { createPartyArchiveFixture, cleanupPartyArchiveFixture, type PartyArchiveFixture } from "./helpers/party-archive-fixture";
 
@@ -96,7 +98,7 @@ describe("customer storage-site registration fence", () => {
       .where(eq(customerLocations.id, f.location.id));
     await expect(runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f), expectedVersion: kept.version,
       name: f.location.name, gpsLatitude: f.location.gpsLatitude + 0.0000005, gpsLongitude: f.location.gpsLongitude }))
-      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }] });
+      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: ["name"] }, { path: ["gpsLatitude"] }] });
     const repaired = await runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f), expectedVersion: kept.version,
       name: f.location.name, gpsLatitude: f.location.gpsLatitude, gpsLongitude: f.location.gpsLongitude });
     expect(repaired.name).toBe(f.location.name);
@@ -115,14 +117,14 @@ describe("customer storage-site registration fence", () => {
   });
 
   it.each([
-    { gpsLatitude: 20, gpsLongitude: 30, field: "gpsLatitude" },
-    { gpsLatitude: undefined, gpsLongitude: 30, field: "gpsLongitude" },
-  ])("points at the first changed coordinate ($field)", async ({ gpsLatitude, gpsLongitude, field }) => {
+    { gpsLatitude: 20, gpsLongitude: 30, fields: ["gpsLatitude", "gpsLongitude"] },
+    { gpsLatitude: undefined, gpsLongitude: 30, fields: ["gpsLongitude"] },
+  ])("points at every changed coordinate ($fields)", async ({ gpsLatitude, gpsLongitude, fields }) => {
     const f = await fixture();
     await mapping(f);
     await expect(runOperationInProcess(updateCustomerLocation, f.ctx, { ...version(f),
       gpsLatitude: gpsLatitude ?? f.location.gpsLatitude, gpsLongitude }))
-      .rejects.toMatchObject({ code: "certification_locked", issues: [{ path: [field] }] });
+      .rejects.toMatchObject({ code: "certification_locked", issues: fields.map(field => ({ path: [field] })) });
   });
 
   it("refuses delete retryably while the dedicated session fence is held", async () => {
@@ -142,6 +144,21 @@ describe("customer storage-site registration fence", () => {
       code: "conflict", retryable: false, issues: [{ path: ["locationId"] }],
       message: "Customer location was not deleted because it is registered with Isometric as a storage site. Archive it instead.",
     });
+  });
+
+  it("refuses deleting an archived storage site without suggesting archive", async () => {
+    const f = await fixture();
+    await mapping(f);
+    await createOrderDestination(f);
+    const archived = await runOperationInProcess(archiveCustomerLocation, f.ctx, version(f));
+    const before = await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id));
+    await expect(db.transaction(tx => deleteCustomerLocationInTransaction(f.ctx, tx, {
+      locationId: archived.id, expectedVersion: archived.version,
+    }))).rejects.toMatchObject({
+      code: "conflict", issues: [{ path: ["locationId"] }],
+      message: "Customer location was not deleted because it is registered with Isometric as a storage site.",
+    });
+    expect(await db.select().from(customerLocations).where(eq(customerLocations.id, archived.id))).toEqual(before);
   });
 });
 

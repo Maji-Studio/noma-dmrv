@@ -1,5 +1,6 @@
 /** Production run side-sheet view mode: the sections config for EntitySideSheet. */
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
@@ -7,7 +8,7 @@ import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
-import { buildProductionRunFeedstockDetailField, buildProductionRunWindowDetailFields, productionRunStatusCertStatus } from "./production-run-detail-fields";
+import { buildProductionRunWindowDetailFields, productionRunStatusCertStatus } from "./production-run-detail-fields";
 import type { ReactNode } from "react";
 import { CheckCircleIcon, ClockIcon, ProhibitIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,7 +54,6 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
     {
       title: "Feedstock & processing",
       fields: [
-        buildProductionRunFeedstockDetailField(run.feedstocks),
         ...run.feedstockDraws.map((draw, index) => ({
           label: `Source bin ${index + 1}`,
           value: `${draw.storageLocationName}: ${formatMassKg(draw.wetMassKg)}`,
@@ -117,8 +117,8 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
       fields: [],
       content: (
         <div className="space-y-20">
-          <ProductionSampleTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
-          <ProductionIncidentTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
+          <ProductionSampleTable facilityId={run.facilityId} productionRunId={run.id} readOnly timeZone={resolveFacilityTimezone(facilities, run.facilityId)} />
+          <ProductionIncidentTable facilityId={run.facilityId} productionRunId={run.id} readOnly timeZone={resolveFacilityTimezone(facilities, run.facilityId)} />
         </div>
       ),
     },

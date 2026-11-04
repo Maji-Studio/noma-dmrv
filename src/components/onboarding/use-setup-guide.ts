@@ -9,9 +9,9 @@ import { onboardingGuideCollapsedKey } from "./onboarding-constants";
 import { deriveSetupProgress, type SetupProgress } from "./use-setup-steps";
 
 /**
- * - `takeover-guide` — Owner/Admin, setup incomplete: the guide IS the body.
+ * - `takeover-guide` — Admin, setup incomplete: the guide IS the body.
  * - `takeover-member` — Member, setup incomplete: the calm "in progress" note.
- * - `strip` — Owner/Admin collapsed the guide: slim strip above the real body.
+ * - `strip` — Admin collapsed the guide: slim strip above the real body.
  * - `loading` — status is unresolved: hold the onboarding-shaped placeholder.
  * - `none` — nothing to show; the real dashboard renders as usual.
  */
@@ -138,7 +138,7 @@ export function resolveMode({
 
   // Fresh org, no facility yet: the guide is the landing surface. A Member waits.
   if (status.facilityCount === 0) {
-    return status.isOwnerOrAdmin ? "takeover-guide" : "takeover-member";
+    return status.canManage ? "takeover-guide" : "takeover-member";
   }
 
   // Facilities exist but none is selected — the normal "select a facility"
@@ -152,12 +152,12 @@ export function resolveMode({
   // legitimately skippable), supplier, first runs — can stay open for a long
   // time on a producing facility, and a Member must not be locked out of the
   // dashboard for them.
-  if (!status.isOwnerOrAdmin) {
+  if (!status.canManage) {
     const operational = (status.facility?.reactorCount ?? 0) > 0;
     return operational ? "none" : "takeover-member";
   }
 
-  // Owner/Admin: the registry step is legitimately skippable (lines above), so
+  // Admin: the registry step is legitimately skippable (lines above), so
   // once every REQUIRED step is done the facility is fully operational even if
   // Isometric was never connected. Recede to the real dashboard — the guide
   // still lists registry as incomplete, it just no longer takes over the page.

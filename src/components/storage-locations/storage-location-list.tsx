@@ -7,8 +7,12 @@
  * already facility-scoped, so the facility is not repeated per bin.
  */
 "use client";
+import { parseAsString, useQueryState } from "nuqs";
+import { RECORD_LINKS } from "@/lib/record-links";
+import { useEntityEditRecord } from "@/hooks/use-entity-edit-record";
+import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
-
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -31,13 +35,14 @@ import {
 } from "@/hooks/use-storage-locations";
 import type { StorageLocationFilterData } from "@/schemas/storage-locations";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DEFAULT_BIN_SORT,
   parseBinSortValue,
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
+import { STORAGE_BOARD_PAGE_SIZE } from "@/config/list-controls";
 import { StorageBinBoard } from "./storage-bin-board";
 import { StorageBinSheet, type StorageBinSheetState } from "./storage-bin-sheet";
 
@@ -49,13 +54,33 @@ export function StorageLocationList() {
   const [sortValue, setSortValue] = useState(DEFAULT_BIN_SORT.value);
   const [showArchived, setShowArchived] = useState(false);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
-    useListPagination(facilityId);
+    useListPagination(facilityId, STORAGE_BOARD_PAGE_SIZE);
   const debouncedSearch = useDebounce(
     searchQuery,
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
   const [sideSheet, setSideSheet] = useState<StorageBinSheetState | null>(null);
+  const [linkedBinId, setLinkedBinId] = useQueryState(
+    RECORD_LINKS.storageBin.param,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const linkedBin = useEntityEditRecord("storageLocation", linkedBinId ?? "");
+  const linkedRecord = useLinkedRecordFacility(linkedBin.data, linkedBin.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
+  const localSideSheet = sideSheet?.entity?.facilityId && sideSheet.entity.facilityId !== facilityId ? null : sideSheet;
+  const displaySideSheet = localSideSheet ?? (linkedBinId && linkedBin.data && linkedFacilityReady
+    ? { mode: "view" as const, entity: linkedBin.data } : null);
+  // A link into an archived facility opens the bin read only, over the
+  // "Select a facility" empty state too.
+  const sheetReadOnly = linkedRecordReadOnly(linkedRecord, displaySideSheet?.entity, "storage bin");
+  // An archived facility is outside the facility list, so the sheet carries its zone.
+  const sheetTimeZone = sheetReadOnly && linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined;
+  const changeSideSheet = (state: StorageBinSheetState | null) => {
+    setSideSheet(state);
+    if (!state) void setLinkedBinId(null);
+  };
+
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingBin, setDeletingBin] = useState<StorageLocationWithFacility | null>(null);
@@ -84,6 +109,12 @@ export function StorageLocationList() {
   const restoreStorageLocation = useRestoreStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
   const toast = useToast();
+  useEffect(() => {
+    if (linkedBinId && (!linkedBin.data && (linkedBin.isError || linkedBin.isSuccess))) {
+      toast.error("Linked storage bin could not be opened");
+      void setLinkedBinId(null);
+    }
+  }, [linkedBinId, linkedBin.isError, linkedBin.isSuccess, linkedBin.data, setLinkedBinId, toast]);
 
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
@@ -141,18 +172,25 @@ export function StorageLocationList() {
     }
   };
 
-  const openCreate = () => setSideSheet({ mode: "create", entity: null });
+  const openCreate = () => {
+    void setLinkedBinId(null);
+    setSideSheet({ mode: "create", entity: null });
+  };
 
-  const openView = (storageLocation: StorageLocationWithFacility) =>
+  const openView = (storageLocation: StorageLocationWithFacility) => {
+    void setLinkedBinId(storageLocation.id);
     setSideSheet({ mode: "view", entity: storageLocation });
+  };
 
-  const openEdit = (storageLocation: StorageLocationWithFacility) =>
+  const openEdit = (storageLocation: StorageLocationWithFacility) => {
+    void setLinkedBinId(storageLocation.id);
     setSideSheet({ mode: "edit", entity: storageLocation });
+  };
 
   // Lost mass lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
   const openReconcile = (storageLocation: StorageLocationWithFacility) => {
-    setSideSheet(null);
+    changeSideSheet(null);
     setReconcilingBin(storageLocation);
   };
 
@@ -165,7 +203,7 @@ export function StorageLocationList() {
   const toggleShowArchived = () => {
     setShowArchived((current) => !current);
     setCurrentPage(1);
-    setSideSheet(null);
+    changeSideSheet(null);
   };
 
   const hasActiveFilters = Boolean(searchQuery) || typeFilter !== "all";
@@ -173,12 +211,11 @@ export function StorageLocationList() {
   if (!facilityId) {
     return (
       <div className="container-max page-shell">
-        <PageHeader
-          area="infrastructure"
-          title="Storage"
-          subtitle="Bins and stores for feedstock, biochar, and finished product"
-        />
+        <PageHeader area="setup" title="Storage bins" />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its storage bins." />
+        {linkedRecord.readOnly && (
+          <StorageBinSheet readOnly={sheetReadOnly} timeZone={sheetTimeZone} state={displaySideSheet} onStateChange={changeSideSheet} onReconcile={openReconcile} />
+        )}
       </div>
     );
   }
@@ -194,9 +231,8 @@ export function StorageLocationList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
-        title="Storage"
-        subtitle="Bins and stores for feedstock, biochar, and finished product"
+        area="setup"
+        title="Storage bins"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -262,8 +298,10 @@ export function StorageLocationList() {
       />
 
       <StorageBinSheet
-        state={sideSheet}
-        onStateChange={setSideSheet}
+        readOnly={sheetReadOnly}
+        timeZone={sheetTimeZone}
+        state={displaySideSheet}
+        onStateChange={changeSideSheet}
         onReconcile={openReconcile}
       />
 

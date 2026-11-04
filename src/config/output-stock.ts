@@ -14,3 +14,24 @@ export const SUB_BIN_RECENT_MOVEMENTS = 3;
  * recorded as usual but held out of credit-batch slices.
  */
 export const MIX_BIN_REMOVALS_CREDITABLE = false;
+
+/** Below this a part of a bin's stock is rounding, not a row, band or key entry worth showing. */
+export const STOCK_PART_MIN_KG = 0.05;
+
+/**
+ * Wet estimates are whole kilograms. They are computed at an entered moisture,
+ * not weighed, so a decimal would claim a precision the figure does not have.
+ */
+export const WET_ESTIMATE_DIGITS = 0;
+
+/** Half of the last displayed digit: below it, a figure rounds to nothing. */
+const HALF_UNIT = 1 / 2;
+
+/**
+ * A figure shown in whole kilograms (a wet estimate, a wet-basis output lane
+ * total) reads "Empty" below this: it would render as "0 kg". Derived from the
+ * precision. Figures shown at one decimal (feedstock wet mass, dry biochar, and
+ * the lanes of those) follow the formatter's rounds-to-zero rule instead
+ * (`isMassEmpty`). Display only: the stored stock is never trimmed.
+ */
+export const WET_ESTIMATE_DISPLAY_MIN_KG = HALF_UNIT * 10 ** -WET_ESTIMATE_DIGITS;

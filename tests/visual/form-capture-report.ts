@@ -16,7 +16,7 @@ const SCALE_TOLERANCE_PX = 1;
 /** Levels judged against the scale; read label-to-value gaps are reported only. */
 const SCALED_LEVELS: GapItem["level"][] = ["section", "field", "label"];
 const TOP_ISSUES_PER_FAMILY = 8;
-const SUMMARY_COLUMNS = 11;
+const SUMMARY_COLUMNS = 10;
 /** Distinct off-scale gaps listed per surface row. */
 const OFF_SCALE_SHOWN = 6;
 
@@ -40,13 +40,6 @@ export interface CapturedState {
   failures: string[];
 }
 
-export interface R1Diff {
-  simpleOnly: { labels: string[]; sectionTitles: string[]; actions: string[] };
-  detailedOnly: { labels: string[]; sectionTitles: string[]; actions: string[] };
-  explanationOnly: string[];
-  failures: string[];
-}
-
 export interface SurfaceRecord {
   id: string;
   family: string;
@@ -57,7 +50,6 @@ export interface SurfaceRecord {
   reason?: string;
   skippedStates: { state: string; reason: string }[];
   states: CapturedState[];
-  r1?: R1Diff;
 }
 
 export interface CaptureRun {
@@ -119,28 +111,6 @@ export function evaluateGeometry(geometry: Geometry, mode: BodyMode): { violatio
   return { violations, failures };
 }
 
-const minus = (a: string[], b: string[]) => a.filter((item) => !b.includes(item));
-
-export function diffR1(simple: Geometry["r1"], detailed: Geometry["r1"]): R1Diff {
-  const simpleOnly = {
-    labels: minus(simple.labels, detailed.labels),
-    sectionTitles: minus(simple.sectionTitles, detailed.sectionTitles),
-    actions: minus(simple.actions, detailed.actions),
-  };
-  const detailedOnly = {
-    labels: minus(detailed.labels, simple.labels),
-    sectionTitles: minus(detailed.sectionTitles, simple.sectionTitles),
-    actions: minus(detailed.actions, simple.actions),
-  };
-  // Items inside a data-detail-explanation block are the only allowed difference.
-  const explanationOnly = [...minus(detailed.explanation, simple.explanation), ...minus(simple.explanation, detailed.explanation)];
-  const failures = [
-    ...simpleOnly.labels, ...simpleOnly.sectionTitles, ...simpleOnly.actions,
-    ...detailedOnly.labels, ...detailedOnly.sectionTitles, ...detailedOnly.actions,
-  ];
-  return { simpleOnly, detailedOnly, explanationOnly, failures };
-}
-
 export function writeGeometry(outDir: string, run: CaptureRun) {
   writeFileSync(path.join(outDir, "geometry.json"), JSON.stringify(run, null, 1));
 }
@@ -167,7 +137,6 @@ function surfaceRow(surface: SurfaceRecord): string {
   const styleCounts = measured.map((state) => state.geometry!.textStyles.count);
   const offScale = new Set(measured.flatMap((state) => state.violations!.offScaleGaps.map((gap) => `${gap.level}:${Math.round(gap.value)}`)));
   const inconsistent = new Set(measured.flatMap((state) => state.violations!.inconsistentLevels.map((level) => level.level)));
-  const r1 = surface.r1 ? surface.r1.failures.length : "n/a";
   return [
     "",
     surface.id,
@@ -180,7 +149,6 @@ function surfaceRow(surface: SurfaceRecord): string {
     `${max((v) => v.alignment)}`,
     `${max((v) => v.overflow)}`,
     `${max((v) => v.prose)}`,
-    `${r1}`,
     "",
   ].join(" | ").trim();
 }
@@ -192,7 +160,7 @@ export function writeSummary(outDir: string, run: CaptureRun) {
     "",
     `Run ${run.startedAt} to ${run.finishedAt ?? "(unfinished)"} against ${run.baseURL}, facility ${run.facility}. Viewports: ${run.viewports.join(", ")}.${run.family ? ` Family filter: ${run.family}.` : ""}`,
     "",
-    `Columns are the worst value across a surface's states and viewports. Styles = distinct text styles (forms fail above ${MAX_FORM_TEXT_STYLES}). Caps = uppercase or tracked runs. Lines = rules outside the allowed chrome. Off-scale = gaps off ${SPACING_SCALE.join("/")} (level:px). Mixed = levels with more than one gap value. Align = near-misaligned control edges, lone half-width fields, orphaned grid items, wrapped labels. Overflow = horizontal scroll, clipped text, elements wider than the body. Prose = visible helper captions plus paragraphs. R1 = Simple/Detailed differences outside data-detail-explanation blocks.`,
+    `Columns are the worst value across a surface's states and viewports. Styles = distinct text styles (forms fail above ${MAX_FORM_TEXT_STYLES}). Caps = uppercase or tracked runs. Lines = rules outside the allowed chrome. Off-scale = gaps off ${SPACING_SCALE.join("/")} (level:px). Mixed = levels with more than one gap value. Align = near-misaligned control edges, lone half-width fields, orphaned grid items, wrapped labels. Overflow = horizontal scroll, clipped text, elements wider than the body. Prose = visible helper captions plus paragraphs.`,
     "",
   ];
   for (const family of families) {
@@ -201,26 +169,16 @@ export function writeSummary(outDir: string, run: CaptureRun) {
     for (const surface of surfaces) {
       tally[surface.status] += 1;
       for (const state of surface.states) for (const failure of state.failures) tallyIssue(tally, `${surface.id}: ${failure.replace(/^\d+ /, "")}`);
-      for (const failure of surface.r1?.failures ?? []) tallyIssue(tally, `${surface.id}: R1 "${failure}"`);
     }
     lines.push(`## ${family}`, "");
     lines.push(`${tally.captured} captured, ${tally.skipped} skipped, ${tally.failed} failed, of ${tally.surfaces} surfaces.`, "");
-    lines.push("| Surface | Captured | Styles | Caps | Lines | Off-scale | Mixed | Align | Overflow | Prose | R1 |");
-    lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
+    lines.push("| Surface | Captured | Styles | Caps | Lines | Off-scale | Mixed | Align | Overflow | Prose |");
+    lines.push("|---|---|---|---|---|---|---|---|---|---|");
     for (const surface of surfaces) lines.push(surfaceRow(surface));
     const top = Array.from(tally.issues.entries()).sort((a, b) => b[1] - a[1]).slice(0, TOP_ISSUES_PER_FAMILY);
     if (top.length) {
       lines.push("", "Most frequent violations (count = states and viewports affected):", "");
       for (const [issue, count] of top) lines.push(`- ${issue} (${count})`);
-    }
-    const r1 = surfaces.filter((surface) => surface.r1 && surface.r1.failures.length);
-    if (r1.length) {
-      lines.push("", `R1 differences (Simple vs Detailed, ${run.viewports[0]}):`, "");
-      for (const surface of r1) {
-        const d = surface.r1!;
-        const fmt = (side: typeof d.simpleOnly) => [...side.labels, ...side.sectionTitles, ...side.actions].join("; ") || "none";
-        lines.push(`- ${surface.id}: Detailed only: ${fmt(d.detailedOnly)}. Simple only: ${fmt(d.simpleOnly)}.`);
-      }
     }
     lines.push("");
   }

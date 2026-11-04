@@ -3,14 +3,13 @@ import type { LineContract } from "@/lib/isometric/template-observations/line-so
  * Parity for the semantic binding catalog (#636): the catalog's projections
  * must resolve every (group, blueprint, input) tuple exactly as the literal
  * INPUT_MAPPING and PERIOD_INPUT_TUPLES did before the catalog existed, and
- * MAPPING_REVISION must not move (a moved revision supersedes every prior
- * removal version).
+ * MAPPING_REVISION is pinned to the late-entry carry policy (#1059).
  *
  * The frozen tables below are the pre-catalog literals (staging @ 41ac738fe),
  * with transform functions reduced to their transformRevision. Change them
  * only together with an intentional binding change.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   lookupSourceFact,
   SEMANTIC_BINDING_CATALOG,
@@ -28,8 +27,8 @@ import {
   resolveDatapointSource,
 } from "@/lib/isometric/transformers/datapoint";
 
-const PRE_CATALOG_MAPPING_REVISION =
-  "ade17311184266354b7ee20e1ea0b58406c05deae8e2dbb6709d3105e007a2e5";
+const ENTRY_CONTRIBUTION_MAPPING_REVISION =
+  "5a3efe8bc7a2e4df87734f1935646e7d1fd62f93e07859dbfe84e382e51c2705";
 
 const PRE_CATALOG_INPUT_MAPPING = {
   "co2-stored": {
@@ -179,8 +178,8 @@ function triples(
 }
 
 describe("semantic binding catalog parity", () => {
-  it("keeps MAPPING_REVISION byte-identical", () => {
-    expect(MAPPING_REVISION).toBe(PRE_CATALOG_MAPPING_REVISION);
+  it("pins MAPPING_REVISION for entry contributions", () => {
+    expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
   });
 
   it("projects INPUT_MAPPING to the pre-catalog literal", () => {
@@ -188,13 +187,17 @@ describe("semantic binding catalog parity", () => {
     expect(JSON.parse(JSON.stringify(INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
   });
 
-  it("resolves every pre-catalog tuple identically", () => {
+  it("resolves every active pre-catalog tuple and refuses retired sample transport", () => {
     for (const [group, blueprint, input] of triples(PRE_CATALOG_INPUT_MAPPING)) {
       const entry = lookupInputMapping(group, blueprint, input);
       const frozen = PRE_CATALOG_INPUT_MAPPING[
         group as keyof typeof PRE_CATALOG_INPUT_MAPPING
       ] as FrozenTable[string];
-      expect(entry, `${group}/${blueprint}/${input}`).toMatchObject(frozen[blueprint][input]);
+      if (frozen[blueprint][input].source === "sampleTransportMassDistanceTonneKm") {
+        expect(entry, `${group}/${blueprint}/${input}`).toBeUndefined();
+      } else {
+        expect(entry, `${group}/${blueprint}/${input}`).toMatchObject(frozen[blueprint][input]);
+      }
     }
   });
 
@@ -241,7 +244,11 @@ describe("semantic binding catalog parity", () => {
 
   it("gives every bound source fact a provenance and a repair destination", () => {
     for (const [group, blueprint, input] of triples(INPUT_MAPPING)) {
-      const entry = INPUT_MAPPING[group][blueprint][input];
+      const entry = lookupInputMapping(group, blueprint, input);
+      if (!entry) {
+        expect(INPUT_MAPPING[group][blueprint][input].source).toBe("sampleTransportMassDistanceTonneKm");
+        continue;
+      }
       for (const source of [entry.source, ...Object.values(entry.sourceByComponent ?? {})]) {
         const fact = lookupSourceFact(source);
         expect(fact?.provenance, source).toBeTruthy();
@@ -283,4 +290,23 @@ describe("semantic binding catalog parity", () => {
     };
     expect(() => projectPeriodInputTuples(broken)).toThrow(/no named component carve-out/);
   });
+});
+
+it("keeps the mapping revision stable while retiring sample runtime lookups", async () => {
+  const { buildMappingRevisionInput } = await import("@/lib/isometric/transformers/datapoint");
+  const { payloadHash } = await import("@/lib/isometric/utils/payload-hash");
+  expect(payloadHash(buildMappingRevisionInput())).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
+  expect(MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
+  expect(INPUT_MAPPING["sampling-required-for-mrv"].mass_distance_based_ci_emissions.mass_distance.source).toBe("sampleTransportMassDistanceTonneKm");
+  expect(lookupInputMapping("sampling-required-for-mrv", "mass_distance_based_ci_emissions", "mass_distance") === undefined).toBe(true);
+  expect(lookupSourceFact("sampleTransportMassDistanceTonneKm") === undefined).toBe(true);
+});
+
+it("keeps fresh module-load projections stable", async () => {
+  vi.resetModules();
+  const activated = await import("@/lib/isometric/transformers/datapoint");
+  expect(activated.MAPPING_REVISION).toBe(ENTRY_CONTRIBUTION_MAPPING_REVISION);
+  expect(JSON.parse(JSON.stringify(activated.INPUT_MAPPING))).toEqual(PRE_CATALOG_INPUT_MAPPING);
+  vi.resetModules();
+  expect((await import("@/lib/isometric/transformers/datapoint")).MAPPING_REVISION).toBe(activated.MAPPING_REVISION);
 });

@@ -14,7 +14,7 @@ import { RevokeApiKeyDialog } from "./revoke-api-key-dialog";
 const EMPTY_ICON_SIZE = 32;
 export function ApiKeySettings({ canManage, organizationId }: { canManage: boolean; organizationId: string }) {
   if (!canManage) {
-    return <Notice tone="info">Only organization Owners and Admins with a membership can manage API keys. Ask one to make changes.</Notice>;
+    return <Notice tone="info">Only organization Admins with a membership can manage API keys. Ask one to make changes.</Notice>;
   }
   return <ApiKeyManager key={organizationId} organizationId={organizationId} />;
 }

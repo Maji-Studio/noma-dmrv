@@ -107,7 +107,7 @@ describe("order product-bin options", () => {
         dryKg: 212.5,
       },
       subtitle:
-        "250 kg wet, 212.5 kg dry biochar available",
+        "250 kg wet mass, 212.5 kg dry biochar available",
     });
   });
 
@@ -130,7 +130,7 @@ describe("order product-bin options", () => {
         wetKg: 250,
         dryKg: 212.5,
       },
-      subtitle: "250 kg wet, 212.5 kg dry biochar available",
+      subtitle: "250 kg wet mass, 212.5 kg dry biochar available",
     });
   });
 
@@ -152,7 +152,7 @@ describe("order product-bin options", () => {
         dryKg: 212.5,
       },
       subtitle:
-        "250 kg wet, 212.5 kg dry biochar available",
+        "250 kg wet mass, 212.5 kg dry biochar available",
     });
   });
 

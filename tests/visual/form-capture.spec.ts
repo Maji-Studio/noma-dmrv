@@ -26,7 +26,6 @@ import { test, expect, type CaptureSession } from "./form-capture-fixture";
 import { measureFormGeometry, type Geometry } from "./form-geometry";
 import { measureNativePickerIcons } from "./native-picker-geometry";
 import {
-  diffR1,
   evaluateGeometry,
   writeGeometry,
   writeSummary,
@@ -132,7 +131,7 @@ async function captureState(page: Page, surface: Surface, root: Locator, state: 
   const geometry = await page.evaluate(measureFormGeometry, { kind: surface.kind, mode: surface.mode, nativePickerIcons });
   const { violations, failures } = evaluateGeometry(geometry, surface.mode);
   if (HEADINGLESS_GROUP_SURFACES.test(surface.id)) {
-    const remainingTitles = geometry.r1.sectionTitles.filter((title) => REMOVED_SECTION_TITLES.includes(title));
+    const remainingTitles = geometry.sectionTitles.filter((title) => REMOVED_SECTION_TITLES.includes(title));
     failures.push(...remainingTitles.map((title) => `Removed section heading still visible: ${title}`));
     expect.soft(remainingTitles, "Generic section headings must be absent").toEqual([]);
     await expect.soft(root.getByText(REMOVED_AUTO_BALANCE_CUE, { exact: true })).toHaveCount(0);
@@ -143,19 +142,6 @@ async function captureState(page: Page, surface: Surface, root: Locator, state: 
   record.states.push({ state, viewport: `${viewport.width}x${viewport.height}`, png, geometry, violations, failures });
   expect.soft(geometry.trailingIcons.filter((icon) => !icon.valid), "Trailing icons must sit 12px (+/- 1px) from the padding-box edge").toEqual([]);
   return geometry;
-}
-
-async function detailToggle(root: Locator) {
-  const radio = root.getByRole("radio", { name: "Simple", exact: true });
-  return (await radio.count()) > 0;
-}
-
-async function setLevel(root: Locator, level: "simple" | "detailed") {
-  const name = level === "simple" ? "Simple" : "Detailed";
-  const radio = root.getByRole("radio", { name, exact: true }).first();
-  if (await radio.isChecked()) return;
-  await radio.locator("..").click();
-  await expect(radio).toBeChecked();
 }
 
 /**
@@ -206,35 +192,18 @@ async function captureSurface(session: CaptureSession, browser: Browser, surface
     const opened = await surface.open(target, ctx);
     if (typeof opened === "string") return { ...record, status: "skipped", reason: opened };
     const root = opened;
-    const levels = (await detailToggle(root)) ? (["simple", "detailed"] as const) : null;
     const fill = surface.fill === "none" ? "" : `-${surface.fill}`;
-    const r1: Partial<Record<"simple" | "detailed", Geometry["r1"]>> = {};
     for (const viewport of viewports) {
       await target.setViewportSize(viewport);
-      if (!levels) {
-        await captureState(target, surface, root, `default${fill}`, record, mask);
-        continue;
-      }
-      for (const level of levels) {
-        await setLevel(root, level);
-        const geometry = await captureState(target, surface, root, `${level}${fill}`, record, mask);
-        // R1 compares the levels once, at the first (widest) viewport.
-        if (viewport === viewports[0]) r1[level] = geometry.r1;
-      }
+      await captureState(target, surface, root, `default${fill}`, record, mask);
     }
-    if (r1.simple && r1.detailed) record.r1 = diffR1(r1.simple, r1.detailed);
     if (surface.errors) {
       await target.setViewportSize(viewports[0]);
-      if (levels) await setLevel(root, "simple");
       const blocked = await showValidationErrors(target, root);
       if (!blocked) {
-        // Errors stay on screen through a level switch: capture Simple, then Detailed.
-        for (const level of levels ?? [null]) {
-          if (level) await setLevel(root, level);
-          for (const viewport of viewports) {
-            await target.setViewportSize(viewport);
-            await captureState(target, surface, root, `${level ?? "default"}-errors`, record, mask);
-          }
+        for (const viewport of viewports) {
+          await target.setViewportSize(viewport);
+          await captureState(target, surface, root, "default-errors", record, mask);
         }
       } else {
         record.skippedStates.push({ state: "errors", reason: blocked });

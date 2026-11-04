@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
+import { toolText } from "@/lib/mcp/results";
 import { GET as GET_LIST } from "@/app/api/v1/lab-samples/route";
 import { GET as GET_ONE } from "@/app/api/v1/lab-samples/[idOrCode]/route";
 import { GET as GET_BATCHES } from "@/app/api/v1/credit-batches/route";
@@ -236,14 +237,14 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(await labSampleRows(a)).toHaveLength(1);
     const preview = await call("delete_lab_sample", { ...args, dryRun: true }, a.deleteKey);
     expect(preview.structuredContent.data).toMatchObject({ id: seeded.id });
-    expect(preview.content[0].text).toBe(`Dry run: would delete lab sample ${seeded.code}.`);
+    expect(preview.content[0].text).toBe(toolText(`Dry run: would delete lab sample ${seeded.code}.`, preview.structuredContent));
     expect(await labSampleRows(a)).toHaveLength(1);
     const changed = await write("update_lab_sample", { ...args, labName: "Edit" });
     const stale = await write("delete_lab_sample", args, a.deleteKey);
     expect(stale).toMatchObject({ isError: true, structuredContent: { code: "stale_version", current: changed.structuredContent.data } });
     const deleted = await write("delete_lab_sample", { ...args, expectedVersion: 2 }, a.deleteKey);
     expect(deleted.structuredContent).toEqual({ deleted: { id: seeded.id, code: seeded.code } });
-    expect(deleted.content[0].text).toBe(`Deleted lab sample ${seeded.code}.`);
+    expect(deleted.content[0].text).toBe(toolText(`Deleted lab sample ${seeded.code}.`, deleted.structuredContent));
     expect(await labSampleRows(a)).toEqual([]);
     expect((await labSampleAudits(a)).map((row) => row.operationId).sort()).toEqual(["delete_lab_sample", "record_lab_sample", "update_lab_sample"]);
   });
@@ -347,7 +348,7 @@ describe("lab sample MCP tools", { timeout: TIMEOUT_MS }, () => {
       const rest = await GET_ONE(labApiRequest("lab-samples", `/${idOrCode}`, a.key), labApiParams(idOrCode));
       const result = await call("get_lab_sample", { idOrCode }, a.key);
       expect(result.structuredContent).toEqual(await rest.json());
-      expect(result.content[0].text).toBe(`Lab sample ${seeded.code}, version 1.`);
+      expect(result.content[0].text).toBe(toolText(`Lab sample ${seeded.code}, version 1.`, result.structuredContent));
     }
     const batches = await GET_BATCHES(labApiRequest("credit-batches", `?facilityId=${a.facility.id}`, a.key));
     expect((await call("find_credit_batches", { facilityId: a.facility.id }, a.key)).structuredContent).toEqual(await batches.json());

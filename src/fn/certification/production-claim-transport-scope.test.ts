@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import {
   collectProductionClaimAwareRequiredTransportCategories,
   collectProductionClaimAwareTransportEntityIds,
@@ -27,18 +26,8 @@ function lineage(args: {
   return {
     productionRun: { id: args.productionRunId },
     biocharProduct: { id: args.biocharProductId },
-    feedstocks: [{ id: args.feedstockId }],
+    feedstocks: [{ id: args.feedstockId, ownsTransport: true }],
   } as ChainOfCustodyData;
-}
-
-function batchWithSample(
-  creditBatchId: string,
-  sampleId: string,
-): CreditBatchWithSamples {
-  return {
-    creditBatchId,
-    samples: [{ id: sampleId }],
-  } as unknown as CreditBatchWithSamples;
 }
 
 describe("production-claim-aware transport requirements", () => {
@@ -78,6 +67,24 @@ describe("production-claim-aware transport requirements", () => {
     ).toEqual(REQUIRED);
   });
 
+  it("still requires feedstock coverage when a production-claiming batch has no owned feedstock IDs", () => {
+    expect(collectProductionClaimAwareRequiredTransportCategories({
+      removalId: CURRENT_REMOVAL_ID,
+      memberBatches: [{ ...batch("later", null), productionFeedstockIds: [] }],
+      requiredTransportCategories: ["feedstock", "biochar"],
+    })).toEqual(["feedstock", "biochar"]);
+  });
+
+  it("does not reintroduce transport owned by an earlier run through lineage", () => {
+    const later = lineage({ productionRunId: "later", biocharProductId: "product", feedstockId: "earlier-stock" });
+    later.feedstocks[0].ownsTransport = false;
+    expect(collectProductionClaimAwareTransportEntityIds({
+      removalId: CURRENT_REMOVAL_ID,
+      memberBatches: [{ ...batch("later-batch", null, "later"), productionFeedstockIds: [] }],
+      lineages: [later],
+    })).toEqual({ feedstockIds: [], feedstockTransportOwnedElsewhere: true, biocharProductIds: ["product"], sampleIds: [] });
+  });
+
   it("keeps production transport IDs from unclaimed batches and biochar IDs from every lineage", () => {
     expect(
       collectProductionClaimAwareTransportEntityIds({
@@ -98,15 +105,39 @@ describe("production-claim-aware transport requirements", () => {
             feedstockId: "feedstock-unclaimed",
           }),
         ],
-        batchesWithSamples: [
-          batchWithSample("batch-prior", "sample-prior"),
-          batchWithSample("batch-unclaimed", "sample-unclaimed"),
-        ],
       }),
     ).toEqual({
       feedstockIds: ["feedstock-unclaimed", "batch-unclaimed-feedstock"],
       biocharProductIds: ["product-prior", "product-unclaimed"],
-      sampleIds: ["sample-unclaimed"],
+      sampleIds: [],
     });
   });
+});
+
+
+it.each([null, CURRENT_REMOVAL_ID, PRIOR_REMOVAL_ID])("carries linked feedstock from unapplied runs only when production is claimed here: %s", (claimedBy) => {
+  const ids = collectProductionClaimAwareTransportEntityIds({
+    removalId: CURRENT_REMOVAL_ID,
+    memberBatches: [{ ...batch("later", claimedBy), productionFeedstockIds: [], productionHasLinkedFeedstock: true }],
+    lineages: [],
+  });
+  expect(ids.feedstockIds).toEqual([]);
+  expect(ids.feedstockTransportOwnedElsewhere === true).toBe(claimedBy !== PRIOR_REMOVAL_ID);
+});
+
+it("does not turn missing owned legs or wholly absent feedstock into zero", () => {
+  for (const member of [batch("owned", null), { ...batch("absent", null), productionFeedstockIds: [], productionHasLinkedFeedstock: false }]) {
+    expect(collectProductionClaimAwareTransportEntityIds({
+      removalId: CURRENT_REMOVAL_ID, memberBatches: [member], lineages: [],
+    }).feedstockTransportOwnedElsewhere).toBeUndefined();
+  }
+});
+
+
+it("keeps the zero feedstock figure in the claiming Removal's ledger preview categories", () => {
+  expect(collectProductionClaimAwareRequiredTransportCategories({
+    removalId: CURRENT_REMOVAL_ID,
+    memberBatches: [{ ...batch("later", null), productionFeedstockIds: [], productionHasLinkedFeedstock: true }],
+    requiredTransportCategories: ["feedstock", "biochar"],
+  })).toEqual(["feedstock", "biochar"]);
 });

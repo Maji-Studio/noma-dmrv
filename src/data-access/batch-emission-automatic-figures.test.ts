@@ -7,6 +7,7 @@ vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertificat
 vi.mock("@/data-access/credit-batch-samples", () => ({ getSamplesByCreditBatchIds: vi.fn() }));
 vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsForEntities: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
+vi.mock("@/data-access/feedstock-transport-ownership", () => ({ getFeedstockTransportOwnerBatches: vi.fn() }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
@@ -14,6 +15,7 @@ import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-masses";
+import { getFeedstockTransportOwnerBatches } from "@/data-access/feedstock-transport-ownership";
 import { loadBatchesEmissionAutomaticFacts } from "./batch-emission-automatic-figures";
 
 const ctx = makeTestOrgContext();
@@ -21,7 +23,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(loadCreditBatchRollups).mockResolvedValue(Object.fromEntries(["a", "b"].map((id) => [id, {
     lineageFacts: {
-      runs: [{ id, feedstocks: [{ id: "feedstock" }, { id: "feedstock" }] }],
+      runs: [{ id, feedstocks: [{ id: "feedstock", ownsTransport: true }, { id: "feedstock", ownsTransport: true }] }],
       applications: [{ id: "application" }, { id: "application" }, { id: "second-application" }],
       runForwards: { [id]: [{ id: "product", deliveries: [{ id: "delivery", code: "DL-1", wetMassKg: id === "a" ? "100.1" : "200.2" }] }] },
     },
@@ -36,6 +38,7 @@ beforeEach(() => {
     { id: "delivery", entityId: "delivery", loadMassKg: 999, distanceKm: 10 },
   ] as never);
   vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: { leg: "100" } });
+  vi.mocked(getFeedstockTransportOwnerBatches).mockResolvedValue(new Map());
 });
 
 it("counts unique records and retains batch delivery shares with a constant number of reads", async () => {
@@ -45,9 +48,12 @@ it("counts unique records and retains batch delivery shares with a constant numb
   expect(facts.b.automaticFigures["run-electricity"]).toBeNull();
   expect(facts.a.automaticFigures["delivery-transport"]).toEqual({ magnitude: "2.002", unit: "km * tonne" });
   expect(facts.b.automaticFigures["delivery-transport"]).toEqual({ magnitude: "4.004", unit: "km * tonne" });
-  expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], { includeRunForwards: true });
-  expect(getProductionRunsForCertification).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"]);
-  expect(getTransportLegsForEntities).toHaveBeenCalledTimes(2);
+  expect(loadCreditBatchRollups).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], { includeRunForwards: true }, expect.anything());
+  expect(getProductionRunsForCertification).toHaveBeenCalledExactlyOnceWith(ctx, ["a", "b"], expect.anything());
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", ["feedstock"], expect.anything());
+  expect(getSamplesByCreditBatchIds).not.toHaveBeenCalled();
+  expect(facts.a.automaticRecordCounts?.["sample-transport"]).toBe(0);
+  expect(facts.a.automaticFigures["sample-transport"]).toBeNull();
   expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
   expect(getEmissionAutomaticMasses).toHaveBeenCalledTimes(1);
 });
@@ -61,4 +67,40 @@ it("keeps delivery counts when their figure is unknown and leaves other figures 
   expect(facts.a.automaticRecordCounts?.["delivery-transport"]).toBe(1);
   expect(facts.a.automaticFigures["delivery-transport"]).toBeNull();
   expect(facts.a.automaticFigures["run-electricity"]?.magnitude).toBe("12");
+});
+
+it("threads the supplied transaction to every automatic-facts reader", async () => {
+  const tx = {} as Parameters<typeof loadBatchesEmissionAutomaticFacts>[3];
+  await loadBatchesEmissionAutomaticFacts(ctx, ["a", "b"], {}, tx);
+  for (const reader of [loadCreditBatchRollups, getProductionRunsForCertification, getSamplesByCreditBatchIds,
+    getTransportLegsForEntities, loadBiocharDeliveryTransportLegs, getEmissionAutomaticMasses]) {
+    for (const call of vi.mocked(reader).mock.calls) expect(call.at(-1)).toBe(tx);
+  }
+});
+
+it("does not count or request earlier-run transport in a later batch", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { lineageFacts: {
+    runs: [{ id: "b", feedstocks: [{ id: "earlier", ownsTransport: false }] }],
+    applications: [], runForwards: {},
+  } } } as never);
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["b"]);
+  expect(getTransportLegsForEntities).toHaveBeenCalledExactlyOnceWith(ctx, "feedstock", [], expect.anything());
+  expect(facts.b.automaticRecordCounts?.["feedstock-transport"]).toBe(0);
+});
+
+it("names the other batches that count an owned-elsewhere batch's transport", async () => {
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ b: { lineageFacts: {
+    runs: [{ id: "b", feedstocks: [{ id: "f1", ownsTransport: false }, { id: "f2", ownsTransport: false }] }],
+    applications: [], runForwards: {},
+  } } } as never);
+  vi.mocked(getFeedstockTransportOwnerBatches).mockResolvedValue(new Map([
+    ["f1", [{ creditBatchId: "x", code: "CB-26-002" }]],
+    ["f2", [{ creditBatchId: "y", code: "CB-26-001" }]],
+  ]));
+  const facts = await loadBatchesEmissionAutomaticFacts(ctx, ["b"]);
+  expect(getFeedstockTransportOwnerBatches).toHaveBeenCalledExactlyOnceWith(ctx, ["f1", "f2"], expect.anything());
+  expect(facts.b.feedstockTransportCountedOn).toEqual([
+    { creditBatchId: "y", code: "CB-26-001" }, { creditBatchId: "x", code: "CB-26-002" },
+  ]);
+  expect(facts.b.automaticFigures["feedstock-transport"]).toEqual({ magnitude: "0", unit: "km * tonne" });
 });

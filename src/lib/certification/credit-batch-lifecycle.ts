@@ -118,6 +118,15 @@ function statementLifecycle(
   }
 }
 
+function interruptedLifecycle(): CreditBatchLifecycle {
+  return {
+    badgeStatus: "failed",
+    label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
+    currentStepIndex: 0,
+    stepStates: buildStepStates(0, "failed"),
+  };
+}
+
 function removalLifecycle(
   summary: CreditBatchHealthSummary,
 ): CreditBatchLifecycle | null {
@@ -142,12 +151,7 @@ function removalLifecycle(
         stepStates: buildStepStates(0),
       };
     case "interrupted":
-      return {
-        badgeStatus: "failed",
-        label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
-        currentStepIndex: 0,
-        stepStates: buildStepStates(0, "failed"),
-      };
+      return interruptedLifecycle();
     case "submitted":
       return {
         badgeStatus: "running",
@@ -177,6 +181,8 @@ function removalLifecycle(
 export function deriveCreditBatchLifecycle(
   summary: CreditBatchHealthSummary,
 ): CreditBatchLifecycle {
+  // The batch-level rule (`findInterruptedRemoval`): any interrupted holder wins, as on the list and timeline.
+  if (summary.removalInterrupted) return interruptedLifecycle();
   const statement = statementLifecycle(summary);
   if (statement) return statement;
 

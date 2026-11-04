@@ -6,5 +6,5 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export const GET = apiRoute("api.v1.feedstocks.list", "feedstocks:read", async (request, { ctx, headers }) =>
-  Response.json(await readFeedstockList(request, ctx), { headers }));
-export const POST = apiRoute("api.v1.feedstocks.create", "feedstocks:write", createFeedstockResponse);
+  Response.json(await readFeedstockList(request, ctx), { headers }), { audience: "rest" });
+export const POST = apiRoute("api.v1.feedstocks.create", "feedstocks:write", createFeedstockResponse, { audience: "rest" });

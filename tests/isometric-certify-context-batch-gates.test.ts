@@ -25,6 +25,8 @@ import {
   mockNormalizedLineageFacts,
 } from "./fixtures/certify-context";
 
+vi.mock("@/data-access/facilities", () => ({ getFacilityById: vi.fn(async () => ({ timezone: "UTC" })) }));
+
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
   getCreditBatchActiveScopeRemovalId: vi.fn(),

@@ -1,3 +1,4 @@
+import { resolveRemovalReportingWindow } from "@/fn/certification/removal-reporting-window";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
@@ -359,7 +360,7 @@ describe("buildCreateDatapointRequest", () => {
 
     expect(mapping).toBeDefined();
     expect(() => resolveDatapointSource(mapping!, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow(
-      /Review the Removal template lines/,
+      /This Removal template has components to decide/,
     );
     expect(
       lookupInputMapping("constructor", "mass_based_ci_emissions", "mass"),
@@ -459,7 +460,7 @@ describe("buildCreateDatapointRequest", () => {
     // double-count or land in the wrong bucket.
     expect(() =>
       buildCreateDatapointRequest(fuelVolumeArgs("Diesel usage")),
-    ).toThrow(/Review the Removal template lines/);
+    ).toThrow(/This Removal template has components to decide/);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -613,7 +614,7 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/has no calculated value/);
   });
 
-  it("INPUT_MAPPING covers the MVP demo-template (group, blueprint, input) tuples", () => {
+  it("INPUT_MAPPING covers active demo-template tuples", () => {
     // Sanity: any deletion here is a real schema change, not a refactor.
     // Anchors the contract with the noma-mvp tailored template authored in
     // `docs/isometric/sandbox-template-authoring.md`. The seven previously-
@@ -622,7 +623,7 @@ describe("buildCreateDatapointRequest", () => {
     const expected: Array<[string, string, string]> = [
       ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
       ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
-      // All three transport categories bind the `mass_distance_based_ci_emissions`
+      // Legacy transport categories bind the `mass_distance_based_ci_emissions`
       // blueprint: a single mass-weighted `mass_distance` (tonne·km) per category
       // (there is no LIST-shaped transport blueprint in the Certify catalog).
       [
@@ -647,8 +648,8 @@ describe("buildCreateDatapointRequest", () => {
     ];
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(
-        lookupInputMapping(groupKey, blueprintKey, inputKey),
-      ).toBeDefined();
+        lookupInputMapping(groupKey, blueprintKey, inputKey) !== undefined,
+      ).toBe(groupKey !== "sampling-required-for-mrv");
     }
   });
 });
@@ -987,5 +988,29 @@ describe("buildCreateGhgEntryRequest", () => {
 
     expect(result.started_on).toBe("2026-03-15");
     expect(result.completed_on).toBe("2026-04-02");
+  });
+
+  it("sends the facility's calendar days for a west-of-UTC run that ends after UTC midnight (issue #1282)", () => {
+    const tmpl = template([
+      { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+    ]);
+    // Bogota (UTC-5): run 14 Mar 09:00 to 21:30 local = 14:00Z to 02:30Z next day.
+    const reportingWindow = resolveRemovalReportingWindow({
+      earliestProductionStartTime: new Date("2026-03-14T14:00:00Z"),
+      latestProductionEndTime: new Date("2026-03-15T02:30:00Z"),
+      latestApplicationTime: new Date("2026-03-14T00:00:00Z"),
+      facilityTimezone: "America/Bogota",
+    });
+    const result = buildCreateGhgEntryRequest({
+      template: tmpl,
+      blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
+      datapointIdsByRtcInput: new Map([["rtc_A::mass", ["dtp_1"]]]),
+      reportingWindow,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.started_on).toBe("2026-03-14");
+    expect(result.completed_on).toBe("2026-03-14");
   });
 });

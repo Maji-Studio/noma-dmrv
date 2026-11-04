@@ -8,11 +8,12 @@
 
 import { useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRightIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRightIcon, ClockIcon, FileIcon, PlusIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms/server-error";
 import { Button, Notice } from "@/components/ui";
 import type { EmissionBatchScope } from "@/hooks/use-emission-entries";
-import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { removalTemplateSetupHref, removalTemplatesSettingsHref, DECIDE_LINES_LINK_LABEL, OPEN_REMOVAL_TEMPLATES_LINK_LABEL } from "@/lib/certification/links";
+import { entryFigures } from "@/lib/certification/late-entry-figures";
 import { cn } from "@/lib/utils";
 import { EntryFileUpload, useEntryFiles } from "./emission-entry-files";
 import {
@@ -20,6 +21,9 @@ import {
   addEntryRefusal,
   formatFigure,
   hasRecordsFigure,
+  isCalculatedByRegistry,
+  isCountedElsewhere,
+  isRecordsGap,
   lineRecords,
   lineTotalText,
   openSourceLabel,
@@ -32,13 +36,21 @@ import {
   type LineRecords,
 } from "./emission-line-display";
 import type { EntryMenuItem } from "./emission-ledger-entries";
-import { TOUCH_TARGET } from "./emission-line-grid";
-import { SOURCE_ICON } from "./emission-source-chips";
+import { CENTRED_HIT_AREA } from "@/components/ui/touch-target";
+import { CountedOnLink, SOURCE_ICON } from "./emission-source-chips";
 
 export const ICON = 14;
 
+/** An entry re-entered after its Removal was sent: it counts once the Removal is resubmitted. */
+export const WAITING_FOR_RESUBMIT_LABEL = "Waiting for resubmit";
+
+/** The sent original is retired and its replacement is not sent yet. */
+export function isWaitingForResubmit(entry: Pick<EmissionEntry, "heldForRemovalId" | "sentByRemovalId">): boolean {
+  return !!entry.heldForRemovalId && !entry.sentByRemovalId;
+}
+
 /** What the body reads off a line before laying it out. */
-export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
+export function lineBodyModel(line: EmissionLine) {
   const records = lineRecords(line);
   const values = valueEntries(line);
   const stopped = stoppedEntries(line);
@@ -52,17 +64,17 @@ export function lineBodyModel(line: EmissionLine, canWrite: boolean) {
     /** No records source and no entries: the body says so in one sentence (the row's Sources cell holds Add). */
     nothingYet: !hasSomething && line.state !== "needsSetup",
     /** Add manual entry inside the body, only when the Sources cell shows chips instead of the link. */
-    canAddInBody: canWrite && hasSomething && !addEntryRefusal(line),
+    canAddInBody: hasSomething && !addEntryRefusal(line),
     /** The Total repeats the one part when only one part counts, so it shows from two parts up. */
-    showTotal: recordsCount + values.length > 1,
+    showTotal: recordsCount + values.length > 1 && lineTotalText(line) !== null,
     totalText: lineTotalText(line),
-    totalMissing: !line.total && line.state !== "confirmedZero",
+    totalMissing: !line.total && !isCalculatedByRegistry(line.records) && line.state !== "confirmedZero",
     reviewWithoutEntries: line.state === "needsReview" && !stopped.length,
   };
 }
 
 const QUIET_ACTION = cn(
-  TOUCH_TARGET,
+  CENTRED_HIT_AREA,
   "inline-flex min-h-28 items-center gap-6 text-left body-small font-medium text-[var(--color-text-interaction-primary)] underline decoration-[color:var(--color-border-primary)] underline-offset-4 hover:decoration-current",
 );
 
@@ -102,10 +114,18 @@ export function AddEntryLink({ line, onAdd, className }: { line: EmissionLine; o
   );
 }
 
-/** "3 production runs" as the link to them, with the source icon; a source that holds nothing reads in warning ink. */
+/** "3 production runs" as the link to them, with the source icon (counted elsewhere: the first counting batch, so pass one batch per row); a source that holds nothing reads in warning ink. */
 export function RecordsSourceLink({ records, scope, className }: { records: LineRecords; scope: EmissionBatchScope; className?: string }) {
   const SourceIcon = SOURCE_ICON[records.source];
-  const gap = !hasRecordsFigure(records);
+  if (isCountedElsewhere(records)) {
+    return (
+      <span className={cn("inline-flex min-h-24 items-baseline gap-6 body-small text-[var(--color-text-primary)]", className)}>
+        <SourceIcon size={ICON} aria-hidden="true" className="shrink-0 self-center" />
+        {records.countedOn[0] && <CountedOnLink batch={records.countedOn[0]} facilityId={scope.facilityId} wrap />}
+      </span>
+    );
+  }
+  const gap = isRecordsGap(records);
   const text = recordsSourceText(records);
   const split = text.lastIndexOf(" ") + 1;
   return (
@@ -142,7 +162,7 @@ export function entryAmount(entry: EmissionEntry): { figures: string[]; detail: 
     const md = first?.massDistanceDetail;
     return { figures: [formatFigure(entry.total)], detail: md ? `${formatFigure(md.mass)} × ${formatFigure(md.distance)}` : null };
   }
-  return { figures: entry.values.map((value) => formatFigure({ magnitude: value.magnitude, unit: value.unit })), detail: null };
+  return { figures: entryFigures(entry).map(formatFigure), detail: null };
 }
 
 /** One counting entry's actions: Edit, Add file (opens the upload in place), Delete. */
@@ -175,18 +195,24 @@ function AddFilePanel({ entry, scope, actions }: { entry: EmissionEntry; scope: 
  * caption line that wraps, then the upload panel. Until the file names load
  * the entry's own count stands in, so the slot never shows an empty bar.
  */
-export function EntryEvidence({ entry, scope, canWrite, actions, className }: {
+export function EntryEvidence({ entry, scope, actions, className, readOnly = false }: {
   entry: EmissionEntry;
   scope: EmissionBatchScope;
-  canWrite: boolean;
   actions: ReturnType<typeof useEntryActions>;
   className?: string;
+  readOnly?: boolean;
 }) {
   const { files, countText } = useEntryFiles(entry);
   const missing = entry.documentCount === 0;
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-x-16 gap-y-2 body-caption text-[var(--color-text-secondary)]">
+        {isWaitingForResubmit(entry) && (
+          <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]" data-entry-waiting-for-resubmit>
+            <ClockIcon size={ICON} weight="bold" aria-hidden="true" />
+            {WAITING_FOR_RESUBMIT_LABEL}
+          </span>
+        )}
         {missing ? (
           <span className="inline-flex min-h-24 items-center gap-4 text-[var(--st-wait)]">
             <WarningIcon size={ICON} weight="bold" aria-hidden="true" />
@@ -211,7 +237,7 @@ export function EntryEvidence({ entry, scope, canWrite, actions, className }: {
             {countText}
           </span>
         )}
-        {missing && canWrite && !actions.addingFile && (
+        {missing && !readOnly && !actions.addingFile && (
           <QuietAction onClick={actions.startAddFile} className="min-h-24 body-caption">Add file</QuietAction>
         )}
         {entry.note && <span className="min-w-0">{entry.note}</span>}
@@ -226,27 +252,31 @@ export function NothingYet({ line, className }: { line: EmissionLine; className?
   const text = line.entryPolicy === "single"
     ? "No manual entry yet. One manual entry counts for the whole credit batch."
     : line.entryPolicy === "none"
-      ? "No records source yet. This line takes no manual entries."
-      : "No records source and no manual entries yet.";
+      ? "No automatic datapoints yet. This component takes no manual entries."
+      : "No automatic datapoints and no manual entries yet.";
   return <p className={cn("body-small text-[var(--color-text-tertiary)]", className)}>{text}</p>;
 }
 
-function TemplateReviewLink({ scope }: { scope: EmissionBatchScope }) {
+/** "Answer in Settings" only for a line without a decision; any other template problem opens Removal templates. */
+function TemplateReviewLink({ scope, undecided }: { scope: EmissionBatchScope; undecided: boolean }) {
   return (
-    <Link href={certificationRemovalTemplatesHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
-      Open template review
+    <Link href={undecided ? removalTemplateSetupHref(scope.facilityId) : removalTemplatesSettingsHref(scope.facilityId)} className="body-small font-medium underline underline-offset-4">
+      {undecided ? DECIDE_LINES_LINK_LABEL : OPEN_REMOVAL_TEMPLATES_LINK_LABEL}
     </Link>
   );
 }
 
-export function SetupNotice({ scope }: { scope: EmissionBatchScope }) {
-  return <Notice tone="info" action={<TemplateReviewLink scope={scope} />}>{NEEDS_SETUP_COPY}</Notice>;
+/** A decided line noma cannot fill: nothing to decide, so no "Answer in Settings". */
+export function SetupNotice({ scope, readOnly = false }: { scope: EmissionBatchScope; readOnly?: boolean }) {
+  return <Notice tone="info" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={false} />}>{NEEDS_SETUP_COPY}</Notice>;
 }
 
-export function ReviewNotice({ line, scope }: { line: EmissionLine; scope: EmissionBatchScope }) {
+/** `readOnly` keeps the notice text and drops its Settings link. */
+export function ReviewNotice({ line, scope, readOnly = false }: { line: EmissionLine; scope: EmissionBatchScope; readOnly?: boolean }) {
+  const undecided = line.blocker?.code === "lineNeedsReview" && line.blocker.fixTarget === "templateLineReview";
   return (
-    <Notice tone="warning" action={<TemplateReviewLink scope={scope} />}>
-      {line.blocker?.message ?? "An admin reviews this line in the template review."}
+    <Notice tone="warning" action={readOnly ? undefined : <TemplateReviewLink scope={scope} undecided={undecided} />}>
+      {line.blocker?.message ?? (readOnly ? "This component has no decision yet." : "This component has no decision yet. An Admin answers it in Settings, Removal templates.")}
     </Notice>
   );
 }

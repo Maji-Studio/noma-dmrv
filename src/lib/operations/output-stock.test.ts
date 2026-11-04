@@ -1,5 +1,5 @@
 import { createOperationActivity } from "@/lib/operations/activity-links";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 
@@ -14,7 +14,7 @@ const BIN_ID = "00000000-0000-4000-8000-000000000001";
 const FACILITY_ID = "00000000-0000-4000-8000-000000000002";
 const LAYER_A = "00000000-0000-4000-8000-00000000000a";
 const LAYER_B = "00000000-0000-4000-8000-00000000000b";
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const tx = {} as OperationScope["tx"];
 const snapshotStock = vi.fn();
 let activity = createOperationActivity();
@@ -104,4 +104,21 @@ describe("published movement body", () => {
     expect(recordOutputStockMovementApiInput.safeParse({ ...loss, occurredAt: "2026-09-14T12:00:00" }).success).toBe(false);
     expect(recordOutputStockMovementApiInput.safeParse({ ...loss, kind: "count", sources: [{ layerId: LAYER_A, moisturePercent: 10 }] }).success).toBe(false);
   });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it.each(["loss", "count"])("refuses %s before any stock reads or writes while off", async kind => {
+  vi.stubEnv("STOCK_ADJUSTMENTS_ENABLED", "false");
+  await expect(execute({ ...loss, kind })).rejects.toMatchObject({
+    code: "conflict", message: "Lost mass and stock counts are turned off on this server.",
+  });
+  expect(mocks.readBin).not.toHaveBeenCalled();
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
+it("passes delivery movements through while adjustments are off", async () => {
+  vi.stubEnv("STOCK_ADJUSTMENTS_ENABLED", "false");
+  await execute({ ...loss, kind: "delivery" });
+  expect(mocks.record).toHaveBeenCalledOnce();
 });

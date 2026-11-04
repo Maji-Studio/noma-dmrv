@@ -70,7 +70,7 @@ describe("deleteCustomer", () => {
     state.deliveryCount = 2;
 
     await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
-      "Customer was not deleted because deliveries were recorded on its orders. Archive it instead.",
+      "Customer was not deleted because deliveries were recorded on its orders: DEL-0 and DEL-1. Archive it instead.",
     );
     expect(state.deleted).toBe(false);
   });
@@ -79,7 +79,7 @@ describe("deleteCustomer", () => {
     state.locationCount = 3;
     state.failDeleteAt = 2;
     await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toMatchObject({
-      code: "conflict", issues: [expect.objectContaining({ path: ["customerId"], meta: { locationIds: ["location-1"] } })],
+      code: "conflict", issues: [expect.objectContaining({ path: ["customerId"], meta: { locationIds: ["location-1"], reason: "in_use" } })],
     });
   });
 

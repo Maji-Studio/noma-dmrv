@@ -11,7 +11,7 @@ vi.mock("./api-orders", () => ({ findApiOrder: mocks.order }));
 vi.mock("./delivery-order-balance", () => ({ readDeliveryOrderAllocation: mocks.allocation }));
 vi.mock("./utils", () => ({ requireOrgScope: mocks.scope }));
 
-const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "user", orgRole: "admin" as const, isPlatformAdmin: false };
 const id = "4d766880-6bb2-4dcb-ad62-e00c04bcbb4b";
 
 const tx = { snapshot: "one" };

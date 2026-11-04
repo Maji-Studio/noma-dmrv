@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEnergyBreakdown } from "./attribution";
-import type { EnergyInputs, EnergyRecord, EnergyRunInput } from "./types";
+import type { EnergyFeedstockInput, EnergyInputs, EnergyRecord, EnergyRunInput } from "./types";
 
 const ALL_TIME = { from: null, to: "2026-09-30" };
 
@@ -23,7 +23,6 @@ function inputs(overrides: Partial<EnergyInputs> = {}): EnergyInputs {
   return {
     runs: [],
     feedstocks: [],
-    feedstockDraws: [],
     deliveries: [],
     deliveryRunShares: [],
     applications: [],
@@ -43,6 +42,24 @@ const sumFlows = (breakdown: ReturnType<typeof buildEnergyBreakdown>, source: st
   breakdown.flows
     .filter((flow) => flow.source === source)
     .reduce((total, flow) => total + flow.activity, 0);
+
+/** Feb drew 60% and Mar 40%; the loader resolves Feb as the sole owner. */
+function sharedFeedstockInputs(): EnergyInputs {
+  return inputs({
+    creditBatches: [
+      { id: "feb-batch", code: "CB-FEB", startDate: "2026-02-01", endDate: "2026-02-28", status: "pending" },
+      { id: "mar-batch", code: "CB-MAR", startDate: "2026-03-01", endDate: "2026-03-31", status: "pending" },
+    ],
+    runs: [
+      run({ id: "feb", day: "2026-02-10", creditBatchId: "feb-batch", biocharDryMassKg: 900 }),
+      run({ id: "mar", day: "2026-03-10", creditBatchId: "mar-batch", biocharDryMassKg: 600 }),
+    ],
+    feedstocks: [{
+      id: "f", code: "FS-1", day: "2026-01-10", transportOwnerRunId: "feb",
+      legs: [{ distanceKm: 500, loadMassKg: 1000, method: "road" }],
+    }],
+  });
+}
 
 describe("buildEnergyBreakdown", () => {
   it("keeps a null reading as a missing reading, never zero", () => {
@@ -77,9 +94,8 @@ describe("buildEnergyBreakdown", () => {
       inputs({
         runs: [run({ id: "a" })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
         ],
-        feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 25, deliveredWetMassKg: 1000, massDryKg: 450 },
         ],
@@ -99,14 +115,13 @@ describe("buildEnergyBreakdown", () => {
             id: "f",
             code: "FS-1",
             day: "2026-09-01",
-            wetMassKg: 2000,
+            transportOwnerRunId: "a",
             legs: [
               { distanceKm: 10, loadMassKg: 2000, method: "road" },
               { distanceKm: 300, loadMassKg: 2000, method: "rail" },
             ],
           },
         ],
-        feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
       }),
       ALL_TIME,
     );
@@ -116,7 +131,7 @@ describe("buildEnergyBreakdown", () => {
     expect(breakdown.flows.some((flow) => flow.source === "feedstockTransport")).toBe(false);
   });
 
-  it("splits feedstock and delivery transport so the parts add up to the source totals", () => {
+  it("counts feedstock transport once and splits delivery transport so parts add up to totals", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         creditBatches: [
@@ -125,12 +140,7 @@ describe("buildEnergyBreakdown", () => {
         ],
         runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b2", biocharDryMassKg: 600 })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 3000, legs: [{ distanceKm: 15, loadMassKg: 3000, method: "road" }] },
-        ],
-        // 1,000 kg stays in the bin and reaches no credit batch.
-        feedstockDraws: [
-          { runId: "a", feedstockId: "f", wetMassKg: 1500 },
-          { runId: "b", feedstockId: "f", wetMassKg: 500 },
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 15, loadMassKg: 3000, method: "road" }] },
         ],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
@@ -147,14 +157,108 @@ describe("buildEnergyBreakdown", () => {
     const unassigned = breakdown.flows.find(
       (flow) => flow.source === "feedstockTransport" && flow.creditBatchId == null,
     );
-    expect(unassigned?.activity).toBeCloseTo(feedstockTonneKm / 3);
+    expect(unassigned).toBeUndefined();
     expect(sumFlows(breakdown, "biocharTransport")).toBeCloseTo(2 * 20 * 1);
 
     const b1 = record(breakdown.records, "b1");
     const b2 = record(breakdown.records, "b2");
     expect(b1.footprint.activity.biocharTransport + b2.footprint.activity.biocharTransport).toBeCloseTo(40);
-    expect(b1.footprint.activity.feedstockTransport).toBeCloseTo(feedstockTonneKm / 2);
-    expect(b2.footprint.activity.feedstockTransport).toBeCloseTo(feedstockTonneKm / 6);
+    expect(b1.footprint.activity.feedstockTransport).toBeCloseTo(feedstockTonneKm);
+    expect(b2.footprint.activity.feedstockTransport).toBe(0);
+  });
+
+  it("counts all 1,000 tonne-km on the owner of a feedstock drawn 60/40", () => {
+    const breakdown = buildEnergyBreakdown(sharedFeedstockInputs(), ALL_TIME);
+    for (const id of ["feb", "feb-batch"]) {
+      expect(record(breakdown.records, id).footprint.activity.feedstockTransport).toBe(1000);
+    }
+    for (const id of ["mar", "mar-batch"]) {
+      expect(record(breakdown.records, id).footprint.activity.feedstockTransport).toBe(0);
+      expect(record(breakdown.records, id).footprint.gaps.feedstockTransport).toBeUndefined();
+    }
+    expect(breakdown.flows.filter((flow) => flow.source === "feedstockTransport")).toEqual([
+      { source: "feedstockTransport", creditBatchId: "feb-batch", day: "2026-01-10", activity: 1000 },
+    ]);
+    expect(sumFlows(breakdown, "feedstockTransport")).toBe(1000);
+  });
+
+  it.each([null, "unloaded-owner"])("leaves transport unattributed with owner %s", (transportOwnerRunId) => {
+    const base = sharedFeedstockInputs();
+    base.feedstocks[0].transportOwnerRunId = transportOwnerRunId;
+    const breakdown = buildEnergyBreakdown(base, ALL_TIME);
+    expect(breakdown.flows.filter((flow) => flow.source === "feedstockTransport")).toEqual([
+      { source: "feedstockTransport", creditBatchId: null, day: "2026-01-10", activity: 1000 },
+    ]);
+    for (const row of breakdown.records) {
+      expect(row.footprint.activity.feedstockTransport).toBe(0);
+      expect(row.footprint.gaps.feedstockTransport).toBeUndefined();
+    }
+  });
+
+  it.each<{ label: string; legs: EnergyFeedstockInput["legs"] }>([
+    { label: "no legs", legs: [] },
+    { label: "a non-road leg", legs: [
+      { distanceKm: 500, loadMassKg: 1000, method: "road" },
+      { distanceKm: 500, loadMassKg: 1000, method: "rail" },
+    ] },
+    { label: "an unknown load", legs: [{ distanceKm: 500, loadMassKg: null, method: "road" }] },
+    { label: "a zero load", legs: [{ distanceKm: 500, loadMassKg: 0, method: "road" }] },
+  ])("counts a feedstock with $label as missing only on its owner", ({ legs }) => {
+    const base = sharedFeedstockInputs();
+    base.feedstocks[0].legs = legs;
+    const breakdown = buildEnergyBreakdown(base, ALL_TIME);
+    for (const id of ["feb", "feb-batch"]) {
+      const footprint = record(breakdown.records, id).footprint;
+      expect(footprint.activity.feedstockTransport).toBe(0);
+      expect(footprint.gaps.feedstockTransport).toEqual({ missing: 1, of: 1, unit: "feedstock", recorded: false });
+    }
+    for (const id of ["mar", "mar-batch"]) {
+      expect(record(breakdown.records, id).footprint.activity.feedstockTransport).toBe(0);
+      expect(record(breakdown.records, id).footprint.gaps.feedstockTransport).toBeUndefined();
+    }
+    expect(breakdown.flows.filter((flow) => flow.source === "feedstockTransport")).toEqual([]);
+    expect(breakdown.gaps.filter((gap) => gap.source === "feedstockTransport")).toEqual([
+      { source: "feedstockTransport", creditBatchIds: ["feb-batch"], day: "2026-01-10", recordId: "f" },
+    ]);
+  });
+
+  it.each([null, "unloaded-owner"])("leaves missing transport unattributed with owner %s", (transportOwnerRunId) => {
+    const base = sharedFeedstockInputs();
+    base.feedstocks[0] = { ...base.feedstocks[0], transportOwnerRunId, legs: [] };
+    const breakdown = buildEnergyBreakdown(base, ALL_TIME);
+    expect(breakdown.gaps.filter((gap) => gap.source === "feedstockTransport")).toEqual([
+      { source: "feedstockTransport", creditBatchIds: [], day: "2026-01-10", recordId: "f" },
+    ]);
+    expect(breakdown.records.every((row) => row.footprint.gaps.feedstockTransport == null)).toBe(true);
+  });
+
+  it.each([null, "unloaded-batch"])("keeps an owner's missing transport unattributed without a loaded batch %s", (creditBatchId) => {
+    const base = sharedFeedstockInputs();
+    base.runs[0].creditBatchId = creditBatchId;
+    base.feedstocks[0].legs = [];
+    const breakdown = buildEnergyBreakdown(base, ALL_TIME);
+    expect(record(breakdown.records, "feb").footprint.gaps.feedstockTransport).toMatchObject({ missing: 1, of: 1 });
+    expect(breakdown.gaps.filter((gap) => gap.source === "feedstockTransport")).toEqual([
+      { source: "feedstockTransport", creditBatchIds: [], day: "2026-01-10", recordId: "f" },
+    ]);
+  });
+
+  it("carries the owner's whole transport by delivery dry share and none from a non-owner", () => {
+    const base = sharedFeedstockInputs();
+    base.deliveries = ["owner-delivery", "other-delivery"].map((id) => ({
+      id, code: id, day: "2026-09-20", customerName: null,
+      effectiveDistanceKm: 20, deliveredWetMassKg: 500, massDryKg: 300,
+    }));
+    base.deliveryRunShares = [
+      { ownerId: "owner-delivery", runId: "feb", dryMassKg: 300 },
+      { ownerId: "other-delivery", runId: "mar", dryMassKg: 300 },
+    ];
+    const breakdown = buildEnergyBreakdown(base, ALL_TIME);
+    const owner = record(breakdown.records, "owner-delivery").footprint;
+    const other = record(breakdown.records, "other-delivery").footprint;
+    expect(owner.activity.feedstockTransport).toBeCloseTo(1000 / 3);
+    expect(other.activity.feedstockTransport).toBe(0);
+    expect(other.gaps.feedstockTransport).toBeUndefined();
   });
 
   it("gives a delivery the production energy of the dry biochar it carried", () => {
@@ -179,6 +283,9 @@ describe("buildEnergyBreakdown", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         runs: [run({ id: "a", biocharDryMassKg: null })],
+        feedstocks: [
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+        ],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: null, effectiveDistanceKm: 20, deliveredWetMassKg: 500, massDryKg: 450 },
         ],
@@ -189,12 +296,17 @@ describe("buildEnergyBreakdown", () => {
     const d = record(breakdown.records, "d");
     expect(d.footprint.gaps.startup).toEqual({ missing: 1, of: 1, unit: "run", recorded: false });
     expect(d.footprint.activity.startup).toBe(0);
+    expect(d.footprint.activity.feedstockTransport).toBe(0);
+    expect(d.footprint.gaps.feedstockTransport).toEqual({ missing: 1, of: 1, unit: "feedstock", recorded: false });
   });
 
   it("shares production and transport with an application by dry mass", () => {
     const base = inputs({
       creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" }],
       runs: [run({ id: "a", creditBatchId: "b1", biocharDryMassKg: 900 })],
+      feedstocks: [
+        { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+      ],
       deliveries: [
         { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
       ],
@@ -211,21 +323,18 @@ describe("buildEnergyBreakdown", () => {
       const p = record(breakdown.records, "p");
       expect(p.footprint.activity.genset).toBeCloseTo(20 / 3);
       expect(p.footprint.activity.biocharTransport).toBeCloseTo(40 / 3);
+      expect(p.footprint.activity.feedstockTransport).toBeCloseTo(40 / 3);
       expect(p.creditBatchIds).toEqual(["b1"]);
       expect(p.context).toBe("North block");
     }
   });
 
-  it("keeps a shared feedstock's recorded share when another carried run cannot be scaled", () => {
+  it("keeps the owner's recorded transport when a non-owner carried run cannot be scaled", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
         runs: [run({ id: "a", biocharDryMassKg: 900 }), run({ id: "b", biocharDryMassKg: null })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
-        ],
-        feedstockDraws: [
-          { runId: "a", feedstockId: "f", wetMassKg: 1000 },
-          { runId: "b", feedstockId: "f", wetMassKg: 1000 },
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
         ],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: null, effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
@@ -238,8 +347,26 @@ describe("buildEnergyBreakdown", () => {
       ALL_TIME,
     );
     const d = record(breakdown.records, "d");
-    expect(d.footprint.gaps.feedstockTransport).toEqual({ missing: 1, of: 1, unit: "feedstock", recorded: true });
-    expect(d.footprint.activity.feedstockTransport).toBeGreaterThan(0);
+    expect(d.footprint.gaps.feedstockTransport).toBeUndefined();
+    expect(d.footprint.activity.feedstockTransport).toBeCloseTo(20);
+    expect(d.footprint.gaps.startup).toEqual({ missing: 1, of: 2, unit: "run", recorded: true });
+  });
+
+  it("keeps missing owner transport visible alongside recorded transport in a carried mix", () => {
+    const base = sharedFeedstockInputs();
+    base.runs[1].biocharDryMassKg = null;
+    base.feedstocks.push({ ...base.feedstocks[0], id: "other-feedstock", transportOwnerRunId: "mar" });
+    base.deliveries = [{
+      id: "d", code: "DL-1", day: "2026-09-20", customerName: null,
+      effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900,
+    }];
+    base.deliveryRunShares = [
+      { ownerId: "d", runId: "feb", dryMassKg: 450 },
+      { ownerId: "d", runId: "mar", dryMassKg: 450 },
+    ];
+    const d = record(buildEnergyBreakdown(base, ALL_TIME).records, "d");
+    expect(d.footprint.activity.feedstockTransport).toBe(500);
+    expect(d.footprint.gaps.feedstockTransport).toEqual({ missing: 1, of: 2, unit: "feedstock", recorded: true });
   });
 
   it("counts production as missing for an application with no dry mass to scale by", () => {
@@ -247,6 +374,9 @@ describe("buildEnergyBreakdown", () => {
       inputs({
         creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" }],
         runs: [run({ id: "a", creditBatchId: "b1", biocharDryMassKg: 900 })],
+        feedstocks: [
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+        ],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
         ],
@@ -256,7 +386,7 @@ describe("buildEnergyBreakdown", () => {
       ALL_TIME,
     );
     const p = record(breakdown.records, "p");
-    for (const source of ["startup", "genset", "preprocessing", "grid", "biocharTransport"] as const) {
+    for (const source of ["startup", "genset", "preprocessing", "grid", "feedstockTransport", "biocharTransport"] as const) {
       expect(p.footprint.activity[source]).toBe(0);
       expect(p.footprint.gaps[source]).toMatchObject({ missing: 1, of: 1 });
     }
@@ -272,9 +402,8 @@ describe("buildEnergyBreakdown", () => {
         ],
         runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b1", electricityKwh: 50 })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
+          { id: "f", code: "FS-1", day: "2026-09-01", transportOwnerRunId: "a", legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
         ],
-        feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
         deliveries: [
           { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 25, deliveredWetMassKg: 1000, massDryKg: 450 },
         ],

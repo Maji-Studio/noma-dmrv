@@ -10,14 +10,16 @@ vi.mock("nuqs", () => ({
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: null, selectedFacility: null }),
 }));
+vi.mock("@/hooks/use-linked-application-delivery", () => ({ useLinkedApplicationDelivery: () => ({ data: undefined, isPending: false, error: null, isFetching: false, refetch: vi.fn() }) }));
 vi.mock("@/hooks/use-applications", () => ({
   useApplications: () => ({
     data: { items: [], total: 0 },
     isLoading: false,
     error: null,
   }),
+  useApplicationStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useApplicationDeliveryOptions: () => ({ data: [] }),
-  useCreateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateApplication: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

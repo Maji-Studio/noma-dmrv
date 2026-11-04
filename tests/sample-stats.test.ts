@@ -12,7 +12,7 @@ import { getSampleStats } from "@/data-access/samples";
 const ORG_CONTEXT: OrgContext = {
   userId: "user-sample-stats",
   organizationId: "org-sample-stats",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 

@@ -142,7 +142,7 @@ describe("idempotency claim protocol", { timeout: SUITE_TIMEOUT_MS }, () => {
     const third = await openTransaction();
     const replay = await claimIdempotencyKey(fixture.ctx, third.tx, claimFor(key));
     await third.rollback();
-    expect(replay).toEqual({ kind: "replay", outcome: { code: "FS-26-001" } });
+    expect(replay).toEqual({ kind: "replay", recordId: owner.recordId, outcome: { code: "FS-26-001" } });
   });
 
   it("hands the key to the waiting request when the first rolls back", async () => {

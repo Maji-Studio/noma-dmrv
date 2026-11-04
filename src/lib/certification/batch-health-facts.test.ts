@@ -21,6 +21,19 @@ describe("toBatchHealthFacts", () => {
     transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
 
+  it.each([
+    { ownedElsewhere: true, missingEntityIds: [], satisfied: true },
+    { ownedElsewhere: undefined, missingEntityIds: [], satisfied: false },
+    { ownedElsewhere: true, missingEntityIds: ["missing"], satisfied: false },
+  ])("adapts zero feedstock coverage for batch health and Removal readiness: %j", ({ ownedElsewhere, missingEntityIds, satisfied }) => {
+    const ctx = { ...readyContext, transportCoverage: {
+      ...readyContext.transportCoverage,
+      feedstock: { ...readyContext.transportCoverage.feedstock, count: 0, ownedElsewhere, missingEntityIds },
+    } };
+    expect(deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1")).state).toBe(satisfied ? "ready" : "incomplete");
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx)).state).toBe(satisfied ? "ready" : "blocked");
+  });
+
   it("only emits the emissions check when pinned lines were derived", () => {
     expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).checks.map((check) => check.key))
       .toEqual(["emissions", "carbon", "feedstockTypeMapping", "production", "transport", "entityReadiness"]);
@@ -55,20 +68,20 @@ describe("toBatchHealthFacts", () => {
   });
 
   it.each([
-    ["orders", "/orders?"],
-    ["deliveries", "/deliveries?"],
-    ["deliveryEvidence", "/deliveries?"],
-    ["deliveryDistances", "/deliveries?"],
-  ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path) => {
+    ["orders", "/orders?", "applicationDestination"],
+    ["deliveries", "/deliveries?", "applicationDestination"],
+    ["deliveryEvidence", "/deliveries?", "deliveryProof"],
+    ["deliveryDistances", "/deliveries?", "deliveryDistance"],
+  ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path, kind) => {
     const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, submissionLineageBlockers: [{
-      detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" },
+      kind, instruction: "Resolve this submission blocker.", fact: "Submission evidence is missing.", detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" },
     }] }, "batch-1"));
     const check = health.checks.find((check) => check.status === "unmet")!;
     expect(health.issueCount).toBe(1);
     expect(check.fixTarget).toBe(fixTarget);
     expect(batchHealthFixLinkFor(check, "facility-1").href).toContain(path);
     expect(buildRemovalRequirementsChecklist(toRemovalReadinessFacts({ ...readyContext,
-      submissionLineageBlockers: [{ detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" } }],
+      submissionLineageBlockers: [{ kind, instruction: "Resolve this submission blocker.", fact: "Submission evidence is missing.", detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" } }],
     }))).toContainEqual(expect.objectContaining({ key: "entityReadiness", lineageIssues: [
       expect.objectContaining({ fixTarget, record: { id: "record-1", code: "RE-1" } }),
     ] }));

@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 const usesTurbopackBuildCache =
   process.env.NOMA_TURBOPACK_BUILD_CACHE === "true";
 
+// Screenshot mode for PR evidence: hides the dev indicator here and the
+// sidebar account text in sidebar-content.tsx. Never set it in a deployment.
+const shotMode = process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_SHOT_MODE === "true";
+
 const nextConfig: NextConfig = {
+  ...(shotMode ? { devIndicators: false as const } : {}),
   reactCompiler: true,
   // `next dev` otherwise writes a managed block into AGENTS.md and creates a
   // root CLAUDE.md whenever it detects a coding agent. Agent instructions live

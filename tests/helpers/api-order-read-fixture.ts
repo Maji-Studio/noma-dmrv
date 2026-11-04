@@ -15,7 +15,7 @@ export const UNKNOWN_READ_ID = "4d766880-6bb2-4dcb-ad62-e00c04bcbb4b";
 
 export async function createApiOrderReadFixture() {
   const f = await createOrderFixture();
-  await db.insert(members).values({ id: randomUUID(), organizationId: f.ctx.organizationId, userId: f.ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), organizationId: f.ctx.organizationId, userId: f.ctx.userId, role: "admin" });
   const key = async (scopes: ApiScope[]) => (await createApiKey(f.ctx, { name: "Order read fixture", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
   return { ...f, key: await key(["customers:read", "orders:read", "storage-locations:read"]),
     customerKey: await key(["customers:read"]), orderKey: await key(["orders:read"]), writeOnlyKey: await key(["orders:write"]), missingScopeKey: await key(["feedstocks:read"]) };

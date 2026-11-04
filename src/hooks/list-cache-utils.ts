@@ -45,13 +45,15 @@ export function patchArrayListCacheByExactKeyWithSavedRow<TItem extends { id: st
   );
 }
 
-/** Merge a saved row into every unpaginated list under a query-key prefix. */
+/** Merge a saved row into array lists, preserving other data under the prefix. */
 export function patchArrayListCachesByPrefixWithSavedRow<TItem extends { id: string }>(
   queryClient: QueryClient,
   listsKey: QueryKey,
   saved: Partial<TItem> & { id: string },
 ): void {
   queryClient.setQueriesData<TItem[]>({ queryKey: listsKey }, (old) =>
-    old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
+    Array.isArray(old)
+      ? old.map((item) => item.id === saved.id ? { ...item, ...saved } : item)
+      : old,
   );
 }

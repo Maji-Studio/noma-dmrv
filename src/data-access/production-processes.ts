@@ -98,28 +98,27 @@ export async function findOrCreateProductionProcess(
   return created;
 }
 
-export async function startNewProductionProcess(
+export async function startNewProductionProcessInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   input: StartNewProcessInput,
 ): Promise<ProductionProcess> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  return db.transaction(async (tx) => {
-    await assertSameOrg(ctx, facilities, input.facilityId, tx);
-    await assertSameOrg(ctx, feedstockTypes, input.feedstockTypeId, tx);
-    await lockProductionProcessScope(tx, input);
-    const [created] = await tx
-      .insert(productionProcesses)
-      .values({
-        organizationId: ctx.organizationId,
-        facilityId: input.facilityId,
-        feedstockTypeId: input.feedstockTypeId,
-        establishedAt: new Date(),
-        notes: input.notes ?? null,
-      })
-      .returning();
-    return created;
-  });
+  await assertSameOrg(ctx, facilities, input.facilityId, tx);
+  await assertSameOrg(ctx, feedstockTypes, input.feedstockTypeId, tx);
+  await lockProductionProcessScope(tx, input);
+  const [created] = await tx
+    .insert(productionProcesses)
+    .values({
+      organizationId: ctx.organizationId,
+      facilityId: input.facilityId,
+      feedstockTypeId: input.feedstockTypeId,
+      establishedAt: new Date(),
+      notes: input.notes ?? null,
+    })
+    .returning();
+  return created;
 }
 
 export async function recordMethodBPrerequisites(

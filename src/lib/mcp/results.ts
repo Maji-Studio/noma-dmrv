@@ -8,6 +8,9 @@ import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
+import { toolText } from "./tool-text";
+
+export { TOOL_TEXT_SEPARATOR, toolText } from "./tool-text";
 
 /** REST's `errors` become MCP `issues`; HTTP metadata does not cross transports. */
 export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true, preview: true })
@@ -18,7 +21,7 @@ export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, re
   });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
-  return { content: [{ type: "text" as const, text }], structuredContent };
+  return { content: [{ type: "text" as const, text: toolText(text, structuredContent) }], structuredContent };
 }
 
 export function writesDisabledResult() {

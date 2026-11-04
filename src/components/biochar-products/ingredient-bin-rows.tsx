@@ -12,6 +12,8 @@ interface IngredientBinRowsProps {
   previews?: readonly AffectedStockPreview[];
   /** False while the projection refetches, failed or refuses any bin. */
   previewsAvailable?: boolean;
+  /** The saved product being edited; its own draw is left out of the moisture estimate. */
+  productId?: string;
 }
 
 /**
@@ -25,6 +27,7 @@ export function IngredientBinRows({
   allocationFrozen = false,
   previews,
   previewsAvailable = false,
+  productId,
 }: IngredientBinRowsProps) {
   if (composition.rows.length === 0) return null;
   return (
@@ -44,6 +47,7 @@ export function IngredientBinRows({
           allocationFrozen={allocationFrozen}
           previews={previews}
           previewsAvailable={previewsAvailable}
+          productId={productId}
         />
       ))}
     </div>

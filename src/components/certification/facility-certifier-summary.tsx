@@ -3,28 +3,31 @@
  * facility side-sheet (Stage 6 / ADR 0007). The facility sheet used to host the
  * full management UI (`FacilityCertifierSection`: link / edit / unlink project,
  * template selection, link hints). That config now lives in its primary home,
- * Certification → Settings, so the facility sheet shows only a read-only
- * summary + a "Manage in Certification → Settings" link.
+ * Settings, Facilities, so the facility sheet shows only a read-only
+ * summary + a "Manage in Settings" link. The durability tier is changed there too.
  *
  * Reads the DB-only summary (`useFacilityCertifierSummary`) — never the heavier
- * management payload (available projects, templates, link hints), which a
- * non-managing viewer must not pull. The trade-off is that this shows persisted
- * identifiers (project id, default template id, protocol) rather than the
- * human-friendly names, which are only resolvable from the management list.
+ * management payload (available projects, link hints), which a non-managing
+ * viewer must not pull. The project shows as its persisted id. The removal
+ * template reads by its display name, looked up in the project's template list
+ * (as the credit batch does); its registry id sits in the "Technical details" disclosure.
  */
 "use client";
 
 import Link from "next/link";
-import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useFacilityCertifierSummary, useIsometricProjectTemplates } from "@/hooks/use-certification";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { RawIdentifiers } from "./removal-template-mapping-view";
+import { LOAD_FAILED, MISSING_VALUE, NOT_FOUND_ON_ISOMETRIC } from "@/lib/copy-utils";
+import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import { EnvBanner } from "./env-banner";
 import { Field, Section } from "./panel-layout";
 
-// Carry the viewed facility through to Settings — this summary renders in the
-// facility side-sheet, which can show a facility other than the sidebar-selected
-// one. Without `?facility=`, Settings would fall back to the localStorage
-// facility and the operator would manage the wrong link.
-const settingsHref = (facilityId: string) =>
-  `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
+// The link carries the viewed facility in `?facility=`, which also makes it the
+// working facility: this summary renders in the facility side sheet, which can
+// show a facility other than the sidebar-selected one, and Settings, Facilities
+// configures the working facility.
+const settingsHref = facilityCertificationSettingsHref;
 
 export function FacilityCertifierSummary({
   facilityId,
@@ -42,7 +45,7 @@ export function FacilityCertifierSummary({
             href={settingsHref(facilityId)}
             className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
           >
-            Manage in Certification → Settings ↗
+            Manage in Settings, Facilities ↗
           </Link>
         </div>
 
@@ -86,7 +89,7 @@ function SummaryBody({
             href={settingsHref(facilityId)}
             className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
           >
-            Certification → Settings
+            Settings, Facilities
           </Link>
           .
         </p>
@@ -104,17 +107,36 @@ function SummaryBody({
         </span>
       </Field>
 
-      <Field label="Default Removal template">
-        {mapping.defaultRemovalTemplateId ? (
-          <span className="body-small font-mono text-[var(--color-text-primary)]">
-            {mapping.defaultRemovalTemplateId}
-          </span>
-        ) : (
+      {mapping.removalTemplateId ? (
+        <RemovalTemplateField projectId={mapping.externalProjectId} templateId={mapping.removalTemplateId} />
+      ) : (
+        <Field label="Removal template">
           <span className="body-small text-[var(--color-text-tertiary)]">
-            None selected
+            {MISSING_VALUE.notSet}
           </span>
-        )}
-      </Field>
+        </Field>
+      )}
     </div>
+  );
+}
+
+/**
+ * The template's display name, styled like the Project row above it: a skeleton
+ * while the project's templates load, a settled reason when the name cannot be
+ * read. The registry id stays in the technical details.
+ */
+function RemovalTemplateField({ projectId, templateId }: { projectId: string; templateId: string }) {
+  const templates = useIsometricProjectTemplates(projectId);
+  const name = templates.data?.find((template) => template.id === templateId)?.display_name;
+  const reason = name ? null : templates.isError ? LOAD_FAILED : templates.isSuccess ? NOT_FOUND_ON_ISOMETRIC : null;
+  return (
+    <Field label="Removal template">
+      {name || reason ? (
+        <span className={`body-small ${name ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)]"}`}>{name ?? reason}</span>
+      ) : (
+        <Skeleton className="h-16 w-96" />
+      )}
+      <RawIdentifiers summary="Technical details" entries={[["Template", templateId]]} />
+    </Field>
   );
 }

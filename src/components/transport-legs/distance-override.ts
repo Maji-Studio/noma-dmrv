@@ -10,6 +10,7 @@
  */
 import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { formatDistanceKm } from "@/lib/format-utils";
+import { isActionError } from "@/lib/action-error";
 import { DELIVERY_DISTANCE_MESSAGE } from "@/schemas/delivery-input";
 import { DISTANCE_SOURCE_LABELS, type DistanceSourceValue } from "@/schemas/distance-source";
 
@@ -157,7 +158,7 @@ export function distanceProvenance({
  * the record counts, with its provenance behind the ⓘ as on the form.
  */
 export function distanceReadFields({
-  overrideKm, effectiveKm, note, pending = false, locationName, derivedSource, locationDefaultKm,
+  overrideKm, effectiveKm, note, pending = false, locationName, derivedSource, locationDefaultKm, certify,
 }: {
   overrideKm: number | null;
   /** The distance the record counts. */
@@ -169,6 +170,8 @@ export function distanceReadFields({
   derivedSource?: DistanceSourceValue | null;
   /** What resetting the override returns to. */
   locationDefaultKm?: number | null;
+  /** CERT chip on the distance; its colour follows whether a distance is on file. */
+  certify?: Pick<DetailPanelField, "certifyRequired" | "certifyStatus">;
 }): DetailPanelField[] {
   const overridden = isOverrideDistance(overrideKm);
   return [
@@ -176,8 +179,20 @@ export function distanceReadFields({
       label: DISTANCE_FIELD_LABEL,
       value: effectiveKm == null ? null : formatDistanceKm(effectiveKm),
       pending,
+      ...certify,
       hint: distanceProvenance({ overriding: overridden, locationName, source: derivedSource, locationDefaultKm }),
     },
     ...(overridden ? [{ label: DISTANCE_NOTE_FIELD_LABEL, value: note }] : []),
   ];
+}
+
+/**
+ * A lock refusal that names one of the override fields. A cleared override
+ * leaves its input read-only, so the refusal files no field error there, yet
+ * the form must still go back to the saved override.
+ */
+export function isOverrideLockRefusal(error: unknown, fields: readonly string[]): boolean {
+  return isActionError(error) && error.issues.some(
+    (issue) => issue.code === "certification_locked" && fields.includes(String(issue.path[0])),
+  );
 }

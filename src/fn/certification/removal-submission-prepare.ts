@@ -1,4 +1,5 @@
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { removalTemplateTypeBlocker } from "@/lib/certification/listed-removal-template";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal submission preparation: the template and registry-connection gates
@@ -8,7 +9,7 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
  * `RemovalSubmissionContext`. It returns the ordered blockers and, once the
  * project, credentials and template resolve, the bundle every build and compile
  * takes: the pinned template narrowed to non-null, its blueprint lookup, the
- * project id, the period-input stub flag and whether the template carries
+ * project id and whether the template carries
  * durability components. Review still compiles from a blocked bundle so the
  * operator sees the details; submit and freshness refuse on any blocker.
  *
@@ -16,9 +17,7 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
  * member-batch blockers in `removal-blockers-gate.ts`. The
  * client readiness verdict stays in `lib/certification/readiness.ts` (ADR 0007).
  */
-import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
-import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
 import type {
   IsometricComponentBlueprint,
@@ -59,12 +58,6 @@ export interface PreparedRemovalSubmission {
   lineSources: LineSources;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   externalProjectId: string;
-  /**
-   * ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares
-   * a period-input tuple emits a 0-magnitude stub instead of failing closed.
-   * Production NEVER stubs; 0 is an over-claim for these positive emissions.
-   */
-  allowPeriodInputStub: boolean;
   hasDurabilityComponents: boolean;
 }
 
@@ -80,10 +73,25 @@ type PreparationContext = Pick<
   | "hasOrgCredentials"
   | "templateBlockers"
   | "lineSources"
+  | "removalEntryContext"
   | "removalTemplate"
   | "unresolvedBlueprintKeys"
   | "blueprintsForTemplate"
 >;
+
+/** Preparation and compilation must judge the same submission capabilities. */
+export function removalSubmissionBindingOptions(
+  ctx: Pick<PreparationContext, "removalEntryContext" | "templateBlockers">,
+  lineSources: LineSources,
+) {
+  return {
+    lineSources,
+    entriesCanSubmit: !!ctx.removalEntryContext,
+    enrichmentComplete: !ctx.templateBlockers?.some(
+      (blocker) => blocker.code === "templateNotFullyRead",
+    ),
+  };
+}
 
 function blocker(code: RemovalPreparationBlockerCode): RemovalPreparationBlocker {
   return { code, message: REMOVAL_PREPARATION_BLOCKERS[code] };
@@ -111,7 +119,6 @@ export function assertRemovalRegistryConnection<
 
 export function prepareRemovalSubmission(
   ctx: PreparationContext,
-  options: { isometricEnvironment?: typeof env.ISOMETRIC_ENVIRONMENT } = {},
 ): RemovalSubmissionPreparation {
   // Without a project link or credentials no template was loaded, so nothing
   // after this can be judged.
@@ -129,12 +136,15 @@ export function prepareRemovalSubmission(
 
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
-  const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead") });
+  const unbindable = findUnbindableTemplateInputs(
+    removalTemplate,
+    removalSubmissionBindingOptions(ctx, ctx.lineSources),
+  );
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
-  if (removalTemplate.credit_type !== "REMOVAL") {
-    blockers.push(blocker("notRemovalTemplate"));
+  const typeBlocker = removalTemplateTypeBlocker(removalTemplate);
+  if (typeBlocker) {
+    blockers.push(blocker(typeBlocker));
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     blockers.push(blocker("templateOutOfDate"));
@@ -159,7 +169,6 @@ export function prepareRemovalSubmission(
         ctx.blueprintsForTemplate.map((blueprint) => [blueprint.key, blueprint]),
       ),
       externalProjectId: ctx.mapping.externalProjectId,
-      allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment),
       hasDurabilityComponents,
     },
   };

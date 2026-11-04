@@ -14,7 +14,8 @@ export const SUPPLIER_REPRESENTATION_REVISION = 2;
 export const SUPPLIER_LOCATION_REPRESENTATION_REVISION = 1;
 export const FEEDSTOCK_TYPE_REPRESENTATION_REVISION = 1;
 // Revision 3 adds the product bin formulation claim (Phase 5b-1, round 9 Q64).
-export const STORAGE_LOCATION_REPRESENTATION_REVISION = 3;
+// Revision 4 adds stockMode and feedstock draw methods.
+export const STORAGE_LOCATION_REPRESENTATION_REVISION = 4;
 // Revision 2 adds the current split-bin draw order (Phase 5b-2, Q67).
 export const OUTPUT_BIN_STOCK_REPRESENTATION_REVISION = 2;
 export const VEHICLE_REPRESENTATION_REVISION = 1;
@@ -23,7 +24,7 @@ export const API_DOCS_CACHE_SECONDS = 300;
 export const PRODUCTION_RUN_REPRESENTATION_REVISION = 2;
 export const REACTOR_REPRESENTATION_REVISION = 1;
 export const API_PRODUCTION_RUN_MAX_DRAWS = 200;
-// Revision 3 represents productionDate as the source run's calendar day (#46).
+// Revision 3 represents productionDate as a calendar day, not an instant (#46).
 export const BIOCHAR_PRODUCT_REPRESENTATION_REVISION = 3;
 export const FORMULATION_REPRESENTATION_REVISION = 2;
 export const LAB_SAMPLE_REPRESENTATION_REVISION = 1;

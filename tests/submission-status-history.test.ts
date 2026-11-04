@@ -32,7 +32,7 @@ let orgB: OrgContext;
 let actorId: string;
 
 function orgContext(id: string, userId: string): OrgContext {
-  return { organizationId: id, userId, orgRole: "owner", isPlatformAdmin: false };
+  return { organizationId: id, userId, orgRole: "admin", isPlatformAdmin: false };
 }
 
 beforeEach(async () => {

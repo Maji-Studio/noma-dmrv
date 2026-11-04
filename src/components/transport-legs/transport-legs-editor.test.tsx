@@ -200,11 +200,11 @@ describe("TransportLegsEditor route rail", () => {
     expect(rendered).toContain("1 leg has no recorded distance.");
   });
 
-  it("carries one CERT chip on the Route label rather than one per leg", () => {
+  it("carries no CERT chip; One-way distance carries it on the read sheet", () => {
     mocks.legs = [savedLeg(), savedLeg({ id: "leg-2", originName: "E2E Regional collection hub" })];
     const html = renderEditor({ readOnly: true });
 
-    expect(html.match(/data-cert-field=/g)?.length).toBe(1);
+    expect(html).not.toContain("data-cert-field=");
   });
 
   it("keeps the add button and a per-leg actions menu in edit mode", () => {
@@ -246,15 +246,20 @@ describe("TransportLegsEditor route rail", () => {
       ),
     );
 
-    expect(rendered).toContain("Road · One way: Not recorded");
-    expect(rendered).toContain("Distance source: Not recorded");
+    expect(rendered).toContain("Road");
+        // The leg row reads method, load, then one "Not recorded" before the stop.
+    expect(rendered).toContain("Road Load: 2 kg Not recorded E2E Regional collection hub");
+    expect(rendered).not.toContain("One way:");
+    expect(rendered).not.toContain("Distance source");
     expect(rendered).not.toContain("null km");
   });
 
-  it("says a single leg's load is not recorded instead of dropping it", () => {
+  it("leaves the load out of a single leg that records none", () => {
     mocks.legs = [savedLeg({ loadMassKg: null })];
+    const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(text(renderEditor({ readOnly: true }))).toContain("Load: Not recorded");
+    expect(rendered).toContain("Distance source: Manual entry");
+    expect(rendered).not.toContain("Load:");
   });
 
   it("names an unrecorded stop rather than leaving the node blank", () => {

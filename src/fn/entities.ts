@@ -9,7 +9,7 @@ import { getEntities, getEntityById } from "@/data-access/entities";
 import { requireOrgFacility } from "@/data-access/utils";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
-import { uuidSchema } from "@/schemas/helpers";
+import { uuidSchema, MASS_INPUT_MAX_KG } from "@/schemas/helpers";
 import { withAction } from "./with-action";
 
 const ENTITY_TYPES = [
@@ -96,6 +96,8 @@ const entityByIdFilterSchema = z
   .object({
     excludeOrderId: z.uuid().optional(),
     occurredAt: z.iso.datetime().optional(),
+    excludeProductId: z.uuid().optional(),
+    drawWetKg: z.coerce.number().finite().positive().max(MASS_INPUT_MAX_KG).optional(),
   })
   .optional();
 

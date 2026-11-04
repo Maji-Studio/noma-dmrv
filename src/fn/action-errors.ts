@@ -1,3 +1,4 @@
+import { isPgNulCharacterError, NUL_CHARACTER_MESSAGE } from "@/db/errors";
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { formatValidationIssues } from "@/lib/validation-message";
@@ -46,6 +47,16 @@ export function toWarnableSuccess<T>({
   return warning ? { success: true, data, warning } : { success: true, data };
 }
 
+/**
+ * The failure for a value PostgreSQL refused because it holds U+0000, or
+ * `undefined`. Boundaries with their own catch call it before their fallback.
+ */
+export function nulCharacterFailure(error: unknown): ActionFailure | undefined {
+  return isPgNulCharacterError(error)
+    ? { success: false, error: NUL_CHARACTER_MESSAGE, code: "validation_failed" }
+    : undefined;
+}
+
 export function formatZodActionError(error: ZodError, context?: string): string {
   return formatValidationIssues(error.issues, context);
 }
@@ -78,7 +89,8 @@ export function toLoggedActionError(
 /**
  * Convert a thrown error into the shared `ActionResult` failure shape: Zod
  * issues become one readable sentence, an `ActionConflictError` keeps its
- * structured `conflict`, and anything else is logged and replaced by the
+ * structured `conflict`, PostgreSQL NUL refusals become validation failures,
+ * and anything else is logged and replaced by the
  * fallback. Both server entry points use it (`withAction` for Server Actions,
  * `readResponse` for the `/api/reads/*` handlers) so the two transports cannot
  * drift apart.
@@ -138,6 +150,8 @@ export function toActionFailure(
       ...(error.blockers ? { blockers: error.blockers } : {}),
     };
   }
+  const nulFailure = nulCharacterFailure(error);
+  if (nulFailure) return nulFailure;
   if (logUnexpected) logActionError(error, log);
   return { success: false, error: toActionError(error, fallbackMessage) };
 }

@@ -135,6 +135,8 @@ describe("credit batch automatic production-run membership", () => {
       .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-${tag}`,
+        // Before every run in this file: runs only draw intakes delivered by their start day.
+        deliveryDate: new Date("2024-01-01T00:00:00.000Z"),
         facilityId,
         status: "complete",
         feedstockTypeId,
@@ -176,6 +178,8 @@ describe("credit batch automatic production-run membership", () => {
       .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-ALT-${tag}`,
+        // Before every run in this file: runs only draw intakes delivered by their start day.
+        deliveryDate: new Date("2024-01-01T00:00:00.000Z"),
         facilityId,
         status: "complete",
         feedstockTypeId: alternateFeedstockTypeId,
@@ -228,6 +232,8 @@ describe("credit batch automatic production-run membership", () => {
       .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-OTHER-${tag}`,
+        // Before every run in this file: runs only draw intakes delivered by their start day.
+        deliveryDate: new Date("2024-01-01T00:00:00.000Z"),
         facilityId: otherFacilityId,
         status: "complete",
         feedstockTypeId,

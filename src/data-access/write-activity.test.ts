@@ -9,7 +9,7 @@ import { recordDocumentActivity, recordMembershipActivity, resolveWriteActivityS
 vi.mock("./activity-events", () => ({ recordActivity: vi.fn(), recordActivityChange: vi.fn() }));
 vi.mock("./delivery-allocation-provenance", () => ({ deliveryProductAllocations: vi.fn(() => ({ deliveryId: "deliveryId" })), getDeliveryAllocationProvenance: vi.fn() }));
 
-const ctx = { organizationId: "org", userId: "actor", orgRole: "owner", isPlatformAdmin: false } satisfies OrgContext;
+const ctx = { organizationId: "org", userId: "actor", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const tx = {} as DbTransaction;
 beforeEach(() => vi.clearAllMocks());
 

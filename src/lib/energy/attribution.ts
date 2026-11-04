@@ -3,12 +3,14 @@
  * per record (litres, kWh, tonne-km), and into dated flows for the facility.
  * No CO2e is computed: Isometric derives the figures that count.
  *
- * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution"):
+ * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution";
+ * feedstock transport ownership below replaces the plan's wet-mass split):
  *
  * - A null reading is a missing reading, never zero.
- * - Feedstock transport is 2 x one-way km x load tonnes per leg, and is split
- *   across the runs that drew the feedstock by wet mass drawn. What no run
- *   drew stays with the feedstock and reaches no credit batch. Only road legs
+ * - Feedstock transport is 2 x one-way km x load tonnes per leg and counts
+ *   once, on the owning run, the earliest complete run in a credit batch that
+ *   drew it, as the Removal does (#1487, #1522). Without a loaded owner it
+ *   stays unattributed and reaches no credit batch. Only road legs
  *   are counted, so a feedstock with a rail, ship, pipeline or air leg counts
  *   as a missing reading rather than road tonne-km.
  * - Biochar delivery is 2 x effective km x delivered wet tonnes, split across
@@ -58,15 +60,15 @@ interface RunCalc {
   run: EnergyRunInput;
   creditBatchId: string | null;
   readings: Record<RunSourceKey, Reading | null>;
-  /** Share of each drawn feedstock's transport this run carries. */
-  feedstockShares: { feedstockId: string; share: number }[];
+  /** Feedstocks whose whole transport this run owns. */
+  ownedFeedstockIds: string[];
 }
 
 interface FeedstockCalc {
   feedstock: EnergyFeedstockInput;
   transport: Reading | null;
-  /** Share drawn by each listed run; the rest stays unattributed. */
-  draws: { runId: string; share: number }[];
+  /** Loaded owning run, or null when the transport stays unattributed. */
+  owner: RunCalc | null;
 }
 
 interface DeliveryCalc {
@@ -143,37 +145,22 @@ function buildModel(inputs: EnergyInputs): Model {
       creditBatchId:
         run.creditBatchId && batchIds.has(run.creditBatchId) ? run.creditBatchId : null,
       readings: runReadings(run),
-      feedstockShares: [],
+      ownedFeedstockIds: [],
     });
   }
 
-  const drawsByFeedstock = groupBy(
-    inputs.feedstockDraws.filter((draw) => runs.has(draw.runId) && draw.wetMassKg > 0),
-    (draw) => draw.feedstockId,
-  );
   const feedstocks = new Map<string, FeedstockCalc>();
   for (const feedstock of inputs.feedstocks) {
-    const draws = drawsByFeedstock.get(feedstock.id) ?? [];
-    const drawnKg = draws.reduce((total, draw) => total + draw.wetMassKg, 0);
-    // Shares never add up to more than the whole feedstock, even when runs
-    // drew more wet mass than was received (moisture changes in the bin).
-    const basisKg = Math.max(feedstock.wetMassKg ?? 0, drawnKg);
+    const owner = feedstock.transportOwnerRunId == null
+      ? null
+      : runs.get(feedstock.transportOwnerRunId) ?? null;
     const tonneKm = legsTonneKm(feedstock);
-    const calc: FeedstockCalc = {
+    feedstocks.set(feedstock.id, {
       feedstock,
       transport: tonneKm == null ? null : { activity: tonneKm },
-      draws:
-        basisKg > 0
-          ? draws.map((draw) => ({ runId: draw.runId, share: draw.wetMassKg / basisKg }))
-          : [],
-    };
-    feedstocks.set(feedstock.id, calc);
-    for (const draw of calc.draws) {
-      runs.get(draw.runId)?.feedstockShares.push({
-        feedstockId: feedstock.id,
-        share: draw.share,
-      });
-    }
+      owner,
+    });
+    owner?.ownedFeedstockIds.push(feedstock.id);
   }
 
   const sharesByDelivery = groupBy(
@@ -255,7 +242,7 @@ function addRun(
   for (const source of RUN_SOURCE_KEYS) {
     count(tally, source, "run", calc.run.id, scale == null ? null : calc.readings[source], scale ?? 0);
   }
-  for (const { feedstockId, share } of calc.feedstockShares) {
+  for (const feedstockId of calc.ownedFeedstockIds) {
     const transport = model.feedstocks.get(feedstockId)?.transport ?? null;
     count(
       tally,
@@ -263,7 +250,7 @@ function addRun(
       "feedstock",
       feedstockId,
       scale == null ? null : transport,
-      share * (scale ?? 0),
+      scale ?? 0,
     );
   }
 }
@@ -490,22 +477,17 @@ function facilityFlows(model: Model): { flows: EnergyFlow[]; gaps: EnergyGap[] }
   }
 
   for (const calc of model.feedstocks.values()) {
-    const batchOf = (runId: string) => model.runs.get(runId)?.creditBatchId ?? null;
+    const creditBatchId = calc.owner?.creditBatchId ?? null;
     if (!calc.transport) {
       gaps.push({
         source: "feedstockTransport",
-        creditBatchIds: [...new Set(calc.draws.map((draw) => batchOf(draw.runId)).filter((id): id is string => id != null))],
+        creditBatchIds: creditBatchId ? [creditBatchId] : [],
         day: calc.feedstock.day,
         recordId: calc.feedstock.id,
       });
       continue;
     }
-    let drawn = 0;
-    for (const draw of calc.draws) {
-      push("feedstockTransport", batchOf(draw.runId), calc.feedstock.day, calc.transport, draw.share);
-      drawn += draw.share;
-    }
-    push("feedstockTransport", null, calc.feedstock.day, calc.transport, 1 - drawn);
+    push("feedstockTransport", creditBatchId, calc.feedstock.day, calc.transport, 1);
   }
 
   for (const calc of model.deliveries.values()) {

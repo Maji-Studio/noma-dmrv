@@ -24,35 +24,29 @@ import { EmissionsOverviewTable } from "./emissions-overview-table";
 import { EmissionsOverviewToolbar } from "./emissions-overview-toolbar";
 
 const TITLE = "Emissions";
-const SUBTITLE = "Every line your credit batches' Removal templates ask for.";
+const SUBTITLE = "Every component your credit batches' Removal templates ask for.";
 const ACTIVITY_TITLE = "Facility activity";
 // Matches emissionEntryFlows: only lines with a production run source reach site energy.
-const ACTIVITY_CAPTION = "Includes manual entries on lines fed by production runs: electricity and diesel.";
+const ACTIVITY_CAPTION = "Includes manual entries on components fed by production runs: electricity and diesel.";
 const ACTIVITY_REGION_ID = "facility-activity";
 const TABLE_SKELETON_CLASS = "h-320 w-full";
 const PANEL_CLASS = "[border:var(--panel-border)] bg-[var(--paper)]";
 
-interface EmissionsOverviewProps {
-  /** The server's EMISSIONS_ENTRIES_ENABLED flag. Off, manual entries count nowhere, so the activity caption is left out. */
-  entriesEnabled: boolean;
-}
-
-export function EmissionsOverview({ entriesEnabled }: EmissionsOverviewProps) {
+export function EmissionsOverview() {
   const { facilityId } = useFacilityContext();
-
   if (!facilityId) {
     return (
       <div className="container-max page-shell">
-        <PageHeader area="infrastructure" title={TITLE} subtitle={SUBTITLE} />
+        <PageHeader area="records" title={TITLE} subtitle={SUBTITLE} />
         <SelectFacilityEmptyState description="Choose a facility from the sidebar to see its emissions." />
       </div>
     );
   }
 
-  return <EmissionsLedger facilityId={facilityId} entriesEnabled={entriesEnabled} />;
+  return <EmissionsLedger facilityId={facilityId} />;
 }
 
-function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; entriesEnabled: boolean }) {
+function EmissionsLedger({ facilityId }: { facilityId: string }) {
   const { data, isLoading, error } = useEmissionsOverview(facilityId);
   // Period presets resolve on the facility's calendar, like its KPIs.
   const { timeZone } = useFacilityClock(facilityId);
@@ -62,7 +56,6 @@ function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; e
     "activity",
     parseAsBoolean.withDefault(false).withOptions({ history: "replace", scroll: false }),
   );
-
   if (error && !data) {
     return (
       <div className="container-max py-32">
@@ -74,10 +67,9 @@ function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; e
   const batches = data?.batches ?? [];
   const facet = facetBatches(batches, query, today);
   const rows = filterAndSortBatches(batches, query, today);
-
   return (
     <div className="container-max page-shell">
-      <PageHeader area="infrastructure" title={TITLE} subtitle={SUBTITLE} />
+      <PageHeader area="records" title={TITLE} subtitle={SUBTITLE} />
       <EmissionsOverviewKpis facet={facet} query={query} facilityId={facilityId} isLoading={isLoading} />
 
       <div className={PANEL_CLASS}>
@@ -127,7 +119,7 @@ function EmissionsLedger({ facilityId, entriesEnabled }: { facilityId: string; e
         </button>
         {activityOpen && (
           <div id={ACTIVITY_REGION_ID}>
-            <FacilityActivity facilityId={facilityId} caption={entriesEnabled ? ACTIVITY_CAPTION : undefined} />
+            <FacilityActivity facilityId={facilityId} caption={ACTIVITY_CAPTION} />
           </div>
         )}
       </section>

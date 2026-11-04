@@ -5,6 +5,7 @@ vi.mock("./with-action", () => ({ withAction: async (fn: (ctx: typeof mocks.ctx)
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.run }));
 vi.mock("@/lib/operations/suppliers", () => ({ createSupplier: {}, updateSupplier: {}, deleteSupplier: {}, archiveSupplier: {}, restoreSupplier: {} }));
 vi.mock("@/lib/operations/supplier-locations", () => ({ addSupplierLocation: { id: "add_supplier_location" }, updateSupplierLocation: { id: "update_supplier_location" }, deleteSupplierLocation: { id: "delete_supplier_location" } }));
+vi.mock("@/data-access/supplier-stats", () => ({}));
 vi.mock("@/data-access/suppliers", () => ({ getSuppliers: vi.fn(), getSupplierById: vi.fn(), getSupplierLocationsBySupplier: vi.fn() }));
 import { createSupplierLocationFn, updateSupplierLocationFn, deleteSupplierLocationFn } from "./suppliers";
 
@@ -13,7 +14,7 @@ beforeEach(() => { mocks.run.mockReset(); mocks.run.mockResolvedValue({ id }); }
 describe("supplier location app actions", () => {
   it("uses the runner for add and delete", async () => {
     await createSupplierLocationFn({ supplierId: id, country: "TZ", gpsLatitude: 0, gpsLongitude: 0, isDefault: false });
-    expect(mocks.run).toHaveBeenLastCalledWith({ id: "add_supplier_location" }, mocks.ctx, expect.objectContaining({ supplierId: id, country: "TZ" }));
+    expect(mocks.run).toHaveBeenLastCalledWith({ id: "add_supplier_location" }, mocks.ctx, expect.objectContaining({ supplierId: id, country: "TZ" }), undefined);
     expect(await deleteSupplierLocationFn({ locationId: id, expectedVersion: 1 })).toEqual({ success: true, data: undefined });
     expect(mocks.run).toHaveBeenLastCalledWith({ id: "delete_supplier_location" }, mocks.ctx, { locationId: id, expectedVersion: 1 });
   });

@@ -11,7 +11,6 @@ import {
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Notice } from "@/components/ui/notice";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -21,7 +20,7 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
 import { TRANSPORT_EVIDENCE_HINTS } from "./transport-evidence-hints";
@@ -78,7 +77,7 @@ export function TransportEvidenceDocuments({
   readOnly: readOnlyProp = false,
 }: TransportEvidenceDocumentsProps) {
   const toast = useToast();
-  const locked = useIsRecordCertificationLocked(entityType, entityId);
+  const locked = useIsRecordCertificationLocked(entityType, entityId, entityType === "feedstock" || entityType === "transport_leg" ? "transport" : undefined);
   const readOnly = readOnlyProp || locked;
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     entityType,
@@ -113,7 +112,7 @@ export function TransportEvidenceDocuments({
 
   return (
     <div className="flex flex-col gap-12">
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind={entityType === "transport_leg" ? undefined : entityType} lockId={entityId} />}
       {error && (
         <ServerError
           message={
@@ -144,8 +143,8 @@ export function TransportEvidenceDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {evidenceUploaderLabel(entityType, doc.documentType)} ·{" "}
-                  {formatFileSize(doc.fileSizeBytes)}
+                  {evidenceUploaderLabel(entityType, doc.documentType)}
+                  {doc.fileSizeBytes == null ? null : ` · ${formatFileSize(doc.fileSizeBytes)}`}
                 </span>
               </div>
               <a
@@ -190,7 +189,6 @@ export function TransportEvidenceDocuments({
         />
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
@@ -202,6 +200,7 @@ export function TransportEvidenceDocuments({
             setDeleteError(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </div>

@@ -29,8 +29,8 @@ import { appendSubmissionJournal } from "@/data-access/certification";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
-import type { IsometricClient } from "@/lib/isometric/client";
-import { patchDatapoint } from "@/lib/isometric/submissions";
+import { IsometricApiError, isRetryableIsometricReadError, type IsometricClient } from "@/lib/isometric/client";
+import { getDatapoint, patchDatapoint } from "@/lib/isometric/submissions";
 import {
   buildMeasurementSampleReference,
   captureMeasurementSampleDatapointIds,
@@ -236,6 +236,8 @@ export interface SubmitDurabilityMeasurementSamplesResult {
 }
 
 const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
+const HTTP_CLIENT_ERROR = 400;
+const HTTP_SERVER_ERROR = 500;
 
 interface MeasurementSampleSourceBindingCapture
   extends MeasurementSampleDatapointCapture {
@@ -290,7 +292,7 @@ export async function patchMeasurementSampleSourceBindings(args: {
       [encodeMeasurementProperty(H_TO_C_ORG_MEASUREMENT_PROPERTY)],
     ],
   ]);
-  let patchedCount = 0;
+  let boundCount = 0;
   for (const capture of args.captures) {
     if (!capture.creditBatchId) {
       throw new SafeError(
@@ -329,13 +331,28 @@ export async function patchMeasurementSampleSourceBindings(args: {
           ),
         ).sort();
         if (sourceIds.length === 0) continue;
+        const existing = await getDatapoint(args.client, datapointId);
+        if (sourceIds.every((sourceId) => existing.source_ids.includes(sourceId))) {
+          boundCount += 1;
+          continue;
+        }
         const patched = await patchDatapoint(args.client, datapointId, {
           description: PATCH_UNDEFINED,
           display_name: PATCH_UNDEFINED,
           quantity: PATCH_UNDEFINED,
-          source_ids: sourceIds,
+          // Add the missing Sources; never drop ones already in the registry.
+          source_ids: Array.from(new Set([...existing.source_ids, ...sourceIds])).sort(),
           type: PATCH_UNDEFINED,
           uncertainty_justification: PATCH_UNDEFINED,
+        }, { idempotent: true }).catch((error: unknown) => {
+          if (error instanceof IsometricApiError && error.code === "http" &&
+            error.status !== undefined && error.status >= HTTP_CLIENT_ERROR &&
+            error.status < HTTP_SERVER_ERROR && !isRetryableIsometricReadError(error)) {
+            throw new SafeError(
+              `Isometric refused the Sources for registry value ${datapointId}. Check its Sources in Isometric before submitting again.`,
+            );
+          }
+          throw error;
         });
         if (
           sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))
@@ -344,11 +361,11 @@ export async function patchMeasurementSampleSourceBindings(args: {
             `Registry value ${datapointId} did not keep its Sources. Check the Sources in Isometric before submitting again.`,
           );
         }
-        patchedCount += 1;
+        boundCount += 1;
       }
     }
   }
-  return patchedCount;
+  return boundCount;
 }
 
 /** Credit batches whose samples need a registered production batch (#630). */

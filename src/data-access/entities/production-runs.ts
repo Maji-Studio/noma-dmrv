@@ -76,7 +76,7 @@ export async function getProductionRunsEntity(ctx: OrgContext, params: {
       or(
         ilike(productionRuns.code, searchPattern),
         ilike(storageLocations.name, searchPattern),
-        sql`${productionRunDateExpr()}::text ILIKE ${searchPattern}`,
+        sql`${productionRunDateExpr(ctx.organizationId)}::text ILIKE ${searchPattern}`,
       )!,
     );
   }
@@ -87,7 +87,7 @@ export async function getProductionRunsEntity(ctx: OrgContext, params: {
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
@@ -113,7 +113,7 @@ export async function getProductionRunEntityById(ctx: OrgContext, id: string): P
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRunDateExpr(),
+      date: productionRunDateExpr(ctx.organizationId),
       status: productionRuns.status,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharDryMassKg: productionRuns.biocharDryMassKg,

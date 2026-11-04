@@ -1,7 +1,7 @@
 # Traceability
 
 How the Traceability page resolves and renders chain-of-custody: the credit-batch
-roll-up, the single-application drill-down, the DAG / Map / Sankey / Trail
+roll-up, the single-application drill-down, the Flow / Map / Sankey / Trail
 readings, and the batch Activities segment. Read this before touching anything under
 `src/data-access/chain-of-custody*`, `src/lib/chain-of-custody/`, or
 `src/components/chain-of-custody/`. For "why credit-batch anchored" see
@@ -35,7 +35,7 @@ facts load inside the consolidated roll-up loader
 (`loadCreditBatchRollups(..., { includeRunForwards: true })`, via
 `credit-batch-run-forward-facts.ts`); `chain-of-custody-roll-forward.ts` only
 projects them. A batch
-with no application yet therefore still renders DAG and Map, ending wherever the
+with no application yet therefore still renders Flow and Map, ending wherever the
 biochar is now. The client merges roll-forwards **after** the rollbacks and only
 adds nodes and edges the rollbacks lack, so applied masses are never summed with
 drawn or shipped masses. Sankey stays application-scoped and shows a message
@@ -60,8 +60,8 @@ until something is applied.
   `requireAuth()` — and **every** join predicate, leftJoins
   included, additionally carries `eq(<table>.organizationId, ctx.organizationId)`.
   Omitting the per-join org predicate is the default mistake here.
-- Production-run dates come from `productionRunDateExpr()`
-  (`src/data-access/production-runs/date-expr.ts`), not a raw column. New lineage
+- Production-run dates come from `productionRunDateExpr(ctx.organizationId)`
+  (`src/data-access/production-runs/date-expr.ts`), the facility-local start day. New lineage
   queries that skip it sort and display inconsistently with the rest of the app.
 - `src/lib/chain-of-custody/sankey.ts` must stay pure and dependency-light — no
   data-access, no `"use server"` imports — so it stays unit-testable. Its narrow
@@ -77,7 +77,7 @@ Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
 **credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
 (`run-picker.tsx`) whose options derive from the loaded batch's rollbacks and
 roll-forwards (so runs with nothing applied are listed), never an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
-the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
+the facility code. The run filter narrows the whole roll-up (Flow, Map, and a
 client-side recomputed Sankey — every figure derives from the filtered lineages)
 and deep-links as `?run=`.
 
@@ -89,22 +89,33 @@ remembered ids fall through; standalone `?application=` deep links stay
 application-only. With both `?batch=` and `?application=` the page is a drill-down
 inside batch context, with a "Batch roll-up" button back.
 
-- **Credit batch (roll-up)** — segments `DAG | Map | Sankey | Activities`:
-  - **DAG** — member rollbacks merged into one fan-out, then roll-forwards for
+- **Credit batch (roll-up)**: segments `Flow | Map | Sankey | Activities`
+  (`?view=flow` is the default; old `dag` links fall back to it):
+  - **Flow**: member rollbacks merged into one fan-out, then roll-forwards for
     whatever they lack; nodes/edges dedupe by id so a shared production run
-    appears once. Application cards drill down
-    instead of navigating.
-  - **Map** — the merged geo payload (nodes/legs deduped the same way).
-  - **Sankey** — honest dry-mass balance, dry kg end to end, every loss an explicit
-    labeled exit; no net-tCO₂e, since project emissions/counterfactual are
-    registry-owned ([ADR 0018](adr/0018-isometric-owns-project-emissions.md)). Exit
-    taxonomy and residual clamping: the header of
-    `src/lib/chain-of-custody/sankey.ts`. Rendered on a React Flow canvas; clicking
-    a column or exit opens a tooltip with a "See details" link to the backing
-    entity route — the Sankey doubles as navigation.
+    appears once. An application record's sheet offers "Trace rollback" into
+    the drill-down.
+  - **Map** — the merged geo payload (nodes/legs deduped the same way), read as
+    a stage list and one chain at a time ([Carbon Viewer](#carbon-viewer--geography-carbon-in-transit)).
+  - **Sankey** — the batch's honest mass balance in kg, drawn as a waterfall
+    (`src/components/chain-of-custody/sankey/`): a big figure (dry biochar
+    applied) with one sentence and an (i) for how it is made; the first column is
+    the feedstock that went in (wet when every member run's draws carry a wet
+    mass, then "Water driven off" is the first step, otherwise dry); each step
+    down is an explicit labeled exit the lib computes (conversion loss, outside
+    these applications, in storage) drawn as a plain stepped box, with only water
+    driven off hatched, as in the moisture split; the last lit column is what was applied.
+    Under the chart, the records behind the selected column (the lit one by
+    default), one line each, the whole row a link to the record. The run filter
+    narrows every figure; with nothing applied the view is an `EmptyState`. No
+    net-tCO₂e: project emissions/counterfactual are registry-owned
+    ([ADR 0018](adr/0018-isometric-owns-project-emissions.md)). Exit taxonomy and
+    residual clamping: the header of `src/lib/chain-of-custody/sankey.ts`; the
+    waterfall model is `sankey/waterfall-model.ts`, pure, and adds no figure the
+    lib or the loaded lineages do not already hold.
   - **Activities** (`?view=activity`) — the batch's recorded changes, newest
-    first, grouped by day (consecutive changes by one actor within a minute
-    share one who-and-when header), from `useCreditBatchActivity` (membership and cardinality:
+    first, as a timeline on a panel: one rail per day, each change a circle node
+    with its record-type icon, a title line and a who-and-when line, from `useCreditBatchActivity` (membership and cardinality:
     [database.md](database.md#activity-events)). Not a lineage reading: it
     renders before the roll-up loads, for batches with no runs, and hides the
     run filter. Filters by kind and record type run server side; the summary
@@ -112,11 +123,15 @@ inside batch context, with a "Batch roll-up" button back.
     to the record's side sheet where one exists (a document opens its owner),
     on the facility the record lives at now, which `resolveActivityRecords`
     reads with the label; deleted records are tombstones with no link. Field names only, never
-    values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
-    (`src/config/activity.ts`). The credit batch side sheet's Activity section
-    summarizes the same history and links here. Components:
+    values. Consecutive identical events (same actor, source, record, action and
+    shown lines) fold into one row with a count, and updates that touch only
+    hidden system fields (checksums, upload status, send reservations) are left
+    out (`activity-day-groups.ts`). Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
+    (`src/config/activity.ts`). The credit batch page's Activities tab mounts
+    the same view in page flow (`inline`). Components:
     `src/components/activity/`.
-- **Application (drill-down)** — segments `Lineage | Map | Split | Trail`:
+- **Application (drill-down)**: segments `Flow | Map | Split | Trail` (the
+  same chart and name as the roll-up; old `lineage` links fall back to Flow):
   - **Trail** — each custody step with its date, mass figure, and what attests it:
     linked documents (polymorphic `documents` — weigh tickets, COAs, lab reports,
     photos), production-run samples, and transport-leg `distanceSource` provenance
@@ -132,27 +147,68 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/credit-batch-run-forward-facts.ts` | Run-forward facts, loaded only inside `loadCreditBatchRollups` |
 | Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Projects member runs' roll-forwards (run → products → deliveries) |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
-| Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
+| Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by graph node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
+| Pure lib | `src/lib/chain-of-custody/lineage-mass-totals.ts` | Wet/dry totals per graph node and edge, rollback and roll-forward |
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id |
 | Batch List | `src/hooks/use-credit-batches.ts` | Facility-scoped, newest-first cards query |
-| Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, DAG, `sankey/`, `trail/`, `map/` |
-| Route | `src/app/(app)/traceability/page.tsx` | Canonical entry; legacy `/chain-of-custody` redirects here with query string intact |
+| Components | `src/components/chain-of-custody/` | Page, command-bar header, batch/run pickers, Flow chart (`chain-flow-graph.tsx`, `flow-layout.ts`), `sankey/`, `trail/`, `map/` |
+| Route | `src/app/(app)/traceability/page.tsx` | Canonical entry with query-based deep links |
 
-## Graph behavior
+## Graph behavior (Flow chart)
 
-Nodes are auto-laid-out with **Dagre left-to-right** (`@dagrejs/dagre` in
-`use-chain-graph.ts`) on a React Flow canvas. Card styling, accents, canvas wash
-and grid constants live in `src/components/chain-of-custody/chain-constants.ts`;
-token and contrast rules are owned by [docs/design-system.md](design-system.md).
+`use-chain-graph.ts` builds the records and edges (unpositioned);
+`flow-layout.ts` lays them out, purely and unit tested; `chain-flow-graph.tsx`
+renders them on a React Flow canvas for pan, pinch, wheel zoom and the + / − /
+fit controls. Geometry, columns and the group threshold live in
+`chain-constants.ts`; token and contrast rules are owned by
+[docs/design-system.md](design-system.md). Modelled on the buyer journey graph
+on the site (`site/src/components/site/journey/graph.js`), in the app's light
+theme.
 
-- **Edges carry the mass moving along them** and the mass chip hides below
-  `EDGE_LABEL_MIN_ZOOM` — zoomed out the flow reads as shape, quantities arrive as
-  you move in. Per-step CO₂e is never shown (ADR 0018).
-- **Focus** is cross-surface (bar ⇄ map ⇄ DAG selection *and* DAG hover): the
-  focused node's full connected lineage — ancestors + descendants via
-  `reachableNodeIds` — stays full strength, everything else dims.
+- **Columns by kind, in chain order** (`FLOW_COLUMNS`): feedstock, reactor,
+  production run, biochar product, order, delivery, application. Empty kinds
+  drop out. Each column has a header with its kind and record count. Rows are
+  deterministic: the first column in code order, every later node at the mean
+  height of its already placed neighbours, pushed one row apart. The reactor is
+  equipment, so it sits one row above the runs it served, out of the flow.
+- **Records are small squares** in their kind's accent with its icon and the
+  record's own code underneath (`shortCode`: run, product, order and delivery
+  codes; an application's field identifier). The sheet keeps the longer
+  heading (`code`). The reactor is the exception: its node shows the reactor's
+  name (`identifier`), as every list does, with its code in the details.
+- **Groups**: a column with more than `FLOW_GROUP_THRESHOLD` records collapses
+  into one stacked node ("34 feedstocks"); parallel edges into it merge. Wet
+  and dry kg sum independently, each only when every member has it; the share
+  mass sums only when every member is in the same unit, basis and footing
+  (allocation edges carry dry kg, or wet kg when dry is unknown). A merge
+  that cannot sum is `mixedMass`, and no fan holding it shows a %. Clicking
+  the group expands the column; its header then offers "Collapse". Every
+  record stays reachable.
+- **Edges** are cubic beziers between column edges. Feedstock → run links are
+  dashed: a run records what it drew from a bin, and which intakes that came
+  from follows from the bin's draw order (legend bottom right). The reactor's
+  equipment link is a quieter solid line.
+- **Focus** is cross-surface (bar ⇄ map ⇄ Flow selection *and* Flow hover).
+  `reachableNodeIds` walks the focused record's ancestors and descendants
+  along the edge direction (not its siblings), always on the record edges;
+  `flowLighting` then maps the result onto groups, so a group never joins two
+  lineages that only meet inside it, and hovering a group lights the union of
+  its members' lineages. That lineage stays lit, lit edges draw on top,
+  everything else dims. A click lights the record and opens
+  its sheet; a click on the empty canvas clears the focus. Split view moves the
+  map's walk instead of opening the sheet.
+- **Mass labels only on lit edges**: the kg / % toggle labels the edges of the
+  current hover or selection, nothing at rest. A merged edge only partly on
+  the lineage draws lit but carries no chip, since its mass would include
+  records off the lineage. A wet and dry pair stacks on two
+  lines. Chips always sit in a column gap, never on a column, so an edge that
+  skips a column never covers its records: a fan out of one record labels each
+  branch in the gap before its target, any other edge in the gap after its
+  source, and chips left sharing a gap are pushed apart
+  (`placeEdgeLabels`, `flow-edge-geometry.ts`). Per-step CO₂e is never
+  shown (ADR 0018).
 - Product-to-delivery edges show the selected applications' allocated shares.
   An edge only a roll-forward reaches shows the member runs' net shipped share
   instead. Branch % is computed within one mass basis (applied vs recorded); a
@@ -160,22 +216,63 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
   Orders describe requested wet mass; they do not reserve stock or identify a
   product layer. Stock balances come from the output ledger, never from
   subtracting order quantity from product creation mass.
-- MiniMap gotcha: nodes must carry `initialWidth`/`initialHeight` so the MiniMap
-  can size them — React Flow never writes `measured` back onto user nodes.
+- **Framing**: every Flow node carries its own width and height, so the chart
+  frames itself from known bounds (no wait on DOM measurement). Below
+  `FLOW_NARROW_CANVAS_PX` (a phone) it opens at zoom 1 from the top-left
+  (first column and its header, below the Missing links box when there is
+  one) instead of fitting every column, so every
+  node's 48px hit box and the 44px "Collapse" button stay touch-sized.
+- **Keyboard**: Enter or Space on a focused record opens it like a click; on
+  a group it expands the column (`elementsSelectable` is off, so React Flow
+  would otherwise ignore the keys).
+- **Column headers**: sentence case title and a "n records" count, shown only
+  when the count adds something (not for one record, not over a collapsed
+  group, which states its own count).
 
 ## Carbon Viewer — "Geography: carbon in transit"
 
-The map view (both anchors) renders the Carbon Transit panel. The DAG is the
-*logical lineage* tool; the MapLibre map is the *geography* tool.
+The Flow chart is the *logical lineage* tool; the MapLibre map is the *geography*
+tool. One view, `TraceMapView`, serves the batch Map and the application's Map
+and Split; its walk is controlled (`walk`, `onWalkChange`, pure `walkTo` /
+`resolveWalk` in `trace-chains.ts`), and the geo payload's helpers live in
+`viewer-utils.ts`:
 
-- **Two layouts, one fetch** — `view="map"` pairs the custody stages rail
-  (`custody-stages-rail.tsx`: three milestones — feedstock in / pyrolysis /
-  application out — on a dashed thread, transport legs as sub-rows, a "Not on
-  the map" cluster for anything unplottable) with the map, and docks a clicked
-  record's details over the map's left edge (`record-detail-panel.tsx`, closed
-  by its own X or a basemap click, never by re-clicking the rail row — the row
-  is a selection, not a toggle). `view="split"` is the compact half beside the
-  DAG and keeps the legend plus the collapsed not-geolocated chip box.
+- **Batch Map** (`TraceMap`, `trace-map*.tsx`): the map takes the full width and
+  one panel on the right (below the map on a phone) holds two states. At rest it
+  is the **stage list**: stages in chain order (feedstock intake, production run,
+  biochar product, order, delivery, application) with the kind's Flow accent,
+  icon and count; a stage opens in place with its records one line each, the map
+  frames it and lights its legs. Picking a record or a marker starts a **chain
+  walk**: one chain from the supplier to one end (a field, or the delivery or
+  product nothing is applied from yet), walked one step per stage ("01 / 06 · To
+  Coffee block A"). The chain holds every record upstream of its end; a stage with
+  one record is a plain step with its values open in place, and a stage where
+  several converge (intakes, runs, products) is one step titled with the count
+  ("2 production runs") that lists its records, each opening in place, one at a
+  time ([#1485](https://github.com/Maji-Studio/noma-dmrv/issues/1485), decided
+  2026-10-29). Values: wet first, a Dry figure of "Not recorded" when the kind
+  carries one and it is missing, a "Not recorded: a, b" Notice for the other plain
+  gaps, "Trace rollback", "View full record" through `recordHref`. Back / Next
+  step stage to stage, the camera frames every record of the step, only that
+  chain's legs are lit. A record picked from the list or a marker starts the first
+  chain through it (fields first) on its stage's step with the record open.
+  "Whole batch" returns to the stage list.
+  Only lit legs carry a km label (one per road, even when several product layers
+  share it); each road is drawn once. FIT, + / − and SAT stay. A batch with no
+  location at all shows an empty state instead of the map and keeps the list.
+  The model is pure and tested: `trace-model.ts` (stages, lighting, one drawn
+  leg per road), `trace-chains.ts` (chains, walk lighting).
+- **Application Map and Split** (`ApplicationTraceMap`,
+  `application-trace-map.tsx`, [#1486](https://github.com/Maji-Studio/noma-dmrv/issues/1486)):
+  the same view on the application's own lineage (`useChainOfCustodyGeo`, the
+  model from its own graph and `lineageIdsByApplication([chainData])`). An
+  application is one chain, so it opens on that chain's walk at its first step
+  (`singleChain`): no stage list, no "Whole batch", no "Trace rollback"; "View
+  full record" stays. Map is the batch layout (panel right, below the map under
+  1024px). Split is the Flow chart beside a column of map over walk
+  (`layout="column"`); below 1280px, phones included, the Flow stacks over the
+  walk panel alone (`layout="panel"`, the map's warnings at its top) at a fixed
+  share of the viewport height, and the page scrolls.
 - **Geo payload** — `chain-of-custody-geo.ts` reuses the same lineage resolution;
   node position source falls back `own` GPS → inbound-leg origin (feedstocks) →
   facility-inherited → none.
@@ -185,15 +282,17 @@ The map view (both anchors) renders the Carbon Transit panel. The DAG is the
   [ADR 0009](adr/0009-provider-agnostic-server-proxied-geo.md). Legs without
   geometry draw a dashed bowed arc. **The polyline is illustrative — distance chips
   always show the leg's stored `distanceKm`, never the polyline length.**
-- **Cross-linking** — split-view DAG card clicks locate the record on the map (links
-  disabled there); marker / rail / chip clicks ring-highlight the DAG card.
+- **Cross-linking** (application Split): a Flow record click moves the walk to that
+  record's step with the record open, and the camera frames it (links disabled
+  there); the Flow lights the records of the walk's current step and dims the
+  rest. A record on no step (the reactor) leaves the walk where it is.
 - **Degradation** depends on two independent env vars, both declared in
   `src/config/env.ts` (see [docs/security.md](security.md)): no
   `NEXT_PUBLIC_MAPTILER_KEY` → blank style over a sea-tinted dotted field, markers
   and legs still plotted (the satellite raster is key-independent, so SAT keeps
   working) with a "basemap unavailable" note; no `OPENROUTESERVICE_API_KEY` → all
   legs draw as dashed arcs and address search is disabled. No WebGL context → an
-  explicit "map unavailable" notice with the rails still rendered.
+  explicit "map unavailable" notice with the stage list or walk still rendered.
 
 Map components live in `src/components/chain-of-custody/map/`; the shared
 brand-recolored basemap treatment is `src/components/map/` (also used by
@@ -207,9 +306,15 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `tests/credit-batch-accounting-contract.test.ts`,
   `tests/credit-batch-context-set.test.ts`
 - `src/lib/chain-of-custody/sankey.test.ts`
-- `src/components/chain-of-custody/use-chain-graph.test.ts`
+- `src/lib/chain-of-custody/lineage-mass-totals.test.ts` (shares `lineage-mass-totals-test-fixtures.ts` with the graph suite)
+- `src/components/chain-of-custody/use-chain-graph.test.ts`, `flow-layout.test.ts`, `flow-edge-geometry.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
-- `src/components/chain-of-custody/map/viewer-utils.test.ts`
+- `src/components/chain-of-custody/map/viewer-utils.test.ts`,
+  `trace-model.test.ts`, `trace-chains.test.ts` (chains, steps, `walkTo`),
+  `trace-map-view.test.tsx`, `trace-map-canvas.test.tsx` (the camera flies to a
+  new selection, refits without a flight when framed places move),
+  `application-trace-map.test.tsx` (opens on its own chain, a Flow pick moves
+  the walk), `trace-record-values.test.tsx`
 
 ## Saved delivery and application provenance
 
@@ -232,7 +337,7 @@ Credit-batch accounting joins these saved run shares to membership, retaining
 product identity when two products share a run. Batch-scoped reconciliation
 leaves other batch slices and Removal-owned rows intact. The application
 traceability payload carries every product branch; singular fields are populated
-only for a single product or source. DAG nodes retain physical entity IDs while
+only for a single product or source. Flow nodes retain physical entity IDs while
 allocated edges sum their contributing source shares. The Sankey retains full
 run quantities as context, labels selected product quantities as allocated
 biochar, and does not present the rest of a run as a current stock balance.

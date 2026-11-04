@@ -23,7 +23,7 @@ const DRAIN_BUDGET_MS = 2_000;
 const provider = new RetirementStorageProvider();
 const pool = new Pool({ ...getPgPoolConfig(process.env.DATABASE_URL!), max: 3 });
 const database = drizzle(pool, { schema });
-const contexts = [randomUUID(), randomUUID()].map((organizationId) => ({ organizationId, userId: randomUUID(), orgRole: "owner" as const, isPlatformAdmin: false }));
+const contexts = [randomUUID(), randomUUID()].map((organizationId) => ({ organizationId, userId: randomUUID(), orgRole: "admin" as const, isPlatformAdmin: false }));
 const organizationIds = contexts.map((ctx) => ctx.organizationId);
 const ids: string[] = [];
 let facilityId: string;

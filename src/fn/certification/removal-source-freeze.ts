@@ -18,17 +18,28 @@ function isGeneratedEvidence(candidate: CandidateSourceDocument): boolean {
   );
 }
 
+function isEntryEvidence(candidate: CandidateSourceDocument): boolean {
+  return candidate.binding?.nomaRole === "emission_entry";
+}
+
+function followsCurrentManifest(candidate: CandidateSourceDocument): boolean {
+  return isGeneratedEvidence(candidate) || isEntryEvidence(candidate);
+}
+
 /**
  * A blocking Removal submission freezes its operator evidence tuple, not just
- * document IDs. Draft retries are exact. A terminal claim may be superseded
- * with freshly generated deterministic ledgers, while operator uploads remain
- * fixed to the reviewed snapshot. Superseded/rejected attempts rebuild live.
+ * document IDs. Draft retries preserve reviewed operator uploads and ledgers.
+ * A terminal claim may use freshly generated ledgers. Entry files always follow
+ * the current contribution manifest, which applies the frozen or live entry set
+ * for the attempt. Superseded/rejected attempts rebuild live.
  */
 export function filterCandidateSourcesForSubmissionLifecycle(
   candidates: CandidateSourceDocument[],
   latestSubmission: CertificationSubmissionRow | null,
+  correctionWindowOpen = false,
 ): CandidateSourceDocument[] {
   if (
+    correctionWindowOpen ||
     !latestSubmission ||
     !FROZEN_SNAPSHOT_STATUSES.has(latestSubmission.status)
   ) {
@@ -38,21 +49,24 @@ export function filterCandidateSourcesForSubmissionLifecycle(
   const frozenCandidates = readRemovalCandidateSources(latestSubmission);
   if (latestSubmission.status === "draft") {
     const refreshed = getMetadataValue(latestSubmission.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates);
-    if (!refreshed) return frozenCandidates;
+    if (!refreshed) return [
+      ...frozenCandidates.filter((candidate) => !isEntryEvidence(candidate)),
+      ...candidates.filter((candidate) => isEntryEvidence(candidate)),
+    ];
     const reviewed = readRemovalCandidateSources({ ...latestSubmission, payloadSnapshot: { semantic: { candidateSources: refreshed } } });
     return [
-      ...reviewed.filter((candidate) => !isGeneratedEvidence(candidate)),
-      ...candidates.filter(isGeneratedEvidence),
+      ...reviewed.filter((candidate) => !followsCurrentManifest(candidate)),
+      ...candidates.filter((candidate) => followsCurrentManifest(candidate)),
     ];
   }
 
-  const currentGeneratedCandidates = candidates.filter(isGeneratedEvidence);
+  const currentManifestCandidates = candidates.filter((candidate) => followsCurrentManifest(candidate));
   const frozenOperatorCandidates = frozenCandidates.filter(
-    (candidate) => !isGeneratedEvidence(candidate),
+    (candidate) => !followsCurrentManifest(candidate),
   );
   return Array.from(
     new Map(
-      [...frozenOperatorCandidates, ...currentGeneratedCandidates].map(
+      [...frozenOperatorCandidates, ...currentManifestCandidates].map(
         (candidate) => [candidate.documentId, candidate],
       ),
     ).values(),

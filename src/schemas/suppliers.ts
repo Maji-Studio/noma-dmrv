@@ -175,6 +175,9 @@ export const createSupplierLocationSchema = supplierLocationFormSchema.extend({
   supplierId: z.string().uuid("Choose a valid supplier."),
 });
 
+/** Create sends `{ supplier, locations }`, so refusals of the supplier name `supplier.*`; the form names `*`. */
+export const SUPPLIER_REFUSAL_ALIASES = { "supplier.*": "*" } as const;
+
 export const createSupplierWithLocationsSchema = z.object({
   supplier: createSupplierSchema,
   locations: z

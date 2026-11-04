@@ -4,9 +4,13 @@ Biochar bins hold layers from completed production runs. Product bins hold layer
 from products placed in that bin. Stock accounting follows dry biochar and frozen
 source-run shares. Wet stock is wet mass added less wet mass taken out, per
 layer, from the last posted count on (`estimateStock` in
-`src/lib/output-stock/moisture-estimate.ts`). A removal's moisture fixes its dry
-draw only and never changes the bin's moisture; only a count does. Counts and
-removals apply in posting order, as dry stock does: a backdated entry still
+`src/lib/output-stock/moisture-estimate.ts`). A draw's moisture determines the solids it takes. Normally it leaves
+the bin's estimated moisture unchanged. If wet stock would fall below remaining
+solids (dry biochar plus ingredient solids), saving re-estimates what stays at
+the draw's own moisture until the next count. Split bins check each drawn
+sub-bin; mix bins check and re-estimate the whole physical pile, including
+layers outside the draw's allocation subset. A legacy draw without its own
+reading floors wet stock at solids. Counts and draws apply in posting order, as dry stock does: a backdated entry still
 sees every posted count and draw, and a backdated count's solids already
 reflect what was posted before it. A product draw saved before the ledger counts before every count.
 Dry biochar alone blocks a draw, so wet stock can still show once dried biochar
@@ -98,7 +102,7 @@ or bin stock. A completed delivery records its actual source bin, physical time,
 measured wet mass, and moisture. Its immutable layer and run allocations determine
 its dry biochar total. Future delivery times are refused in both the app and API.
 REST/MCP create previews and committed creates expose the drawn product allocations;
-PATCH changes metadata only. Mass and moisture corrections stay in the app.
+PATCH changes metadata only. Mass, moisture and date corrections stay in the app.
 See [delivery API contracts](./api.md#deliveries-on-rest-and-mcp).
 Legacy storage-inventory rows are not a stock ledger.
 
@@ -109,7 +113,9 @@ shares, including physical residuals whose dry grams were already attributed.
 
 ## Operator stock sheets
 
-Every bin uses the same stock card and a separate Stock over time card. Split
+The facility sheet sums its output bins, including archived bins, through the same read as the board: wet mass when every bin has an estimate, otherwise dry biochar.
+
+Every bin uses the same stock card and a separate Stock over time card. The headline reads "200 kg wet mass" with "90 kg dry biochar" under it. Every run and product enters its bin with a wet mass (a product's moisture is required, and `production_runs_complete_has_output` refuses a complete run without moisture, output above zero and a bin), so the headline is always the wet mass. A wet figure that is still missing would be a defect; the known dry biochar then stands in, never a placeholder. No approximation sign and no "estimated" in the figures. "Estimated" lives in the details, the chart key and the ⓘ tooltip, and the line under the bays says how they are drawn. Split
 output bins show fixed-width bays in the bin's default draw order, wrapping when
 needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
 fills against the configured capacity and lists its parts beside it. Multiple
@@ -126,8 +132,8 @@ History links to the originating production run, biochar product, delivery or
 feedstock intake when the entry has one. Fix a wrong entry in the form where it
 was entered (decision 1). An output-bin Lost mass entry has an Edit action that opens its
 own form with the saved time, mass, moisture, draw and reason (decision 3).
-Delivery mass, moisture and split-bin draw readings can be edited in the delivery
-form. Both saves append a reversal and replacement, shown as Original and Corrected.
+Delivery mass, moisture, date and time, and split-bin draw readings can be edited
+in the delivery form. Both saves append a reversal and replacement, shown as Original and Corrected.
 The delivery row stays in agreement with its replacement movement.
 
 These edits use the same dependency predicate as the server correction path
@@ -136,8 +142,12 @@ stock, balance-dependent counts, applications and certification lineage lock
 protected values. Unrelated intake alone does not lock an entry. An explicitly
 ordered draw from another sub-bin does not lock stock it did not use. History
 and the delivery form show the same dependency reason as the server, which
-rechecks under the posting path's bin-stock lock. Delivery source, order,
-and date/time retain their existing posting restrictions.
+rechecks under the posting path's bin-stock lock. Delivery source and order
+retain their existing posting restrictions. Open deliveries can change date and
+time while stock at the new time suffices and no other live stock entry in the same bin
+is crossed (a draw, loss or count). Equal times use posting order: a replacement follows existing entries.
+Preview and save share the crossing check; additions and mode switches do not
+count. Future times remain refused.
 Old counts remain readable without an edit action. Feedstock Lost mass supports
 creation only; feedstock intake changes retain ADR 0027's wet-lane guard.
 
@@ -147,10 +157,51 @@ permanently lock an otherwise independent correction.
 
 The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
 hatched estimated water. Product ingredient solids are a separate solid band,
-not water. Output points replay frozen stock effects, including reversals, in
-physical-time order; explanatory moisture rows are not counted twice. Missing
-historical wet or solids bases leave water unknown. Bay, pile-band and chart
-point details open on hover, keyboard focus or tap.
+not water. The output chart cancels each corrected entry with its reversal when
+both are present and plots only the live effect in physical-time order; history
+keeps every row. Unmatched reversals remain in the chart replay so totals add up.
+Explanatory moisture rows are not counted twice. Missing
+historical wet or solids bases leave water unknown. Wet mass below the solids
+(removals wetter than the bin) has no water figure either: the chart and history
+leave water out rather than show 0 kg (`stockWaterKg` in `stock-parts.ts`).
+The recorded wet total remains visible even when it is below solids; only water
+is hidden. `stock-parts.ts` owns unrounded display composition: `subBinFigures`
+reads a split layer's wet figure and `pileFigures` takes the pile's own wet total.
+`stockParts` exposes raw dry biochar, ingredient solids, water and wet mass, plus
+layout rows (water, named ingredients, unnamed remainder, dry biochar). Only
+layout rows filter parts by `STOCK_PART_MIN_KG`; `stockWaterKg` also uses it
+as the below-solids tolerance. History changes keep their own display threshold.
+A split bay's size is wet when water is known, otherwise solids,
+otherwise dry biochar, without rounding even a tiny remaining sub-bin.
+A bay whose recorded wet is below its solids is therefore sized by solids, so its
+bands never overflow it (intended; pinned in `stock-sheet.test.tsx`).
+Split bays, the sub-bin tooltip and mix pile bands all lay out `stockParts`
+(labels come from `partLabel` in `sub-bin-card.tsx`). Split bays size by
+`stockParts(...).sizeKg`; a mix pile is still sized by the sum of its displayed
+bands. No component derives water or ingredient solids itself.
+
+Late-recorded intake can change earlier wet estimates in a mix pile. History
+recomputes each movement's wet change through the balance's posting-order
+moisture model (`postingWetSteps`) from current layers, including movements saved
+under older moisture rules and legacy movements saved without a wet figure,
+which now get a computed change when the current layers resolve it. Intake
+keeps its recorded wet mass. Past days and chart points update to end at the current balance. The row retains
+its saved preview change in `savedWetDeltaKg` for details; measurements and
+saved allocations never change. For example, adding a late 200 kg wet run to
+100 kg wet before a 50 kg loss removes the earlier re-estimate: history ends
+at 250 kg instead of 310 kg, while the saved change remains +10 kg. A row keeps that saved figure ("Saved change: Wet mass +10 kg.") even when the recompute is unknown, and the moisture block saved with the movement is labelled "When saved".
+
+Water is display only; no balance, guard, preview or posting reads it. The
+replay re-bases an unknown wet or solids figure on a movement's saved or
+recomputed (`currentAfterWetKg`) after-balance only while no earlier-dated entry
+was recorded after that balance was saved; a stale value is refused and wet stays
+unknown (`src/lib/output-stock/stock-replay.ts`). A run intake counts as recorded when its output was posted (the
+run's last save as complete, `updatedAt`), not when the run was created. Bay, pile-band and chart
+point details open on hover, keyboard focus or tap. A product bin's bays and
+pile bands name their parts as the product composition does (dry biochar,
+"<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's
+ingredient solids by the product's saved ingredient snapshots, pro rata, since
+a draw takes a blend as mixed. Presentation only; nothing posts from the split.
 
 Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
 production-run draws, product ingredient draws, losses and old counts. The pile
@@ -176,7 +227,9 @@ solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
 
-Corrections append a reversal of the original effects and a replacement. They
+Corrections append a reversal of the original effects and a replacement. Delivery
+reversals retain the original event time so the audit history associates the
+reversal with the original draw's time; the replacement uses the corrected time. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
 late older intake through the existing server correction contract. The Lost mass form and delivery update use
@@ -186,7 +239,8 @@ and certification artifacts continue to block server corrections with a named re
 Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
-applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
+applications. Posted product measurements stay immutable. Delivery mass, moisture
+and date edits append corrections;
 Open products and deliveries can be deleted through app operations. The writer
 appends an exact inverse of the frozen source allocations under the bin stock
 lock before removing the live record. History retains the original and its
@@ -229,6 +283,23 @@ and ETag contract. A read reserves no stock; use the loss dry run's
 The pure planner lives in `src/lib/output-stock/`. Scoped projections, preview,
 posting, correction, and history modules live in `src/data-access/output-stock*`.
 `src/data-access/delivery-allocation-provenance.ts` owns saved downstream shares.
+
+`stock-order.ts` owns physical history order independently of the display replay.
+Intake dry before/after balances use that order; movements retain their saved
+posting-order balances. Live intake balances exclude cancelled pairs, matching
+the display replay. Cancelled intakes and placement reversals keep their audit
+balances with those pairs included.
+
+`stock-parts.test.ts`, `stock-replay.test.ts` and `moisture-estimate.test.ts`
+cover composition, stale saved balances and posting wet changes. The six
+scenarios in `tests/output-stock-replay-parity.integration.test.ts` compare
+history end with preview and sub-bin balances at one evaluation instant,
+including a late mix run, corrections and ingredient solids by name. Dry
+parity allows 1e-3 kg; solids, wet and ingredient parity allow 1e-6 kg.
+ESLint's two `import/no-restricted-paths` zones keep replay/parts in display
+readers and block server paths from importing storage-location components.
+The display behavior test and planner type fence remain in
+`water-display-only.test.ts`.
 
 Migration 0115 introduces the immutable allocations and required formulation and
 placement facts. Existing disposable development data with missing facts needs a

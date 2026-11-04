@@ -124,8 +124,8 @@ export function buildJourney(
     .map((leg) => leg.countedKm)
     .filter((km): km is number => km != null);
   const loads = legs.map((leg) => leg.loadKg).filter((kg): kg is number => kg != null);
-  // A leg without a load is not the same cargo as one with it, so a missing
-  // load reads on its own leg instead of disappearing from the route.
+  // A leg without a load is not the same cargo as one with it, so it keeps the
+  // route from claiming one shared load. That leg's caption leaves the load out.
   const loadsVary =
     loads.some((kg) => kg !== loads[0]) || loads.length < legs.length;
   const loadOnLegs = !options.hideLoad && (legs.length === 1 || loadsVary);

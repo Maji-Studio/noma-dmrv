@@ -89,6 +89,11 @@ export function useSubBinDraw({ bin, occurredAt, wetKg, correction }: SubBinDraw
     sources,
     untickCode,
     needsTick,
+    restoreSaved: () => setStored({
+      binId, correctionId: correction?.movementId,
+      order: saved ? saved.map(source => source.layerId) : null,
+      readings: savedReadings,
+    }),
     setOrder: (order: string[] | null) => setStored({ ...choices, order }),
     setReading: (layerId: string, raw: string) => setStored({ ...choices, readings: { ...choices.readings, [layerId]: raw } }),
   };

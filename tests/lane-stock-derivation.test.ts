@@ -315,7 +315,8 @@ describe("shared lane-stock derivation", () => {
       feedstockConsumedWetKg: FEEDSTOCK_CONSUMED_KG,
       feedstockMovementDeltaKg: FEEDSTOCK_MOVEMENT_KG,
       feedstockStockWetKg: -27,
-      feedstockEstimatedDryKg: -21.6,
+      // A negative wet ledger has no physical remaining dry estimate.
+      feedstockEstimatedDryKg: null,
     });
     expect(biochar?.biocharAllocatedKg).toBe(BIOCHAR_ALLOCATED_KG);
     // Output-bin movements never count as feedstock stock.
@@ -344,7 +345,7 @@ describe("shared lane-stock derivation", () => {
     );
 
     expect(feedstock.feedstockInventory.currentWetMassKg).toBe(-27);
-    expect(feedstock.feedstockInventory.estimatedDryMassKg).toBeCloseTo(-21.6);
+    expect(feedstock.feedstockInventory.estimatedDryMassKg).toBeNull();
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
     expect(feedstock.feedstockInventory.pendingWetMassKg).toBe(1000);
     expect(feedstock.feedstockInventory.estimatedMoisturePercent).toBeNull();

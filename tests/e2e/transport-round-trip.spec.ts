@@ -53,7 +53,7 @@ test.describe("Transport round trip (#852)", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await waitForFacilityHydration(page, seededData.facility.name);
@@ -154,7 +154,7 @@ test.describe("Transport round trip (#852)", () => {
   });
 
   test("organization defaults have no trip type setting", async ({ adminPage: page }) => {
-    await page.goto("/settings/defaults");
+    await page.goto("/settings/general");
     await expect(page.getByRole("group", { name: "Application evidence" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/trip type/i)).toHaveCount(0);
   });

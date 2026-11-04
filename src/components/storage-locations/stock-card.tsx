@@ -10,6 +10,7 @@ import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import type { ReactNode } from "react";
 import { InfoHint } from "@/components/ui/tooltip";
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { STOCK_ACTION_LABEL } from "@/lib/output-stock/labels";
 
 const ACTION_ICON_PX = 16;
@@ -52,10 +53,11 @@ export function StockCard({ title, hint, figure, caption, status, children, onAd
   children?: ReactNode;
   onAdjust?: () => void;
 }) {
+  const { stockAdjustments } = useFeatureSwitches();
   return (
     <section aria-label={title} className="flex flex-col gap-12 bg-[var(--panel-bg)] [border:var(--panel-border)] px-12 pt-6 pb-12">
       <div className="flex flex-col gap-2">
-        <CardHeader title={title} hint={hint} hintLabel="About this stock" action={onAdjust &&
+        <CardHeader title={title} hint={hint} hintLabel="About this stock" action={onAdjust && stockAdjustments &&
           <CardTextButton icon={<ArrowsClockwiseIcon size={ACTION_ICON_PX} aria-hidden="true" />} onClick={onAdjust}>{STOCK_ACTION_LABEL}</CardTextButton>
         } />
         {status}

@@ -1,6 +1,7 @@
+import { apiKeyContext } from "../../../../tests/helpers/api-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ApiContext } from "@/lib/auth/api-context";
-import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
+import { principalAllows, type ApiScope } from "@/lib/auth/api-scopes";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { resourceQueries } from "@/lib/api/query-schemas";
 import { APPLICATION_REPRESENTATION_REVISION } from "@/config/api-rest";
@@ -27,7 +28,7 @@ const row = { id: ID, code: "AP-1", version: 1, deliveryId: ID, applicationDate:
   gpsLatitude: 1, gpsLongitude: 2, gisBoundary: null, soilTemperatureSource: null, soilTemperatureC: null, allocations: [],
   createdAt: "2025-07-08T00:00:00Z", updatedAt: "2025-07-08T00:00:00Z" };
 const output = { application: row, allocations: [], deliveryBalance: { remainingWetMassKgBefore: 500, remainingWetMassKgAfter: 400 }, warnings: ["GPS copied from customer location North."] };
-const context = { ctx: { credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: [] },
+const context = { ctx: apiKeyContext({ credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: [] }),
   requestId: "request", deadlineAt: 0 } as unknown as ApiRouteContext;
 const args = (name: string) => name === "record_application" ? create : target;
 const write = (name: string) => applicationWriteTools.find(tool => tool.name === name)!;
@@ -42,11 +43,11 @@ beforeEach(() => {
 it.each([
   { scopes: ["applications:read"], role: "admin", names: ["find_applications", "get_application"] },
   { scopes: ["applications:read", "deliveries:read"], role: "admin", names: ["find_applications", "get_application", "get_delivery_application_balance"] },
-  { scopes: ["applications:write"], role: "owner", names: ["record_application", "update_application"] },
+  { scopes: ["applications:write"], role: "admin", names: ["record_application", "update_application"] },
   { scopes: ["applications:read", "applications:write", "applications:delete", "deliveries:read"], role: "member", names: [] },
 ])("admits $role with $scopes", ({ scopes, role, names }) => {
-  const ctx = { scopes: scopes as ApiScope[], orgRole: role } as ApiContext;
-  expect([...applicationReadTools, ...applicationWriteTools].filter(tool => hasRoleAndScope(ctx, tool.scope!)).map(tool => tool.name)).toEqual(names);
+  const ctx = { principal: { kind: "api-key" }, scopes: scopes as ApiScope[], orgRole: role } as ApiContext;
+  expect([...applicationReadTools, ...applicationWriteTools].filter(tool => principalAllows(ctx, tool.scope!)).map(tool => tool.name)).toEqual(names);
 });
 it("shares every application list filter and reader with REST", async () => {
   const tool = applicationReadTools[0]; expect(tool.input).toBe(resourceQueries.applications.list);

@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Application } from "@/db/schema/application";
-import { deliveryStockOverdrawMessage } from "@/lib/stock-overdraw";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 
 vi.mock("@/hooks/use-organization-settings", async () => {
@@ -65,11 +64,9 @@ function application(appliedKg: number): Application {
 function render({
   appliedKg = 400,
   alreadyAppliedWetKg = DELIVERY.alreadyAppliedWetKg,
-  errorMessage,
 }: {
   appliedKg?: number;
   alreadyAppliedWetKg?: number;
-  errorMessage?: string;
 } = {}): string {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
@@ -77,7 +74,6 @@ function render({
         application={application(appliedKg)}
         deliveries={[{ ...DELIVERY, alreadyAppliedWetKg }]}
         onSubmit={() => undefined}
-        errorMessage={errorMessage}
       />
     </QueryClientProvider>,
   );
@@ -96,14 +92,6 @@ describe("ApplicationForm stock figure", () => {
     expect(html).not.toContain("Remaining now");
   });
 
-  it("shows the delivery's remaining stock when a mass error replaces the cue", () => {
-    const html = render({ errorMessage: deliveryStockOverdrawMessage() });
-
-    expect(html).toContain(deliveryStockOverdrawMessage());
-    expect(html).not.toContain("available to this application");
-    expect(html).toContain("Remaining now: 600 kg wet, 270 kg dry biochar");
-  });
-
   it("keeps one figure when the over-draw error states what is available", () => {
     // Another application already took the rest: 1,000 − 1,400 + 400 = 0 kg.
     const html = render({ alreadyAppliedWetKg: 1_400 });
@@ -112,3 +100,8 @@ describe("ApplicationForm stock figure", () => {
     expect(html).not.toContain("Remaining now");
   });
 });
+
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilityId: "facility-1" }),
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "" }),
+}));

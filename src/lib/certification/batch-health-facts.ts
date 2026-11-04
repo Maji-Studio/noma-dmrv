@@ -15,9 +15,10 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
-import { sampleDocumentWarnings } from "./sample-document-warnings";
+import { sampleDocumentWarningKeys, sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
+import { transportCategoryCovered } from "./readiness";
 
 // Preview keys owned by other UI checks. Credit-batch detail may still explain
 // local preview gaps, but Removal readiness is derived from the independent
@@ -81,9 +82,14 @@ export function toBatchHealthFacts(
   const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
     templateBlockers: ctx.templateBlockers ?? [],
+    undecidedLineIds: ctx.undecidedLineIds,
+    entryCorrections: ctx.entryCorrectionsByBatchId?.[batchId],
     emissionLines: ctx.emissionLinesByBatchId?.[batchId] ?? ctx.emissionLines,
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
+    documentWarnings: batch ? sampleDocumentWarningKeys({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
+    carbonBlockerFacts: batch?.durabilityGateFacts,
+    durabilityConfigurationFacts: ctx.durabilityConfigurationFacts,
     facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete
       ? (ctx.feedstockTypeMappingGaps ?? []).filter(
@@ -99,8 +105,7 @@ export function toBatchHealthFacts(
     facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
-      present: ctx.transportCoverage[category].count > 0 &&
-        (ctx.transportCoverage[category].missingEntityIds?.length ?? 0) === 0,
+      present: transportCategoryCovered(ctx.transportCoverage[category]),
     })),
   };
 }

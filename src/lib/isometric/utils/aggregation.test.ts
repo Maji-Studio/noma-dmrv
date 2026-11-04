@@ -285,3 +285,15 @@ describe("aggregateProductionRuns production claims", () => {
     expect(result.totalElectricityKwh).toBe(4);
   });
 });
+
+
+it("returns a real zero only for empty transport owned elsewhere", () => {
+  expect(aggregateTransportMassDistance([], "Feedstock", true)).toEqual({ massDistanceTonneKm: 0, warning: null });
+  expect(aggregateTransportMassDistance([], "Feedstock", false)).toEqual({ massDistanceTonneKm: null, warning: null });
+  const missingMass = aggregateTransportMassDistance([leg("01", { loadMassKg: null })], "Feedstock", true);
+  expect(missingMass.massDistanceTonneKm).toBeNull();
+  expect(missingMass.warning).toContain("without a load mass");
+  const mixed = aggregateTransportMassDistance([leg("01"), leg("02", { transportMethodType: "rail" })], "Feedstock", true);
+  expect(mixed.massDistanceTonneKm).toBeNull();
+  expect(mixed.warning).not.toBeNull();
+});

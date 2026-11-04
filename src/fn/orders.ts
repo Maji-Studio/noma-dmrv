@@ -1,5 +1,7 @@
 "use server";
 
+import { getOrderStats as getOrderStatsData, type OrderStats } from "@/data-access/order-stats";
+
 /**
  * Orders Server Actions
  * Server-side functions for order CRUD operations
@@ -24,8 +26,10 @@ import { z } from "zod";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
+import { withCreate } from "./with-create";
 import { getOrderById, getOrderWithRelationsById, type OrderWithRelations } from "@/data-access/orders";
 import { uuidSchema } from "@/schemas/helpers";
+import type { CreateIntentOptions } from "@/schemas/create-intent";
 
 // ============================================
 // List/Query Operations
@@ -46,6 +50,26 @@ export async function getOrdersFn(
     }
     return getOrdersData(ctx, validatedFilters);
   }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
+}
+
+const orderStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
+export async function getOrderStatsFn(
+  filters?: { facilityId?: string },
+): Promise<ActionResult<OrderStats>> {
+  return withAction(async (ctx) => {
+    const validatedFilters = orderStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
+    return getOrderStatsData(ctx, validatedFilters);
+  }, {
+    fallbackMessage: "Failed to load order stats",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "order action failed", context: { op: "order:stats" } },
+  });
 }
 
 const facilityIdSchema = z.string().uuid("Invalid facility ID");
@@ -92,13 +116,14 @@ export async function getOrdersForSelectFn(
  * Create a new order
  */
 export async function createOrderFn(
-  data: z.infer<typeof createOrderSchema>
+  data: z.infer<typeof createOrderSchema>,
+  options?: CreateIntentOptions
 ): Promise<ActionResult<Order>> {
-  return withAction(async (ctx) => {
+  return withCreate(async (_ctx, create) => {
     const validated = createOrderSchema.parse(data);
 
-    return runOperationInProcess(recordOrder, ctx, validated);
-  }, { fallbackMessage: "Failed to create order" });
+    return create(recordOrder, validated);
+  }, options, { fallbackMessage: "Failed to create order" });
 }
 
 // ============================================

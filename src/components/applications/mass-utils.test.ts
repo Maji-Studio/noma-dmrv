@@ -36,7 +36,7 @@ function delivery(
 describe("application delivery option mass", () => {
   it("shows wet and dry mass together", () => {
     expect(getApplicationDeliveryMassLabel(delivery())).toBe(
-      "850 kg wet, 820 kg dry biochar",
+      "850 kg wet mass, 820 kg dry biochar",
     );
   });
 
@@ -46,7 +46,7 @@ describe("application delivery option mass", () => {
         delivery({ massDryKg: null, moistureContentPercent: null }),
       ),
     ).toBe(
-      "850 kg wet, dry biochar not available",
+      "850 kg wet mass, dry biochar not tracked",
     );
   });
 
@@ -55,7 +55,7 @@ describe("application delivery option mass", () => {
 
     expect(label).toContain("Finished product north");
     expect(label).toContain(
-      "850 kg wet, 820 kg dry biochar",
+      "850 kg wet mass, 820 kg dry biochar",
     );
     expect(label).not.toContain("DL-26-004");
     expect(label).not.toContain("OR-26-003");
@@ -68,7 +68,7 @@ describe("application delivery option mass", () => {
     });
 
     expect(formatApplicationDeliveryHelperText(option)).toBe(
-      "Remaining now: 800 kg wet, 775 kg dry biochar",
+      "Remaining now: 800 kg wet mass, 775 kg dry biochar",
     );
   });
 });
@@ -95,7 +95,7 @@ describe("application stock cues", () => {
         isEditMode: false,
       }),
     ).toEqual({
-      deliveryCue: "Remaining now: wet not recorded, 820 kg dry biochar",
+      deliveryCue: "Remaining now: wet mass not recorded, 820 kg dry biochar",
       appliedMassCue: undefined,
     });
   });

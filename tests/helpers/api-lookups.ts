@@ -23,7 +23,7 @@ export interface LookupFixture extends IntakeFixture { key: string; missingScope
 export async function createLookupFixture(): Promise<LookupFixture> {
   const fixture = await createIntakeFixture(`lookup-${randomUUID()}`);
   await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "REST fixture", emailVerified: true });
-  await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "owner" });
+  await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "admin" });
   const key = (await createApiKey(fixture.ctx, {
     name: "Lookup fixture", scopes: API_SCOPES.filter((scope) => scope.endsWith(":read")), expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   })).key;

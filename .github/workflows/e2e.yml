@@ -17,7 +17,8 @@ concurrency:
 jobs:
   playwright:
     name: playwright (${{ matrix.shard_id }}/4)
-    runs-on: ubuntu-latest
+    # Playwright cannot install Chromium on ubuntu-latest (26.04) yet; unpin once it can.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -44,8 +45,13 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NOMA_HERMETIC_CI: "true"
       NOMA_TURBOPACK_BUILD_CACHE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-      ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
+      # The OAuth consent and Connected apps specs need the provider; the
+      # production gate allows a loopback origin only for hermetic CI.
+      OAUTH_PROVIDER_ENABLED: "true"
+      MCP_ENABLED: "true"
+      STOCK_ADJUSTMENTS_ENABLED: "true"
+      MULTI_BIN_RUNS_ENABLED: "true"
       # Playwright builds + serves a production bundle on CI
       # (playwright.config.ts), but the suite is hermetic and localhost-only.
       # Use local-fs so upload specs can round-trip bytes without external
@@ -137,8 +143,11 @@ jobs:
           DATABASE_URL=${DATABASE_URL}
           NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-          ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          MCP_ENABLED=${MCP_ENABLED}
+          STOCK_ADJUSTMENTS_ENABLED=${STOCK_ADJUSTMENTS_ENABLED}
+          MULTI_BIN_RUNS_ENABLED=${MULTI_BIN_RUNS_ENABLED}
+          OAUTH_PROVIDER_ENABLED=${OAUTH_PROVIDER_ENABLED}
           STORAGE_PROVIDER=${STORAGE_PROVIDER}
           STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}
           STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}

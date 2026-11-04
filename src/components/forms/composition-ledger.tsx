@@ -1,4 +1,3 @@
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatPercent } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
@@ -23,16 +22,29 @@ const MIN_DISPLAY_SHARE = 0.1;
 const MIN_DISPLAY_MASS_KG = 0.1;
 const ROW = "border-b border-[var(--color-border-secondary)]";
 
-/** Preserve positive quantities below the displayed precision instead of showing zero. */
-export function formatCompositionMass(mass: number | null | undefined) {
-  if (mass == null || !Number.isFinite(mass) || mass < 0) return MISSING_VALUE.notAvailable;
+/**
+ * Preserve positive quantities below the displayed precision instead of showing zero.
+ * A part's mass is derived, so a part without one shows no figure: callers
+ * skip the call (`compositionMassOrNothing`) rather than print a placeholder.
+ */
+export function formatCompositionMass(mass: number) {
   return mass > 0 && mass < MIN_DISPLAY_MASS_KG
     ? `<${formatMassKg(MIN_DISPLAY_MASS_KG)}`
     : formatMassKg(mass);
 }
 
+/** A derived mass with no figure renders nothing, so its cell stays empty and the column stays aligned. */
+function knownMass(mass: number | null | undefined): mass is number {
+  return mass != null && Number.isFinite(mass) && mass >= 0;
+}
+
+/** The formatted mass, or null when the part has no figure. */
+export function compositionMassOrNothing(mass: number | null | undefined): string | null {
+  return knownMass(mass) ? formatCompositionMass(mass) : null;
+}
+
 function share(mass: number | null, total: number | null) {
-  if (mass === null || total === null || total <= 0) return MISSING_VALUE.notAvailable;
+  if (mass === null || total === null || total <= 0) return null;
   const percent = mass / total * PERCENT_SCALE;
   return percent > 0 && percent < MIN_DISPLAY_SHARE ? `<${formatPercent(MIN_DISPLAY_SHARE)}` : formatPercent(percent);
 }
@@ -64,9 +76,9 @@ export function CompositionLedger({ label, totalLabel, total, segments, hideZero
       <thead><tr className={ROW}><th scope="col" className="w-auto py-8 text-left body-small font-medium text-[var(--color-text-secondary)]">Component</th><th scope="col" className="py-8 pl-12 text-right body-small font-medium text-[var(--color-text-secondary)] whitespace-nowrap">Mass</th><th scope="col" className="py-8 pl-12 text-right body-small font-medium text-[var(--color-text-secondary)] whitespace-nowrap">% of total</th></tr></thead>
       <tbody>{rows.map((segment) => <tr key={segment.label} className={ROW}>
         <th scope="row" className="w-auto py-8 text-left font-normal"><span>{segment.label}</span><MiniBar segment={segment} total={denominator} /></th>
-        <td className="py-8 pl-12 text-right align-top whitespace-nowrap">{formatCompositionMass(segment.mass)}</td>
+        <td className="py-8 pl-12 text-right align-top whitespace-nowrap">{compositionMassOrNothing(segment.mass)}</td>
         <td className="py-8 pl-12 text-right align-top whitespace-nowrap">{share(segment.mass, denominator)}</td>
       </tr>)}</tbody>
-      <tfoot><tr><th scope="row" className="py-8 text-left font-medium">{totalLabel}</th><td className="py-8 pl-12 text-right align-top whitespace-nowrap">{formatCompositionMass(total)}</td><td className="py-8 pl-12 text-right align-top whitespace-nowrap">{share(denominator, denominator)}</td></tr></tfoot>
+      <tfoot><tr><th scope="row" className="py-8 text-left font-medium">{totalLabel}</th><td className="py-8 pl-12 text-right align-top whitespace-nowrap">{compositionMassOrNothing(total)}</td><td className="py-8 pl-12 text-right align-top whitespace-nowrap">{share(denominator, denominator)}</td></tr></tfoot>
     </table>;
 }

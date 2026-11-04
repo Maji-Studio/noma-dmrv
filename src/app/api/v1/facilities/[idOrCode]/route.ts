@@ -10,4 +10,4 @@ export const GET = apiRoute<Params>("api.v1.facilities.get", "facilities:read", 
   const data = await readFacility(request, ctx, idOrCode);
   headers.set("ETag", facilityEtag(data));
   return Response.json({ data }, { headers });
-});
+}, { audience: "rest" });

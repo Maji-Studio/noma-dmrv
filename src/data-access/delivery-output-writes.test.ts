@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 
-const mocks = vi.hoisted(() => ({ posting: vi.fn(), post: vi.fn(), select: vi.fn(), sync: vi.fn(), transaction: vi.fn(), replay: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ posting: vi.fn(), post: vi.fn(), select: vi.fn(), sync: vi.fn(), transaction: vi.fn(), replay: vi.fn(), lineage: vi.fn(), projection: vi.fn() }));
 // Every I/O seam is mocked; this suite never opens a database connection.
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./output-stock-post", () => ({ withOutputStockPostingInTransaction: mocks.posting, findPostedOutputRequest: mocks.replay, OUTPUT_STOCK_FUTURE_TIME_MESSAGE: "Date and time cannot be in the future." }));
@@ -12,7 +12,7 @@ vi.mock("./certification-lineage-guards", () => ({ assertCanMutateCertifiedLinea
 vi.mock("./bin-movement-requests", () => ({ lockMovementRequest: vi.fn() }));
 vi.mock("./delivery-order-balance", () => ({ lockDeliveryOrderAndAssertBalance: vi.fn() }));
 vi.mock("./lock-bin-stocks", () => ({ lockBinStock: vi.fn() }));
-vi.mock("./output-stock", () => ({ getOutputStockAllocationProjection: vi.fn() }));
+vi.mock("./output-stock", () => ({ getOutputStockAllocationProjection: mocks.projection }));
 vi.mock("./delivery-distance-snapshot", () => ({ deliveryDistanceSnapshot: vi.fn().mockResolvedValue({ recordedDistanceKm: null, recordedDistanceSource: null }) }));
 vi.mock("./transport-legs", () => ({ lockBiocharTransportRouteTopology: vi.fn(), syncBiocharProductTransportLegs: mocks.sync }));
 
@@ -22,7 +22,7 @@ import { createDeliveryInTransaction, updateDeliveryInTransaction } from "./deli
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const PRODUCT_VERSION = 2;
-const ctx = { organizationId: "org", userId: "operator", orgRole: "owner" as const, isPlatformAdmin: false };
+const ctx = { organizationId: "org", userId: "operator", orgRole: "admin" as const, isPlatformAdmin: false };
 const input = {
   code: "DL-001", orderId: ID, facilityId: ID, storageLocationId: ID,
   deliveryDate: new Date("2026-09-14T12:00:00.000Z"), deliveredWetMassKg: 100,
@@ -33,6 +33,7 @@ const savedProducts = [{ id: "product", version: PRODUCT_VERSION }];
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.projection.mockResolvedValue([]);
   mocks.post.mockResolvedValue({ preview: { removedDryKg: 90, allocations: [{ layerId: "product" }] }, moisturePercent: 10, savedProducts, movement: { id: "movement" } });
 });
 
@@ -61,8 +62,22 @@ it("types the update lineage guard's safe refusal at deliveryId without losing i
   const tx = transaction([[{ ...delivery, facilityId: ID, storageLocationId: ID }]]);
   const update = updateDeliveryInTransaction(ctx, tx as unknown as DbTransaction, ID, { expectedVersion: 1, code: "DL-EDIT" });
   await expect(update).rejects.toBeInstanceOf(DomainError);
-  await expect(update).rejects.toMatchObject({ code: "certification_locked", message, issues: [{ path: ["deliveryId"], code: "certification_locked", message }] });
+  await expect(update).rejects.toMatchObject({ code: "certification_locked", message, issues: ["deliveryId", "code"].map(field => ({ path: [field], code: "certification_locked", message })) });
   expect(mocks.select).toHaveBeenCalledTimes(1);
+  expect(mocks.sync).not.toHaveBeenCalled();
+});
+
+it.each([undefined, null, {}])("does not flag unchanged code when the movement snapshot is %j", async inputSnapshot => {
+  const message = "Delivery DL-001 is locked by a certification submission.";
+  mocks.lineage.mockRejectedValue(new SafeError(message));
+  mocks.projection.mockResolvedValue([{ movement: { id: "movement", outputKind: "delivery", correctsMovementId: null, postingSequence: 1, inputSnapshot } }]);
+  const tx = transaction([[{ ...delivery, facilityId: ID, storageLocationId: ID }]]);
+  const update = updateDeliveryInTransaction(ctx, tx as unknown as DbTransaction, ID, { expectedVersion: 1, code: delivery.code });
+  await expect(update).rejects.toBeInstanceOf(DomainError);
+  await expect(update).rejects.toMatchObject({ code: "certification_locked", message });
+  await expect(update.catch(error => error.issues)).resolves.toEqual([
+    { path: ["deliveryId"], code: "certification_locked", message },
+  ]);
   expect(mocks.sync).not.toHaveBeenCalled();
 });
 

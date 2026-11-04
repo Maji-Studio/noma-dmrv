@@ -188,7 +188,7 @@ test.describe("Product bin ↔ formulation filtering", () => {
     }
 
     try {
-      await page.goto(`/storage-locations?facility=${facility.id}`);
+      await page.goto(`/storage-bins?facility=${facility.id}`);
       await page.getByLabel("Search storage").fill(storedBin.name);
       const card = page.locator("article").filter({ hasText: storedBin.name });
       await expect(async () => {

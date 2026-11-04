@@ -13,7 +13,7 @@ it("reports drift for a legacy zero delivery override", async () => {
     where: async () => reads.shift(),
   };
   const tx = { select: () => query } as unknown as DbTransaction;
-  const ctx = { organizationId: "org", userId: "actor", orgRole: "owner" as const, isPlatformAdmin: false };
+  const ctx = { organizationId: "org", userId: "actor", orgRole: "admin" as const, isPlatformAdmin: false };
   expect(await getTransportDistanceDrift(ctx, { entityType: "delivery", entityId: "delivery" }, tx))
     .toMatchObject({ isOverridden: false, hasDrift: true });
 });

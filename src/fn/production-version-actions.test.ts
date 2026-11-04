@@ -6,7 +6,7 @@ vi.mock("@/lib/log", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/log")>();
   return { ...actual, logger: { ...actual.logger, error: mocks.log } };
 });
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }) }));
+vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "admin", isPlatformAdmin: false }) }));
 vi.mock("@/data-access/production-incidents", () => ({ updateProductionIncident: mocks.update, deleteProductionIncident: mocks.remove }));
 vi.mock("@/data-access/production-samples", () => ({ updateProductionSample: mocks.update, deleteProductionSample: mocks.remove }));
 vi.mock("@/data-access/biochar-products", () => ({ updateBiocharProduct: mocks.update, deleteBiocharProduct: mocks.remove }));

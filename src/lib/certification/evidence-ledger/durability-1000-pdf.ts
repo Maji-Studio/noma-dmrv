@@ -13,7 +13,7 @@ import type {
   ThousandYearDurabilityLedgerModel,
   ThousandYearLedgerBatch,
 } from "./durability-types";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { FACILITY_NOT_FOUND, MISSING_VALUE } from "@/lib/copy-utils";
 
 const COL = {
   ref: 24,
@@ -113,7 +113,7 @@ function masthead(model: ThousandYearDurabilityLedgerModel): ReactElement {
     styles.metaCol,
     {},
     pair("Member batches", model.memberBatchCodes ?? MISSING_VALUE.none),
-    pair("Facility", model.facilityName ?? MISSING_VALUE.notAvailable),
+    pair("Facility", model.facilityName ?? FACILITY_NOT_FOUND),
     pair("Registry project", model.externalProjectId ?? MISSING_VALUE.notSet),
     pair(
       "Evidence set",
@@ -228,8 +228,9 @@ function batchSection(batch: ThousandYearLedgerBatch): ReactElement {
       ),
       t(
         [styles.mono, { width: COL.carbon, textAlign: "right" }],
+        // Derived from total and inorganic carbon, so without them the cell stays empty.
         replicate.calculatedOrganicCarbonFraction == null
-          ? MISSING_VALUE.notAvailable
+          ? ""
           : fraction(replicate.calculatedOrganicCarbonFraction),
       ),
       t(

@@ -1,8 +1,12 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { ActionError } from "@/lib/action-error";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { Control, FieldValues } from "react-hook-form";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const mocks = vi.hoisted(() => ({
@@ -23,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/forms", async () => {
   const { FormError } = await import("@/components/forms/form-error");
-  const { useWatch } = await vi.importActual<
+  const { useWatch, useController } = await vi.importActual<
     typeof import("react-hook-form")
   >("react-hook-form");
   const Wrapper = ({ children }: { children: ReactNode }) => children;
@@ -35,21 +39,29 @@ vi.mock("@/components/forms", async () => {
       name,
       allowCreate,
       onCreateNew,
+      onChange,
+      disabled,
     }: {
       control: Control<FieldValues>;
       name: string;
+      disabled?: boolean;
       allowCreate?: boolean;
       onCreateNew?: () => void;
+      onChange?: (value: string, change: { asDefault: boolean }) => void;
     }) => {
       const value = useWatch({ control, name });
+      const { field } = useController({ control, name });
       if (name === "supplierId") {
         mocks.supplierSelectProps = { allowCreate, onCreateNew };
       }
       return name === "supplierId" ? (
-        <output
-          data-testid="selected-supplier-id"
-          data-value={String(value ?? "")}
-        />
+        <>
+          <output data-testid="selected-supplier-id" data-value={String(value ?? "")} />
+          <input aria-label="Supplier" disabled={disabled} {...field} onChange={(event) => {
+            field.onChange(event);
+            onChange?.(event.target.value, { asDefault: false });
+          }} />
+        </>
       ) : null;
     },
     FormField: Wrapper,
@@ -59,8 +71,8 @@ vi.mock("@/components/forms", async () => {
     FormTextarea: () => null,
     MassMoistureFields: ({ wet, moisture }: ComponentProps<typeof import("@/components/forms/mass-moisture-fields").MassMoistureFields>) => (
       <>
-        <input {...wet.registration} />
-        <input {...moisture.registration} />
+        <input {...wet.registration} disabled={wet.disabled} />
+        <input {...moisture.registration} disabled={moisture.disabled} />
       </>
     ),
     ResolvedErrorRevalidator: () => null,
@@ -113,6 +125,7 @@ vi.mock(
 );
 
 vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
 vi.mock("@/hooks/use-suppliers", () => ({
@@ -209,6 +222,42 @@ describe("FeedstockForm supplier quick-add wiring", () => {
 });
 
 
+describe("FeedstockForm on a Sent record whose transport is open", () => {
+  const feedstock = {
+    id: "11111111-1111-4111-8111-111111111111",
+    facilityId: "22222222-2222-4222-8222-222222222222",
+    supplierId: "33333333-3333-4333-8333-333333333333",
+    feedstockTypeId: "44444444-4444-4444-8444-444444444444",
+    storageLocationId: "55555555-5555-4555-8555-555555555555",
+    deliveryDate: new Date("2026-10-06"),
+    massWetKg: 100,
+    moistureContentPercent: 25,
+  } as FeedstockWithRelations;
+  const sent = (transportLevel: "open" | "sent"): RecordLockView => ({
+    level: "sent", heldBy: [], usedBy: [], freeFields: [], howToFree: null, returnedBy: [],
+    transport: { level: transportLevel, heldBy: [] },
+  });
+
+  it("locks the other fields and leaves the transport override editable", () => {
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={vi.fn()} lock={sent("open")} />);
+    try {
+      const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+      expect(input("deliveryDate").disabled).toBe(true);
+      expect(input("totalWetMassKg").disabled).toBe(true);
+      expect(input("moisturePercent").disabled).toBe(true);
+      expect((view.getByLabelText("Supplier") as HTMLInputElement).disabled).toBe(true);
+      expect((view.getByRole("button", { name: "Override the one-way distance" }) as HTMLButtonElement).disabled).toBe(false);
+    } finally { cleanup(); }
+  });
+
+  it("changes nothing in the form when the transport is sent too (the sheet makes it read-only)", () => {
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={vi.fn()} lock={sent("sent")} />);
+    try {
+      expect(view.container.querySelector<HTMLInputElement>('input[name="deliveryDate"]')!.disabled).toBe(false);
+    } finally { cleanup(); }
+  });
+});
+
 describe("FeedstockForm single-bin mass editing", () => {
   const feedstock = {
     id: "11111111-1111-4111-8111-111111111111",
@@ -220,6 +269,100 @@ describe("FeedstockForm single-bin mass editing", () => {
     massWetKg: 100,
     moistureContentPercent: 25,
   } as FeedstockWithRelations;
+
+  it.each(["totalWetMassKg", "allocations.0.allocatedWetMassKg"])("reverts both mass controls after a lock refusal on %s", async field => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["massWetKg"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    const input = (name: string) => view.container.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    try {
+      // An allocation-only edit must stay within the unchanged delivery total.
+      const editedMass = field === "totalWetMassKg" ? "120" : "80";
+      fireEvent.change(input(field), { target: { value: editedMass } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input("totalWetMassKg").value).toBe("100"));
+      expect(input("allocations.0.allocatedWetMassKg").value).toBe("100");
+    } finally { cleanup(); }
+  });
+
+  it("closes a newly opened transport override after a Sent refusal restores the saved distance", async () => {
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Override the one-way distance" }));
+      const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+      fireEvent.change(input()!, { target: { value: "60" } });
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()).toBeNull());
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("restores a saved override cleared before a Sent refusal", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["transportDistanceKm"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      fireEvent.click(view.getByRole("button", { name: "Reset to the location default" }));
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
+
+  it("clears the saved route override when the operator picks another supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const nextSupplierId = "66666666-6666-4666-8666-666666666666";
+    const onSubmit = vi.fn();
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    try {
+      expect(view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]')?.value).toBe("60");
+      fireEvent.change(view.getByLabelText("Supplier"), { target: { value: nextSupplierId } });
+      expect(view.container.querySelector('input[name="transportDistanceKm"]')).toBeNull();
+      expect(view.getByRole("button", { name: "Override the one-way distance" })).toBeTruthy();
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        supplierId: nextSupplierId,
+        transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
+      }), expect.any(Function));
+    } finally { cleanup(); }
+  });
+
+  it("keeps the saved override after reverting a changed supplier", async () => {
+    const saved = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
+    const onSubmit = vi.fn((_data, onRefusal) => onRefusal(new ActionError({
+      error: "Sent to a Removal.", code: "certification_locked",
+      issues: [{ path: ["supplierId"], code: "certification_locked", message: "Sent to a Removal." }],
+    }), "Feedstock was not saved."));
+    const view = render(<FeedstockForm feedstock={saved} onSubmit={onSubmit} />);
+    const input = () => view.container.querySelector<HTMLInputElement>('input[name="transportDistanceKm"]');
+    try {
+      await act(async () => {
+        mocks.supplierDialogProps?.onSuccess({ id: "66666666-6666-4666-8666-666666666666", code: "SUP-2", name: "Supplier B" });
+      });
+      expect(input()?.value).not.toBe("60");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      await waitFor(() => expect(input()?.value).toBe("60"));
+      await act(async () => {});
+      expect(input()?.value).toBe("60");
+      expect(view.getByRole("button", { name: "Reset to the location default" })).toBeTruthy();
+    } finally { cleanup(); }
+  });
 
   it.each([150, 80])("submits an edited total of %s kg as its bin allocation", async (mass) => {
     const onSubmit = vi.fn();
@@ -244,7 +387,7 @@ describe("FeedstockForm single-bin mass editing", () => {
         totalWetMassKg: mass,
         moisturePercent: 25,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: mass }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }
@@ -273,7 +416,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -298,7 +441,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: 60, transportDistanceSource: "manual",
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -332,7 +475,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: undefined, transportDistanceSource: undefined, distanceNote: undefined,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -352,7 +495,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         supplierId: "66666666-6666-4666-8666-666666666666",
         transportDistanceKm: 60, transportDistanceSource: "manual", distanceNote: null,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -364,7 +507,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         transportDistanceKm: null, transportDistanceSource: undefined, distanceNote: null,
-      }));
+      }), expect.any(Function));
     } finally { await act(async () => renderer.unmount()); }
   });
 
@@ -386,7 +529,7 @@ describe("FeedstockForm single-bin mass editing", () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         totalWetMassKg: 160,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg }],
-      }));
+      }), expect.any(Function));
     } finally {
       await act(async () => renderer.unmount());
     }

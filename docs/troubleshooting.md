@@ -130,6 +130,13 @@ pnpm db:reset         # local only — destructive
 
 See [auth.md](./auth.md) for the flow and route protection.
 
+### OAuth Connector Debugging
+
+- `vercel logs` returns only the newest 50 lines unless filtered. Use
+  `vercel logs -q 'requestPath:/api/mcp'`.
+- Reloading a noma consent page invalidates it ("Start again from the app").
+  Restart from the client.
+
 ### Auth Change Didn't Take Effect (role/permission edits)
 
 Do not blame the 5-minute Better Auth cookie cache for a stale authorization
@@ -174,6 +181,16 @@ Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL
 `ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set — there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
 
 ## Build & Deployment Issues
+
+### OAuth resource seeding during build
+
+**Symptom:** with `OAUTH_PROVIDER_ENABLED=true`, `next build` logs
+`could not seed resources at startup` from oauth-provider when no database is
+available. This is expected for a build without a DB: the plugin tries to seed
+the configured REST and MCP resources and retries on first access. Do not run
+DB commands or weaken auth to silence the build log. A runtime failure after
+connecting to the configured DB still needs investigation. See
+[build-check env](./testing.md#build-check-environment).
 
 ### Type Errors During Build
 

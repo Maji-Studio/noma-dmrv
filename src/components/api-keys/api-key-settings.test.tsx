@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import type { ReactNode } from "react";
+import { squashed } from "../../../tests/helpers/error-box-text";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModalProps } from "@/components/ui/modal";
@@ -17,6 +19,7 @@ const state = vi.hoisted(() => ({
   update: vi.fn(),
   revoke: vi.fn(),
   reset: vi.fn(),
+  startDraft: vi.fn(),
   pending: false,
 }));
 
@@ -30,6 +33,7 @@ vi.mock("@/hooks/use-api-keys", () => ({
     },
     isPending: state.pending,
     reset: state.reset,
+    startDraft: state.startDraft,
   }),
   useUpdateApiKey: () => ({ mutateAsync: state.update, isPending: false }),
   useRevokeApiKey: () => ({ mutateAsync: state.revoke, isPending: false }),
@@ -151,7 +155,7 @@ describe("API key forms", () => {
     await fillAndSubmit("Unsaved draft");
     state.list.mockReturnValue({ data: [{ ...activeKey, name: "Latest saved name", version: 2 }], isLoading: false, isError: false });
     await act(async () => tree.update(<ApiKeySettings canManage organizationId="org-1" />));
-    expect(text(tree.root)).toContain(STALE_VERSION_MESSAGE);
+    expect(squashed(text(tree.root))).toContain(squashed(STALE_VERSION_MESSAGE));
     expect(tree.root.findAllByType("form")).toHaveLength(1);
     // Resubmitting without changing the input proves RHF retained the draft.
     await act(async () => { await tree.root.findByType("form").props.onSubmit({ preventDefault() {} }); });
@@ -165,7 +169,7 @@ describe("API key forms", () => {
     await render(<CreateApiKeyDialog isOpen onClose={vi.fn()} organizationId="org-1" />);
     await fillAndSubmit();
     expect(tree.root.findAllByType("form")).toHaveLength(1);
-    expect(text(tree.root)).toContain("Creation refused. Check your organization role.");
+    expect(squashed(text(tree.root))).toContain(squashed("Creation refused. Check your organization role."));
     expect(tree.root.findAllByProps({ id: "api-key-plaintext" })).toHaveLength(0);
   });
 });
@@ -189,6 +193,7 @@ describe("one-time API key", () => {
     expect(tree.root.findAllByProps({ id: "api-key-plaintext" })).toHaveLength(0);
     expect(tree.root.findAllByType("form")).toHaveLength(1);
     expect(state.reset).toHaveBeenCalledOnce();
+    expect(state.startDraft).toHaveBeenCalledOnce();
   });
 
   it("shows a manual-copy instruction if clipboard access fails", async () => {
@@ -235,11 +240,11 @@ describe("API key management", () => {
     expect(state.revoke).toHaveBeenCalledWith({ id: activeKey.id, expectedVersion: 1 });
   });
 
-  it.each(["Member", "Platform Admin without an Owner/Admin membership"])("shows no controls or list request for %s", async () => {
+  it.each(["Member", "Platform Admin without an Admin membership"])("shows no controls or list request for %s", async () => {
     await render(<ApiKeySettings canManage={false} organizationId="org-1" />);
     expect(state.list).not.toHaveBeenCalled();
     expect(tree.root.findAllByType("button")).toHaveLength(0);
-    expect(text(tree.root)).toContain("Only organization Owners and Admins with a membership");
+    expect(text(tree.root)).toContain("Only organization Admins with a membership");
   });
 
   it("lists safe metadata and all statuses, keeping revoked keys as Disabled", async () => {
@@ -250,7 +255,7 @@ describe("API key management", () => {
     await render(<ApiKeySettings canManage organizationId="org-1" />);
     expect(text(tree.root)).toContain("Example owner");
     expect(text(tree.root)).toContain(MISSING_VALUE.notRecorded);
-    expect(text(tree.root)).toContain("Feedstocks: Read");
+    expect(text(tree.root)).toContain("Reads Feedstocks");
     expect(tree.root.findAllByType("li").map(text)).toEqual([
       expect.stringContaining("Active"), expect.stringContaining("Disabled"), expect.stringContaining("Expired"),
     ]);

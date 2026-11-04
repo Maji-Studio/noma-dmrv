@@ -1,3 +1,4 @@
+import { legacyTransportObservation } from "./helpers/legacy-transport-observation";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -73,6 +74,25 @@ describe("org-scoped template observations", () => {
     const reviewed = await reviewLineContracts(ctx, { observationId: second.id, expectedVersion: second.version,
       assignments: { [component.id]: { scope, entryPolicy, automaticSource } } });
     expect(reviewed.lineSources[component.id].templateOrder).toEqual({ groupPosition: 0, position: 0 });
+  });
+  it("drops stored proposals that share one figure when the unchanged template is read again (#1198)", async () => {
+    const value = template();
+    const line = value.groups[0].components[0];
+    const ids = [`shared_a_${tag}`, `shared_b_${tag}`];
+    value.groups[0].components = ids.map((id) => ({ ...structuredClone(line), id }));
+    const first = await observe(value);
+    for (const id of ids) expect(first.lineSources[id]).toMatchObject({ scope: "unassigned", origin: "proposed" });
+    // A row stored before the fix: both lines proposed the same automatic figure.
+    const proposal = { scope: "operating", automaticSource: "run-electricity", entryPolicy: "additive", origin: "proposed" } as const;
+    await db.update(removalTemplateObservations)
+      .set({ lineSources: Object.fromEntries(ids.map((id) => [id, { ...first.lineSources[id], ...proposal }])) })
+      .where(and(eq(removalTemplateObservations.organizationId, TEST_ORG_ID), eq(removalTemplateObservations.id, first.id)));
+    const second = await observe(value);
+    expect(second).toMatchObject({ id: first.id, version: first.version + 1 });
+    for (const id of ids) {
+      expect(second.lineSources[id]).toMatchObject({ scope: "unassigned", entryPolicy: "none", origin: "proposed" });
+      expect(second.lineSources[id].automaticSource).toBeUndefined();
+    }
   });
   it("inserts once and only bumps lastObservedAt on an unchanged read", async () => {
     const value = template();
@@ -200,4 +220,21 @@ describe("org-scoped template observations", () => {
       });
     });
   });
+});
+
+
+it("refuses to review another component beside an undecided legacy pair", async () => {
+  const { observation } = legacyTransportObservation();
+  const value = template();
+  value.groups[0].components[0].id = `pending-${crypto.randomUUID()}`;
+  const row = await observe(value);
+  const pendingId = row.definition.groups[0].components[0].id;
+  await db.update(removalTemplateObservations).set({
+    definition: { groups: [...row.definition.groups, ...observation.definition.groups] },
+    enrichment: { ...row.enrichment, ...observation.enrichment },
+    lineSources: { ...row.lineSources, ...observation.lineSources },
+  }).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, row.id)));
+  const review = reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
+    assignments: { [pendingId]: { scope: "operating", entryPolicy: "additive" } } });
+  await expect(review).rejects.toThrow("Choose valid, distinct sources");
 });

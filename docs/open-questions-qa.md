@@ -29,8 +29,9 @@ bound); these are the decisions it deliberately did not make.
 - `credit_batches.status` still defaults every row to `pending` with no
   transition path; the badge/filter were removed from the UI rather than
   wired to anything. The enum (draft/pending/verified/issued/rejected) remains
-  in the schema and the dashboard's "period ended · awaiting verification"
-  attention item still keys on `status = 'pending'`.
+  in the schema. The dashboard's period-ended attention rows still read only
+  `status = 'pending'` batches, and take their wording from the holding
+  Removals' display state (`creditBatchAttention`, #1528).
 - **Resolve via:** define the lifecycle's owner (local readiness vs Isometric
   submission/verification/issuance webhooks) and its transitions, then either
   drive the column from that machine and restore the badge, or drop the column
@@ -61,7 +62,7 @@ bound); these are the decisions it deliberately did not make.
   three photo roles). The counts are consistent across surfaces, but the
   wording never says "1 gap group · 4 missing fields".
 - **Resolve via:** pick one convention (group count with expanded field list,
-  or field count everywhere) and apply it to the card tag, health strip, and
+  or field count everywhere) and apply it to the card tag, the batch page's open items, and
   Removal wizard copy (S).
 
 ### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)
@@ -71,9 +72,8 @@ bound); these are the decisions it deliberately did not make.
   `fn/production-samples` parse a zoneless `"YYYY-MM-DDTHH:mm"` string with
   `new Date(...)` on the **server**, so the stored instant depends on the server
   process timezone; `data-access/production-runs/overlap` formats conflict
-  messages in that same zone; and `productionRunDateExpr` casts `start_time` to
-  a **UTC** calendar day rather than the facility day, so a near-midnight run
-  can land in the wrong cohort date. Display counterparts in
+  messages in that same zone. `productionRunDateExpr` now derives the
+  facility-local start day from `start_time`. Display counterparts in
   `production-incident-form`, `production-sample-form` and
   `components/samples/sample-form` render in the browser zone (the
   production-run side sheet was moved to the facility zone on 2026-07-25).
@@ -162,29 +162,6 @@ bound); these are the decisions it deliberately did not make.
   for any document type. If not, add the partial unique index (`fileUrl is not
   null`) and switch the insert to an upsert (S).
 
-### Reconciled production batches are claimed on the supplier reference alone (`certification/production-batch-remote-drift`)
-
-- `ensureProductionBatchesForCreditBatches`
-  (`src/fn/certification/production-batches.ts`) claims an orphaned remote
-  Production Batch when `findProductionBatchBySupplierRef` matches the stable
-  `nm-ptb-…` reference, then journals the LOCALLY computed mass, window and
-  payload hash. Facility, feedstock types, kind, dates and mass on the remote
-  record are never compared, so a remote record created from different figures
-  is adopted as if it matched.
-- The same asymmetry applies after registration: drift between the registered
-  payload and current local data is recorded as a sync event and logged, never
-  applied, because `POST /production_batches` has no PATCH counterpart (verified
-  against the Certify OpenAPI snapshot: `/production_batches` exposes GET/POST,
-  `/production_batches/{id}` GET/DELETE only).
-- Deferred rather than fixed because the only remedies are a remote-vs-local
-  payload diff on every reconcile (a reconciliation engine for a path that
-  fires on crash recovery), or DELETE-and-recreate, which discards a registry
-  record verifiers may already reference.
-- **Resolve via:** decide whether a mismatched remote Production Batch should
-  block submission and be resolved by hand in Isometric, or be re-created after
-  a DELETE. If blocking, compare the reconciled record's mass/window/facility
-  and surface a conflict instead of claiming it (S).
-
 ### A zero-dry-mass chain passes every readiness surface and fails only at the registry POST (`certification/zero-dry-mass-late-gate`)
 
 - Verified on staging 2026-08-05 (issue #630 negative case): a production run
@@ -233,4 +210,3 @@ bound); these are the decisions it deliberately did not make.
   Edit affordance with the amendment entry point (M). Per project memory,
   verify any Isometric requirement verbatim before building a gate.
   Follow-up issue: #687.
-

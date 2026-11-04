@@ -30,7 +30,7 @@ export async function seedFixture(caseId: string): Promise<EvalFixture> {
   const org = fixture.ctx.organizationId;
   try {
     await db.insert(users).values({ id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`, name: "MCP evaluation", emailVerified: true });
-    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "owner" });
+    await db.insert(members).values({ id: randomUUID(), organizationId: org, userId: fixture.ctx.userId, role: "admin" });
     await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     await db.update(suppliers).set({ name: "X Timber", code: "X" })

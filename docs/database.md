@@ -10,6 +10,12 @@ infrastructure (`users`, sessions, accounts, verifications, organizations,
 members, invitations) follows its own identity/membership relationships.
 `api_keys.reference_id` is the plugin's organization id; its management table
 `api_key_owners` carries `organization_id` and an independent integer `version`.
+OAuth consents and tokens carry `reference_id`, the grant generation id, and
+reach their organization through `oauth_grants.organization_id`. Authorization
+attempts carry their own `organization_id`. The platform tables are
+`oauth_clients`, `oauth_resources`, `oauth_client_resources` and
+`oauth_client_assertions`. Client `reference_id` and `user_id` remain null in
+our provider configuration.
 `geo_route_cache` is the explicit organization-neutral cache. These exceptions
 are not examples for new domain tables. Domain tenancy is enforced in
 `src/data-access/`, not by the route layer.
@@ -32,12 +38,80 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - `organization_api_access`: one Platform Admin policy row per organization,
   with enabled state and change attribution. A missing row means enabled.
   Credential resolution and cross-organization administration are explicit
-  privileged seams, marked `// org-scope-ok:` in data-access. Owners/Admins
+  privileged seams, marked `// org-scope-ok:` in data-access. Admins
   without Platform Admin access cannot administer this policy.
 
 The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
 org-scoped reads.
+
+## Feedstock Lost mass corrections
+
+Any member can correct a feedstock Lost mass entry with a linked reversal and
+an optional replacement loss. The reversal restores exactly the original wet
+mass, at most once; omitting the replacement removes the entry. Both rows keep
+the reason and actor, and request keys make retries idempotent. A later run draw,
+live product ingredient draw, live Lost mass entry, or stock count of any delta locks
+correction in ledger order (event time, recorded time, id); later intakes do not.
+Every resulting balance must remain non-negative. History retains the reversed
+original and links its replacement without showing a separate reversal entry.
+
+## OAuth grant lifecycle
+
+`oauth_grants` binds an organization, user, issuance membership, client and
+resource immutably. Removal sets the membership FK to null. Re-admission
+creates a new generation; it never restores an old connection. One partial
+unique index permits one unrevoked binding per organization, user, client and
+resource. Creation sets `last_used_at` to `created_at`; management revocation
+increments `version` once and preserves the first reason.
+
+The expiring `verification` store keeps pending step-up hints under an
+`oauth-step-up:` identifier containing the exact user, client and organization
+tuple. A deterministic primary key makes replacement atomic. Hints grant no
+authority; consent ignores them after 15 minutes, including after accept or deny,
+and the OAuth purge removes expired hints.
+
+`oauth_authorization_attempts` binds one verified authorization query to one
+organization and session. Selection is insert-only. Resolution locks the
+attempt and the live membership, then reuses or creates a generation. A stored
+grant id never rebinds after revocation. The shared eligibility guard must also
+check the returned generation before issuance. Only consented generations
+count as connected apps or as the picker's most recently used connection.
+Exactly one eligible membership can skip the picker; multiple memberships
+always permit a new organization choice.
+
+`revokeGeneration` sets the generation's revocation time and reason and deletes
+its consent in one transaction. It never deletes or updates plugin token rows.
+The provider can interpret a revoked refresh row as replay and delete tokens
+across organizations, so application revocation must stay on the generation.
+Plugin member removal and self-service leave revoke affected generations;
+Platform Admin removal does so in its membership transaction. The live
+membership identity also fails closed after a direct membership delete.
+
+Named privileged seams use these exact waiver reasons:
+
+- `pre-authentication token lookup establishes the grant organization`: token
+  resolution and trusted generation revocation.
+- `session-authenticated authorization attempt; membership validated in the same query`:
+  `selectOAuthOrganization`, `resolveAttemptGrant`, and picker selection reads.
+- `trusted membership hooks revoke only the affected organization/user generations`:
+  `revokeMemberOAuthGrants`.
+- `platform client registry`: platform client reads.
+
+Connected-app management is ordinary org-scoped data access. It checks live
+membership, filters by organization, limits Members to their own connections,
+and requires the expected management version to disconnect. Admins
+can list and disconnect all connections in their organization. Role policy
+lives in `oauth-role-policy.ts`; Platform Admin status gives no override. Role
+changes keep connections under the default policy. If Member connections are
+disabled there, both membership role hooks revoke on demotion to Member.
+
+The authenticated API purge cron deletes expired attempts, unconsented pending
+generations older than a day, expired plugin tokens, expired client assertions
+and expired step-up hints. Pending cleanup also requires no token rows. An expired
+refresh row remains while an access token still references it, preventing the plugin's
+cascade FK from deleting an unexpired access token. Revoked generations remain
+for attribution. Purge queries are explicit cross-organization system seams.
 
 ## Activity events
 
@@ -181,8 +255,59 @@ so their row version and draw masses share a statement snapshot. The public run
 representation carries reference IDs; clients resolve codes and facility zones
 through lookups. Its strong ETag covers the run version and representation
 revision. Feedstock edits change bin stock and their own version, but do not
-rewrite the run's measured moisture, draws or batch allocations and do not bump
+rewrite the run's measured moisture or draws and do not bump
 the run version. A change to the run itself bumps its version.
+
+Feedstock draws replay each bin's remaining deliveries using its Draw method:
+Mass weighted takes proportional wet shares; In order empties deliveries Oldest
+first or Newest first. Complete intakes become available at the start of their
+facility-local delivery day. Stock edits re-plan runs from the earliest affected
+instant, with recorded time at millisecond precision then event ID breaking ties.
+Earlier runs keep saved shares.
+Later withdrawals that exceed available stock refuse the edit. Rebuilds are
+transactional and refuse changes to Sent lineage. Timezone edits lock the facility,
+source bins, then runs in ID order. Rebuilds allow archived historical bins;
+stock writers require active bins. Historical withdrawals beyond available stock
+carry debt that later intakes and positive counts repay before creating holdings;
+saved run shares remain unchanged. Every transactional replan checks that wet
+stock is zero to gram precision at each Mass weighted to In order switch. This
+covers intake edits, loss corrections, run cancellation/deletion/draw changes and
+product deletion; dry-only corrections pass when wet stock remains zero.
+
+Every saved run share has positive wet mass. Migration 0173 deletes nonpositive
+rows before adding the normal validated CHECK. Ownership is the earliest completed,
+non-archived run in a non-archived credit batch with a share row for the feedstock
+record; submission status never changes the candidate set.
+
+`pnpm feedstock:recalculate` rebuilds allocations per bin and reports rewritten
+runs and owned transport legs before/after per credit batch code. `--dry-run`
+rolls back each bin after planning. Without `--include-sent`, each bin starts just
+after its last Sent run draw, ordered by run time, draw recorded time and draw ID;
+without Sent runs it starts at the first event. The report warns about kept Sent
+runs separately from refused runs. Certification refusals identify the blocking
+run and Removal codes when the guard supplies them, or the blocked feedstock for
+a transport ownership refusal.
+
+`--include-sent` requires a local database target, checked from `DATABASE_URL`
+regardless of `NODE_ENV`; a `host` or `hostaddr` query parameter makes it non-local. Remote targets require the explicit
+`--allow-remote-include-sent` override, including for dry runs.
+
+For the one-off pre-production staging rebuild, confirm `DATABASE_URL` targets
+staging, then run
+`pnpm feedstock:recalculate --include-sent --allow-remote-include-sent --dry-run`,
+review the per-bin report, then
+`pnpm feedstock:recalculate --include-sent --allow-remote-include-sent`.
+This explicitly rebuilds from each
+bin's first event, including shares under sent RM-26-001. The report lists rewritten
+Sent runs with their Removal codes. Only this CLI path may opt out of the Sent
+lineage refusal and transport ownership freeze. The option is rejected when
+`NODE_ENV=production`; ordinary writes, including facility timezone edits, retain
+both guards. The command rebuilds local shares, not registry submission snapshots.
+
+A failed bin rolls back independently; other bins continue and the command exits
+unsuccessfully. The CLI uses a short-lived `Pool(getPgPoolConfig(...))` and Drizzle
+reader for inventory, identity checks and transactions, and ends the pool in
+`finally`; the app pool's lock timeout does not apply.
 
 Application writers use `src/data-access/application-write-scope.ts`: unlocked
 discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,
@@ -190,14 +315,21 @@ batches `FOR SHARE`, deliveries `FOR UPDATE`, application `FOR UPDATE` with its
 version check, revalidation, then application slices `FOR UPDATE` and writes.
 Changed lineage, parent or discovered sets return retryable `conflict` to the
 client; no new locks are taken late. Explicit credit-batch membership takes
-artifacts before facilities and runs, then process scope and batch. Scalar
-edits and delete take no member run locks; late auto-membership acquisition is
+facilities before facility-local date reads, artifacts and runs, then process
+scope and batch. Sample writers likewise take facilities before artifacts and
+batch/Sample rows. Scalar edits and delete take no member run locks; late
+auto-membership acquisition is
 non-blocking `SKIP LOCKED` and refuses a missed row. See
 [Database boundaries](./architecture.md#database-boundaries) for the full order.
 `src/lib/db/transaction-retry.ts` shares the runner's bounded retry policy with
 all three membership transactions. It retries 40P01, 40001 and 55P03; production
 run writers still take runs before artifacts. The residual order is tracked in
 `data/production-run-artifact-order` and `data/lock-order`.
+
+`certification_submissions.payload_snapshot` is guarded by migration 0167's
+`refuse_frozen_submission_payload_update` trigger. Leaving draft freezes the
+payload, with `payload_snapshot_frozen` retaining that freeze through retries
+and status resets. Only the `journaled` recovery key remains mutable.
 
 ## Numeric Column Families
 
@@ -372,11 +504,12 @@ Flow: change schema → `pnpm db:generate` → review the emitted SQL → run ta
 
 ### Your migration number is taken after merging staging
 
-1. Merge `origin/staging`, then replace your metadata with its: `rm -rf drizzle/meta && git checkout origin/staging -- drizzle/meta`. A plain checkout keeps your branch-only snapshots, and `db:generate` would diff against them.
-2. Delete your own `NNNN_*.sql`, then rerun `pnpm db:generate --name <same name>`.
-3. Re-apply any hand-written SQL you added to the generated file.
-4. Reset your worktree DBs, then migrate. A plain migrate skips staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
-5. Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. `pnpm check:migrations` catches this.
+1. Fetch and merge `origin/staging`, including its schema code. Commit or stash changes under `drizzle/` before renumbering.
+2. Preview with `pnpm db:renumber --dry-run`, then run `pnpm db:renumber`. It backs up branch-only SQL and metadata under `node_modules/.cache/db-renumber/<timestamp>/`, replaces all metadata with staging's snapshots, and regenerates offline with a fresh journal timestamp. Multiple branch-only migrations collapse into one named after the last migration. The command never connects to a database.
+3. Review the generated SQL and re-apply hand-written SQL from the backups, especially if the command reports differences.
+4. Reset both worktree DBs with the commands the script prints (it prints them only for a worktree's own local `noma_dmrv_wt_*` DBs, never with credentials). A plain migrate would skip staging's migration when its `when` is older than the one you already applied. Before pushing, `git status --short drizzle/` should show only your new migration files and metadata changes.
+
+Never rename the file and edit the journal by hand: Drizzle skips migrations whose `when` is older than the last applied one. Applied shared migrations remain immutable (see below). `pnpm check:migrations` checks journal consistency and compares branch-only migration prefixes with `origin/staging`. If that ref is unavailable, it warns and skips only the staging comparison; fetch it with `git fetch origin staging` to enable the check.
 
 ### Migration files are immutable once applied
 
@@ -423,7 +556,7 @@ submission and configuration boundary. Purpose per table:
 
 `removal_template_observations` stores normalized Isometric templates, enriched
 input metadata, fingerprints and versioned component-ID line contracts. Reviews
-require Owner/Admin permission; compilation requires complete enrichment and
+require Admin permission; compilation requires complete enrichment and
 valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
 `credit_batches.removal_template_id` pins the facility default at creation.
@@ -484,6 +617,17 @@ row versions, stock limits or relationship restrictions.
 
 A covering statement must be read fresh from Certify to reopen: FAILED_VERIFICATION, or DRAFT with earlier verifier-submission evidence (`submitted_at`, retained in metadata). This includes submissions made in Certify itself when REST or saved metadata retains a submission timestamp. Historical Certify submissions with a null REST timestamp and no saved evidence remain locked: this integration has no GraphQL history reader. Every other covering statement must also be known and safe, and nothing may be in flight. Failed reads keep the lock. Writers re-read under sorted certification artifact locks and refuse lineage expansion after locking; advisory reads cannot authorize a write. Every attempt with remote effects must have a known external identity covered by the fresh statement and predate its return evidence. REST exposes no return timestamp, so its verifier-submission time is used as a conservative lower bound; attempts after that bound remain locked. Resubmission therefore locks the lineage again.
 
+While the correction window is open, changed submission content (entries, lineage
+values, reporting dates or attached evidence) marks the Removal **Resubmit needed**.
+Advisory comparisons recompile from the stored template observation and current
+DB records, without template fetches or storage I/O. Existing live statement-status
+refreshes still determine whether the window is open. Descriptive fields do not count. Resubmission
+uses the current attached operator evidence and restores Sent. Statement submission
+checks member Removals under its artifact lock and refuses until their corrections
+have been resubmitted; advisory status alone never authorizes that write.
+Generated-ledger comparisons use ledger source facts frozen as versioned, tier-specific input fingerprints in generation row order in the sent snapshot, outside the submission payload hash. Computed outputs, formula/blueprint versions and display labels are excluded; older model-fingerprint baselines are unknown and do not force resubmission.
+A missing or invalid frozen baseline is unknown and never forces a resubmit by itself.
+
 Numeric consumers remain In use after reopening. Output entries share the correction dependency resolver between browser and server; unrelated intake does not lock them. Feedstock retains ADR 0027 wet-lane checks, so an intake edit may still proceed if all withdrawals fit. These rules need no schema migration. Free-field declarations describe current accepted updates, subject to field validation, membership and stock-sufficiency checks. They do not authorize bypassing those guards. Independent master-data, document, Removal lifecycle and deletion guards remain; see [record-lock follow-ups](./open-questions.md#record-lock-follow-ups) for independent guards and registry return evidence.
 
 ## Method-B storage boundary
@@ -504,9 +648,33 @@ by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibilit
 `emission_entries` binds one batch entry to a template observation and component.
 All domain references include `organization_id`. `version` changes on every write;
 `content_revision` changes for values, dates, template confirmation and uploaded
-evidence. Notes change only the version. Membership writers lock the batch before
-the entry; evidence writers lock the entry. Reserved or sent entries refuse edits.
-Deletion tombstones the entry and keeps its values and evidence.
+evidence. Notes change only the version. Membership and evidence writers lock lineage artifacts, then the facility, batch
+and entry. Reserved entries refuse edits. Sent entries reopen only with
+fresh returned-statement facts under the shared
+certification lineage locks. Unknown or stale statuses and in-flight lineage
+submissions keep the correction window closed. The window also controls date
+edits and sent-zero replacement; dates must stay within the Removal's entry window.
+An entry carried into a later Removal is corrected under that receiving Removal's
+window, which applies only its end date, as carry election does.
+"Enter again" is refused for a carried entry (#1580).
+Correction state compares the last submitted contribution manifest with the
+current contribution and is never stored. A new attempt reserves the current set
+and supersedes the prior attempt without transferring its entry claims.
+A replacement of a sent entry starts unsent. Its nullable `replaces_entry_id`
+references the sent original through the composite `(replaces_entry_id,
+organization_id)` foreign key, with a partial index on non-null replacement links.
+Replacing an unsent replacement carries the same original link. The original's
+`sent_by_removal_id` holds the replacement for that Removal even after its
+correction window closes. Entry reads expose this as `heldForRemovalId`; holds
+exclude other drafts and the entries-without-Removal list. Edits, deletion and
+evidence changes use the holding Removal's correction window. Only
+`markSubmissionSubmitted` stamps the replacement when its frozen reservation set
+is submitted successfully.
+Ordinary entry deletion tombstones the entry and keeps its values and evidence.
+Removal draft deletion first records an activity tombstone, then hard-deletes
+its never-sent recorded zeros, including already tombstoned zeros. The zero-owner
+CHECK requires `confirmed_for_removal_id`; its organization-scoped NO ACTION FK
+prevents retaining those zeros after their owning Removal is deleted.
 
 `emission_entry_values.magnitude` is an unconstrained PostgreSQL numeric read as
 decimal text. Values are non-negative and finite. Optional `mass_distance_detail`

@@ -1,3 +1,5 @@
+import { submissionHasRemoteEffect } from "@/lib/record-lock";
+import { lockRemovalEntryCorrectionAttempt } from "./emission-entry-corrections";
 import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
  * Submission ledger — claim choreography.
@@ -49,8 +51,7 @@ import {
   type CertificationSubmissionRow,
 } from "./certification";
 import { withCertificationStatusActivity } from "./certification-status-activity";
-import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
-import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
+import { acquireFacilityCertificationLocks } from "./facility-durability-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 /** Ledger statuses that mean "a submission finalized"; deletion refuses on any of them. */
@@ -71,8 +72,8 @@ export interface SubmissionKey {
 
 export interface MappingClaimGuard {
   facilityId: string;
-  /** Caller holds the matching certification-boundary session lock. */
-  facilityCertificationBoundaryLockHeldBySession?: true;
+  /** Caller already holds the boundary lock, on this transaction or as a session lock on another connection. */
+  facilityCertificationBoundaryLockHeld?: true;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
   /** Removals compile against their member batches' pin; a switch must not land between read and claim. */
@@ -325,6 +326,12 @@ async function resumeDraft<H>(
 ): Promise<ClaimOutcome> {
   const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
+    if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+      const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+      // Keep the lineage artifact locks, but remote effects must always be reconcilable.
+      const reconcile = !!candidate && submissionHasRemoteEffect(candidate);
+      await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, candidate?.id, reconcile);
+    }
     await lockSubmissionArtifact(tx, args.key);
     if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
 
@@ -387,6 +394,14 @@ async function createDraft<H>(
   try {
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
+      if (args.key.localEntityType === "removal" && args.key.submissionType === "removal") {
+        const candidate = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
+        const recovery = decideSubmissionClaim({ latest: candidate, payloadHash: args.hashOf(args.tentativeInputs),
+          now: Date.now(), lockTtlMs: LOCK_TTL_MS, policy: args.policy });
+        const predecessorId = recovery.kind === "create-new-version" && recovery.reason === "evidence-refresh"
+          ? recovery.supersedePreviousId ?? undefined : undefined;
+        await lockRemovalEntryCorrectionAttempt(ctx, tx, args.key.localEntityId, predecessorId);
+      }
       await lockSubmissionArtifact(tx, args.key);
       if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic
@@ -583,14 +598,9 @@ async function lockAndVerifyMapping(
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
-  if (!guard.facilityCertificationBoundaryLockHeldBySession) {
-    await acquireFacilityCertificationBoundaryLock(
-      ctx,
-      executor,
-      guard.facilityId,
-    );
-  }
-  await acquireFacilityDurabilityLock(ctx, executor, guard.facilityId);
+  await acquireFacilityCertificationLocks(ctx, executor, guard.facilityId, {
+    boundaryLockHeld: guard.facilityCertificationBoundaryLockHeld,
+  });
 
   if (guard.expectedDurabilityOption !== undefined) {
     const [facility] = await executor
@@ -628,7 +638,7 @@ async function lockAndVerifyMapping(
 
   if (!current) {
     throw new SafeError(
-      "Facility is no longer linked to a certifier project. Re-link in facility settings before submitting.",
+      "Facility is no longer linked to a certifier project. Link it again in Settings, Facilities before submitting.",
     );
   }
   if (current.externalProjectId !== guard.expectedExternalProjectId) {

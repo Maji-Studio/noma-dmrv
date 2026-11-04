@@ -24,11 +24,12 @@ vi.mock("@/lib/certification/facility-setup-gaps", () => ({
 }));
 
 const mockedListUngrouped = vi.mocked(listUngroupedCreditBatches);
+const APPLIED_DRY_TONS = 1;
 
 const orgCtx: OrgContext = {
   userId: "user-1",
   organizationId: "org-1",
-  orgRole: "owner",
+  orgRole: "admin",
   isPlatformAdmin: false,
 };
 
@@ -41,7 +42,10 @@ function accountingRecord(
     appliedWeightTons,
     co2ePreview: { co2eStoredTonnes },
     batch: { id: batchId },
-    lineageFacts: { batchId },
+    lineageFacts: {
+      batchId,
+      applications: [{ biocharAppliedDryTons: APPLIED_DRY_TONS }],
+    },
   };
 }
 
@@ -51,7 +55,7 @@ describe("buildSelectableBatchesData", () => {
   });
 
   it("requests one set of accounting-backed contexts for the whole wizard render", async () => {
-    const facilityFacts = { mapping: { id: "mapping-1" } };
+    const facilityFacts = { facilityTimezone: "UTC", mapping: { id: "mapping-1" } };
     const batchRows = [
       { id: "batch-1", code: "CB-1" },
       { id: "batch-2", code: "CB-2" },
@@ -85,8 +89,8 @@ describe("buildSelectableBatchesData", () => {
     );
     expect(result).toMatchObject({
       batches: [
-        { id: "batch-1", appliedWeightTons: 1.25 },
-        { id: "batch-2", appliedWeightTons: 2.5 },
+        { id: "batch-1", appliedWeightTons: 1.25, appliedDryTons: APPLIED_DRY_TONS },
+        { id: "batch-2", appliedWeightTons: 2.5, appliedDryTons: APPLIED_DRY_TONS },
       ],
     });
     expect(result.batches[0]).not.toHaveProperty("co2eStoredTonnes");

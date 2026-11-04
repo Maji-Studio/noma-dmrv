@@ -1,12 +1,13 @@
 import { LINE_NO_MAPPING_MESSAGE, LINE_TRANSPORT_REPLACEMENT_MESSAGE, TRANSPORT_BLUEPRINT_KEY } from "./emission-line-constants";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { emissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
+import { emissionLineBindingDecision, type EmissionLineBindingDecision, type LineCoverageReason } from "@/lib/certification/emission-line-binding";
 import type { components } from "./generated/certify";
 import { ownValue } from "./semantic-binding-catalog";
 import { validateLineSources, type LineSources } from "./template-observations/line-sources";
 import { normalizeTemplateDefinition } from "./template-observations/normalize";
 
 export interface UnbindableTemplateInput {
+  state: EmissionLineBindingDecision["state"];
   groupKey: string;
   componentId: string;
   componentDisplayName: string;
@@ -18,7 +19,7 @@ export interface UnbindableTemplateInput {
 
 export function findUnbindableTemplateInputs(
   template: components["schemas"]["GhgEntryTemplate"],
-  options: { lineSources?: LineSources; enrichmentComplete?: boolean } = {},
+  options: { lineSources?: LineSources; enrichmentComplete?: boolean; entriesCanSubmit?: boolean } = {},
 ): UnbindableTemplateInput[] {
   if (options.enrichmentComplete === false) return [];
   const definition = normalizeTemplateDefinition(template);
@@ -28,10 +29,10 @@ export function findUnbindableTemplateInputs(
   return template.groups.flatMap((group) => group.components.flatMap((rawComponent) => {
     const component = componentsById.get(rawComponent.id)!;
     const decision = emissionLineBindingDecision({ component, groupKey: group.key,
-      contract: ownValue(lineSources, component.id), problems, enrichmentComplete: options.enrichmentComplete ?? true });
+      contract: ownValue(lineSources, component.id), entriesCanSubmit: options.entriesCanSubmit, problems, enrichmentComplete: options.enrichmentComplete ?? true });
     if (!decision) return [];
     const finding = (inputKey: string, reason: LineCoverageReason) => ({ groupKey: group.key, componentId: component.id,
-      componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason });
+      componentDisplayName: component.displayName, blueprintKey: component.blueprintKey, inputKey, reason, state: decision.state });
     return [
       ...(decision.unknownInputKeys ?? []).map((inputKey) => finding(inputKey, "unmapped")),
       ...decision.inputKeys.map((inputKey) => finding(inputKey, decision.reason)),
@@ -51,7 +52,7 @@ function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
   if (input.reason === "project-scope" || input.reason === "unrecognized-component") {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
-  if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Choose a different automatic source for each line.`;
+  if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Give each component its own automatic datapoints.`;
   if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return LINE_TRANSPORT_REPLACEMENT_MESSAGE.replace("Replace it", `Replace ${target}`);
   return LINE_NO_MAPPING_MESSAGE;
 }

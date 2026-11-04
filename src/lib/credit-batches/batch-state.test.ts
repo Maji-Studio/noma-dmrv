@@ -4,26 +4,29 @@ import { creditBatchStateOf } from "./batch-state";
 
 const open: CreditBatchHealthSummary = {
   state: "incomplete",
-  issueCount: 3,
+  issueCount: 2,
+  linesToDecide: 0,
+  checkCount: 1,
   removalId: null,
   removalCode: null,
   productionEmissionsClaimedByRemovalCode: null,
   removalStatus: null,
+  removalInterrupted: false,
   ghgStatementId: null,
   ghgStatementStatus: null,
 };
 
 describe("creditBatchStateOf", () => {
   it("has no state before readiness loads", () => {
-    expect(creditBatchStateOf(undefined)).toEqual({ state: null, blockingCount: 0 });
+    expect(creditBatchStateOf(undefined)).toEqual({ state: null, blockingCount: 0, openTodoCount: 0 });
   });
 
-  it("counts blocking items while the batch is Open", () => {
-    expect(creditBatchStateOf(open)).toEqual({ state: "blocking", blockingCount: 3 });
+  it("counts Blocking and Check items while the batch is Open", () => {
+    expect(creditBatchStateOf(open)).toEqual({ state: "blocking", blockingCount: 2, openTodoCount: 3 });
   });
 
-  it("is Ready with no count once the data is complete", () => {
-    expect(creditBatchStateOf({ ...open, state: "ready", issueCount: 0 })).toEqual({ state: "ready", blockingCount: 0 });
+  it("shows no count while Ready, even with Check items", () => {
+    expect(creditBatchStateOf({ ...open, state: "ready", issueCount: 0, checkCount: 2 })).toEqual({ state: "ready", blockingCount: 0, openTodoCount: 0 });
   });
 
   it("drops the count once a Removal is submitted", () => {
@@ -32,6 +35,29 @@ describe("creditBatchStateOf", () => {
       removalId: "removal-1",
       removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
     });
-    expect(submitted).toEqual({ state: "submitted", blockingCount: 0 });
+    expect(submitted).toEqual({ state: "submitted", blockingCount: 0, openTodoCount: 0 });
+  });
+  it("reads interrupted when an older holder is interrupted and the newest is submitted", () => {
+    expect(creditBatchStateOf({
+      ...open,
+      removalId: "newest-submitted",
+      removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
+      removalInterrupted: true,
+    })).toEqual({ state: "interrupted", blockingCount: 2, openTodoCount: 3 });
+  });
+  it.each([
+    { issueCount: 2, checkCount: 1, openTodoCount: 3 },
+    { issueCount: 0, checkCount: 2, openTodoCount: 2 },
+    { issueCount: 0, checkCount: 0, openTodoCount: 0 },
+  ])("keeps $openTodoCount open to-dos during an interrupted submission", ({ issueCount, checkCount, openTodoCount }) => {
+    expect(creditBatchStateOf({ ...open, removalInterrupted: true, issueCount, checkCount }))
+      .toEqual({ state: "interrupted", blockingCount: issueCount, openTodoCount });
+  });
+  it("drops the count once credits are issued", () => {
+    expect(creditBatchStateOf({
+      ...open,
+      ghgStatementId: "statement-1",
+      ghgStatementStatus: { kind: "issued", value: "issued", label: "Issued", isActionable: false, isTerminal: true },
+    })).toEqual({ state: "issued", blockingCount: 0, openTodoCount: 0 });
   });
 });

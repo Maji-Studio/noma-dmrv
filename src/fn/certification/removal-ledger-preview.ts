@@ -19,6 +19,19 @@ export interface RemovalLedgerInput {
   input: string;
   magnitude: number | null;
   unit: string;
+  /** Why a required input has no magnitude. Null whenever `magnitude` is set. */
+  missingReason: string | null;
+}
+
+/** A required transport category with no legs recorded. */
+export const NO_LEGS_RECORDED = "No legs recorded";
+/** Legs exist but the category gives no single sum (a leg without a load mass or distance, or mixed factors). */
+export const LEGS_CANNOT_BE_SUMMED = "Recorded legs cannot be summed";
+
+/** Why a required transport input has no mass-distance: no legs, or legs the sum refuses. */
+function transportGap(magnitude: number | null, legCount: number): string | null {
+  if (magnitude != null) return null;
+  return legCount === 0 ? NO_LEGS_RECORDED : LEGS_CANNOT_BE_SUMMED;
 }
 
 export interface RemovalLedgerClaim {
@@ -59,8 +72,9 @@ function input(
   label: string,
   magnitude: number | null,
   unit: string,
+  missingReason: string | null = null,
 ): RemovalLedgerInput {
-  return { id, component, input: label, magnitude, unit };
+  return { id, component, input: label, magnitude, unit, missingReason };
 }
 
 export function buildRemovalLedgerPreview(args: {
@@ -143,6 +157,7 @@ export function buildRemovalLedgerPreview(args: {
             "Mass and distance",
             aggregate.feedstockTransportMassDistanceTonneKm,
             "t·km",
+            transportGap(aggregate.feedstockTransportMassDistanceTonneKm, args.transportLegs.feedstock.length),
           ),
         );
       }
@@ -154,20 +169,7 @@ export function buildRemovalLedgerPreview(args: {
             "Mass and distance",
             aggregate.biocharTransportMassDistanceTonneKm,
             "t·km",
-          ),
-        );
-      }
-      if (
-        args.requiredTransportCategories.includes("sample") &&
-        aggregate.sampleTransportMassDistanceTonneKm > 0
-      ) {
-        inputs.push(
-          input(
-            "sample-transport",
-            "Sample transport",
-            "Mass and distance",
-            aggregate.sampleTransportMassDistanceTonneKm,
-            "t·km",
+            transportGap(aggregate.biocharTransportMassDistanceTonneKm, args.transportLegs.biochar.length),
           ),
         );
       }

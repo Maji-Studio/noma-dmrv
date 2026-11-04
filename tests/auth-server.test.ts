@@ -83,8 +83,8 @@ describe("getUser", () => {
 
 
 describe("organization role checks", () => {
-  const roles = [null, "member", "admin", "owner"] as const;
-  const minimumRoles = ["member", "admin", "owner"] as const;
+  const roles = [null, "member", "admin"] as const;
+  const minimumRoles = ["member", "admin"] as const;
   it.each(roles)("shares the permission decision for role %s", (orgRole) => {
     const ctx: OrgContext = { userId: "user", organizationId: "org", orgRole, isPlatformAdmin: false };
     for (const minRole of minimumRoles) {

@@ -1,0 +1,52 @@
+// @vitest-environment jsdom
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import type { CreditBatchMilestone } from "@/lib/credit-batches/batch-page";
+import { CreditBatchProgressCompact, progressFocusIndex } from "./credit-batch-progress-compact";
+
+const step = (key: CreditBatchMilestone["key"], label: string, state: CreditBatchMilestone["state"], extra: Partial<CreditBatchMilestone> = {}): CreditBatchMilestone =>
+  ({ key, label, state, caption: null, ...extra });
+
+const missing: CreditBatchMilestone[] = [
+  step("data", "Open to-dos", "current", { count: 4 }),
+  step("removal", "Removal submitted", "todo"),
+  step("verified", "Verified", "todo"),
+  step("issued", "Credits issued", "todo"),
+];
+
+describe("progressFocusIndex", () => {
+  it("names the current or failed step, else the last done one, else the first", () => {
+    expect(progressFocusIndex(missing)).toBe(0);
+    const failed = missing.map((s, i) => (i === 0 ? { ...s, state: "done" as const } : i === 2 ? { ...s, state: "failed" as const } : s));
+    expect(progressFocusIndex(failed)).toBe(2);
+    expect(progressFocusIndex(missing.map((s) => ({ ...s, state: "done" as const })))).toBe(3);
+    expect(progressFocusIndex(missing.map((s) => ({ ...s, state: "todo" as const })))).toBe(0);
+  });
+  it("stays on a failed step even while an earlier step is current", () => {
+    expect(progressFocusIndex(missing.map((s, i) => (i === 1 ? { ...s, state: "failed" as const } : s)))).toBe(1);
+  });
+});
+
+describe("CreditBatchProgressCompact", () => {
+  it("renders one 44px trigger naming the step, its to-do count and its place", () => {
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(<CreditBatchProgressCompact steps={missing} />);
+    const trigger = container.querySelector('[data-testid="credit-batch-progress-trigger"]') as HTMLButtonElement;
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger.className).toContain("min-h-44");
+    const text = (trigger.textContent ?? "").replace(/\s+/g, " ").trim();
+    expect(text).toBe("Open to-dos4Step 1 of 4");
+    expect(trigger.querySelector('[aria-label="4 open to-dos"]')).not.toBeNull();
+    // The four-step list mounts only while the popover is open.
+    expect(container.querySelector("ol")).toBeNull();
+  });
+
+  it("names what went wrong on a failed step, not the step it did not reach", () => {
+    const steps = missing.map((s, i) => (i === 1 ? { ...s, state: "failed" as const, caption: "RM-26-001: Submission interrupted" } : s));
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(<CreditBatchProgressCompact steps={steps} />);
+    const text = (container.querySelector('[data-testid="credit-batch-progress-trigger"]')?.textContent ?? "").replace(/\s+/g, " ").trim();
+    expect(text).toBe("RM-26-001: Submission interruptedStep 2 of 4");
+    expect(text).not.toContain("Removal submitted");
+  });
+});

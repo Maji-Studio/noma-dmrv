@@ -11,11 +11,14 @@
  */
 "use client";
 
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
+import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
@@ -25,11 +28,14 @@ import {
 } from "@/hooks/use-certification";
 import {
   deriveRemovalWorkflowStatus,
+  REMOVAL_FAILED_REVIEW_REASON,
+  REMOVAL_INTERRUPTED_RECONCILE_REASON,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
 import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
 import { IsometricLink } from "./isometric-link";
 import { ProductionBatchLinks } from "./production-batch-links";
@@ -38,7 +44,8 @@ import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
-import { SyncEventLog } from "./sync-event-log";
+import { SubmissionHistory } from "./submission-history";
+import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
@@ -49,14 +56,20 @@ import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
+import { correctionStatus } from "@/lib/removal-correction-copy";
+import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
+import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 interface RemovalDetailSheetProps {
+  /** Admin: may add a missed run to a credit batch. */
+  canManage?: boolean;
   summary: RemovalListRow;
   isProduction: boolean;
   facilityId: string;
   open: boolean;
   onClose: () => void;
-  /** Which Isometric returned, if any: shows "Correction needed". */
+  /** Which Isometric returned, if any: shows "Correction needed" where the Removal has no `correction`. */
   lock?: RecordLockView;
 }
 
@@ -87,13 +100,33 @@ export function RemovalStorageSitesField({
   );
 }
 
+/** The outcome the notice under the status tells, or null when nothing needs saying. */
+export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWorkflowStatus): NoticeOutcome | null {
+  if (status.kind === "submitted" || status.kind === "submitting" || status.kind === "superseded") return null;
+  const latest = summary.submissionAttempts[0]?.outcome;
+  // A retry of an interrupted draft can stop on drift before it claims anything, so the status stays
+  // "interrupted": the red stop still leads.
+  if (latest?.kind === "differs") return latest;
+  if (status.kind === "interrupted") return { kind: "interrupted" };
+  return latest && latest.kind !== "submitted" ? latest : null;
+}
+
 function SubmissionStatusSection({
   summary,
   status,
+  facilityId,
+  timeZone,
 }: {
   summary: RemovalListRow;
   status: RemovalWorkflowStatus;
+  facilityId: string;
+  timeZone: string;
 }) {
+  const outcome = submissionOutcomeFor(summary, status);
+  // The outcome notice replaces the two generic "review the history" reasons.
+  const reasons = outcome
+    ? status.reasons.filter((reason) => reason !== REMOVAL_FAILED_REVIEW_REASON && reason !== REMOVAL_INTERRUPTED_RECONCILE_REASON)
+    : status.reasons;
   return (
     <DetailSection title="Submission status" divider={false}>
       <DetailField
@@ -112,10 +145,19 @@ function SubmissionStatusSection({
         valuePresent
       />
 
-      {status.reasons.length > 0 && (
+      {outcome && (
+        <SubmissionOutcomeNotice
+          outcome={outcome}
+          facilityId={facilityId}
+          timeZone={timeZone}
+          finalized={summary.hasFinalizedSubmission}
+        />
+      )}
+
+      {reasons.length > 0 && (
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
-            {status.reasons.map((reason) => (
+            {reasons.map((reason) => (
               <li key={reason}><MultilineDetail>{reason}</MultilineDetail></li>
             ))}
           </ul>
@@ -148,10 +190,7 @@ export function RemovalReviewAction({
   return (
     <Link
       href={reviewHref}
-      className={buttonVariants({
-        variant: "primary",
-        className: "flex-1",
-      })}
+      className={buttonVariants({ variant: "primary" })}
     >
       Review &amp; submit
     </Link>
@@ -165,7 +204,9 @@ export function RemovalDetailSheet({
   open,
   onClose,
   lock,
+  canManage = false,
 }: RemovalDetailSheetProps) {
+  const { timeZone } = useFacilityClock(facilityId);
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
     open,
@@ -179,6 +220,15 @@ export function RemovalDetailSheet({
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
+  // A replaced Removal never sends anything, so it is the one state that
+  // skips the carried-entries read.
+  const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
+  const carriedEntries = removalEntries?.carriedEntries;
+  const lateEntries = removalEntries?.lateEntries;
+  // A returned Removal with its correction window open shows the Returned or
+  // Resubmit needed status and one notice in place of #1134's lock-based one.
+  const { correction } = summary;
+  const shownStatus = correction ? { ...workflowStatus, ...correctionStatus(correction) } : workflowStatus;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
@@ -189,20 +239,24 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
-  // Deletion mirrors the server rule: never-finalized only. With registry
-  // history the draft GHG Entry and Biochar Applications are removed from
-  // Isometric before the local record goes. No role gate yet (issue #746).
-  const touchesRegistry = removalDeletionTouchesRegistry(summary);
-  const canDelete = canDeleteRemovalRow(summary);
+  // Deletion mirrors the server rule: never-finalized only, and once the
+  // Removal touched the registry only viewers at the role floor (issue #746).
+  // With registry history the draft GHG Entry and Biochar Applications are
+  // removed from Isometric before the local record goes.
+  const deleteAccess = useRemovalDeleteAccess(
+    facilityId,
+    summary.removalId,
+    open,
+  );
+  const touchesRegistry = removalDeletionTouchesRegistry(summary, deleteAccess);
+  const canDelete = canDeleteRemovalRow(summary, deleteAccess);
   const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
-  // The legacy `/removals/[id]/review` route only redirects here (dropping any
-  // `?step=`), so we skip the hop and build the resume URL it resolves to.
-  const reviewHref = `/certification/removals?resume=${encodeURIComponent(
+  const reviewHref = `/removals?resume=${encodeURIComponent(
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
 
@@ -228,8 +282,14 @@ export function RemovalDetailSheet({
           <SlideOverPanel.Body className="flex flex-col gap-24">
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={workflowStatus} />
-            <RemovalCorrectionNotice lock={lock} />
+            <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} />
+            {correction ? (
+              <RemovalResubmitNotice correction={correction} facilityId={facilityId} />
+            ) : (
+              <RemovalCorrectionNotice lock={lock} />
+            )}
+            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage} />
+            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown
@@ -299,6 +359,13 @@ export function RemovalDetailSheet({
               </div>
             </DetailSection>
 
+            <CarriedEntriesSection
+              entries={carriedEntries}
+              facilityId={facilityId}
+              sent={workflowStatus.kind === "submitted"}
+            />
+            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} />
+
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
               diesel the active template cannot carry. Distinct from readiness
@@ -320,37 +387,30 @@ export function RemovalDetailSheet({
               isEditable={isActionable}
             />
 
-            {summary.recentSyncEvents.length > 0 && (
-              <SyncEventLog
-                events={summary.recentSyncEvents}
-                label={`Submission history (${summary.recentSyncEvents.length})`}
-              />
-            )}
+            <SubmissionHistory
+              attempts={summary.submissionAttempts}
+              events={summary.recentSyncEvents}
+              facilityId={facilityId}
+              timeZone={timeZone}
+            />
           </SlideOverPanel.Body>
 
-          <SlideOverPanel.Footer className="justify-stretch">
+          <SlideOverPanel.Footer>
+            <ResubmitRemovalAction correction={correction} facilityId={facilityId} />
+            <RemovalReviewAction
+              isActionable={isActionable}
+              reviewHref={reviewHref}
+            />
             {canDelete && (
               <Button
                 variant="destructive"
-                className="flex-1"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
               >
                 {deleteCopy.actionLabel}
               </Button>
             )}
-            <RemovalReviewAction
-              isActionable={isActionable}
-              reviewHref={reviewHref}
-            />
-            <SlideOverPanel.Close>
-              <Button
-                variant={isActionable ? "default" : "primary"}
-                className="flex-1"
-              >
-                Close
-              </Button>
-            </SlideOverPanel.Close>
+            <SlideOverPanel.FooterClose />
           </SlideOverPanel.Footer>
         </SlideOverPanel.Content>
       </SlideOverPanel.Root>
@@ -383,7 +443,6 @@ export function RemovalDetailSheet({
             : undefined
         }
         confirmLabel={deleteCopy.actionLabel}
-        pendingLabel={deleteCopy.pendingLabel}
       />
     </>
   );

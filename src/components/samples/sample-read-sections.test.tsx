@@ -11,6 +11,10 @@ import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections"
 describe("formatSamplingTime", () => {
   const samplingTime = new Date("2026-03-10T07:30:00.000Z");
 
+  it("uses UTC for an unknown facility", () => {
+    expect(formatSamplingTime({ samplingTime, facilityTimezone: null })).toBe("Mar 10, 2026, 07:30");
+  });
+
   it("reads the time on the batch facility's clock", () => {
     // 07:30 UTC is 10:30 in Dar es Salaam (UTC+3).
     expect(formatSamplingTime({ samplingTime, facilityTimezone: "Africa/Dar_es_Salaam" })).toContain("10:30");
@@ -20,9 +24,8 @@ describe("formatSamplingTime", () => {
 
 describe("Sample read-view Transport section", () => {
   const sample = { id: "sample", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC" } as unknown as SampleWithRelations;
-  it("shows Transport by default and hides it behind the emissions gate", () => {
-    expect(sampleSheetSections(sample).map((section) => section.title)).toContain("Transport");
-    expect(sampleSheetSections(sample, { hideTransport: true }).map((section) => section.title)).not.toContain("Transport");
+  it("hides Transport", () => {
+    expect(sampleSheetSections(sample).map((section) => section.title)).not.toContain("Transport");
   });
 });
 
@@ -43,7 +46,11 @@ describe("Sample read-view certification chips", () => {
       organicCarbonPercent: 75, hToCOrgRatio: 0.24, oToCOrgRatio: 0.06,
       sReflectanceFraction: 0.9, nutrientClaimEnabled: false,
     } as unknown as SampleWithRelations;
-    const fields = sampleSheetSections(sample).flatMap((section) => section.fields);
+    const sections = sampleSheetSections(sample, "missing");
+    const evidence = sections.find((section) => section.title === "Evidence & documents");
+    expect(evidence?.certifyRequired).toBe(sampling === "sampled");
+    expect(evidence?.certifyStatus).toBe("missing");
+    const fields = sections.flatMap((section) => section.fields);
     for (const label of ["Organic carbon", "H:C org ratio", "O:C org ratio"]) {
       const field = fields.find((field) => field.label === label)!;
       const markup = renderToStaticMarkup(<DetailField {...field} />);

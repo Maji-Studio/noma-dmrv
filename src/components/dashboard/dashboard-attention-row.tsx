@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 
 type AttentionDate = string | Date | null;
 
-const EMPTY_FORMATTED_DATE = formatDate(null);
+const EMPTY_FORMATTED_DATE = formatCalendarDate(null);
 
 export function formatDashboardRecordMetadata(
   entityCode: string,
   date: AttentionDate,
 ): string {
-  const formattedDate = formatDate(date);
+  // These record dates are facility day strings or UTC-midnight business dates.
+  const formattedDate = formatCalendarDate(date);
   return formattedDate === EMPTY_FORMATTED_DATE
     ? entityCode
     : `${entityCode} · ${formattedDate}`;

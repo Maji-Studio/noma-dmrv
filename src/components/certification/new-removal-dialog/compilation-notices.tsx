@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { MultilineDetail } from "../multiline-detail";
 import { Notice } from "@/components/ui/notice";
@@ -73,11 +74,16 @@ function FindingFixLink({ finding, facilityId, memberBatchIds }: { finding: Pick
 }
 
 /** Blockers stop submission. Each names the affected line where it has one and links to its fix. */
-export function RemovalBlockerList({ blockers, facilityId, memberBatchIds }: FindingListProps & { blockers: RemovalBlocker[] }) {
-  if (blockers.length === 0) return null;
+export function RemovalBlockerList({ blockers, facilityId, memberBatchIds, lead }: FindingListProps & {
+  blockers: RemovalBlocker[];
+  /** List items that come first, such as the blocked components the table below names. */
+  lead?: ReactNode;
+}) {
+  if (blockers.length === 0 && !lead) return null;
   return (
     <Notice tone="error">
       <ul role="list" className="flex flex-col gap-8">
+        {lead}
         {blockers.map((blocker) => (
           <li key={`${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.message}`} className="flex flex-col gap-2">
             <span><MultilineDetail>{removalLineBlockerMessage(blocker)}</MultilineDetail></span>

@@ -6,6 +6,8 @@
  */
 "use client";
 
+import { useFacilityDateDefaults } from "@/hooks/use-facility-date-defaults";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
@@ -15,12 +17,13 @@ import { CalendarIcon, MapPinIcon, NoteIcon, PlantIcon, PlusIcon, StackIcon } fr
 import { numericValue } from "@/lib/form-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { toDateInputValue } from "@/lib/date-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { toDateInputValue, facilityToday } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
+import { RecordCreditBatchLine } from "@/components/credit-batches/record-credit-batch-line";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -39,6 +42,7 @@ import {
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
+import { isRecordFieldLocked, isTransportOnlyEditable, type RecordLockView } from "@/lib/record-lock-view";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FeedstockAllocationSummary } from "./feedstock-allocation-summary";
@@ -50,8 +54,9 @@ import { useFacility } from "@/hooks/use-facilities";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
 import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
-import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, isOverrideLockRefusal, overrideDistanceError } from "@/components/transport-legs/distance-override";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
+import { feedstockRefusalAliases } from "./feedstock-update-payload";
 import { supplierLocationDistanceLink } from "@/lib/location-distance-links";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -59,6 +64,8 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
 
+/** The override fields: reset together on a refusal, cleared together with the override. */
+const OVERRIDE_FIELDS = ["transportDistanceKm", "transportDistanceSource", "distanceNote"] as const;
 const ROUTE_EMPTY = "Select a supplier and enter the wet mass to see the route.";
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
@@ -70,7 +77,8 @@ const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 interface FeedstockFormProps {
   /** Existing feedstock for editing (undefined = create mode) */
   feedstock?: FeedstockWithRelations;
-  onSubmit: (data: FeedstockFormData) => Promise<void> | void;
+  /** An edit hands `onRefusal` on so a refused save shows at its fields (#1298). */
+  onSubmit: (data: FeedstockFormData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
@@ -81,8 +89,10 @@ interface FeedstockFormProps {
   /** All rows a failed create produced, so evidence retry reaches each. */
   retryEntityIds?: string[];
   focusTarget?: EntityFocusTarget | null;
-  /** A refresh from location saved a new version: reopen the form on it. */
-  onDistanceRefreshed?: () => void;
+  /** A refresh from location saved a new version: reopen the form on it; resolves once the sheet holds it. */
+  onDistanceRefreshed?: () => Promise<void>;
+  /** The saved record's lock: a Sent record whose transport is open locks every other field. */
+  lock?: RecordLockView;
 }
 
 export function FeedstockForm({
@@ -97,12 +107,19 @@ export function FeedstockForm({
   retryEntityIds,
   focusTarget,
   onDistanceRefreshed,
+  lock,
 }: FeedstockFormProps) {
+  const latched = useLatchedSubmit();
   const isEditMode = !!feedstock;
+  // Update-input names, as the server's record lock knows them.
+  const transportOnly = isEditMode && isTransportOnlyEditable(lock);
+  const locked = (field: string) => transportOnly && isRecordFieldLocked(lock, field);
   // Returning to the saved mass clears RHF dirtiness, but is still an override.
   const [hasEditedAllocationMass, setHasEditedAllocationMass] = useState(false);
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const { timeZone: initialTimeZone } = useFacilityClock(feedstock?.facilityId ?? contextFacilityId);
+  const today = facilityToday(initialTimeZone);
 
   // Quick-add dialogs
   const vehicleDialog = useQuickAddDialog();
@@ -113,7 +130,7 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null, today),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     distanceNote: feedstock?.distanceNote ?? "",
@@ -144,6 +161,8 @@ export function FeedstockForm({
     control,
     trigger,
     setValue,
+    resetField,
+    getFieldState,
     getValues,
     setError,
     clearErrors,
@@ -174,6 +193,14 @@ export function FeedstockForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const { timeZone } = useFacilityClock(feedstock?.facilityId ?? (watchedFacilityId || contextFacilityId));
+  const markDateEdited = useFacilityDateDefaults({
+    timeZone,
+    isEditMode,
+    fields: ["deliveryDate"] as const,
+    isPristine: (field) => !getFieldState(field).isDirty,
+    setDefault: (field, day) => resetField(field, { defaultValue: day }),
+  });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
   // The schema coerces the raw input (`optionalPositiveNumber`); the live
@@ -254,15 +281,15 @@ export function FeedstockForm({
   };
   const clearOverride = () => {
     setOverriding(false);
-    clearErrors(["transportDistanceKm", "transportDistanceSource", "distanceNote"]);
+    clearErrors([...OVERRIDE_FIELDS]);
     setValue("transportDistanceKm", null, { shouldDirty: true });
     setValue("transportDistanceSource", null, { shouldDirty: true });
     setValue("distanceNote", "", { shouldDirty: true });
   };
-  // A new supplier or facility is a new route: its override no longer applies.
-  useClearOnDependencyChange([watchedSupplierId, watchedFacilityId], () => {
-    if (overriding) clearOverride();
-  });
+  // Operator route changes clear the distance override (lock reverts do not).
+  const changeRoute = (next: string | undefined, current: string) => {
+    if (next !== current && overriding) clearOverride();
+  };
 
   // Auto-set facility from context
   useEffect(() => {
@@ -307,7 +334,32 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const handleFormSubmit = handleSubmit((data) => {
+  // A refused override edit goes back to the saved override as a whole, and the panel follows it.
+  const restoreSavedOverride = () => {
+    setOverriding(hasSavedOverride(savedOverride));
+    for (const name of OVERRIDE_FIELDS) resetField(name);
+  };
+  const refuseWithFields = useSaveRefusal({ control, setError, formId, aliases: feedstockRefusalAliases(hasEditedAllocationMass),
+    // Operator changes clear the route override; programmatic restores do not.
+    dependents: { supplierId: OVERRIDE_FIELDS },
+    resetField: (field) => {
+      if ((OVERRIDE_FIELDS as readonly string[]).includes(field)) {
+        setOverriding(hasSavedOverride(savedOverride));
+        resetField(field);
+      }
+      // Both controls describe the same saved row in edit mode.
+      else if (isEditMode && (field === "totalWetMassKg" || String(field) === "allocations.0.allocatedWetMassKg")) {
+        resetField("totalWetMassKg");
+        resetField("allocations.0.allocatedWetMassKg");
+        setHasEditedAllocationMass(false);
+      } else resetField(field);
+    },
+  });
+  const refuseSave: SaveRefusalHandler = (error, fallback) => {
+    if (isOverrideLockRefusal(error, OVERRIDE_FIELDS)) restoreSavedOverride();
+    return refuseWithFields(error, fallback);
+  };
+  const handleFormSubmit = latched(handleSubmit((data) => {
     const submitted = {
       overriding,
       distanceKm: data.transportDistanceKm,
@@ -323,18 +375,16 @@ export function FeedstockForm({
     const patch = distanceOverridePatch(savedOverride, submitted, {
       routeChanged: isEditMode && (data.supplierId !== feedstock.supplierId || data.facilityId !== feedstock.facilityId),
     });
-    onSubmit({
+    return onSubmit({
       ...data,
       transportDistanceKm: patch.distanceKm,
       transportDistanceSource: patch.source,
       distanceNote: patch.note,
-    } as FeedstockFormData);
-  });
+    } as FeedstockFormData, refuseSave);
+  }));
 
   return (
     <>
-      {/* The wrapper div absorbs the side-sheet Body's direct-child flex-col
-          override so the sticky CTA row keeps its own layout (see sample-form). */}
       <div className="space-y-20">
       <FormSpine control={control}>
         <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
@@ -350,10 +400,11 @@ export function FeedstockForm({
               <FormEntitySelect
                 control={formControl}
                 name="facilityId"
+                onChange={(value) => changeRoute(value, watchedFacilityId)}
                 label="Facility"
                 entityType="facility"
                 placeholder="Select facility..."
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("facilityId")}
                 required
               />
             </div>
@@ -369,20 +420,21 @@ export function FeedstockForm({
               <FormInput
                 id="deliveryDate"
                 type="date"
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("deliveryDate")}
                 error={!!errors.deliveryDate}
-                {...register("deliveryDate")}
+                {...register("deliveryDate", { onChange: () => markDateEdited("deliveryDate") })}
               />
             </FormField>
 
             <FormEntitySelect
               control={formControl}
               name="supplierId"
+              onChange={(value) => changeRoute(value, watchedSupplierId)}
               label="Supplier"
               entityType="supplier"
               allowEdit
               placeholder="Select supplier..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("supplierId")}
               required
               allowCreate
               onCreateNew={supplierDialog.open}
@@ -476,7 +528,6 @@ export function FeedstockForm({
             distanceKm={effectiveDistance.distanceKm}
             distanceSource={effectiveDistance.source}
             loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
-            saved={isEditMode}
             emptyMessage={ROUTE_EMPTY}
           />
         </FormSection>
@@ -495,7 +546,7 @@ export function FeedstockForm({
               entityType="feedstockType"
               allowEdit
               placeholder="Select feedstock type..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("feedstockTypeId")}
               required
               allowCreate
               createLabel="Add new feedstock type"
@@ -514,7 +565,7 @@ export function FeedstockForm({
               error: errors.totalWetMassKg?.message,
               hint: "As-received weight of the entire delivery, water included.",
               required: true,
-              disabled: isSubmitting,
+              disabled: isSubmitting || locked("massWetKg"),
               placeholder: "e.g. 1500",
               certifyRequired: isFeedstockCertifyField("totalWetMassKg"),
               certifyStatus: certStatus("totalWetMassKg"),
@@ -525,7 +576,7 @@ export function FeedstockForm({
               rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER,
               error: errors.moisturePercent?.message,
               required: true,
-              disabled: isSubmitting,
+              disabled: isSubmitting || locked("moistureContentPercent"),
               placeholder: "e.g. 35",
               registration: register("moisturePercent", { setValueAs: numericValue }),
             }}
@@ -574,7 +625,7 @@ export function FeedstockForm({
                   massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
                   canRemove={fields.length > 1}
                   onRemove={() => remove(index)}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || locked("storageLocationId")}
                   binTypeFilter={FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
@@ -606,7 +657,7 @@ export function FeedstockForm({
                 deliveredKg={deliveredWetMassKg}
                 justificationRegister={register("overrideJustification")}
                 justificationError={errors.overrideJustification?.message}
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("overrideJustification")}
               />
             )}
           </FormSection>
@@ -628,7 +679,7 @@ export function FeedstockForm({
               <FormTextarea
                 id="notes"
                 placeholder="Enter delivery note IDs, weighbridge tickets, supplier batch references..."
-                disabled={isSubmitting}
+                disabled={isSubmitting || locked("notes")}
                 error={!!errors.notes}
                 rows={3}
                 {...register("notes")}
@@ -658,6 +709,7 @@ export function FeedstockForm({
         errorAction={serverErrorAction}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={<RecordCreditBatchLine kind="feedstock" id={feedstock?.id} />}
       />
       </div>
 
@@ -666,6 +718,7 @@ export function FeedstockForm({
         isOpen={supplierDialog.isOpen}
         onClose={supplierDialog.close}
         onSuccess={(supplier) => {
+          changeRoute(supplier.id, getValues("supplierId"));
           setValue("supplierId", supplier.id, SET_VALUE_OPTS);
           supplierDialog.close();
         }}

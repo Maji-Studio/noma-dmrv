@@ -1,0 +1,50 @@
+import { describe, expect, it, vi } from "vitest";
+import { facilitiesWithLinked, linkedRecordReadOnly } from "./linked-record-read-only";
+
+const ARCHIVED = { ready: true, readOnly: { reason: "archived" as const, facilityId: "facility-x", facilityName: "Mafinga", timezone: "Africa/Dar_es_Salaam" } };
+const retry = vi.fn();
+const UNCHECKED = { ready: true, readOnly: { reason: "unchecked" as const, facilityId: "facility-x", retry, retrying: false } };
+
+describe("linkedRecordReadOnly", () => {
+  it("names the archived facility as information", () => {
+    expect(linkedRecordReadOnly(ARCHIVED, { facilityId: "facility-x" }, "order"))
+      .toEqual({
+        tone: "info",
+        message: "Mafinga is archived, so this order is read-only.",
+        facility: { name: "Mafinga", href: "/facilities?archivedFacility=facility-x", rest: " is archived, so this order is read-only." },
+      });
+  });
+
+  it("fails closed as a warning with a retry on the facility read", () => {
+    expect(linkedRecordReadOnly(UNCHECKED, { facilityId: "facility-x" }, "order")).toEqual({
+      tone: "warning",
+      message: "This order's facility could not be checked, so it is read-only.",
+      retry: { run: retry, running: false },
+    });
+  });
+
+  it("gives the unchecked warning no facility link", () => {
+    expect(linkedRecordReadOnly(UNCHECKED, { facilityId: "facility-x" }, "order")?.facility).toBeUndefined();
+  });
+
+  it("gives a record in another facility nothing", () => {
+    expect(linkedRecordReadOnly(ARCHIVED, { facilityId: "facility-a" }, "order")).toBeUndefined();
+    expect(linkedRecordReadOnly(UNCHECKED, { facilityId: "facility-a" }, "order")).toBeUndefined();
+    expect(linkedRecordReadOnly(ARCHIVED, null, "order")).toBeUndefined();
+  });
+
+  it("gives nothing while the linked facility is workable", () => {
+    expect(linkedRecordReadOnly({ ready: true, readOnly: null }, { facilityId: "facility-x" }, "order")).toBeUndefined();
+  });
+});
+
+describe("facilitiesWithLinked", () => {
+  const active = [{ id: "facility-a", timezone: "Europe/Zurich" }];
+  it("adds the archived facility with its own timezone", () => {
+    expect(facilitiesWithLinked(active, ARCHIVED)).toEqual([...active, { id: "facility-x", timezone: "Africa/Dar_es_Salaam" }]);
+  });
+  it("leaves the list alone otherwise", () => {
+    expect(facilitiesWithLinked(active, UNCHECKED)).toBe(active);
+    expect(facilitiesWithLinked(active, { ready: true, readOnly: null })).toBe(active);
+  });
+});

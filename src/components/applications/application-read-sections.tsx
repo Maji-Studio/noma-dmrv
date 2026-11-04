@@ -4,6 +4,7 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { LOAD_FAILED, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -16,11 +17,17 @@ import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import { Notice } from "@/components/ui/notice";
 
+const DELIVERY_RETRY_TEXT = "Try again to load the delivery source.";
+
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {
   delivery: Pick<ApplicationDeliveryOption, "productBinName" | "formulationName" | "deliveryDate" | "deliveryDay"> | undefined;
   lock: Pick<UseQueryResult<unknown>, "data" | "isPending" | "error" | "isFetching" | "refetch">;
   durabilityOption: string;
+  /** The linked delivery read of an archived facility's application, so the sheet can say loading or failed instead of "not recorded". */
+  deliveryRead?: Pick<UseQueryResult<unknown>, "isPending" | "error" | "isFetching" | "refetch">;
+  /** Read only (a link into an archived facility): no upload, delete or sync. */
+  readOnly?: boolean;
 }
 
 /** "-8.1, 35.2", or null when either coordinate is missing. */
@@ -33,6 +40,8 @@ function formatFieldPosition(
 }
 
 export function applicationSheetSections(application: ApplicationListItem, context: ApplicationSheetContext): DetailPanelSection[] {
+  // A failed refetch over a delivery that already loaded changes nothing the sheet shows.
+  const deliveryReadFailed = !!context.deliveryRead?.error && !context.delivery;
   return [
     {
       title: "Application details",
@@ -46,7 +55,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : null,
+            : context.deliveryRead?.error ? LOAD_FAILED : null,
+          ...(deliveryReadFailed ? { valuePresent: false } : {}),
+          ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
         },
         {
           label: "Biochar product applied",
@@ -63,13 +74,24 @@ export function applicationSheetSections(application: ApplicationListItem, conte
           },
         },
       ],
-      content: application.heldOutOfCredits
-        ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>
-        : undefined,
+      content: application.heldOutOfCredits || deliveryReadFailed ? (
+        <>
+          {deliveryReadFailed && (
+            // The field states the failure; the notice carries only the step.
+            <Notice
+              tone="warning"
+              action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+            >
+              {DELIVERY_RETRY_TEXT}
+            </Notice>
+          )}
+          {application.heldOutOfCredits && <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>}
+        </>
+      ) : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{
-      // The bar and key line show at both levels; the ledger and source
-      // runs are the block's explanation, so Detailed only.
+      // The bar and key line are always visible; the ledger and source runs
+      // open from the block's (i).
       title: "Batch shares",
       fields: [],
       content: <ApplicationAllocationShares shares={application.allocationShares} />,
@@ -118,16 +140,16 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     },
     {
       title: "Supporting evidence",
-      fields: context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
+      fields: context.lock.isPending && !context.readOnly ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
       content: (
         <>
-          {context.lock.error && (
+          {context.lock.error && !context.readOnly && (
             <div className="flex flex-col gap-8">
               <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
-              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>Retry certification check</Button>
+              <Button type="button" variant="weak" disabled={context.lock.isFetching} onClick={() => void context.lock.refetch()}>{TRY_AGAIN_LABEL}</Button>
             </div>
           )}
-          <ApplicationSupportingEvidencePanel applicationId={application.id} />
+          <ApplicationSupportingEvidencePanel applicationId={application.id} readOnly={context.readOnly} />
         </>
       ),
     },
@@ -137,6 +159,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       content: (
         <ApplicationStorageLocationSync
           applicationId={application.id}
+          readOnly={context.readOnly}
         />
       ),
     },

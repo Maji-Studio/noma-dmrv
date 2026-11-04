@@ -1,3 +1,4 @@
+import { apiAudit } from "@/lib/api/audit";
 import { DomainError } from "@/lib/domain-errors";
 import { parseIfMatch } from "./etag";
 import { partyLocationNotFound, partyNotFound } from "@/lib/party-domain-errors";
@@ -40,7 +41,7 @@ export async function addSupplierLocationResponse(request: Request, { ctx, heade
   const input = body !== null && typeof body === "object" && !Array.isArray(body) ? { ...body, supplierId: id } : body;
   const result = await runOperation(addSupplierLocationApi, ctx, input, {
     deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+    audit: apiAudit(ctx, requestId, "rest"),
     idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const responseBody = locationBody(result.data);
@@ -78,7 +79,7 @@ export async function mutateSupplierLocationResponse(request: Request, { ctx, he
       : representationCheckedDelete(id, locationId, revision);
     const result = await runOperation(operation, ctx, input, {
       deadlineMs: remainingDeadlineMs(deadlineAt), dryRun,
-      audit: { requestId, credentialId: ctx.credentialId, transport: "rest" },
+      audit: apiAudit(ctx, requestId, "rest"),
       idempotency: key ? { credentialId: ctx.credentialId, key, target: locationId, precondition: precondition! } : undefined,
     });
     if (result.replayed) headers.set("Idempotent-Replayed", "true");

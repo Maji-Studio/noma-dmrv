@@ -1,3 +1,4 @@
+import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -34,7 +35,7 @@ import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./
 // Query Keys
 // ============================================
 
-const sampleKeys = {
+export const sampleKeys = {
   all: ["samples"] as const,
   lists: () => [...sampleKeys.all, "list"] as const,
   list: (filters?: Partial<SampleFilterData>) =>
@@ -108,9 +109,9 @@ export function useCreateSample(
 ) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.sample),
-    mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data)),
+    mutationFn: async (data: CreateSampleData, intentKey) => unwrap(await createSampleFn(data, { intentKey })),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },

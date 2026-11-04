@@ -17,9 +17,8 @@
  * denominator. Until both wet masses are entered nothing is drawn to scale:
  * an unresolved bar names the masses still to enter.
  *
- * Both levels show the yield headline and the flow, because the flow is what
- * the masses above add up to. Detailed adds only the yield arithmetic behind
- * Show calculation.
+ * The yield headline and the flow are always visible, because the flow is what
+ * the masses above add up to. The yield arithmetic opens from the caption's (i).
  */
 "use client";
 
@@ -97,7 +96,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
     const lossKg = Math.max(0, feedstockKg - biocharKg);
     return {
       nodes: [
-        { id: "source", column: 0, ...source, caption: `${formatMassKg(feedstockKg)} wet`, segments: [{ id: "feed", kg: feedstockKg, kind: "wet" }] },
+        { id: "source", column: 0, ...source, caption: `${formatMassKg(feedstockKg)} wet mass`, segments: [{ id: "feed", kg: feedstockKg, kind: "wet" }] },
         {
           id: "reactor",
           column: 1,
@@ -107,7 +106,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
             { id: "made", kg: biocharKg, kind: "process" },
           ],
         },
-        { id: "destination", column: 2, ...destination, caption: `${formatMassKg(biocharKg)} wet`, segments: [{ id: "biochar", kg: biocharKg, kind: "wet" }] },
+        { id: "destination", column: 2, ...destination, caption: `${formatMassKg(biocharKg)} wet mass`, segments: [{ id: "biochar", kg: biocharKg, kind: "wet" }] },
       ],
       links: [
         { from: "feed", to: "reactor" },
@@ -127,7 +126,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
         id: "source",
         column: 0,
         ...source,
-        caption: `${formatMassKg(feedstockKg)} wet, ${formatMassKg(feedstockDryKg)} dry`,
+        caption: `${formatMassKg(feedstockKg)} wet mass, ${formatMassKg(feedstockDryKg)} dry`,
         segments: [
           { id: "feed-water", kg: feedWaterKg, kind: "water" },
           { id: "feed-dry", kg: feedstockDryKg, kind: "dry" },
@@ -146,7 +145,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
         id: "destination",
         column: 2,
         ...destination,
-        caption: `${formatMassKg(biocharKg)} wet, ${formatMassKg(biocharDryKg)} dry`,
+        caption: `${formatMassKg(biocharKg)} wet mass, ${formatMassKg(biocharDryKg)} dry`,
         segments: [
           { id: "biochar-dry", kg: biocharDryKg, kind: "dry" },
           { id: "biochar-water", kg: showBiocharWater ? biocharWaterKg : 0, kind: "addedWater" },
@@ -180,7 +179,8 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
   const { sourceBinName, reactorName, destinationBinName } = props;
   if (!sourceBinName && !reactorName && !destinationBinName) return null;
   const basis = resolveBasis(props);
-  // Until a yield resolves there is no basis to name, only the figure missing.
+  // Until a yield resolves there is no basis to name; the headline is left out
+  // and the line under the flow names the masses still missing.
   const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
   const diagram = processFlowDiagram(props);
 
@@ -192,7 +192,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
         label={yieldLabel}
         value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}
       />}
-      calculation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
+      explanation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
       {diagram ? (
         <MassFlowSankey diagram={diagram} />

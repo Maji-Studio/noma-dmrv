@@ -5,7 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { certifierStorageSiteLockKey } from "@/lib/certification/certifier-storage-site-lock";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
-import { customerLocationCertificationLocked, storageSiteRegistrationBusy } from "@/lib/party-domain-errors";
+import { customerLocationCertificationLocked, REGISTERED_SITE_LOCKED_FIELDS, storageSiteRegistrationBusy } from "@/lib/party-domain-errors";
 import type { UpdateCustomerLocationInput } from "@/schemas/customer-location-input";
 import { findCustomerLocationRegistrations } from "./certifier-storage-locations";
 import { requireOrgScope } from "./utils";
@@ -31,9 +31,8 @@ export async function assertRegisteredStorageSiteUnchanged(
   ctx: OrgContext, tx: DbTransaction, locked: Pick<CustomerLocation, "id" | "name" | "gpsLatitude" | "gpsLongitude">, data: Pick<UpdateCustomerLocationInput, "name" | "gpsLatitude" | "gpsLongitude">,
 ): Promise<void> {
   requireOrgScope(ctx);
-  const fields = ["name", "gpsLatitude", "gpsLongitude"] as const;
-  const changed = fields.find(field => data[field] !== undefined && data[field] !== locked[field]);
-  if (!changed) return;
+  const changed = REGISTERED_SITE_LOCKED_FIELDS.filter(field => data[field] !== undefined && data[field] !== locked[field]);
+  if (changed.length === 0) return;
   const mappings = await findCustomerLocationRegistrations(ctx, tx, locked.id);
   const name = data.name ?? locked.name;
   const latitude = data.gpsLatitude ?? locked.gpsLatitude;

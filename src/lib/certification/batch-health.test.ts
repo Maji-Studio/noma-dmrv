@@ -1,3 +1,5 @@
+import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";
+import { readOnlyOpenItems } from "@/lib/credit-batches/batch-page";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,7 +8,7 @@ import {
   type BatchHealthCheckKey,
   type BatchHealthFacts,
 } from "./batch-health";
-import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { CERT_REQUIREMENT_META, certCheckLabel } from "./requirement-labels";
 import { batchHealthFixLinkFor } from "./batch-health-links";
 import { removalTemplateBlocker } from "./removal-template-blockers";
 import { deriveBatchEmissionLines } from "./emission-lines";
@@ -47,12 +49,70 @@ describe("deriveBatchHealth", () => {
       ],
     }));
     const links = result.checks
-      .filter((check) => check.key === "template")
+      .filter((check) => check.key === "templateSet" || check.key === "templateLines")
       .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
     expect(links).toEqual([
-      { label: "Switch template", href: "/credit-batches?facility=facility-1&batch=batch-1&focus=removal-template" },
-      { label: "Review template lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
+      { label: "Set template", href: "/settings/removal-templates?facility=facility-1&setup=template" },
+      { label: "Open Removal templates", href: "/settings/removal-templates?facility=facility-1" },
+      { label: "Answer in Settings", href: "/settings/removal-templates?facility=facility-1&setup=template" },
     ]);
+    expect(result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines")
+      .map(certCheckLabel)).toEqual(["No Removal template chosen", "Template not fully read", "Template components not ready"]);
+  });
+
+  it("names missing pins and undecided lines separately", () => {
+    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
+    expect(unpinned.unmetLabel).toBe("No Removal template chosen");
+    const lines = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] })), "templateLines");
+    expect(lines.unmetLabel).toBe("Template components not ready");
+  });
+
+  it("carries the read-only template fact on the check, merged checks included", () => {
+    const unpinned = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate")] })), "templateSet");
+    // Alone, the title "No Removal template chosen" states it.
+    expect(unpinned.copy?.readOnlyDetail).toBeUndefined();
+    expect(unpinned.copy?.detail).toBeUndefined();
+    const merged = checkFor(deriveBatchHealth(facts({ templateBlockers: [removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("missingFixedDatapoint")] })), "templateSet");
+    expect(merged.copy?.readOnlyDetail).toContain("This credit batch has no Removal template.");
+    expect(merged.copy?.readOnlyDetail).toContain("Some fixed values are not set in the Isometric template.");
+  });
+
+  it.each([
+    { ids: ["one"], label: "1 component to decide" },
+    { ids: ["one", "two"], label: "2 components to decide" },
+  ])("counts distinct lines for $label while merging template blockers", ({ ids, label }) => {
+    const lines = deriveBatchEmissionLines({
+      definition: { groups: [{
+        id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "",
+        components: ids.map((id) => ({
+          id, displayName: id, description: null, blueprintKey: "grid_electricity_use",
+          inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+        })),
+      }] },
+      lineSources: {}, problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+    });
+    const result = deriveBatchHealth(facts({
+      templateBlockers: [
+        removalTemplateBlocker("templateNotFound"),
+        removalTemplateBlocker("templateNotFullyRead"),
+        removalTemplateBlocker("templateLinesNeedReview"),
+      ],
+      undecidedLineIds: [...ids, ...ids],
+      emissionLines: [...lines, ...lines, {
+        ...lines[0], componentId: "evidence",
+        blocker: { code: "entryMissingEvidence", message: "Add evidence.", fixTarget: "emissions" },
+      }],
+    }));
+    const checks = result.checks.filter((check) => check.key === "templateSet" || check.key === "templateLines");
+    expect(checks.map(certCheckLabel)).toEqual(["Template cannot be used", "Template not fully read", label]);
+    expect(checks.map((check) => check.fixTarget)).toEqual(["templateSetup", "templateLines", "templateLineReview"]);
+  });
+
+  it("uses the general pin label when an unpinned batch is not the only pin problem", () => {
+    const result = deriveBatchHealth(facts({ templateBlockers: [
+      removalTemplateBlocker("unpinnedTemplate"), removalTemplateBlocker("templateNotFound"),
+    ] }));
+    expect(certCheckLabel(checkFor(result, "templateSet"))).toBe("Template cannot be used");
   });
 
   it("keeps document warnings separate from blocking issues", () => {
@@ -217,6 +277,22 @@ describe("deriveBatchHealth", () => {
       "PR-1",
       "PR-2",
     ]);
+    // Each per-field issue names its problem while unmet.
+    expect(issues.map((issue) => issue.unmetLabel)).toEqual([
+      "Production-run evidence not complete",
+      "Sample evidence not complete",
+    ]);
+  });
+
+  it("names lineage and configuration blockers as one Submission blockers item", () => {
+    const result = deriveBatchHealth(
+      facts({ durabilityConfigurationBlockers: ["Set the batch durability."] }),
+    );
+    const blocker = result.checks.find(
+      (check) => check.issueKey === "submission-batchDetails",
+    );
+    expect(blocker?.requirementLabel).toBe("Submission blockers");
+    expect(blocker?.unmetLabel).toBe("Submission blockers");
   });
 
   it("merges overlapping carbon and sample gaps into one lab action", () => {
@@ -247,6 +323,9 @@ describe("deriveBatchHealth", () => {
     );
     expect(open[0]?.requirementLabel).toBe(
       "Lab chemistry results · Sample evidence",
+    );
+    expect(open[0]?.unmetLabel).toBe(
+      "No lab chemistry results · Sample evidence not complete",
     );
     expect(open[0]?.whyDetail).toContain(
       CERT_REQUIREMENT_META.carbon.whyDetail,
@@ -324,6 +403,7 @@ describe("deriveBatchHealth", () => {
       expect(check.requirementLabel).toBe(
         CERT_REQUIREMENT_META[check.key].requirementLabel,
       );
+      expect(check.unmetLabel).toBe(CERT_REQUIREMENT_META[check.key].unmetLabel);
       expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
     }
     // The carbon gap now reads as its neutral requirement, so it never
@@ -385,7 +465,7 @@ it("evidence gaps fail emissions; template review and setup gaps stay in Removal
   const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence, missingEvidence, { ...line, state: "needsSetup", blocker: { code: "lineNeedsSetup", message: "Do not include this copy.", fixTarget: "templateLineReview" } }] }));
   expect(health.issueCount).toBe(1);
   expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions", detail: "Add a file for Line." });
-  expect(health.checks.some((check) => check.key === "template")).toBe(false);
+  expect(health.checks.some((check) => check.key === "templateSet" || check.key === "templateLines")).toBe(false);
   for (const code of ["lineNeedsReview", "lineNeedsSetup", "lineHasNoSource"] as const) {
     const state = code === "lineNeedsSetup" ? "needsSetup" : "needsReview";
     const result = deriveBatchHealth(facts({ emissionLines: [{ ...line, state,
@@ -393,7 +473,7 @@ it("evidence gaps fail emissions; template review and setup gaps stay in Removal
     // Facility/template setup stays outside batch-local emissions health.
     expect(result.issueCount).toBe(0);
     expect(result.checks.find((check) => check.key === "emissions")?.status).toBe("met");
-    expect(result.checks.some((check) => check.key === "template")).toBe(false);
+    expect(result.checks.some((check) => check.key === "templateSet" || check.key === "templateLines")).toBe(false);
   }
   expect(deriveBatchHealth(facts({ emissionLines: null })).checks.some((check) => check.key === "emissions")).toBe(false);
 });
@@ -420,4 +500,109 @@ it.each(["stopped counting", "unit mismatch"])("fails emissions for entries with
     detail: "Check the manual entry on Lab electricity. Add a file for Travel." });
   expect(checkFor(health, "emissions").detail).not.toMatch(/[\u2013\u2014]/);
   expect(deriveBatchHealth(facts({ emissionLines: [] })).state).toBe("ready");
+});
+
+it("keeps an undecided check separate from a decided line it cannot fill, and counts from the template", () => {
+  const checks = deriveBatchHealth(facts({
+    undecidedLineIds: ["one", "two"],
+    templateBlockers: [removalTemplateBlocker("templateLinesNeedReview"), removalTemplateBlocker("forbiddenLine")],
+  })).checks.filter((check) => check.key === "templateLines");
+  expect(checks.map(certCheckLabel)).toEqual(["2 components to decide", "Template components not ready"]);
+  expect(batchHealthFixLinkFor(checks[0], "facility-1", "batch-1").label).toBe("Answer in Settings");
+  expect(batchHealthFixLinkFor(checks[1], "facility-1", "batch-1").label).toBe("Open Removal templates");
+});
+
+
+it("keeps returned Removal corrections advisory and routes them to that Removal", () => {
+  const health = deriveBatchHealth(facts({ emissionLines: [], entryCorrections: [{ removalId: "returned", removalCode: "RM-001", windowOpen: true,
+    correctionNeeded: true, changedComponentIds: ["component"], message: "Resubmit needed" }] }));
+  expect(health.state).toBe("ready");
+  expect(health.issueCount).toBe(0);
+  expect(checkFor(health, "emissions").status).toBe("met");
+  expect(health.advisories).toEqual([{ message: "Resubmit needed", fixTarget: "removal", removalId: "returned", removalCode: "RM-001" }]);
+});
+
+
+describe("read-only batch health copy", () => {
+  it.each(["unpinnedTemplate", "notRemovalTemplate", "templateNotFullyRead", "missingFixedDatapoint", "templateLinesNeedReview"] as const)("keeps editable %s copy and removes repair instructions", (code) => {
+    const blocker = removalTemplateBlocker(code);
+    const health = deriveBatchHealth(facts({ templateBlockers: [blocker] }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(openItemText(groups.blocking[0])).toBe(blocker.message);
+    expect(health.checks.find((check) => check.status === "unmet")?.detail).toBe(blocker.message);
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    // Alone, the unpinned title "No Removal template chosen" is the fact.
+    expect(readOnly.detail).toBe(code === "unpinnedTemplate" ? undefined : blocker.copy?.detail ?? blocker.copy?.readOnlyDetail);
+    expect(openItemText(readOnly) ?? "").not.toMatch(/Set a Removal template|Add a file|Check the manual entry|in Settings|An Admin|Upload|Try again/);
+    expect(readOnly.instruction).toBeUndefined();
+  });
+
+  it.each(["missingFixedDatapoint"] as const)("states the %s fact to a member too", (code) => {
+    const blocker = removalTemplateBlocker(code);
+    const health = deriveBatchHealth(facts({ templateBlockers: [blocker] }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: false, health });
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(readOnly.detail).toBe(blocker.copy?.readOnlyDetail);
+    expect(readOnly.instruction).toBeUndefined();
+  });
+
+  it("shows merged template facts before their instructions", () => {
+    const blockers = [removalTemplateBlocker("notRemovalTemplate"), removalTemplateBlocker("missingFixedDatapoint")];
+    const health = deriveBatchHealth(facts({ templateBlockers: blockers }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(openItemText(groups.blocking[0])).toBe("This template is not a Removal template. Set a Removal template in Settings, Removal templates. · Set each value in the Isometric template editor before submitting.");
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(openItemText(readOnly)).toBe("This template is not a Removal template. · Some fixed values are not set in the Isometric template.");
+  });
+
+  it("keeps Add a file health instructions on editable batches only", () => {
+    const emissionLines = deriveBatchEmissionLines({
+      definition: { groups: [{ id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "", components: [{
+        id: "power", displayName: "Power", description: null, blueprintKey: "grid_electricity_use",
+        inputs: [{ key: "electricity_use", type: "monitored", quantityKind: "energy" }],
+      }] }] },
+      lineSources: { power: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+      entriesCanSubmit: true, problems: [], enrichmentComplete: true, automaticFigures: {},
+      entries: [{ componentId: "power", counts: true, kind: "value", hasEvidence: false, total: { magnitude: "1", unit: "kWh" } }],
+    });
+    const health = deriveBatchHealth(facts({ emissionLines }));
+    const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+    expect(checkFor(health, "emissions").detail).toBe("Add a file for Power.");
+    expect(openItemText(groups.blocking[0])).toBe("Add a file for Power.");
+    const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+    expect(readOnly.title).toBeTruthy();
+    expect(openItemText(readOnly)).toBeUndefined();
+  });
+});
+
+
+it("keeps legacy production facts while hiding their repair sentence", () => {
+  const health = deriveBatchHealth(facts({ hasSubmittableRuns: false }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  expect(openItemText(groups.blocking[0])).toBe("No production data is linked. Link a production run before submitting.");
+  expect(openItemText(readOnlyOpenItems({ ...groups, waiting: [] }).blocking[0])).toBe("No production data is linked.");
+});
+
+
+it("shows only the title for health text without explicit copy on a read-only batch", () => {
+  const health = deriveBatchHealth(facts({ carbonMissingInputs: ["moisture"] }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  expect(checkFor(health, "carbon").copy).toBeUndefined();
+  expect(openItemText(groups.blocking[0])).toBe("Missing: moisture");
+  expect(groups.blocking[0].detailMayInstruct).toBe(true);
+  const [readOnly] = readOnlyOpenItems({ ...groups, waiting: [] }).blocking;
+  expect(readOnly.title).toBe(groups.blocking[0].title);
+  expect(openItemText(readOnly)).toBeUndefined();
+});
+
+
+it("merges feedstock mapping facts before their source-owned instructions", () => {
+  const health = deriveBatchHealth(facts({ feedstockTypeMappingGaps: [
+    { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "wood", feedstockTypeName: "Wood" },
+    { creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "husk", feedstockTypeName: "Husk" },
+  ] }));
+  const groups = buildCreditBatchOpenItems({ facilityId: "facility", creditBatchId: "batch", canManage: true, health });
+  const detail = "Credit batch CB-1 uses pyrolysis feedstock type Wood, which is not linked to an Isometric feedstock type. · Credit batch CB-1 uses pyrolysis feedstock type Husk, which is not linked to an Isometric feedstock type.";
+  expect(openItemText(groups.blocking[0])).toBe(`${detail} Edit Wood in Feedstock types. · Edit Husk in Feedstock types.`);
+  expect(openItemText(readOnlyOpenItems({ ...groups, waiting: [] }).blocking[0])).toBe(detail);
 });

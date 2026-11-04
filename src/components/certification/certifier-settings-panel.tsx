@@ -1,16 +1,12 @@
 /**
- * CertifierSettingsPanel — the whole registry connection on one pane.
+ * CertifierSettingsPanel — the whole registry connection in one run, for the
+ * dashboard registry dialog: which registry and its status, its keys, then
+ * which project this facility submits to, with the link control inline.
  *
- * Credentials and the facility's project link used to be two categories in the
- * rail, then two titled blocks in one pane. Both splits told the same lie: that
- * these are separate jobs. They are one — keys are useless until a project is
- * linked, and a project cannot be listed until the keys work — so the pane now
- * reads straight down: which registry, its keys, then which project this
- * facility submits to, with the link control in the same run of controls.
- *
- * The pane sits under the Organization tier because the certifier and its keys
- * are organization-wide. The project link is per facility; the pane caption in
- * `certification-settings.tsx` says so.
+ * In Settings the same parts sit on two panes (Registry for the keys,
+ * Facilities for the project link), because the console groups by what a
+ * setting applies to. The dialog keeps them together because it walks one
+ * facility through first setup.
  *
  * Members see the registry and the read-only project link; the keys form is
  * mounted only for a viewer the server says can manage it.
@@ -21,7 +17,7 @@ import { OrganizationCertifierCredentials } from "@/components/organizations/org
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 import { FacilityCertifierSection } from "./facility-certifier-section";
-import { RegistryPicker } from "./registry-picker";
+import { RegistryStatusLine, useRegistryConnectionStatus } from "./registry-status-line";
 
 interface CertifierSettingsPanelProps {
   facilityId: string;
@@ -42,10 +38,15 @@ export function CertifierSettingsPanel({
   onProjectLinked,
 }: CertifierSettingsPanelProps) {
   const { data: organization, isLoading } = useActiveOrganizationProfile();
+  const status = useRegistryConnectionStatus({
+    organizationId: organization?.id,
+    facilityId,
+    canManage,
+  });
 
   return (
     <div className="flex flex-col gap-24">
-      <RegistryPicker />
+      <RegistryStatusLine status={status} canManage={canManage} />
 
       {canManage &&
         (isLoading ? (

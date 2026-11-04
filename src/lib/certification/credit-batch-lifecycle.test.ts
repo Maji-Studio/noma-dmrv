@@ -8,10 +8,13 @@ function summary(
   return {
     state: "ready",
     issueCount: 0,
+    linesToDecide: 0,
+    checkCount: 0,
     removalId: null,
     removalCode: null,
     productionEmissionsClaimedByRemovalCode: null,
     removalStatus: null,
+    removalInterrupted: false,
     ghgStatementId: null,
     ghgStatementStatus: null,
     ...overrides,
@@ -172,5 +175,12 @@ describe("deriveCreditBatchLifecycle", () => {
 
     expect(lifecycle.label).toBe("Verified");
     expect(lifecycle.currentStepIndex).toBe(2);
+  });
+  it("reads interrupted when an older holder is, even with the newest submitted", () => {
+    expect(deriveCreditBatchLifecycle(summary({
+      removalId: "newest",
+      removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
+      removalInterrupted: true,
+    }))).toMatchObject({ badgeStatus: "failed", label: "Submission interrupted", currentStepIndex: 0 });
   });
 });

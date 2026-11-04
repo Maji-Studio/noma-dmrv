@@ -1,3 +1,7 @@
+import { EXACT_ID_FILTER_MAX as EXACT_ID_CHUNK_SIZE } from "@/lib/exact-id-filter";
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
+import { applicationOperationInput } from "@/lib/application-operation-input";
+import { useIntentMutation } from "./use-create-intent-key";
 import type { ActionResult } from "@/types/actions";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import type { DeleteApplicationInput } from "@/schemas/application-input";
@@ -5,12 +9,12 @@ import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import {
   useMutation,
-  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import {
   getApplicationsFn,
+  getApplicationStatsFn,
   getApplicationDeliveryOptionsFn,
   createApplicationFn,
   updateApplicationFn,
@@ -23,8 +27,6 @@ import type { ApplicationFormData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
 import { unwrap } from "@/hooks/types";
 
-const EXACT_ID_CHUNK_SIZE = 100;
-
 /**
  * Query key factory for applications
  */
@@ -33,11 +35,24 @@ export const applicationKeys = {
   lists: () => [...applicationKeys.all, "list"] as const,
   list: (filters?: ApplicationListOptions) =>
     [...applicationKeys.lists(), filters] as const,
+  stats: (filters?: { facilityId?: string }) =>
+    [...applicationKeys.all, "stats", filters] as const,
+  statsPrefix: () => [...applicationKeys.all, "stats"] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
+  linkedDelivery: (id: string) => [...applicationKeys.all, "linked-delivery", id] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };
+
+export function useApplicationStats(facilityId?: string, options?: { enabled?: boolean }) {
+  const filters = { facilityId };
+  return useQuery({
+    queryKey: applicationKeys.stats(filters),
+    queryFn: async () => unwrap(await getApplicationStatsFn(filters)),
+    enabled: options?.enabled,
+  });
+}
 
 /**
  * Query hook for fetching applications with pagination
@@ -46,42 +61,14 @@ export function useApplications(
   options?: ApplicationListOptions,
   queryOptions?: { enabled?: boolean },
 ) {
-  const exactIds = options?.ids ?? [];
-  const requests = exactIds.length > 0
-    ? Array.from(
-        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
-        (_, index) => {
-          const ids = exactIds.slice(
-            index * EXACT_ID_CHUNK_SIZE,
-            (index + 1) * EXACT_ID_CHUNK_SIZE,
-          );
-          return { ...options, ids, page: 1, pageSize: ids.length };
-        },
-      )
-    : [options];
-  const results = useQueries({
-    queries: requests.map((request) => ({
-      queryKey: applicationKeys.list(request),
-      queryFn: async () => unwrap(await getApplicationsFn(request)),
-      staleTime: 30000,
-      enabled: queryOptions?.enabled,
-    })),
+  return useExactIdChunkedList({
+    filters: options,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: applicationKeys.list,
+    fetcher: async (request) => unwrap(await getApplicationsFn(request)),
+    staleTime: 30000,
+    enabled: queryOptions?.enabled,
   });
-
-  const items = results.flatMap((result) => result.data?.items ?? []);
-  return {
-    data: exactIds.length > 0
-      ? {
-          items,
-          total: items.length,
-          page: 1,
-          pageSize: Math.max(items.length, 1),
-          totalPages: items.length > 0 ? 1 : 0,
-        }
-      : results[0]?.data,
-    isLoading: results.some((result) => result.isLoading),
-    error: results.find((result) => result.error)?.error ?? null,
-  };
 }
 
 export function useApplicationDeliveryOptions(
@@ -102,11 +89,18 @@ export function useApplicationDeliveryOptions(
 export function useCreateApplication() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIntentMutation({
     meta: recordLockMeta(RECORD_LOCK_TOUCHES.application),
-    mutationFn: (data: ApplicationFormData) => createApplicationFn(applicationOperationInput(data)),
+    mutationFn: async (data: ApplicationFormData, intentKey): Promise<Awaited<ReturnType<typeof createApplicationFn>>> => {
+      const result = await createApplicationFn(applicationOperationInput(data), { intentKey });
+      if (!result.success) throwActionError(result);
+      return result;
+    },
+    // A refused save can mean the delivery's shares moved: re-plan the credit batch preview (#1350).
+    onError: () => { void queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() }); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
@@ -133,9 +127,11 @@ export function useUpdateApplication() {
       if (!result.success) throwActionError(result);
       return result;
     },
+    onError: () => { void queryClient.invalidateQueries({ queryKey: creditBatchKeys.recordPreviewPrefix() }); },
     onSuccess: (result) => {
       if (result.success) patchListCachesWithSavedRow(queryClient, applicationKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
@@ -173,11 +169,13 @@ export function useDeleteApplication() {
     onError: (error, variables) => {
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
         queryClient.invalidateQueries({ queryKey: applicationKeys.detail(variables.applicationId) });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: applicationKeys.statsPrefix() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
@@ -189,11 +187,4 @@ export function useDeleteApplication() {
       invalidateCertificationReadiness(queryClient);
     },
   });
-}
-
-function applicationOperationInput(data: ApplicationFormData) {
-  const { biocharAppliedKg, applicationMethodType, ...fields } = data;
-  return { ...fields, gpsLatitude: fields.gpsLatitude ?? null, gpsLongitude: fields.gpsLongitude ?? null,
-    soilTemperatureC: fields.soilTemperatureC ?? null, soilTemperatureSource: fields.soilTemperatureSource ?? null,
-    appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
 }

@@ -1,0 +1,92 @@
+#!/bin/sh
+# Pre-push: two stages of tests for what this branch changed.
+#   1. Always, no time limit (may include DB-backed specs, so Postgres must be
+#      up): changed test files plus test files that vi.mock a changed module
+#      (the stale-mock failure class). A failure blocks.
+#   2. Then `vitest related --run` on the changed files, cut off after
+#      PRE_PUSH_RELATED_TIMEOUT_SECONDS (CI runs the rest). A failure inside
+#      the bound blocks; a cut-off lets the push through.
+# Not the full suite (15 to 55 min). Skip once with `git push --no-verify`.
+# See docs/testing.md#stale-mocks-lint-rule-and-pre-push-hook.
+
+BASE_REF=origin/staging
+DEFAULT_RELATED_TIMEOUT_SECONDS=300
+PRE_PUSH_RELATED_TIMEOUT_SECONDS=${PRE_PUSH_RELATED_TIMEOUT_SECONDS:-$DEFAULT_RELATED_TIMEOUT_SECONDS}
+
+# Pushes that only delete remote refs have nothing to test (stdin: local_ref local_sha remote_ref remote_sha).
+refs=0
+updates=0
+while read -r _ local_sha _ _; do
+  refs=$((refs + 1))
+  case "$local_sha" in *[!0]*) updates=$((updates + 1)) ;; esac
+done
+[ "$refs" -gt 0 ] && [ "$updates" -eq 0 ] && exit 0
+
+root=$(git rev-parse --show-toplevel) || exit 0
+cd "$root" || exit 0
+
+if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
+  echo "pre-push: $BASE_REF not found; skipping unit tests (git fetch origin staging)"
+  exit 0
+fi
+
+base=$(git merge-base "$BASE_REF" HEAD) || exit 0
+
+# Added, copied, modified, renamed files; deleted files cannot be tested.
+changed=$(git diff --name-only --diff-filter=ACMR "$base" HEAD)
+[ -n "$changed" ] || exit 0
+
+# Only source and test files can affect a unit test; docs-only pushes skip.
+files=$(printf '%s\n' "$changed" | grep -E '^(src|tests)/.*\.(ts|tsx|mts|cts|js|jsx|json)$')
+if [ -z "$files" ]; then
+  echo "pre-push: no source or test changes against $BASE_REF; skipping unit tests"
+  exit 0
+fi
+
+# Stage 1 input: changed test files, plus test files that vi.mock a changed
+# module by its "@/" alias path (src/lib/api/problem.ts -> @/lib/api/problem;
+# an index file also matches its directory and "/index").
+mock_pattern=$(printf '%s\n' "$files" | grep '^src/' | grep -vE '\.test\.(ts|tsx)$' |
+  sed -e 's#^src/#@/#' -e 's#\.[A-Za-z]*$##' -e 's#/index$##' |
+  sed -e 's#[][\.^$*+?(){}|]#\\&#g' | paste -sd'|' -)
+stage1=$(printf '%s\n' "$files" | grep -E '\.test\.(ts|tsx)$')
+if [ -n "$mock_pattern" ]; then
+  # Files naming the module as a string, then those that call vi.mock/vi.doMock
+  # anywhere, so a vi.mock( split across lines is still found.
+  mockers=$(grep -rlE --include='*.test.ts' --include='*.test.tsx' \
+    "[\"'](${mock_pattern})(/index)?[\"']" src tests 2>/dev/null |
+    while IFS= read -r f; do grep -qE 'vi\.(mock|doMock)\(' "$f" && printf '%s\n' "$f"; done)
+  stage1=$(printf '%s\n%s\n' "$stage1" "$mockers")
+fi
+stage1=$(printf '%s\n' "$stage1" | grep -v '^$' | sort -u)
+
+set -f
+if [ -n "$stage1" ]; then
+  echo "pre-push stage 1: $(printf '%s\n' "$stage1" | wc -l | tr -d ' ') test files (changed, or mocking a changed module). Skip once with: git push --no-verify"
+  # shellcheck disable=SC2086 -- file paths in this repo hold no spaces
+  pnpm vitest run --passWithNoTests $stage1 || { echo "pre-push: stage 1 failed; push blocked"; exit 1; }
+fi
+
+echo "pre-push stage 2: related tests, cut off after ${PRE_PUSH_RELATED_TIMEOUT_SECONDS}s"
+# Own process group so the cut-off kills only what this hook started.
+set -m
+# shellcheck disable=SC2086
+pnpm vitest related --run --passWithNoTests $files &
+child=$!
+set +m
+trap 'kill -TERM -- "-$child" 2>/dev/null; exit 130' INT TERM HUP
+elapsed=0
+while kill -0 "$child" 2>/dev/null; do
+  if [ "$elapsed" -ge "$PRE_PUSH_RELATED_TIMEOUT_SECONDS" ]; then
+    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null
+    sleep 1
+    kill -KILL -- "-$child" 2>/dev/null
+    wait "$child" 2>/dev/null
+    echo "pre-push: related run cut off after ${PRE_PUSH_RELATED_TIMEOUT_SECONDS}s; CI will run the rest. Push allowed."
+    exit 0
+  fi
+  sleep 1
+  elapsed=$((elapsed + 1))
+done
+wait "$child" || { echo "pre-push: related tests failed; push blocked"; exit 1; }
+exit 0

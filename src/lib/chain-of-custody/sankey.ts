@@ -3,13 +3,17 @@
  * view's Sankey reading (plan: 2026-06-11-chain-of-custody-views, decision 3).
  *
  * One unit (dry kg) end to end: Feedstock → Production runs → Biochar lots →
- * Applied. Every loss is an explicit labeled exit, never hidden by
- * normalizing column widths:
+ * Applied. Losses positive at display precision have explicit labeled exits
+ * rather than normalized column widths:
  *
  *   - conversion loss (pyrolysis syngas/vapour/ash — expected physics, not an
  *     error) exits at the production runs;
  *   - output never bagged into a lot exits between runs and lots;
  *   - in-storage / undelivered lot mass exits before "Applied".
+ * Exit masses are display-rounded differences of display-rounded columns.
+ * Columns remain raw. Residuals not shown and within EXIT_EPSILON_KG are
+ * summed raw, signed, in omittedResidualKg so consumers can close the balance.
+ * Warnings use raw residuals and EXIT_EPSILON_KG.
  *
  * The terminal node is the batch's applied mass. No net-tCO₂e figure is
  * carried at all — the registry owns project emissions/counterfactual
@@ -24,8 +28,9 @@
  * any data-access / "use server" coupling.
  */
 
-import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { displayedDifferenceKg } from "@/lib/mass-precision";
 
 export type SankeyColumnKey =
   | "feedstock"
@@ -52,6 +57,7 @@ export interface SankeyExit {
   label: string;
   /** Column the exit leaves from. */
   fromColumn: SankeyColumnKey;
+  /** Display-rounded difference of display-rounded columns; columns and omittedResidualKg stay raw. */
   massKg: number;
   /** alert = compliance-relevant (red); loss = expected/neutral exit. */
   tone: "alert" | "loss";
@@ -62,6 +68,8 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
+  /** Raw signed sum of residuals not shown and within EXIT_EPSILON_KG. */
+  omittedResidualKg: number;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
 }
@@ -79,6 +87,7 @@ export interface SankeyLineage {
     id: string;
     massKg: number | null;
     moistureContentPercent: number | null;
+    composition?: unknown;
   } | null;
   feedstocks: {
     id: string;
@@ -93,11 +102,13 @@ export interface SankeyLineage {
   }[];
 }
 
-/** Residuals smaller than this are rounding noise, not a labeled exit. */
-const EXIT_EPSILON_KG = 0.5;
+/** Raw residual tolerance for mass-balance warnings. */
+export const EXIT_EPSILON_KG = 0.5;
 
 interface ResidualResult {
+  raw: number;
   value: number;
+  shown: boolean;
   warning: string | null;
 }
 
@@ -108,11 +119,16 @@ function residual(
   downstreamKg: number,
   inconsistencyWarning: string,
 ): ResidualResult {
-  const value = upstreamKg - downstreamKg;
-  if (value < -EXIT_EPSILON_KG) {
-    return { value: 0, warning: inconsistencyWarning };
-  }
-  return { value: Math.max(0, value), warning: null };
+  const raw = upstreamKg - downstreamKg;
+  // Subtract the displayed columns, rather than independently rounding
+  // their raw difference. Keep raw masses for tolerance and warnings.
+  const value = Math.max(0, displayedDifferenceKg(upstreamKg, downstreamKg));
+  return {
+    raw,
+    value,
+    shown: value > 0,
+    warning: raw < -EXIT_EPSILON_KG ? inconsistencyWarning : null,
+  };
 }
 
 export function buildBatchSankey(
@@ -166,16 +182,15 @@ export function buildBatchSankey(
     runOutputKg += run.biocharDryMassKg ?? 0;
   }
 
-  // `massKg` is the lot's WET mass, but every other column here is dry, so
-  // convert via the recorded moisture (biochar runs 1–2%) to keep one basis
-  // end to end (issue #361 F14; mirrors the dashboard custody ribbon). A lot
-  // with no moisture reading counts at wet mass rather than vanishing.
+  // Share the dashboard's allocation-first, ingredient-excluded biochar basis.
+  // Without a dry figure, retain only the source biochar's wet mass.
   let lotMassKg = 0;
   for (const lot of lotById.values()) {
-    lotMassKg += allocatedByProductId.get(lot.id) ??
-      computeClampedDryMass(lot.massKg, lot.moistureContentPercent) ??
-      lot.massKg ??
-      0;
+    lotMassKg += sourceBiocharMassFlowKg({
+      ...lot,
+      composition: lot.composition,
+      sourceAllocatedDryMassKg: allocatedByProductId.get(lot.id) ?? null,
+    });
   }
 
   const conversionLoss = residual(
@@ -200,7 +215,7 @@ export function buildBatchSankey(
   if (inStorage.warning) warnings.push(inStorage.warning);
 
   const exits: SankeyExit[] = [];
-  if (conversionLoss.value > EXIT_EPSILON_KG) {
+  if (conversionLoss.shown) {
     exits.push({
       key: "conversion_loss",
       label: "Conversion loss",
@@ -209,7 +224,7 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
-  if (unallocated.value > EXIT_EPSILON_KG) {
+  if (unallocated.shown) {
     exits.push({
       key: "unallocated_output",
       label: allocatedByProductId.size ? "Outside these applications" : "Not bagged into lots",
@@ -218,7 +233,7 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
-  if (inStorage.value > EXIT_EPSILON_KG) {
+  if (inStorage.shown) {
     exits.push({
       key: "in_storage",
       label: "In storage / undelivered",
@@ -227,6 +242,8 @@ export function buildBatchSankey(
       tone: "loss",
     });
   }
+  const omittedResidualKg = [conversionLoss, unallocated, inStorage]
+    .reduce((sum, { raw, shown, warning }) => sum + (!shown && !warning ? raw : 0), 0);
 
   return {
     columns: [
@@ -256,6 +273,7 @@ export function buildBatchSankey(
       },
     ],
     exits,
+    omittedResidualKg,
     warnings,
   };
 }

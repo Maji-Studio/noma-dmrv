@@ -208,7 +208,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
       const f = await fixture();
       const [reactor] = await db.select().from(reactors).where(eq(reactors.organizationId, f.ctx.organizationId));
       await db.insert(productionRuns).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, reactorId: reactor.id, code: `E2E-STOCK-RUN-${f.tag}`,
-        status: "complete", startTime: new Date("2026-09-12T08:00:00Z"), endTime: new Date("2026-09-12T12:00:00Z"), biocharStorageLocationId: f.source.id, biocharOutputKg: 100 });
+        status: "complete", startTime: new Date("2026-09-12T08:00:00Z"), endTime: new Date("2026-09-12T12:00:00Z"), biocharStorageLocationId: f.source.id, biocharOutputKg: 100, biocharMoisturePercent: 0 });
       expect(await findApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).toMatchObject(unresolved("run_incomplete"));
     });
 

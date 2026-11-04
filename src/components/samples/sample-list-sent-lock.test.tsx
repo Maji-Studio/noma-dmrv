@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const SAMPLE_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-type SubmitHandler = (data: Record<string, unknown>) => Promise<void>;
+type SubmitHandler = (data: Record<string, unknown>, onRefusal: (error: unknown, fallback: string) => string | null) => Promise<void>;
 type ModeChange = (mode: "view" | "edit" | "create") => void;
 
 const harness = vi.hoisted(() => ({
@@ -19,16 +19,19 @@ const harness = vi.hoisted(() => ({
   sample: null as Record<string, unknown> | null,
   update: vi.fn(),
   onSubmit: null as SubmitHandler | null,
+  formError: undefined as string | undefined,
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
   lock: undefined as RecordLockView | undefined,
   lockStatus: "ready" as "pending" | "error" | "ready",
   retry: vi.fn(),
   sheetProps: null as { canEdit?: boolean; submitBlock?: { retry?: { run: () => void } } | null } | null,
-  columns: [] as Array<{ id?: string; cell?: unknown }>,
+  columns: [] as Array<{ id?: string; accessorKey?: string; header?: unknown; cell?: unknown }>,
   rowActions: null as Array<{ label: string }> | null,
 }));
 
+vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
+vi.mock("@/components/forms/use-documents-cert-status", () => ({ useDocumentsCertStatus: () => "neutral" }));
 vi.mock("nuqs", () => ({
   parseAsString: { withOptions: () => ({}) },
   useQueryState: (key: string) => [
@@ -47,7 +50,7 @@ vi.mock("@/hooks/use-samples", () => ({
     error: null,
     isSuccess: true,
   }),
-  useCreateSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateSample: () => ({ startDraft: vi.fn(), isPending: false, mutateAsync: vi.fn() }),
   useUpdateSample: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteSample: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
@@ -83,7 +86,7 @@ vi.mock("@/hooks/use-create-with-evidence", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 vi.mock("@/hooks/use-record-locks", () => ({
-  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus }),
+  useRecordLocks: () => ({ locks: harness.lock ? { [SAMPLE_ID]: harness.lock } : {}, statusOf: () => harness.lockStatus, failed: harness.lockStatus === "error", retry: harness.retry, retrying: false }),
   useRecordLock: (_kind: string, id: string | null | undefined) => ({ lock: id ? harness.lock : undefined, status: harness.lockStatus, retry: harness.retry, retrying: false }),
 }));
 
@@ -98,7 +101,7 @@ vi.mock("@/components/ui", () => ({
 }));
 vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/ui/data-table", () => ({
-  DataTable: ({ columns }: { columns: Array<{ id?: string; cell?: unknown }> }) => {
+  DataTable: ({ columns }: { columns: typeof harness.columns }) => {
     harness.columns = columns;
     return null;
   },
@@ -127,15 +130,21 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     return props.open ? <div>{props.titleBadge}{props.mode === "view" ? props.viewModeNotice : props.children}</div> : null;
   },
 }));
-vi.mock("./sample-read-sections", () => ({ sampleSheetSections: () => [] }));
+vi.mock("./sample-read-sections", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./sample-read-sections")>()),
+  sampleSheetSections: () => [],
+}));
+vi.mock("./sample-documents-panel", () => ({ SampleDocumentsPanel: () => null }));
 vi.mock("./sample-form", () => ({
-  SampleForm: (props: { onSubmit: SubmitHandler }) => {
+  SampleForm: (props: { onSubmit: SubmitHandler; errorMessage?: string }) => {
     harness.onSubmit = props.onSubmit;
+    harness.formError = props.errorMessage;
     return null;
   },
 }));
 
 import type { CellContext } from "@tanstack/react-table";
+import { ActionError } from "@/lib/action-error";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { SampleList } from "./sample-list";
 
@@ -153,10 +162,10 @@ const SENT: RecordLockView = {
   heldBy: [{ kind: "removal", id: REMOVAL_ID, label: null, facilityId: FACILITY_ID, period: { startedOn: "2026-01-01", completedOn: "2026-03-31" } }],
   usedBy: [{ kind: "removal", id: REMOVAL_ID, label: null, facilityId: FACILITY_ID, period: { startedOn: "2026-01-01", completedOn: "2026-03-31" } }],
   freeFields: [],
-  howToFree: "Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+  howToFree: "If Isometric sends the GHG Statement back, refresh its status to edit again.",
   returnedBy: [],
 };
-const IN_USE: RecordLockView = { ...SENT, level: "inUse", howToFree: "Correct or remove the records that use it first." };
+const IN_USE: RecordLockView = { ...SENT, level: "inUse", howToFree: "To change them, first correct or remove those records." };
 
 function textOf(renderer: ReactTestRenderer): string {
   const walk = (node: unknown): string => {
@@ -199,10 +208,10 @@ describe("Sample sheet behind a Sent Removal", () => {
     expect(harness.sheetProps?.canEdit).toBe(false);
     const text = textOf(renderer!);
     expect(text).toContain("Sent");
-    expect(text).toContain("Sent with Removal Jan 1 to Mar 31, 2026, so every field is locked.");
-    expect(text).toContain("Wait for Isometric to return the covering GHG Statement, then refresh its status.");
+    expect(text).toContain("Nothing can be changed, because this was sent to Isometric with Removal Jan 1 to Mar 31, 2026.");
+    expect(text).toContain("If Isometric sends the GHG Statement back, refresh its status to edit again.");
     const link = renderer!.root.findByType("a");
-    expect(link.props.href).toBe(`/certification/removals?facility=${FACILITY_ID}&removal=${REMOVAL_ID}`);
+    expect(link.props.href).toBe(`/removals?facility=${FACILITY_ID}&removal=${REMOVAL_ID}`);
     renderer?.unmount();
   });
 
@@ -242,6 +251,30 @@ describe("Sample sheet behind a Sent Removal", () => {
     renderer?.unmount();
   });
 
+  it("hands a refused save to the form's handler and shows what it returns (#1327)", async () => {
+    harness.lock = IN_USE;
+    harness.query = { sample: SAMPLE_ID, mode: "edit" };
+    const refusal = new ActionError({
+      error: "The Removal holds this sample.", code: "certification_locked",
+      issues: [{ path: ["labName"], code: "certification_locked", message: "The Removal holds this sample." }],
+    });
+    harness.update.mockRejectedValue(refusal);
+    await act(async () => { renderer = create(<SampleList />); });
+
+    // Every reason sits at a field: nothing is left for the footer.
+    const everyReasonAtAField = vi.fn(() => null);
+    await act(async () => { await harness.onSubmit?.({ labName: "Changed" }, everyReasonAtAField); });
+    expect(everyReasonAtAField).toHaveBeenCalledWith(refusal, "The Removal holds this sample.");
+    expect(harness.formError ?? null).toBeNull();
+
+    // The rest of the refusal shows in the footer once.
+    const footer = vi.fn(() => "Your changes were not saved.");
+    await act(async () => { await harness.onSubmit?.({ labName: "Changed" }, footer); });
+    expect(harness.formError).toBe("Your changes were not saved.");
+    expect(harness.sheet).toEqual({ open: true, mode: "edit" });
+    renderer?.unmount();
+  });
+
   it("offers no row actions while Sent", async () => {
     harness.lock = SENT;
     await act(async () => { renderer = create(<SampleList />); });
@@ -256,10 +289,33 @@ describe("Sample sheet behind a Sent Removal", () => {
     harness.query = { sample: SAMPLE_ID };
     await act(async () => { renderer = create(<SampleList />); });
     expect(harness.sheetProps?.canEdit).toBe(true);
-    expect(textOf(renderer!)).not.toContain("so every field is locked");
+    expect(textOf(renderer!)).not.toContain("Nothing can be changed");
     const cell = renderActionsCell();
     expect(harness.rowActions?.map((action) => action.label)).toEqual(["Edit", "Delete"]);
     cell.unmount();
     renderer?.unmount();
+  });
+});
+
+describe("Sample list added lab columns", () => {
+  it("prints lab values with the digits the Sample sheet uses", async () => {
+    harness.sample = SAMPLE;
+    harness.query = {};
+    harness.lock = undefined;
+    harness.lockStatus = "ready";
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<SampleList />); });
+    const row = { ashContentPercent: 0.04, oToCOrgRatio: 0.06123456 };
+    const cellText = (accessorKey: string) => {
+      const column = harness.columns.find((entry) => entry.accessorKey === accessorKey);
+      const cell = column?.cell as (context: unknown) => ReactNode;
+      let cellRenderer!: ReactTestRenderer;
+      act(() => { cellRenderer = create(<>{cell({ row: { original: row } })}</>); });
+      return textOf(cellRenderer);
+    };
+    expect(cellText("ashContentPercent")).toBe("0.04%");
+    expect(cellText("oToCOrgRatio")).toBe("0.0612");
+    expect(harness.columns.find((entry) => entry.accessorKey === "labName")?.header).toBe("Lab name");
+    renderer.unmount();
   });
 });

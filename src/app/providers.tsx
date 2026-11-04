@@ -10,10 +10,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => {
     const client: QueryClient = new QueryClient({
       // Mutation hooks declare which record kinds' locks a write can change
-      // (`recordLockMeta`); only those mounted reads refetch, after success,
-      // or after any outcome for registry writes.
+      // (`recordLockMeta`); those mounted reads refetch after success or a lock
+      // refusal, or any registry outcome. Refusal-only meta skips other outcomes.
       mutationCache: new MutationCache({
-        onSettled: (data, error, _variables, _context, mutation) => invalidateRecordLocksAfter(client, data, error, mutation),
+        onSettled: (data, error, variables, _context, mutation) => invalidateRecordLocksAfter(client, data, error, mutation, variables),
       }),
       defaultOptions: {
         queries: {

@@ -23,9 +23,9 @@ function pathCoordinates(path: string): [number, number][] {
 /** Feedstock 1,000 kg (200 water, 800 dry) through a reactor to 300 kg of biochar. */
 const run: MassFlowDiagram = {
   nodes: [
-    { id: "source", column: 0, name: "Feedstock", caption: "1,000 kg wet", segments: [{ id: "water", kg: 200, kind: "water" }, { id: "dry", kg: 800, kind: "dry" }] },
+    { id: "source", column: 0, name: "Feedstock", caption: "1,000 kg wet mass", segments: [{ id: "water", kg: 200, kind: "water" }, { id: "dry", kg: 800, kind: "dry" }] },
     { id: "reactor", column: 1, name: "Reactor", segments: [{ id: "loss", kg: 530, kind: "released" }, { id: "made", kg: 270, kind: "process" }] },
-    { id: "bin", column: 2, name: "Biochar", caption: "300 kg wet", segments: [{ id: "char", kg: 270, kind: "dry" }, { id: "char-water", kg: 30, kind: "water" }] },
+    { id: "bin", column: 2, name: "Biochar", caption: "300 kg wet mass", segments: [{ id: "char", kg: 270, kind: "dry" }, { id: "char-water", kg: 30, kind: "water" }] },
   ],
   links: [{ from: "dry", to: "reactor" }, { from: "made", to: "char" }],
   exits: [{ from: "water", name: "Water driven off", caption: "200 kg" }, { from: "loss", name: "Conversion loss", caption: "530 kg" }],
@@ -45,9 +45,9 @@ const runWithInflow: MassFlowDiagram = {
 /** The run with a 40% wet biochar: 4,000 kg in, 1,000 kg wet out, 400 kg of it water taken up. */
 const heavyWaterRun: MassFlowDiagram = {
   nodes: [
-    { id: "source", column: 0, name: "E2E Feedstock Bin ce57419b", caption: "4,000 kg wet, 3,000 kg dry", segments: [{ id: "water", kg: 1000, kind: "water" }, { id: "dry", kg: 3000, kind: "dry" }] },
+    { id: "source", column: 0, name: "E2E Feedstock Bin ce57419b", caption: "4,000 kg wet mass, 3,000 kg dry", segments: [{ id: "water", kg: 1000, kind: "water" }, { id: "dry", kg: 3000, kind: "dry" }] },
     { id: "reactor", column: 1, name: "E2E Seed Reactor ce57419b", segments: [{ id: "loss", kg: 2400, kind: "released" }, { id: "made", kg: 600, kind: "process" }] },
-    { id: "bin", column: 2, name: "E2E Biochar Pile ce57419b", caption: "1,000 kg wet, 600 kg dry", segments: [{ id: "char", kg: 600, kind: "dry" }, { id: "char-water", kg: 400, kind: "addedWater" }] },
+    { id: "bin", column: 2, name: "E2E Biochar Pile ce57419b", caption: "1,000 kg wet mass, 600 kg dry", segments: [{ id: "char", kg: 600, kind: "dry" }, { id: "char-water", kg: 400, kind: "addedWater" }] },
   ],
   links: [{ from: "dry", to: "reactor" }, { from: "made", to: "char" }],
   exits: [{ from: "water", name: "Water driven off", caption: "1,000 kg" }, { from: "loss", name: "Conversion loss", caption: "2,400 kg" }],

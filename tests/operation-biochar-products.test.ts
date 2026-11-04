@@ -116,6 +116,32 @@ const orphanAllocations = async (f: ProductFixture) => (await db.execute<{ count
 const locked = { code: "certification_locked", message: expect.stringContaining(LINEAGE_LOCKED_COPY) };
 
 describe("creating products", () => {
+  it("dates a blend by facility-local mixing day while keeping source lineage", async () => {
+    const f = await fixture();
+    await db.update(facilities).set({ timezone: "Africa/Dar_es_Salaam" })
+      .where(and(eq(facilities.organizationId, f.ctx.organizationId), eq(facilities.id, f.facility.id)));
+    const { product } = await runOperationInProcess(makeBiocharProduct, f.ctx,
+      blended(f, { placedAt: "2026-10-21T22:30:00Z" }));
+    expect(product.productionDate).toBe("2026-10-22");
+    expect(await sourceShares(f, product.id)).toEqual([[f.r1, BIOCHAR_DRY_KG]]);
+    const [stored] = await productsOf(f);
+    expect(stored.productionDate).toBe("2026-10-22");
+    const [run] = await db.select().from(productionRuns)
+      .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.r1)));
+    expect(run.startTime).toEqual(f.runs[0].startTime);
+  });
+
+  it("derives October 1 from a Dar es Salaam run started before UTC midnight", async () => {
+    const f = await fixture();
+    await db.update(facilities).set({ timezone: "Africa/Dar_es_Salaam" })
+      .where(and(eq(facilities.organizationId, f.ctx.organizationId), eq(facilities.id, f.facility.id)));
+    await db.update(productionRuns).set({
+      startTime: new Date("2025-09-30T22:00:00Z"), endTime: new Date("2025-09-30T23:00:00Z"),
+    }).where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.r1)));
+    const { product } = await runOperationInProcess(makeBiocharProduct, f.ctx, pure(f));
+    expect(product).toMatchObject({ productionDate: "2025-10-01", linkedProductionRunId: f.r1 });
+  });
+
   it("stores and renders July 6 for a run dated 2026-07-06 even when it finishes the next day", async () => {
     const f = await fixture();
     await db.update(productionRuns).set({ startTime: new Date("2026-07-06T23:00:00Z"), endTime: new Date("2026-07-07T01:00:00Z") })

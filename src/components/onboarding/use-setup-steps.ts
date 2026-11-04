@@ -27,7 +27,7 @@ export interface SetupProgress {
   /**
    * True once every non-skippable (required) step is done — the facility is
    * operational even if an optional step (the registry link) is still open.
-   * Drives the Owner/Admin dashboard gate so an intentionally-unconnected
+   * Drives the Admin dashboard gate so an intentionally-unconnected
    * registry doesn't pin the guide open forever.
    */
   requiredComplete: boolean;

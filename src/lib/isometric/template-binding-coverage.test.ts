@@ -38,9 +38,12 @@ describe("contract-based template coverage", () => {
     const group = copy.groups.find((group) => group.key === "biochar-transport")!;
     const first = group.components[0];
     group.components.push({ ...structuredClone(first), id: "second", display_name: "Second shipment" });
-    const findings = coverage(copy).filter((finding) => finding.reason === "ambiguous");
+    // noma never proposes a figure another line owns (#1198), so the clash is an operator's assignment.
+    const firstContract = reviewedTemplateSources(copy)[first.id];
+    const findings = coverage(copy, reviewedTemplateSources(copy, { second: { ...firstContract, origin: "reviewed" } }))
+      .filter((finding) => finding.reason === "ambiguous");
     expect(findings.map((finding) => finding.componentId).sort()).toEqual([first.id, "second"].sort());
-    expect(formatUnbindableTemplateInputsText(findings)).toContain("Choose a different automatic source for each line.");
+    expect(formatUnbindableTemplateInputsText(findings)).toContain("Give each component its own automatic datapoints.");
   });
   it("resolves a renamed diesel component with the same id", () => {
     const copy = structuredClone(template);
@@ -56,7 +59,7 @@ describe("contract-based template coverage", () => {
   });
   it("still fails closed on diesel without a contract", () => {
     const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(mapping)).toThrow("Review the Removal template lines in Certification settings.");
+    expect(() => resolveDatapointSource(mapping)).toThrow("This Removal template has components to decide.");
   });
   it("blocks entry-only operating lines in both environments until entries can be submitted", () => {
     const value = realTemplate as GhgEntryTemplate;
@@ -72,7 +75,10 @@ describe("contract-based template coverage", () => {
       .toContainEqual(expect.objectContaining({ componentId: first.id, reason: "project-scope" }));
   });
   it("reports unsupported paired transport with repair guidance", () => {
-    const findings = coverage(unsupportedTemplate());
+    const pairedTransport = unsupportedTemplate();
+    // Sample shipping is entry-only; this regression covers the two automatic paired transports.
+    for (const group of pairedTransport.groups) group.components = group.components.filter((component) => component.id !== "sample-shipment");
+    const findings = coverage(pairedTransport);
     expect(findings).toHaveLength(2);
     expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
     const formatted = formatUnbindableTemplateInputs(findings);

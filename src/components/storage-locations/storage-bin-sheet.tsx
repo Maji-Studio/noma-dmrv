@@ -21,11 +21,13 @@ import {
 } from "@/hooks/use-storage-locations";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { StorageLocationForm } from "./storage-location-form";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { storageLocationSheetSections } from "./storage-location-read-sections";
 import { recordLockSheetProps } from "@/components/record-locks";
 import { useRecordLock } from "@/hooks/use-record-locks";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { isRecordEditable } from "@/lib/record-lock-view";
 
 export type StorageBinSheetState =
@@ -34,6 +36,10 @@ export type StorageBinSheetState =
   | { mode: "edit"; entity: StorageLocationWithFacility };
 
 interface StorageBinSheetProps {
+  /** A link into an archived facility: view only, no edit or stock adjustment. */
+  readOnly?: SheetReadOnly;
+  /** The linked bin's own facility zone, when that facility is archived. */
+  timeZone?: string;
   state: StorageBinSheetState | null;
   onStateChange: (state: StorageBinSheetState | null) => void;
   onReconcile: (
@@ -42,6 +48,8 @@ interface StorageBinSheetProps {
 }
 
 export function StorageBinSheet({
+  readOnly,
+  timeZone,
   state,
   onStateChange,
   onReconcile,
@@ -49,6 +57,12 @@ export function StorageBinSheet({
   const [formError, setFormError] = useState<string | null>(null);
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
+  const creating = state?.mode === "create";
+  const startDraft = useEffectEvent(() => createStorageLocation.startDraft());
+  useEffect(() => {
+    if (creating) startDraft();
+  }, [creating]);
+
   const toast = useToast();
   const { lock, status: lockStatus, retry: retryLock, retrying: lockRetrying } = useRecordLock("storageLocation", state?.entity?.id);
 
@@ -57,18 +71,18 @@ export function StorageBinSheet({
     setFormError(null);
   };
 
-  const handleCreate = async (data: StorageLocationFormData) => {
+  const handleCreate = async (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => {
     setFormError(null);
     try {
       await createStorageLocation.mutateAsync(data);
       onStateChange(null);
       toast.success("Storage bin created.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not created. Check the form.");
+      setFormError(onRefusal(error, error instanceof Error ? error.message : "Storage bin was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: StorageLocationFormData) => {
+  const handleUpdate = async (data: StorageLocationFormData, onRefusal: SaveRefusalHandler) => {
     if (state?.mode !== "edit") return;
     setFormError(null);
     try {
@@ -84,7 +98,7 @@ export function StorageBinSheet({
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
+      setFormError(onRefusal(error, toSaveErrorMessage(error, "Storage bin was not saved. Try again.")));
     }
   };
 
@@ -105,8 +119,6 @@ export function StorageBinSheet({
       }}
       mode={state?.mode ?? "create"}
       onModeChange={handleModeChange}
-      // No detail toggle: a bin sheet has no explanation to switch on, since
-      // a mix bin's batch shares are data and show at every level.
       // Bins lead with their name, not their code — the one entity where the
       // house convention (code as the sheet title) puts an opaque lookup key
       // where the operator's own word for the thing belongs. The code stays,
@@ -115,10 +127,11 @@ export function StorageBinSheet({
       subtitle={state?.mode === "create" ? undefined : state?.entity?.code}
       {...recordLockSheetProps({ lock, status: lockStatus, retry: retryLock, retrying: lockRetrying, subject: "storageBin" })}
       editLabel="Edit storage bin"
+      readOnly={readOnly}
       canEdit={state?.entity?.archivedAt == null && isRecordEditable(lock)}
       sections={
         state?.mode === "view" && state.entity
-          ? storageLocationSheetSections(state.entity, onReconcile)
+          ? storageLocationSheetSections(state.entity, readOnly ? undefined : onReconcile, { readOnly: !!readOnly, timeZone })
           : undefined
       }
     >

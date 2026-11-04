@@ -16,8 +16,8 @@
  * `assertDryMassBalance` in ../production-runs/mutations.ts merges the same way.
  */
 import type { samples } from "@/db/schema";
-import { sampleCarbonReconciliationError } from "@/lib/sample-domain-errors";
-import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
+import { SampleFieldError } from "@/lib/sample-domain-errors";
+import { getSampleCarbonReconciliationErrors, SAMPLE_CARBON_REFUSAL_FIELDS } from "@/schemas/samples";
 
 export function assertCarbonReconciliation(
   existing: Pick<
@@ -25,6 +25,8 @@ export function assertCarbonReconciliation(
     | "totalCarbonPercent"
     | "organicCarbonPercent"
     | "inorganicCarbonPercent"
+    | "reactiveCarbonPercent"
+    | "residualCarbonPercent"
   >,
   data: Partial<
     Pick<
@@ -32,6 +34,8 @@ export function assertCarbonReconciliation(
       | "totalCarbonPercent"
       | "organicCarbonPercent"
       | "inorganicCarbonPercent"
+      | "reactiveCarbonPercent"
+      | "residualCarbonPercent"
     >
   >,
 ): void {
@@ -47,20 +51,23 @@ export function assertCarbonReconciliation(
     data.inorganicCarbonPercent !== undefined
       ? data.inorganicCarbonPercent
       : existing.inorganicCarbonPercent;
-  if (
-    total != null &&
-    organic != null &&
-    organic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
-  ) {
-    throw sampleCarbonReconciliationError("organicCarbonPercent");
-  }
-  if (
-    total != null &&
-    organic != null &&
-    inorganic != null &&
-    organic + inorganic - total >
-      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
-  ) {
-    throw sampleCarbonReconciliationError("inorganicCarbonPercent");
+  const reactive =
+    data.reactiveCarbonPercent !== undefined
+      ? data.reactiveCarbonPercent
+      : existing.reactiveCarbonPercent;
+  const residual =
+    data.residualCarbonPercent !== undefined
+      ? data.residualCarbonPercent
+      : existing.residualCarbonPercent;
+  const errors = getSampleCarbonReconciliationErrors({
+    totalCarbonPercent: total,
+    organicCarbonPercent: organic,
+    inorganicCarbonPercent: inorganic,
+    reactiveCarbonPercent: reactive,
+    residualCarbonPercent: residual,
+  });
+  for (const field of SAMPLE_CARBON_REFUSAL_FIELDS) {
+    const message = errors[field];
+    if (message) throw new SampleFieldError(message, field);
   }
 }

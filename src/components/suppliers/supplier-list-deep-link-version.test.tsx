@@ -31,6 +31,7 @@ vi.mock("nuqs", () => ({
   useQueryState: (key: string) => [harness.query[key] ?? null, vi.fn()],
 }));
 vi.mock("@/hooks/use-suppliers", () => ({
+  useSupplierStats: () => ({ data: undefined, isLoading: false, isError: false }),
   useSuppliers: () => ({ data: { items: [], total: 0, totalPages: 0 }, isLoading: false, error: null }),
   useSupplier: () => ({ data: harness.supplier, isLoading: false, isFetching: false, isPending: false, isSuccess: true, isError: false }),
   useFetchSupplier: () => vi.fn(),
@@ -41,7 +42,6 @@ vi.mock("@/hooks/use-suppliers", () => ({
   useArchiveSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useRestoreSupplier: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
-vi.mock("@/components/ui/lifecycle-notices", () => ({ DeleteConflictNotice: () => null, isInUseDeleteRefusal: () => false }));
 vi.mock("@/components/parties", () => ({ ArchivedSupplierNotice: () => null }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-list-pagination", () => ({

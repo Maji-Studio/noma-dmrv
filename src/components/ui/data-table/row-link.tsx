@@ -37,6 +37,8 @@ interface RowLinkProps {
   /** Deep link that opens this record; renders a real anchor when present. */
   href?: string;
   children: React.ReactNode;
+  /** A mark before the link, outside it so no control nests inside the link. */
+  before?: React.ReactNode;
 }
 
 const ROW_LINK_CLASSES = cn(
@@ -65,27 +67,24 @@ function isModifiedClick(event: React.MouseEvent): boolean {
  * open-in-new-tab loads the deep link. Without one it is a button with link
  * affordance that calls the same handler as a whole-row click.
  */
-export function RowLink({ onActivate, href, children }: RowLinkProps) {
-  if (href) {
-    return (
-      <a
-        href={href}
-        data-row-link=""
-        onClick={(event) => {
-          // The row's own click handler would activate a second time, and a
-          // modifier click must not also open the sheet behind the new tab.
-          event.stopPropagation();
-          if (isModifiedClick(event)) return;
-          event.preventDefault();
-          onActivate();
-        }}
-        className={ROW_LINK_CLASSES}
-      >
-        {children}
-      </a>
-    );
-  }
-  return (
+export function RowLink({ onActivate, href, children, before }: RowLinkProps) {
+  const link = href ? (
+    <a
+      href={href}
+      data-row-link=""
+      onClick={(event) => {
+        // The row's own click handler would activate a second time, and a
+        // modifier click must not also open the sheet behind the new tab.
+        event.stopPropagation();
+        if (isModifiedClick(event)) return;
+        event.preventDefault();
+        onActivate();
+      }}
+      className={ROW_LINK_CLASSES}
+    >
+      {children}
+    </a>
+  ) : (
     <button
       type="button"
       data-row-link=""
@@ -97,6 +96,13 @@ export function RowLink({ onActivate, href, children }: RowLinkProps) {
     >
       {children}
     </button>
+  );
+  if (!before) return link;
+  return (
+    <span className="inline-flex max-w-full min-w-0 items-center gap-6">
+      {before}
+      {link}
+    </span>
   );
 }
 

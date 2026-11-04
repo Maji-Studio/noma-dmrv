@@ -1,9 +1,13 @@
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
+import { reallocateRunsForBins } from '../feedstock-run-allocations';
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze } from "../feedstock-transport-ownership-freeze";
 import type { ActivityEventInput } from "../activity-events";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
+import { IN_USE_DELETE_MARKER, inUseDeleteRefusal } from "@/lib/delete-refusal";
 import { db, type DbTransaction } from "@/db";
 import { outputStockRunAllocations, creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -23,7 +27,8 @@ export class ProductionRunDependencyError extends DomainError {
   readonly conflict: ConflictRef;
 
   constructor(message: string, conflict: ConflictRef) {
-    super("conflict", message, { conflict });
+    const refusal = inUseDeleteRefusal(message, ["productionRunId"], { conflict });
+    super(refusal.code, refusal.message, { conflict, issues: refusal.issues });
     this.name = "ProductionRunDependencyError";
     this.conflict = conflict;
   }
@@ -71,6 +76,8 @@ export async function deleteProductionRunInTransaction(
   const [locked] = await tx
     .select({
       id: productionRuns.id,
+      code: productionRuns.code,
+      startTime: productionRuns.startTime,
       facilityId: productionRuns.facilityId,
       version: productionRuns.version,
       biocharOutputKg: productionRuns.biocharOutputKg,
@@ -106,96 +113,105 @@ export async function deleteProductionRunInTransaction(
     },
   );
 
+  const previousDraws = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
+    .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, productionRunId)));
+  const eventTie = earliestFeedstockEventTie(previousDraws);
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
-  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
-    ctx,
-    tx,
-    { entityType: "productionRun", entityId: productionRunId },
-    "delete",
-  ), "certification_locked");
+  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+    await getTransportFreezeFeedstockIds(ctx, tx, { runIds: [productionRunId], binIds: lockedFeedstockStorageLocationIds }),
+    { mutation: "delete", subject: "production run" });
+  return freeze(async transportOwnershipFreeze => {
+    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "delete",
+    ), "certification_locked");
 
-  const dependentProduct = await getProductionRunDependentProduct(
-    ctx,
-    tx,
-    productionRunId,
-  );
-  const [dependentCreditBatch] = await tx
-    .select({ id: creditBatches.id, code: creditBatches.code })
-    .from(creditBatchProductionRuns)
-    .innerJoin(
-      creditBatches,
-      and(
-        eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
-        eq(creditBatches.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(and(
-      eq(creditBatchProductionRuns.productionRunId, productionRunId),
-      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-    ))
-    .limit(1);
-
-  if (dependentProduct || dependentCreditBatch) {
-    const dependentKinds = [
-      dependentProduct ? "biochar products" : null,
-      dependentCreditBatch ? "credit batches" : null,
-    ].filter((kind): kind is string => kind != null);
-    const dependent = dependentProduct
-      ? { entity: "biocharProduct", ...dependentProduct }
-      : { entity: "creditBatch", ...dependentCreditBatch! };
-    const conflict = { ...dependent, code: conflictCode(dependent.code) };
-    throw new ProductionRunDependencyError(
-      `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
-      conflict,
+    const dependentProduct = await getProductionRunDependentProduct(
+      ctx,
+      tx,
+      productionRunId,
     );
-  }
+    const [dependentCreditBatch] = await tx
+      .select({ id: creditBatches.id, code: creditBatches.code })
+      .from(creditBatchProductionRuns)
+      .innerJoin(
+        creditBatches,
+        and(
+          eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+          eq(creditBatches.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(and(
+        eq(creditBatchProductionRuns.productionRunId, productionRunId),
+        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+      ))
+      .limit(1);
 
-  const [history] = await tx.select({ id: outputStockRunAllocations.id }).from(outputStockRunAllocations)
-    .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
-  if (history) {
-    const lock = recordLocks.productionRun({ removals: [], dependents: [{ kind: "stockEntry", id: history.id, label: "in retained stock history" }] });
-    throw new DomainError("certification_locked", withRecordLockGuidance(
-      "This production run cannot be deleted.",
-      { ...lock, howToFree: "You can archive it with its facility." },
-    ));
-  }
+    if (dependentProduct || dependentCreditBatch) {
+      const dependentKinds = [
+        dependentProduct ? "biochar products" : null,
+        dependentCreditBatch ? "credit batches" : null,
+      ].filter((kind): kind is string => kind != null);
+      const dependent = dependentProduct
+        ? { entity: "biocharProduct", ...dependentProduct }
+        : { entity: "creditBatch", ...dependentCreditBatch! };
+      const conflict = { ...dependent, code: conflictCode(dependent.code) };
+      throw new ProductionRunDependencyError(
+        `Production run ${locked.code} ${IN_USE_DELETE_MARKER} ${dependentKinds.join(" and ")} still use it. Remove those ${dependentKinds.join(" and ")} first, or keep this run.`,
+        conflict,
+      );
+    }
 
-  const productionIncidents = await tx
-    .select({ id: incidentReports.id })
-    .from(incidentReports)
-    .where(
-      and(
-        eq(incidentReports.productionRunId, productionRunId),
-        eq(incidentReports.organizationId, ctx.organizationId),
-      ),
-    );
-  await tx
-    .delete(productionRunFeedstocks)
-    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+    const [history] = await tx.select({ id: outputStockRunAllocations.id }).from(outputStockRunAllocations)
+      .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
+    if (history) {
+      const lock = recordLocks.productionRun({ removals: [], dependents: [{ kind: "stockEntry", id: history.id, label: "in retained stock history" }] });
+      throw new DomainError("certification_locked", withRecordLockGuidance(
+        "This production run cannot be deleted.",
+        { ...lock, howToFree: "You can archive it with its facility." },
+      ));
+    }
 
-  await tx
-    .delete(productionRunFeedstockDraws)
-    .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
+    const productionIncidents = await tx
+      .select({ id: incidentReports.id })
+      .from(incidentReports)
+      .where(
+        and(
+          eq(incidentReports.productionRunId, productionRunId),
+          eq(incidentReports.organizationId, ctx.organizationId),
+        ),
+      );
+    await tx
+      .delete(productionRunFeedstocks)
+      .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
-  await tx
-    .delete(productionRunReadings)
-    .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)));
+    await tx
+      .delete(productionRunFeedstockDraws)
+      .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
 
-  await tx
-    .delete(incidentReports)
-    .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
+    await tx
+      .delete(productionRunReadings)
+      .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)));
 
-  await tx.delete(productionRuns).where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-  await retireDocumentsForEntities(ctx, tx, [
-    { entityType: "production_run", entityId: productionRunId },
-    ...productionIncidents.map((incident) => ({
-      entityType: "production_incident" as const,
-      entityId: incident.id,
-      activityScopes: [{ productionRunId }],
-    })),
-  ], source);
-  return { facilityId: locked.facilityId };
+    await tx
+      .delete(incidentReports)
+      .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
+
+    await tx.delete(productionRuns).where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_run", entityId: productionRunId },
+      ...productionIncidents.map((incident) => ({
+        entityType: "production_incident" as const,
+        entityId: incident.id,
+        activityScopes: [{ productionRunId }],
+      })),
+    ], source);
+    await reallocateRunsForBins(ctx, tx, lockedFeedstockStorageLocationIds, { earliestEventAt: locked.startTime, eventTie, transportOwnershipFreeze });
+    return { facilityId: locked.facilityId };
+  });
 }
 
 export async function deleteProductionRun(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {

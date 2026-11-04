@@ -6,10 +6,9 @@ import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 const mocks = vi.hoisted(() => ({ select: vi.fn(), transaction: vi.fn(), latest: vi.fn(), previous: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: mocks.select, transaction: mocks.transaction } }));
-vi.mock("./batch-emission-automatic-figures", () => ({ loadBatchAutomaticFigures: vi.fn() }));
-vi.mock("./emission-entry-facts", () => ({ loadBatchEmissionEntryFacts: vi.fn() }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
-vi.mock("@/lib/certification/emissions-entry-gate", () => ({ requireEmissionsEntriesEnabled: vi.fn() }));
+// These fixtures have no returned lineage. Correction authorization is tested separately.
+vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(), emissionCorrectionWindow: () => undefined }));
 import { restoreEmissionEntry } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
@@ -20,7 +19,7 @@ const entry: typeof emissionEntries.$inferSelect = {
   id, organizationId: ctx.organizationId, creditBatchId: "batch", removalTemplateId: "template",
   componentId: "line", inputShape: shape, lineRule: "additive", observationId: "observation",
   kind: "value", confirmedForRemovalId: null, occurredOn: "2026-01-01", note: "private note", createdBy: ctx.userId,
-  version: 2, contentRevision: 2, deletedAt: new Date("2026-01-02"), sentByRemovalId: null,
+  version: 2, contentRevision: 2, deletedAt: new Date("2026-01-02"), sentByRemovalId: null, replacesEntryId: null,
   sendReservedBySubmissionId: null, createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02"),
 };
 const saved = { ...entry, deletedAt: null, version: 3, contentRevision: 3 };
@@ -47,7 +46,7 @@ beforeEach(() => {
   lockedEntry = { ...entry };
   const batch = { id: "batch", facilityId: "facility", removalTemplateId: "template", archivedAt: null, startDate: "2026-01-01" };
   const rows = [[batch], [{ archivedAt: null, timezone: "UTC" }], [batch], () => [lockedEntry],
-    values, [], [saved], values, [{ count: 1 }]];
+    values, [], [], [saved], values, [{ count: 1 }]];
   select.mockImplementation(() => {
     const result = rows.shift();
     if (!result) throw new Error("Unexpected query");

@@ -1,3 +1,4 @@
+import { sourceFactAvailable } from "./template-observations/source-fact-availability";
 /**
  * Semantic binding catalog: the one code-owned place that says which noma
  * fact feeds which Certify removal-template input, and how (#291, #636).
@@ -123,6 +124,7 @@ export function normalizeComponentDisplayName(
 
 /** The source fact behind an aggregated source key, if the catalog knows it. */
 export function lookupSourceFact(source: string): SourceFact | undefined {
+  if (!sourceFactAvailable(source)) return undefined;
   return ownValue<SourceFact>(SOURCE_FACTS, source);
 }
 
@@ -166,7 +168,8 @@ export type NomaEvidenceRole =
   | "delivery_bill_of_lading"
   | "transport_evidence_ledger"
   | "durability_evidence_ledger"
-  | "lab_report";
+  | "lab_report"
+  | "emission_entry";
 
 /**
  * A noma evidence role whose Isometric Source supports a role's input. The
@@ -174,7 +177,7 @@ export type NomaEvidenceRole =
  * input of its tier's storage components (`projectDurabilityLedgerInputKeys`).
  */
 export interface EvidenceTarget {
-  role: Exclude<NomaEvidenceRole, "durability_evidence_ledger">;
+  role: Exclude<NomaEvidenceRole, "durability_evidence_ledger" | "emission_entry">;
   /** The template may leave the input out without failing the Source plan. */
   optional?: true;
   /** Only this component, by a name the role's disambiguation rule declares. */

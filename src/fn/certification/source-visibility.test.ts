@@ -5,7 +5,7 @@ const authState = vi.hoisted(() => ({
   ctx: {
     userId: "user-1",
     organizationId: "organization-1",
-    orgRole: "admin" as "owner" | "admin" | "member" | null,
+    orgRole: "admin" as "admin" | "member" | null,
     isPlatformAdmin: false,
   },
 }));
@@ -15,12 +15,11 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgRole: vi.fn(
     (
       ctx: typeof authState.ctx,
-      minimumRole: "owner" | "admin" | "member",
+      minimumRole: "admin" | "member",
     ) => {
       void minimumRole;
       if (
         !ctx.isPlatformAdmin &&
-        ctx.orgRole !== "owner" &&
         ctx.orgRole !== "admin"
       ) {
         throw new SafeError("You don't have permission to perform this action.");

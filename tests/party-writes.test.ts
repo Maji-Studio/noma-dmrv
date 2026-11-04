@@ -1,4 +1,5 @@
 import { createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
+import { BLOCKER_LIMIT } from "@/config/party-input";
 import { logFeedstockDelivery } from "@/lib/operations/feedstocks";
 import { toActionFailure } from "@/fn/action-errors";
 import { findCustomerLocationBlockers } from "@/data-access/customer-location-reference-guards";
@@ -21,6 +22,7 @@ import { createCustomer, updateCustomer, deleteCustomer } from "@/lib/operations
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { createOrderFixture, cleanupOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
 
+const OVERFLOW_COUNT = 2;
 const fixtures: OrderFixture[] = [];
 const intakeFixtures: IntakeFixture[] = [];
 const location = { name: "Field", country: "TZ", gpsLatitude: -8, gpsLongitude: 34 };
@@ -112,8 +114,26 @@ describe("party refusals and atomic effects", () => {
     const [intake] = await db.update(feedstocks).set({ archivedAt: new Date() })
       .where(eq(feedstocks.organizationId, f.ctx.organizationId)).returning();
     await expect(runOperation(deleteSupplier, f.ctx, { supplierId: f.supplierId, expectedVersion: 1 }))
-      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCodes: [intake.code] } })] });
+      .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { feedstockCount: 1, feedstockCodes: [intake.code], feedstocks: [{ id: intake.id, code: intake.code, facilityId: intake.facilityId }], reason: "in_use" } })] });
     expect(await db.select().from(suppliers).where(eq(suppliers.id, f.supplierId))).toHaveLength(1);
+  });
+  it("caps supplier references in code order with ids from the matching intakes", async () => {
+    const f = await createIntakeFixture("supplier-references"); intakeFixtures.push(f);
+    const references: { id: string; code: string; facilityId: string }[] = [];
+    for (const index of Array.from({ length: BLOCKER_LIMIT + OVERFLOW_COUNT }, (_, index) => index + 1).reverse()) {
+      const result = await runOperation(logFeedstockDelivery, f.ctx, f.input());
+      const [row] = result.data.feedstocks;
+      const code = `E2E-FS-${index}`;
+      await db.update(feedstocks).set({ code, archivedAt: new Date() }).where(and(eq(feedstocks.organizationId, f.ctx.organizationId), eq(feedstocks.id, row.id)));
+      references.push({ id: row.id, code, facilityId: row.facilityId });
+    }
+    const named = references.sort((a, b) => a.code.localeCompare(b.code)).slice(0, BLOCKER_LIMIT);
+    await expect(runOperation(deleteSupplier, f.ctx, { supplierId: f.supplierId, expectedVersion: 1 }))
+      .rejects.toMatchObject({ code: "conflict",
+        message: `Supplier was not deleted because feedstock intakes still use it: ${named.map(row => row.code).join(", ")} and ${OVERFLOW_COUNT} more. Review the linked intakes or keep this supplier.`,
+        issues: [expect.objectContaining({
+          meta: { reason: "in_use", feedstockCount: references.length, feedstockCodes: named.map(row => row.code), feedstocks: named },
+        })] });
   });
   it("keeps the feedstock supplier refusal text for foreign and unknown suppliers", async () => {
     const f = await createIntakeFixture("supplier-refusal"); intakeFixtures.push(f);
@@ -174,10 +194,10 @@ describe("party refusals and atomic effects", () => {
       submittedPayload: buildCreateStorageLocationRequest({ externalProjectId: project.externalProjectId, name: "Registered field", latitude: -8, longitude: 34, supplierReferenceId: id }),
     });
     await db.transaction(async tx => {
-      expect(await findCustomerLocationBlockers(f.ctx, tx, id)).toEqual({ orderCodes: [], registeredLocationIds: [id] });
-      expect(await findCustomerLocationBlockers(f.ctx, tx, created.locations[0].id)).toEqual({ orderCodes: [], registeredLocationIds: [] });
+      expect(await findCustomerLocationBlockers(f.ctx, tx, id)).toEqual({ orderCodes: [], orders: [], orderCount: 0, registeredLocationIds: [id] });
+      expect(await findCustomerLocationBlockers(f.ctx, tx, created.locations[0].id)).toEqual({ orderCodes: [], orders: [], orderCount: 0, registeredLocationIds: [] });
     });
-    await expect(runOperation(deleteCustomer, f.ctx, { customerId: created.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { locationIds: [id] } })] });
+    await expect(runOperation(deleteCustomer, f.ctx, { customerId: created.customer.id, expectedVersion: 1 })).rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ meta: { locationIds: [id], reason: "in_use" } })] });
     expect(await db.select().from(customerLocations).where(eq(customerLocations.customerId, created.customer.id))).toHaveLength(2);
     expect(await db.select().from(customers).where(eq(customers.id, created.customer.id))).toHaveLength(1);
   });

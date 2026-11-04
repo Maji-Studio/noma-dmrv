@@ -1,8 +1,8 @@
 /**
  * Date Formatting Utilities
  *
- * Local-timezone date formatting helpers for form default values.
- * Avoids UTC conversion bugs from toISOString().split("T")[0].
+ * Facility clock formatting, calendar-date defaults and explicit wall-clock
+ * conversion. Local helpers remain for controls that hold calendar values.
  */
 
 import { SafeError } from "@/lib/errors";
@@ -163,6 +163,11 @@ export function formatFacilityTime(
 /** Format a UTC date as date-only in a facility's local timezone. */
 export function formatFacilityDate(utcDate: Date, timezone: string): string {
   return formatFacilityTime(utcDate, timezone, "yyyy-MM-dd");
+}
+
+/** The facility calendar day used for new-record business dates. */
+export function facilityToday(timeZone: string, now = new Date()): string {
+  return formatFacilityDate(now, timeZone);
 }
 
 /**
@@ -396,14 +401,14 @@ export function combineDateAndTime(
  * must be read on the UTC calendar, not the browser's — otherwise a value like
  * `2026-07-17T00:00:00Z` renders as `2026-07-16` west of UTC and a status-only
  * edit silently saves the shifted day (#46). Plain `YYYY-MM-DD` strings pass
- * through untouched; only the empty/invalid fallback defaults to local today,
- * which is the right "new record" default.
+ * through untouched. The caller supplies the facility day for empty or invalid
+ * values, so new records never inherit the browser calendar.
  */
-export function toDateInputValue(value: string | Date | null | undefined): string {
-  if (!value) return formatLocalDate(new Date());
+export function toDateInputValue(value: string | Date | null | undefined, fallbackDay: string): string {
+  if (!value) return fallbackDay;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = typeof value === "string" ? new Date(value) : value;
-  if (isNaN(date.getTime())) return formatLocalDate(new Date());
+  if (isNaN(date.getTime())) return fallbackDay;
   return formatUtcDate(date);
 }
 

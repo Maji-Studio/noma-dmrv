@@ -1,3 +1,6 @@
+import { requireMultiBinRunsEnabled } from "@/lib/feature-switches";
+import { earliestFeedstockEventTie } from '@/lib/feedstock-event-boundary';
+import { getTransportFreezeFeedstockIds, prepareFeedstockTransportOwnershipFreeze, type TransportOwnershipFreezeScope } from "../feedstock-transport-ownership-freeze";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import { z } from "zod";
@@ -15,14 +18,15 @@ import {
   MASS_KG_INPUT_STEP,
 } from "@/schemas/helpers";
 import {
-  allocateFeedstockWetMass,
   assertFeedstockWetDrawWithinStock,
 } from "../feedstock-wet-stock";
+import { reallocateRunsForBins } from "../feedstock-run-allocations";
 import { requireOrgScope } from "../utils";
 
 const drawValidationError = (message: string, index?: number, field?: keyof ProductionRunFeedstockDrawInput) =>
   productionRunValidationError(message, index === undefined ? ["feedstockDraws"] : ["feedstockDraws", index, ...(field ? [field] : [])]);
 
+const SINGLE_SOURCE_BIN_COUNT = 1;
 const MASS_PRECISION_FACTOR = 1 / MASS_KG_INPUT_STEP;
 
 export interface ProductionRunFeedstockDrawInput {
@@ -33,6 +37,7 @@ export interface ProductionRunFeedstockDrawInput {
 /** Validate the data-access boundary independently of action/schema callers. */
 export function normalizeProductionRunFeedstockDraws(
   draws: readonly ProductionRunFeedstockDrawInput[],
+  existingStorageLocationIds: readonly string[] = [],
 ): ProductionRunFeedstockDrawInput[] {
   const seenStorageLocationIds = new Set<string>();
   let totalMassUnits = 0;
@@ -74,6 +79,12 @@ export function normalizeProductionRunFeedstockDraws(
 
   if (totalMassUnits / MASS_PRECISION_FACTOR > MASS_INPUT_MAX_KG) {
     throw drawValidationError("Total feedstock wet mass is too large");
+  }
+
+  // Older runs may keep their bins, change masses or remove bins while off.
+  if (normalized.length > SINGLE_SOURCE_BIN_COUNT &&
+    normalized.some(draw => !existingStorageLocationIds.includes(draw.storageLocationId))) {
+    requireMultiBinRunsEnabled();
   }
 
   // Keep request positions for field errors; lockBinStocks sorts lock keys itself.
@@ -196,10 +207,16 @@ export async function replaceProductionRunFeedstockDraws(
     productionRunId: string;
     facilityId: string;
     draws: readonly ProductionRunFeedstockDrawInput[];
+    transportOwnershipFreeze?: TransportOwnershipFreezeScope;
+    earliestEventAt?: Date;
   },
 ): Promise<number> {
   requireOrgScope(ctx);
-  const draws = normalizeProductionRunFeedstockDraws(params.draws);
+  const previousTies = await tx.select({ recordedAt: productionRunFeedstockDraws.createdAt, id: productionRunFeedstockDraws.id })
+    .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, params.productionRunId)));
+  const previousTie = earliestFeedstockEventTie(previousTies);
+  const previousBins = await getProductionRunFeedstockDrawStorageIds(ctx, tx, params.productionRunId);
+  const draws = normalizeProductionRunFeedstockDraws(params.draws, previousBins);
   await validateProductionRunFeedstockDrawSources(
     ctx,
     tx,
@@ -216,46 +233,39 @@ export async function replaceProductionRunFeedstockDraws(
     }), ["feedstockDraws", index, "storageLocationId"]);
   }
 
-  await tx.delete(productionRunFeedstocks).where(
-    and(
-      eq(productionRunFeedstocks.productionRunId, params.productionRunId),
-      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-    ),
-  );
-  await tx.delete(productionRunFeedstockDraws).where(
-    and(
-      eq(productionRunFeedstockDraws.productionRunId, params.productionRunId),
-      eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
-    ),
-  );
-
-  if (draws.length > 0) {
-    await tx.insert(productionRunFeedstockDraws).values(
-      draws.map((draw) => ({
-        organizationId: ctx.organizationId,
-        productionRunId: params.productionRunId,
-        storageLocationId: draw.storageLocationId,
-        wetMassKg: draw.wetMassKg,
-      })),
+  const freeze = await prepareFeedstockTransportOwnershipFreeze(ctx, tx,
+    await getTransportFreezeFeedstockIds(ctx, tx, {
+      runIds: [params.productionRunId], binIds: [...previousBins, ...draws.map(draw => draw.storageLocationId)],
+    }), { mutation: "update", subject: "production run" }, params.transportOwnershipFreeze);
+  return freeze(async transportOwnershipFreeze => {
+    if (!draws.length) {
+      await tx.delete(productionRunFeedstocks).where(
+        and(
+          eq(productionRunFeedstocks.productionRunId, params.productionRunId),
+          eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+        ),
+      );
+    }
+    await tx.delete(productionRunFeedstockDraws).where(
+      and(
+        eq(productionRunFeedstockDraws.productionRunId, params.productionRunId),
+        eq(productionRunFeedstockDraws.organizationId, ctx.organizationId),
+      ),
     );
-  }
 
-  for (const [index, draw] of draws.entries()) {
-    const allocations = await withProductionRunErrors(() => allocateFeedstockWetMass(
-      ctx,
-      tx,
-      draw.storageLocationId,
-      draw.wetMassKg,
-    ), ["feedstockDraws", index, "storageLocationId"]);
-    await tx.insert(productionRunFeedstocks).values(
-      allocations.map((allocation) => ({
-        organizationId: ctx.organizationId,
-        productionRunId: params.productionRunId,
-        feedstockId: allocation.feedstockId,
-        wetMassUsedKg: allocation.wetMassUsedKg,
-      })),
-    );
-  }
+    if (draws.length > 0) {
+      await tx.insert(productionRunFeedstockDraws).values(
+        draws.map((draw) => ({
+          organizationId: ctx.organizationId,
+          productionRunId: params.productionRunId,
+          storageLocationId: draw.storageLocationId,
+          wetMassKg: draw.wetMassKg,
+        })),
+      );
+    }
 
-  return sumProductionRunFeedstockDraws(draws);
+    await reallocateRunsForBins(ctx, tx, [...draws.map((draw) => draw.storageLocationId), ...previousBins], { onlyRunId: params.productionRunId, earliestEventAt: params.earliestEventAt, eventTie: previousTie, transportOwnershipFreeze });
+
+    return sumProductionRunFeedstockDraws(draws);
+  });
 }

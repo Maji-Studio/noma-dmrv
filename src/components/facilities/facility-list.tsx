@@ -4,7 +4,9 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { ARCHIVED_FACILITY_PARAM, RECORD_LINKS } from "@/lib/record-links";
 import {
   ArchiveIcon,
   FactoryIcon,
@@ -20,11 +22,11 @@ import {
   useCreateFacility,
   useFacilities,
   useFacilityCountries,
+  useFacilityOutputStock,
   useRestoreFacility,
   useUpdateFacility,
+  useFacilityStats,
 } from "@/hooks/use-facilities";
-import { formatMass } from "@/lib/format-utils";
-import { formatCount } from "@/lib/copy-utils";
 import { toSaveErrorMessage, StaleVersionError, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 import { ServerError } from "@/components/forms";
 import {
@@ -38,20 +40,22 @@ import {
   ListPagination,
   PageHeader,
 } from "@/components/ui";
+import { formatMass } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { FacilityCertifierLinkLoader } from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
+import { FacilityRegistryLinkNotice } from "./facility-registry-link-notice";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton } from "@/components/ui/loading-skeleton";
@@ -64,7 +68,9 @@ const LOADING_CARD_COUNT = 3;
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState<string>("");
-  const [showArchived, setShowArchived] = useState(false);
+  // An archived facility link (`?archivedFacility=`) opens the Archived view.
+  const [archivedParam] = useQueryState(ARCHIVED_FACILITY_PARAM, parseAsString);
+  const [showArchived, setShowArchived] = useState(archivedParam != null);
   const { currentPage, pageSize, setCurrentPage, setPageSize } =
     useListPagination(showArchived ? "archived" : "active");
   const debouncedSearch = useDebounce(
@@ -72,10 +78,14 @@ export function FacilityList() {
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
-  const [sideSheet, setSideSheet] = useState<{
+  const [localSheet, setLocalSheet] = useState<{
     entity: FacilityWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
+  // The record param is the working-facility param, which the provider also
+  // writes on a plain visit. Only the value the page was entered with is a link.
+  const [facilityParam] = useQueryState(RECORD_LINKS.facility.param, parseAsString);
+  const [linkedFacilityId, setLinkedFacilityId] = useState<string | null>(archivedParam ?? facilityParam);
   const [archivingFacility, setArchivingFacility] = useState<{
     version: number;
     id: string;
@@ -85,14 +95,14 @@ export function FacilityList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  // After creating a facility, admins are offered the optional certifier link
-  // for the new facility (skippable; editable later in Settings).
-  const [linkCertifierFacilityId, setLinkCertifierFacilityId] = useState<
-    string | null
-  >(null);
+  // After creating a facility, a viewer who may link it is pointed to the
+  // registry link in Settings, Facilities (it used to open a link dialog here).
+  const [createdFacility, setCreatedFacility] = useState<{
+    id: string;
+    code: string;
+  } | null>(null);
 
-  const isAdmin = useIsAdmin();
-  const { setFacilityId } = useFacilityContext();
+  const { setFacilityId, facilityId: workingFacilityId } = useFacilityContext();
 
   const filters: Partial<FacilityFilterData> = {
     search: debouncedSearch || undefined,
@@ -105,6 +115,22 @@ export function FacilityList() {
   };
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
+  // Organization null keeps the lookup off until a link asks for it.
+  const linkedFacility = useFacilities(
+    { id: linkedFacilityId ?? undefined, pageSize: 1 },
+    linkedFacilityId ? undefined : null,
+  );
+  const linkedFacilityRow = linkedFacilityId ? linkedFacility.data?.items[0] : undefined;
+  const sideSheet = localSheet ??
+    (linkedFacilityRow ? { entity: linkedFacilityRow, mode: "view" as const } : null);
+  const setSideSheet = (state: typeof localSheet) => {
+    setLocalSheet(state);
+    if (!state) setLinkedFacilityId(null);
+  };
+  const inventory = useFacilityOutputStock(
+    sideSheet?.mode === "view" ? sideSheet.entity?.id ?? null : null,
+  );
+  const { data: statsData, isLoading: statsLoading, isError: statsError } = useFacilityStats(showArchived);
   // Country options follow the visible collection — the archived view offers
   // archived facilities' countries, not the active set's.
   const { data: countries } = useFacilityCountries(showArchived);
@@ -115,8 +141,13 @@ export function FacilityList() {
   const restoreFacility = useRestoreFacility();
   const toast = useToast();
 
+  // The provider replaces an unknown facility param with a valid working facility.
+  const linkedMissing = !!linkedFacilityId && (linkedFacility.isError || (linkedFacility.isSuccess && !linkedFacilityRow));
+  useEffect(() => {
+    if (linkedMissing) toast.error("Linked facility could not be opened");
+  }, [linkedMissing, toast]);
+
   const facilities = facilitiesData?.items ?? [];
-  const totalFacilities = facilitiesData?.total ?? 0;
   const totalPages = facilitiesData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -124,35 +155,21 @@ export function FacilityList() {
     isLoading,
     setCurrentPage,
   });
-  const totalReactors = facilities.reduce((sum, facility) => sum + facility.reactorCount, 0);
-  const totalStorageBins = facilities.reduce(
-    (sum, facility) => sum + facility.storageLocationCount,
-    0
-  );
-  const feedstockOnHandKg = facilities.reduce(
-    (sum, facility) => sum + facility.inventorySummary.feedstockWetKg,
-    0
-  );
 
-  const handleCreate = async (data: FacilityFormData) => {
+  const handleCreate = async (data: FacilityFormData, onRefusal: SaveRefusalHandler) => {
     setCreateError(null);
     try {
       const facility = await createFacility.mutateAsync(data);
       setFacilityId(facility.id);
       setSideSheet(null);
       toast.success("Facility created.");
-      // Offer the optional certifier link for the new facility. Admin-only
-      // (saving the mapping is admin-gated); non-admins create unlinked and an
-      // admin links later in Settings.
-      if (isAdmin) {
-        setLinkCertifierFacilityId(facility.id);
-      }
+      setCreatedFacility({ id: facility.id, code: facility.code });
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Facility was not created. Check the form.");
+      setCreateError(onRefusal(error, error instanceof Error ? error.message : "Facility was not created. Check the form."));
     }
   };
 
-  const handleUpdate = async (data: FacilityFormData) => {
+  const handleUpdate = async (data: FacilityFormData, onRefusal: SaveRefusalHandler) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -168,7 +185,7 @@ export function FacilityList() {
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
-      setUpdateError(toSaveErrorMessage(error, "Facility was not saved. Try again."));
+      setUpdateError(onRefusal(error, toSaveErrorMessage(error, "Facility was not saved. Try again.")));
     }
   };
 
@@ -207,16 +224,21 @@ export function FacilityList() {
   };
 
   const openCreate = () => {
+    createFacility.startDraft();
+    setCreatedFacility(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
 
+  // Opening a facility also makes it the working facility; archived ones cannot be.
   const openView = (facility: FacilityWithRelations) => {
+    if (!facility.archivedAt && facility.id !== workingFacilityId) setFacilityId(facility.id);
     setSideSheet({ entity: facility, mode: "view" });
   };
 
   const openEdit = (facility: FacilityWithRelations) => {
+    if (!facility.archivedAt && facility.id !== workingFacilityId) setFacilityId(facility.id);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: facility, mode: "edit" });
@@ -265,15 +287,14 @@ export function FacilityList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? facilitySheetSections(sideSheetEntity)
+    ? facilitySheetSections(sideSheetEntity, { data: inventory.data, isPending: inventory.isPending, isError: inventory.isError })
     : undefined;
 
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="infrastructure"
+        area="setup"
         title="Facilities"
-        subtitle="Production sites, reactors, and registry links"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
@@ -282,27 +303,33 @@ export function FacilityList() {
         }
       />
 
+      {createdFacility && (
+        <FacilityRegistryLinkNotice facility={createdFacility} onDismiss={() => setCreatedFacility(null)} />
+      )}
+
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
           title={showArchived ? "Archived facilities" : "Active facilities"}
-          value={totalFacilities}
+          value={statsData?.totalFacilities ?? 0}
           icon={<FactoryIcon size={24} weight="bold" />}
-          description="Facilities matching the current filters"
-          isLoading={isLoading}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
           title="Total reactors"
-          value={totalReactors}
+          value={statsData?.totalReactors ?? 0}
           icon={<LightningIcon size={24} weight="bold" />}
-          description="Installed across the visible facilities"
-          isLoading={isLoading}
+          description={showArchived ? "Across all archived facilities" : "Across all active facilities"}
+          isLoading={statsLoading}
+          isError={statsError}
         />
         <StatCard
           title="Wet feedstock on hand"
-          value={formatMass(feedstockOnHandKg)}
+          value={formatMass(statsData?.totalFeedstockWetKg)}
           icon={<PackageIcon size={24} weight="bold" />}
-          description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
-          isLoading={isLoading}
+          description={`${formatCount(statsData?.totalStorageBins ?? 0, "storage bin")} across all ${showArchived ? "archived" : "active"} facilities`}
+          isLoading={statsLoading}
+          isError={statsError}
         />
       </div>
 
@@ -448,9 +475,7 @@ export function FacilityList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) =>
-          setSideSheet((previous) => (previous ? { ...previous, mode } : null))
-        }
+        onModeChange={(mode) => setSideSheet(sideSheet ? { ...sideSheet, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit facility"
@@ -466,14 +491,6 @@ export function FacilityList() {
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create facility"}
         />
       </EntitySideSheet>
-
-      {linkCertifierFacilityId && (
-        <FacilityCertifierLinkLoader
-          facilityId={linkCertifierFacilityId}
-          isOpen
-          onClose={() => setLinkCertifierFacilityId(null)}
-        />
-      )}
     </div>
   );
 }

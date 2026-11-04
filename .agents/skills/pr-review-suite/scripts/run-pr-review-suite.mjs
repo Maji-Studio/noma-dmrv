@@ -3,9 +3,14 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { selfTestDesignContext, selfTestDesignRuntime } from "./review-context-self-test.mjs";
+import {
+  materializeGlobalDesignSkill,
+  selectDesignContextPaths,
+} from "./review-context.mjs";
 import {
   createPrompt,
   extractPracticeDefinition,
@@ -15,6 +20,7 @@ import {
 } from "./review-prompt.mjs";
 import {
   aggregateReport,
+  buildReportJson,
   COMMENT_MARKER,
   displayModel,
   displayPractice,
@@ -25,11 +31,18 @@ import {
   parseArgs,
   requireCommand,
   run,
+  selectPractices,
   truncateForComment,
   usage,
 } from "./review-runtime.mjs";
+import { modelSettings, profileModels } from "./review-models.mjs";
+import { loadPriors } from "./review-prior.mjs";
+import { selfTestLocalReview } from "./review-local-self-test.mjs";
+import { discoverSpec } from "./review-spec.mjs";
+import { resolveTarget, verifyLocalHead, verifyRemoteHead } from "./review-target.mjs";
 
 const MAX_DIFF_CHARS = 500_000;
+const REPORT_FILENAME = "report.json";
 // Generated payloads the models read nothing useful from: one drizzle snapshot
 // alone (~390k chars) used to push a routine schema PR past MAX_DIFF_CHARS.
 // They stay in the changed-file list, and the report names what was left out.
@@ -60,63 +73,21 @@ async function getRepoRoot() {
   return result.stdout.trim();
 }
 
-async function getPr(prTarget) {
-  const fields = [
-    "number",
-    "url",
-    "title",
-    "body",
-    "baseRefName",
-    "baseRefOid",
-    "headRefName",
-    "headRefOid",
-    "isDraft",
-    "files",
-    "closingIssuesReferences",
-  ].join(",");
-  const args = ["pr", "view"];
-  if (prTarget) args.push(prTarget);
-  args.push("--json", fields);
-  const result = await gh(args);
-  return JSON.parse(result.stdout);
-}
-
 async function getRepoSlug() {
   const result = await gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);
   return result.stdout.trim();
 }
 
-async function resolveBaseRef(pr, cwd) {
-  const existing = await git(["cat-file", "-e", `${pr.baseRefOid}^{commit}`], {
-    cwd,
-    allowFailure: true,
-  });
-  if (existing.code !== 0) {
-    await git(["fetch", "--no-tags", "origin", pr.baseRefName], { cwd });
-  }
-  const resolved = await git(["rev-parse", "--verify", pr.baseRefOid], { cwd });
-  return { name: pr.baseRefOid, sha: resolved.stdout.trim() };
-}
-
-async function verifyHead(pr, cwd) {
-  const local = (await git(["rev-parse", "HEAD"], { cwd })).stdout.trim();
-  if (local !== pr.headRefOid) {
-    throw new Error(
-      `Local HEAD ${local} does not match PR head ${pr.headRefOid}. Check out and pull ${pr.headRefName}.`,
-    );
-  }
-  return local;
-}
-
-async function getDiffMetadata(baseRef, cwd) {
+async function getDiffMetadata(baseRef, cwd, headRef = "HEAD") {
+  // Display HEAD for reviewers in the pinned checkout; collect against the captured head.
   const diffRange = `${baseRef}...HEAD`;
-  const namesResult = await git(["diff", "--name-only", diffRange], { cwd });
+  const namesResult = await git(["diff", "--name-only", `${baseRef}...${headRef}`], { cwd });
   const changedFiles = namesResult.stdout.trim().split("\n").filter(Boolean);
   if (changedFiles.length === 0) {
     throw new Error(`No changes found for git diff ${diffRange}`);
   }
   const commits = (
-    await git(["log", `${baseRef}..HEAD`, "--oneline"], { cwd })
+    await git(["log", `${baseRef}..${headRef}`, "--oneline"], { cwd })
   ).stdout.trim();
   const omittedFiles = changedFiles.filter((path) =>
     GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob)),
@@ -124,7 +95,7 @@ async function getDiffMetadata(baseRef, cwd) {
   const excludes = GENERATED_PAYLOAD_GLOBS.map((glob) => `:(exclude,glob)${glob}`);
   const patch = (
     await git(
-      ["diff", "--no-ext-diff", "--unified=5", diffRange, "--", ".", ...excludes],
+      ["diff", "--no-ext-diff", "--unified=5", `${baseRef}...${headRef}`, "--", ".", ...excludes],
       { cwd },
     )
   ).stdout;
@@ -152,82 +123,6 @@ async function readFromBase(baseRef, path, cwd) {
     allowFailure: true,
   });
   return result.code === 0 ? result.stdout : undefined;
-}
-
-async function discoverSpec(options, pr, diff, cwd, artifactDir) {
-  if (options.spec) {
-    const absolute = resolve(cwd, options.spec);
-    const content = safeRead(absolute);
-    if (content === undefined) {
-      throw new Error(`Spec file not found: ${absolute}`);
-    }
-    const path = join(artifactDir, "spec.md");
-    writeFileSync(path, `# Spec source: ${relative(cwd, absolute)}\n\n${content}`);
-    return { source: relative(cwd, absolute), path };
-  }
-
-  const issue = pr.closingIssuesReferences?.[0];
-  if (issue?.body) {
-    const path = join(artifactDir, "spec.md");
-    writeFileSync(
-      path,
-      `# ${issue.title}\n\nSource: ${issue.url}\n\n${issue.body}\n`,
-    );
-    return { source: issue.url, path };
-  }
-
-  const referenceText = `${pr.title}\n${pr.body || ""}\n${diff.commits}`;
-  // The keyword is mandatory. When it was optional this matched any bare "#123",
-  // so "Supersedes PR #583" or a squash subject ending "(#585)" was fetched as the
-  // authoritative spec.
-  const issueMatch = referenceText.match(
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|issue)\s*#(\d+)/i,
-  );
-  if (issueMatch) {
-    const result = await gh(
-      ["issue", "view", issueMatch[1], "--json", "title,body,url"],
-      { allowFailure: true },
-    );
-    if (result.code === 0) {
-      const fetched = JSON.parse(result.stdout);
-      const path = join(artifactDir, "spec.md");
-      writeFileSync(
-        path,
-        `# ${fetched.title}\n\nSource: ${fetched.url}\n\n${fetched.body || ""}\n`,
-      );
-      return { source: fetched.url, path };
-    }
-  }
-
-  const branchTerms = pr.headRefName
-    .split(/[-_/]+/)
-    .filter((term) => term.length >= 4);
-  const tracked = await git(
-    ["ls-files", "docs", "specs", ".scratch"],
-    { cwd, allowFailure: true },
-  );
-  const candidates = tracked.stdout
-    .trim()
-    .split("\n")
-    .filter((path) => path.endsWith(".md"))
-    .map((path) => ({
-      path,
-      score: branchTerms.filter((term) => path.toLowerCase().includes(term.toLowerCase()))
-        .length,
-    }))
-    .filter((candidate) => candidate.score >= 2)
-    .sort((left, right) => right.score - left.score);
-
-  if (candidates[0]) {
-    const content = safeRead(resolve(cwd, candidates[0].path));
-    if (content !== undefined) {
-      const path = join(artifactDir, "spec.md");
-      writeFileSync(path, `# Spec source: ${candidates[0].path}\n\n${content}`);
-      return { source: candidates[0].path, path };
-    }
-  }
-
-  return undefined;
 }
 
 async function selectContext(baseRef, changedFiles, cwd) {
@@ -294,16 +189,17 @@ function subscriptionOnlyEnv() {
   return env;
 }
 
-async function runCodex(prompt, cwd, schemaPath, outputPath, timeoutMs) {
+async function runCodex(prompt, cwd, schemaPath, outputPath, timeoutMs, profile) {
+  const settings = modelSettings("codex", profile);
   const args = [
     "exec",
     "-C",
     cwd,
     "--ephemeral",
     "-m",
-    "gpt-6-astra",
+    settings.model,
     "-c",
-    'model_reasoning_effort="medium"',
+    `model_reasoning_effort="${settings.effort}"`,
     "-s",
     "read-only",
     "--output-schema",
@@ -322,13 +218,14 @@ async function runCodex(prompt, cwd, schemaPath, outputPath, timeoutMs) {
   return parseReviewOutput(raw, "Codex");
 }
 
-async function runOpus(prompt, cwd, schema, rawOutputPath, timeoutMs, readDir) {
+async function runOpus(prompt, cwd, schema, rawOutputPath, timeoutMs, readDir, profile) {
+  const settings = modelSettings("opus", profile);
   const args = [
     "-p",
     "--model",
-    "opus",
+    settings.model,
     "--effort",
-    "high",
+    settings.effort,
     "--permission-mode",
     "plan",
     "--safe-mode",
@@ -490,15 +387,6 @@ async function publishComment(repo, prNumber, reportPath) {
   return JSON.parse(result.stdout).html_url;
 }
 
-async function verifyRemoteHead(prTarget, expectedSha) {
-  const current = await getPr(prTarget);
-  if (current.headRefOid !== expectedSha) {
-    throw new Error(
-      `PR head changed during review (${expectedSha} -> ${current.headRefOid}); refusing to publish.`,
-    );
-  }
-}
-
 // Tracks the temporary review checkout so an interrupt can still remove it. Without
 // this, Ctrl-C during a long reviewer run leaves a worktree registered in the real repo.
 let activeWorktree;
@@ -539,6 +427,8 @@ async function removeReviewWorktree(cwd, worktree) {
 }
 
 async function selfTest() {
+  selfTestDesignContext();
+  await selfTestLocalReview();
   const sample = {
     practice: "standards",
     findings: [
@@ -581,7 +471,7 @@ async function selfTest() {
     baseSha: "a".repeat(40),
     headSha: "b".repeat(40),
     reports: [{ practice: "standards", model: "codex", output: sample }],
-    skippedPractices: new Set(["spec"]),
+    skippedPractices: new Map([["spec", "No spec available"]]),
   });
   if (!report.includes(COMMENT_MARKER) || !report.includes("Duplicated policy branch")) {
     throw new Error("aggregation self-test failed");
@@ -593,38 +483,7 @@ async function selfTest() {
     join(SKILL_ROOT, "references/practices.md"),
     "utf8",
   );
-  const contextFiles = [
-    { path: "GLOSSARY.md", absolute: "/artifacts/base-context/GLOSSARY.md" },
-  ];
-  for (const practice of DEFAULT_PRACTICES) {
-    const practiceDefinition = extractPracticeDefinition(reference, practice);
-    if (!practiceDefinition.startsWith(`## ${displayPractice(practice)}`)) {
-      throw new Error(`practice definition self-test failed for ${practice}`);
-    }
-    const prompt = createPrompt({
-      practice,
-      model: "codex",
-      pr: { number: 1, title: "Example", body: "Body" },
-      baseRef: "a".repeat(40),
-      baseSha: "a".repeat(40),
-      headSha: "b".repeat(40),
-      diff: {
-        diffRange: "base...HEAD",
-        changedFiles: ["src/example.ts"],
-        commits: "abc1234 example",
-        patch: "diff --git a/src/example.ts b/src/example.ts",
-      },
-      contextFiles,
-      spec: undefined,
-      practiceDefinition,
-    });
-    if (
-      !prompt.includes(practiceDefinition) ||
-      !prompt.includes(contextFiles[0].absolute)
-    ) {
-      throw new Error(`prompt self-test failed for ${practice}`);
-    }
-  }
+  selfTestDesignRuntime(reference);
   const generated = (path) => GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob));
   if (
     !generated("drizzle/meta/0121_snapshot.json") ||
@@ -638,7 +497,10 @@ async function selfTest() {
   // A 600k-char diff whose bulk is a snapshot must still fit, through the real
   // git path rather than a stub.
   const repo = mkdtempSync(join(tmpdir(), "review-suite-selftest-"));
-  const inRepo = (args) => git(args, { cwd: repo });
+  const inRepo = (args) => git(args, {
+    cwd: repo,
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_COUNT: "0", GIT_TEMPLATE_DIR: "" },
+  });
   // Hermetic: no signing or hooks from the user's global git config.
   const commit = ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify"];
   let bigDiff;
@@ -666,7 +528,7 @@ async function selfTest() {
     baseSha: "a".repeat(40),
     headSha: "b".repeat(40),
     reports: [],
-    skippedPractices: new Set(),
+    skippedPractices: new Map(),
     omittedFiles: ["drizzle/meta/0121_snapshot.json"],
   });
   if (!omittedReport.includes("drizzle/meta/0121_snapshot.json")) {
@@ -701,8 +563,13 @@ async function main() {
   const artifactDir = options.artifactDir
     ? resolve(cwd, options.artifactDir)
     : mkdtempSync(join(tmpdir(), "noma-pr-review-suite-"));
+  if (options.prior.some((path) => resolve(path) === join(artifactDir, REPORT_FILENAME))) {
+    throw new Error("A --prior path would be overwritten by this run; use a new --artifact-dir per round.");
+  }
   mkdirSync(artifactDir, { recursive: true });
   const timeoutMs = options.timeoutMinutes * 60 * 1000;
+  const { priors, round } = loadPriors(options.prior);
+  const localTarget = options.local ? await resolveTarget(options, cwd) : undefined;
 
   const versions = {
     git: await requireCommand("git"),
@@ -717,27 +584,18 @@ async function main() {
     }
   }
 
-  const pr = await getPr(options.pr);
-  const base = await resolveBaseRef(pr, cwd);
-  const headSha = await verifyHead(pr, cwd);
-  const diff = await getDiffMetadata(base.name, cwd);
+  const { pr, base, headSha, baseFetchFailed, mergeBase } = localTarget || await resolveTarget(options, cwd);
+  const diff = await getDiffMetadata(base.name, cwd, headSha);
   const spec = await discoverSpec(options, pr, diff, cwd, artifactDir);
-  const selectedContext = await selectContext(base.name, diff.changedFiles, cwd);
-  const contextFiles = await materializeBaseContext(
-    base.name,
-    selectedContext,
-    artifactDir,
-    cwd,
-  );
-
   // The review criteria must come from the base branch. Reading the working tree
   // would let the PR under review rewrite the standards it is judged against.
   let practiceReferenceSource = "base";
-  let practiceReference = await readFromBase(
+  const basePracticeReference = await readFromBase(
     base.name,
     PRACTICE_REFERENCE_PATH,
     cwd,
   );
+  let practiceReference = basePracticeReference;
   if (practiceReference === undefined) {
     // The PR that introduces this skill has no copy in its base commit. Fall back
     // rather than making the suite unable to review its own introducing PR.
@@ -751,14 +609,30 @@ async function main() {
     );
   }
 
-  const skippedPractices = new Set();
-  const practices = options.practices.filter((practice) => {
-    if (practice === "spec" && !spec) {
-      skippedPractices.add(practice);
-      return false;
-    }
-    return true;
+  const { practices, skippedPractices } = selectPractices({
+    practices: options.practices,
+    spec,
+    changedFiles: diff.changedFiles,
+    basePracticeReference,
   });
+  const selectedContext = await selectContext(base.name, diff.changedFiles, cwd);
+  const contextFiles = await materializeBaseContext(
+    base.name, selectedContext, artifactDir, cwd,
+  );
+  const designContextFiles = [];
+  if (practices.includes("design")) {
+    const basePaths = await git(
+      ["ls-tree", "-r", "--name-only", "-z", base.name, "--", ".agents/skills"],
+      { cwd },
+    );
+    designContextFiles.push(...await materializeBaseContext(
+      base.name, selectDesignContextPaths(basePaths.stdout.split("\0"), practices), artifactDir, cwd,
+    ));
+  }
+  const globalDesign = practices.includes("design")
+    ? materializeGlobalDesignSkill(artifactDir)
+    : {};
+  if (globalDesign.contextFile) designContextFiles.push(globalDesign.contextFile);
 
   const metadata = {
     generatedAt: new Date().toISOString(),
@@ -776,8 +650,15 @@ async function main() {
     },
     spec,
     contextFiles,
+    designContextFiles,
+    designGlobalSkill: globalDesign.designGlobalSkill,
     practiceReferenceSource,
-    models: options.models,
+    profile: options.profile,
+    models: profileModels(options.profile, options.models),
+    selectedModels: options.models,
+    round,
+    priors: options.prior,
+    ...(options.local ? { baseFetchFailed, mergeBase } : {}),
     practices,
     skippedPractices: [...skippedPractices],
   };
@@ -794,12 +675,14 @@ async function main() {
       const prompt = createPrompt({
         practice,
         model,
+        profile: options.profile,
+        priors,
         pr,
         baseRef: base.name,
         baseSha: base.sha,
         headSha,
         diff,
-        contextFiles,
+        contextFiles: practice === "design" ? [...contextFiles, ...designContextFiles] : contextFiles,
         spec,
         practiceDefinition: extractPracticeDefinition(
           practiceReference,
@@ -838,6 +721,7 @@ async function main() {
                   schemaPath,
                   join(artifactDir, `${task.stem}.json`),
                   timeoutMs,
+                  options.profile,
                 )
               : await runOpus(
                   task.prompt,
@@ -846,11 +730,12 @@ async function main() {
                   join(artifactDir, `${task.stem}-raw.json`),
                   timeoutMs,
                   artifactDir,
+                  options.profile,
                 );
           const validated = validateReviewOutput(output, reviewCwd);
           if (validated.practice !== task.practice) {
             throw new Error(
-              `${displayModel(task.model)} returned practice ${validated.practice}; expected ${task.practice}`,
+              `${displayModel(task.model, options.profile)} returned practice ${validated.practice}; expected ${task.practice}`,
             );
           }
           writeFileSync(
@@ -869,23 +754,33 @@ async function main() {
   }
 
   const reportPath = join(artifactDir, "review-comment.md");
+  const aggregate = {
+    pr,
+    baseSha: base.sha,
+    headSha,
+    reports,
+    skippedPractices,
+    omittedFiles: diff.omittedFiles,
+    round,
+    priors,
+    profile: options.profile,
+    models: options.models,
+  };
+  writeFileSync(reportPath, aggregateReport(aggregate));
   writeFileSync(
-    reportPath,
-    aggregateReport({
-      pr,
-      baseSha: base.sha,
-      headSha,
-      reports,
-      skippedPractices,
-      omittedFiles: diff.omittedFiles,
-    }),
+    join(artifactDir, REPORT_FILENAME),
+    `${JSON.stringify(buildReportJson(aggregate), null, 2)}\n`,
   );
+  if (options.local) {
+    const warning = await verifyLocalHead(headSha, cwd);
+    if (warning) process.stderr.write(warning);
+  }
   const failures = reports.filter((report) => report.error);
   if (failures.length > 0) {
     const detail = failures
       .map(
         (failure) =>
-          `${displayPractice(failure.practice)} / ${displayModel(failure.model)}: ${
+          `${displayPractice(failure.practice)} / ${displayModel(failure.model, options.profile)}: ${
             failure.error
           }`,
       )

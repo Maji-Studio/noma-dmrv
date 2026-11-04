@@ -16,19 +16,18 @@
  * Three surfaces, one component:
  * - `variant="detail"` (default) — no card and no frame. The bar sits directly
  *   under the wet-mass and moisture inputs it describes, with one key line of
- *   swatches under it ("Dry 3,200 kg", "Water 800 kg"). Below that, the
- *   calculation table: the composition ledger plus the wet-basis arithmetic in
- *   words. Forms and read side sheets.
+ *   swatches under it ("Dry 3,200 kg", "Water 800 kg") and an (i) after it.
+ *   The (i) opens the composition ledger and the provenance `note`; the
+ *   wet-basis arithmetic stays in one sentence under the key. Forms and read
+ *   side sheets.
  * - `variant="compact"` — figures plus bar plus one line. Nested panels, cards.
  * - `variant="inline"` — text only, no bar. Table cells and option labels.
  *
- * `calculation={false}` drops that table where the host surface already owns a
- * disclosure for the arithmetic.
+ * `calculation={false}` drops the (i), the formula sentence and the note where
+ * the host surface already owns the explanation of the arithmetic.
  *
- * Both detail levels show the bar and key line, because those are what the
- * two inputs mean; the table is explanation, so only Detailed adds it.
- * Without a form detail scope (unmanaged sheets) the level resolves to
- * Detailed and the table always shows.
+ * The bar, the key line and the one-sentence dry mass formula are always
+ * visible; the ledger and the note are explanation, so they open from the (i).
  *
  * The key line carries `aria-live`, so a screen reader hears the recalculated
  * split without the table being re-announced on every keystroke.
@@ -41,8 +40,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { CompositionLedger } from "@/components/forms/composition-ledger";
+import { ExplanationInfo } from "@/components/ui/explanation-info";
 import {
   describeMassSplit,
   describeMassSplitAfterAddedWater,
@@ -67,10 +66,10 @@ const SWATCH = "inline-block h-12 w-12 shrink-0";
 
 interface MoistureSplitProps {
   /**
-   * `detail` only. Set false where the surrounding surface already discloses the
+   * `detail` only. Set false where the surrounding surface already explains the
    * arithmetic, so the split contributes the bar and its key line and nothing
-   * else. The stock movement card is the case: its own "Show calculation" holds
-   * the FIFO draw, and a second ledger of the same movement's dry and water
+   * else. The stock movement card is the case: its own (i) holds the FIFO draw,
+   * and a second ledger and formula of the same movement's dry and water
    * masses beside it reads as two competing breakdowns.
    */
   calculation?: boolean;
@@ -334,12 +333,15 @@ function SplitKey({
   materialLabel,
   dryLabel,
   finalMoistureLabel,
+  trailing,
 }: {
   split: MassSplit;
   addedWaterState: AddedWaterState | null;
   materialLabel?: string;
   dryLabel?: string;
   finalMoistureLabel?: string;
+  /** Rendered as the last item of the wrapping row, so it follows the last swatch. */
+  trailing?: ReactNode;
 }) {
   return (
     <div
@@ -369,29 +371,31 @@ function SplitKey({
           </span>
         </>
       )}
+      {trailing}
     </div>
   );
 }
 
 /**
- * The arithmetic behind the ledger, in one sentence per step. It states the
- * rule and then the same rule with this record's numbers, so an operator can
- * check the figure without leaving the form.
+ * The dry mass arithmetic, in one sentence. It states the rule and then the
+ * same rule with this record's numbers, so an operator can check the figure
+ * without leaving the form. This is the line that stays inline.
  */
 function formatSplitArithmetic({
   split,
   dryMassIsStored,
-  addedWaterState,
 }: {
   split: MassSplit;
   dryMassIsStored: boolean;
-  addedWaterState: AddedWaterState | null;
 }): string {
-  const base = dryMassIsStored
+  return dryMassIsStored
     ? `Dry mass comes from the saved record. Water is the wet mass minus the dry mass: ${formatSplitMass(split.wetKg)} - ${formatSplitMass(split.dryKg)} = ${formatSplitMass(split.waterKg)}.`
     : `Dry = wet × (1 - moisture). ${formatSplitMass(split.wetKg)} × (1 - ${formatMoisturePercent(split.moisturePercent)}) = ${formatSplitMass(split.dryKg)}.`;
-  if (!addedWaterState) return base;
-  return `${base} Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
+}
+
+/** The added water step. Explanation, so it sits in the (i) panel, not under the key. */
+function formatAddedWaterArithmetic(split: MassSplit, addedWaterState: AddedWaterState): string {
+  return `Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
 }
 
 function UnresolvedBar({ height, widthPercent = PERCENT_SCALE }: { height: string; widthPercent?: number }) {
@@ -419,7 +423,6 @@ export function MoistureSplit({
   barWidthPercent,
   className = "",
 }: MoistureSplitProps) {
-  const detailed = useFormDetailLevel() === "detailed";
   const display = resolveDisplaySplit(wetMassKg, moisturePercent, dryMassKg);
   const unresolvedDryLabel =
     dryLabel ?? (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
@@ -503,10 +506,24 @@ export function MoistureSplit({
     );
   }
 
-  // The bar and its key are what the two inputs mean, so both levels show
-  // them. The table is the arithmetic behind them: explanation, Detailed only.
-  const showCalculation = calculation && detailed;
+  const keyProps = { split, addedWaterState, materialLabel, dryLabel, finalMoistureLabel };
+  if (!calculation) {
+    return (
+      <div className={`flex flex-col gap-12 ${className}`}>
+        <div className="flex flex-col gap-8">
+          <SplitBar
+            split={split}
+            height={BAR_HEIGHT}
+            addedWaterState={addedWaterState}
+            widthPercent={barWidthPercent}
+          />
+          <SplitKey {...keyProps} />
+        </div>
+      </div>
+    );
+  }
 
+  const panelTitle = `${materialLabel ?? "Material"} composition`;
   return (
     <div className={`flex flex-col gap-12 ${className}`}>
       <div className="flex flex-col gap-8">
@@ -517,48 +534,55 @@ export function MoistureSplit({
           widthPercent={barWidthPercent}
         />
         <SplitKey
-          split={split}
-          addedWaterState={addedWaterState}
-          materialLabel={materialLabel}
-          dryLabel={dryLabel}
-          finalMoistureLabel={finalMoistureLabel}
-        />
-      </div>
-
-      {showCalculation && (
-        <div {...{ [DETAIL_EXPLANATION_ATTR]: true }} className="flex flex-col gap-8">
-          <CompositionLedger
-            label={`${materialLabel ?? "Material"} composition`}
-            totalLabel={wetLabel ?? "Wet total"}
-            total={displayedSplit.wetKg}
-            segments={[
-              {
-                label: unresolvedDryLabel,
-                mass: split.dryKg,
-                category: "dry-biochar",
-              },
-              {
-                label: MASS_MOISTURE_LABELS.water,
-                mass: split.waterKg,
-                category: "existing-water",
-              },
-              ...(addedWaterState
-                ? [
+          {...keyProps}
+          trailing={(
+            <ExplanationInfo title={panelTitle}>
+                <CompositionLedger
+                  label={panelTitle}
+                  totalLabel={wetLabel ?? "Wet total"}
+                  total={displayedSplit.wetKg}
+                  segments={[
                     {
-                      label: MASS_MOISTURE_LABELS.waterAdded,
-                      mass: addedWaterState.addedWaterKg,
-                      category: "added-water" as const,
+                      label: unresolvedDryLabel,
+                      mass: split.dryKg,
+                      category: "dry-biochar",
                     },
-                  ]
-                : []),
-            ]}
-          />
+                    {
+                      label: MASS_MOISTURE_LABELS.water,
+                      mass: split.waterKg,
+                      category: "existing-water",
+                    },
+                    ...(addedWaterState
+                      ? [
+                          {
+                            label: MASS_MOISTURE_LABELS.waterAdded,
+                            mass: addedWaterState.addedWaterKg,
+                            category: "added-water" as const,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                {dryMassIsStored && (
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {formatSplitArithmetic({ split, dryMassIsStored })}
+                  </p>
+                )}
+                {addedWaterState && (
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {formatAddedWaterArithmetic(split, addedWaterState)}
+                  </p>
+                )}
+                {note && <p className="body-caption">{note}</p>}
+              </ExplanationInfo>
+          )}
+        />
+        {!dryMassIsStored && (
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            {formatSplitArithmetic({ split, dryMassIsStored, addedWaterState })}
+            {formatSplitArithmetic({ split, dryMassIsStored })}
           </p>
-          {note && <p className="body-caption">{note}</p>}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -2,10 +2,17 @@
 import type { ReactNode } from "react";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RECORD_FILES_INTERRUPTED_MESSAGE, RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 
-const mocks = vi.hoisted(() => ({ remove: vi.fn(), visibility: vi.fn(), version: 7, role: "owner" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
+const mocks = vi.hoisted(() => ({ remove: vi.fn(), visibility: vi.fn(), version: 7, role: "admin" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
 
+const recordLockMock = vi.hoisted(() => ({ lock: undefined as unknown, args: [] as unknown[][] }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLock: (...args: unknown[]) => {
+    recordLockMock.args.push(args);
+    return { lock: recordLockMock.lock, status: "ready", retry: () => {}, retrying: false };
+  },
+}));
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
     mocks.lockArgs.push(args);
@@ -13,7 +20,7 @@ vi.mock("@/hooks/use-record-certification-lock", () => ({
   },
 }));
 vi.mock("@/hooks/use-documents", () => ({
-  useCanChangeDocumentVisibility: () => mocks.platformAdmin || ["owner", "admin"].includes(mocks.role ?? ""),
+  useCanChangeDocumentVisibility: () => mocks.platformAdmin || ["admin"].includes(mocks.role ?? ""),
   documentKeys: { forEntity: () => ["documents"] },
   useDeleteDocument: () => ({ isPending: false, mutateAsync: mocks.remove }),
   useSetDocumentVisibility: () => ({ isPending: false, mutateAsync: mocks.visibility }),
@@ -54,10 +61,23 @@ describe("SampleDocumentsPanel certification lock", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.version = 7;
-    mocks.role = "owner";
+    mocks.role = "admin";
     mocks.platformAdmin = false;
     mocks.locked = false;
     mocks.lockArgs = [];
+    recordLockMock.lock = undefined;
+    recordLockMock.args = [];
+  });
+
+  it("words the files line as the sample header words an interrupted Removal", () => {
+    mocks.locked = true;
+    const holder = { kind: "removal", id: "removal-1", label: null };
+    recordLockMock.lock = { level: "sent", heldBy: [holder], usedBy: [], freeFields: [], howToFree: null, interruptedHolders: [holder] };
+    render(<SampleDocumentsPanel sampleId="sample-1" />);
+
+    expect(recordLockMock.args).toContainEqual(["sample", "sample-1"]);
+    expect(screen.getByText(RECORD_FILES_INTERRUPTED_MESSAGE)).toBeTruthy();
+    expect(screen.queryByText(RECORD_FILES_LOCKED_MESSAGE)).toBeNull();
   });
 
   it("keeps a locked sample's files downloadable and hides every change control", () => {
@@ -73,7 +93,7 @@ describe("SampleDocumentsPanel certification lock", () => {
   });
 
   it.each([
-    ["owner", false, true], ["admin", false, true], ["member", false, false],
+    ["admin", false, true], ["member", false, false],
     [null, true, true], [null, false, false],
   ] as const)("gates visibility for role=%s platformAdmin=%s", (role, platformAdmin, allowed) => {
     mocks.role = role;
@@ -94,7 +114,7 @@ describe("SampleDocumentsPanel certification lock", () => {
 });
 
 it("sends the listed version on visibility and retains the deletion version while the list refreshes", async () => {
-  mocks.version = 7; mocks.role = "owner"; mocks.locked = false;
+  mocks.version = 7; mocks.role = "admin"; mocks.locked = false;
   vi.clearAllMocks();
   const view = render(<SampleDocumentsPanel sampleId="sample-1" />);
   fireEvent.click(screen.getByRole("button", { name: "Make public" }));

@@ -5,9 +5,12 @@
  */
 "use client";
 
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
+import { recordHref } from "@/lib/record-links";
+import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
-import { nullableNumericValue, integerValue } from "@/lib/form-utils";
-import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   buildProductionRunResolver,
   buildProductionRunWindow,
@@ -20,6 +23,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
+import { useSaveRefusal, type SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
@@ -30,15 +34,19 @@ import {
   EntitySelect,
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
+  useSelectDefault,
 } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { createIntentHref } from "@/lib/create-intent";
 import {
   formatProductionRunStatus,
+  productionRunFormSchema,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+import { ProductionRunCreditBatchPreview } from "./production-run-credit-batch-preview";
 
 import {
   productionRunMassBalanceFeedback,
@@ -57,6 +65,10 @@ import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-r
 import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-lock-view";
+import { numberInputConstraintsFor } from "@/lib/number-input-constraints";
+
+/** Native min, max and step for each number input, read from the schema. */
+const numberBounds = numberInputConstraintsFor(productionRunFormSchema);
 
 // ============================================
 // Constants for select options
@@ -65,6 +77,8 @@ import { isProductionRunOutputLocked, type RecordLockView } from "@/lib/record-l
 const isProductionRunCertifyField = (field: string) =>
   isCertifyFormField("productionRun", field);
 
+const REACTORS_LIST_PATH = "/reactors";
+const NO_REACTORS_HINT = { message: "This facility has no reactors yet." };
 // Quick-add on the Biochar Storage select only mints biochar bins (the run's
 // output lands here), mirroring how the biochar-product form scopes its bin.
 const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
@@ -75,6 +89,12 @@ const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
 // Component
 // ============================================
 
+/** The server reports each run time as one instant; the form edits it as a date and a time. */
+const RUN_SPLIT_FIELDS = {
+  startTime: ["startDate", "startTime"],
+  endTime: ["endDate", "endTime"],
+} as const;
+
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
   expectedVersion?: number;
@@ -83,8 +103,8 @@ export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
-  /** Form submission handler */
-  onSubmit: (data: ProductionRunSubmitData) => Promise<void> | void;
+  /** Form submission handler; the form hands `onRefusal` on, in create and edit, so a refused save shows at its fields (#1298). */
+  onSubmit: (data: ProductionRunSubmitData, onRefusal: SaveRefusalHandler) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -114,6 +134,7 @@ export function ProductionRunForm({
   deferredAttachments,
   lock,
 }: ProductionRunFormProps) {
+  const latched = useLatchedSubmit();
   const formId = useId();
   const isEditMode = !!productionRun;
   // `assertProductionRunOutputBasisChange` refuses these once stock is used.
@@ -148,7 +169,9 @@ export function ProductionRunForm({
         : [{ ...EMPTY_FEEDSTOCK_DRAW }],
     feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
     feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
-    residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
+    // "", not undefined: the input has no setValueAs, so it reads empty as
+    // "", and a field with no default would read as edited.
+    residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? "",
     dieselOperationLiters: productionRun?.dieselOperationLiters ?? null,
     dieselGensetLiters: productionRun?.dieselGensetLiters ?? null,
     preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? null,
@@ -199,6 +222,8 @@ export function ProductionRunForm({
     remove: removeFeedstockDraw,
   } = useFieldArray({ control, name: "feedstockDraws" });
 
+  const { multiBinRuns } = useFeatureSwitches();
+
   // The run this run's window overlaps, if the server rejected the save (#259).
   const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
 
@@ -230,6 +255,7 @@ export function ProductionRunForm({
   const feedstockWetInput = summarizeFeedstockWetInput(watchedFeedstockDraws);
   const selectedFeedstockDrawCount = feedstockWetInput.binCount;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
+  const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedEndTime = useWatch({ control, name: "endTime" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
@@ -304,19 +330,13 @@ export function ProductionRunForm({
     dirtyFields,
     resetField,
   });
+  const setSelectDefault = useSelectDefault(control);
 
   const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
-  const handleFormSubmit = handleSubmit(async (data) => {
-    // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
-    // defaults to the start date when only an end time was entered.
-    const startDateStr =
-      typeof data.startDate === "string" ? data.startDate : formatLocalDate(data.startDate as Date);
-    const endDateStr = data.endDate
-      ? typeof data.endDate === "string"
-        ? data.endDate
-        : formatLocalDate(data.endDate as Date)
-      : startDateStr;
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId, splitFields: RUN_SPLIT_FIELDS });
+
+  const handleFormSubmit = latched(handleSubmit(async (data) => {
     // A touched value or newly entered physical outcome submits that Date;
     // otherwise undefined means "unchanged", so a no-op edit of an already
     // terminal run never rewrites the stored end.
@@ -332,10 +352,7 @@ export function ProductionRunForm({
       existingEndTime: productionRun?.endTime,
     });
     const runWindow = buildProductionRunWindow({
-      startDateStr,
-      startTimeStr: data.startTime as string,
-      endDateStr,
-      endTimeStr: data.endTime as string | undefined,
+      ...data,
       includeEndTime,
       clearEndTime,
       timeZone: formTimezone,
@@ -355,7 +372,7 @@ export function ProductionRunForm({
     setOverlapConflict(null);
     clearErrors("startTime");
     try {
-      await onSubmit(combined);
+      await onSubmit(combined, refuseSave);
     } catch (error) {
       const conflict = getRunConflict(error);
       if (conflict) {
@@ -368,7 +385,7 @@ export function ProductionRunForm({
       }
       throw error;
     }
-  });
+  }));
 
   return (
     <div className="space-y-20">
@@ -430,11 +447,16 @@ export function ProductionRunForm({
                   allowEdit
                   value={field.value}
                   onChange={field.onChange}
+                  // The select's own pick of a facility's only reactor is a default, not an edit.
+                  onAutoSelect={(id) => setSelectDefault("reactorId", id, field.onChange)}
                   placeholder="Select a reactor..."
                   disabled={isSubmitting || !watchedFacilityId || outputLocked}
                   error={!!errors.reactorId}
                   filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
                   autoSelectSingle
+                  allowCreate
+                  createHref={watchedFacilityId ? createIntentHref(REACTORS_LIST_PATH, watchedFacilityId) : undefined}
+                  emptyHint={NO_REACTORS_HINT}
                 />
               )}
             />
@@ -485,7 +507,7 @@ export function ProductionRunForm({
         {overlapConflict && watchedFacilityId && (
           <p className="body-caption text-[var(--color-text-secondary)]">
             <Link
-              href={`/production-runs?facility=${watchedFacilityId}&run=${overlapConflict.id}`}
+              href={recordHref("productionRun", overlapConflict.id, { facilityId: watchedFacilityId })}
               className="text-[var(--clr-dark-purple)] underline"
             >
               Open {overlapConflict.code}
@@ -498,7 +520,6 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
-            required={terminal}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -535,16 +556,18 @@ export function ProductionRunForm({
           "residenceTimeMinutes",
         ]}
         actions={
-          <Button
-            type="button"
-            variant="default"
-            size="small"
-            onClick={() => appendFeedstockDraw({ ...EMPTY_FEEDSTOCK_DRAW })}
-            disabled={isSubmitting || !watchedFacilityId}
-          >
-            <PlusIcon size={16} weight="bold" />
-            Add source
-          </Button>
+          multiBinRuns || feedstockDrawFields.length === 0 ? (
+            <Button
+              type="button"
+              variant="default"
+              size="small"
+              onClick={() => appendFeedstockDraw({ ...EMPTY_FEEDSTOCK_DRAW })}
+              disabled={isSubmitting || !watchedFacilityId}
+            >
+              <PlusIcon size={16} weight="bold" />
+              Add source
+            </Button>
+          ) : undefined
         }
       >
 
@@ -609,7 +632,6 @@ export function ProductionRunForm({
           />
         ))}
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
             id="feedstockMoisturePercent"
@@ -623,14 +645,17 @@ export function ProductionRunForm({
               setValueAs: nullableNumericValue,
             })}
           />
-          <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
+          {/* Nothing to show until a first value arrives: the unresolved bar would only explain what will appear. */}
+          {(watchWetMass != null || watchMoisture != null) && (
+            <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} materialLabel="Feedstock" />
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
               type="number"
-              step="any"
+              {...numberBounds("feedingRateKgHr")}
               placeholder="e.g. 420"
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
@@ -644,13 +669,11 @@ export function ProductionRunForm({
             <FormInput
               id="residenceTimeMinutes"
               type="number"
-              step="1"
+              {...numberBounds("residenceTimeMinutes")}
               placeholder="e.g. 30"
               disabled={isSubmitting}
               error={!!errors.residenceTimeMinutes}
-              {...register("residenceTimeMinutes", {
-                setValueAs: integerValue,
-              })}
+              {...register("residenceTimeMinutes")}
             />
           </FormField>
         </div>
@@ -692,7 +715,7 @@ export function ProductionRunForm({
             )}
           />
         </FormField>
-        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
+        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} startDate={watchedStartDate} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
 
         <MassMoistureFields
           materialLabel="Biochar"
@@ -762,7 +785,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselOperationLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselOperationLiters")}
               placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
@@ -783,7 +806,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselGensetLiters"
               type="number"
-              step="any"
+              {...numberBounds("dieselGensetLiters")}
               placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
@@ -804,7 +827,7 @@ export function ProductionRunForm({
             <FormInput
               id="preprocessingFuelLiters"
               type="number"
-              step="any"
+              {...numberBounds("preprocessingFuelLiters")}
               placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
@@ -825,7 +848,7 @@ export function ProductionRunForm({
             <FormInput
               id="electricityKwh"
               type="number"
-              step="any"
+              {...numberBounds("electricityKwh")}
               placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}
@@ -872,6 +895,19 @@ export function ProductionRunForm({
         errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
+        preview={
+          <ProductionRunCreditBatchPreview
+            control={control}
+            facilityId={watchedFacilityId}
+            productionRunId={productionRun?.id}
+            timeZone={formTimezone}
+            clearEndTime={shouldClearProductionRunEndTime({
+              from: transitionFrom,
+              to: watchedStatus,
+              existingEndTime: productionRun?.endTime,
+            })}
+          />
+        }
       />
     </div>
   );

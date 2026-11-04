@@ -12,8 +12,9 @@ import {
   useUpdateSupplierLocation,
 } from "@/hooks/use-suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
+import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
 import { toSaveErrorMessage } from "@/lib/stale-version";
-import { facilityDistanceChanges } from "@/lib/facility-distance-changes";
+import { facilityDistanceChanges, withFormDistanceRows } from "@/lib/facility-distance-changes";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -50,13 +51,16 @@ export function SupplierLocationDialog({
 
   // Modal unmounts its children while closed, so the embedded form resets on
   // every open. Only the dialog-level server error needs clearing.
+  // Closing ends the draft, so the next open never reuses a key from a failed save.
   const handleClose = () => {
     setError(null);
+    createLocation.startDraft();
     onClose();
   };
 
-  const handleSubmit = async (data: SupplierLocationFormData) => {
+  const handleSubmit = async (data: SupplierLocationFormData, onRefusal: SaveRefusalHandler) => {
     setError(null);
+    const submitted = facilityDistanceChanges(data.facilityDistances, location?.facilityDistances);
     try {
       if (location) {
         await updateLocation.mutateAsync({
@@ -65,11 +69,11 @@ export function SupplierLocationDialog({
           // instead of silently overwritten (#768).
           expectedVersion: location.version,
           ...data,
-          facilityDistances: facilityDistanceChanges(data.facilityDistances, location.facilityDistances),
+          facilityDistances: submitted,
         });
       } else {
         await createLocation.mutateAsync({ supplierId, ...data,
-          facilityDistances: facilityDistanceChanges(data.facilityDistances),
+          facilityDistances: submitted,
         });
       }
       handleClose();
@@ -77,11 +81,14 @@ export function SupplierLocationDialog({
       // The dialog stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
       setError(
-        toSaveErrorMessage(
-          err,
-          isEditing
-            ? "Location was not saved. Try again."
-            : "Location was not created. Check the form.",
+        onRefusal(
+          withFormDistanceRows(err, submitted, data.facilityDistances),
+          toSaveErrorMessage(
+            err,
+            isEditing
+              ? "Location was not saved. Try again."
+              : "Location was not created. Check the form.",
+          ),
         ),
       );
     }
@@ -100,6 +107,7 @@ export function SupplierLocationDialog({
       }
     >
       <SupplierLocationForm
+        key={location?.id ?? "new"}
         idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
         initialIsDefault={isFirstLocation}

@@ -2,27 +2,25 @@
  * Certification registry guard
  *
  * Certification is a conditional workspace (ADR 0007): its operational routes
- * (Removals, GHG Statements, plus legacy root redirects) are only reachable
+ * (`/removals` and `/ghg-statements`) are only reachable
  * once the current facility is linked to a registry. This guard mirrors the
- * sidebar's nav-hiding (`app-sidebar.tsx`) for direct URL access — without a
- * link it redirects to Settings, the one route that stays open because it's
- * where the link is made.
+ * sidebar's nav-hiding (`sidebar-content.tsx`) for direct URL access: without a
+ * link it redirects to Settings, Registry, which says what connecting unlocks
+ * and points on to the facility's project link.
  */
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
-
-const SETTINGS_PATH = "/certification/settings";
+import { registrySettingsHref } from "@/lib/certification/links";
 
 export function CertificationRegistryGuard({
   children,
 }: {
   children: ReactNode;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
   const { facilityId } = useFacilityContext();
   const { data, isLoading } = useFacilityCertifierSummary(
@@ -30,18 +28,14 @@ export function CertificationRegistryGuard({
     !!facilityId,
   );
 
-  const onSettings =
-    pathname === SETTINGS_PATH || pathname.startsWith(`${SETTINGS_PATH}/`);
-  // Only guard once a facility is selected; Settings is always allowed through.
-  const guarded = !onSettings && !!facilityId;
+  // The route group contains only operational pages; guard once a facility is selected.
+  const guarded = !!facilityId;
   const hasRegistry = Boolean(data?.mapping);
   const shouldRedirect = guarded && !isLoading && !hasRegistry;
 
   useEffect(() => {
     if (shouldRedirect && facilityId) {
-      router.replace(
-        `${SETTINGS_PATH}?facility=${encodeURIComponent(facilityId)}`,
-      );
+      router.replace(registrySettingsHref(facilityId));
     }
   }, [shouldRedirect, facilityId, router]);
 

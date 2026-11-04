@@ -54,6 +54,28 @@ amended 2026-07-04 (feedstock declared)
 > Certify project was observed on v1.1 on this date. Historical v1.2/v1.3
 > citations below do not change this ADR's production-batch/process grain.
 
+> **Amendment (2026-10-19, issue #1099):** a completed production run joins the
+> credit batch whose inclusive window contains the day it ended on the facility's
+> calendar, in its time zone, with organization, facility and feedstock still matching.
+> A month's set of completed runs is known
+> once the month ends; cross-month runs join the later month. A run from 30 September
+> to 2 October therefore joins October. Lists and dashboards still date runs by
+> their start. The registered Production Batch still spans the earliest member
+> start to the latest member end. The #1098 span check guards that interval at
+> readiness/submission, not at save time. Locked batches with a submitted Removal
+> keep their members and accept no automatic joins. Runs already assigned by
+> their start date are not repaired under the pre-production database policy.
+
+> **Amendment (2026-10-19, issue #1175, following PR #1173):** lists,
+> dashboards, date filters and run-derived product dates use the day the run
+> started on the facility's calendar. Credit batch membership continues to use
+> the facility-local end day. A facility time zone change is refused when a
+> credit batch holds runs from this facility or a batch of this facility holds
+> Samples. The refusal names the first blocking batch by code and asks the
+> operator to set Timezone back;
+> saving the same time zone with other edits remains allowed. Membership is
+> neither reassigned nor revalidated as part of a facility edit.
+
 ## Current conservative rules
 
 Kenji's #942 q7 decision retains the one-calendar-month credit-batch cap and

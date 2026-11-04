@@ -1,3 +1,4 @@
+import { reallocateRunsForBins } from './feedstock-run-allocations';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
@@ -18,6 +19,7 @@ import { findPostedOutputRequest, withOutputStockPostingInTransaction, type Outp
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 import { productionRunDateExpr } from './production-runs/date-expr';
+import { deriveBiocharProductProductionDate } from '@/lib/biochar-product-production-date';
 
 const BIOCHAR_MOISTURE_REQUIRED = 'Enter the measured biochar moisture.';
 const INGREDIENT_REPLAY_FACTS = ['formulationIngredientId', 'storageLocationId', 'massKg', 'moistureContentPercent'] as const;
@@ -132,7 +134,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const ingredientFacts = (data.composition?.ingredients ?? []) as { storageLocationId?: string | null; massKg?: number | null }[];
   const additionalBinIds = [productBinId, ...ingredientFacts.filter(line => (line.massKg ?? 0) > 0 && line.storageLocationId).map(line => line.storageLocationId)];
   return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: (replayTx, existing) => replayPostedProduct(ctx, replayTx, existing), write: async (writeTx, post) => {
-    const [facility] = await writeTx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
+    const [facility] = await writeTx.select({ id: facilities.id, timezone: facilities.timezone }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
     const formulation = await lockFormulationReference(ctx, writeTx, data.formulationId);
     const [bin] = await writeTx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, productBinId), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
@@ -153,17 +155,17 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     // A short ingredient bin is a typed wet-stock shortage; a short source bin a typed solids shortage.
     await assertCompositionIngredientDrawsWithinStock(ctx, writeTx, composition);
     if (!prepared.plan || prepared.preview.blockingMessage) throw blockedOutputStockError(prepared.blocking, prepared.preview.blockingMessage ?? 'Source stock is unavailable.');
-    // The production date is the oldest lot drawn, whatever order the operator emptied them in.
+    // Pure products use the oldest lot drawn, whatever order they were emptied in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
-    const [sourceRun] = await writeTx.select({ date: productionRunDateExpr() }).from(productionRuns).where(and(
+    const [sourceRun] = await writeTx.select({ date: productionRunDateExpr(ctx.organizationId) }).from(productionRuns).where(and(
       eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, data.facilityId), eq(productionRuns.id, firstLayer.id)));
     if (!sourceRun) throw new SafeError('Source production run not found.');
     const moistureContentPercent = postedMoisturePercent(prepared);
     if (moistureContentPercent == null) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
     const [product] = await writeTx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
       formulationId: data.formulationId, biocharRatio: formulation.biocharRatio, placedAt: new Date(data.placedAt),
-      productionDate: sourceRun.date, status: data.status ?? 'testing',
+      productionDate: deriveBiocharProductProductionDate({ composition, placedAt: new Date(data.placedAt), facilityTimezone: facility.timezone, sourceRunDate: sourceRun.date }), status: data.status ?? 'testing',
       sourceBiocharStorageLocationId: input.storageLocationId, linkedProductionRunId: prepared.plan.allocations.length === 1 ? firstLayer.id : null,
       // A split draw's biochar moisture is its overall 1 − solids ÷ wet across the sub-bins read.
       storageLocationId: productBinId, massKg, moistureContentPercent, densityKgM3: data.densityKgM3,
@@ -187,6 +189,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     const sources = await writeTx.select().from(biocharProductSourceAllocations).where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.biocharProductId, product.id)));
     const ingredients = await writeTx.select().from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), eq(productIngredientSnapshots.biocharProductId, product.id)));
     options.capture?.(product.id, null, { ...product, sources, ingredients });
+    await reallocateRunsForBins(ctx, writeTx, ingredientFacts.flatMap(line => line.storageLocationId ? [line.storageLocationId] : []), { earliestEventAt: product.placedAt, eventTie: { recordedAt: product.createdAt, id: product.id } });
     return { product, basisFingerprint: productBasis.basisFingerprint };
   } }, { snapshotStock: options.snapshotStock, onReplay: options.onReplay });
 }

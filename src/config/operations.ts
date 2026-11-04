@@ -36,3 +36,6 @@ export const IDEMPOTENCY_OUTCOME_SCHEMA_VERSION = 2;
 /** Rows removed per autocommit statement by the daily purge. */
 export const API_RECORD_PURGE_BATCH_SIZE = 1_000;
 export const CRON_SECRET_MIN_LENGTH = 32;
+
+/** App form intents cannot share the generated API credential namespace. */
+export const APP_FORM_CREDENTIAL_PREFIX = "app-form:";

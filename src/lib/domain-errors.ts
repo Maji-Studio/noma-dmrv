@@ -3,8 +3,11 @@ import { SafeError } from "@/lib/errors";
 import type { StockEffect } from "@/lib/representations/stock-effects";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 
+export const SESSION_EXPIRED = "session_expired";
+
 export type DomainErrorCode =
   | "validation_failed"
+  | typeof SESSION_EXPIRED
   | "not_found"
   | "stale_version"
   | "conflict"

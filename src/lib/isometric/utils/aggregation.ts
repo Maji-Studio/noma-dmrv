@@ -45,13 +45,13 @@ export interface AggregatedProductionData {
   // (see `aggregateTransportMassDistance`). Caller populates via
   // `enrichWithTransportLegs`.
   //
-  // feedstock/biochar are null when no legs are recorded — transport is
-  // required for those categories, so a missing value fails closed at submit.
+  // Empty transport is null unless linked feedstock trips all belong to
+  // earlier runs; that production scope contributes a real zero.
   feedstockTransportMassDistanceTonneKm: number | null;
   biocharTransportMassDistanceTonneKm: number | null;
-  // Sample shipment is optional: 0 (a true value — "no sample transport")
-  // rather than null when no sample legs exist.
-  sampleTransportMassDistanceTonneKm: number;
+  // Legacy sample shipment is optional: 0 when no legs exist.
+  // Once entries are enabled the retired automatic source is null.
+  sampleTransportMassDistanceTonneKm: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
@@ -182,9 +182,10 @@ export function transportMassDistanceAvailable(legs: TransportLeg[], requirePosi
 export function aggregateTransportMassDistance(
   legs: TransportLeg[],
   categoryLabel: string,
+  transportOwnedElsewhere = false,
 ): TransportAggregationResult {
   if (legs.length === 0) {
-    return { massDistanceTonneKm: null, warning: null };
+    return { massDistanceTonneKm: transportOwnedElsewhere ? 0 : null, warning: null };
   }
 
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
@@ -334,7 +335,7 @@ export function aggregateProductionRuns(
     // `enrichWithTransportLegs`.
     feedstockTransportMassDistanceTonneKm: null,
     biocharTransportMassDistanceTonneKm: null,
-    sampleTransportMassDistanceTonneKm: 0,
+    sampleTransportMassDistanceTonneKm: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -344,13 +345,15 @@ export function aggregateProductionRuns(
 
 export interface TransportLegsByCategory {
   feedstock: TransportLeg[];
+  /** Linked feedstock exists, but none of its trips belong to this production scope. */
+  feedstockTransportOwnedElsewhere?: boolean;
   /** Removal-scoped delivery rows carrying immutable applied wet loads. */
   biochar: TransportLeg[];
   sample: TransportLeg[];
 }
 
 // Layers transport-leg distances onto an existing aggregation result.
-// Pure: returns a new object, doesn't mutate `agg`. Per-category warnings
+// Returns a new object without mutating `agg`. Per-category warnings
 // (mixed methods/factors, missing per-leg data) are appended to
 // `agg.warnings`, which the submission pipeline short-circuits on.
 //
@@ -359,25 +362,19 @@ export function enrichWithTransportLegs<T extends AggregatedProductionRunData>(
   agg: T,
   legs: TransportLegsByCategory,
 ): Omit<T, keyof AggregatedProductionRunData> & AggregatedProductionRunData {
-  const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
+  const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock", legs.feedstockTransportOwnedElsewhere);
   const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
-  const sample = aggregateTransportMassDistance(legs.sample, "Sample");
   const newWarnings = [
     feedstock.warning,
     biochar.warning,
-    sample.warning,
   ].filter((w): w is string => w !== null);
 
   return {
     ...agg,
     feedstockTransportMassDistanceTonneKm: feedstock.massDistanceTonneKm,
     biocharTransportMassDistanceTonneKm: biochar.massDistanceTonneKm,
-    // Sample shipment is optional, so an empty category collapses to 0 (a
-    // true "no sample transport" value); feedstock/biochar stay null when
-    // empty so a forgotten required leg fails closed at submit. A blocked
-    // sample category (mixed factor / missing mass) yields its warning above
-    // AND falls back to 0 here — the pipeline blocks on the warning either way.
-    sampleTransportMassDistanceTonneKm: sample.massDistanceTonneKm ?? 0,
+    // Sample shipping has no automatic source. Retired legs provide no value or warning.
+    sampleTransportMassDistanceTonneKm: null,
     warnings: [...agg.warnings, ...newWarnings],
   };
 }

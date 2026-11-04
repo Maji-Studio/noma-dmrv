@@ -3,7 +3,7 @@ import { documentNotFound, readApiDocument, readApiDocumentList, resolveApiDocum
 import { representDocument } from "@/lib/representations/documents";
 import { documentDownloadUrl } from "@/lib/documents/download-url";
 import { apiRoute } from "./route";
-import { apiDenialResponse } from "./problem";
+import { apiScopeDenialResponse } from "./scope-denial";
 import { canonicalUuid } from "./canonical-uuid";
 import { lookupIdentifier, parseApiQuery, readLookupPage } from "./lookup-query";
 import { documentListSchema, lookupGetSchema } from "./query-schemas";
@@ -17,7 +17,7 @@ export function documentReadHandler(ownerType: ApiDocumentOwnerType, kind: ReadK
   const owner = API_DOCUMENT_OWNERS[ownerType];
   return apiRoute<Params>(`api.v1.${owner.path}.documents.${kind}`, owner.readScope, async (request, context, params) => {
     const { ctx, headers, instance, requestId } = context;
-    if (!canAccessOwnerDocuments(ctx, ownerType, "read")) return apiDenialResponse("missing_scope", instance, requestId);
+    if (!canAccessOwnerDocuments(ctx, ownerType, "read")) return apiScopeDenialResponse(ctx, instance, requestId, [owner.readScope]);
     if (kind === "list") {
       const { limit, cursor, ...filters } = parseApiQuery(request, documentListSchema(ownerType));
       const ownerId = await resolveApiDocumentOwner(ctx, ownerType, lookupIdentifier(params.idOrCode));
@@ -40,5 +40,5 @@ export function documentReadHandler(ownerType: ApiDocumentOwnerType, kind: ReadK
     const etag = documentEtag(data);
     headers.set("ETag", etag);
     return Response.json({ data }, { headers });
-  });
+  }, { audience: "rest" });
 }

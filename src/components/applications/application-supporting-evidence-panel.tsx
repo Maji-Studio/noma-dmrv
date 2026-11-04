@@ -7,7 +7,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FormField, FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { applicationKeys } from "@/hooks/use-applications";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -22,7 +21,7 @@ import {
   isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
-import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
+import { RecordFilesLockedNotice } from "@/components/record-locks/record-files-locked-notice";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
 import {
@@ -55,7 +54,11 @@ export function ApplicationSupportingEvidencePanel({
   const readOnly = readOnlyProp || locked;
   const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
   const deleteId = deleting?.id ?? null;
-  const setDeleteId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const setDeleteId = (id: string | null) => {
+    setDeleteError(null);
+    setDeleting(docs?.find((doc) => doc.id === id) ?? null);
+  };
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
@@ -82,16 +85,16 @@ export function ApplicationSupportingEvidencePanel({
 
   const handleDelete = async () => {
     if (!deleting) return;
-    setErrorMessage(null);
+    setDeleteError(null);
     try {
       await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       invalidateApplicationLists();
       toast.success("Supporting evidence deleted");
       setDeleteId(null);
-    } catch (deleteError) {
-      setErrorMessage(
-        deleteError instanceof StaleVersionError ? staleDeleteMessage("Supporting evidence") : deleteError instanceof Error
-          ? deleteError.message
+    } catch (err) {
+      setDeleteError(
+        err instanceof StaleVersionError ? staleDeleteMessage("Supporting evidence") : err instanceof Error
+          ? err.message
           : "The supporting evidence was not deleted. Try again.",
       );
     }
@@ -142,7 +145,7 @@ export function ApplicationSupportingEvidencePanel({
 
   return (
     <div className="flex flex-col gap-16">
-      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
+      {locked && <RecordFilesLockedNotice lockKind="application" lockId={applicationId} />}
       {(error || errorMessage) && (
         <ServerError
           message={
@@ -203,9 +206,9 @@ export function ApplicationSupportingEvidencePanel({
           onConfirm={handleDelete}
           onCancel={() => {
             setDeleteId(null);
-            setErrorMessage(null);
           }}
           isPending={deleteMutation.isPending}
+          errorMessage={deleteError ?? undefined}
         />
       )}
     </div>

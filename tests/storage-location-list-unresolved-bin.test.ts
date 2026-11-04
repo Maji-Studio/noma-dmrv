@@ -82,6 +82,7 @@ beforeAll(async () => {
         endTime: new Date("2026-06-01T12:00:00Z"),
         biocharStorageLocationId: bin.id,
         biocharMoisturePercent: 0,
+        biocharOutputKg: 100,
         biocharDryMassKg: null,
       })
       .returning({ id: productionRuns.id, code: productionRuns.code });
@@ -131,6 +132,7 @@ describe("storage location list with an unresolved output bin", () => {
     expect(result.laneSummary.biochar_bin).toEqual({
       binCount: 1,
       onHandKg: null,
+      basis: "wet",
     });
     // Other lanes are unaffected.
     expect(result.laneSummary.feedstock_bin.onHandKg).toBe(0);

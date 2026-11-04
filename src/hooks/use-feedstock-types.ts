@@ -1,7 +1,9 @@
 "use client";
 
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
+import { isActionError } from "@/lib/action-error";
 
+import { useIntentMutation } from "./use-create-intent-key";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
@@ -10,6 +12,7 @@ import {
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
   deleteFeedstockTypeFn,
+  getFeedstockTypeLinkLockFn,
   importIsometricFeedstockTypeFn,
   listFeedstockTypesFn,
   unarchiveFeedstockTypeFn,
@@ -21,6 +24,7 @@ import type {
   UpdateFeedstockTypeData,
 } from "@/schemas/feedstock-types";
 import { certificationKeys } from "./use-certification";
+import { recordLockKeys } from "./record-lock-query-keys";
 
 export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
@@ -41,10 +45,24 @@ export function useFeedstockTypeList(enabled = true) {
   });
 }
 
+/** Whether a sent Removal holds the type's Isometric link, and which Removals. */
+export function useFeedstockTypeLinkLock(feedstockTypeId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: recordLockKeys.feedstockTypeLink(feedstockTypeId ?? ""),
+    queryFn: async () => {
+      const result = await getFeedstockTypeLinkLockFn({ feedstockTypeId });
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    enabled: enabled && !!feedstockTypeId,
+  });
+}
+
 function useInvalidateFeedstockTypes() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
+    void queryClient.invalidateQueries({ queryKey: recordLockKeys.feedstockTypeLinks() });
     void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
@@ -52,9 +70,9 @@ function useInvalidateFeedstockTypes() {
 
 export function useCreateFeedstockType() {
   const invalidate = useInvalidateFeedstockTypes();
-  return useMutation({
-    mutationFn: async (input: CreateFeedstockTypeData) => {
-      const result = await createFeedstockTypeFn(input);
+  return useIntentMutation({
+    mutationFn: async (input: CreateFeedstockTypeData, intentKey) => {
+      const result = await createFeedstockTypeFn(input, { intentKey });
       if (!result.success) throwActionError(result);
       return result.data;
     },
@@ -71,7 +89,12 @@ export function useUpdateFeedstockType() {
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
+    onError: (error) => {
+      if (error instanceof StaleVersionError) invalidate();
+      if (isActionError(error) && error.code === "certification_locked") {
+        void queryClient.invalidateQueries({ queryKey: recordLockKeys.feedstockTypeLinks() });
+      }
+    },
     onSuccess: (data) => {
       patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
       invalidate();

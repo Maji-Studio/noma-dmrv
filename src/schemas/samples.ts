@@ -9,8 +9,10 @@ import { expectedVersionSchema } from "./helpers";
  */
 
 import { z } from "zod";
+import { formatPercent } from "@/lib/format-utils";
 import { offsetInstantSchema } from "./event-instant";
 import {
+  dateOrStringSchema,
   optionalNumber,
   optionalPercent,
   PG_INTEGER_MAX,
@@ -31,6 +33,8 @@ const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
 export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
+const CARBON_PERCENT_CEILING = 100;
+const CARBON_SUM_DISPLAY_DIGITS = 2;
 export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
@@ -67,13 +71,13 @@ const SAMPLING_TIME_OFFSET_MESSAGE =
  * facility wall clock to that instant with `EventTimeInput`, so a time is
  * never read in the browser's zone.
  */
-const samplingTimeSchema = z.union([
-  z.date(),
-  z.string()
+const samplingTimeSchema = dateOrStringSchema(
+  SAMPLING_TIME_REQUIRED_MESSAGE,
+  (text) => text
     .min(1, SAMPLING_TIME_REQUIRED_MESSAGE)
     .pipe(offsetInstantSchema(SAMPLING_TIME_OFFSET_MESSAGE))
     .transform((value) => new Date(value)),
-], { error: SAMPLING_TIME_REQUIRED_MESSAGE });
+);
 
 const percentNumber = z
   .number()
@@ -123,11 +127,18 @@ interface SampleCarbonValues {
   totalCarbonPercent?: number | null;
   organicCarbonPercent?: number | null;
   inorganicCarbonPercent?: number | null;
+  reactiveCarbonPercent?: number | null;
+  residualCarbonPercent?: number | null;
 }
 
 export interface SampleCarbonReconciliationErrors {
   organicCarbonPercent?: string;
   inorganicCarbonPercent?: string;
+  residualCarbonPercent?: string;
+}
+
+export function reactiveResidualCarbonExceedsCeilingMessage(sum: number): string {
+  return `Reactive and residual carbon add up to ${formatPercent(sum, { digits: CARBON_SUM_DISPLAY_DIGITS })}. Correct them to ${CARBON_PERCENT_CEILING}% or less.`;
 }
 
 function isCompleteNumber(value: number | null | undefined): value is number {
@@ -160,30 +171,75 @@ export function getSampleCarbonReconciliationErrors(
     errors.inorganicCarbonPercent = COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE;
   }
 
+  // Isometric Soil Environments v1.3, Eq. 6 uses only residual carbon and
+  // states no sum rule. This is noma's own plausibility check (20 Oct 2026,
+  // #684), using the same tolerance as the other carbon reconciliation rules.
+  if (
+    isCompleteNumber(value.reactiveCarbonPercent) &&
+    isCompleteNumber(value.residualCarbonPercent)
+  ) {
+    const sum = value.reactiveCarbonPercent + value.residualCarbonPercent;
+    if (sum - CARBON_PERCENT_CEILING > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
+      errors.residualCarbonPercent = reactiveResidualCarbonExceedsCeilingMessage(sum);
+    }
+  }
+
   return errors;
 }
 
-function carbonReconciliationSuperRefine(
-  value: SampleCarbonValues,
-  ctx: z.RefinementCtx,
-): void {
-  const errors = getSampleCarbonReconciliationErrors(value);
+/** The inputs each carbon refusal reads. */
+const CARBON_REFUSAL_INPUTS: Record<keyof SampleCarbonReconciliationErrors, readonly PropertyKey[]> = {
+  organicCarbonPercent: ["totalCarbonPercent", "organicCarbonPercent"],
+  inorganicCarbonPercent: ["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"],
+  residualCarbonPercent: ["reactiveCarbonPercent", "residualCarbonPercent"],
+};
 
-  if (errors.organicCarbonPercent) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["organicCarbonPercent"],
-      message: errors.organicCarbonPercent,
-    });
-  }
+/** The fields a carbon refusal sits on, in the order the writer reports them. */
+export const SAMPLE_CARBON_REFUSAL_FIELDS = Object.keys(CARBON_REFUSAL_INPUTS) as (keyof SampleCarbonReconciliationErrors)[];
 
-  if (errors.inorganicCarbonPercent) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["inorganicCarbonPercent"],
-      message: errors.inorganicCarbonPercent,
-    });
+export type SampleCarbonRefusalField = keyof SampleCarbonReconciliationErrors;
+
+/**
+ * Zod skips object refinements once any field has failed, so a Save with an
+ * empty sampling time would not list a carbon refusal the form already shows
+ * live. Each carbon check runs unless one of its own inputs failed to parse,
+ * or the body itself is not an object.
+ * Custom issues are refusals, such as the carbon ones before this check, not
+ * parse failures: the carbon inputs raise none.
+ */
+function inputsParsed(fields: readonly PropertyKey[]) {
+  return (payload: z.core.ParsePayload): boolean =>
+    typeof payload.value === "object" && payload.value !== null &&
+    !payload.issues.some((issue) =>
+      !issue.path?.length ||
+      (issue.code !== "custom" && fields.includes(issue.path[0] as PropertyKey)),
+    );
+}
+
+/** One refinement per refused field, so each refusal sits on its own input. */
+function carbonRefusal(
+  field: SampleCarbonRefusalField,
+): [(value: SampleCarbonValues) => boolean, z.core.$ZodCustomParams] {
+  return [
+    (value) => !getSampleCarbonReconciliationErrors(value)[field],
+    {
+      path: [field],
+      when: inputsParsed(CARBON_REFUSAL_INPUTS[field]),
+      error: (issue) => getSampleCarbonReconciliationErrors(issue.input as SampleCarbonValues)[field],
+    },
+  ];
+}
+
+/**
+ * Adds the carbon reconciliation refusals to a Sample body schema: the form,
+ * the server update and the REST/MCP bodies all use this one chain.
+ */
+export function withCarbonRefusals<T extends z.ZodType<SampleCarbonValues>>(schema: T): T {
+  let refined = schema;
+  for (const field of SAMPLE_CARBON_REFUSAL_FIELDS) {
+    refined = refined.refine(...carbonRefusal(field)) as T;
   }
+  return refined;
 }
 
 // ============================================
@@ -203,7 +259,7 @@ function carbonReconciliationSuperRefine(
  * 6. Stability — hToCOrgRatio (calculated)
  * 7. 1000-Year Durability (conditional) — R₀ reflectance, TGA non-reactive carbon
  */
-export const sampleFormSchema = z
+export const sampleFormSchema = withCarbonRefusals(z
   .object({
     // === Section 1: Sample Info ===
     // The credit batch (protocol production batch) this lab replicate
@@ -282,10 +338,8 @@ export const sampleFormSchema = z
     magnesiumPercent: optionalPercentInput,
     calciumPercent: optionalPercentInput,
     ironPercent: optionalPercentInput,
-  })
+  }))
   .superRefine((value, ctx) => {
-    carbonReconciliationSuperRefine(value, ctx);
-
     // Conditional validation for nutrient claims
     if (value.nutrientClaimEnabled) {
       const nutrientFields = [
@@ -321,7 +375,7 @@ export const createSampleSchema = sampleFormSchema;
  * Schema for updating a sample (server action)
  * All fields optional except sampleId
  */
-export const updateSampleSchema = z.object({
+export const updateSampleSchema = withCarbonRefusals(z.object({
   expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
@@ -365,7 +419,7 @@ export const updateSampleSchema = z.object({
   magnesiumPercent: percentNumber.optional().nullable(),
   calciumPercent: percentNumber.optional().nullable(),
   ironPercent: percentNumber.optional().nullable(),
-}).superRefine(carbonReconciliationSuperRefine);
+}));
 
 /**
  * Schema for deleting a sample

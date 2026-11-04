@@ -29,7 +29,6 @@ export async function loadRegistrySourceVisibility(): Promise<
     ),
     viewerCanManage:
       orgCtx.isPlatformAdmin ||
-      orgCtx.orgRole === "owner" ||
       orgCtx.orgRole === "admin",
   }));
 }
