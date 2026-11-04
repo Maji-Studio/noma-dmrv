@@ -18,6 +18,7 @@ import { activityEvents, certificationSubmissions, certifierGhgStatements, certi
   emissionEntries, emissionEntryValues, productionProcesses, productionRuns, removalTemplateObservations, users } from "@/db/schema";
 import { createEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope } from "@/data-access/emission-entry-corrections";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import { markSubmissionSubmitted } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
@@ -121,7 +122,7 @@ it("releases a carried claim when its receiving Removal is deleted", async () =>
     productionBatches: (claim.productionBatches ?? []).map(batch => ({ creditBatchId: batch.creditBatchId, externalId: batch.externalProductionBatchId, outcome: "absent" as const })) });
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ creditBatchId: origin.batchId, sendReservedBySubmissionId: null, sentByRemovalId: null });
 });
-it("keeps a carried entry locked after the receiver's statement is returned", async () => {
+it("allows a carried entry correction only after the receiver's statement is returned", async () => {
   const row = await attempt();
   await reserve(row);
   await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!, productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
@@ -131,7 +132,23 @@ it("keeps a carried entry locked after the receiver's statement is returned", as
   await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "ghg_statement", localEntityType: "ghgStatement",
     localEntityId: statement.id, version: 1, status: "submitted", externalId: "returned", submittedAt: new Date(), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: ["carried"] } });
   const sent = await getEmissionEntry(ctx, entry.id);
-  await expect(updateEmissionEntry(ctx, { id: entry.id, expectedVersion: sent.version, note: "correction" })).rejects.toThrow("reserved or sent");
+  const correction = { id: entry.id, expectedVersion: sent.version, note: "correction",
+    values: [{ inputKey: "electricity_use", quantityKind: "energy" as const, magnitude: "125", unit: "kWh" }] };
+  registry.getGhgStatement.mockResolvedValue({ status: "AWAITING_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  await expect(updateEmissionEntry(ctx, correction)).rejects.toMatchObject({ code: "certification_locked" });
+  registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  expect(await updateEmissionEntry(ctx, correction)).toMatchObject({ note: "correction", sentByRemovalId: receiving.removalId,
+    creditBatchId: origin.batchId, values: [expect.objectContaining({ magnitude: "125" })] });
+});
+it("refuses a carry receiver introduced after the correction artifacts were locked", async () => {
+  await expect(db.transaction(async tx => {
+    await lockEmissionCorrectionScope(ctx, tx, origin.batchId);
+    await tx.select().from(creditBatches).where(eq(creditBatches.id, origin.batchId)).for("update");
+    // Model a receiver discovered only after waiting for the batch row lock.
+    await tx.update(emissionEntries).set({ sentByRemovalId: receiving.removalId }).where(eq(emissionEntries.id, entry.id));
+    await revalidateEmissionCorrectionScope(ctx, tx, origin.batchId);
+  })).rejects.toThrow("Certification lineage changed while it was being locked");
+  expect((await getEmissionEntry(ctx, entry.id)).sentByRemovalId).toBeNull();
 });
 it("locks the origin and receiving batches before waiting on the carried entry", async () => {
   const row = await attempt();

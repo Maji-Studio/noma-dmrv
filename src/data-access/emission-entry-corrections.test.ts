@@ -7,7 +7,7 @@ vi.mock("@/db", () => ({ db: {} }));
 it("discovers the same full batch union from every owner of the edited batch", async () => {
   const { emissionCorrectionBatchIds } = await import("./emission-entry-corrections");
   const results = [[{ id: "owner-a" }, { id: "owner-b" }, { id: null }], [{ id: "a" }, { id: "b" }, { id: "b" }]];
-  const tx = { select: () => ({ from: () => ({ where: async () => results.shift() }) }) } as unknown as DbTransaction;
+  const tx = { select: () => ({ from: () => ({ where: async () => results.shift(), leftJoin: () => ({ where: async () => [] }) }) }) } as unknown as DbTransaction;
   expect(await emissionCorrectionBatchIds(makeTestOrgContext(), tx, "a")).toEqual(["a", "b"]);
   expect(results).toEqual([]);
 });
@@ -17,7 +17,7 @@ it("fans out distinct batches and shares pending reads across differently ordere
   const results = [[{ id: "owner-a" }], [{ id: "owner-b" }], [],
     [{ id: "b" }, { id: "a" }], [{ id: "a" }, { id: "b" }]];
   const where = vi.fn(async () => results.shift());
-  const tx = { select: () => ({ from: () => ({ where }) }) } as unknown as DbTransaction;
+  const tx = { select: () => ({ from: () => ({ where, leftJoin: () => ({ where: async () => [] }) }) }) } as unknown as DbTransaction;
   const shared = { value: "shared" };
   const read = vi.fn(async (union: string[]) => union.includes("c") ? null : shared);
   const pending = readPerCorrectionUnion(makeTestOrgContext(), tx, ["a", "b", "a", "c"], read);
@@ -50,10 +50,30 @@ it("propagates failed union queries and reader failures", async () => {
   const { readPerCorrectionUnion } = await import("./emission-entry-corrections");
   const failure = new Error("read failed");
   const where = vi.fn().mockRejectedValueOnce(failure).mockResolvedValue([]);
-  const tx = { select: () => ({ from: () => ({ where }) }) } as unknown as DbTransaction;
+  const tx = { select: () => ({ from: () => ({ where, leftJoin: () => ({ where: async () => [] }) }) }) } as unknown as DbTransaction;
   const read = vi.fn().mockRejectedValue(failure);
   await expect(readPerCorrectionUnion(makeTestOrgContext(), tx, ["a"], read)).rejects.toBe(failure);
   expect(read).not.toHaveBeenCalled();
   await expect(readPerCorrectionUnion(makeTestOrgContext(), tx, ["a"], read)).rejects.toBe(failure);
   expect(read).toHaveBeenCalledExactlyOnceWith(["a"]);
+});
+
+// Receiver discovery must reach a Removal even with no origin-batch applications.
+it.each(["sent", "reserved", "held"])("includes a %s carry receiver's batches", async (kind) => {
+  const { emissionCorrectionBatchIds } = await import("./emission-entry-corrections");
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  const receiver = "receiving-removal";
+  const entry = { id: "entry", replacesEntryId: kind === "held" ? "original" : null,
+    sentByRemovalId: kind === "sent" ? receiver : null,
+    reservedByRemovalId: kind === "reserved" ? receiver : null };
+  const where = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "receiving-batch" }]);
+  const tx = { select: () => ({ from: () => ({ where,
+    leftJoin: () => ({ where: async () => [entry] }),
+    innerJoin: () => ({ where: async () => [{ id: entry.id, removalId: receiver }] }),
+  }) }) } as unknown as DbTransaction;
+  expect(await emissionCorrectionBatchIds(makeTestOrgContext(), tx, "origin-batch"))
+    .toEqual(["origin-batch", "receiving-batch"]);
+  const query = new PgDialect().sqlToQuery(where.mock.calls[1][0]);
+  expect(query.params).toContain(receiver);
+  expect(query.params).toContain(makeTestOrgContext().organizationId);
 });

@@ -2,12 +2,13 @@ import { EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW } from "@/lib/certification/em
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applications, certificationSubmissions, creditBatchApplications, creditBatches } from "@/db/schema";
+import { applications, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deriveRemovalEntryWindow, inWindow, type RemovalEntryWindow } from "@/lib/certification/removal-emission-contributions";
 import { isRemovalCorrectionWindowOpen } from "@/lib/record-lock";
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { requireOrgScope, type Executor } from "./utils";
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
 
 type CorrectionScope = { batchIds: string[]; artifactIds: Set<string>; windows: Map<string, RemovalEntryWindow> };
 const scopes = new WeakMap<DbTransaction, Map<string, CorrectionScope>>();
@@ -43,7 +44,8 @@ export async function revalidateEmissionCorrectionScope(ctx: OrgContext, tx: DbT
   requireOrgScope(ctx);
   const scope = scopes.get(tx)?.get(scopeKey(ctx, batchId));
   if (!scope) return;
-  const lineage = (await Promise.all(scope.batchIds.map((id) => getCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: id })))).flat();
+  const batchIds = await emissionCorrectionBatchIds(ctx, tx, batchId);
+  const lineage = (await Promise.all([...new Set([...scope.batchIds, ...batchIds])].map((id) => getCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: id })))).flat();
   const facts = lineage.map((row) => row.recordLockRemoval);
   if (facts.some((fact) => !scope.artifactIds.has(`removal:${fact.id}`) || fact.statements.some((statement) => !scope.artifactIds.has(`statement:${statement.id}`)))) {
     throw new CertificationLineageChangedError();
@@ -90,13 +92,26 @@ export async function lockRemovalEntryCorrectionAttempt(ctx: OrgContext, tx: DbT
     throw new SafeError("This Removal is sent. If Isometric sends the GHG Statement back, refresh its status to correct it.");
 }
 
-/** The same one-hop batch union governs advisory and locked correction eligibility. */
+/** One-hop union through application owners and carried-entry receivers, shared by reads and locks. */
 export async function emissionCorrectionBatchIds(ctx: OrgContext, executor: Executor, batchId: string) {
   requireOrgScope(ctx);
   const owners = await executor.select({ id: creditBatchApplications.removalId }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.creditBatchId, batchId),
   ));
-  const ownerIds = owners.flatMap((row) => row.id ? [row.id] : []);
+  // Include tombstoned originals: replacements retain their sent Removal as a hold.
+  const entries = await executor.select({
+    id: emissionEntries.id, replacesEntryId: emissionEntries.replacesEntryId,
+    sentByRemovalId: emissionEntries.sentByRemovalId, reservedByRemovalId: certificationSubmissions.localEntityId,
+  }).from(emissionEntries).leftJoin(certificationSubmissions, and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId),
+    eq(certificationSubmissions.id, emissionEntries.sendReservedBySubmissionId),
+    eq(certificationSubmissions.localEntityType, "removal"),
+  )).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, batchId)));
+  const holds = await loadEmissionEntryHolds(ctx, entries, executor);
+  const ownerIds = [...new Set([
+    ...owners.map((row) => row.id),
+    ...entries.flatMap((entry) => [entry.sentByRemovalId, entry.reservedByRemovalId, holds.get(entry.id)]),
+  ].filter((id): id is string => !!id))];
   const shared = ownerIds.length ? await executor.select({ id: creditBatchApplications.creditBatchId }).from(creditBatchApplications).where(and(
     eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, ownerIds),
   )) : [];
