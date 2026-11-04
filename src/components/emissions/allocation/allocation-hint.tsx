@@ -59,7 +59,7 @@ export function wentRows(hint: FeedstockHint): WentRow[] {
     ...use.used.map((entry) => ({
       key: entry.creditBatchId,
       name: entry.code,
-      sub: entry.creditBatchId === use.owner ? `${entry.runs.join(", ")}. Carries it` : entry.runs.join(", "),
+      sub: `Drawn by ${entry.runs.join(", ")}${entry.creditBatchId === use.owner ? ", carries the transport" : ""}`,
       kg: entry.kg,
     })),
     ...extra,

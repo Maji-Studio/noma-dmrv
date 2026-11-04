@@ -101,7 +101,7 @@ function OwnerHeader({ owner, focused, compact }: { owner: Owner; focused: boole
           <NotYetSwatch owner={owner} />
           {owner.label}
         </span>
-        <span className={cn("whitespace-nowrap body-caption font-normal", FAINT)}>{owner.notYet ? "In the bin" : owner.sub}</span>
+        {!owner.notYet && <span className={cn("whitespace-nowrap body-caption font-normal", FAINT)}>{owner.sub}</span>}
       </span>
     </th>
   );

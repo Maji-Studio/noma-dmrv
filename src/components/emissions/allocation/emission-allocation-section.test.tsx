@@ -57,8 +57,8 @@ describe("EmissionAllocationSection, Table view on a batch", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "About FS-26-001 transport" })[0]);
     expect(document.body.textContent).toContain("CB-26-001 carries the whole 1,000 t·km because its run PR-26-001 drew from FS-26-001 first, on 4 Feb.");
     const table = screen.getByText("Where the 10,000 kg went").closest("table")!;
-    expect(within(table).getByText("PR-26-001. Carries it")).toBeTruthy();
-    expect(within(table).getByText("PR-26-004")).toBeTruthy();
+    expect(within(table).getByText("Drawn by PR-26-001, carries the transport")).toBeTruthy();
+    expect(within(table).getByText("Drawn by PR-26-004")).toBeTruthy();
     expect(within(table).getByText("Lost")).toBeTruthy();
     expect(within(table).getByText("Still in North bay")).toBeTruthy();
   });
