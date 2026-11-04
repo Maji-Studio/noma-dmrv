@@ -99,6 +99,8 @@ export interface BatchHealthCheck {
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
+  /** The facts alone, for read-only surfaces, when detail mixes facts with repair steps. */
+  readOnlyDetail?: string;
   /** Fact/instruction split; detail above preserves the full copy for existing consumers. */
   copy?: BlockerCopy;
   /** UI hint for the most specific workflow that resolves an unmet check. */
@@ -154,6 +156,7 @@ export interface BatchHealthFacts {
    * No local CO₂e preview is involved; empty means the raw gates are complete.
    */
   carbonMissingInputs: string[];
+  carbonBlockerFacts?: string[];
   /**
    * Facility-level emission-estimate blockers that apply to this batch's
    * durability tier, such as a missing reference soil temperature.
@@ -171,6 +174,7 @@ export interface BatchHealthFacts {
   entityReadinessGaps: string[];
   submissionLineageBlockers?: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers?: string[];
+  durabilityConfigurationFacts?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
@@ -220,6 +224,16 @@ const COMPLETE_FACILITY_INSTRUCTION = "Complete facility setup to evaluate trans
 /** One open item for lineage and configuration blockers found by the submit-time build. */
 const SUBMISSION_BLOCKERS_LABEL = "Submission blockers";
 
+/** Each producer fact once, joined like merged check text. */
+function uniqueFacts(facts: readonly string[] | undefined): string | undefined {
+  return [...new Set(facts?.filter(Boolean))].join(MERGED_CHECK_SEPARATOR) || undefined;
+}
+
+/** The fact a check states on a read-only batch; undefined when its detail may hold a repair step. */
+function batchHealthReadOnlyFact(check: Pick<BatchHealthCheck, "readOnlyDetail" | "copy">): string | undefined {
+  return check.readOnlyDetail ?? check.copy?.readOnlyDetail ?? check.copy?.detail;
+}
+
 function emissionCheckDetail(line: BatchEmissionLine): { message: string; copy?: BlockerCopy } {
   if (line.blocker?.code === "entryHasNoRemoval") return line.blocker;
   const instruction = line.blocker?.code === "entryMissingEvidence"
@@ -240,6 +254,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: CARBON_LABEL,
     status: "unmet",
     detail: `Missing: ${missingInputs.join(", ")}`,
+    readOnlyDetail: uniqueFacts(facts.carbonBlockerFacts),
     fixTarget: "labSamples",
   };
 }
@@ -356,6 +371,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
         label: TRANSPORT_LABEL,
         status: "unmet",
         detail: `Missing ${category} transport legs`,
+        readOnlyDetail: `Missing ${category} transport legs`,
         fixTarget: category === "feedstock" ? "feedstocks" : "deliveries",
       }));
 }
@@ -441,6 +457,10 @@ function mergeUnmetChecksByDestination(
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
       detail: mergeCheckText(existing.detail, check.detail),
+      // Read only, a merged item states every side's fact or none: a bare detail may hold a repair step.
+      readOnlyDetail: (existing.readOnlyDetail || check.readOnlyDetail) && batchHealthReadOnlyFact(existing) && batchHealthReadOnlyFact(check)
+        ? mergeCheckText(batchHealthReadOnlyFact(existing), batchHealthReadOnlyFact(check))
+        : undefined,
       copy: existing.copy && check.copy ? {
         detail: mergeCheckText(existing.copy.detail, check.copy.detail),
         instruction: mergeCheckText(existing.copy.instruction, check.copy.instruction),
@@ -468,17 +488,22 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }
   const issues = facts.entityReadinessIssues;
   if (issues && issues.length > 0) {
-    return issues.map((issue) => ({
+    return issues.map((issue) => {
+      // A count of records, no repair step: read only states it too.
+      const detail = `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`;
+      return {
       key: "entityReadiness",
       issueKey: issue.key,
       label: ENTITY_READINESS_LABEL,
       requirementLabel: issue.label,
       unmetLabel: entityFieldUnmetLabel(issue.label),
       status: "unmet",
-      detail: `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`,
+      detail,
+      readOnlyDetail: detail,
       fixTarget: issue.fixTarget,
       affectedRecords: issue.affectedRecords,
-    }));
+    } satisfies BatchHealthCheckBase;
+    });
   }
   const suffix =
     facts.entityReadinessGaps.length > ENTITY_READINESS_PREVIEW_LIMIT
@@ -503,6 +528,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: blocker.detail,
+    readOnlyDetail: blocker.fact,
     fixTarget: blocker.fixTarget,
     affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
   }));
@@ -515,6 +541,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     unmetLabel: SUBMISSION_BLOCKERS_LABEL,
     status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
+    readOnlyDetail: uniqueFacts(facts.durabilityConfigurationFacts),
     fixTarget: "batchDetails",
   });
   return lineageChecks;
@@ -560,7 +587,10 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
         const key = fixTarget === "templateSetup" ? "templateSet" : "templateLines";
         return {
           key, label: CERT_REQUIREMENT_META[key].requirementLabel, status: "unmet",
-          detail: blocker.message, copy: blocker.copy, fixTarget,
+          detail: blocker.message, fixTarget,
+          // The title "No Removal template chosen" already states the unpinned fact.
+          copy: blocker.code === "unpinnedTemplate" && onlyUnpinned && blocker.copy
+            ? { instruction: blocker.copy.instruction } : blocker.copy,
           unmetLabel: key === "templateLines"
             ? templateLinesUnmetLabel(fixTarget === "templateLineReview" ? linesToDecide : 0, [blocker.code])
             : onlyUnpinned ? NO_REMOVAL_TEMPLATE_LABEL : CERT_REQUIREMENT_META.templateSet.unmetLabel,

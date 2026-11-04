@@ -104,7 +104,7 @@ describe("Removal preflight", () => {
     ["template", () => makeContext(undefined, { removalTemplate: null })],
     ["unresolved tier", () => makeContext(undefined, { batchesWithSamples: [] })],
     ["entity evidence", () => makeContext(undefined, { entityReadinessGaps: ["Record Sample moisture"] })],
-    ["delivery evidence", () => makeContext(undefined, { submissionLineageBlockers: [{ detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] })],
+    ["delivery evidence", () => makeContext(undefined, { submissionLineageBlockers: [{ fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] })],
     ["missing mass", () => { const ctx = makeContext(); ctx.runs[0].biocharDryMassKg = null; return ctx; }],
     ["missing runs", () => makeContext(undefined, { runs: [] })],
   ] as const)("preserves the first refusal: %s", async (_label, fixture) => {
@@ -151,7 +151,7 @@ describe("Removal preflight", () => {
 
   it("uses the lineage target for the build's exact joined lineage refusal", async () => {
     const detail = "Delivery DL-1 has no proof of delivery.";
-    const ctx = makeContext(undefined, { submissionLineageBlockers: [{ detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
+    const ctx = makeContext(undefined, { submissionLineageBlockers: [{ fact: detail, detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
       { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
     ]);
@@ -163,7 +163,7 @@ describe("Removal preflight", () => {
   ])("does not attribute a %s build error to an unrelated lineage blocker", async (_label, message) => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {
-      const ctx = makeContext(undefined, { submissionLineageBlockers: [{ detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
+      const ctx = makeContext(undefined, { submissionLineageBlockers: [{ fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
       expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
     } finally { spy.mockRestore(); }
   });

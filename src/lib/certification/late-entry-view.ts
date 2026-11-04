@@ -77,10 +77,14 @@ export function waitingDetailCopy(reason: CarryWaitingReason, canManage = true):
   };
 }
 
+export function recordedAfterSentence(code: string): string {
+  return `Recorded after ${code} was sent.`;
+}
+
 /** The reason on a read-only batch, as a fact: "Recorded after RM-26-009 was sent. No later draft is available at this facility." */
 export function readOnlyWaitingDetail(reason: CarryWaitingReason, recordedAfterCode?: string): string {
   const detail = READ_ONLY_CARRY_DETAILS[reason];
-  return recordedAfterCode ? `Recorded after ${recordedAfterCode} was sent. ${detail}` : detail;
+  return recordedAfterCode ? `${recordedAfterSentence(recordedAfterCode)} ${detail}` : detail;
 }
 
 /**

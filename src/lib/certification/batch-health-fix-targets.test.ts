@@ -235,7 +235,7 @@ describe("batchHealthFixLinkFor", () => {
     "routes merged %s gaps to the appropriate delivery destination",
     (kind) => {
       const proof = {
-        detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
+        fact: "Missing proof", detail: "Missing proof", fixTarget: "deliveryEvidence" as const,
         record: { id: "delivery-1", code: "D-1" },
       };
       const facts: BatchHealthFacts = {
@@ -247,7 +247,7 @@ describe("batchHealthFixLinkFor", () => {
           proof,
           ...(kind === "same delivery proofs" ? [proof] : []),
           ...(kind === "multiple proofs" ? [{ ...proof, record: { id: "delivery-2", code: "D-2" } }] : []),
-          ...(kind === "distance" ? [{ detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
+          ...(kind === "distance" ? [{ fact: "Missing distance", detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
         ],
         ...(kind === "production" ? { productionReadinessGap: {
           kind: "noApplications", detail: "Missing delivery", fixTarget: "deliveries",

@@ -77,6 +77,7 @@ describe("buildCreditBatchContexts", () => {
     mockedLoadDurabilityBatchData.mockResolvedValue({
       batchesWithSamples: [],
       blockers: [],
+      blockerFactsByBatchId: {},
       warnings: [],
       blockersByBatchId: {},
     });

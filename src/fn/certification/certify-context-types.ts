@@ -70,6 +70,7 @@ export interface RemovalCertifyContext {
   entityReadinessGaps: string[];
   submissionLineageBlockers: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers: string[];
+  durabilityConfigurationFacts?: string[];
   templateTierBlocker?: string | null;
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list

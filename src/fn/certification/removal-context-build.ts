@@ -21,7 +21,7 @@ import { productionReadinessGapForScope } from "@/lib/certification/production-r
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
-import { durabilityConfigurationBlockers, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
+import { durabilityConfigurationBlockerMessages, hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import {
   buildSoilTemperatureGate,
@@ -191,6 +191,7 @@ export async function buildRemovalContext(
       ...batch,
       hasLabReport: sampleBatch?.hasLabReport,
       hasReflectanceHistogram: sampleBatch?.hasReflectanceHistogram,
+      durabilityGateFacts: durabilityBatchData.blockerFactsByBatchId?.[batch.id] ?? [],
       durabilityGateBlockers:
         durabilityBatchData.blockersByBatchId[batch.id] ?? [],
     };
@@ -217,7 +218,7 @@ export async function buildRemovalContext(
           })),
   });
   const durabilityConfigBlockers = hasDurabilityMeasurementComponents(templateFacts.removalTemplate)
-    ? durabilityConfigurationBlockers(batchesWithSamples) : [];
+    ? durabilityConfigurationBlockerMessages(batchesWithSamples) : [];
   const templateTierBlocker = templateFacts.removalTemplate
     ? removalTemplateTierCompatibilityBlocker({ batchesWithSamples }, templateFacts.removalTemplate)
     : null;
@@ -256,7 +257,8 @@ export async function buildRemovalContext(
       entityReadinessGaps: [],
       submissionLineageBlockers: [],
       durabilityGateBlockers,
-      durabilityConfigurationBlockers: durabilityConfigBlockers,
+      durabilityConfigurationBlockers: durabilityConfigBlockers.map((item) => item.message),
+      durabilityConfigurationFacts: durabilityConfigBlockers.map((item) => item.fact),
       templateTierBlocker,
       // No applications and no runs resolved ⇒ no date to be in the future.
       futureDatedMeasurements: [],
@@ -395,7 +397,8 @@ export async function buildRemovalContext(
     submissionLineageBlockers,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
-    durabilityConfigurationBlockers: durabilityConfigBlockers,
+    durabilityConfigurationBlockers: durabilityConfigBlockers.map((item) => item.message),
+    durabilityConfigurationFacts: durabilityConfigBlockers.map((item) => item.fact),
     templateTierBlocker,
     futureDatedMeasurements: collectFutureDatedMeasurements({
       facilityTimezone: facilityFacts.facilityTimezone,
