@@ -18,23 +18,25 @@ function productionParts(facts: EmissionAllocationFacts, batchId: string | null,
   return claimedPart(owner.removalId, label, owner.pending);
 }
 
-/** Loads already come from the submission's frozen application lineage. */
-function deliveryRemovalParts(fact: AllocationDeliveryFact): Part[] {
-  const total = fact.wetKg ?? 0;
+/**
+ * Split a delivery's whole load over its holders in grams, the remainder not yet
+ * allocated. Ordered fractions sum to exactly 1: the floating point remainder goes
+ * to the last positive part while the physical shares keep their precision.
+ */
+function loadShareParts(fact: AllocationDeliveryFact, loads: { key: string; kg: number | null; basis: PartBasis }[], overflow: string): Part[] {
+  const totalGrams = fact.wetKg === null ? 0 : massGrams(fact.wetKg);
+  const knownMass = totalGrams > 0;
   const parts: Part[] = [];
-  let assigned = 0;
-  for (const load of fact.removalLoads ?? []) {
-    if (load.kg < 0 || total > 0 && massGrams(assigned + load.kg) > massGrams(total)) {
-      throw new Error("Removal application slices exceed the whole delivery load");
-    }
-    assigned += load.kg;
-    parts.push({ key: load.removalId, fraction: total > 0 ? load.kg / total : 0,
-      basis: [{ kind: load.pending ? "wouldClaim" : "slice", label: load.code, kg: load.kg, recordId: fact.id }] });
+  let assignedGrams = 0;
+  for (const load of loads) {
+    const grams = knownMass && load.kg !== null ? massGrams(load.kg) : 0;
+    if (grams < 0 || assignedGrams + grams > totalGrams) throw new Error(overflow);
+    parts.push({ key: load.key, fraction: knownMass ? grams / totalGrams : 0, basis: [load.basis] });
+    assignedGrams += grams;
   }
-  if (massGrams(assigned) < massGrams(total) || total <= 0 || !parts.length) {
-    parts.push({ key: NOT_YET, fraction: total > 0 ? (total - assigned) / total : 1,
-      basis: [{ kind: "notYet", label: fact.code, kg: total > 0 ? total - assigned : null }] });
-  }
+  if (assignedGrams < totalGrams || !knownMass || !parts.length) parts.push({ key: NOT_YET,
+    fraction: knownMass ? (totalGrams - assignedGrams) / totalGrams : 1,
+    basis: [{ kind: "notYet", label: fact.code, kg: knownMass ? fact.wetKg! * (totalGrams - assignedGrams) / totalGrams : null }] });
   const last = parts.findLastIndex(part => part.fraction > 0);
   if (last >= 0) parts[last].fraction = 1 - parts.slice(0, last).reduce((sum, part) => sum + part.fraction, 0);
   return parts;
@@ -58,7 +60,7 @@ function feedstockRecord(fact: AllocationFeedstockFact, facts: EmissionAllocatio
     detail: { kind: "feedstockTransport", binId: fact.binId, binName: fact.binName, wetKg: usage.intakeWetKg, legs: fact.legs },
     quantities: [{ value: tonneKm, unit: "t·km", label: "Transport" }], parts,
     removalParts: productionParts(facts, owner, fact.code),
-    basisWord: "the first run that drew from it",
+    basisWord: "the first completed run that drew from it",
     feedstock: {
       bin: fact.binName, binId: fact.binId, wetKg: usage.intakeWetKg, tonneKm,
       used: usage.creditBatches.map(batch => ({ creditBatchId: batch.creditBatchId, code: batch.code,
@@ -72,30 +74,18 @@ function feedstockRecord(fact: AllocationFeedstockFact, facts: EmissionAllocatio
 }
 
 function deliveryRecord(fact: AllocationDeliveryFact): AllocationRecord {
-  const totalGrams = fact.wetKg === null ? 0 : massGrams(fact.wetKg);
-  const knownMass = totalGrams > 0;
-  const parts: Part[] = [];
-  let assignedGrams = 0;
-  for (const load of fact.loads) {
-    const grams = knownMass && load.kg !== null ? massGrams(load.kg) : 0;
-    if (grams < 0 || assignedGrams + grams > totalGrams) throw new Error("Delivery batch shares exceed the whole load");
-    parts.push({ key: load.creditBatchId, fraction: knownMass ? grams / totalGrams : 0,
-      basis: [{ kind: "load", label: load.code, kg: load.kg }] });
-    assignedGrams += grams;
-  }
-  if (assignedGrams < totalGrams || !knownMass || !parts.length) parts.push({ key: NOT_YET,
-    fraction: knownMass ? (totalGrams - assignedGrams) / totalGrams : 1,
-    basis: [{ kind: "notYet", label: fact.code, kg: knownMass ? fact.wetKg! * (totalGrams - assignedGrams) / totalGrams : null }] });
-  // Assign the floating point remainder to the last positive part. Ordered sums
-  // are exactly 1 while the physical load shares retain their precision.
-  const last = parts.findLastIndex(part => part.fraction > 0);
-  if (last >= 0) parts[last].fraction = 1 - parts.slice(0, last).reduce((sum, part) => sum + part.fraction, 0);
+  const parts = loadShareParts(fact, fact.loads.map(load => ({ key: load.creditBatchId, kg: load.kg,
+    basis: { kind: "load" as const, label: load.code, kg: load.kg } })), "Delivery batch shares exceed the whole load");
+  // Removal loads already come from the submission's frozen application lineage.
+  const removalParts = loadShareParts(fact, (fact.removalLoads ?? []).map(load => ({ key: load.removalId, kg: load.kg,
+    basis: { kind: load.pending ? "wouldClaim" as const : "slice" as const, label: load.code, kg: load.kg, recordId: fact.id } })),
+  "Removal application slices exceed the whole delivery load");
   return {
     id: fact.id, code: fact.code, group: "deliveryTransport", date: fact.date,
     detail: { kind: "deliveryTransport", wetKg: fact.wetKg, oneWayKm: fact.oneWayKm },
     quantities: [{ value: fact.wetKg === null || fact.oneWayKm === null ? null
       : kgToTonnes(fact.wetKg) * countedRoundTripKm(fact.oneWayKm), unit: "t·km", label: "Transport" }],
-    parts, removalParts: deliveryRemovalParts(fact), basisWord: "biochar on the load",
+    parts, removalParts, basisWord: "biochar on the load",
   };
 }
 

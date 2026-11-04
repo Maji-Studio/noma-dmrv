@@ -1,6 +1,6 @@
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
+import { creditBatchProductionRuns, creditBatches, feedstocks, productionRunFeedstocks, productionRuns, storageLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -12,25 +12,19 @@ import { requireOrgScope } from "./utils";
 
 type Reader = Pick<typeof db, "select" | "selectDistinct">;
 
-/** Only bins drawn by the facility's runs, plus explicit member-run feedstock links. */
+/**
+ * Every live feedstock delivery in the facility, so one no run drew from shows as
+ * not yet allocated, plus any delivery a run links even if since archived.
+ */
 export async function loadAllocationFeedstocks(ctx: OrgContext, facilityId: string, runIds: string[], timezone: string, reader: Reader) {
   requireOrgScope(ctx);
-  if (!runIds.length) return [];
-  const [draws, links] = await Promise.all([
-    reader.select({ binId: productionRunFeedstockDraws.storageLocationId }).from(productionRunFeedstockDraws)
-      .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), inArray(productionRunFeedstockDraws.productionRunId, runIds))),
-    reader.select({ feedstockId: productionRunFeedstocks.feedstockId, binId: feedstocks.storageLocationId }).from(productionRunFeedstocks)
-      .innerJoin(feedstocks, and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, productionRunFeedstocks.feedstockId)))
-      .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.productionRunId, runIds))),
-  ]);
-  const binIds = [...new Set([...draws, ...links].map(row => row.binId))];
+  const links = runIds.length ? await reader.select({ feedstockId: productionRunFeedstocks.feedstockId }).from(productionRunFeedstocks)
+    .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), inArray(productionRunFeedstocks.productionRunId, runIds))) : [];
   const linkedIds = [...new Set(links.map(row => row.feedstockId))];
-  if (!binIds.length && !linkedIds.length) return [];
   const rows = await reader.select({ stock: feedstocks, binName: storageLocations.name }).from(feedstocks)
     .innerJoin(storageLocations, and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, feedstocks.storageLocationId)))
     .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.facilityId, facilityId),
-      or(binIds.length ? inArray(feedstocks.storageLocationId, binIds) : undefined,
-        linkedIds.length ? inArray(feedstocks.id, linkedIds) : undefined)));
+      or(isNull(feedstocks.archivedAt), linkedIds.length ? inArray(feedstocks.id, linkedIds) : undefined)));
   const ids = rows.map(row => row.stock.id);
   if (!ids.length) return [];
   const [usage, owners, legs, uses] = await Promise.all([
