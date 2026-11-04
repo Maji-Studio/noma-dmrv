@@ -9,7 +9,8 @@
 "use client";
 
 import { useId } from "react";
-import { HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE, useMeasuredWidth } from "@/components/chain-of-custody/sankey";
+import { HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE } from "@/components/ui/chart-tokens";
+import { useMeasuredWidth } from "@/hooks/use-measured-width";
 import { cn } from "@/lib/utils";
 import { formatDay, formatValue, recordFacts } from "./allocation-format";
 import { PERCENT_WHOLE } from "./allocation-model";

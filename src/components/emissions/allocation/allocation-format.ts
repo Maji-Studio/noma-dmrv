@@ -43,7 +43,9 @@ export function formatDay(date: string): string {
 
 /** What a manual entry is called: its component name. Every other record keeps its code. */
 export function recordName(record: AllocationRecord): string {
-  return record.detail.kind === "manual" ? record.detail.componentName : record.code;
+  if (record.detail.kind !== "manual") return record.code;
+  // A template component with no name carries its ID as the name; never show that.
+  return record.detail.componentName === record.detail.componentId ? "Manual entry" : record.detail.componentName;
 }
 
 /** Short facts about a record, for the line under its name: "North bay", "10,000 kg wet", "42 km". */
@@ -58,7 +60,7 @@ export function recordFacts(record: AllocationRecord): string[] {
     const facts = [detail.wetKg === null ? null : `${formatKg(detail.wetKg)} wet`, detail.oneWayKm === null ? null : formatLegDistanceCompactKm(detail.oneWayKm)];
     return facts.some(Boolean) ? facts.filter((fact): fact is string => fact !== null) : ["Biochar delivery"];
   }
-  return ["Manual entry"];
+  return [recordName(record) === "Manual entry" ? "Recorded by hand" : "Manual entry"];
 }
 
 export function recordLine(record: AllocationRecord): string {

@@ -14,11 +14,11 @@ import { Button, Notice } from "@/components/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { SegmentSwitch } from "@/components/ui/segment-switch";
 import { useEmissionAllocation } from "@/hooks/use-emission-allocation";
 import type { EmissionAllocationInput } from "@/types/emission-allocation";
 import { SECTION_TITLE, sectionHint } from "./allocation-copy";
 import { FlowView } from "./allocation-flow-view";
+import { ModeSwitch } from "./allocation-parts";
 import { buildFocus } from "./allocation-model";
 import { TableView } from "./allocation-table-view";
 
@@ -85,7 +85,7 @@ export function EmissionAllocationSection(props: EmissionAllocationInput) {
           <h2 id={headingId} className="title-heading-3">{SECTION_TITLE}</h2>
           <ExplanationInfo title={SECTION_TITLE} hint={sectionHint(surface)} />
         </span>
-        <SegmentSwitch label="View mode" options={VIEW_OPTIONS} value={view} onChange={(next) => void setView(next === "flow" ? null : next)} />
+        <ModeSwitch legend="View mode" options={VIEW_OPTIONS} value={view} onChange={(next) => void setView(next === "flow" ? null : next)} className="w-max" />
       </div>
       {body}
     </section>

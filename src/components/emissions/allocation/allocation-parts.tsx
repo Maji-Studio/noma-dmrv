@@ -1,7 +1,8 @@
 /** Small pieces the Flow and Table views share: group titles, record labels, swatches. */
 "use client";
 
-import { HATCH_BACKGROUND } from "@/components/chain-of-custody/sankey";
+import { HATCH_BACKGROUND } from "@/components/ui/chart-tokens";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { cn } from "@/lib/utils";
 import type { AllocationRecord, GroupKey } from "@/types/emission-allocation";
@@ -38,4 +39,15 @@ export function RecordLabel({ record }: { record: AllocationRecord }) {
 export function NotYetSwatch({ owner }: { owner: Owner }) {
   if (!owner.notYet) return null;
   return <span aria-hidden className="inline-block size-10 shrink-0 border border-[var(--clr-dark-purple-40)]" style={HATCH_BACKGROUND} />;
+}
+
+/** A short mode switch: the documented SegmentedControl, native radios with arrow keys and a check glyph. */
+export function ModeSwitch<T extends string>({ legend, options, value, onChange, className }: {
+  legend: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  className?: string;
+}) {
+  return <SegmentedControl legend={legend} options={options} value={value} onValueChange={(next) => onChange(next as T)} className={className} />;
 }

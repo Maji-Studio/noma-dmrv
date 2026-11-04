@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOT_YET, type AllocationRecord } from "@/types/emission-allocation";
-import { STREAMS, buildGraph, ownerPercent, place } from "./allocation-flow-graph";
+import { MIN_NODE_H, STREAMS, TARGET_HEIGHT_NARROW, TARGET_HEIGHT_WIDE, buildGraph, ownerPercent, place } from "./allocation-flow-graph";
 import { BATCH_A, REMOVAL_1, allocationFixture } from "./allocation-test-fixtures";
 import { buildFocus } from "./allocation-model";
 
@@ -50,8 +50,10 @@ describe("place", () => {
     const graph = buildGraph(DIESEL, data.records, focus.owners, focus.notYet);
     for (const width of [WIDE_PX, NARROW_PX]) {
       const { height, placed } = place(graph, width);
-      expect(height).toBeLessThan(1000);
-      expect(placed.every((node) => node.h >= 42)).toBe(true);
+      const target = width === WIDE_PX ? TARGET_HEIGHT_WIDE : TARGET_HEIGHT_NARROW;
+      // The target, plus at most one minimum height per node that is too small to scale.
+      expect(height).toBeLessThanOrEqual(target + graph.nodes.length * MIN_NODE_H);
+      expect(placed.every((node) => node.h >= MIN_NODE_H)).toBe(true);
     }
   });
 });

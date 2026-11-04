@@ -133,10 +133,10 @@ const LANE_GAP = 12;
 const MAX_BLOCK_W = 120;
 const MIN_BLOCK_W = 64;
 const MIN_BAND_W = 40;
-const TARGET_HEIGHT_WIDE = 440;
-const TARGET_HEIGHT_NARROW = 380;
+export const TARGET_HEIGHT_WIDE = 440;
+export const TARGET_HEIGHT_NARROW = 380;
 /** Two caption lines inside a block: a small quantity is drawn this tall, never smaller. */
-const MIN_NODE_H = 42;
+export const MIN_NODE_H = 42;
 /** "Not yet allocated" wraps to two lines in a narrow block, plus the figure. */
 const MIN_NOT_YET_H_NARROW = 60;
 const NARROW_BLOCK_W = 100;

@@ -26,5 +26,7 @@ describe("basisSentence", () => {
     const draft = structuredClone(byId("run-1"));
     draft.removalParts = [{ key: REMOVAL_1, fraction: 1, basis: [{ kind: "wouldClaim", label: "PR-26-001", kg: null }] }];
     expect(basisSentence(draft, removal.owner)).toBe("Would be sent with RM-26-001");
+    // On the page's own Removal the code is the sheet title, so it is left out.
+    expect(basisSentence(draft, removal.owner, removal.owner)).toBe("Would be sent");
   });
 });

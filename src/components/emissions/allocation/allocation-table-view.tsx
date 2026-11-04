@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { AllocationRecord, EmissionAllocation, GroupKey } from "@/types/emission-allocation";
+import { wouldBeSent } from "./allocation-basis";
 import { CountedOnNote, HintMarker } from "./allocation-hint";
 import { formatAmounts, formatValue, recordName } from "./allocation-format";
 import {
@@ -145,7 +146,9 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
   const columns = compact ? [focus.owner] : owners;
   const th = compact ? TH_C : TH;
   const td = compact ? TD_C : TD;
-  const others = (record: AllocationRecord) => sharesOf(record, owners).filter((share) => share.owner.key !== focus.owner.key);
+  // Elsewhere skips the carrier a Counted on note already names in this row.
+  const others = (record: AllocationRecord, countedOn?: string) =>
+    sharesOf(record, owners).filter((share) => share.owner.key !== focus.owner.key && share.owner.label !== countedOn);
   const recordRow = (record: AllocationRecord, nested: boolean) => {
     const shares = sharesOf(record, owners);
     const rowHint = feedstockHint(record, focus.owner, focus.owners, ctx.codes);
@@ -161,7 +164,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
             <RecordLabel record={record} />
           )}
           {focus.surface === "removal" && shares.filter(share => basisFor(record, share.owner).some(basis => basis.kind === "wouldClaim")).map(share => (
-            <span key={share.owner.key} className={cn("block body-caption", MUTED)}>Would be sent with {share.owner.label}</span>
+            <span key={share.owner.key} className={cn("block body-caption", MUTED)}>{wouldBeSent(share.owner, focus.owner)}</span>
           ))}
           {rowHint && <HintMarker hint={rowHint} viewer={focus.owner} className="pt-4" />}
         </th>
@@ -189,7 +192,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
         })}
         {compact && (
           <td className={cn(td, ELSEWHERE_COL_WIDTH_C)}>
-            <ElsewhereCell shares={others(record)} />
+            <ElsewhereCell shares={others(record, rowHint?.kind === "countedOn" ? rowHint.ownerLabel : undefined)} />
           </td>
         )}
       </tr>
@@ -248,7 +251,7 @@ function Matrix({ group, records, ctx }: { group: GroupKey; records: AllocationR
                     <span className="body-small font-medium">{row.records.length} {row.records.length === 1 ? one : many}</span>
                     {compact && <span className={cn("body-caption", MUTED)}>{formatAmounts(sum, true)}</span>}
                     {focus.surface === "removal" && row.records.every(record => basisFor(record, row.owner).some(basis => basis.kind === "wouldClaim")) && (
-                      <span className={cn("body-caption", MUTED)}>Would be sent with {row.owner.label}</span>
+                      <span className={cn("body-caption", MUTED)}>{wouldBeSent(row.owner, focus.owner)}</span>
                     )}
                   </span>
                 </Button>

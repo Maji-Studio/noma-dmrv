@@ -28,7 +28,7 @@ afterEach(cleanup);
 describe("EmissionAllocationSection, Flow view", () => {
   it("opens on Flow and lists what the page's batch carries with hint A", () => {
     show({ creditBatchId: BATCH_A });
-    expect(screen.getByRole("button", { name: "Flow" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByRole("radio", { name: "Flow" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByTestId("allocation-flow")).toBeTruthy();
     expect(screen.getByText("Used 2,000 of 10,000 kg")).toBeTruthy();
     expect(screen.getByText("Total")).toBeTruthy();
@@ -50,7 +50,7 @@ describe("EmissionAllocationSection, Flow view", () => {
     data.records.push({ ...data.records.find((r) => r.id === "me-1")!, id: "me-2", detail: { kind: "manual", creditBatchId: BATCH_A, componentId: "c2", componentName: "Hauling", kindOfEntry: "value", omittedInputKeys: [] }, quantities: [{ value: 90, unit: "t·km", label: "Transport" }] });
     state.data = data;
     show({ creditBatchId: BATCH_A });
-    expect(screen.getByRole("button", { name: "Manual transport" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Manual transport" })).toBeTruthy();
   });
 });
 
@@ -137,7 +137,7 @@ describe("EmissionAllocationSection, a second Removal that only counts", () => {
 
   it("shows the same in Flow, which opens on the feedstock quantity", () => {
     show({ removalId: SECOND });
-    expect(screen.getByRole("button", { name: "Feedstock" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByRole("radio", { name: "Feedstock" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText("Counted on")).toBeTruthy();
     expect(screen.getByText("Batches used 3,000 of 10,000 kg")).toBeTruthy();
   });
@@ -146,15 +146,27 @@ describe("EmissionAllocationSection, a second Removal that only counts", () => {
 describe("EmissionAllocationSection, Flow when the page carries nothing in a quantity", () => {
   it("opens on a quantity the page has a stake in", () => {
     show({ creditBatchId: BATCH_C });
-    expect(screen.getByRole("button", { name: "Diesel" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByRole("radio", { name: "Diesel" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("says what is missing and where to look, never an empty table", () => {
     show({ creditBatchId: BATCH_C });
-    fireEvent.click(screen.getByRole("button", { name: "Delivery" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Delivery" }));
     expect(screen.getByText("CB-26-003 carries no delivery transport")).toBeTruthy();
     expect(screen.getByText(/Try .*Diesel/)).toBeTruthy();
     expect(screen.queryByText("Total")).toBeNull();
+  });
+});
+
+describe("EmissionAllocationSection, a manual entry without a name", () => {
+  it("reads Manual entry, never the component ID", () => {
+    const data = allocationFixture();
+    const entry = data.records.find((record) => record.id === "me-1")!;
+    entry.detail = { kind: "manual", creditBatchId: BATCH_A, componentId: "loader-diesel", componentName: "loader-diesel", kindOfEntry: "value", omittedInputKeys: [] };
+    state.data = data;
+    show({ creditBatchId: BATCH_A }, "?allocation=table");
+    expect(screen.getAllByText("Manual entry").length).toBeGreaterThan(0);
+    expect(screen.queryByText("loader-diesel")).toBeNull();
   });
 });
 

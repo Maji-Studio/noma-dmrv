@@ -9,15 +9,14 @@
 import { ChartBarIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SegmentSwitch } from "@/components/ui/segment-switch";
 import { cn } from "@/lib/utils";
 import type { EmissionAllocation } from "@/types/emission-allocation";
 import { HintMarker } from "./allocation-hint";
 import { STREAMS, buildGraph, firstStreamWithData, visibleStreams, type Graph, type GraphNode, type Stream, type StreamKey } from "./allocation-flow-graph";
 import { FlowChart } from "./allocation-flow-chart";
 import { formatKg, formatNumber, recordLine, recordName } from "./allocation-format";
-import { basisFor, batchCodesOf, feedstockHint, fractionFor, percentFor, type FeedstockHint, type Focus } from "./allocation-model";
-import { MUTED } from "./allocation-parts";
+import { basisFor, batchCodesOf, feedstockHint, fractionFor, percentFor, type FeedstockHint, type Focus, type Owner } from "./allocation-model";
+import { ModeSwitch, MUTED } from "./allocation-parts";
 import { basisSentence } from "./allocation-basis";
 
 const EMPTY_ICON_PX = 32;
@@ -33,7 +32,7 @@ interface DetailRow {
   hint?: FeedstockHint;
 }
 
-function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: ReadonlyMap<string, string>): DetailRow[] {
+function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: ReadonlyMap<string, string>, pageOwner: Owner): DetailRow[] {
   const columnOwners = [...graph.owners, graph.notYet];
   if (node.kind === "record" && node.record) {
     const record = node.record;
@@ -44,7 +43,7 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: Readon
         key: owner.key,
         name: owner.notYet ? graph.notYet.label : owner.label,
         code: !owner.notYet,
-        sub: basisSentence(record, owner) ?? undefined,
+        sub: basisSentence(record, owner, pageOwner) ?? undefined,
         percent: percentFor(record, owner, columnOwners),
         value: node.value * fraction,
       }));
@@ -63,7 +62,7 @@ function detailRows(graph: Graph, node: GraphNode, stream: Stream, codes: Readon
     .map((record) => ({
       key: record.id,
       name: recordName(record),
-      sub: owner.surface === "removal" && basisFor(record, owner).some((basis) => basis.kind === "wouldClaim") ? basisSentence(record, owner) ?? recordLine(record) : recordLine(record),
+      sub: owner.surface === "removal" && basisFor(record, owner).some((basis) => basis.kind === "wouldClaim") ? basisSentence(record, owner, pageOwner) ?? recordLine(record) : recordLine(record),
       percent: percentFor(record, owner, columnOwners),
       value: (stream.pick(record) ?? 0) * fractionFor(record, owner),
       hint: feedstockHint(record, owner, graph.owners, codes) ?? undefined,
@@ -147,21 +146,20 @@ export function FlowView({ allocation, focus }: { allocation: EmissionAllocation
   // another batch carries). It still gets its list, so its Counted on rows and hints stay reachable.
   const focusNode: GraphNode = { key: focusKey, col: 1, kind: "owner", label: focus.owner.label, value: 0, owner: focus.owner };
   const activeNode = graph.nodes.find((node) => node.key === activeKey) ?? (graph.nodes.length > 0 ? focusNode : undefined);
-  const activeRows = activeNode ? detailRows(graph, activeNode, stream, codes) : [];
+  const activeRows = activeNode ? detailRows(graph, activeNode, stream, codes, focus.owner) : [];
   // Streams where the page has a stake, to point an operator with nothing here at the right tab.
   const otherStreams = streams.filter((candidate) => candidate.key !== stream.key && allocation.records.some((record) => (candidate.pick(record) ?? 0) > 0 && hasStake(record)));
   return (
     <div data-allocation-flow-panel className="flex min-w-0 flex-col gap-20 border border-[var(--color-border-secondary)] bg-[var(--paper)] p-16 sm:p-24">
-      <SegmentSwitch
-        label="Quantity"
+      <ModeSwitch
+        legend="Quantity"
         options={streams.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
         value={streamKey}
         onChange={(next) => {
           setChosen(next);
           setPinned(null);
         }}
-        stretch
-        className="w-full sm:w-max"
+        className="w-full max-sm:grid-flow-row max-sm:grid-cols-2 sm:w-max"
       />
       {graph.nodes.length === 0 ? (
         <EmptyState padding="sm" icon={<ChartBarIcon size={EMPTY_ICON_PX} aria-hidden />} title={`No ${stream.label.toLowerCase()} figures recorded`} description={stream.emptyHint} />
