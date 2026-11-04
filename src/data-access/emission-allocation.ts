@@ -7,7 +7,8 @@ import { buildEmissionAllocation } from "@/lib/certification/emission-allocation
 import { formatFacilityDate } from "@/lib/date-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
-import { REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
+import { isSubmittedAttempt } from "@/lib/record-lock";
 import type { EmissionAllocation, EmissionAllocationInput } from "@/types/emission-allocation";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { loadAllocationFeedstocks } from "./emission-allocation-feedstocks";
@@ -59,7 +60,7 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
     removalIds.length ? executor.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId })
       .from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [],
     removalIds.length ? executor.select({ removalId: certificationSubmissions.localEntityId, status: certificationSubmissions.status, submittedAt: certificationSubmissions.submittedAt, externalId: certificationSubmissions.externalId })
-      .from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, "isometric"),
+      .from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
         eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE), eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
         inArray(certificationSubmissions.localEntityId, removalIds))).orderBy(desc(certificationSubmissions.version)) : [],
     loadAllocationFeedstocks(ctx, facilityId, [...new Set([...memberIds, ...runs.map(({ run }) => run.id)])], facility.timezone, executor),
@@ -76,7 +77,8 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
     }),
     productionClaims: Object.fromEntries(Object.values(rollups).map(({ batch }) => [batch.id, batch.productionEmissionsClaimedByRemovalId])),
     feedstocks, deliveries: deliveries.map(delivery => ({ ...delivery, removalLoads: (removalLoads.get(delivery.id) ?? []).map(load => ({ ...load,
-      pending: !submissions.some(row => row.removalId === load.removalId && (row.submittedAt !== null || row.status === "submitted" || row.status === "accepted")),
+      pending: !submissions.some(row => row.removalId === load.removalId &&
+        isSubmittedAttempt({ status: row.status, submittedAt: row.submittedAt?.toISOString() ?? null })),
     })) })), manual,
     runs: runs.map(({ run, reactorCode }) => ({ id: run.id, code: run.code, date: formatFacilityDate(run.startTime, facility.timezone),
       creditBatchId: batchByRun.get(run.id) ?? null, reactorId: run.reactorId, reactorCode,

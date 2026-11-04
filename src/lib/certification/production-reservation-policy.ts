@@ -1,3 +1,4 @@
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/isometric/utils/constants";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { getMetadataValue, SUBMISSION_EXTERNAL_MUTATIONS, SUBMISSION_METADATA_KEYS } from "./submission-metadata";
 
@@ -20,7 +21,7 @@ export function hasPossibleExternalMutation(row: Pick<ProductionReservation, "me
 export function isIsometricRemovalSubmission(
   row: Pick<ProductionReservation, "provider" | "submissionType" | "localEntityType">,
 ): boolean {
-  return row.provider === "isometric" && row.submissionType === "removal" && row.localEntityType === "removal";
+  return row.provider === ISOMETRIC_PROVIDER && row.submissionType === REMOVAL_SUBMISSION_TYPE && row.localEntityType === REMOVAL_ENTITY_TYPE;
 }
 
 /** Shared by the reservation writer and allocation reads; unknown reservations stay protected. */
