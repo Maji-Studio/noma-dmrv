@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { buildAllocationManualFacts } from "./emission-allocation-manual";
+import type { TemplateDefinition } from "@/lib/isometric/template-observations/types";
 import { buildEmissionAllocation } from "./emission-allocation";
 import type { AllocationFeedstockFact, AllocationRunFact, EmissionAllocationFacts } from "./emission-allocation-facts";
 import { NOT_YET } from "@/types/emission-allocation";
@@ -105,10 +107,11 @@ describe("buildEmissionAllocation", () => {
 
   it("keeps a manual entry on its recorded batch", () => {
     const input = facts();
-    input.manual = [{ id: "entry", componentId: "loader-diesel", date: DATE, creditBatchId: BATCH_B, kind: "value",
+    input.manual = [{ id: "entry", componentId: "loader-diesel", componentName: "Loader diesel usage", date: DATE, creditBatchId: BATCH_B, kind: "value",
       quantities: [{ value: 46, unit: "L", label: "Diesel" }], omittedInputKeys: [] }];
     const [record] = buildEmissionAllocation(input).records;
-    expect(record).toMatchObject({ id: "entry", code: "loader-diesel", group: "manual", quantities: input.manual[0].quantities });
+    expect(record).toMatchObject({ id: "entry", code: "loader-diesel", group: "manual", detail: { kind: "manual", componentId: "loader-diesel", componentName: "Loader diesel usage" },
+      quantities: input.manual[0].quantities });
     expect(record.parts[0]).toMatchObject({ key: BATCH_B, fraction: 1 });
   });
 
@@ -131,7 +134,7 @@ describe("buildEmissionAllocation", () => {
     input.runs = [run(BATCH_A), run(null)];
     input.deliveries = [{ id: "delivery", code: "DL-1", date: DATE, wetKg: 3, oneWayKm: 10,
       loads: [BATCH_A, BATCH_B].map(creditBatchId => ({ creditBatchId, code: creditBatchId, kg: 1 })) }];
-    input.manual = [{ id: "entry", componentId: "grid", date: DATE, creditBatchId: BATCH_A, kind: "value",
+    input.manual = [{ id: "entry", componentId: "grid", componentName: "Grid electricity", date: DATE, creditBatchId: BATCH_A, kind: "value",
       quantities: [{ value: 310, unit: "kWh", label: "Electricity" }], omittedInputKeys: [] }];
     const snapshot = structuredClone(input);
     for (const record of buildEmissionAllocation(input).records) {
@@ -139,5 +142,47 @@ describe("buildEmissionAllocation", () => {
       expect(record.parts.every(part => part.fraction >= 0 && part.fraction <= 1)).toBe(true);
     }
     expect(input).toEqual(snapshot);
+  });
+});
+
+describe("manual allocation display names", () => {
+  const entry = { id: "entry", componentId: "loader-diesel", creditBatchId: BATCH_B,
+    removalTemplateId: "template", observationId: "previous", occurredOn: DATE, kind: "value" as const,
+    values: [{ inputKey: "volume_of_fuel", magnitude: "46000", unit: "mL" }] };
+  const definition: TemplateDefinition = { groups: [{ id: "group", key: "pyrolysis", displayName: "Pyrolysis", description: "",
+    components: [{ id: entry.componentId, displayName: "Loader diesel usage", description: null, blueprintKey: "diesel",
+      inputs: [{ key: "volume_of_fuel", type: "monitored", quantityKind: "volume" }] }] }] };
+  const previous = { id: "previous", externalTemplateId: "template", definition };
+
+  it("uses the current component name while preserving the component code", () => {
+    const renamed = structuredClone(definition);
+    renamed.groups[0].components[0].displayName = "Wheel loader diesel";
+    const input = facts();
+    input.manual = buildAllocationManualFacts([entry], [{ ...previous, id: "current", definition: renamed }], [previous]);
+    expect(buildEmissionAllocation(input).records[0]).toMatchObject({ code: entry.componentId,
+      detail: { kind: "manual", componentName: "Wheel loader diesel" },
+      quantities: [{ value: 46, unit: "L", label: "Diesel" }] });
+  });
+
+  it("retains removed component names through the same definition helper as Emissions", () => {
+    const [fact] = buildAllocationManualFacts([entry], [{ ...previous, id: "current", definition: { groups: [] } }], [previous]);
+    expect(fact.componentName).toBe("Loader diesel usage");
+    expect(fact.quantities).toEqual([{ value: 46, unit: "L", label: "Diesel" }]);
+  });
+
+  it("falls back to the component ID only when definitions cannot supply the name", () => {
+    const [missing] = buildAllocationManualFacts([entry], [{ ...previous, definition: { groups: [] } }], []);
+    expect(missing.componentName).toBe(entry.componentId);
+    const [fact] = buildAllocationManualFacts([{ ...entry, values: [...entry.values,
+      { inputKey: "unknown_energy", magnitude: "2", unit: "MWh" },
+      { inputKey: "factor", magnitude: "3", unit: "kgCO2e / L" }] }], [previous], []);
+    expect(fact.componentName).toBe("Loader diesel usage");
+    expect(fact.quantities).toEqual([{ value: 46, unit: "L", label: "Diesel" },
+      { value: 2000, unit: "kWh", label: "Electricity" }]);
+    expect(fact.omittedInputKeys).toEqual(["factor"]);
+  });
+
+  it("uses the recorded definition if there is no current observation", () => {
+    expect(buildAllocationManualFacts([entry], [], [previous])[0].componentName).toBe("Loader diesel usage");
   });
 });

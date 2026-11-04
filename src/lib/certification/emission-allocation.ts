@@ -86,7 +86,7 @@ export function buildEmissionAllocation(facts: EmissionAllocationFacts): Emissio
     ...facts.manual.map((entry): AllocationRecord => ({
       id: entry.id, code: entry.componentId, group: "manual", date: entry.date,
       detail: { kind: "manual", creditBatchId: entry.creditBatchId, componentId: entry.componentId,
-        kindOfEntry: entry.kind, omittedInputKeys: entry.omittedInputKeys },
+        componentName: entry.componentName, kindOfEntry: entry.kind, omittedInputKeys: entry.omittedInputKeys },
       quantities: entry.quantities,
       parts: wholePart(entry.creditBatchId, { kind: "recordedOnBatch", label: entry.componentId, recordId: entry.id, kg: null }),
       basisWord: "the batch it was recorded on",

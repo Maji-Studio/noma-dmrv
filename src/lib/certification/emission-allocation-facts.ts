@@ -41,6 +41,7 @@ export interface AllocationDeliveryFact {
 export interface AllocationManualFact {
   id: string;
   componentId: string;
+  componentName: string;
   date: string;
   creditBatchId: string;
   kind: "value" | "zero";

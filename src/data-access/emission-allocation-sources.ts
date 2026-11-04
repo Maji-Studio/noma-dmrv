@@ -1,18 +1,16 @@
 import { and, eq, inArray } from "drizzle-orm";
+import type { db } from "@/db";
 import { deliveries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CreditBatchLineageFacts } from "./credit-batch-lineage-types";
 import type { AllocationDeliveryFact, AllocationManualFact } from "@/lib/certification/emission-allocation-facts";
+import { buildAllocationManualFacts } from "@/lib/certification/emission-allocation-manual";
 import { emissionDeliveryShares } from "@/lib/certification/emission-delivery-shares";
-import { canonicalUnit } from "@/lib/isometric/template-observations/units";
 import { formatUtcDate } from "@/lib/date-utils";
-import type { Quantity } from "@/types/emission-allocation";
 import { loadBiocharDeliveryTransportLegs } from "./biochar-delivery-transport";
 import { listEmissionEntriesForBatches } from "./emission-entries";
+import { getLatestTemplateObservations, getTemplateObservationsByIds } from "./removal-template-observations";
 import { requireOrgScope, type Executor } from "./utils";
-
-const VOLUME_SCALES: Record<string, number> = { L: 1, mL: 0.001, "m^3": 1000 };
-const ENERGY_SCALES: Record<string, number> = { kWh: 1, Wh: 0.001, MWh: 1000, MJ: 1 / 3.6, J: 1 / 3_600_000 };
 
 export async function loadAllocationDeliveries(ctx: OrgContext,
   batches: { id: string; code: string; lineageFacts: CreditBatchLineageFacts }[], reader: Executor,
@@ -37,29 +35,15 @@ export async function loadAllocationDeliveries(ctx: OrgContext,
     loads: loads.get(row.id)! }));
 }
 
-function activityQuantity(value: { magnitude: string; unit: string; inputKey: string }): Quantity | null {
-  const volume = canonicalUnit("volume", value.unit);
-  if (volume && Object.hasOwn(VOLUME_SCALES, volume)) return { value: Number(value.magnitude) * VOLUME_SCALES[volume], unit: "L", label: value.inputKey };
-  const energy = canonicalUnit("energy", value.unit);
-  if (energy && Object.hasOwn(ENERGY_SCALES, energy)) return { value: Number(value.magnitude) * ENERGY_SCALES[energy], unit: "kWh", label: value.inputKey };
-  if (canonicalUnit("mass_distance", value.unit) === canonicalUnit("mass_distance", "tonne * km"))
-    return { value: Number(value.magnitude), unit: "t·km", label: value.inputKey };
-  return null;
-}
-
 /** Entries retain their recorded batch even while their template needs reconfirmation. */
-export async function loadAllocationManualEntries(ctx: OrgContext, batchIds: string[], reader: Executor): Promise<AllocationManualFact[]> {
+export async function loadAllocationManualEntries(
+  ctx: OrgContext, batchIds: string[], reader: Pick<typeof db, "select" | "selectDistinctOn">,
+): Promise<AllocationManualFact[]> {
   requireOrgScope(ctx);
   const entries = await listEmissionEntriesForBatches(ctx, batchIds, reader);
-  return entries.map(entry => {
-    const quantities: Quantity[] = [];
-    const omittedInputKeys: string[] = [];
-    for (const value of entry.values) {
-      const quantity = activityQuantity(value);
-      if (quantity) quantities.push(quantity);
-      else omittedInputKeys.push(value.inputKey);
-    }
-    return { id: entry.id, componentId: entry.componentId, date: entry.occurredOn, creditBatchId: entry.creditBatchId,
-      kind: entry.kind, quantities, omittedInputKeys };
-  });
+  const [current, previous] = await Promise.all([
+    getLatestTemplateObservations(ctx, "isometric", [...new Set(entries.map(entry => entry.removalTemplateId))], reader),
+    getTemplateObservationsByIds(ctx, entries.map(entry => entry.observationId), reader),
+  ]);
+  return buildAllocationManualFacts(entries, current, previous);
 }

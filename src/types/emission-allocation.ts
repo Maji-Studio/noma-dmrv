@@ -66,7 +66,7 @@ export type AllocationDetail =
   | { kind: "feedstockTransport"; binId: string; binName: string; wetKg: number; legs: { id: string; oneWayKm: number; loadKg: number | null }[] }
   | { kind: "production"; reactorId: string | null; reactorCode: string | null }
   | { kind: "deliveryTransport"; wetKg: number | null; oneWayKm: number | null }
-  | { kind: "manual"; creditBatchId: string; componentId: string; kindOfEntry: "value" | "zero"; omittedInputKeys: string[] };
+  | { kind: "manual"; creditBatchId: string; componentId: string; componentName: string; kindOfEntry: "value" | "zero"; omittedInputKeys: string[] };
 
 export interface AllocationRecord {
   id: string;

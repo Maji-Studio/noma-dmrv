@@ -3,10 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProductSourceAllocations, creditBatchProductionRuns, creditBatches, deliveries,
+  emissionEntries, emissionEntryValues, removalTemplateObservations,
   outputStockAllocations, outputStockRunAllocations, productionRunFeedstockDraws,
   productionRunFeedstocks, productionRuns, transportLegs,
 } from "@/db/schema";
+import sandbox from "./fixtures/isometric/sandbox-template-2026-10-15.json";
+import { normalizeTemplateDefinition, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
+import { buildBatchEmissionLines } from "@/lib/read-models/batches-emission-lines";
+import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { getEmissionAllocation } from "@/data-access/emission-allocation";
+import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
 import type { EmissionAllocation, GroupKey } from "@/types/emission-allocation";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -94,6 +100,62 @@ describe("allocation transport parity with the Emissions tab (real database)", (
         expect(await getEmissionAllocation(ctx, { removalId: fixture.removalId }, tx)).toEqual(allocation);
         await expect(getEmissionAllocation({ ...ctx, organizationId: `foreign-${crypto.randomUUID()}` }, { creditBatchId: fixture.batchId }, tx))
           .rejects.toThrow("Credit batch or Removal was not found.");
+        throw ROLLBACK;
+      })).rejects.toBe(ROLLBACK);
+    }, "none");
+  });
+});
+
+describe("manual allocation names (real database)", () => {
+  it("matches the Emissions line name, retains removed names and falls back for missing definitions", async () => {
+    await withLineageFixture(async fixture => {
+      await expect(db.transaction(async tx => {
+        const org = { organizationId: ctx.organizationId };
+        const template = structuredClone(sandbox) as GhgEntryTemplate;
+        const definition = normalizeTemplateDefinition(template);
+        const component = definition.groups.flatMap(group => group.components).find(component =>
+          component.inputs.some(input => input.key === "volume_of_fuel"))!;
+        const input = component.inputs.find(input => input.key === "volume_of_fuel")!;
+        const templateId = `allocation-template-${crypto.randomUUID()}`;
+        const [previous] = await tx.insert(removalTemplateObservations).values({ ...org, provider: "isometric",
+          externalProjectId: "allocation-project", externalTemplateId: templateId,
+          semanticFingerprint: "previous", fullFingerprint: "previous", definition, enrichment: {}, lineSources: {},
+          lastObservedAt: new Date("2026-06-01T00:00:00Z") }).returning();
+        const currentDefinition = structuredClone(definition);
+        const currentComponent = currentDefinition.groups.flatMap(group => group.components).find(line => line.id === component.id)!;
+        currentComponent.displayName = "Loader diesel usage";
+        const removed = structuredClone(component);
+        removed.id = "retired-diesel";
+        // The old observation retains this component for the Emissions review line.
+        definition.groups[0].components.push(removed);
+        await tx.update(removalTemplateObservations).set({ definition }).where(and(
+          eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, previous.id)));
+        const [current] = await tx.insert(removalTemplateObservations).values({ ...org, provider: "isometric",
+          externalProjectId: "allocation-project", externalTemplateId: templateId,
+          semanticFingerprint: "current", fullFingerprint: "current", definition: currentDefinition, enrichment: {}, lineSources: {},
+          lastObservedAt: new Date("2026-06-02T00:00:00Z") }).returning();
+        await tx.update(creditBatches).set({ removalTemplateId: templateId }).where(and(
+          eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, fixture.batchId)));
+        const entries = await tx.insert(emissionEntries).values([component.id, removed.id, "missing-component"].map(componentId => ({
+          ...org, creditBatchId: fixture.batchId, removalTemplateId: templateId, observationId: previous.id,
+          componentId, inputShape: [input], lineRule: "additive" as const, kind: "value" as const, occurredOn: "2026-06-13",
+        }))).returning();
+        await tx.insert(emissionEntryValues).values(entries.map(entry => ({ ...org, entryId: entry.id,
+          inputKey: input.key, magnitude: "46", unit: "L" })));
+        const allocation = await getEmissionAllocation(ctx, { creditBatchId: fixture.batchId }, tx);
+        const observations = new Map([[previous.id, { ...previous, definition }], [current.id, current]]);
+        const stored = await listEmissionEntriesForBatches(ctx, [fixture.batchId], tx);
+        const lines = buildBatchEmissionLines(current, deriveEmissionEntryFacts(stored, current, observations),
+          observations, { automaticFigures: {} });
+        for (const entry of entries) {
+          const record = allocation.records.find(record => record.id === entry.id)!;
+          const line = lines.find(line => line.componentId === entry.componentId);
+          expect(record.code).toBe(entry.componentId);
+          expect(record.detail).toMatchObject({ kind: "manual", componentName: line?.label ?? entry.componentId });
+          expect(record.quantities).toEqual([{ value: 46, unit: "L", label: "Diesel" }]);
+        }
+        expect(allocation.records.find(record => record.id === entries[0].id)?.detail)
+          .toMatchObject({ componentName: "Loader diesel usage" });
         throw ROLLBACK;
       })).rejects.toBe(ROLLBACK);
     }, "none");
