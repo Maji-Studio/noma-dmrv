@@ -2,6 +2,7 @@ import { principalAllows } from "@/lib/auth/api-scopes";
 import { apiScopeDenialResponse } from "@/lib/api/scope-denial";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
+import { mcpEnabled } from "@/lib/feature-switches";
 import { env } from "@/config/env";
 import { readBoundedBody } from "@/lib/api/request-body";
 import { ApiHttpError } from "@/lib/api/http-error";
@@ -43,6 +44,7 @@ const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
 });
 
 export async function POST(request: Request): Promise<Response> {
+  if (!mcpEnabled()) return new Response(null, { status: 404 });
   const hostnames = localhostAllowedOrigins();
   if (env.NEXT_PUBLIC_APP_URL) hostnames.push(new URL(env.NEXT_PUBLIC_APP_URL).hostname);
   const rejected = originValidationResponse(request, hostnames);
@@ -53,4 +55,8 @@ const methodNotAllowedResponse = () => new Response(null, { status: 405, headers
 const methodNotAllowed = apiRoute("api.mcp.method-not-allowed", undefined, async () => methodNotAllowedResponse(), {
   audience: "mcp", prepare: async request => ({ request, access: "read", response: methodNotAllowedResponse() }),
 });
-export { methodNotAllowed as GET, methodNotAllowed as DELETE };
+export async function GET(request: Request): Promise<Response> {
+  if (!mcpEnabled()) return new Response(null, { status: 404 });
+  return methodNotAllowed(request);
+}
+export { GET as DELETE };

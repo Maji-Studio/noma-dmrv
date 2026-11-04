@@ -1,5 +1,6 @@
 "use client";
 
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { Button } from "@/components/ui";
 import { DRY_BIOCHAR_LABEL } from "@/components/biochar-products/product-composition-components";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -66,6 +67,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   timeZone?: string;
 }) {
   const { timeZone: zone } = useFacilityClock(facilityId, { timeZone });
+  const { stockAdjustments } = useFeatureSwitches();
   const [open, setOpen] = useState(false);
   const historyTitleId = useId();
   const lostMassTitleId = useId();
@@ -104,7 +106,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
               <DayHeader day={day} />
               {day.rows.map((row) => isModeChange(row.entry) || row.entry.kind === "moisture_update"
                 ? <HistoryBreak key={row.entry.id} entry={row.entry} timeZone={zone} facilityId={facilityId} />
-                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={zone} facilityId={facilityId} onEdit={readOnly ? undefined : setEditing} onDelete={readOnly ? undefined : setDeleting} />)}
+                : <HistoryEntry key={row.entry.id} row={row} defaultOpen={!!movementId} linked={!movementId} timeZone={zone} facilityId={facilityId} onEdit={readOnly || !stockAdjustments ? undefined : setEditing} onDelete={readOnly || !stockAdjustments ? undefined : setDeleting} />)}
             </section>
           ))}
         </div>}

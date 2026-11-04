@@ -128,7 +128,7 @@ beforeEach(() => {
   mocks.me.mockResolvedValue({ organization: { id: "org-1", name: "Test" }, facilities: [], role: "admin", scopes: API_SCOPES,
     credential: { kind: "api-key", id: "key-1", name: null, expiresAt: "2027-01-01T00:00:00.000Z" } });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("authenticated MCP read route", () => {
   it("refuses hostile Origin before admission, even with a valid credential", async () => {
@@ -550,4 +550,18 @@ it("does not advertise tool list changes and closes subscriptions/listen at once
   expect(await readsToEnd(listen)).toBe(true);
   const discover = await (await POST(modernRequest("server/discover", 2))).json();
   expect(discover.result.capabilities.tools.listChanged).toBe(false);
+});
+
+it.each(["false", undefined])("returns bare 404 for every method when MCP_ENABLED is %s", async value => {
+  vi.stubEnv("MCP_ENABLED", value);
+  for (const [method, handler] of [["POST", POST], ["GET", GET], ["DELETE", DELETE]] as const) {
+    const response = await handler(new Request(ENDPOINT, { method, headers: { origin: "https://attacker.example" } }));
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+    expect([...response.headers]).toEqual([]);
+  }
+  expect(mocks.pre).not.toHaveBeenCalled();
+  expect(mocks.resolve).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+  expect(serveMcp).not.toHaveBeenCalled();
 });

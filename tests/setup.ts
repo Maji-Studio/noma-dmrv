@@ -28,6 +28,9 @@ if (underVitest) {
 
 const testEnvDefaults: Record<string, string> = {
   NODE_ENV: "test",
+  MCP_ENABLED: "true",
+  STOCK_ADJUSTMENTS_ENABLED: "true",
+  MULTI_BIN_RUNS_ENABLED: "true",
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/app_template_test",
   // The app default is a single connection, but the DB-backed concurrency
   // tests (tests/certification-submissions.test.ts) hold a transaction open

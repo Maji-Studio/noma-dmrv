@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { recordHref } from "@/lib/record-links";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { MoistureSplit } from "@/components/ui/moisture-split";
@@ -220,6 +221,8 @@ export function ProductionRunForm({
     append: appendFeedstockDraw,
     remove: removeFeedstockDraw,
   } = useFieldArray({ control, name: "feedstockDraws" });
+
+  const { multiBinRuns } = useFeatureSwitches();
 
   // The run this run's window overlaps, if the server rejected the save (#259).
   const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
@@ -553,16 +556,18 @@ export function ProductionRunForm({
           "residenceTimeMinutes",
         ]}
         actions={
-          <Button
-            type="button"
-            variant="default"
-            size="small"
-            onClick={() => appendFeedstockDraw({ ...EMPTY_FEEDSTOCK_DRAW })}
-            disabled={isSubmitting || !watchedFacilityId}
-          >
-            <PlusIcon size={16} weight="bold" />
-            Add source
-          </Button>
+          multiBinRuns || feedstockDrawFields.length === 0 ? (
+            <Button
+              type="button"
+              variant="default"
+              size="small"
+              onClick={() => appendFeedstockDraw({ ...EMPTY_FEEDSTOCK_DRAW })}
+              disabled={isSubmitting || !watchedFacilityId}
+            >
+              <PlusIcon size={16} weight="bold" />
+              Add source
+            </Button>
+          ) : undefined
         }
       >
 

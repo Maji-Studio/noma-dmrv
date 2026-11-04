@@ -97,6 +97,17 @@ sync). The app refuses to boot on an invalid or missing required var.
 
 Non-obvious semantics only:
 
+- **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and
+  its protected-resource discovery return 404 before admission.
+- **`STOCK_ADJUSTMENTS_ENABLED`**: `true` or `false`, default `false`. When off,
+  lost mass, stock counts and lost mass edits/deletes are refused; reads remain.
+- **`MULTI_BIN_RUNS_ENABLED`**: `true` or `false`, default `false`. When off, a
+  run takes one source bin; older runs may keep or reduce their saved bins.
+- The three switches above share validation in `src/config/feature-switches.ts`,
+  read off in browser bundles, and are set `true` locally and in CI. The features
+  are not ready yet (they lack testing and concept work), so staging and
+  production leave them unset; see [open questions](./open-questions.md#unfinished-features-behind-env-switches).
+
 - **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
   builds and runtimes, including staging, except hermetic CI. Optional in
   development/test. The daily Vercel crons call `/api/cron/purge-api-records` at 03:00 UTC

@@ -4,7 +4,7 @@
  * under its own code. The operation runner is mocked; the posting itself runs
  * against the database in tests/operation-output-stock.test.ts.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
@@ -98,4 +98,18 @@ describe("removeOutputLossFn", () => {
     expect(await removeOutputLossFn(input)).toEqual({ success: false, error: message, code, conflict });
     expect(mocks.loggerError).not.toHaveBeenCalled();
   });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+it("refuses posting, correcting and deleting output adjustments while off", async () => {
+  vi.stubEnv("STOCK_ADJUSTMENTS_ENABLED", "false");
+  const expected = { success: false, code: "conflict", error: "Lost mass and stock counts are turned off on this server." };
+  expect(await postOutputStockFn(command)).toEqual(expected);
+  expect(await postOutputStockFn({ ...command, kind: "count" })).toEqual(expected);
+  expect(await postOutputStockFn({ ...command, correctsMovementId: FACILITY_ID })).toEqual(expected);
+  expect(await removeOutputLossFn({ storageLocationId: BIN_ID, correctsMovementId: FACILITY_ID, idempotencyKey: "key", reason: "Wrong reading" })).toEqual(expected);
+  expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
+  expect(mocks.correct).not.toHaveBeenCalled();
+  expect(mocks.loggerError).not.toHaveBeenCalled();
 });
