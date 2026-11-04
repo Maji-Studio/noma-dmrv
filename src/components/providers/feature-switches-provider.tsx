@@ -9,12 +9,11 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 export interface FeatureSwitches {
-  mcp: boolean;
   stockAdjustments: boolean;
   multiBinRuns: boolean;
 }
 
-const ALL_OFF: FeatureSwitches = { mcp: false, stockAdjustments: false, multiBinRuns: false };
+const ALL_OFF: FeatureSwitches = { stockAdjustments: false, multiBinRuns: false };
 
 const FeatureSwitchesContext = createContext<FeatureSwitches>(ALL_OFF);
 

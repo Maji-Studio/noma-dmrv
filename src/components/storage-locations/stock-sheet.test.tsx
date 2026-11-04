@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feeds
 vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }), useOutputStockBalance: (bin: unknown) => ({ data: bin ? state.balance : undefined }),
   useRemoveOutputLoss: () => ({ mutateAsync: state.removeOutputLoss, isPending: false }) }));
 const switches = vi.hoisted(() => ({ stockAdjustments: true }));
-vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ mcp: true, multiBinRuns: true, ...switches }) }));
+vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ multiBinRuns: true, ...switches }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/hooks/use-bin-movements", () => ({ useFeedstockBinStock: () => ({ data: state.feedstock, dataUpdatedAt: Date.parse("2026-10-03T12:00:00Z") }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC" }) }));

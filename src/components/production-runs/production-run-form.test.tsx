@@ -22,7 +22,7 @@ vi.mock("@/components/forms/entity-select", async () => ({
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 const switches = vi.hoisted(() => ({ multiBinRuns: true }));
-vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ mcp: true, stockAdjustments: true, ...switches }) }));
+vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ stockAdjustments: true, ...switches }) }));
 vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: ({ onRemove }: { onRemove: () => void }) => <button type="button" onClick={onRemove}>Remove source</button> }));
 vi.mock("./production-run-mix-bin-notice", () => ({ ProductionRunMixBinNotice: () => null }));
 // The footer line has its own tests; here it only marks its place in the footer.

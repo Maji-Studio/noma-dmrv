@@ -25,8 +25,8 @@ import { StorageBinTile } from "@/components/storage-locations/storage-bin-tile"
 import { StorageBinBoard } from "@/components/storage-locations/storage-bin-board";
 import { FeatureSwitchesProvider, useFeatureSwitches, type FeatureSwitches } from "./feature-switches-provider";
 
-const ON: FeatureSwitches = { mcp: true, stockAdjustments: true, multiBinRuns: true };
-const OFF: FeatureSwitches = { mcp: false, stockAdjustments: false, multiBinRuns: false };
+const ON: FeatureSwitches = { stockAdjustments: true, multiBinRuns: true };
+const OFF: FeatureSwitches = { stockAdjustments: false, multiBinRuns: false };
 
 const negativeBin = { id: "bin", facilityId: "facility", name: "Fixture bin", code: "BIN", type: "feedstock_bin", archivedAt: null,
   feedstockInventory: { currentWetMassKg: -5, feedstockTypes: [], batchCount: 0, pendingBatchCount: 0 }, capacityKg: 100, lastActivity: null } as unknown as StorageLocationWithFacility;

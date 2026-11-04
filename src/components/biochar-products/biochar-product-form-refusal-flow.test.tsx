@@ -24,7 +24,7 @@ const preview = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ mcp: true, stockAdjustments: true, multiBinRuns: true }) }));
+vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ stockAdjustments: true, multiBinRuns: true }) }));
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   const base = { data: undefined, error: null, isLoading: false, isPending: false, isFetching: false, isError: false, isSuccess: true, status: "success", dataUpdatedAt: 0, refetch: async () => ({}) };
