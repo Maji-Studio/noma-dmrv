@@ -83,6 +83,35 @@ describe("Removal allocation follows submission ownership", () => {
     }
   });
 
+  it("keeps a retryable rejected Removal as the sole production candidate", () => {
+    const input = facts();
+    input.productionClaims = {};
+    input.removals = [{ id: FIRST, code: FIRST, status: "rejected", creditBatchIds: [BATCH], canSendProduction: true }];
+    expect(shares(input).find(record => record.group === "production")?.removalParts)
+      .toEqual([expect.objectContaining({ key: FIRST, fraction: 1 })]);
+  });
+
+  it("leaves production unallocated when a retryable Removal and a draft both could send it", () => {
+    const input = facts();
+    input.productionClaims = {};
+    input.removals = [
+      { id: FIRST, code: FIRST, status: "rejected", creditBatchIds: [BATCH], canSendProduction: true },
+      { id: FOLLOWUP, code: FOLLOWUP, status: "draft", creditBatchIds: [BATCH], canSendProduction: true },
+    ];
+    expect(shares(input).find(record => record.group === "production")?.removalParts[0]).toMatchObject({ key: NOT_YET, fraction: 1 });
+  });
+
+  it("never elects a rejected Removal the registry already holds", () => {
+    const input = facts();
+    input.productionClaims = {};
+    input.removals = [
+      { id: FIRST, code: FIRST, status: "rejected", creditBatchIds: [BATCH], canSendProduction: false },
+      { id: FOLLOWUP, code: FOLLOWUP, status: "draft", creditBatchIds: [BATCH], canSendProduction: true },
+    ];
+    expect(shares(input).find(record => record.group === "production")?.removalParts)
+      .toEqual([expect.objectContaining({ key: FOLLOWUP, fraction: 1 })]);
+  });
+
   it("does not elect a production claimer from draft membership", () => {
     const input = facts();
     input.productionClaims = {};

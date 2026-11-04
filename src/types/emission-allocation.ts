@@ -90,6 +90,10 @@ export interface EmissionAllocation {
   facilityId: string;
   batches: { id: string; code: string; startDate: string; endDate: string }[];
   /** Membership for captions only; never use it to derive a Removal share. */
-  removals: { id: string; code: string; status: string; creditBatchIds: string[] }[];
+  removals: {
+    id: string; code: string; status: string; creditBatchIds: string[];
+    /** Unsent and still submittable: no attempt yet, a draft, or a rejection with no registry ID (retryable). */
+    canSendProduction?: boolean;
+  }[];
   records: AllocationRecord[];
 }

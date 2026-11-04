@@ -58,7 +58,7 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
   const [memberships, submissions, feedstocks, deliveries, manual] = await Promise.all([
     removalIds.length ? executor.select({ removalId: creditBatchApplications.removalId, creditBatchId: creditBatchApplications.creditBatchId })
       .from(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), inArray(creditBatchApplications.removalId, removalIds))) : [],
-    removalIds.length ? executor.select({ removalId: certificationSubmissions.localEntityId, status: certificationSubmissions.status, submittedAt: certificationSubmissions.submittedAt })
+    removalIds.length ? executor.select({ removalId: certificationSubmissions.localEntityId, status: certificationSubmissions.status, submittedAt: certificationSubmissions.submittedAt, externalId: certificationSubmissions.externalId })
       .from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.provider, "isometric"),
         eq(certificationSubmissions.submissionType, REMOVAL_SUBMISSION_TYPE), eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
         inArray(certificationSubmissions.localEntityId, removalIds))).orderBy(desc(certificationSubmissions.version)) : [],
@@ -68,8 +68,12 @@ export async function getEmissionAllocation(ctx: OrgContext, input: EmissionAllo
     loadAllocationManualEntries(ctx, batchIds, facilityId, executor),
   ]);
   return buildEmissionAllocation({ facilityId, batches, ...production,
-    removals: removalRows.map(removal => ({ ...removal, status: submissions.find(row => row.removalId === removal.id)?.status ?? "draft",
-      creditBatchIds: [...new Set(memberships.filter(row => row.removalId === removal.id).map(row => row.creditBatchId))].sort() })),
+    removals: removalRows.map(removal => {
+      const latest = submissions.find(row => row.removalId === removal.id);
+      return { ...removal, status: latest?.status ?? "draft",
+        canSendProduction: !latest || latest.status === "draft" || (latest.status === "rejected" && !latest.externalId),
+        creditBatchIds: [...new Set(memberships.filter(row => row.removalId === removal.id).map(row => row.creditBatchId))].sort() };
+    }),
     productionClaims: Object.fromEntries(Object.values(rollups).map(({ batch }) => [batch.id, batch.productionEmissionsClaimedByRemovalId])),
     feedstocks, deliveries: deliveries.map(delivery => ({ ...delivery, removalLoads: (removalLoads.get(delivery.id) ?? []).map(load => ({ ...load,
       pending: !submissions.some(row => row.removalId === load.removalId && (row.submittedAt !== null || row.status === "submitted" || row.status === "accepted")),
