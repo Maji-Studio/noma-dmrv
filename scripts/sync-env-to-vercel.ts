@@ -29,7 +29,6 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { pathToFileURL } from "url";
 import {
-  ITEM_PREFIX,
   REQUIRED_DEPLOYED_VARS,
   fetchItemFieldNames,
   filterTemplateToItem,
@@ -334,19 +333,19 @@ function warnUntrackedOnePasswordVars(
 
   if (untracked.length === 0) {
     console.log(
-      `\n  .env.tpl covers every field in "${ITEM_PREFIX} ${itemSuffix}" — nothing untracked.`
+      `\n  .env.tpl covers every field in "${itemNameForEnvironment(opEnv)}" — nothing untracked.`
     );
     return;
   }
 
   console.warn(
-    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${ITEM_PREFIX} ${itemSuffix}") are NOT in .env.tpl`
+    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${itemNameForEnvironment(opEnv)}") are NOT in .env.tpl`
   );
   console.warn("      and will NOT be synced to Vercel:");
   for (const name of untracked) console.warn(`        ${name}`);
   console.warn(
     `      To include one, add to .env.tpl:\n` +
-      `        NAME="op://Environment Variables/${ITEM_PREFIX} staging/NAME"`
+      `        NAME="op://Environment Variables/${itemNameForEnvironment("staging")}/NAME"`
   );
 }
 
@@ -566,9 +565,8 @@ async function main() {
 
   const flags = parseFlags();
 
-  const itemSuffix = itemEnvironment(flags.opEnv);
   console.log("Configuration:");
-  console.log(`  1Password item: ${ITEM_PREFIX} ${itemSuffix}`);
+  console.log(`  1Password item: ${itemNameForEnvironment(flags.opEnv)}`);
   console.log(`  Vercel environment: ${flags.vercelEnv}`);
   console.log(`  Dry-run: ${flags.dryRun ? "yes" : "no"}`);
 

@@ -15,10 +15,14 @@ import {
 
 // No test can launch op or another process, including on an unexpected code path.
 vi.mock("child_process", () => ({ spawn: vi.fn(), spawnSync: vi.fn() }));
-// ESM namespaces cannot be spied on; wrap the real writer so one test can fail it.
+// ESM namespaces cannot be spied on; wrap file access for template edge cases.
 vi.mock("fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fs")>();
-  return { ...actual, writeFileSync: vi.fn(actual.writeFileSync) };
+  return {
+    ...actual,
+    readFileSync: vi.fn(actual.readFileSync),
+    writeFileSync: vi.fn(actual.writeFileSync),
+  };
 });
 vi.mock("os", async (importOriginal) => ({
   ...await importOriginal<typeof import("os")>(),
@@ -30,6 +34,7 @@ const FILE_PERMISSION_MASK = 0o777;
 const SIGNAL_EXIT_CODE_BASE = 128;
 const COMMAND_FAILURE_CODE = 23;
 const ENVIRONMENTS = ["local", "staging", "prod"] as const;
+const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 const OPTIONAL_TIMEOUTS = [
   "DB_POOL_IDLE_TIMEOUT_MS",
   "DB_POOL_CONNECTION_TIMEOUT_MS",
@@ -114,6 +119,7 @@ describe("runEnvCommand", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(testDirectory, { recursive: true, force: true });
   });
 
@@ -149,9 +155,16 @@ describe("runEnvCommand", () => {
       { encoding: "utf-8" }
     );
     expect(templateDuringRun).toContain(`DATABASE_URL="op://${VAULT}/${itemName}/DATABASE_URL"`);
+    // The local template does not declare NODE_ENV; preserve its existing behavior.
+    expect(templateDuringRun.match(/^NODE_ENV=(.*)$/m)?.[1]).toBe(
+      environment === "local" ? undefined : environment === "prod" ? "production" : "development"
+    );
     for (const name of OPTIONAL_TIMEOUTS) {
-      expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
+      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
       expect(console.warn).toHaveBeenCalledWith(`        ${name}`);
+    }
+    for (const [, name] of templateDuringRun.matchAll(/^# ([A-Z_][A-Z0-9_]*) skipped /gm)) {
+      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
     }
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(
       `optional variable(s) with no field in "${itemName}":`
@@ -194,7 +207,8 @@ describe("runEnvCommand", () => {
     const command = ["pnpm", "-s", "feedstock:recalculate", "--dry-run", "space here", "$(example)", ";"];
     expect(await runEnvCommand(["--1p-env=staging", "--", ...command])).toBe(0);
     expect(spawn).toHaveBeenCalledExactlyOnceWith(
-      "op", ["run", `--env-file=${writtenFile}`, "--", ...command], { stdio: "inherit" }
+      "op", ["run", `--env-file=${writtenFile}`, "--", ...command],
+      { stdio: "inherit", env: expect.any(Object) }
     );
     expect(templateDuringRun).toContain("NODE_ENV=development");
   });
@@ -204,8 +218,39 @@ describe("runEnvCommand", () => {
     const fields = [...template.matchAll(/^([A-Z_][A-Z0-9_]*)="op:\/\//gm)].map((match) => match[1]);
     listFields(fields);
     expect(await runEnvCommand(argsFor("prod"))).toBe(0);
-    expect(templateDuringRun).toBe(templateForEnvironment(template, "prod"));
+    expect(templateDuringRun).toBe(
+      templateForEnvironment(template, "prod").replace(/^NODE_ENV=.*$/m, "NODE_ENV=production")
+    );
     expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("appends production NODE_ENV when absent (trailing newline: %s)", async (trailingNewline) => {
+    const template = `DATABASE_URL="op://${VAULT}/noma-dmrv env staging/DATABASE_URL"`;
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(template + (trailingNewline ? "\n" : ""));
+    expect(await runEnvCommand(argsFor("prod"))).toBe(0);
+    expect(templateDuringRun).toContain(`${templateForEnvironment(template, "prod")}\nNODE_ENV=production\n`);
+  });
+
+  it.each(ENVIRONMENTS)("removes all %s template names from the inherited child env", async (environment) => {
+    const templateFile = environment === "local" ? ".env.local.tpl" : ".env.tpl";
+    const template = fs.readFileSync(join(process.cwd(), templateFile), "utf-8");
+    const names = [...template.matchAll(/^([A-Z_][A-Z0-9_]*)=/gm)].map((match) => match[1]);
+    vi.stubEnv("NODE_ENV", "mock-parent-value");
+    for (const name of names) vi.stubEnv(name, "mock-parent-value");
+    vi.stubEnv("ENV_RUN_TEST_INHERITED", "mock-unrelated-value");
+    listFields(environment === "local" ? REQUIRED_LOCAL_VARS : REQUIRED_DEPLOYED_VARS);
+
+    expect(await runEnvCommand(argsFor(environment))).toBe(0);
+    const childEnv = vi.mocked(spawn).mock.calls[0][2]!.env!;
+    for (const name of names) {
+      expect(childEnv).not.toHaveProperty(name);
+      expect(process.env[name]).toBe("mock-parent-value");
+    }
+    expect(childEnv.ENV_RUN_TEST_INHERITED).toBe("mock-unrelated-value");
+    if (environment === "local") expect(childEnv.NODE_ENV).toBe("mock-parent-value");
+    for (const name of ["ISOMETRIC_CLIENT_SECRET", "ISOMETRIC_ACCESS_TOKEN"]) {
+      expect(templateDuringRun).toMatch(new RegExp(`^${name}=$`, "m"));
+    }
   });
 
   it("fails closed if field listing fails", async () => {
@@ -247,18 +292,49 @@ describe("runEnvCommand", () => {
     expect(fs.readdirSync(testDirectory)).toEqual([]);
   });
 
-  it.each(["SIGINT", "SIGTERM"] as const)("cleans up and forwards %s on interruption", async (signal) => {
-    const once = vi.spyOn(process, "once");
+  it.each(FORWARDED_SIGNALS.flatMap((signal) => [
+    { signal, code: 0, exitSignal: null },
+    { signal, code: COMMAND_FAILURE_CODE, exitSignal: null },
+    { signal, code: null, exitSignal: signal },
+    { signal, code: null, exitSignal: "SIGKILL" as const },
+  ]))("forwards $signal and waits for child exit ($code, $exitSignal)", async ({ signal, code, exitSignal }) => {
+    const on = vi.spyOn(process, "on");
     const exit = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("mock process exit"); });
     vi.mocked(spawn).mockImplementation((_file, argv) => {
       captureTempFile(argv as readonly string[]);
       return child;
     });
     const running = runEnvCommand(argsFor("staging"));
-    const handler = once.mock.calls.find(([event]) => event === signal)![1];
-    expect(() => handler()).toThrow("mock process exit");
+    let settled = false;
+    void running.then(() => { settled = true; });
+    const handler = on.mock.calls.find(([event]) => event === signal)![1];
+    handler();
+    await Promise.resolve();
     expect(child.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    expect(exit).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+    expect(fs.existsSync(writtenFile!)).toBe(true);
+    child.emit("exit", code, exitSignal);
+    expect(await running).toBe(code ?? SIGNAL_EXIT_CODE_BASE + constants.signals[exitSignal!]);
+    expect(fs.existsSync(writtenFile!)).toBe(false);
+    expect(process.listeners(signal)).not.toContain(handler);
+    expect(fs.readdirSync(testDirectory)).toEqual([]);
+  });
+
+  it.each(FORWARDED_SIGNALS)("forces exit and cleans up on a second %s", async (signal) => {
+    const on = vi.spyOn(process, "on");
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("mock process exit"); });
+    vi.mocked(spawn).mockImplementation((_file, argv) => {
+      captureTempFile(argv as readonly string[]);
+      return child;
+    });
+    const running = runEnvCommand(argsFor("staging"));
+    const handler = on.mock.calls.find(([event]) => event === signal)![1];
+    handler();
+    expect(exit).not.toHaveBeenCalled();
+    expect(() => handler()).toThrow("mock process exit");
     expect(exit).toHaveBeenCalledExactlyOnceWith(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith(signal);
     expect(fs.existsSync(writtenFile!)).toBe(false);
     child.emit("exit", null, signal);
     expect(await running).toBe(SIGNAL_EXIT_CODE_BASE + constants.signals[signal]);
@@ -268,6 +344,7 @@ describe("runEnvCommand", () => {
 
   it("cleans up on process exit and removes its lifecycle listeners after completion", async () => {
     const once = vi.spyOn(process, "once");
+    const on = vi.spyOn(process, "on");
     vi.mocked(spawn).mockImplementation((_file, argv) => {
       captureTempFile(argv as readonly string[]);
       return child;
@@ -278,10 +355,9 @@ describe("runEnvCommand", () => {
     expect(fs.existsSync(writtenFile!)).toBe(false);
     child.emit("exit", 0, null);
     expect(await running).toBe(0);
-    for (const [event, handler] of once.mock.calls) {
-      if (event === "exit") {
-        expect(process.listeners("exit")).not.toContain(handler);
-      } else if (event === "SIGINT" || event === "SIGTERM") {
+    expect(process.listeners("exit")).not.toContain(exitHandler);
+    for (const [event, handler] of on.mock.calls) {
+      if (event === "SIGINT" || event === "SIGTERM" || event === "SIGHUP") {
         expect(process.listeners(event)).not.toContain(handler);
       }
     }

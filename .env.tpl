@@ -8,8 +8,9 @@
 # REQUIRED_DEPLOYED_VARS in scripts/env-tpl-utils.ts defines the required set.
 # Variables outside that set may be absent from a 1Password item: the sync
 # skips them with a warning instead of failing.
-# NODE_ENV is never synced to Vercel. The sync skips it; it exists here for
-# one-off CLI runs.
+# NODE_ENV is never synced to Vercel. Staging one-off runs use
+# NODE_ENV=development like local; prod runs force NODE_ENV=production so
+# production guards apply.
 
 # -----------------------------------------------------------------------------
 # Database (PostgreSQL via Drizzle ORM)
