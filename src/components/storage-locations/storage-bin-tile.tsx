@@ -27,6 +27,7 @@
  */
 "use client";
 
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { RowActionsMenu } from "@/components/ui";
 import { handleRowActivationClick } from "@/components/ui/data-table/data-table-helpers";
@@ -81,6 +82,7 @@ export function StorageBinTile({
   // An archived bin has no posting read, so it has no wet estimate either.
   const wetEstimateKg = bin.type === "feedstock_bin" || bin.archivedAt != null ? null : output.data?.beforeEstimatedWetKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
+  const { stockAdjustments } = useFeatureSwitches();
   const needsReconciliation = binNeedsReconciliation(bin);
   // Empty is judged on the figure the tile leads with, at its own precision, so
   // a residue that would read "0 kg wet mass" reads Empty, as the facility sheet does.
@@ -186,7 +188,7 @@ export function StorageBinTile({
             >
               {!loading && <TileFigure feedstock={bin.type === "feedstock_bin"} empty={isEmpty} massKg={massKg} wetEstimateKg={wetEstimateKg} readFailed={!!output.error} />}
             </span>
-            {needsReconciliation && (
+            {needsReconciliation && stockAdjustments && (
               <ReconcileLink bin={bin} onReconcile={onReconcile} />
             )}
           </div>

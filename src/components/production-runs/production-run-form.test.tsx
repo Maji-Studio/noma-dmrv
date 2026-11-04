@@ -21,7 +21,9 @@ vi.mock("@/components/forms/entity-select", async () => ({
   StorageLocationQuickAddDialog: () => null,
   useQuickAddDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
-vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: () => null }));
+const switches = vi.hoisted(() => ({ multiBinRuns: true }));
+vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ mcp: true, stockAdjustments: true, ...switches }) }));
+vi.mock("./production-run-feedstock-draw-row", () => ({ ProductionRunFeedstockDrawRow: ({ onRemove }: { onRemove: () => void }) => <button type="button" onClick={onRemove}>Remove source</button> }));
 vi.mock("./production-run-mix-bin-notice", () => ({ ProductionRunMixBinNotice: () => null }));
 // The footer line has its own tests; here it only marks its place in the footer.
 const previewProps: Array<{ clearEndTime: boolean }> = [];
@@ -217,5 +219,36 @@ describe("footerForRefusedSave", () => {
     const onRefusal = vi.fn(() => "footer");
     expect(footerForRefusedSave(new Error("x"), "fallback", onRefusal)).toBe("footer");
     expect(onRefusal).toHaveBeenCalledWith(expect.any(Error), "fallback");
+  });
+});
+
+describe("ProductionRunForm Add source with several source bins switched off", () => {
+  const twoDraws = { ...savedRun, feedstockDraws: [
+    { storageLocationId: "33333333-3333-4333-8333-333333333333", wetMassKg: 100 },
+    { storageLocationId: "66666666-6666-4666-8666-666666666666", wetMassKg: 50 },
+  ] } as unknown as ProductionRunWithRelations;
+
+  it("offers Add source only while the form has no source row", () => {
+    switches.multiBinRuns = false;
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Add source/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Remove source" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add source/ }));
+    expect(screen.getAllByRole("button", { name: "Remove source" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Add source/ })).toBeNull();
+  });
+
+  it("keeps every saved row of an older run and its remove buttons", () => {
+    switches.multiBinRuns = false;
+    render(<ProductionRunForm productionRun={twoDraws} onSubmit={vi.fn()} lock={OPEN_LOCK} />);
+    expect(screen.getAllByRole("button", { name: "Remove source" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /Add source/ })).toBeNull();
+  });
+
+  it("offers Add source beside existing rows when the switch is on", () => {
+    switches.multiBinRuns = true;
+    render(<ProductionRunForm onSubmit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /Add source/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Remove source" })).toHaveLength(1);
   });
 });
