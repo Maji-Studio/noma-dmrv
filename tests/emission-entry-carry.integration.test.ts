@@ -18,6 +18,7 @@ import { activityEvents, certificationSubmissions, certifierGhgStatements, certi
   emissionEntries, emissionEntryValues, productionProcesses, productionRuns, removalTemplateObservations, users } from "@/db/schema";
 import { createEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
+import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope } from "@/data-access/emission-entry-corrections";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import { markSubmissionSubmitted } from "@/data-access/submission-ledger-transitions";
 import { claimRemovalDeletion, finalizeRemovalDeletion } from "@/data-access/certifier-removal-deletion";
@@ -121,7 +122,11 @@ it("releases a carried claim when its receiving Removal is deleted", async () =>
     productionBatches: (claim.productionBatches ?? []).map(batch => ({ creditBatchId: batch.creditBatchId, externalId: batch.externalProductionBatchId, outcome: "absent" as const })) });
   expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ creditBatchId: origin.batchId, sendReservedBySubmissionId: null, sentByRemovalId: null });
 });
-it("keeps a carried entry locked after the receiver's statement is returned", async () => {
+it("allows a carried entry correction only after the receiver's statement is returned", async () => {
+  const [receiver] = await db.update(creditBatches).set({ startDate: "2026-06-11" }).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+  )).returning();
+  expect(entry.occurredOn < receiver.startDate).toBe(true);
   const row = await attempt();
   await reserve(row);
   await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!, productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
@@ -131,7 +136,117 @@ it("keeps a carried entry locked after the receiver's statement is returned", as
   await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric", submissionType: "ghg_statement", localEntityType: "ghgStatement",
     localEntityId: statement.id, version: 1, status: "submitted", externalId: "returned", submittedAt: new Date(), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: ["carried"] } });
   const sent = await getEmissionEntry(ctx, entry.id);
-  await expect(updateEmissionEntry(ctx, { id: entry.id, expectedVersion: sent.version, note: "correction" })).rejects.toThrow("reserved or sent");
+  const correction = { id: entry.id, expectedVersion: sent.version, occurredOn: sent.occurredOn, note: "correction",
+    values: [{ inputKey: "electricity_use", quantityKind: "energy" as const, magnitude: "125", unit: "kWh" }] };
+  registry.getGhgStatement.mockResolvedValue({ status: "AWAITING_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  await expect(updateEmissionEntry(ctx, correction)).rejects.toMatchObject({ code: "certification_locked" });
+  registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  expect(await updateEmissionEntry(ctx, correction)).toMatchObject({ note: "correction", sentByRemovalId: receiving.removalId,
+    creditBatchId: origin.batchId, values: [expect.objectContaining({ magnitude: "125" })] });
+});
+it("corrects an origin-sent entry while its carry receiver awaits verification", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
+  // A separate entry from the same batch was sent by R1; the fixture entry went to R2.
+  const [stored] = await db.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id),
+  ));
+  const [originEntry] = await db.insert(emissionEntries).values({ ...stored, id: crypto.randomUUID(),
+    sentByRemovalId: origin.removalId, sendReservedBySubmissionId: null }).returning();
+  try {
+    await db.insert(emissionEntryValues).values({ organizationId: ctx.organizationId, entryId: originEntry.id,
+      inputKey: "electricity_use", magnitude: "120", unit: "kWh" });
+    for (const [fixture, externalId, removalExternalId, remoteStatus, periodEnd] of [
+      [origin, "returned-origin", "origin-sent", "FAILED_VERIFICATION", "2026-06-30"],
+      [receiving, "pending-receiver", "carried", "AWAITING_VERIFICATION", "2026-07-31"],
+    ] as const) {
+      const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+        facilityId: origin.facilityId, reportingPeriodEndOn: periodEnd }).returning();
+      fixture.ghgStatementId = statement.id;
+      await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(
+        eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, fixture.removalId),
+      ));
+      await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+        submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
+        version: 1, status: "submitted", externalId, submittedAt: new Date(),
+        metadata: { remoteStatus, removalIds: [removalExternalId] } });
+    }
+    registry.getGhgStatement.mockImplementation(async (_client, externalId) => ({
+      status: externalId === "returned-origin" ? "FAILED_VERIFICATION" : "AWAITING_VERIFICATION",
+      submitted_at: "2099-01-01T00:00:00Z",
+      ghg_entry_ids: [externalId === "returned-origin" ? "origin-sent" : "carried"],
+    }));
+    expect(await updateEmissionEntry(ctx, { id: originEntry.id, expectedVersion: originEntry.version,
+      occurredOn: originEntry.occurredOn, note: "origin correction",
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "125", unit: "kWh" }],
+    })).toMatchObject({ sentByRemovalId: origin.removalId, creditBatchId: origin.batchId,
+      note: "origin correction", values: [expect.objectContaining({ magnitude: "125" })] });
+    expect((await getEmissionEntry(ctx, entry.id)).sentByRemovalId).toBe(receiving.removalId);
+  } finally {
+    registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+    await db.delete(emissionEntryValues).where(and(eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, originEntry.id)));
+    await db.delete(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, originEntry.id)));
+  }
+});
+it("keeps the origin's sent zero when correcting a value carried and sent by the receiver", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
+  // Reconstruct R1's empty-line confirmation using the normal writer. The value belongs to R2.
+  const originSubmission = and(eq(certificationSubmissions.organizationId, ctx.organizationId),
+    eq(certificationSubmissions.localEntityId, origin.removalId), eq(certificationSubmissions.submissionType, "removal"));
+  await db.update(certificationSubmissions).set({ status: "draft", submittedAt: null, externalId: null }).where(originSubmission);
+  const { entryIds: [zeroId] } = await recordEmissionZeros(ctx, {
+    removalId: origin.removalId, creditBatchId: origin.batchId, componentIds: ["line"],
+  });
+  expect(zeroId).toBeDefined();
+  await db.update(emissionEntries).set({ sentByRemovalId: origin.removalId }).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zeroId),
+  ));
+  await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date(), externalId: "origin-sent" }).where(originSubmission);
+  for (const [fixture, externalId, removalExternalId, periodEnd] of [
+    [origin, "returned-origin", "origin-sent", "2026-06-30"],
+    [receiving, "returned-receiver", "carried", "2026-07-31"],
+  ] as const) {
+    const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+      facilityId: origin.facilityId, reportingPeriodEndOn: periodEnd }).returning();
+    fixture.ghgStatementId = statement.id;
+    await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(
+      eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, fixture.removalId),
+    ));
+    await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+      submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
+      version: 1, status: "submitted", externalId, submittedAt: new Date(),
+      metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: [removalExternalId] } });
+  }
+  registry.getGhgStatement.mockImplementation(async (_client, externalId) => ({
+    status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z",
+    ghg_entry_ids: [externalId === "returned-origin" ? "origin-sent" : "carried"],
+  }));
+  try {
+    const zeroBefore = await getEmissionEntry(ctx, zeroId);
+    const sent = await getEmissionEntry(ctx, entry.id);
+    expect(await updateEmissionEntry(ctx, { id: sent.id, expectedVersion: sent.version,
+      values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "125", unit: "kWh" }],
+    })).toMatchObject({ sentByRemovalId: receiving.removalId, values: [expect.objectContaining({ magnitude: "125" })] });
+    expect(await getEmissionEntry(ctx, zeroId)).toMatchObject({ deletedAt: null, sentByRemovalId: origin.removalId,
+      version: zeroBefore.version, contentRevision: zeroBefore.contentRevision });
+  } finally {
+    registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  }
+});
+it("refuses a carry receiver introduced after the correction artifacts were locked", async () => {
+  await expect(db.transaction(async tx => {
+    await lockEmissionCorrectionScope(ctx, tx, origin.batchId);
+    await tx.select().from(creditBatches).where(eq(creditBatches.id, origin.batchId)).for("update");
+    // Model a receiver discovered only after waiting for the batch row lock.
+    await tx.update(emissionEntries).set({ sentByRemovalId: receiving.removalId }).where(eq(emissionEntries.id, entry.id));
+    await revalidateEmissionCorrectionScope(ctx, tx, origin.batchId);
+  })).rejects.toThrow("Certification lineage changed while it was being locked");
+  expect((await getEmissionEntry(ctx, entry.id)).sentByRemovalId).toBeNull();
 });
 it("locks the origin and receiving batches before waiting on the carried entry", async () => {
   const row = await attempt();
