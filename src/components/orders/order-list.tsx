@@ -1,6 +1,7 @@
 "use client";
 
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
 import { recordHref, ORDER_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
@@ -180,27 +181,14 @@ export function OrderList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderFulfillmentStatus | "">("");
   const [customerFilter, setCustomerFilter] = useState("");
-  const [affectedOrderIdsParam, setAffectedOrderIdsParam] = useQueryState(
-    "ids",
-    parseAsString.withOptions({ shallow: true, history: "replace" }),
-  );
-  const affectedOrderFilter = parseExactIdFilter(affectedOrderIdsParam);
-  const affectedOrderIds = affectedOrderFilter.ids;
-  useEffect(() => {
-    if (
-      affectedOrderIdsParam &&
-      affectedOrderFilter.normalized !== affectedOrderIdsParam
-    ) {
-      void setAffectedOrderIdsParam(affectedOrderFilter.normalized);
-    }
-  }, [
-    affectedOrderFilter.normalized,
-    affectedOrderIdsParam,
-    setAffectedOrderIdsParam,
-  ]);
+  const {
+    ids: affectedOrderIds,
+    normalized: affectedOrderNormalized,
+    clear: clearAffectedOrderIds,
+  } = useExactIdFilterParam();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(
-      `${facilityId ?? ""}:${affectedOrderFilter.normalized ?? ""}`,
+      `${facilityId ?? ""}:${affectedOrderNormalized ?? ""}`,
     );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
@@ -386,7 +374,7 @@ export function OrderList() {
     setSearchQuery("");
     setStatusFilter("");
     setCustomerFilter("");
-    void setAffectedOrderIdsParam(null);
+    void clearAffectedOrderIds();
     setCurrentPage(1);
   };
   const hasActiveFilters =
@@ -517,10 +505,11 @@ export function OrderList() {
       >
         <DataTable.Toolbar>
           {affectedOrderIds.length > 0 && (
-            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
-              {affectedOrderIds.length} affected{" "}
-              {affectedOrderIds.length === 1 ? "order" : "orders"}
-            </span>
+            <AffectedRecordsChip
+                count={affectedOrderIds.length}
+                singular="order"
+                plural="orders"
+              />
           )}
           <DataTable.Search
             placeholder="Search by order code..."
