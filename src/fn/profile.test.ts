@@ -48,7 +48,6 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe("profile actions", () => {
   it("allows all personal actions without an org while refusing an org-scoped action", async () => {
-    mocks.requireOrgContext.mockRejectedValue(new SafeError("Select an organization to continue."));
     expect(await updateProfileNameFn({ name: "Example" })).toMatchObject({ success: true });
     expect(await changePasswordFn(PASSWORD_INPUT)).toMatchObject({ success: true });
     expect(await changeEmailFn({ newEmail: "new@example.test" })).toMatchObject({ success: true });
@@ -107,18 +106,15 @@ describe("profile actions", () => {
     expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: false, error: "This account signs in without a password." });
   });
 
-  it("limits failed attempts per user across organizations and resets after the window", async () => {
+  it("limits failed attempts per user and resets after the window", async () => {
     vi.useFakeTimers();
     mocks.changePassword.mockRejectedValue(new APIError("BAD_REQUEST", { code: "INVALID_PASSWORD" }));
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) await changePasswordFn(PASSWORD_INPUT);
-    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
     expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: false, error: "Too many attempts. Try again in 900s." });
     expect(mocks.changePassword).toHaveBeenCalledTimes(MAX_ATTEMPTS);
     mocks.getUser.mockResolvedValue({ id: "user-2" });
-    mocks.requireOrgContext.mockResolvedValue({ userId: "user-2", organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
     await changePasswordFn(PASSWORD_INPUT);
     expect(mocks.changePassword).toHaveBeenCalledTimes(MAX_ATTEMPTS + 1);
-    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-1", orgRole: "member", isPlatformAdmin: false });
     mocks.getUser.mockResolvedValue({ id: USER_ID });
     vi.advanceTimersByTime(WINDOW_MS);
     await changePasswordFn(PASSWORD_INPUT);
@@ -187,17 +183,14 @@ describe("changeEmailFn", () => {
     expect(JSON.stringify(mocks.loggerError.mock.calls)).not.toContain(input.newEmail);
   });
 
-  it("limits attempts per user across organizations for 15 minutes", async () => {
+  it("limits attempts per user for 15 minutes, then resets", async () => {
     vi.useFakeTimers();
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) await changeEmailFn(input);
-    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
     expect(await changeEmailFn(input)).toEqual({ success: false, error: "Too many attempts. Try again in 900s." });
     expect(mocks.changeEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS);
     mocks.getUser.mockResolvedValue({ id: "user-2" });
-    mocks.requireOrgContext.mockResolvedValue({ userId: "user-2", organizationId: "org-2", orgRole: "member", isPlatformAdmin: false });
     await changeEmailFn(input);
     expect(mocks.changeEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS + 1);
-    mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-1", orgRole: "member", isPlatformAdmin: false });
     mocks.getUser.mockResolvedValue({ id: USER_ID });
     vi.advanceTimersByTime(WINDOW_MS);
     await changeEmailFn(input);

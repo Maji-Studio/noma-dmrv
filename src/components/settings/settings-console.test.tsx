@@ -4,7 +4,7 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer } from "@/lib/settings/panes";
 import { SettingsConsole } from "./settings-console";
 
 const state = vi.hoisted(() => ({
@@ -32,7 +32,7 @@ vi.mock("@/hooks/use-certifier-credentials", () => ({
 }));
 vi.mock("@/components/certification/env-banner", () => ({ EnvBanner: () => <div>Environment banner</div> }));
 
-const base: SettingsViewer = {
+const base: OrganizationSettingsViewer = {
   organizationId: "org-1",
   organizationName: "Dark Earth Carbon",
   isPlatformAdmin: false,
@@ -42,7 +42,7 @@ const base: SettingsViewer = {
   isProduction: false,
 };
 
-const render = (pane: Parameters<typeof SettingsConsole>[0]["pane"], viewer: Partial<SettingsViewer> = {}) =>
+const render = (pane: Parameters<typeof SettingsConsole>[0]["pane"], viewer: Partial<OrganizationSettingsViewer> = {}) =>
   renderToStaticMarkup(
     <SettingsConsole pane={pane} viewer={{ ...base, ...viewer }}>
       <div>Pane body</div>
@@ -71,6 +71,9 @@ describe("SettingsConsole", () => {
     expect(html).not.toContain('href="/settings/connected-apps"');
     expect(html).not.toContain('href="/settings/registry"');
     expect(html).toContain("Profile form");
+    expect(html).toContain("Your name, email and password.");
+    expect(html).not.toContain("every organization you belong to");
+    expect(html).toContain("Other settings appear once an Admin adds you to an organization.");
   });
 
   it("lists the groups in order with the organization name on its group", () => {

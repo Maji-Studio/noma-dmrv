@@ -119,7 +119,7 @@ Registry credentials are owned per organization and managed by its Admins (and b
 Two distinct limiters — a real trip hazard:
 
 1. Better Auth's limiter (`src/lib/auth/better-auth.ts`) is on unless `DISABLE_RATE_LIMIT === "true"` in development/test or in a CI production build on a loopback origin (policy in `src/lib/auth/rate-limit-policy.ts`, entry in [security.md](./security.md); E2E relies on it, see [testing.md](./testing.md)). Production deployments always keep it on. It has tightened custom rules on `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
-2. `withAction` has an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
+2. `withAction` and `withAuthAction` have an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
 
 ## Invitations
 

@@ -97,6 +97,10 @@ function useRegistryKeysSaved(viewer: SettingsViewer): boolean {
   return data?.configured ?? viewer.registryKeysSaved;
 }
 
+// Without an organization only Profile opens; its usual caption names organizations.
+const NO_ORGANIZATION_PROFILE_CAPTION = "Your name, email and password.";
+const NO_ORGANIZATION_HIDDEN_LINE = "Other settings appear once an Admin adds you to an organization.";
+
 export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: SettingsConsoleProps) {
   const router = useRouter();
   const guard = useUnsavedPaneGuard();
@@ -159,7 +163,15 @@ export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: S
 
           <FormDialogContext.Provider value={guard.actions}>
             <div className="flex flex-col gap-24 p-16 sm:p-24">
-              <p className="body-small text-[var(--color-text-secondary)]">{pane.caption}</p>
+              {viewer.organizationId === null ? (
+                <div className="flex flex-col gap-4">
+                  <p className="body-small text-[var(--color-text-secondary)]">{NO_ORGANIZATION_PROFILE_CAPTION}</p>
+                  {/* Q11: settings that do not apply are hidden with one quiet line. */}
+                  <p className="body-caption text-[var(--color-text-tertiary)]">{NO_ORGANIZATION_HIDDEN_LINE}</p>
+                </div>
+              ) : (
+                <p className="body-small text-[var(--color-text-secondary)]">{pane.caption}</p>
+              )}
               {children}
             </div>
           </FormDialogContext.Provider>
