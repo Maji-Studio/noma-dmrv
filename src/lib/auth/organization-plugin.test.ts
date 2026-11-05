@@ -449,5 +449,5 @@ it.each(["change-password", "reset-password"])("%s succeeds when OAuth revocatio
     : { token: "revoke-token", newPassword: NOTICE_NEW_PASSWORD };
   expect((await postAuth(path, body)).status).toBe(200);
   expect(revokeUserOAuthGrants).toHaveBeenCalledExactlyOnceWith("actor");
-  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("connected apps could not be disconnected") }));
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Connected apps could not be disconnected") }));
 });

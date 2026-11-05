@@ -52,14 +52,13 @@ it("password changed: names the account and time, links to reset, no organizatio
   expect(changed.text).toContain(`The password for ${TO} was changed on Oct 22, 2026 at 14:32 UTC.`);
   expect(changed.text).toContain(`If you did not change it, reset your password now.\n${RESET_URL}\n`);
   expect(changed.text).toContain("Your connected apps were disconnected. Connect them again when you need them.");
-  expect(changed.text).toContain("Your active API keys still work. Review and revoke them in Settings, Developers:");
-  expect(changed.text).toContain("Automation. Created Oct 22, 2026.");
-  expect(changed.html).toContain(`href="${APP}/settings/developers"`);
+  expect(changed.text).toContain(`Your API keys still work. Review and revoke them at ${APP}/settings/developers.`);
+  expect(changed.text).toContain("Automation, created Oct 22, 2026.");
   expect(changed.text).toContain(`Sent to ${TO} about your noma account.`);
   expect(changed.html).toContain(`href="${RESET_URL}"`);
   expect(changed.html).toContain(`src="${APP}/email/password-changed.png"`);
   expect(changed.html).not.toContain("Confirm");
-  expect(changed.text).toContain(`Settings, Developers:\n${APP}/settings/developers`);
+  expect(changed.text).toContain("If you made this change, you do not need to do anything.");
 });
 
 it("email change confirm: before to after, 24 hours, current address, button", () => {
@@ -143,8 +142,8 @@ it("escapes crafted addresses in the before and after block", () => {
 it("reports failed disconnection and unavailable keys without claiming success", () => {
   const email = passwordChangedEmail({ to: TO, changedAt: WHEN, resetUrl: RESET_URL, appUrl: APP,
     connectedAppsDisconnected: false, activeApiKeys: null });
-  expect(email.text).toContain("connected apps could not be disconnected");
-  expect(email.text).toContain("The active API key list could not be loaded.");
+  expect(email.text).toContain(`Connected apps could not be disconnected. Disconnect them at ${APP}/settings/connected-apps.`);
+  expect(email.text).toContain(`Your API keys still work. Review and revoke them at ${APP}/settings/developers.`);
   expect(email.text).not.toContain("Your connected apps were disconnected.");
 });
 
@@ -153,5 +152,10 @@ it("escapes API key names and handles an empty active list", () => {
   const crafted = passwordChangedEmail({ ...input, activeApiKeys: [{ name: CRAFTED, createdAt: WHEN }] });
   expect(crafted.html).toContain(CRAFTED_ESCAPED);
   expect(crafted.html).not.toContain("<img src=x");
-  expect(passwordChangedEmail({ ...input, activeApiKeys: [] }).text).toContain("You have no active API keys.");
+  expect(passwordChangedEmail({ ...input, activeApiKeys: [] }).text).not.toContain("API key");
+  const many = Array.from({ length: 12 }, (_, index) => ({ name: `Key ${index + 1}`, createdAt: WHEN }));
+  const capped = passwordChangedEmail({ ...input, activeApiKeys: many }).text;
+  expect(capped).toContain("Key 10, created");
+  expect(capped).not.toContain("Key 11, created");
+  expect(capped).toContain("And 2 more.");
 });
