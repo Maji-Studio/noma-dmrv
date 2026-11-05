@@ -16,6 +16,7 @@ import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
+import { EmissionAllocationSection } from "@/components/emissions/allocation";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
@@ -387,6 +388,7 @@ export function RemovalDetailSheet({
               isEditable={isActionable}
             />
 
+            <EmissionAllocationSection removalId={summary.removalId} />
             <SubmissionHistory
               attempts={summary.submissionAttempts}
               events={summary.recentSyncEvents}

@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { invalidateAfterFeedstockReplan } from "./feedstock-replan-invalidation";
 import { useIntentMutation } from "./use-create-intent-key";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import {
@@ -254,6 +255,7 @@ export function useUpdateStorageLocation(
         // A stock-mode change reshapes the bin's sub-bins, balance and history.
         queryClient.invalidateQueries({ queryKey: outputStockKeys.all }),
       ]);
+      invalidateAfterFeedstockReplan(queryClient);
       // A rename or type change shows in every bin picker's label and options.
       invalidateEntityTypeQueries(queryClient, "storageLocation");
 
