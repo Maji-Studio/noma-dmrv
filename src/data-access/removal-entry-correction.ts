@@ -68,7 +68,7 @@ export async function listNomaSentRemovalsForRemoteEntries(ctx: OrgContext, stat
   // Retired drafts also use superseded. Require a newer remotely sent version,
   // independent of whether that newer entry is included in this statement.
   const newer = alias(certificationSubmissions, "newer_removal_submission");
-  return db.selectDistinct({ isSuperseded: sql<boolean>`${certificationSubmissions.status} = 'superseded' and ${newer.id} is not null`,
+  return db.selectDistinct({ isSuperseded: sql<boolean>`${and(eq(certificationSubmissions.status, "superseded"), isNotNull(newer.id))}`,
     id: certifierRemovals.id, code: certifierRemovals.code,
     ghgStatementId: certifierRemovals.ghgStatementId }).from(certificationSubmissions)
     .leftJoin(newer, and(eq(newer.organizationId, ctx.organizationId),
