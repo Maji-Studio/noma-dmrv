@@ -45,15 +45,25 @@ import {
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
 import { Notice } from "@/components/ui/notice";
+import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 
 const ICON_SIZE = 14;
 const STALE_DETAIL_WARNING =
   "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
+const STALE_DETAIL_READ_ONLY = "Statement details could not be refreshed. Showing the last loaded details.";
+
+/** What the sheet needs of a statement: a list row, or the same fields read by link. */
+export type GhgStatementSheetItem = Pick<GhgStatementListItem, "statement" | "effectiveReportingPeriodEndOn" | "remotePeriodMissing">;
 
 interface GhgStatementDetailSheetProps {
-  item: GhgStatementListItem;
+  item: GhgStatementSheetItem;
   isProduction: boolean;
   canManageReports: boolean;
+  /** Set when the statement's facility is archived or unchecked: no refresh, generate or submit. */
+  readOnly?: SheetReadOnly;
+  /** The archived facility's own timezone, which the working facility list does not carry. */
+  timeZone?: string;
   open: boolean;
   onClose: () => void;
 }
@@ -74,6 +84,8 @@ export function GhgStatementDetailSheet({
   item,
   isProduction,
   canManageReports,
+  readOnly,
+  timeZone: facilityTimeZone,
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
@@ -87,7 +99,9 @@ export function GhgStatementDetailSheet({
         <DetailState
           item={item}
           isProduction={isProduction}
-          canManageReports={canManageReports}
+          canManageReports={canManageReports && !readOnly}
+          readOnly={readOnly}
+          timeZone={facilityTimeZone}
           open={open}
         />
       </SlideOverPanel.Content>
@@ -99,15 +113,22 @@ function DetailState({
   item,
   isProduction,
   canManageReports,
+  readOnly,
+  timeZone: facilityTimeZone,
   open,
 }: {
-  item: GhgStatementListItem;
+  item: GhgStatementSheetItem;
   isProduction: boolean;
   canManageReports: boolean;
+  readOnly?: SheetReadOnly;
+  timeZone?: string;
   open: boolean;
 }) {
   const { statement } = item;
-  const { timeZone } = useFacilityClock(statement.facilityId);
+  // Refresh, generate and submit all need an admin: members, like a read-only
+  // sheet, read where the statement stands and no instructions.
+  const factsOnly = !!readOnly || !canManageReports;
+  const { timeZone } = useFacilityClock(statement.facilityId, { timeZone: facilityTimeZone });
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
   const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
@@ -134,10 +155,12 @@ function DetailState({
   if (!hasGhgStatementDetailData(query)) {
     return (
       <>
-        <SlideOverPanel.Body>
+        <SlideOverPanel.Body className="flex flex-col gap-24">
+          {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
           <p className="body-small text-[var(--clr-red)]" role="alert">
-            Statement details could not be loaded. Refresh the page and try
-            again.
+            {readOnly
+              ? "Statement details could not be loaded."
+              : "Statement details could not be loaded. Refresh the page and try again."}
           </p>
         </SlideOverPanel.Body>
         <CloseFooter />
@@ -167,6 +190,7 @@ function DetailState({
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
+    readOnly: factsOnly,
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error
@@ -179,11 +203,14 @@ function DetailState({
           : { status: "loading" },
   });
   const registryActionsAvailable = canUseGhgStatementRegistryActions(query);
-  const canGenerate = workflowState.canGenerate && registryActionsAvailable;
-  const canSubmit = workflowState.canSubmit && registryActionsAvailable;
-  const generationUnavailableReason = registryActionsAvailable
-    ? workflowState.generationUnavailableReason
-    : STALE_DETAIL_WARNING;
+  const canGenerate = workflowState.canGenerate && registryActionsAvailable && !readOnly;
+  const canSubmit = workflowState.canSubmit && registryActionsAvailable && !readOnly;
+  // The notice at the top says why; the ladder repeats nothing.
+  const generationUnavailableReason = factsOnly
+    ? null
+    : registryActionsAvailable
+      ? workflowState.generationUnavailableReason
+      : STALE_DETAIL_WARNING;
   const { mode } = workflowState;
   const isResubmit = mode === "resubmit";
 
@@ -203,10 +230,11 @@ function DetailState({
   return (
     <>
       <SlideOverPanel.Body className="flex flex-col gap-24">
+        {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
         <EnvBanner isProduction={isProduction} variant="inline" />
 
         {!registryActionsAvailable && (
-          <Notice tone="warning">{STALE_DETAIL_WARNING}</Notice>
+          <Notice tone="warning">{factsOnly ? STALE_DETAIL_READ_ONLY : STALE_DETAIL_WARNING}</Notice>
         )}
 
         <DetailSection title="Statement status" divider={false}>
@@ -265,6 +293,7 @@ function DetailState({
               canSubmit ? () => setSubmitOpen(true) : undefined
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
+            readOnly={factsOnly}
           />
         </DetailSection>
 
@@ -392,7 +421,7 @@ function DetailState({
       />
 
       <SlideOverPanel.Footer>
-        {statementSubmission && (
+        {statementSubmission && !readOnly && canManageReports && (
           <Button
             variant="primary"
             onClick={handleRefresh}

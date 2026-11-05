@@ -21,11 +21,14 @@ export function RemovalMissingRunsNotice({
   batches,
   facilityId,
   canManage,
+  readOnly = false,
 }: {
   batches: RemovalPreflightSummary["missingProductionRuns"];
   facilityId: string;
   /** Admin: others are told who can add the run. */
   canManage: boolean;
+  /** Archived facility: nobody can add the run, so no one is pointed at Edit. */
+  readOnly?: boolean;
 }) {
   return (
     <>
@@ -42,7 +45,8 @@ export function RemovalMissingRunsNotice({
             tone="warning"
             data-removal-missing-runs={batch.creditBatchId}
             title={`${one ? "1 completed run is" : `${batch.runs.length} completed runs are`} not in ${batch.creditBatchCode} yet`}
-            action={
+            // Links only open the records, so a read-only sheet keeps them (references always link).
+            action={(
               <span className="flex flex-wrap gap-x-16">
                 {addable.length > 0 && (
                   <Link href={batchHref} className={NOTICE_ACTION_LINK_CLASS}>
@@ -55,12 +59,12 @@ export function RemovalMissingRunsNotice({
                   </Link>
                 )}
               </span>
-            }
+            )}
           >
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
             {`. ${missingRunsCountedSentence(batch.runs.length)}`}
-            {refused.length > 0 && ` ${refusedRunsSentence(refused, addable.length === 0)}`}
-            {!canManage && addable.length > 0 && ` ${refused.length === 0
+            {refused.length > 0 && !readOnly && ` ${refusedRunsSentence(refused, addable.length === 0)}`}
+            {!canManage && !readOnly && addable.length > 0 && ` ${refused.length === 0
               ? missingRunsMemberSentence(addable.length)
               : missingRunsMemberNamedSentence(addable.map((run) => run.code))}`}
             {canManage && sameDay && ` ${sameDay}`}

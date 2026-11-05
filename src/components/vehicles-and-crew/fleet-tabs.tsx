@@ -1,12 +1,12 @@
 /**
  * The Drivers | Operators tab row of the Crew page, styled like the credit batch
- * page tabs. There is no shared tab primitive in the repo, so this follows the
- * WAI-ARIA tabs pattern itself: tablist/tab roles, one tab stop (roving
- * tabindex), Left/Right/Home/End move and select.
+ * page tabs. Tablist/tab roles here; the one tab stop (roving tabindex) and
+ * Left/Right/Home/End keys come from `useTablistKeys`, shared with the credit
+ * batch page tabs.
  */
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useTablistKeys } from "@/components/ui/tablist-keys";
 import { cn } from "@/lib/utils";
 import { CREW_KINDS, FLEET_KIND_COPY, type CrewKind } from "./fleet-kinds";
 
@@ -22,30 +22,8 @@ interface FleetTabsProps {
   onChange: (kind: CrewKind) => void;
 }
 
-function nextTab(current: CrewKind, key: string): CrewKind | null {
-  const index = CREW_KINDS.indexOf(current);
-  switch (key) {
-    case "ArrowRight":
-      return CREW_KINDS[(index + 1) % CREW_KINDS.length]!;
-    case "ArrowLeft":
-      return CREW_KINDS[(index - 1 + CREW_KINDS.length) % CREW_KINDS.length]!;
-    case "Home":
-      return CREW_KINDS[0]!;
-    case "End":
-      return CREW_KINDS[CREW_KINDS.length - 1]!;
-    default:
-      return null;
-  }
-}
-
 export function FleetTabs({ tab, counts, onChange }: FleetTabsProps) {
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, kind: CrewKind) => {
-    const target = nextTab(kind, event.key);
-    if (!target) return;
-    event.preventDefault();
-    onChange(target);
-    document.getElementById(fleetTabId(target))?.focus();
-  };
+  const tabProps = useTablistKeys({ keys: CREW_KINDS, selected: tab, onSelect: onChange, tabId: fleetTabId });
 
   return (
     <div
@@ -64,9 +42,8 @@ export function FleetTabs({ tab, counts, onChange }: FleetTabsProps) {
             type="button"
             aria-selected={selected}
             aria-controls={FLEET_TAB_PANEL_ID}
-            tabIndex={selected ? 0 : -1}
             onClick={() => onChange(kind)}
-            onKeyDown={(event) => onKeyDown(event, kind)}
+            {...tabProps(kind)}
             className={cn(
               "-mb-px inline-flex h-44 shrink-0 items-center gap-8 border-b-2 px-16 body-medium first:pl-0",
               FOCUS_RING,
