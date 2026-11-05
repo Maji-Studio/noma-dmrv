@@ -114,6 +114,11 @@ because staging holds test data, including the one-off
 pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
 ```
 
+`env:run` passes only names in `.env.tpl`, so for staging/prod it does not
+provide `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` or `ISOMETRIC_CLIENT_SECRET`.
+Admin bootstrap and Isometric credential setup for staging/prod run through the
+`migrate.yml` workflow, which loads them from the matching item.
+
 Non-obvious semantics only:
 
 - **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and
@@ -320,6 +325,10 @@ Notes:
 - Vercel Production/Preview secrets sync as sensitive; `NEXT_PUBLIC_*` as
   non-sensitive. Local `vercel build --target=preview` cannot reconstruct
   sensitive values — use local env injection for local builds.
+- `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` live
+  in the 1Password items for workflows only, outside `.env.tpl`, so they are not
+  synced to Vercel. Sync never deletes, so older Vercel copies stay until removed
+  by hand.
 - **Optional vars may be missing from an item.** Both sync scripts skip template
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in

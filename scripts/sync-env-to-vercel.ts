@@ -34,6 +34,7 @@ import {
   filterTemplateToItem,
   itemEnvironment,
   itemNameForEnvironment,
+  readWorkflowOpReferences,
   templateForEnvironment,
   warnSkippedOptionalVars,
 } from "./env-tpl-utils";
@@ -304,18 +305,20 @@ export function parseInjectedEnv(output: string): Map<string, string> {
 
 /**
  * Warn about variables that exist in the 1Password item but are NOT referenced
- * by .env.tpl — they will silently NOT be synced. Surfacing them at sync time
+ * by .env.tpl or GitHub workflows. Surfacing them at sync time
  * lets the operator notice a newly-added secret and add it to the template
  * before continuing (or Ctrl+C and readjust). Field names only; never values.
  * Best-effort: a lookup failure warns but does not abort the sync.
  */
-function warnUntrackedOnePasswordVars(
+export function warnUntrackedOnePasswordVars(
   opEnv: string,
   syncedNames: Set<string>
 ): void {
   let itemFields: Set<string>;
+  let workflowFields: Map<string, Set<string>>;
   try {
     itemFields = fetchItemFieldNames(opEnv);
+    workflowFields = readWorkflowOpReferences().get(itemEnvironment(opEnv)) ?? new Map();
   } catch (error) {
     console.warn(
       `\n  (Could not check for untracked 1Password vars: ${
@@ -325,13 +328,20 @@ function warnUntrackedOnePasswordVars(
     return;
   }
 
-  const untracked = [...itemFields]
+  const outsideTemplate = [...itemFields]
     .filter((name) => !syncedNames.has(name))
     .sort();
+  const workflowOnly = outsideTemplate.filter((name) => workflowFields.has(name));
+  const untracked = outsideTemplate.filter((name) => !workflowFields.has(name));
+
+  if (workflowOnly.length > 0) {
+    console.log("\n  Read only by GitHub workflows (keep out of .env.tpl):");
+    for (const name of workflowOnly) console.log(`        ${name}`);
+  }
 
   if (untracked.length === 0) {
     console.log(
-      `\n  .env.tpl covers every field in "${itemNameForEnvironment(opEnv)}" — nothing untracked.`
+      `\n  .env.tpl and GitHub workflows cover every field in "${itemNameForEnvironment(opEnv)}"; nothing untracked.`
     );
     return;
   }
