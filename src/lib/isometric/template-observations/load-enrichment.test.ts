@@ -8,12 +8,49 @@ import { loadTemplateEnrichment } from "./load-enrichment";
 import { enrichmentProblems, isEnrichmentComplete } from "./enrichment";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
 import { normalizeTemplateDefinition } from "./normalize";
-import { canonicalUnit, unitsConvertible } from "./units";
+import { canonicalUnit, monitoredInputUnit, unitsConvertible } from "./units";
 import type { GhgEntryTemplate } from "./types";
+import { timeBasedEmissionsFixture } from "./test-support";
 
 const template = templateFixture as GhgEntryTemplate;
 const blueprints = fixture.blueprints as IsometricComponentBlueprint[];
 const datapoints = fixture.datapoints as Record<string, Datapoint>;
+
+it.each([
+  ["time", "second", "s"],
+  ["time", "hour", "h"],
+  ["time", "d", "day"],
+  ["time", "minute", "min"],
+  ["time_emission_factor", "kgCO2e / hour", "kgCO2e / h"],
+  ["time_emission_factor", "kgCO2e / day", "kgCO2e / day"],
+] as const)("canonicalizes %s unit %s to %s", (kind, unit, expected) => {
+  expect(canonicalUnit(kind, unit)).toBe(expected);
+});
+
+it("fully recognizes a time-based line with a fixed hourly rate and monitored time", () => {
+  const { template, enrichment } = timeBasedEmissionsFixture();
+  const definition = normalizeTemplateDefinition(template);
+  expect(enrichmentProblems(definition, enrichment)).toEqual([]);
+  expect(isEnrichmentComplete(definition, enrichment)).toBe(true);
+});
+
+it("selects hours idempotently only for monitored time", () => {
+  expect(monitoredInputUnit("time", "second")).toBe("hour");
+  expect(monitoredInputUnit("time", "hour")).toBe("hour");
+  expect(monitoredInputUnit("energy", "kWh")).toBe("kWh");
+  expect(monitoredInputUnit("time_emission_factor", "kgCO2e / day")).toBe("kgCO2e / day");
+});
+
+it.each(["kgCO2e / hour", "kgCO2e / day"])("loads operating hours and preserves the fixed rate in %s", async (unit) => {
+  const { template, blueprint } = timeBasedEmissionsFixture();
+  const get = vi.fn(async () => ({ quantity: { magnitude: 2, unit } }));
+  const enrichment = await loadTemplateEnrichment({ get } as unknown as IsometricClient, template, [blueprint]);
+  expect(enrichment["time-line"]).toEqual({
+    emissions_per_unit_time: { unit, fixedValue: 2, deprecated: null },
+    time: { unit: "hour", deprecated: null },
+  });
+  expect(enrichmentProblems(normalizeTemplateDefinition(template), enrichment)).toEqual([]);
+});
 function client(failId?: string) {
   const get = vi.fn(async (path: string) => {
     const id = path.split("/").at(-1)!;

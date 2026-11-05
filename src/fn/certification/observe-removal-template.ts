@@ -4,9 +4,18 @@ import { canonicalJson } from "@/lib/canonical-json";
 import { getLatestTemplateObservation, observeTemplate } from "@/data-access/removal-template-observations";
 import { isEnrichmentComplete, normalizeTemplateDefinition, type TemplateDefinition, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
+import { monitoredInputUnit } from "@/lib/isometric/template-observations/units";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
 export const TEMPLATE_ENRICHMENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** A cache read before a monitored unit changed (time moved from seconds to hours) is re-read, not reused. */
+function usesMonitoredInputUnits(definition: TemplateDefinition, enrichment: TemplateEnrichment): boolean {
+  return definition.groups.every((group) => group.components.every((component) => component.inputs.every((input) => {
+    const stored = input.type === "monitored" ? enrichment[component.id]?.[input.key] : undefined;
+    return !stored || "status" in stored || monitoredInputUnit(input.quantityKind, stored.unit) === stored.unit;
+  })));
+}
 
 export async function enrichmentForObservation(input: {
   client: IsometricClient;
@@ -20,7 +29,8 @@ export async function enrichmentForObservation(input: {
   const { previous, definition } = input;
   const age = previous ? Date.now() - previous.enrichedAt.getTime() : Infinity;
   const reuse = !input.refreshEnrichment && previous && previous.externalProjectId === input.externalProjectId && age >= 0 && age < TEMPLATE_ENRICHMENT_TTL_MS &&
-    canonicalJson(previous.definition) === canonicalJson(definition) && isEnrichmentComplete(definition, previous.enrichment);
+    canonicalJson(previous.definition) === canonicalJson(definition) && isEnrichmentComplete(definition, previous.enrichment) &&
+    usesMonitoredInputUnits(definition, previous.enrichment);
   const enrichment = reuse ? previous.enrichment : await loadTemplateEnrichment(input.client, input.template, await input.loadBlueprints());
   return { enrichment, reused: !!reuse };
 }

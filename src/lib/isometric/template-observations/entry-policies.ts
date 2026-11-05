@@ -23,6 +23,8 @@ for (const inputs of Object.values(SEMANTIC_BINDING_CATALOG)) {
 // Staff distance is cataloged as project-scope today, without a datapoint
 // contract. Entries add support without changing the existing submit path.
 ADDITIVE_INPUTS.set("distance", new Set(["distance"]));
+// Time-based emissions take operating hours, which add up across entries.
+ADDITIVE_INPUTS.set("time", new Set(["time"]));
 
 /** `none` is always available, including storage and unsupported shapes. */
 export function allowedEntryPolicies(component: TemplateComponent): EntryPolicy[] {
