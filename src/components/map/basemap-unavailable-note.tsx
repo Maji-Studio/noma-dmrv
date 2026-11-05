@@ -6,7 +6,7 @@
  */
 
 const NOTE_CLASS =
-  "absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]";
+  "absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 body-caption text-[var(--clr-dark-purple-60)]";
 
 export function BasemapUnavailableNote({ testId }: { testId: string }) {
   return (
