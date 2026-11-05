@@ -1,4 +1,3 @@
-export const CARRIED_EMISSION_ENTRY_CANNOT_REPLACE = "This entry was carried into a later Removal, so it cannot be entered again.";
 export const RETURNED_BY_ISOMETRIC_LABEL = "Returned by Isometric";
 export const EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW = "Keep the entry date within this Removal's period.";
 export const ENTRY_HAS_NO_REMOVAL = "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.";

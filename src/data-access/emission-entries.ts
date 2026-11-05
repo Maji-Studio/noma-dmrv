@@ -1,7 +1,6 @@
-import { CARRIED_EMISSION_ENTRY_CANNOT_REPLACE } from "@/lib/certification/emission-entry-messages";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
-import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection } from "./emission-entry-corrections";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -310,9 +309,6 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
   const data = replaceEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     if (entry.kind !== "value") throw new SafeError("Only value entries can be entered again.");
-    const holdingRemovalId = entryHoldingRemovalId(entry);
-    if (holdingRemovalId && isCarriedEmissionCorrection(ctx, tx, entry.creditBatchId, holdingRemovalId))
-      throw new SafeError(CARRIED_EMISSION_ENTRY_CANNOT_REPLACE);
     const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
     if (!previous) throw new SafeError("The entry's template observation was not found.");
     if (emissionEntryCounts(previous, context.observation, entry.componentId).counts)
@@ -323,6 +319,8 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       contentRevision: nextVersion(emissionEntries.contentRevision),
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
     await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...deleted, values: entry.values });
+    // The sent original names the receiving Removal, including for carried entries.
+    // Replacing an unsent replacement preserves that same original and hold.
     const replacement = await writeEmissionEntryUnderLocks(ctx, tx, {
       creditBatchId: entry.creditBatchId, componentId: entry.componentId,
       occurredOn: data.occurredOn, note: data.note, values: data.values,

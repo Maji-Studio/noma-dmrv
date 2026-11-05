@@ -188,7 +188,7 @@ it("refuses an unsent held replacement after the window closes", async () => {
   expect(insert).not.toHaveBeenCalled();
 });
 
-it.each(["sent", "held"])("refuses Enter again for a %s carried entry before writing", async holding => {
+it.each(["sent", "held"])("holds Enter again for a %s carried entry under its receiver", async holding => {
   if (holding === "sent") locked.sentByRemovalId = "receiver";
   else {
     locked.replacesEntryId = "sent-original";
@@ -196,12 +196,13 @@ it.each(["sent", "held"])("refuses Enter again for a %s carried entry before wri
   }
   mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
   mocks.carried.mockReturnValue(true);
-  await expect(replaceEmissionEntry(ctx, input))
-    .rejects.toThrow("This entry was carried into a later Removal, so it cannot be entered again.");
-  expect(mocks.carried).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver");
-  expect(update).not.toHaveBeenCalled();
-  expect(insert).not.toHaveBeenCalled();
-  expect(mocks.activity).not.toHaveBeenCalled();
+  await replaceEmissionEntry(ctx, input);
+  expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({
+    replacesEntryId: holding === "sent" ? id : "sent-original",
+  }));
+  expect(saved.sentByRemovalId).toBeNull();
+  expect(mocks.assertWindow).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver", batch.endDate);
+  expect(mocks.activity.mock.calls.map(call => call[2])).toEqual(["deleted", "created"]);
 });
 
 it.each([null, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {

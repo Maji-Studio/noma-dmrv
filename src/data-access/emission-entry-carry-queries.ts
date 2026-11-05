@@ -63,14 +63,19 @@ export async function listCarryCandidates(ctx: OrgContext, facilityId: string, e
 export async function listOwnedCarryEntries(ctx: OrgContext, facilityId: string, executor: CarryExecutor, scope: CarryReadScope) {
   requireOrgScope(ctx);
   if (!scope.entryIds?.length && !scope.ownedBatchIds?.length && !scope.ownedRemovalId) return [];
+  const original = alias(emissionEntries, "held_carry_original");
+  // Match loadEmissionEntryHolds: tombstoned sent originals retain unsent replacements.
+  const held = and(isNull(emissionEntries.sentByRemovalId), sql`${original.sentByRemovalId} is not null`);
   return executor.select({ entry: emissionEntries, batch: creditBatches, timezone: facilities.timezone }).from(emissionEntries)
     .innerJoin(creditBatches, and(eq(creditBatches.id, emissionEntries.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(facilities, and(eq(facilities.id, creditBatches.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(original, and(eq(original.id, emissionEntries.replacesEntryId), eq(original.organizationId, ctx.organizationId)))
     .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(emissionEntries.deletedAt),
-      or(sql`${emissionEntries.sentByRemovalId} is not null`, sql`${emissionEntries.sendReservedBySubmissionId} is not null`),
+      or(sql`${emissionEntries.sentByRemovalId} is not null`, sql`${emissionEntries.sendReservedBySubmissionId} is not null`, held),
       or(scope.entryIds?.length ? inArray(emissionEntries.id, scope.entryIds) : undefined,
         scope.ownedBatchIds?.length ? inArray(emissionEntries.creditBatchId, scope.ownedBatchIds) : undefined,
-        scope.ownedRemovalId ? or(eq(emissionEntries.sentByRemovalId, scope.ownedRemovalId), sql`exists (select 1 from ${certificationSubmissions}
+        scope.ownedRemovalId ? or(eq(emissionEntries.sentByRemovalId, scope.ownedRemovalId),
+          and(held, eq(original.sentByRemovalId, scope.ownedRemovalId)), sql`exists (select 1 from ${certificationSubmissions}
           where ${carryRemovalSubmission(ctx, scope.ownedRemovalId)} and ${certificationSubmissions.id} = ${emissionEntries.sendReservedBySubmissionId})`) : undefined)))
     .orderBy(emissionEntries.id);
 }
