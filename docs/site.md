@@ -83,7 +83,6 @@ the site project's Vercel env vars when deployed.
 | Variable | Effect |
 | --- | --- |
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
-| `PUBLIC_MAPTILER_KEY` | Basemap for the Home hero map (the app's domain-locked MapTiler key; the site domain must be allowed on it). Unset plots the sites on a dotted field. |
 
 ## Vercel Projects and Domains
 

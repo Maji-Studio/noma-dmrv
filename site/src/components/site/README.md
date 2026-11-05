@@ -51,8 +51,7 @@ Example data and the trace graph engine: `src/data/` (`core.js` draws the produc
 layers). Walkthrough form copy: `src/content/copy.js`. Local-only images (the Mafinga photo, gitignored until Dark
 Earth Carbon approves publishing it): `public/images/`, resolved by `src/lib/assets.js`.
 Home hero map: `home/HomeHero` + `home/hero-map/` (MapLibre, a port of the app's traceability Map tab). The basemap
-needs `PUBLIC_MAPTILER_KEY` (the app's domain-locked MapTiler key; `.env.local` locally, a Vercel env var on the site
-project, with noma.maji.studio allowed on the key). Without it the sites plot on a dotted field.
+is OpenFreeMap Positron and needs no key.
 Records: `RecordCard` (+ `record-card.js`, its browser twin, and `record-card.css`): a station drawing, label and
 code, one line, what the record holds. Used by `TraceStage`, the product trace's hover card and the hero map's
 record card (text only there); it lays itself out by its own width. Station drawings: `contours/ContourArt` (browser: `contours/index.js`),

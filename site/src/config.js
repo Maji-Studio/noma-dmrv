@@ -4,6 +4,12 @@
 export const APP_URL = import.meta.env.PUBLIC_APP_URL || "";
 export const LOGIN_URL = APP_URL ? `${APP_URL}/login` : "";
 export const SHOW_LOGIN = Boolean(APP_URL);
+// Basemap shared by the Home hero map and the Journey map: OpenFreeMap Positron (no key). If the
+// style does not load within BASEMAP_STYLE_TIMEOUT_MS (or errors before it parses) the maps fall
+// back to BASEMAP_BLANK_STYLE over a dotted field.
+export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+export const BASEMAP_BLANK_STYLE = { version: 8, sources: {}, layers: [] };
+export const BASEMAP_STYLE_TIMEOUT_MS = 8000;
 export const GITHUB_URL = "https://github.com/Maji-Studio/noma-dmrv";
 
 export const BRAND = { name: "noma", by: "by MAJI" };

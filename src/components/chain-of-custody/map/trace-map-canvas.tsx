@@ -16,14 +16,14 @@ import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { useEffect, useRef, useState } from "react";
 import {
+  BASEMAP_STYLE_URL,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
-  maptilerStyleUrl,
   SAT_RASTER_SATURATION,
   SAT_TILE_ATTRIBUTION,
   SAT_TILE_URL,
 } from "@/config/geo";
-import { applyBrandRecolor, MapControls } from "@/components/map";
+import { applyBrandRecolor, armBasemapFallback, BasemapUnavailableNote, MapControls } from "@/components/map";
 import type { ChainOfCustodyGeoData } from "@/data-access/chain-of-custody-geo";
 import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import { formatDistanceKm } from "@/lib/format-utils";
@@ -43,13 +43,11 @@ import { createSiteMarkerElement } from "./viewer-elements";
 import { chipAnchor, legLineCoordinates } from "./viewer-utils";
 import { litKmRange, type DrawnLeg, type MapLighting } from "./trace-model";
 
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const SAT_TILE_SIZE = 256;
 const SOURCE_ID = "noma-own-tm-legs";
 const BASE_LAYER = "noma-own-tm-base";
 const FALLBACK_LAYER = "noma-own-tm-fallback";
 const ANTS_LAYER = "noma-own-tm-ants";
-const BLANK_STYLE: maplibregl.StyleSpecification = { version: 8, sources: {}, layers: [] };
 /** Resting legs are a quiet wash; lit legs read as the figure; dimmed ones ghost. */
 const REST_OPACITY = 0.45;
 const LIT_OPACITY = 0.95;
@@ -267,6 +265,7 @@ export default function TraceMapCanvas({
   const [readyMap, setReadyMap] = useState<maplibregl.Map | null>(null);
   const [satOn, setSatOn] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [basemapFailed, setBasemapFailed] = useState(false);
 
   useEffect(() => {
     latest.current = { lighting, padding, onMarkerClick, onBackgroundClick, nearestMarkerTaps };
@@ -280,7 +279,7 @@ export default function TraceMapCanvas({
     try {
       map = new maplibregl.Map({
         container,
-        style: MAPTILER_KEY ? maptilerStyleUrl(MAPTILER_KEY) : BLANK_STYLE,
+        style: BASEMAP_STYLE_URL,
         center: DEFAULT_MAP_CENTER,
         zoom: DEFAULT_MAP_ZOOM,
         attributionControl: false,
@@ -293,8 +292,13 @@ export default function TraceMapCanvas({
     }
     mapRef.current = map;
     container.dataset.mapState = "loading";
-    map.once("load", () => {
-      if (MAPTILER_KEY) applyBrandRecolor(map);
+    // Overlay setup runs once: on "load" of the real style, or after the
+    // blank fallback style is in place when the basemap cannot load.
+    let initialised = false;
+    const init = () => {
+      if (initialised) return;
+      initialised = true;
+      applyBrandRecolor(map);
       map.addSource(SAT_SOURCE_ID, { type: "raster", tiles: [SAT_TILE_URL], tileSize: SAT_TILE_SIZE, attribution: SAT_TILE_ATTRIBUTION });
       map.addLayer({ id: SAT_LAYER_ID, type: "raster", source: SAT_SOURCE_ID, layout: { visibility: "none" }, paint: { "raster-saturation": SAT_RASTER_SATURATION } });
       const color = ["match", ["get", "kind"], "inbound", token("--clr-orange", "#FF8359"), token("--clr-pink", "#A6216E")] as maplibregl.ExpressionSpecification;
@@ -305,6 +309,12 @@ export default function TraceMapCanvas({
       // Marching ants only on lit legs: direction where it matters.
       map.addLayer({ id: ANTS_LAYER, type: "line", source: SOURCE_ID, filter: ["all", ["==", ["get", "routed"], true], ["==", ["get", "state"], "lit"]], paint: { "line-color": token("--clr-dark-purple", "#0F021A"), "line-width": DASH_LINE_WIDTH, "line-dasharray": ANTS_DASH_SEQUENCE[0] } });
       setReadyMap(map);
+    };
+    map.once("load", init);
+    const disarmFallback = armBasemapFallback(map, () => {
+      // Deferred so the effect never sets state synchronously (React Compiler).
+      queueMicrotask(() => setBasemapFailed(true));
+      map.once("style.load", init);
     });
     map.on("render", () => {
       if (!map.getLayer(BASE_LAYER) || map.isMoving()) return;
@@ -340,6 +350,7 @@ export default function TraceMapCanvas({
     map.on("zoom", () => syncChipVisibility(map, chipsRef.current));
     map.on("zoomend", () => declutterLabels(map, markersRef.current));
     return () => {
+      disarmFallback();
       clearInterval(ants);
       resize.disconnect();
       markersRef.current = [];
@@ -473,17 +484,10 @@ export default function TraceMapCanvas({
     <div className={`cvm-map relative h-full w-full${satOn ? " cvm-sat" : ""}`}>
       <div
         ref={containerRef}
-        className={`h-full w-full ${MAPTILER_KEY ? "bg-[var(--color-background-white)]" : "cvm-field"}`}
+        className={`h-full w-full ${basemapFailed ? "cvm-field" : "bg-[var(--color-background-white)]"}`}
         data-testid="carbon-viewer-map"
       />
-      {!MAPTILER_KEY && !satOn ? (
-        <div
-          className="absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
-          data-testid="carbon-viewer-no-basemap-note"
-        >
-          Basemap unavailable. Ask an Admin to configure the map service, or switch to SAT.
-        </div>
-      ) : null}
+      {basemapFailed && !satOn ? <BasemapUnavailableNote testId="carbon-viewer-no-basemap-note" /> : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
