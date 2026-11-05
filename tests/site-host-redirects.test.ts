@@ -62,7 +62,19 @@ function sitePagePaths(directory: string, prefix = ""): string[] {
   });
 }
 
-const segments = [...new Set(appSegments(resolve(ROOT, "src/app")))]
+function topLevelDirectories(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+}
+
+// The app's public folders are app paths too (old emails embed /email/*.png).
+// A folder the site also serves, such as /brand, stays on the site.
+const sitePublicDirectories = topLevelDirectories(resolve(ROOT, "site/public"));
+const appPublicSegments = topLevelDirectories(resolve(ROOT, "public"))
+  .filter((directory) => !sitePublicDirectories.includes(directory));
+
+const segments = [...new Set([...appSegments(resolve(ROOT, "src/app")), ...appPublicSegments])]
   .filter((segment) => !EXCLUDED_APP_SEGMENTS.includes(segment))
   .sort();
 

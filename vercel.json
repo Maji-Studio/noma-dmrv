@@ -4,13 +4,13 @@
   "ignoreCommand": "sh scripts/vercel-ignore-build.sh",
   "redirects": [
     {
-      "source": "/:segment(\\.well-known|accept-invitation|api|applications|auth|biochar-products|credit-batches|crew|customers|dashboard|deliveries|emissions|facilities|feedstock-intake|feedstock-types|forgot-password|formulations|ghg-statements|lab-samples|login|oauth|orders|platform|production-runs|reactors|removals|reset-password|schema|set-password|settings|storage-bins|styleguide|suppliers|traceability|unauthorized|vehicles|verify-email)/:path*",
+      "source": "/:segment(\\.well-known|accept-invitation|api|applications|auth|biochar-products|credit-batches|crew|customers|dashboard|deliveries|email|emissions|facilities|feedstock-intake|feedstock-types|forgot-password|formulations|ghg-statements|lab-samples|login|oauth|orders|platform|production-runs|reactors|removals|reset-password|schema|set-password|settings|storage-bins|styleguide|suppliers|traceability|unauthorized|vehicles|verify-email)/:path*",
       "has": [{ "type": "host", "value": "^noma\\.maji\\.studio$" }],
       "destination": "https://app.noma.maji.studio/:segment/:path*",
       "statusCode": 308
     },
     {
-      "source": "/:segment(\\.well-known|accept-invitation|api|applications|auth|biochar-products|credit-batches|crew|customers|dashboard|deliveries|emissions|facilities|feedstock-intake|feedstock-types|forgot-password|formulations|ghg-statements|lab-samples|login|oauth|orders|platform|production-runs|reactors|removals|reset-password|schema|set-password|settings|storage-bins|styleguide|suppliers|traceability|unauthorized|vehicles|verify-email)/:path*",
+      "source": "/:segment(\\.well-known|accept-invitation|api|applications|auth|biochar-products|credit-batches|crew|customers|dashboard|deliveries|email|emissions|facilities|feedstock-intake|feedstock-types|forgot-password|formulations|ghg-statements|lab-samples|login|oauth|orders|platform|production-runs|reactors|removals|reset-password|schema|set-password|settings|storage-bins|styleguide|suppliers|traceability|unauthorized|vehicles|verify-email)/:path*",
       "has": [{ "type": "host", "value": "^staging\\.noma\\.maji\\.studio$" }],
       "destination": "https://staging.app.noma.maji.studio/:segment/:path*",
       "statusCode": 308
