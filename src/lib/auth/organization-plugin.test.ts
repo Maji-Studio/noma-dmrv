@@ -87,7 +87,7 @@ const SESSION_LIFETIME_MS = 60_000;
 const MILLISECONDS_PER_SECOND = 1_000;
 beforeEach(() => {
   vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
-  vi.mocked(revokeUserOAuthGrants).mockReset().mockResolvedValue(undefined);
+  vi.mocked(revokeUserOAuthGrants).mockReset().mockResolvedValue(1);
   databaseFailure.enabled = false;
   vi.mocked(replacePendingInvitation).mockClear();
   vi.mocked(revokeDeletedMemberOAuthGrants).mockClear();

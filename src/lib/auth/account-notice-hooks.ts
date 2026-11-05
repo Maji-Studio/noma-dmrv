@@ -50,10 +50,10 @@ export async function deliverPasswordNotice(ctx: MiddlewareContext): Promise<voi
 
 /** Runs only after a successful credential commit; failures cannot undo it. */
 async function finishPasswordChange(recipient: { userId: string; email: string }, sendNotice = true) {
-  let connectedAppsDisconnected = false;
+  // null: there was nothing to disconnect, so the notice says nothing about apps.
+  let connectedAppsDisconnected: boolean | null = false;
   try {
-    await revokeUserOAuthGrants(recipient.userId);
-    connectedAppsDisconnected = true;
+    connectedAppsDisconnected = (await revokeUserOAuthGrants(recipient.userId)) > 0 ? true : null;
   } catch {
     logger.warn({ userId: recipient.userId }, "connected apps were not disconnected");
   }
