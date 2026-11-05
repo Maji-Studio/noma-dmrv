@@ -258,16 +258,22 @@ describe("runEnvCommand", () => {
     }
     expect(childEnv.ENV_RUN_TEST_INHERITED).toBe("mock-unrelated-value");
     if (environment === "local") expect(childEnv.NODE_ENV).toBe("mock-parent-value");
-    for (const name of ["ADMIN_EMAIL", "ISOMETRIC_ENVIRONMENT", "ISOMETRIC_CLIENT_SECRET", "ISOMETRIC_ACCESS_TOKEN"]) {
+    for (const name of ["ADMIN_EMAIL", "ISOMETRIC_CLIENT_SECRET", "ISOMETRIC_ACCESS_TOKEN"]) {
       expect(templateDuringRun).not.toMatch(new RegExp(`^${name}=`, "m"));
+    }
+    if (environment === "local") {
+      expect(templateDuringRun).not.toMatch(/^ISOMETRIC_ENVIRONMENT=/m);
+    } else {
+      expect(templateDuringRun).toMatch(/^ISOMETRIC_ENVIRONMENT=/m);
     }
   });
 
   it.each(["staging", "prod"] as const)("warns before %s runs about local fallback names without values", async (environment) => {
     const fixtureValue = "env-run-fixture-value-must-stay-private";
-    const fallbackNames = ["ADMIN_EMAIL", "ADMIN_PASSWORD", "GEO_PROVIDER", "ISOMETRIC_ENVIRONMENT"];
+    const fallbackNames = ["ADMIN_EMAIL", "ADMIN_PASSWORD", "GEO_PROVIDER"];
     fs.writeFileSync(join(fixtureDirectory, ".env.local"), [
       ...fallbackNames.map((name) => `${name}=${fixtureValue}`),
+      `ISOMETRIC_ENVIRONMENT=${fixtureValue}`,
       `DATABASE_URL=${fixtureValue}`,
       `NODE_ENV=${fixtureValue}`,
       `ADMIN_EMAIL=${fixtureValue}`,
@@ -286,7 +292,7 @@ describe("runEnvCommand", () => {
     expect(warnings.mock.invocationCallOrder.at(-1)).toBeLessThan(vi.mocked(spawn).mock.invocationCallOrder[0]);
     const output = JSON.stringify([...warnings.mock.calls, ...vi.mocked(console.error).mock.calls]);
     expect(output).not.toContain(fixtureValue);
-    for (const name of ["DATABASE_URL", "NODE_ENV", "COMMENTED_OUT", "INDENTED_COMMENT", "INVALID-NAME"]) {
+    for (const name of ["DATABASE_URL", "ISOMETRIC_ENVIRONMENT", "NODE_ENV", "COMMENTED_OUT", "INDENTED_COMMENT", "INVALID-NAME"]) {
       expect(warnings.mock.calls.at(-1)![0]).not.toContain(name);
     }
   });
