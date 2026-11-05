@@ -11,6 +11,8 @@ const APPLIED_DRY_T = 1;
 const APPLIED_WET_T = 1.2;
 const ROUNDING_CONVERSION_KG = 0.4;
 const ROUNDING_DOWNSTREAM_KG = -0.3;
+const ROUNDING_OFFSET_KG = 0.04;
+const TOLERANCE_OVERFLOW_KG = 0.01;
 const BLEND_KG = 2_000;
 const INGREDIENT_KG = 500;
 const BLENDED_DRY_KG = 1_200;
@@ -302,6 +304,32 @@ describe("buildWaterfall", () => {
     expect(model.items.map((item) => item.key)).toEqual(["feedstock", "water_driven_off", "conversion_loss", "in_storage", "applied"]);
     expect(model.warnings).not.toEqual([]);
     expect(model.balanced).toBe(false);
+  });
+
+  it.each([0, RUN_DRY_OUT_KG])("checks the raw gap when rounded steps close with %s kg of water", (waterKg) => {
+    const dryInKg = RUN_DRY_IN_KG + ROUNDING_OFFSET_KG;
+    const gapKg = EXIT_EPSILON_KG + TOLERANCE_OVERFLOW_KG;
+    const entry = lineage([dryInKg + waterKg], {
+      id: "app-1", code: "AP-26-001", dryT: APPLIED_DRY_T, wetT: APPLIED_WET_T,
+    });
+    entry.productionRun = { ...entry.productionRun!, feedstockMassDryKg: dryInKg };
+    entry.biocharProduct = { ...entry.biocharProduct!, massKg: RUN_DRY_OUT_KG + gapKg };
+    const sankey = buildBatchSankey([entry]);
+    const model = buildWaterfall(sankey, [entry]);
+    const steps = model.items.filter((item) => item.kind === "step");
+
+    expect(gapKg).toBeGreaterThan(EXIT_EPSILON_KG);
+    expect(Math.abs(model.startKg - model.removedKg - model.endKg)).toBeLessThan(EXIT_EPSILON_KG);
+    expect(steps.map((item) => item.massKg)).toEqual([
+      ...(waterKg > 0 ? [waterKg] : []),
+      RUN_DRY_IN_KG - RUN_DRY_OUT_KG,
+      RUN_DRY_OUT_KG + EXIT_EPSILON_KG - tonnesToKg(APPLIED_DRY_T),
+    ]);
+    expect(model.balanced).toBe(false);
+    for (const step of steps) {
+      expect(step.top).toBe(step.massKg);
+      expect(step.bottom).toBe(0);
+    }
   });
 
   it("includes displayed water alongside a displayed dry residual", () => {
