@@ -31,5 +31,5 @@ export function useLinkedGhgStatement(
   const linkedState = lookupEnabled && linkedRecord.ready ? linkedStatement.data : undefined;
   const readOnly = linkedRecordReadOnly(linkedRecord, linkedState?.statement, "GHG Statement");
   const timeZone = linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined;
-  return { linkedRecord, linkedFacilityReady: linkedRecord.ready, linkedState, readOnly, timeZone };
+  return { linkedFacilityReady: linkedRecord.ready, linkedState, readOnly, timeZone };
 }

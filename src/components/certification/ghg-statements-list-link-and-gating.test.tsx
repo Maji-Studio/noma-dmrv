@@ -15,6 +15,8 @@ const ARCHIVED_FACILITY = "facility-archived";
 const mocks = vi.hoisted(() => ({
   query: {} as Record<string, string | null>,
   summaryLoaded: true,
+  summaryFailed: false,
+  toastError: vi.fn(),
   workingFacility: "facility-working" as string | null,
   readOnly: null as null | { reason: "archived"; facilityId: string; facilityName: string; timezone: string },
 }));
@@ -28,14 +30,14 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: mocks.workingFacility, facilities: [{ id: WORKING_FACILITY }] }),
 }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toastError, success: vi.fn(), warning: vi.fn() }) }));
 vi.mock("@/hooks/use-linked-record-facility", () => ({
   useLinkedRecordFacility: (record: unknown) => ({ ready: !!record, readOnly: record ? mocks.readOnly : null }),
 }));
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
-    data: mocks.summaryLoaded ? { mapping: {}, linkedFacilityCount: 1, viewerCanManage: true, isProduction: false } : undefined,
-    isLoading: false, isError: false,
+    data: mocks.summaryLoaded && !mocks.summaryFailed ? { mapping: {}, linkedFacilityCount: 1, viewerCanManage: true, isProduction: false } : undefined,
+    isLoading: false, isError: mocks.summaryFailed,
   }),
   useGhgStatementsForFacility: () => ({ data: [], isLoading: false, error: null, isFetching: false, refetch: vi.fn() }),
   useGhgStatementState: () => ({
@@ -59,6 +61,8 @@ beforeEach(() => {
   mocks.readOnly = null;
   mocks.workingFacility = WORKING_FACILITY;
   mocks.summaryLoaded = true;
+  mocks.summaryFailed = false;
+  mocks.toastError.mockClear();
 });
 afterEach(cleanup);
 
@@ -100,6 +104,16 @@ describe("GHG Statements link with no active facility", () => {
     mocks.summaryLoaded = true;
     rerender(<GhgStatementsList canManage />);
     expect(screen.getByRole("dialog", { name: "GHG Statement" })).toBeTruthy();
+  });
+
+  it("closes the link and says so when the environment read fails", () => {
+    mocks.readOnly = { reason: "archived", facilityId: ARCHIVED_FACILITY, facilityName: "Old Plant", timezone: "UTC" };
+    mocks.summaryFailed = true;
+    render(<GhgStatementsList canManage />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.toastError).toHaveBeenCalledWith("Linked GHG Statement could not be opened");
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(mocks.query.statement).toBeNull();
   });
 
   it("opens no sheet for a statement whose facility is not archived", () => {
