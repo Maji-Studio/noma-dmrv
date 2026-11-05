@@ -5,15 +5,15 @@ import { SafeError } from "@/lib/errors";
 import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
 import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 
-/** Must run inside withGhgVerifierSubmissionLock. Lineage/evidence writers share
- * that artifact fence, so the checked facts remain stable through provider I/O.
- * Eligibility for editing is deliberately not an input to this comparison.
- */
 function removalSubject(codes: readonly string[]): string {
   const unique = [...new Set(codes)].sort();
   return unique.length === 1 ? `Removal ${unique[0]}` : `Removals ${unique.join(", ")}`;
 }
 
+/** Must run inside withGhgVerifierSubmissionLock. Lineage/evidence writers share
+ * that artifact fence, so the checked facts remain stable through provider I/O.
+ * Eligibility for editing is deliberately not an input to this comparison.
+ */
 export async function assertStatementRemovalsCurrent(ctx: OrgContext, statementId: string, remoteEntryIds?: readonly string[], compareMembers = true): Promise<void> {
   if (remoteEntryIds) {
     const mapped = await listNomaSentRemovalsForRemoteEntries(ctx, statementId, remoteEntryIds);
