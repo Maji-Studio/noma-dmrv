@@ -654,8 +654,8 @@ fresh returned-statement facts under the shared
 certification lineage locks. Unknown or stale statuses and in-flight lineage
 submissions keep the correction window closed. The window also controls date
 edits and sent-zero replacement; dates must stay within the Removal's entry window.
-If an application-date correction moves a sent value entry from a member credit
-batch outside that window, resubmission is blocked with `sentEntryOutsideWindow`.
+If an application-date correction moves a sent value entry outside the
+Removal's period (after its end, for a carried entry), resubmission is blocked with `sentEntryOutsideWindow`.
 The operator changes the entry date to fit the period or the application date back;
 the entry keeps its sent claim and is not silently moved or included outside the window.
 An entry carried into a later Removal is corrected under that receiving Removal's

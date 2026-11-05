@@ -3,10 +3,10 @@
 ## 2026-11-05: Block a returned Removal from dropping a sent entry (#1575)
 
 An application-date correction can shrink a Removal's entry window. A sent value
-entry from a member credit batch outside the current window now produces
+entry outside the current window (after its end, for a carried entry) now produces
 `sentEntryOutsideWindow` in the shared contribution compiler. Review and submit
 surface the blocker with an Emissions destination.
-Sent ownership is unchanged. Carried entries, recorded zeros, entries inside the
+Sent ownership is unchanged. Recorded zeros, entries inside the
 window and entries sent by other Removals keep their existing behavior. No
 registry contract or schema change.
 

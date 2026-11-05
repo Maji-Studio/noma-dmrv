@@ -2,7 +2,7 @@ import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
 import type { CarriedEntryNote } from "./emission-entry-carry-copy";
 import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import { z } from "zod";
-import { ENTRY_HAS_NO_REMOVAL, sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
+import { ENTRY_HAS_NO_REMOVAL, formatEmissionEntryMessageLabel, sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { getMetadataValue, SUBMISSION_METADATA_KEYS, SUBMISSION_EXTERNAL_MUTATIONS } from "./submission-metadata";
@@ -136,10 +136,13 @@ export function deriveRemovalEntryContributions(args: {
     const contract = stored && effectiveContract(stored);
     if (contract?.scope !== "operating" || contract.entryPolicy === "none") continue;
     // Sent claims cannot move to another Removal or enter carry. Do not let a
-    // correction silently drop one when its own batch's application dates move.
-    if (!carried && entry.kind === "value" && entry.sentByRemovalId === args.removalId &&
-      (!args.window || !inWindow(entry, args.window))) {
-      result.blockers.push({ code: "sentEntryOutsideWindow", message: sentEntryOutsideRemovalPeriod(entry.occurredOn),
+    // correction silently drop one when the Removal's application dates move.
+    // A carried entry only needs to stay on or before the period end.
+    if (entry.kind === "value" && entry.sentByRemovalId === args.removalId &&
+      (!args.window || (carried ? entry.occurredOn > args.window.end : !inWindow(entry, args.window)))) {
+      result.blockers.push({ code: "sentEntryOutsideWindow", message: sentEntryOutsideRemovalPeriod(formatEmissionEntryMessageLabel({
+          componentDisplayName: args.monitoredInputs.find((input) => input.componentId === entry.componentId)?.componentDisplayName,
+          occurredOn: entry.occurredOn, creditBatchCode: args.creditBatchCodes?.[entry.creditBatchId] })),
         fixTarget: "emissions", creditBatchId: entry.creditBatchId,
         lineRef: { componentId: entry.componentId, displayName: entry.componentId },
       });

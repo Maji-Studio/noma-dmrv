@@ -181,7 +181,7 @@ describe("sent entries after a Removal window shrinks", () => {
     expect(result.blockers).toEqual([{
       code: "sentEntryOutsideWindow", fixTarget: "emissions", creditBatchId: "b1",
       lineRef: { componentId: "c1", displayName: "c1" },
-      message: sentEntryOutsideRemovalPeriod("2026-03-10"),
+      message: sentEntryOutsideRemovalPeriod("the emissions entry of 2026-03-10"),
     }]);
     expect(result.entrySet).toEqual([]);
     expect(removalEntryOwner(sent, [second])).toBe("r1");
@@ -202,10 +202,27 @@ describe("sent entries after a Removal window shrinks", () => {
     }
   });
 
-  it("does not change zeros, carried entries, tombstones or other Removals' entries", () => {
+  it("names the component and credit batch when they are known", () => {
+    const result = derive([entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1" })], {
+      creditBatchCodes: { b1: "CB-26-001" },
+      monitoredInputs: [{ componentId: "c1", inputKey: "energy", unit: "kWh", componentDisplayName: "Electricity" }],
+    });
+    expect(result.blockers[0]?.message).toBe(
+      "This Removal sent the Electricity entry of 2026-03-10 (CB-26-001), which is now outside the Removal period. Change the entry date to fit the period, or change the application date back.");
+  });
+
+  it("blocks a carried sent entry only when it falls after the period end", () => {
+    const late = entry({ creditBatchId: "earlier-batch", occurredOn: "2026-03-10", sentByRemovalId: "r1" });
+    expect(derive([late]).blockers.map((blocker) => blocker.code)).toEqual(["sentEntryOutsideWindow"]);
+    expect(derive([late]).selectedEntryIds).toEqual([]);
+    const early = entry({ creditBatchId: "earlier-batch", occurredOn: "2025-12-01", sentByRemovalId: "r1" });
+    expect(derive([early]).selectedEntryIds).toEqual([early.id]);
+    expect(derive([early]).blockers).toEqual([]);
+  });
+
+  it("does not change zeros, tombstones or other Removals' entries", () => {
     for (const overrides of [
       { kind: "zero" as const, confirmedForRemovalId: "r1" },
-      { creditBatchId: "earlier-batch" },
       { deletedAt: new Date("2026-03-01") },
       { sentByRemovalId: "r2" },
     ]) {
@@ -213,8 +230,5 @@ describe("sent entries after a Removal window shrinks", () => {
       expect(result.blockers).toEqual([]);
       expect(result.selectedEntryIds).toEqual([]);
     }
-    const carried = entry({ creditBatchId: "earlier-batch", occurredOn: "2025-12-01", sentByRemovalId: "r1" });
-    expect(derive([carried]).selectedEntryIds).toEqual([carried.id]);
-    expect(derive([carried]).blockers).toEqual([]);
   });
 });

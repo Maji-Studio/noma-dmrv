@@ -2,7 +2,6 @@
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 import { updateApplicationInTransaction } from "@/data-access/application-writes";
 import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
-import { sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -181,7 +180,7 @@ it.each([
       applicationDate: new Date("2026-06-15T00:00:00Z"),
     }));
     await expect(submitRemoval({ orgCtx: org, removalId: f.removalId })).rejects.toThrow(
-      sentEntryOutsideRemovalPeriod("2026-06-16"),
+      /This Removal sent the .* of 2026-06-16.*, which is now outside the Removal period\./,
     );
     expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
     expect(await getEmissionEntry(org, added.id)).toMatchObject({ sentByRemovalId: f.removalId, sendReservedBySubmissionId: null });
