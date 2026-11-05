@@ -376,6 +376,7 @@ export function RemovalDetailSheet({
               entries={carriedEntries}
               facilityId={facilityId}
               sent={workflowStatus.kind === "submitted"}
+              readOnly={!!readOnly}
             />
             <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} readOnly={!!readOnly} />
 

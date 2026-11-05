@@ -28,7 +28,7 @@ export type CarriedEntry = CarriedEntryRow;
 const ICON_SIZE = 14;
 const PANEL_TITLE = "Emissions from other credit batches";
 const PANEL_CAPTION = "Included automatically. Each stays part of its own credit batch, and Isometric gets a note saying so.";
-const SHEET_STATE = { draft: "Included automatically. Sent when this Removal is submitted.", sent: "Sent with this Removal." } as const;
+const SHEET_STATE = { draft: "Included automatically. Sent when this Removal is submitted.", sent: "Sent with this Removal.", draftReadOnly: "Included automatically. Not sent yet." } as const;
 const REVISION_STATE = "Goes out when this Removal is resubmitted.";
 const REVISION_STATE_READ_ONLY = "Not part of the sent Removal.";
 const FALLBACK_NAME = "Emissions entry";
@@ -120,10 +120,10 @@ export function CarriedEntriesPanel({ entries, facilityId }: { entries: readonly
 }
 
 /** The Removal sheet: its own section with the same facts and one state line. */
-export function CarriedEntriesSection({ entries, facilityId, sent }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; sent: boolean }) {
+export function CarriedEntriesSection({ entries, facilityId, sent, readOnly = false }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; sent: boolean; readOnly?: boolean }) {
   if (!entries?.length) return null;
   return (
-    <EntriesSection title={PANEL_TITLE} state={sent ? SHEET_STATE.sent : SHEET_STATE.draft}>
+    <EntriesSection title={PANEL_TITLE} state={sent ? SHEET_STATE.sent : readOnly ? SHEET_STATE.draftReadOnly : SHEET_STATE.draft}>
       {entries.map((entry) => (
         <EntryItem key={entry.entryId} entry={entry} facilityId={facilityId} lead="From" recordedAfter />
       ))}

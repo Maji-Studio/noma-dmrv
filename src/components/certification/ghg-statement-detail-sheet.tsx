@@ -125,6 +125,9 @@ function DetailState({
   open: boolean;
 }) {
   const { statement } = item;
+  // Refresh, generate and submit all need an admin: members, like a read-only
+  // sheet, read where the statement stands and no instructions.
+  const factsOnly = !!readOnly || !canManageReports;
   const { timeZone } = useFacilityClock(statement.facilityId, { timeZone: facilityTimeZone });
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
@@ -187,7 +190,7 @@ function DetailState({
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
-    readOnly: !!readOnly,
+    readOnly: factsOnly,
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error
@@ -203,7 +206,7 @@ function DetailState({
   const canGenerate = workflowState.canGenerate && registryActionsAvailable && !readOnly;
   const canSubmit = workflowState.canSubmit && registryActionsAvailable && !readOnly;
   // The notice at the top says why; the ladder repeats nothing.
-  const generationUnavailableReason = readOnly
+  const generationUnavailableReason = factsOnly
     ? null
     : registryActionsAvailable
       ? workflowState.generationUnavailableReason
@@ -231,7 +234,7 @@ function DetailState({
         <EnvBanner isProduction={isProduction} variant="inline" />
 
         {!registryActionsAvailable && (
-          <Notice tone="warning">{readOnly ? STALE_DETAIL_READ_ONLY : STALE_DETAIL_WARNING}</Notice>
+          <Notice tone="warning">{factsOnly ? STALE_DETAIL_READ_ONLY : STALE_DETAIL_WARNING}</Notice>
         )}
 
         <DetailSection title="Statement status" divider={false}>
@@ -290,7 +293,7 @@ function DetailState({
               canSubmit ? () => setSubmitOpen(true) : undefined
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
-            readOnly={!!readOnly}
+            readOnly={factsOnly}
           />
         </DetailSection>
 

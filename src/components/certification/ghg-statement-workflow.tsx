@@ -122,7 +122,7 @@ export function GhgStatementWorkflow({
   const approvedStep: WorkflowStepModel = reportsUnavailable
     ? {
         status: "skipped",
-        detail: "Load the reports before reviewing or approving one.",
+        detail: readOnly ? "Reports could not be loaded." : "Load the reports before reviewing or approving one.",
       }
     : !generated
     ? {

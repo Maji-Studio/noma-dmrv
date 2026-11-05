@@ -130,6 +130,18 @@ describe("GhgStatementDetailSheet", () => {
     expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
   });
 
+  it.each(STATES)("gives a member no instruction when %s", (_name, setUp) => {
+    setUp();
+    render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+  });
+
+  it("gives a member no Refresh instruction when details are stale", () => {
+    mocks.remote = null; mocks.stateError = new Error("stale");
+    render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toMatch(/Use Refresh|Refresh and try again/);
+  });
+
   it("uses the archived facility's own timezone", () => {
     renderSheet(READ_ONLY);
     expect(mocks.clockOverride).toEqual({ timeZone: "Africa/Dar_es_Salaam" });
