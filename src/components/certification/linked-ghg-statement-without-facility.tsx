@@ -26,7 +26,11 @@ export function LinkedGhgStatementWithoutFacility({ canManage }: { canManage: bo
   const closedStatementId = useRef<string | null>(null);
   useEffect(() => {
     // Without the environment the sheet never opens: close the link once, as the hook does for a dead one.
-    if (!statementId || closedStatementId.current === statementId) return;
+    if (!statementId) {
+      closedStatementId.current = null;
+      return;
+    }
+    if (closedStatementId.current === statementId) return;
     if (summary.isError && !summary.data) {
       closedStatementId.current = statementId;
       toast.error("Linked GHG Statement could not be opened");

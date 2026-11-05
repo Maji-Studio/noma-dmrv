@@ -116,6 +116,19 @@ describe("GHG Statements link with no active facility", () => {
     expect(mocks.query.statement).toBeNull();
   });
 
+  it("closes the same link again when it is opened a second time and fails again", () => {
+    mocks.readOnly = { reason: "archived", facilityId: ARCHIVED_FACILITY, facilityName: "Old Plant", timezone: "UTC" };
+    mocks.summaryFailed = true;
+    const { rerender } = render(<GhgStatementsList canManage />);
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(mocks.query.statement).toBeNull();
+    rerender(<GhgStatementsList canManage />);
+    mocks.query.statement = STATEMENT_ID;
+    rerender(<GhgStatementsList canManage />);
+    expect(mocks.toastError).toHaveBeenCalledTimes(2);
+    expect(mocks.query.statement).toBeNull();
+  });
+
   it("opens no sheet for a statement whose facility is not archived", () => {
     render(<GhgStatementsList canManage />);
     expect(screen.getByText("Select a facility")).toBeTruthy();
