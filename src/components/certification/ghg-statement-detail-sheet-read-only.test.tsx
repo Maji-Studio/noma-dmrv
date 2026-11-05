@@ -69,6 +69,15 @@ function renderSheet(readOnly?: SheetReadOnly) {
 }
 
 const INSTRUCTION_WORDS = /\b(resubmit|submit|refresh|retry|reload|generate|create|edit)\b|submit again|try again|when you submit|Use Refresh/i;
+/** Only a failed reports read keeps a Try again button (it just reads again); no other text instructs. */
+function expectNoInstruction(stateName: string) {
+  if (stateName === "reports failed to load") {
+    expect(screen.getAllByRole("button", { name: TRY_AGAIN_LABEL })).toHaveLength(1);
+    expect(document.body.textContent?.replace(TRY_AGAIN_LABEL, "")).not.toMatch(INSTRUCTION_WORDS);
+    return;
+  }
+  expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+}
 const STATES: [string, () => void][] = [
   ["failed verification", () => {}],
   ["pending changes", () => { mocks.remote = { status: "DRAFT", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 }; }],
@@ -108,11 +117,10 @@ describe("GhgStatementDetailSheet", () => {
     expect(text).not.toContain("when you submit");
   });
 
-  it.each(STATES)("gives no instruction when read only and %s", (_name, setUp) => {
+  it.each(STATES)("gives no instruction when read only and %s", (name, setUp) => {
     setUp();
     renderSheet(READ_ONLY);
-    // The failed reports read keeps its Try again button, which only reads again.
-    expect(document.body.textContent?.replace(TRY_AGAIN_LABEL, "")).not.toMatch(INSTRUCTION_WORDS);
+    expectNoInstruction(name);
   });
 
   it("gives no instruction when read only and the statement could not be loaded", () => {
@@ -133,11 +141,10 @@ describe("GhgStatementDetailSheet", () => {
     expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
   });
 
-  it.each(STATES)("gives a member no instruction when %s", (_name, setUp) => {
+  it.each(STATES)("gives a member no instruction when %s", (name, setUp) => {
     setUp();
     render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
-    // A failed reports read keeps its Try again button for a member (tested below); no other text instructs.
-    expect(document.body.textContent?.replace(TRY_AGAIN_LABEL, "")).not.toMatch(INSTRUCTION_WORDS);
+    expectNoInstruction(name);
   });
 
   it("offers a member Try again when the reports fail, which only reads them again", () => {

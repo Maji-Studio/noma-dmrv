@@ -19,7 +19,7 @@ function isDefiniteRollback(error: unknown): boolean {
 function outcomeUnknown(cause: unknown): DomainError {
   return new DomainError(
     "outcome_unknown",
-    "The connection failed while saving, so it is not known whether the change was saved. Try again with the same idempotency key.",
+    "The connection failed while saving, so it is not known whether the change was saved. Retry with the same idempotency key.",
     { retryable: true, cause },
   );
 }

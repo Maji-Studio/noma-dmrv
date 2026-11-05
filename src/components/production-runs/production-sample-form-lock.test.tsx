@@ -84,6 +84,6 @@ describe("ProductionSampleForm certification lock", () => {
 
     expect(screen.queryByText(RECORD_FILES_LOCKED_MESSAGE)).toBeNull();
     expect(screen.getByTestId("uploader")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Try again for all attachments" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try all again" })).toBeTruthy();
   });
 });
