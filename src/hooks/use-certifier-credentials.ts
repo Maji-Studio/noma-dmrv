@@ -10,7 +10,7 @@ import { unwrap } from "@/hooks/types";
 
 const certifierCredentialKeys = {
   all: ["certifier-credentials"] as const,
-  organization: (organizationId: string) =>
+  organization: (organizationId: string | null) =>
     [...certifierCredentialKeys.all, organizationId] as const,
 };
 
@@ -24,15 +24,15 @@ const certifierCredentialKeys = {
  * unaffected.
  */
 export function useOrgCertifierCredentialsStatus(
-  organizationId: string,
+  organizationId: string | null,
   enabled = true,
 ) {
   return useQuery({
     queryKey: certifierCredentialKeys.organization(organizationId),
-    queryFn: async () =>
-      unwrap(
-        await getOrgCertifierCredentialsStatusFn({ organizationId }),
-      ),
+    queryFn: async () => {
+      if (!organizationId) throw new Error("An organization is required.");
+      return unwrap(await getOrgCertifierCredentialsStatusFn({ organizationId }));
+    },
     enabled: enabled && !!organizationId,
     staleTime: 30000,
   });

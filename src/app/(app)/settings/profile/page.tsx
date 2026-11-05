@@ -12,7 +12,7 @@ export default async function ProfileSettingsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { error } = await searchParams;
-  const [{ viewer }, user] = await Promise.all([loadSettingsViewer(), requireAuth()]);
+  const [{ viewer }, user] = await Promise.all([loadSettingsViewer("profile"), requireAuth()]);
   return (
     <SettingsConsole pane="profile" viewer={viewer}>
       <ProfileSettingsPane name={user.name ?? ""} email={user.email} linkError={typeof error === "string" ? error : undefined} />

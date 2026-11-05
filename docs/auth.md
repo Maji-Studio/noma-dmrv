@@ -82,6 +82,13 @@ and multi-role inputs are rejected.
 
 ## Server actions
 
+`withAuthAction` in `src/fn/with-action.ts` is the user-owned Profile seam:
+it resolves `getUser()`, throws `SafeError` when signed out, and passes only
+`userId`. It shares error formatting and per-user throttling with `withAction`.
+Profile mutations still use Better Auth with the caller's session headers,
+including email freshness and current-password checks. The Profile settings
+loader explicitly allows a missing organization; other panes keep their org guard.
+
 `withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Nearly all exported server actions end in `Fn` (e.g. `createFacilityFn`); `src/fn/organizations.ts` uses the `Action` suffix.
 
 ```ts
@@ -112,7 +119,7 @@ Registry credentials are owned per organization and managed by its Admins (and b
 Two distinct limiters — a real trip hazard:
 
 1. Better Auth's limiter (`src/lib/auth/better-auth.ts`) is on unless `DISABLE_RATE_LIMIT === "true"` in development/test or in a CI production build on a loopback origin (policy in `src/lib/auth/rate-limit-policy.ts`, entry in [security.md](./security.md); E2E relies on it, see [testing.md](./testing.md)). Production deployments always keep it on. It has tightened custom rules on `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
-2. `withAction` has an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
+2. `withAction` and `withAuthAction` have an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
 
 ## Invitations
 

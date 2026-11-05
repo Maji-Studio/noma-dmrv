@@ -161,6 +161,8 @@ export const SETTINGS_PANES: readonly SettingsPaneMeta[] = [
 
 /** What decides which panes a viewer sees. */
 export interface SettingsPaneAccess {
+  /** null explicitly denotes a signed-in viewer without an organization. */
+  organizationId: string | null;
   isPlatformAdmin: boolean;
   /** A live Admin membership. Platform status grants no override. */
   canManageApiKeys: boolean;
@@ -168,7 +170,7 @@ export interface SettingsPaneAccess {
 }
 
 /** Who is looking at the console, resolved on the server for every settings route. */
-export interface SettingsViewer extends SettingsPaneAccess {
+export interface OrganizationSettingsViewer extends SettingsPaneAccess {
   organizationId: string;
   organizationName: string;
   /** Admin in the organization, or a Platform Admin. */
@@ -178,6 +180,18 @@ export interface SettingsViewer extends SettingsPaneAccess {
   /** Which Isometric environment registry writes land in. */
   isProduction: boolean;
 }
+
+/** No invented organization or management privileges for a personal profile. */
+export interface NoOrganizationSettingsViewer extends SettingsPaneAccess {
+  organizationId: null;
+  organizationName: null;
+  canManage: false;
+  canManageApiKeys: false;
+  registryKeysSaved: false;
+  isProduction: false;
+}
+
+export type SettingsViewer = OrganizationSettingsViewer | NoOrganizationSettingsViewer;
 
 export function settingsPane(key: SettingsPaneKey): SettingsPaneMeta {
   const pane = SETTINGS_PANES.find((candidate) => candidate.key === key);
@@ -189,7 +203,8 @@ export function settingsPane(key: SettingsPaneKey): SettingsPaneMeta {
 export function settingsPaneHiddenReason(
   pane: SettingsPaneMeta,
   access: SettingsPaneAccess,
-): "audience" | "registry-keys" | null {
+): "audience" | "registry-keys" | "no-organization" | null {
+  if (access.organizationId === null && pane.key !== "profile") return "no-organization";
   if (pane.audience === "api-key-owners" && !(access.canManageApiKeys || access.isPlatformAdmin)) {
     return "audience";
   }
