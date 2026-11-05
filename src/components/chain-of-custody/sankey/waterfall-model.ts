@@ -334,13 +334,8 @@ export function buildWaterfall(
         ROW_WORDS.water_driven_off));
     rawLevel -= rawWaterKg ?? 0;
   }
-  const rawExitKg: Record<SankeyExitKey, number> = {
-    conversion_loss: dryFeedstockKg - column("productionRuns"),
-    unallocated_output: column("productionRuns") - column("biocharLots"),
-    in_storage: column("biocharLots") - column("applied"),
-  };
   for (const exit of sankey.exits) {
-    rawLevel -= rawExitKg[exit.key];
+    rawLevel -= exit.rawKg;
     const stage = STAGE_OF_COLUMN[exit.fromColumn] ?? "productionRuns";
     if (exit.key === "conversion_loss") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
