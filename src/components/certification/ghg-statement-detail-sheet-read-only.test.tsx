@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   remote: { status: "FAILED_VERIFICATION", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 } as Record<string, unknown> | null,
   reports: [] as { id: string; version: number; lifecycle: string; reviewUrl: string }[],
   reportsError: null as Error | null,
+  refetchReports: vi.fn(),
   stateError: null as Error | null,
   stateData: true,
 }));
@@ -40,7 +41,7 @@ vi.mock("@/hooks/use-certification", () => ({
       recentSyncEvents: [],
     },
   }),
-  useGhgStatementReports: () => ({ data: mocks.reports, error: mocks.reportsError, isFetching: false, isLoading: false, refetch: vi.fn() }),
+  useGhgStatementReports: () => ({ data: mocks.reports, error: mocks.reportsError, isFetching: false, isLoading: false, refetch: mocks.refetchReports }),
   useGhgStatementBreakdown: () => ({ data: { status: "available", message: "" }, isLoading: false, error: null }),
   useRefreshGhgStatementStatus: () => ({ isPending: false, mutate: vi.fn() }),
 }));
@@ -134,6 +135,13 @@ describe("GhgStatementDetailSheet", () => {
     setUp();
     render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
     expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+  });
+
+  it("offers a member Retry when the reports fail, which only reads them again", () => {
+    mocks.reportsError = new Error("reports");
+    render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
+    screen.getByRole("button", { name: "Retry" }).click();
+    expect(mocks.refetchReports).toHaveBeenCalledOnce();
   });
 
   it("gives a member no Refresh instruction when details are stale", () => {
