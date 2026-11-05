@@ -261,9 +261,9 @@ test.describe("Deferred create attachments", () => {
 
     // Network recovers → retry succeeds and the failed list disappears.
     await page.unroute("**/*");
-    await dialog.locator('button:has-text("Try all again")').click();
+    await dialog.getByRole("button", { name: "Try again for all attachments" }).click();
     await expect(
-      dialog.getByRole("button", { name: "Try all again" }),
+      dialog.getByRole("button", { name: "Try again for all attachments" }),
     ).toHaveCount(0, { timeout: 20000 });
 
     // The document is now live on the entity in the edit panel.

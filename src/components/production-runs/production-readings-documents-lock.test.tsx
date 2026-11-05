@@ -113,7 +113,7 @@ describe("ProductionReadingsDocuments certification lock", () => {
   it("offers retries for failed queued uploads while unlocked", () => {
     render(<ProductionReadingsDocuments productionRunId="run-1" deferredAttachments={failedAttachments()} />);
 
-    expect(screen.getByRole("button", { name: "Try all again" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again for all attachments" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 

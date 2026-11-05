@@ -41,7 +41,7 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
   const parsed = new URL(uploadUrl);
   if (parsed.protocol !== "https:") {
     throw new SafeError(
-      "The registry returned an unsafe upload address. Try the submission again or contact support.",
+      "The registry returned an unsafe upload address. Submit the Removal again or contact support.",
     );
   }
   const allowlist = resolveHostAllowlist(
@@ -50,7 +50,7 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
   );
   if (!hostAllowed(parsed.hostname, allowlist)) {
     throw new SafeError(
-      `The registry returned an unsupported upload destination, "${parsed.hostname}". Try the submission again or contact support.`,
+      `The registry returned an unsupported upload destination, "${parsed.hostname}". Submit the Removal again or contact support.`,
     );
   }
 }

@@ -108,7 +108,7 @@ export class EvidenceLedgerRetirementError extends SafeError {
 
   constructor(kind: string, cause: unknown, generationCause?: unknown) {
     super(
-      "Old certification evidence could not be replaced. Try the submission again.",
+      "Old certification evidence could not be replaced. Submit the Removal again.",
     );
     this.name = "EvidenceLedgerRetirementError";
     this.ledgerKind = kind;

@@ -879,7 +879,7 @@ describe("Biochar Application evidence links", () => {
 
     await expect(ensure([sourceIntent()])).rejects.toMatchObject({
       name: "SafeError",
-      message: "Application APP-001: Isometric could not confirm a corrected evidence set. Try the Removal submission again later.",
+      message: "Application APP-001: Isometric could not confirm a corrected evidence set. Submit the Removal again later.",
     });
     expect(mocks.registration).toMatchObject({
       sourceReadbackStatus: "mismatch", correctionStatus: "review_required", driftReason: "source_set_mismatch",

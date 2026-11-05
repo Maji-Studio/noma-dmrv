@@ -72,9 +72,8 @@ describe("read-only sheet sections", () => {
     const deliveryRead = { isPending: false, error: new Error("boom"), isFetching: false, refetch };
     const sections = applicationSheetSections(APPLICATION, { delivery: undefined, deliveryRead, lock: LOCK, durabilityOption: "1000_year", readOnly: true });
     const field = sections[0].fields.find((f) => f.label === "Delivery source");
-    expect(field?.valuePresent).toBe(false);
-    expect(field?.value).toBe("Could not load");
-    // The field names the failure in its value; the notice states it once.
+    expect(field).toBeUndefined();
+    // The row is hidden; the notice states the failure once.
     render(<>{sections[0].content}</>);
     expect(screen.getByRole("status").textContent).toContain("The delivery source could not be loaded.");
     expect(screen.getAllByText(/could not be loaded/i)).toHaveLength(1);
