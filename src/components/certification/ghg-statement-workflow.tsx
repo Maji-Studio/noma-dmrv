@@ -122,7 +122,8 @@ export function GhgStatementWorkflow({
   const approvedStep: WorkflowStepModel = reportsUnavailable
     ? {
         status: "skipped",
-        detail: readOnly ? "Reports could not be loaded." : "Load the reports before reviewing or approving one.",
+        // Read only: the notice below already says the reports could not be loaded.
+        detail: readOnly ? undefined : "Load the reports before reviewing or approving one.",
       }
     : !generated
     ? {
@@ -204,7 +205,8 @@ export function GhgStatementWorkflow({
       {reportsQuery.error && (
         <Notice
           tone="warning"
-          action={readOnly ? undefined : (
+          // Retry only reads the reports again, so a read-only or member sheet keeps it.
+          action={(
             <Button
               size="small"
               variant="default"

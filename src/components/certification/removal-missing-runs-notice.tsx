@@ -45,7 +45,8 @@ export function RemovalMissingRunsNotice({
             tone="warning"
             data-removal-missing-runs={batch.creditBatchId}
             title={`${one ? "1 completed run is" : `${batch.runs.length} completed runs are`} not in ${batch.creditBatchCode} yet`}
-            action={readOnly ? undefined : (
+            // Links only open the records, so a read-only sheet keeps them (references always link).
+            action={(
               <span className="flex flex-wrap gap-x-16">
                 {addable.length > 0 && (
                   <Link href={batchHref} className={NOTICE_ACTION_LINK_CLASS}>
