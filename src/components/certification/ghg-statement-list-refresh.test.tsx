@@ -458,7 +458,7 @@ describe("GHG Statement parent list refreshes", () => {
       await state.client!.invalidateQueries();
     });
     await act(async () => {
-      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeDefined());
+      await vi.waitFor(() => expect(findButton(renderer!, "Try again")).toBeDefined());
     });
     expect(renderer!.root.findByType(GhgStatementDetailSheet).props.item.statement.id).toBe("statement-1");
     expect(JSON.stringify(renderer!.toJSON())).toContain("GHG Statement submitted");
@@ -476,9 +476,9 @@ describe("GHG Statement parent list refreshes", () => {
 
     // Recovery updates the parent without remounting the open result dialog.
     state.list.mockResolvedValue([listItem]);
-    await act(async () => findButton(renderer!, "Retry")!.props.onClick());
+    await act(async () => findButton(renderer!, "Try again")!.props.onClick());
     await act(async () => {
-      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeUndefined());
+      await vi.waitFor(() => expect(findButton(renderer!, "Try again")).toBeUndefined());
     });
     expect(findButton(renderer!, "Done")).toBeDefined();
     expect(state.submit).toHaveBeenCalledOnce();
@@ -498,7 +498,7 @@ describe("GHG Statement parent list refreshes", () => {
     });
     expect(JSON.stringify(renderer!.toJSON())).toContain("GHG Statements could not be loaded.");
     expect(renderer!.root.findAllByType(GhgStatementDetailSheet)).toHaveLength(0);
-    expect(findButton(renderer!, "Retry")).toBeUndefined();
+    expect(findButton(renderer!, "Try again")).toBeUndefined();
     await act(async () => renderer!.unmount());
   });
 
@@ -509,7 +509,7 @@ describe("GHG Statement parent list refreshes", () => {
     state.list.mockRejectedValue(new Error("List refresh failed"));
     await act(async () => { await state.client!.invalidateQueries(); });
     await act(async () => {
-      await vi.waitFor(() => expect(findButton(renderer!, "Retry")).toBeDefined());
+      await vi.waitFor(() => expect(findButton(renderer!, "Try again")).toBeDefined());
     });
     expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(0);
     expect(renderer!.root.findByProps({ "data-testid": "statement-list" })).toBeDefined();

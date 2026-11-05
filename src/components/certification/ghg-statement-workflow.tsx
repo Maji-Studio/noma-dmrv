@@ -14,6 +14,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -213,7 +214,7 @@ export function GhgStatementWorkflow({
               busy={reportsQuery.isFetching}
               onClick={() => void reportsQuery.refetch()}
             >
-              Retry
+              {TRY_AGAIN_LABEL}
             </Button>
           )}
         >

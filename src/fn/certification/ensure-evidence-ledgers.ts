@@ -46,7 +46,7 @@ export async function ensureEvidenceLedgersFromContext(
       );
       if (err instanceof SafeError) throw err;
       throw new SafeError(
-        `Unable to prepare the ${ledger.name} evidence ledger. Retry the Removal submission.`,
+        `Unable to prepare the ${ledger.name} evidence ledger. Try the Removal submission again.`,
       );
     }
   }

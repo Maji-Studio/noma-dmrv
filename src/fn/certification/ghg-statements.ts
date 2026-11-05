@@ -384,7 +384,7 @@ async function createGhgStatementDraftLocked(
       });
       if (blockingFinalizing) {
         throw new SafeError(
-          `Removal ${blockingFinalizing.removal.id} is still finalizing in the registry. Retry that Removal before creating this GHG Statement.`,
+          `Removal ${blockingFinalizing.removal.id} is still finalizing in the registry. Submit that Removal again before creating this GHG Statement.`,
         );
       }
       const openRemovals = await listOpenRemovalsForFacility(

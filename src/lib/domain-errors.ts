@@ -92,7 +92,7 @@ export class DomainError extends SafeError {
 export function idempotencyInProgress(cause?: unknown): DomainError {
   return new DomainError(
     "idempotency_in_progress",
-    "A request with this idempotency key is still running. Retry shortly.",
+    "A request with this idempotency key is still running. Try again shortly.",
     { retryable: true, retryAfterSeconds: IDEMPOTENCY_RETRY_AFTER_SECONDS, cause },
   );
 }

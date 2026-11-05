@@ -1,5 +1,6 @@
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
@@ -23,7 +24,7 @@ const STATE_PRESENTATION: Record<
   },
   synced: { badge: "complete", label: "Synced", action: "Check for drift" },
   drifted: { badge: "pending", label: "Drifted", action: "Check again" },
-  failed: { badge: "failed", label: "Sync failed", action: "Retry sync" },
+  failed: { badge: "failed", label: "Sync failed", action: TRY_AGAIN_LABEL },
 };
 
 export function ApplicationStorageLocationSync({

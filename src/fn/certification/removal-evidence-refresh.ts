@@ -28,7 +28,7 @@ export async function refreshInterruptedRemovalEvidence(input: unknown) {
           supplierRefId: readRemovalTransport(submission).removalSupplierRef,
         });
         if (remote.found) {
-          throw new SafeError("This attempt already has a registry GHG Entry. Retry its saved evidence first. New evidence requires a reviewed registry amendment.");
+          throw new SafeError("This attempt already has a registry GHG Entry. Submit its saved evidence again first. New evidence requires a reviewed registry amendment.");
         }
         const frozen = readRemovalCandidateSources(submission);
         const frozenIds = new Set(frozen.map((candidate) => candidate.documentId));
@@ -36,7 +36,7 @@ export async function refreshInterruptedRemovalEvidence(input: unknown) {
         const additions = live.candidates.filter((candidate) =>
           candidate.biocharApplicationId && !candidate.binding && !frozenIds.has(candidate.document.id),
         ).map((candidate) => ({ documentId: candidate.document.id, binding: null, biocharApplicationId: candidate.biocharApplicationId }));
-        if (additions.length === 0) throw new SafeError("No new Application evidence is available. Retry the saved attempt.");
+        if (additions.length === 0) throw new SafeError("No new Application evidence is available. Submit the saved attempt again.");
         return [...frozen, ...additions];
       }),
     );

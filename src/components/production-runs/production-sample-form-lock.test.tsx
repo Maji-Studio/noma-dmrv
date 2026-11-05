@@ -76,7 +76,7 @@ describe("ProductionSampleForm certification lock", () => {
     expect(screen.getByText(RECORD_FILES_LOCKED_MESSAGE)).toBeTruthy();
     expect(screen.queryByTestId("uploader")).toBeNull();
     expect(screen.getByText("photo.jpg")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
   });
 
   it("is unchanged while the measurement is not locked", () => {
@@ -84,6 +84,6 @@ describe("ProductionSampleForm certification lock", () => {
 
     expect(screen.queryByText(RECORD_FILES_LOCKED_MESSAGE)).toBeNull();
     expect(screen.getByTestId("uploader")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry uploads" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try all again" })).toBeTruthy();
   });
 });

@@ -2,7 +2,7 @@ import type { RemovalCompilationView } from "@/fn/certification";
 import { Button } from "@/components/ui";
 import { formatCount } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import { MISSING_VALUE, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import {
   CompilationBlockers,
   CompilationWarnings,
@@ -115,11 +115,11 @@ export function CompiledSubmissionReview({
         tone="error"
         action={
           <Button variant="weak" onClick={onRetry}>
-            Retry review
+            {TRY_AGAIN_LABEL}
           </Button>
         }
       >
-        Submission details could not be prepared. Retry the review before
+        Submission details could not be prepared. The review must load before
         submitting.
       </Notice>
     );

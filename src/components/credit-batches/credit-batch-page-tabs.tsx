@@ -52,7 +52,7 @@ export function CreditBatchProductionTab() {
         tone="warning"
         action={<Button variant="weak" size="small" busy={runsQuery.isFetching} onClick={() => void runsQuery.refetch()}>{TRY_AGAIN_LABEL}</Button>}
       >
-        Production runs could not be loaded. Try again to load them.
+        Production runs could not be loaded.
       </Notice>
     );
   } else if (runsQuery.isLoading) {

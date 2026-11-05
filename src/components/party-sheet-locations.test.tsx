@@ -65,7 +65,7 @@ describe.each([
     expect(locations[0].fields).toEqual([]);
     expect(failed.flatMap(section => section.fields).some(field => field.pending)).toBe(false);
     const html = renderToStaticMarkup(<DetailSpine sections={locations} />);
-    expect(html).toContain(`${label} locations unavailable`);
+    expect(html).toContain(`${label} locations could not be loaded`);
     expect(html).not.toContain("data-pending");
     expect(html).not.toContain("Not recorded");
 
@@ -86,12 +86,12 @@ describe.each([
     const html = renderToStaticMarkup(<DetailSpine sections={cached} />);
     expect(html).toContain("North field");
     expect(html).toContain(`Could not refresh ${label.toLowerCase()} locations. Showing the last saved values.`);
-    expect(html).not.toContain("locations unavailable");
+    expect(html).not.toContain("locations could not be loaded");
     expect(html).not.toContain("data-pending");
     expect(html).toContain('disabled=""');
   });
 
-  it.each(["success", "error", "pending"] as const)("keeps Retry focused and shows loading for the next party when the retry is %s", async (outcome) => {
+  it.each(["success", "error", "pending"] as const)("keeps Try again focused and shows loading for the next party when the retry is %s", async (outcome) => {
     let resolveRetry!: (data: NonNullable<PartyLocationsQueryState["data"]>) => void;
     let rejectRetry!: (error: Error) => void;
     const retryResult = new Promise<NonNullable<PartyLocationsQueryState["data"]>>((resolve, reject) => {
@@ -109,7 +109,7 @@ describe.each([
       return <DetailSpine sections={sections(locationsQuery, partyId)} />;
     }
     const view = render(<QueryClientProvider client={client}><Sheet /></QueryClientProvider>);
-    const retry = await screen.findByRole<HTMLButtonElement>("button", { name: "Retry" });
+    const retry = await screen.findByRole<HTMLButtonElement>("button", { name: "Try again" });
     const notice = screen.getByRole("status");
     retry.focus();
     expect(document.activeElement).toBe(retry);
@@ -117,7 +117,7 @@ describe.each([
     fireEvent.click(retry);
     await waitFor(() => expect(loadLocations).toHaveBeenCalledTimes(2));
     expect(client.getQueryState(queryKey)?.status).toBe("pending");
-    expect(screen.getByRole("button", { name: "Retry" })).toBe(retry);
+    expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
     expect(screen.getByRole("status")).toBe(notice);
     expect(document.activeElement).toBe(retry);
     expect(retry.disabled).toBe(true);
@@ -131,18 +131,18 @@ describe.each([
     }
     if (outcome === "success") {
       await screen.findByText(location.name);
-      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-      expect(screen.queryByText(/locations unavailable/)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+      expect(screen.queryByText(/locations could not be loaded/)).toBeNull();
     } else if (outcome === "error") {
       await waitFor(() => expect(retry.disabled).toBe(false));
-      expect(screen.getByRole("button", { name: "Retry" })).toBe(retry);
+      expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
       expect(document.activeElement).toBe(retry);
       expect(retry.hasAttribute("aria-busy")).toBe(false);
     }
     view.rerender(<QueryClientProvider client={client}><Sheet partyId="next-party" /></QueryClientProvider>);
     expect(screen.getByRole("status").textContent).toBe(`Loading ${label.toLowerCase()} locations…`);
-    expect(screen.queryByText(/locations unavailable/)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByText(/locations could not be loaded/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     view.unmount();
     client.clear();
   });
