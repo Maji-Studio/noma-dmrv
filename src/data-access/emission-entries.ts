@@ -185,7 +185,7 @@ async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, value
 export async function tombstoneEmissionZeros(
   ctx: OrgContext,
   tx: DbTransaction,
-  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string; holdingRemovalId?: string | null },
+  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string; holdingRemovalId: string | null },
 ) {
   requireOrgScope(ctx);
   const before = await tx.select().from(emissionEntries).where(and(
@@ -299,7 +299,7 @@ async function writeEmissionEntryUnderLocks(
     })
     .returning();
   const values = await writeValues(ctx, tx, entry.id, data.values);
-  await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: replacementHold?.removalId });
+  await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: replacementHold?.removalId ?? null });
   await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
   return getEmissionEntry(ctx, entry.id, tx);
 }
