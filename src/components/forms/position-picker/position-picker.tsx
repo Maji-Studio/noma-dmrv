@@ -7,8 +7,8 @@
  * place name appears as a read-only confirmation label.
  *
  * Graceful degradation (plan decision 5):
- * - no NEXT_PUBLIC_MAPTILER_KEY → no basemap; manual lat/lng still works,
- *   with a "map preview unavailable" notice.
+ * - basemap style fails to load → the map falls back to a notice; manual
+ *   lat/lng still works.
  * - routing not configured server-side → address search + confirmation
  *   label disabled with an explanatory hint.
  */
@@ -27,9 +27,6 @@ import { latitudeSchema, longitudeSchema } from "@/schemas/helpers";
 import { AddressSearch } from "./address-search";
 import type { MapAccent } from "@/components/map";
 
-// Inlined at build time — public, domain-locked key (browser-safe).
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-
 const MAP_PREVIEW_HEIGHT_CLASS = "h-[260px]";
 
 /** Native min, max and step for the manual inputs, read from the schemas. */
@@ -37,7 +34,7 @@ const LATITUDE_BOUNDS = numberInputConstraints(latitudeSchema);
 const LONGITUDE_BOUNDS = numberInputConstraints(longitudeSchema);
 
 // maplibre-gl is ~250 kB gzipped — keep it out of the route bundle and only
-// fetch it when a picker with a configured basemap actually renders.
+// fetch it when a picker actually renders.
 const PositionPickerMap = dynamic(() => import("./position-picker-map"), {
   ssr: false,
   loading: () => (
@@ -188,32 +185,17 @@ export function PositionPicker({
           )}
         </div>
 
-        {MAPTILER_KEY ? (
-          <div className={`${MAP_PREVIEW_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}>
-            <PositionPickerMap
-              latitude={lat}
-              longitude={lng}
-              accent={accent}
-              disabled={disabled}
-              onPick={(pickedLat, pickedLng) =>
-                onPositionChange({ lat: pickedLat, lng: pickedLng })
-              }
-            />
-          </div>
-        ) : (
-          <div
-            className="flex h-[120px] flex-col items-center justify-center gap-6 border border-dashed border-[var(--clr-dark-purple-30)] bg-[var(--color-background-light)] px-16 text-center"
-            data-testid="position-picker-no-map"
-          >
-            <span className="body-small font-medium text-[var(--color-text-secondary)]">
-              Map preview unavailable
-            </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Set NEXT_PUBLIC_MAPTILER_KEY to enable the map. Manual
-              coordinates below still work.
-            </span>
-          </div>
-        )}
+        <div className={`${MAP_PREVIEW_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}>
+          <PositionPickerMap
+            latitude={lat}
+            longitude={lng}
+            accent={accent}
+            disabled={disabled}
+            onPick={(pickedLat, pickedLng) =>
+              onPositionChange({ lat: pickedLat, lng: pickedLng })
+            }
+          />
+        </div>
 
         <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:grid-cols-2">
           <FormField

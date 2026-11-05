@@ -14,10 +14,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import {
+  BASEMAP_STYLE_TIMEOUT_MS,
+  BASEMAP_STYLE_URL,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
   FOCUSED_MAP_ZOOM,
-  maptilerStyleUrl,
   SAT_RASTER_SATURATION,
   SAT_TILE_ATTRIBUTION,
   SAT_TILE_URL,
@@ -30,20 +31,11 @@ import {
   type MapAccent,
 } from "@/components/map";
 
-// Inlined at build time — public, domain-locked key (browser-safe).
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-
 const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}sat`;
 const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}sat-layer`;
 const SAT_TILE_SIZE = 256;
 /** Ease animation when the position changes from outside the map (ms). */
 const EASE_DURATION_MS = 600;
-/**
- * If the basemap style never finishes loading within this window (a failed or
- * hanging MapTiler request — expired/domain-locked key, offline, tile 5xx),
- * fall back to manual coordinates instead of leaving a silent blank box.
- */
-const STYLE_LOAD_TIMEOUT_MS = 12_000;
 /** ~0.1 m precision — more than enough to pin a site. */
 const COORD_DECIMALS = 6;
 
@@ -99,7 +91,7 @@ export default function PositionPickerMap({
   // Map instance lifecycle — the legitimate imperative-DOM exception.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !MAPTILER_KEY) return;
+    if (!container) return;
 
     const initialPoint = mapPoint(latitude, longitude);
     const initial = initialPoint
@@ -110,7 +102,7 @@ export default function PositionPickerMap({
     try {
       map = new maplibregl.Map({
         container,
-        style: maptilerStyleUrl(MAPTILER_KEY),
+        style: BASEMAP_STYLE_URL,
         center: initial.center,
         zoom: initial.zoom,
         attributionControl: { compact: true },
@@ -125,8 +117,8 @@ export default function PositionPickerMap({
     mapRef.current = map;
 
     // Guard against a basemap that never paints: maplibre only throws on a
-    // failed WebGL init, not on a failed *style* fetch. A bad/expired key,
-    // domain-lock rejection, or offline network leaves the canvas blank with
+    // failed WebGL init, not on a failed *style* fetch. A provider
+    // outage or offline network leaves the canvas blank with
     // no "load" event, so trip the manual-entry fallback on the first pre-load
     // error and as a timeout backstop for a silent hang.
     let styleLoaded = false;
@@ -138,11 +130,11 @@ export default function PositionPickerMap({
       // Deferred so the effect never sets state synchronously (React Compiler).
       queueMicrotask(() => setMapFailed(true));
     };
-    const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
+    const loadTimer = setTimeout(failIfUnloaded, BASEMAP_STYLE_TIMEOUT_MS);
     // Tile/source requests only start once the style JSON has parsed
     // ("styledata"), so an error before that is the style fetch itself failing
-    // (bad/expired key, domain-lock rejection, offline) — fatal. An error
-    // after it is a transient tile 404/5xx on an otherwise-valid key and must
+    // (provider outage, blocked, offline) — fatal. An error
+    // after it is a transient tile 404/5xx on an otherwise-valid style and must
     // not tear the map down: "load" still fires and the errored tile just
     // stays blank. The timeout above backstops a silent post-parse hang.
     let styleParsed = false;

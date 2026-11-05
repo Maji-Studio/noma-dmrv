@@ -74,7 +74,7 @@ jobs:
       ISOMETRIC_ENVIRONMENT: sandbox
       # Geo — hermetic like Isometric/storage above: the stub adapter serves
       # deterministic geocode/route fixtures, so position-picker specs make
-      # zero external HTTP calls and need no ORS/MapTiler keys. The env
+      # zero external HTTP calls and need no ORS key. The basemap host is stubbed in the Playwright fixture. The env
       # schema's "no stub in production" safeguard carves out CI for exactly
       # this build (src/config/env.ts).
       GEO_PROVIDER: stub

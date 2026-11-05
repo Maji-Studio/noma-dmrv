@@ -31,7 +31,7 @@ const MARKER_BORDER = "1.5px solid var(--clr-dark-purple)";
 export const OWN_LAYER_PREFIX = "noma-";
 
 interface MapThemeColors {
-  /** Sea / background — orange-tinted paper. */
+  /** Sea (water fills) — orange-tinted paper. */
   bg: string;
   /** Landmass — white. */
   land: string;
@@ -77,7 +77,9 @@ export function applyBrandRecolor(map: MapLibreMap): void {
           map.setLayoutProperty(id, "visibility", "none");
           break;
         case "background":
-          map.setPaintProperty(id, "background-color", theme.bg);
+          // Positron draws land as the background (no land fill), so the
+          // background is land; water fills below repaint the sea.
+          map.setPaintProperty(id, "background-color", theme.land);
           break;
         case "fill": {
           const isWater = WATER_LAYER_PATTERN.test(id);

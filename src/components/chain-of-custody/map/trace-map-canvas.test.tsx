@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({ maps: [] as Array<{
   cameraForBounds: ReturnType<typeof vi.fn>;
   flyTo: ReturnType<typeof vi.fn>;
 }> }));
-vi.mock("@/components/map", () => ({ applyBrandRecolor: vi.fn(), MapControls: () => null }));
+vi.mock("@/components/map", () => ({ applyBrandRecolor: vi.fn(), armBasemapFallback: () => () => {}, BasemapUnavailableNote: () => null, MapControls: () => null }));
 vi.mock("./lazy-trace-map-canvas", async () => ({ LazyTraceMapCanvas: (await import("./trace-map-canvas")).default }));
 vi.mock("@/hooks/use-media-query", () => ({ useIsMobile: () => false }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));

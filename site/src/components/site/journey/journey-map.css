@@ -5,7 +5,7 @@
 .jr .jr-map--blank { background-image: radial-gradient(circle, rgba(255, 249, 247, 0.11) 1.5px, transparent 1.5px); background-size: 28px 28px; }
 .jr .jr-map .maplibregl-canvas { outline: none; }
 
-/* attribution: MapTiler and OSM terms need it visible, so it rides above the sheet */
+/* attribution: OpenFreeMap, OpenMapTiles and OSM terms need it visible, so it rides above the sheet */
 .jr .jr-map .maplibregl-ctrl-bottom-left { bottom: var(--cb, 360px); left: 0; transition: bottom 0.42s var(--spring), opacity 0.25s; z-index: 14; }
 .jr .jr-map .maplibregl-ctrl-bottom-right { display: none; }
 .jr .jr-map .maplibregl-ctrl-attrib { max-width: calc(100vw - 2 * var(--gl) - 44px - 24px); margin: 0 0 0 var(--gl); font: 300 9px/1.35 var(--f-sans); letter-spacing: 0; background: rgba(15, 2, 26, 0.6); color: var(--ink-4); }
