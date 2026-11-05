@@ -132,17 +132,13 @@ const envSchema = z.object({
     z.string().min(1).optional(),
   ),
 
-  // Geo (map integration — ADR 0009). BOTH keys are optional by design:
+  // Geo (map integration — ADR 0009). The routing key is optional by design:
   // env parses at import time, so a required geo key would break every
   // command (build, db scripts, e2e) in environments not yet updated.
   // Degradation is gated where the feature renders, never at parse time.
-  // No OPENROUTESERVICE_API_KEY → CALC + address search disabled (tooltip);
-  // no NEXT_PUBLIC_MAPTILER_KEY → no basemap, manual lat/lng fallback.
+  // No OPENROUTESERVICE_API_KEY → CALC + address search disabled (tooltip).
+  // The basemap (OpenFreeMap) needs no key.
   OPENROUTESERVICE_API_KEY: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
-  NEXT_PUBLIC_MAPTILER_KEY: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional()
   ),

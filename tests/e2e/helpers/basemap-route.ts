@@ -1,0 +1,27 @@
+/**
+ * Keeps E2E hermetic: the app's basemap is the OpenFreeMap style on
+ * tiles.openfreemap.org (src/config/geo.ts → BASEMAP_STYLE_URL). CI must make
+ * zero external HTTP calls, so the style request is answered with an empty
+ * MapLibre style (the map still reaches "load", with no tiles to fetch) and
+ * every other request to the host is aborted.
+ */
+
+import type { BrowserContext, Page } from "@playwright/test";
+
+export const BASEMAP_URL_PATTERN = "**://tiles.openfreemap.org/**";
+
+const BASEMAP_STYLE_PATH = "/styles/positron";
+const BLANK_STYLE = { version: 8, sources: {}, layers: [] } as const;
+const CORS_HEADERS = { "access-control-allow-origin": "*" };
+
+/** Stub the live basemap host on a context or a single page. */
+export async function stubBasemap(target: BrowserContext | Page): Promise<void> {
+  await target.route(BASEMAP_URL_PATTERN, async (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname === BASEMAP_STYLE_PATH) {
+      await route.fulfill({ json: BLANK_STYLE, headers: CORS_HEADERS });
+      return;
+    }
+    await route.abort();
+  });
+}

@@ -23,7 +23,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import {
-  maptilerStyleUrl,
+  BASEMAP_STYLE_URL,
   SAT_RASTER_SATURATION,
   SAT_TILE_ATTRIBUTION,
   SAT_TILE_URL,
@@ -46,9 +46,6 @@ import {
   resolveRouteLine,
   type RoutePoint,
 } from "./route-line";
-
-// Inlined at build time — public, domain-locked key (browser-safe).
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}route-sat`;
 const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}route-sat-layer`;
@@ -369,13 +366,13 @@ export default function RouteMiniMap({
   // Map instance lifecycle — the legitimate imperative-DOM exception.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !MAPTILER_KEY) return;
+    if (!container) return;
 
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
-        style: maptilerStyleUrl(MAPTILER_KEY),
+        style: BASEMAP_STYLE_URL,
         bounds: boundsFor(previewRef.current),
         fitBoundsOptions: { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM },
         attributionControl: { compact: true },

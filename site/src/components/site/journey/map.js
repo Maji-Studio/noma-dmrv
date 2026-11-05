@@ -1,14 +1,13 @@
-// Journey page map: MapTiler "dataviz-dark" recoloured to the noma dark stage (same approach as the
-// home hero map, home/hero-map/map.js), with the transport legs drawn on their routed roads.
-// Without PUBLIC_MAPTILER_KEY it runs on a blank style over a dotted field. Without WebGL
+// Journey page map: OpenFreeMap Positron (OpenMapTiles layers, no key) recoloured to the noma dark stage
+// (same approach as the home hero map, home/hero-map/map.js), with the transport legs drawn on their
+// routed roads. If the style does not load in time it falls back to a blank style over a dotted field. Without WebGL
 // createJourneyMap returns null and the page leaves the map view out.
 import { HERO, J, LEGS, PLANT_LL, R, SUPS, TOWNS, apps, supShort, supTown } from "./model.js";
 import { lineAt, lineMeasure } from "./geo.js";
 import { createPlant } from "./plant.js";
 import { RM } from "./state.js";
 
-const KEY = import.meta.env.PUBLIC_MAPTILER_KEY;
-const STYLE_URL = KEY ? `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${encodeURIComponent(KEY)}` : null;
+const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 const BLANK = { version: 8, sources: {}, layers: [] };
 const START = { center: PLANT_LL, zoom: 9 };
 const MIN_ZOOM = 5.5;
@@ -24,13 +23,14 @@ const NEAR_PLANT_KM = 3; // fields this close get nudged off the plant marker
 const NUDGE_PX = 13;
 const DUP_PX = 9;
 const WATER = /water|ocean|river|lake/i;
-const BORDER = /border/i;
-const ROAD = /^road network$/i;
-const FOREST = /^forest$/i;
-const WOOD = /^landcover$/i;
+// OpenMapTiles layer ids as the OpenFreeMap Positron style names them
+const BORDER = /^boundary_/i;
+const ROAD_CASING = /casing/i; // hidden: the road line carries the width, a casing would double it
+const ROAD = /^(highway_(path|minor|major_inner|major_subtle|motorway_inner|motorway_subtle|motorway_bridge_inner)|tunnel_motorway_inner)$/;
+const FOREST = /^landcover_wood$/;
+const WOOD = /^park$/;
 const URBAN = /residential/i;
-const NO_FILL = /building|pier|bridge|aeroway|stadium|cemetery/i;
-const HILL_EXAGGERATION = 0.35;
+const NO_FILL = /building|pier|aeroway/i;
 // SAT: the same Esri imagery as the app's map controls (src/config/geo.ts), dimmed so the light legs and labels still read
 const SAT_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const SAT_ATTRIBUTION = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
@@ -45,7 +45,6 @@ function palette(host) {
   const t = (n) => css.getPropertyValue(n).trim();
   return { land: t("--jr-map-land"), forest: t("--jr-map-forest"), wood: t("--jr-map-wood"), urban: t("--jr-map-urban"), water: t("--jr-map-water"), boundary: t("--jr-map-boundary"),
     roadMajor: t("--jr-map-road-major"), roadMid: t("--jr-map-road-mid"), roadMinor: t("--jr-map-road-minor"),
-    hillShadow: t("--jr-map-hill-shadow"), hillLight: t("--jr-map-hill-light"), hillAccent: t("--jr-map-hill-accent"),
     base: t("--jr-leg"), rel: t("--jr-leg-rel"), trail: t("--jr-leg-trail"), lit: t("--jr-lit"), glow: t("--jr-lit-glow") };
 }
 
@@ -64,6 +63,7 @@ function recolor(map, p) {
       } else if (type === "line") {
         if (WATER.test(id)) { map.setPaintProperty(id, "line-color", p.water); }
         else if (BORDER.test(id)) { map.setPaintProperty(id, "line-color", p.boundary); map.setPaintProperty(id, "line-width", 1); }
+        else if (ROAD_CASING.test(id)) map.setLayoutProperty(id, "visibility", "none");
         else if (ROAD.test(id)) {
           // the road hierarchy: majors clearly, tracks and service roads barely
           map.setPaintProperty(id, "line-color", ["match", ["get", "class"], ["motorway", "trunk", "primary"], p.roadMajor, "secondary", p.roadMid, "tertiary", p.roadMid, p.roadMinor]);
@@ -75,18 +75,6 @@ function recolor(map, p) {
       } else map.setLayoutProperty(id, "visibility", "none");
     } catch { /* a layer that rejects a property keeps its style; recolouring is best effort */ }
   }
-}
-
-/** Terrain relief under the roads: MapTiler terrain-rgb as a hillshade in plum and ink. Skipped if it fails to load. */
-function addRelief(map, p) {
-  if (!KEY) return;
-  try {
-    map.addSource("noma-dem", { type: "raster-dem", url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${encodeURIComponent(KEY)}`, tileSize: 256 });
-    const firstLine = map.getStyle().layers.find((l) => l.type === "line" && !l.id.startsWith("noma-"));
-    map.addLayer({ id: "noma-hillshade", type: "hillshade", source: "noma-dem",
-      paint: { "hillshade-exaggeration": HILL_EXAGGERATION, "hillshade-shadow-color": p.hillShadow, "hillshade-highlight-color": p.hillLight, "hillshade-accent-color": p.hillAccent, "hillshade-illumination-direction": 315 } }, firstLine?.id);
-    map.on("error", (e) => { if (e.sourceId === "noma-dem" && map.getLayer("noma-hillshade")) map.removeLayer("noma-hillshade"); });
-  } catch { /* no relief; the basemap still works */ }
 }
 
 /** Satellite imagery over the basemap, under the legs; hidden until the SAT button turns it on. Needs no key. */
@@ -131,7 +119,7 @@ export async function createJourneyMap(host, hooks) {
   let map;
   try {
     map = new maplibregl.Map({
-      container: host, style: STYLE_URL ?? BLANK, ...START, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
+      container: host, style: STYLE_URL, ...START, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
       attributionControl: false,
       dragRotate: false, pitchWithRotate: false, maxPitch: 0, keyboard: false, fadeDuration: 0,
     });
@@ -140,7 +128,6 @@ export async function createJourneyMap(host, hooks) {
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "Routes: OpenRouteService" }), "bottom-left");
   map.touchZoomRotate.disableRotation();
   map.getCanvas().tabIndex = -1;
-  if (!KEY) host.classList.add("jr-map--blank");
   await new Promise((resolve) => {
     const loaded = () => { clearTimeout(t); resolve(); };
     const t = setTimeout(() => {
@@ -151,7 +138,7 @@ export async function createJourneyMap(host, hooks) {
     }, STYLE_TIMEOUT_MS);
     map.once("load", loaded);
   });
-  if (map.getStyle()?.layers?.length) { recolor(map, p); addRelief(map, p); }
+  if (map.getStyle()?.layers?.length) recolor(map, p);
   const hasSat = addSatellite(map);
 
   /* ----- legs: routed lines, state through feature-state, the lit one on its own source ----- */

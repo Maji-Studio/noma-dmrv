@@ -5,7 +5,7 @@
  * docs/archive/plans/2026-06-10-map-integration.md → Design reference.
  */
 
-/* ── no-basemap field: sea wash + dotted grid (never a white void) ─────── */
+/* ── sea wash + dotted grid: the "map could not start" panel ──────────── */
 .cvm-field {
   background-color: var(--sea);
   background-image: radial-gradient(

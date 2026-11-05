@@ -1,7 +1,7 @@
 /**
  * Geo / map integration constants (ADR 0009 — provider-agnostic,
  * server-proxied geo). The provider stack is deliberately swappable:
- * MapLibre GL renderer, MapTiler basemap behind these constants,
+ * MapLibre GL renderer, OpenFreeMap basemap behind these constants,
  * OpenRouteService geocoding/routing behind the `src/lib/geo/` interface.
  */
 
@@ -136,17 +136,15 @@ export const GIS_BOUNDARY_NORMALIZE_RATE_LIMIT = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// MapTiler basemap (browser-safe, domain-locked public key)
+// OpenFreeMap basemap (no key; attribution comes from the style itself)
 // ---------------------------------------------------------------------------
 
 /**
- * MapTiler style used as the base layer. The brand recoloring (white land on
- * orange-tinted paper, hairline plum boundaries, labels hidden) is applied on
- * top of this style at runtime by the map components.
+ * OpenFreeMap Positron style used as the base layer. The brand recoloring
+ * (white land on orange-tinted paper, hairline plum boundaries, labels hidden)
+ * is applied on top of this style at runtime by the map components.
  */
-export function maptilerStyleUrl(key: string): string {
-  return `https://api.maptiler.com/maps/dataviz/style.json?key=${encodeURIComponent(key)}`;
-}
+export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 
 /** Esri World Imagery raster for the SAT toggle (no key required). */
 export const SAT_TILE_URL =
