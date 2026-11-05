@@ -52,8 +52,9 @@ it("password changed: names the account and time, links to reset, no organizatio
   expect(changed.text).toContain(`The password for ${TO} was changed on Oct 22, 2026 at 14:32 UTC.`);
   expect(changed.text).toContain(`If you did not change it, reset your password now.\n${RESET_URL}\n`);
   expect(changed.text).toContain("Your connected apps were disconnected. Connect them again when you need them.");
-  expect(changed.text).toContain(`Your API key still works. Review or revoke it at ${APP}/settings/developers.`);
-  expect(changed.text).toContain("Automation, created Oct 22, 2026.");
+  expect(changed.text).toContain(`Your API key Automation (created Oct 22, 2026) still works. Review or revoke it at ${APP}/settings/developers.`);
+  // The reset instruction and its link come before the apps and keys note.
+  expect(changed.text.indexOf("reset your password now")).toBeLessThan(changed.text.indexOf("Your API key"));
   expect(changed.text).toContain(`Sent to ${TO} about your noma account.`);
   expect(changed.html).toContain(`href="${RESET_URL}"`);
   expect(changed.html).toContain(`src="${APP}/email/password-changed.png"`);
@@ -159,7 +160,7 @@ it("escapes API key names and handles an empty active list", () => {
   expect(passwordChangedEmail({ ...input, connectedAppsDisconnected: null, activeApiKeys: [] }).text).not.toContain("connected apps");
   const many = Array.from({ length: 12 }, (_, index) => ({ name: `Key ${index + 1}`, createdAt: WHEN }));
   const capped = passwordChangedEmail({ ...input, activeApiKeys: many }).text;
-  expect(capped).toContain("Key 10, created");
-  expect(capped).not.toContain("Key 11, created");
-  expect(capped).toContain("And 2 more.");
+  expect(capped).toContain("Key 10 (created");
+  expect(capped).not.toContain("Key 11 (created");
+  expect(capped).toContain("and 2 more still work.");
 });
