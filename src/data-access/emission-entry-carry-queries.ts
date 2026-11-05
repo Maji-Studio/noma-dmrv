@@ -1,3 +1,4 @@
+import { heldEmissionEntryPredicate } from "./emission-entry-holds";
 import { and, eq, inArray, isNull, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, type DbTransaction } from "@/db";
@@ -44,8 +45,7 @@ export async function listCarryCandidates(ctx: OrgContext, facilityId: string, e
       isNull(emissionEntries.sentByRemovalId),
       sql`jsonb_array_length(${emissionEntries.inputShape}) = 1`,
       sql`${creditBatches.endDate} < (current_timestamp at time zone ${facilities.timezone})::date`,
-      sql`not exists (select 1 from ${emissionEntries} as ${sql.identifier("carry_original")} where ${original.organizationId} = ${ctx.organizationId}
-        and ${original.id} = ${emissionEntries.replacesEntryId} and ${original.sentByRemovalId} is not null)`,
+      sql`not exists (select 1 from ${emissionEntries} as ${sql.identifier("carry_original")} where ${heldEmissionEntryPredicate(ctx, original)})`,
       sql`exists (select 1 from ${creditBatchApplications} where ${creditBatchApplications.organizationId} = ${ctx.organizationId}
         and ${creditBatchApplications.creditBatchId} = ${creditBatches.id})`,
       // A remaining future application means this batch can still take the entry itself.
@@ -63,14 +63,18 @@ export async function listCarryCandidates(ctx: OrgContext, facilityId: string, e
 export async function listOwnedCarryEntries(ctx: OrgContext, facilityId: string, executor: CarryExecutor, scope: CarryReadScope) {
   requireOrgScope(ctx);
   if (!scope.entryIds?.length && !scope.ownedBatchIds?.length && !scope.ownedRemovalId) return [];
+  const original = alias(emissionEntries, "held_carry_original");
+  const held = heldEmissionEntryPredicate(ctx, original);
   return executor.select({ entry: emissionEntries, batch: creditBatches, timezone: facilities.timezone }).from(emissionEntries)
     .innerJoin(creditBatches, and(eq(creditBatches.id, emissionEntries.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)))
     .innerJoin(facilities, and(eq(facilities.id, creditBatches.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(original, held)
     .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(emissionEntries.deletedAt),
-      or(sql`${emissionEntries.sentByRemovalId} is not null`, sql`${emissionEntries.sendReservedBySubmissionId} is not null`),
+      or(sql`${emissionEntries.sentByRemovalId} is not null`, sql`${emissionEntries.sendReservedBySubmissionId} is not null`, held),
       or(scope.entryIds?.length ? inArray(emissionEntries.id, scope.entryIds) : undefined,
         scope.ownedBatchIds?.length ? inArray(emissionEntries.creditBatchId, scope.ownedBatchIds) : undefined,
-        scope.ownedRemovalId ? or(eq(emissionEntries.sentByRemovalId, scope.ownedRemovalId), sql`exists (select 1 from ${certificationSubmissions}
+        scope.ownedRemovalId ? or(eq(emissionEntries.sentByRemovalId, scope.ownedRemovalId),
+          and(held, eq(original.sentByRemovalId, scope.ownedRemovalId)), sql`exists (select 1 from ${certificationSubmissions}
           where ${carryRemovalSubmission(ctx, scope.ownedRemovalId)} and ${certificationSubmissions.id} = ${emissionEntries.sendReservedBySubmissionId})`) : undefined)))
     .orderBy(emissionEntries.id);
 }

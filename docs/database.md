@@ -675,7 +675,9 @@ The operator changes the entry date to fit the period or the application date ba
 the entry keeps its sent claim and is not silently moved or included outside the window.
 An entry carried into a later Removal is corrected under that receiving Removal's
 window, which applies only its end date, as carry election does.
-"Enter again" is refused for a carried entry (#1580).
+"Enter again" replaces a stopped carried entry while its receiving Removal is open
+for correction. The replacement stays held for that receiving Removal and replaces
+the tombstoned original in its contributions; other Removals cannot claim it.
 Correction state compares the last submitted contribution manifest with the
 current contribution and is never stored. A new attempt reserves the current set
 and supersedes the prior attempt without transferring its entry claims.

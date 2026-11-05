@@ -1,5 +1,14 @@
 # Isometric Docs Change Log
 
+## 2026-11-05: Enter again for carried emissions entries (#1580)
+
+A carried entry that stopped counting can be entered again while its receiving
+Removal is open for correction. The sent original is tombstoned and its replacement
+remains held for the receiving Removal through the original link. Carry reads
+include held replacements, keeping them in that Removal’s contribution manifest
+and out of other Removals. Existing correction locks and refusals still apply.
+No binding, revision or schema change.
+
 ## 2026-11-05: Block a returned Removal from dropping a sent entry (#1575)
 
 An application-date correction can shrink a Removal's entry window. A sent value

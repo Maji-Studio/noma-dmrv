@@ -16,7 +16,8 @@ import { facilityToday } from "@/lib/date-utils";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, certifierGhgStatements, certifierRemovals, creditBatches,
   emissionEntries, emissionEntryValues, productionProcesses, productionRuns, removalTemplateObservations, users } from "@/db/schema";
-import { createEmissionEntry, getEmissionEntry, updateEmissionEntry } from "@/data-access/emission-entries";
+import { createEmissionEntry, getEmissionEntry, updateEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
+import { listCarryCandidates, listOwnedCarryEntries } from "@/data-access/emission-entry-carry-queries";
 import { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { lockEmissionCorrectionScope, revalidateEmissionCorrectionScope } from "@/data-access/emission-entry-corrections";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
@@ -520,4 +521,118 @@ it.each([...["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive"
   expect((await loadRemovalCarriedEntries(ctx, receiving.removalId)).carriedEntries).toEqual([]);
   expect(registry.getGhgStatement).not.toHaveBeenCalled();
   expect(registry.resolveClient).not.toHaveBeenCalled();
+});
+
+
+it("refuses Enter again for a different receiver pin, then keeps a compatible replacement in that receiver's manifest", async () => {
+  const row = await attempt();
+  await reserve(row);
+  await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!,
+    productionEmissionsClaim: { removalId: receiving.removalId, creditBatchIds: [] } });
+  const [statement] = await db.insert(certifierGhgStatements).values({ organizationId: ctx.organizationId,
+    facilityId: origin.facilityId, reportingPeriodEndOn: "2026-06-30" }).returning();
+  receiving.ghgStatementId = statement.id;
+  await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(eq(certifierRemovals.id, receiving.removalId));
+  await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId, provider: "isometric",
+    submissionType: "ghg_statement", localEntityType: "ghgStatement", localEntityId: statement.id,
+    version: 1, status: "submitted", externalId: "returned", submittedAt: new Date(),
+    metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: ["carried"] } });
+  registry.getGhgStatement.mockResolvedValue({ status: "FAILED_VERIFICATION",
+    submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: ["carried"] });
+  const [current] = await db.insert(removalTemplateObservations).values({ ...observation, id: undefined,
+    semanticFingerprint: "carried-replacement", fullFingerprint: "carried-replacement", lastObservedAt: new Date("2099-01-01"),
+    enrichment: { line: { electricity_use: { unit: "MJ" } } },
+  }).returning();
+  let replacementId: string | undefined;
+  let second: LineageFixture | undefined;
+  let receiverObservationId: string | undefined;
+  try {
+    const [receiverObservation] = await db.insert(removalTemplateObservations).values({ ...current, id: undefined,
+      externalTemplateId: `receiver-${crypto.randomUUID()}`,
+    }).returning();
+    receiverObservationId = receiverObservation.id;
+    await db.update(creditBatches).set({ removalTemplateId: receiverObservation.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
+    const before = await getEmissionEntry(ctx, entry.id);
+    const replacementInput = { id: before.id, expectedVersion: before.version, occurredOn: before.occurredOn,
+      values: [{ inputKey: "electricity_use", quantityKind: "energy" as const, magnitude: "125", unit: "MJ" }] };
+    const originEntries = () => db.select().from(emissionEntries).where(and(
+      eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, origin.batchId),
+    )).orderBy(emissionEntries.id);
+    const entriesBefore = await originEntries();
+    const activities = () => db.select().from(activityEvents).where(and(
+      eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.actorUserId, userId),
+    )).orderBy(activityEvents.id);
+    const activitiesBefore = await activities();
+    expect((await resolveScopeForRemoval(ctx, receiving.removalId)).memberBatches[0].removalTemplateId)
+      .toBe(receiverObservation.externalTemplateId);
+    expect(receiverObservation.externalTemplateId).not.toBe(current.externalTemplateId);
+    await expect(replaceEmissionEntry(ctx, replacementInput)).rejects.toThrow(
+      "The receiving Removal's template cannot count this carried entry");
+    expect(await getEmissionEntry(ctx, entry.id)).toEqual(before);
+    expect(await originEntries()).toEqual(entriesBefore);
+    expect(await activities()).toEqual(activitiesBefore);
+    // Counting requires the same template identity as well as a compatible component.
+    await db.update(creditBatches).set({ removalTemplateId: current.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
+    const facility = { templatesById: { [current.externalTemplateId]: { observation: current } } };
+    const contributionsFor = async (removalId: string) => {
+      const scope = await resolveScopeForRemoval(ctx, removalId);
+      const facts = await loadBatchEmissionContext(ctx, scope.facilityId, scope.memberBatches, facility, { ownedRemovalId: removalId });
+      return (await loadRemovalEntryContext(ctx, scope, facts, facility))!.contributions;
+    };
+    expect((await contributionsFor(receiving.removalId)).blockers).toContainEqual(expect.objectContaining({ code: "lineNeedsReview" }));
+    const sent = await getEmissionEntry(ctx, entry.id);
+    const replacement = await replaceEmissionEntry(ctx, { id: sent.id, expectedVersion: sent.version,
+      occurredOn: sent.occurredOn, values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "125", unit: "MJ" }] });
+    replacementId = replacement.id;
+    expect(replacement).toMatchObject({ sentByRemovalId: null, replacesEntryId: entry.id, heldForRemovalId: receiving.removalId });
+    const [original] = await db.select().from(emissionEntries).where(and(
+      eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
+    expect(original).toMatchObject({ deletedAt: expect.any(Date), sentByRemovalId: receiving.removalId });
+    const contributions = await contributionsFor(receiving.removalId);
+    expect(contributions.manifest.flatMap(input => input.entries.map(value => value.entryId))).toEqual([replacement.id]);
+    expect(contributions.entrySet).toEqual([{ entryId: replacement.id, contentRevision: replacement.contentRevision }]);
+    const ownedScope = { ownedRemovalId: receiving.removalId };
+    expect((await listOwnedCarryEntries(ctx, origin.facilityId, db, ownedScope)).map(value => value.entry.id)).toEqual([replacement.id]);
+    expect(await listOwnedCarryEntries(ctx, receiving.facilityId, db, ownedScope)).toEqual([]);
+    expect(await listOwnedCarryEntries({ ...ctx, organizationId: crypto.randomUUID() }, origin.facilityId, db, ownedScope)).toEqual([]);
+
+    expect(await listCarryCandidates(ctx, origin.facilityId, db, { entryIds: [replacement.id] })).toEqual([]);
+    second = await createLineageFixture("none");
+    await db.update(certifierRemovals).set({ facilityId: origin.facilityId }).where(eq(certifierRemovals.id, second.removalId));
+    await db.update(creditBatchApplications).set({ creditBatchId: origin.batchId }).where(eq(creditBatchApplications.removalId, second.removalId));
+    for (const removalId of [origin.removalId, second.removalId]) {
+      const other = await contributionsFor(removalId);
+      expect(other.manifest.flatMap(input => input.entries.map(value => value.entryId))).not.toContain(replacement.id);
+      expect(await listOwnedCarryEntries(ctx, origin.facilityId, db, { ownedRemovalId: removalId })).toEqual([]);
+    }
+    expect(await listCarryCandidates(ctx, origin.facilityId, db, { entryIds: [replacement.id] })).toEqual([]);
+    expect((await loadFacilityEmissionEntryCarry(ctx, origin.facilityId, db, undefined,
+      { ownedBatchIds: [origin.batchId] })).entries.find(value => value.id === replacement.id))
+      .toMatchObject({ heldForRemovalId: receiving.removalId, carry: {
+        receiver: { removalId: receiving.removalId, removalCode: expect.any(String),
+          creditBatchIds: [receiving.batchId], creditBatchCodes: [expect.any(String)], anotherCreditBatch: true },
+        waitingReason: null,
+      } });
+  } finally {
+    if (second) {
+      await db.update(creditBatchApplications).set({ creditBatchId: second.batchId }).where(eq(creditBatchApplications.removalId, second.removalId));
+      await db.update(certifierRemovals).set({ facilityId: second.facilityId }).where(eq(certifierRemovals.id, second.removalId));
+      await cleanupLineageFixture(second);
+    }
+    if (replacementId) {
+      await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, replacementId));
+      await db.delete(emissionEntries).where(eq(emissionEntries.id, replacementId));
+    }
+    await db.update(creditBatches).set({ removalTemplateId: observation.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
+    if (receiverObservationId) await db.delete(removalTemplateObservations).where(and(
+      eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, receiverObservationId),
+    ));
+    await db.delete(removalTemplateObservations).where(eq(removalTemplateObservations.id, current.id));
+  }
 });

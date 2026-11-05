@@ -10,9 +10,10 @@ import { loadBatchEmissionEntryCarry, loadFacilityEmissionEntryCarry } from "./e
 
 beforeEach(() => {
   vi.clearAllMocks();
-  const query = { from: vi.fn(), innerJoin: vi.fn(), where: mocks.where };
+  const query = { from: vi.fn(), innerJoin: vi.fn(), leftJoin: vi.fn(), where: mocks.where };
   query.from.mockReturnValue(query);
   query.innerJoin.mockReturnValue(query);
+  query.leftJoin.mockReturnValue(query);
   mocks.select.mockReturnValue(query);
   mocks.where.mockImplementation(() => ({ orderBy: async () => [] }));
 });
