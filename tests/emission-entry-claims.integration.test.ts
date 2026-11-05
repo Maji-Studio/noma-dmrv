@@ -1,5 +1,7 @@
 import { claimSubmissionDraft } from "@/data-access/certification-submissions";
 import { deleteCreditBatch } from "@/data-access/credit-batches";
+import { syncCreditBatchEntryDates } from "@/data-access/credit-batch-entry-dates";
+import { emissionCorrectionWindow } from "@/data-access/emission-entry-corrections";
 import type { PoolClient } from "pg";
 import { pgSchema, integer, text } from "drizzle-orm/pg-core";
 import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
@@ -22,7 +24,7 @@ import { db } from "@/db";
 import { activityEvents, certificationSubmissions, creditBatchApplications, creditBatches, emissionEntries, emissionEntryValues,
   removalTemplateObservations, users, certifierRemovals, certifierGhgStatements, certifierProductionBatches, organizations, facilities, certifierProjects, samples } from "@/db/schema";
 import { createEmissionEntry, deleteEmissionEntry, getEmissionEntry, updateEmissionEntry, replaceEmissionEntry } from "@/data-access/emission-entries";
-import { assertEmissionEntryDocumentWritable } from "@/data-access/emission-entry-lock";
+import { assertEmissionEntryDocumentWritable, lockEmissionEntryBatch } from "@/data-access/emission-entry-lock";
 import { isRemovalZeroEditable, recordEmissionZeros, undoEmissionZeros } from "@/data-access/emission-zeros";
 import { reserveProductionEmissionsClaims, rejectSubmissionAndReleaseProductionClaims } from "@/data-access/production-claim-reservations";
 import { markSubmissionSubmitted, retireStaleSubmissionDraft } from "@/data-access/submission-ledger-transitions";
@@ -51,6 +53,7 @@ beforeAll(async () => { await ensureTestOrg(); });
 beforeEach(async () => {
   await db.insert(users).values({ id: userId, email: `${userId}@example.test`, emailVerified: true }).onConflictDoNothing();
   correctionRemote.status = "AWAITING_VERIFICATION";
+  correctionRemote.ghg_entry_ids = ["correction-original"];
   fixture = await createLineageFixture("none");
   [observation] = await db.insert(removalTemplateObservations).values({
     organizationId: TEST_ORG_ID, provider: "isometric", externalProjectId: "project", externalTemplateId: `claims-${crypto.randomUUID()}`,
@@ -608,6 +611,78 @@ it.each([false, true])("tombstones a correction zero when an in-window value rep
   const [after] = await db.select().from(emissionEntries).where(eq(emissionEntries.id, zeroIds[0]));
   expect(after.deletedAt).not.toBeNull();
   expect(after.sentByRemovalId).toBe(sent ? fixture.removalId : null);
+});
+
+it("preserves another Removal's correctable zero when a held replacement is redated into its window", async () => {
+  const { zeroIds, statement } = await sentCorrectionEntry(true);
+  second = await createLineageFixture("none");
+  const holdingRemovalId = second.removalId;
+  // A now owns the companion batch; its zero on this batch is carried.
+  // B owns this batch, whose initial start precedes A's correction window.
+  await db.update(creditBatches).set({ startDate: "2026-06-02" }).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, second.batchId)));
+  await db.update(creditBatchApplications).set({ creditBatchId: second.batchId }).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, fixture.removalId)));
+  await db.update(creditBatchApplications).set({ creditBatchId: fixture.batchId }).where(and(
+    eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.removalId, holdingRemovalId)));
+  await db.update(emissionEntries).set({ occurredOn: "2026-06-02" }).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zeroIds[0])));
+  await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(
+    eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.id, holdingRemovalId)));
+  const attempt = await draft([], holdingRemovalId);
+  await db.update(certificationSubmissions).set({ status: "submitted", submittedAt: new Date(), externalId: "correction-holder" }).where(and(
+    eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, attempt.id)));
+  correctionRemote.ghg_entry_ids.push("correction-holder");
+  correctionRemote.status = "FAILED_VERIFICATION";
+
+  // A sent an additive zero under the old observation. B's current component
+  // uses a meter pair, so its replacement follows the batch start date.
+  const meterShape = ["initial_readout", "final_readout"].map(key => ({
+    key, type: "monitored" as const, quantityKind: "energy" as const,
+  }));
+  const [current] = await db.insert(removalTemplateObservations).values({ ...observation, id: undefined,
+    semanticFingerprint: "redate-meter", fullFingerprint: "redate-meter", lastObservedAt: new Date("2099-01-01"),
+    definition: { groups: observation.definition.groups.map(group => ({ ...group,
+      components: group.components.map(component => component.id === "zero" ? { ...component, inputs: meterShape } : component),
+    })) },
+    enrichment: { ...observation.enrichment, zero: { initial_readout: { unit: "kWh" }, final_readout: { unit: "kWh" } } },
+    lineSources: { ...observation.lineSources, zero: { scope: "operating", entryPolicy: "single", origin: "reviewed" } },
+  }).returning();
+  // Seed B's stopped sent original and its unsent single-value replacement.
+  // The real hold loader must follow replacesEntryId to B, including the tombstone.
+  const entryFields = { organizationId: ctx.organizationId, creditBatchId: fixture.batchId,
+    removalTemplateId: observation.externalTemplateId, observationId: current.id,
+    componentId: "zero", inputShape: meterShape, lineRule: "single" as const, kind: "value" as const,
+    occurredOn: "2026-06-01", createdBy: ctx.userId };
+  const [original] = await db.insert(emissionEntries).values({ ...entryFields,
+    sentByRemovalId: holdingRemovalId, deletedAt: new Date() }).returning();
+  const [replacement] = await db.insert(emissionEntries).values({ ...entryFields, replacesEntryId: original.id }).returning();
+  await db.insert(emissionEntryValues).values([original, replacement].flatMap(entry => meterShape.map(input => ({
+    organizationId: ctx.organizationId, entryId: entry.id, inputKey: input.key, magnitude: "1", unit: "kWh",
+  }))));
+  expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({ heldForRemovalId: holdingRemovalId, deletedAt: null });
+
+  await db.transaction(async (tx) => {
+    const { batch } = await lockEmissionEntryBatch(ctx, tx, fixture.batchId);
+    const window = emissionCorrectionWindow(ctx, tx, fixture.batchId, fixture.removalId);
+    expect(window).toEqual({ start: "2026-06-02", end: "2026-06-16" });
+    expect(replacement.occurredOn < window!.start).toBe(true);
+    const startDate = "2026-06-03";
+    expect(startDate >= window!.start && startDate <= window!.end).toBe(true);
+    await syncCreditBatchEntryDates(ctx, tx, batch, startDate, batch.endDate);
+    await tx.update(creditBatches).set({ startDate }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+  });
+
+  expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({
+    occurredOn: "2026-06-03", heldForRemovalId: holdingRemovalId,
+    version: replacement.version + 1, contentRevision: replacement.contentRevision + 1,
+  });
+  const [zero] = await db.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, zeroIds[0])));
+  expect(zero.sentByRemovalId).toBe(fixture.removalId);
+  expect(zero.occurredOn).toBe("2026-06-02");
+  expect(zero.deletedAt).toBeNull();
 });
 
 it("reports contention, not a missing Removal, when the zero writer skips its row lock", async () => {

@@ -204,7 +204,7 @@ it.each(["sent", "held"])("refuses Enter again for a %s carried entry before wri
   expect(mocks.activity).not.toHaveBeenCalled();
 });
 
-it.each([undefined, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {
+it.each([null, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {
   const zero = { ...original, id: "origin-zero", kind: "zero", sentByRemovalId: "origin", confirmedForRemovalId: "origin" };
   const where = vi.fn((_condition: SQL) => ({ returning: async () => [] }));
   const tx = {
