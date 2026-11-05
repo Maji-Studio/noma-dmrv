@@ -128,6 +128,9 @@ Email changes use `useChangeEmail` â†’ `changeEmailFn` in `src/fn/profile.ts` â†
 
 Memberships, credentials and Platform Admin authority use user IDs and stored roles, so changing an address preserves them. Pending invitations remain bound to their original recipient address; ask an Admin to cancel and re-invite the new address. The admin bootstrap CLI still finds its target by `ADMIN_EMAIL`: after a Platform Admin changes their email, update that operator configuration before rerunning bootstrap or it can create another admin at the old address.
 
+For staging/prod that configuration is `ADMIN_EMAIL` in the matching
+1Password item, and bootstrap runs through the `migrate.yml` workflow.
+
 ## Better Auth schema and credential identity
 
 The Drizzle adapter validates the configured schema at startup and before
