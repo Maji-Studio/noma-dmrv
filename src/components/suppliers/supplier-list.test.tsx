@@ -309,15 +309,16 @@ describe("SupplierList archive view", () => {
     expect(dialog.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
   });
 
-  it("does not offer Archive instead when an already archived supplier is refused as in use", async () => {
+  it("shows a Close-only in-use dialog without Archive instead when an archived supplier with no linked intakes is refused", async () => {
     state.remove.mockRejectedValue(inUseError("Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier."));
     render(<SupplierList />);
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
     fireEvent.click(within("Actions for SUP-0002", "Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-    await waitFor(() => expect(state.remove).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Archive instead" })).toBeNull();
-    expect(screen.queryByText(/ is in use/)).toBeNull();
+    const dialog = inDialog(await screen.findByRole("dialog", { name: "SUP-0002 is in use" }));
+    expect(dialog.queryByRole("button", { name: "Archive instead" })).toBeNull();
+    expect(dialog.queryByText(/Archive it instead/)).toBeNull();
+    expect(dialog.getAllByRole("button", { name: "Close" }).length).toBeGreaterThan(0);
   });
 
   it("refuses the edit mode request on an archived supplier and allows it on an active one", () => {
