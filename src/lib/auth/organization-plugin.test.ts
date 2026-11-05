@@ -77,6 +77,8 @@ import { sendEmail } from "@/lib/email/send";
 import { changePasswordFn } from "@/fn/profile";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: memory.member.find(row => row.userId === "actor")?.role ?? null, isPlatformAdmin: false }),
+  // Profile actions authenticate without an organization (withAuthAction).
+  getUser: async () => ({ id: "actor" }),
   requireOrgRole: (ctx: { orgRole: string | null }) => {
     if (ctx.orgRole !== "admin") throw new SafeError("Admin access is required.");
   },

@@ -142,6 +142,9 @@ a rollback or release, or translating a library error into a `SafeError`); and
 actions that surface a library's own error message that is not a `SafeError`
 (the Better Auth member and invitation actions in `organizations.ts`).
 `pnpm check:action-boundaries` enforces this rule and holds the allowlist.
+`withAuthAction` is the user-owned variant for Profile: it needs a signed-in
+user but no organization, hands the callback only `{ userId }`, and shares
+`withAction`'s error formatting and rate limiting.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -153,9 +156,10 @@ export async function createItem(input: CreateItem) {
 ```
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
-windowMs } })`, checked after auth so it keys on the resolved `userId`. It
-applies to expensive or abuse-prone actions: certification submits, geo
-geocode/route and the Profile password change are the current users.
+windowMs } })` (also on `withAuthAction`), checked after auth so it keys on the
+resolved `userId`. It applies to expensive or abuse-prone actions: certification
+submits, geo geocode/route and the Profile password and email changes are the
+current users.
 
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
@@ -349,6 +353,8 @@ runtime.
   `loadSettingsViewer()` and calls `assertSettingsPaneVisible()`: a pane
   outside the viewer's audience is a 404, and Removal templates and Facilities
   answer with Registry while the organization has no registry keys saved.
+  A signed-in person without an organization opens only Profile
+  (`loadSettingsViewer("profile")`); every other pane sends them to `/dashboard`.
   Every member opens General and Members read-only; Admins (and Platform
   Admins) change them. Developers (API keys) requires a verified Admin
   membership; a Platform Admin without one sees it without controls.

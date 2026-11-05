@@ -8,6 +8,7 @@ import { z } from "zod";
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
+  getUser: vi.fn(),
 }));
 
 vi.mock("@/lib/log", () => {
@@ -22,11 +23,11 @@ vi.mock("@/lib/log", () => {
   };
 });
 
-import { withAction } from "@/fn/with-action";
+import { withAction, withAuthAction } from "@/fn/with-action";
 import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger } from "@/lib/log";
-import { requireOrgContext } from "@/lib/auth/server";
+import { getUser, requireOrgContext } from "@/lib/auth/server";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 const mockUser = {
@@ -328,5 +329,28 @@ describe("withAction", () => {
       conflict,
     });
     expect(mapError).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("withAuthAction", () => {
+  it("passes only the authenticated user id without resolving an organization", async () => {
+    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockClear();
+    expect(await withAuthAction(async (ctx) => ctx)).toEqual({ success: true, data: { userId: mockUser.id } });
+    expect(requireOrgContext).not.toHaveBeenCalled();
+  });
+
+  it("refuses a missing session before running the callback", async () => {
+    vi.mocked(getUser).mockResolvedValue(null);
+    const write = vi.fn();
+    expect(await withAuthAction(write)).toEqual({ success: false, error: "You must be signed in." });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("keeps structured validation failures", async () => {
+    vi.mocked(getUser).mockResolvedValue(mockUser);
+    expect(await withAuthAction(async () => z.string().min(1).parse("")))
+      .toMatchObject({ success: false, code: "validation_failed" });
   });
 });

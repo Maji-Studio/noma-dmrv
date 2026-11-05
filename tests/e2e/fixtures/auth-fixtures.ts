@@ -29,6 +29,7 @@ import {
   type SeededChainData,
 } from "./seed-chain-data";
 import { enterDefaultOrganization } from "./organization-helpers";
+import { stubBasemap } from "../helpers/basemap-route";
 import { DEC_ORG_ID } from "../../../src/db/org-defaults";
 
 // Types for user roles
@@ -373,7 +374,9 @@ export async function createDirectAuthContext(
   baseURL: string,
 ): Promise<BrowserContext> {
   const storageState = await createSignedAuthStorageState(user, baseURL);
-  return browser.newContext({ storageState });
+  const context = await browser.newContext({ storageState });
+  await stubBasemap(context);
+  return context;
 }
 
 /**
@@ -407,6 +410,7 @@ export async function createAuthenticatedContext(
 ): Promise<BrowserContext> {
   // Create a new context
   const context = await browser.newContext();
+  await stubBasemap(context);
   const page = await context.newPage();
 
   // Authenticate
@@ -490,10 +494,17 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     await use(workerAuthData.cleanupTestData);
   },
 
+  // Plain `page` / `context` users get the basemap stub too.
+  context: async ({ context }, use) => {
+    await stubBasemap(context);
+    await use(context);
+  },
+
   adminContext: async ({ browser, workerAuthData }, use) => {
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.admin,
     });
+    await stubBasemap(context);
 
     await use(context);
     await context.close();
@@ -503,6 +514,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.org_admin,
     });
+    await stubBasemap(context);
 
     await use(context);
     await context.close();
@@ -512,6 +524,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.operator,
     });
+    await stubBasemap(context);
 
     await use(context);
     await context.close();
@@ -521,6 +534,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.lab_technician,
     });
+    await stubBasemap(context);
 
     await use(context);
     await context.close();
@@ -530,6 +544,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.viewer,
     });
+    await stubBasemap(context);
 
     await use(context);
     await context.close();

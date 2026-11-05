@@ -16,7 +16,7 @@ import { logger } from "@/lib/log";
 import { SETTINGS_PROFILE_HREF } from "@/lib/settings/links";
 import { changeEmailServerSchema, changePasswordSchema, profileNameSchema } from "@/schemas/profile";
 import { revokeUserOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
-import { withAction } from "./with-action";
+import { withAuthAction } from "./with-action";
 
 // Guessing the current password through this form is throttled per user.
 const CHANGE_PASSWORD_MAX_ATTEMPTS = 5;
@@ -51,7 +51,7 @@ function translatePasswordError(error: unknown): never {
 }
 
 export async function updateProfileNameFn(input: unknown) {
-  return withAction(async () => {
+  return withAuthAction(async () => {
     const { name } = profileNameSchema.parse(input);
     try {
       await auth.api.updateUser({ body: { name }, headers: await headers() });
@@ -73,7 +73,7 @@ export async function updateProfileNameFn(input: unknown) {
  * connection, so the two steps run one after the other instead.
  */
 export async function changePasswordFn(input: unknown) {
-  return withAction(async (ctx) => {
+  return withAuthAction(async (ctx) => {
     const { currentPassword, newPassword } = changePasswordSchema.parse(input);
     const requestHeaders = await headers();
     try {
@@ -97,7 +97,7 @@ export async function changePasswordFn(input: unknown) {
       return { otherDevicesSignedOut: true };
     } catch {
       // The password changed; only the sign-out of other devices failed. The
-      // flag, not ActionResult.warning, carries it: withAction has no warning
+      // flag, not ActionResult.warning, carries it: withAuthAction has no warning
       // path. The error itself is not logged, since it may carry PII.
       logger.warn({ op: "change-password", userId: ctx.userId }, "other sessions were not signed out");
       return { otherDevicesSignedOut: false };
@@ -118,7 +118,7 @@ function translateEmailError(error: unknown): never {
 }
 
 export async function changeEmailFn(input: unknown) {
-  return withAction(async () => {
+  return withAuthAction(async () => {
     const { newEmail, currentPassword } = changeEmailServerSchema.parse(input);
     const requestHeaders = await headers();
     try {

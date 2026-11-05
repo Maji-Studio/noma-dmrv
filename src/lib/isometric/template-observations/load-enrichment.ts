@@ -1,6 +1,6 @@
 import { getSequestrationInputBinding } from "../sequestration-input-bindings";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
-import { canonicalUnit } from "./units";
+import { canonicalUnit, monitoredInputUnit } from "./units";
 import type { IsometricClient } from "../client";
 import type { IsometricComponentBlueprint } from "../projects";
 import { getDatapoint } from "../submissions";
@@ -43,7 +43,7 @@ export async function loadTemplateEnrichment(
           unit = binding.sourceContract.wireUnit;
         }
       }
-      return [input.key, unit ? { unit, deprecated: null } : { status: "unknown" }];
+      return [input.key, unit ? { unit: monitoredInputUnit(input.quantityKind, unit), deprecated: null } : { status: "unknown" }];
     })),
   ])));
 }

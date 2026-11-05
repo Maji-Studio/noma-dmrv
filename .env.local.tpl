@@ -70,9 +70,9 @@ STORAGE_SIGNING_SECRET="op://Environment Variables/noma-dmrv env local/STORAGE_S
 # -----------------------------------------------------------------------------
 # Geo / Maps (map integration — ADR 0009)
 # GEO_PROVIDER=stub serves deterministic fixtures (no keys, no network);
-# set it to ors in the 1Password item once the two keys below hold real
-# values. Both keys may be empty strings until then — they're optional.
+# set it to ors in the 1Password item once the key below holds a real
+# value. It may be an empty string until then — it is optional. The basemap
+# (OpenFreeMap) needs no key.
 # -----------------------------------------------------------------------------
 GEO_PROVIDER="op://Environment Variables/noma-dmrv env local/GEO_PROVIDER"
 OPENROUTESERVICE_API_KEY="op://Environment Variables/noma-dmrv env local/OPENROUTESERVICE_API_KEY"
-NEXT_PUBLIC_MAPTILER_KEY="op://Environment Variables/noma-dmrv env local/NEXT_PUBLIC_MAPTILER_KEY"
