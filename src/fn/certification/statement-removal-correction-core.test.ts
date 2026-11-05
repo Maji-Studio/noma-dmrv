@@ -115,7 +115,7 @@ it("logs expected comparison failures and names all affected Removals", async ()
     "GHG Statement member comparison failed");
 });
 
-const oldVersionMessage = "This GHG Statement includes an old version of Removal R-12. Remove the old version from the GHG Statement in Isometric, or ask Isometric to remove it. Then use Sync from registry on the GHG Statements page and try again.";
+const oldVersionMessage = "This GHG Statement still lists an old version of Removal R-12 at Isometric. Ask Isometric to remove the old version from the GHG Statement, then use Sync from registry on the GHG Statements page and try again.";
 
 it.each([{ remoteIds: ["E1"] }, { remoteIds: ["E1", "E2"] }])("refuses superseded entry membership $remoteIds even after the Removal content is current", async ({ remoteIds }) => {
   vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue(remoteIds.map(externalId => ({
@@ -137,5 +137,5 @@ it("names each affected Removal once in code order", async () => {
     { id: "a", code: "R-12", ghgStatementId: "statement", isSuperseded: true },
   ]);
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["E1", "E2", "E3"], false))
-    .rejects.toThrow("This GHG Statement includes an old version of Removals R-12, R-13.");
+    .rejects.toThrow("This GHG Statement still lists an old version of Removals R-12, R-13 at Isometric.");
 });
