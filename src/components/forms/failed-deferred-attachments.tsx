@@ -1,6 +1,6 @@
 "use client";
 
-import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { TRY_AGAIN_LABEL, TRY_ALL_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useState } from "react";
 import { ArrowClockwiseIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -50,12 +50,11 @@ export function FailedDeferredAttachments({
             type="button"
             variant="weak"
             size="small"
-            aria-label="Try again for all attachments"
             onClick={() => void retry()}
             disabled={disabled || retryingKey !== null}
           >
             <ArrowClockwiseIcon size={14} weight="bold" />
-            {TRY_AGAIN_LABEL}
+            {TRY_ALL_AGAIN_LABEL}
           </Button>
         )}
       </div>

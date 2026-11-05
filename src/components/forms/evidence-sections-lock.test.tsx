@@ -80,7 +80,7 @@ describe("evidence sections on a locked record", () => {
   it.each(SECTIONS)("offers retries on an unlocked %s", (_entityType, renderSection) => {
     render(renderSection());
 
-    expect(screen.getByRole("button", { name: "Try again for all attachments" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try all again" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

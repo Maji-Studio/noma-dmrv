@@ -4,7 +4,7 @@
  * section 2), rendered from a `CreditBatchLineCopy`. Each form decides its own
  * copy; this renders it the same way everywhere: batch codes as links that
  * open the batch in a new tab (the unsaved form stays), the ⓘ explanation,
- * and Retry when a check failed.
+ * and Try again when a check failed.
  */
 "use client";
 

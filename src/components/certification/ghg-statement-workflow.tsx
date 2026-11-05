@@ -206,7 +206,7 @@ export function GhgStatementWorkflow({
       {reportsQuery.error && (
         <Notice
           tone="warning"
-          // Retry only reads the reports again, so a read-only or member sheet keeps it.
+          // Try again only reads the reports again, so a read-only or member sheet keeps it.
           action={(
             <Button
               size="small"
