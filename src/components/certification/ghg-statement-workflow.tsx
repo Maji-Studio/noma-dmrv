@@ -102,7 +102,7 @@ export function GhgStatementWorkflow({
     : reportsUnavailable
       ? {
           status: "warning",
-          detail: readOnly ? "Reports could not be loaded." : "Reports could not be loaded. Refresh the page and try again.",
+          detail: "Reports could not be loaded.",
         }
       : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }

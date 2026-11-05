@@ -131,7 +131,7 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain("Report approved");
     expect(html).toContain("Submitted to verifier");
     expect(html).toContain(
-      "Reports could not be loaded. Refresh the page and try again.",
+      "Reports could not be loaded.",
     );
     expect(html).toContain("Try again");
     expect(html).not.toContain("Generate report");

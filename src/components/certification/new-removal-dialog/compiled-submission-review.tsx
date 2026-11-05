@@ -119,8 +119,7 @@ export function CompiledSubmissionReview({
           </Button>
         }
       >
-        Submission details could not be prepared. The review must load before
-        submitting.
+        Submission details could not be prepared.
       </Notice>
     );
   }

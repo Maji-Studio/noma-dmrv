@@ -15,7 +15,7 @@ export type RemovalExternalMutation =
   | RegistryExternalMutation;
 
 const UNEXPECTED_REMOVAL_SUBMISSION_ERROR =
-  "Removal submission failed unexpectedly. Try the submission again.";
+  "Removal submission failed unexpectedly. Submit the Removal again.";
 
 export function readRemovalSubmissionExternalMutation(
   metadata: unknown,

@@ -232,7 +232,7 @@ describe("shared operation runner", () => {
   it("gives in-process unknown outcomes operator copy while keeping the API retry contract", async () => {
     const apiError = new DomainError(
       "outcome_unknown",
-      "The connection failed while saving, so it is not known whether the change was saved. Retry with the same idempotency key.",
+      "The connection failed while saving, so it is not known whether the change was saved. Try again with the same idempotency key.",
       { retryable: true, cause: new Error("Lost commit acknowledgement") },
     );
     owned.mockRejectedValue(apiError);
@@ -257,7 +257,7 @@ describe("shared operation runner", () => {
       idempotency: { credentialId: "credential-id", key: "key" },
     })).rejects.toBe(apiError);
     expect(apiError.retryable).toBe(true);
-    expect(apiError.message).toContain("Retry with the same idempotency key.");
+    expect(apiError.message).toContain("Try again with the same idempotency key.");
   });
 
   it("claims an app intent and returns the same native Dates on first save and replay", async () => {

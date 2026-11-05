@@ -50,11 +50,12 @@ export function FailedDeferredAttachments({
             type="button"
             variant="weak"
             size="small"
+            aria-label="Try again for all attachments"
             onClick={() => void retry()}
             disabled={disabled || retryingKey !== null}
           >
             <ArrowClockwiseIcon size={14} weight="bold" />
-            Try all again
+            {TRY_AGAIN_LABEL}
           </Button>
         )}
       </div>
