@@ -125,7 +125,7 @@ it("lists only the recipient's active key names and dates", async () => {
   vi.mocked(listActiveAccountApiKeys).mockResolvedValue([{ name: "Automation", createdAt: new Date("2026-10-22T00:00:00Z") }]);
   await sendPasswordChangedNotice(MEMBER, true);
   expect(listActiveAccountApiKeys).toHaveBeenCalledExactlyOnceWith(MEMBER.userId);
-  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Automation, created Oct 22, 2026.") }));
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Automation (created Oct 22, 2026)") }));
 });
 it("still sends the notice when the active key lookup fails", async () => {
   vi.mocked(listActiveAccountApiKeys).mockRejectedValue(new Error(MEMBER.email));
