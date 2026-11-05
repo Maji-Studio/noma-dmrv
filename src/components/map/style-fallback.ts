@@ -4,6 +4,8 @@
  * the map without a "load" event and everything that waits on it never starts.
  * This arms a timeout plus a pre-parse error listener; on either it swaps in
  * the blank style (once) and tells the caller, so markers and legs still draw.
+ * Both only cover a style that never parses: once "styledata" fires the timer
+ * is cleared and "load" follows when the tiles settle, however slowly.
  */
 
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -31,7 +33,8 @@ export function armBasemapFallback(
   const fallBack = () => {
     if (settled) return;
     cleanup();
-    map.setStyle(BLANK_BASEMAP_STYLE);
+    // diff: false, or an already-parsed style takes the diff path, which never emits "style.load".
+    map.setStyle(BLANK_BASEMAP_STYLE, { diff: false });
     onFallback();
   };
   const onLoad = () => cleanup();
@@ -39,6 +42,7 @@ export function armBasemapFallback(
   // that it is a transient tile error and "load" still fires.
   const onStyleData = () => {
     styleParsed = true;
+    clearTimeout(timer);
   };
   const onError = () => {
     if (!styleParsed) fallBack();

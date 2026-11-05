@@ -306,6 +306,7 @@ export default function RouteMiniMap({
   // WebGL can be unavailable (headless browsers, exhausted contexts) — the
   // panel keeps its textual details instead of crashing the form.
   const [mapFailed, setMapFailed] = useState(false);
+  const [basemapFailed, setBasemapFailed] = useState(false);
 
   const accentsRef = useRef(accents);
 
@@ -454,6 +455,8 @@ export default function RouteMiniMap({
     };
     map.once("load", init);
     const disarmFallback = armBasemapFallback(map, () => {
+      // Deferred so the effect never sets state synchronously (React Compiler).
+      queueMicrotask(() => setBasemapFailed(true));
       map.once("style.load", init);
     });
 
@@ -520,9 +523,17 @@ export default function RouteMiniMap({
     <div className="relative h-full w-full">
       <div
         ref={containerRef}
-        className="h-full w-full bg-[var(--color-background-white)]"
+        className={`h-full w-full ${basemapFailed ? "cvm-field" : "bg-[var(--color-background-white)]"}`}
         data-testid="transport-route-map-canvas"
       />
+      {basemapFailed && !satOn ? (
+        <div
+          className="absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
+          data-testid="route-map-no-basemap-note"
+        >
+          Basemap unavailable. Switch to SAT or reload.
+        </div>
+      ) : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}

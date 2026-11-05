@@ -2,7 +2,8 @@
 // (same approach as the home hero map, home/hero-map/map.js), with the transport legs drawn on their
 // routed roads. If the style does not load in time it falls back to a blank style over a dotted field. Without WebGL
 // createJourneyMap returns null and the page leaves the map view out.
-import { BASEMAP_BLANK_STYLE, BASEMAP_STYLE_TIMEOUT_MS, BASEMAP_STYLE_URL } from "../../../config.js";
+import { BASEMAP_STYLE_URL } from "../../../config.js";
+import { loadBasemapOrBlank } from "../../../lib/basemap.js";
 import { HERO, J, LEGS, PLANT_LL, R, SUPS, TOWNS, apps, supShort, supTown } from "./model.js";
 import { lineAt, lineMeasure } from "./geo.js";
 import { createPlant } from "./plant.js";
@@ -126,23 +127,7 @@ export async function createJourneyMap(host, hooks) {
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "Routes: OpenRouteService" }), "bottom-left");
   map.touchZoomRotate.disableRotation();
   map.getCanvas().tabIndex = -1;
-  await new Promise((resolve) => {
-    let parsed = false;
-    const fallBack = () => {
-      clearTimeout(t);
-      map.off("load", loaded);
-      map.off("error", onError);
-      host.classList.add("jr-map--blank");
-      map.once("style.load", resolve);
-      map.setStyle(BASEMAP_BLANK_STYLE);
-    };
-    const loaded = () => { clearTimeout(t); map.off("error", onError); resolve(); };
-    const onError = () => { if (!parsed) fallBack(); }; // a style fetch failure; later errors are tiles
-    const t = setTimeout(fallBack, BASEMAP_STYLE_TIMEOUT_MS);
-    map.once("styledata", () => { parsed = true; });
-    map.on("error", onError);
-    map.once("load", loaded);
-  });
+  await loadBasemapOrBlank(map, () => host.classList.add("jr-map--blank"));
   if (map.getStyle()?.layers?.length) recolor(map, p);
   const hasSat = addSatellite(map);
 

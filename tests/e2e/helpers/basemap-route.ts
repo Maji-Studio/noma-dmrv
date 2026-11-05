@@ -7,14 +7,13 @@
  */
 
 import type { BrowserContext, Page } from "@playwright/test";
-import { BASEMAP_STYLE_URL } from "@/config/geo";
+import { BASEMAP_STYLE_URL, BLANK_BASEMAP_STYLE } from "@/config/geo";
 
 const BASEMAP = new URL(BASEMAP_STYLE_URL);
 
 export const BASEMAP_URL_PATTERN = `**://${BASEMAP.host}/**`;
 
 const BASEMAP_STYLE_PATH = BASEMAP.pathname;
-const BLANK_STYLE = { version: 8, sources: {}, layers: [] } as const;
 const CORS_HEADERS = { "access-control-allow-origin": "*" };
 
 /** Stub the live basemap host on a context or a single page. */
@@ -22,7 +21,7 @@ export async function stubBasemap(target: BrowserContext | Page): Promise<void> 
   await target.route(BASEMAP_URL_PATTERN, async (route) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === BASEMAP_STYLE_PATH) {
-      await route.fulfill({ json: BLANK_STYLE, headers: CORS_HEADERS });
+      await route.fulfill({ json: BLANK_BASEMAP_STYLE, headers: CORS_HEADERS });
       return;
     }
     await route.abort();

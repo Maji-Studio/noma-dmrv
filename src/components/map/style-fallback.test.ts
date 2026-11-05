@@ -35,7 +35,7 @@ describe("armBasemapFallback", () => {
     armBasemapFallback(map, onFallback, TIMEOUT_MS);
     vi.advanceTimersByTime(TIMEOUT_MS * 2);
     expect(spy.setStyle).toHaveBeenCalledTimes(1);
-    expect(spy.setStyle).toHaveBeenCalledWith(BLANK_BASEMAP_STYLE);
+    expect(spy.setStyle).toHaveBeenCalledWith(BLANK_BASEMAP_STYLE, { diff: false });
     expect(onFallback).toHaveBeenCalledTimes(1);
   });
 
@@ -58,6 +58,16 @@ describe("armBasemapFallback", () => {
     emit("error");
     expect(onFallback).not.toHaveBeenCalled();
     expect(spy.setStyle).not.toHaveBeenCalled();
+  });
+
+  it("does not time out once the style has parsed", () => {
+    const { map, spy, emit } = fakeMap();
+    const onFallback = vi.fn();
+    armBasemapFallback(map, onFallback, TIMEOUT_MS);
+    emit("styledata");
+    vi.advanceTimersByTime(TIMEOUT_MS * 2);
+    expect(spy.setStyle).not.toHaveBeenCalled();
+    expect(onFallback).not.toHaveBeenCalled();
   });
 
   it("does nothing after load and clears the timer", () => {
