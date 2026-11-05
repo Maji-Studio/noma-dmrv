@@ -3,7 +3,7 @@ import { OAUTH_CODE_LIFETIME_MS, isOAuthGenerationIdle } from "@/config/oauth";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { members, oauthAuthorizationAttempts, oauthConsents, oauthGrants, organizationApiAccess, organizations, sessions, users, type OAuthGrant, type OAuthRevocationReason } from "@/db/schema";
+import { members, oauthAccessTokens, oauthRefreshTokens, oauthAuthorizationAttempts, oauthConsents, oauthGrants, organizationApiAccess, organizations, sessions, users, type OAuthGrant, type OAuthRevocationReason } from "@/db/schema";
 import { DomainError } from "@/lib/domain-errors";
 import { oauthRolePolicy } from "@/lib/auth/oauth-role-policy";
 import { disableOwnerApiKeys } from "./api-credential-auth";
@@ -165,4 +165,23 @@ export async function getOAuthOrganizationSelection(input: { sessionId: string; 
     .orderBy(desc(oauthGrants.lastUsedAt), oauthGrants.id).limit(1);
   return { memberships, autoSelectOrganizationId: eligible.length === 1 ? eligible[0].organizationId : null,
     preselectedOrganizationId: recent && eligible.some(member => member.organizationId === recent.organizationId) ? recent.organizationId : null };
+}
+
+/** Trusted password-change/reset hooks supply the authenticated account ID. */
+// org-scope-ok: password security events revoke the user's grants across all organizations.
+export async function revokeUserOAuthGrants(userId: string): Promise<void> {
+  await db.transaction(async tx => {
+    // org-scope-ok: account-wide revocation, independent of the active organization.
+    const grants = await tx.select({ id: oauthGrants.id }).from(oauthGrants)
+      .where(and(eq(oauthGrants.userId, userId), isNull(oauthGrants.revokedAt)))
+      .orderBy(oauthGrants.id).for("update");
+    for (const grant of grants) await revokeGeneration(grant.id, "disconnected", tx);
+    // Delete rather than mark refresh rows revoked, avoiding plugin family teardown.
+    // org-scope-ok: remove only this user's tokens, including old generations.
+    await tx.delete(oauthAccessTokens).where(eq(oauthAccessTokens.userId, userId));
+    // org-scope-ok: remove only this user's refresh tokens across organizations.
+    await tx.delete(oauthRefreshTokens).where(eq(oauthRefreshTokens.userId, userId));
+    // org-scope-ok: remove only this user's consents, including old generations.
+    await tx.delete(oauthConsents).where(eq(oauthConsents.userId, userId));
+  });
 }

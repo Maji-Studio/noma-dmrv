@@ -158,7 +158,7 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
     formState: { errors },
   } = useForm<ChangeEmailFormData>({
     resolver: zodResolver(changeEmailSchema(email)),
-    defaultValues: { newEmail: "" },
+    defaultValues: { newEmail: "", currentPassword: "" },
   });
 
   const onSubmit = latched(
@@ -169,6 +169,7 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
         await mutation.mutateAsync(values);
         setPendingEmail(values.newEmail);
         setValue("newEmail", "");
+        setValue("currentPassword", "");
       } catch (error) {
         setPendingEmail("");
         setSessionExpired(error instanceof ActionError && error.code === SESSION_EXPIRED);
@@ -199,6 +200,16 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
             autoComplete="email"
             error={!!errors.newEmail}
             {...register("newEmail")}
+          />
+        </FormField>
+        {/* Same rule as a password change (#1576). Its own id: the Password form below has currentPassword. */}
+        <FormField id="emailCurrentPassword" label="Current password" required error={errors.currentPassword?.message}>
+          <FormInput
+            id="emailCurrentPassword"
+            type="password"
+            autoComplete="current-password"
+            error={!!errors.currentPassword}
+            {...register("currentPassword")}
           />
         </FormField>
       </FormSection>

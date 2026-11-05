@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), warn: vi.fn(), error: vi.fn() }));
+vi.mock("@/data-access/account-api-keys", () => ({ listActiveAccountApiKeys: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({ getBetterAuthSession: mocks.session }));
 vi.mock("@/lib/log", () => ({ logger: { warn: mocks.warn, error: mocks.error } }));
 vi.mock("./send", async importOriginal => ({
   ...(await importOriginal<typeof import("./send")>()), sendEmail: vi.fn(),
 }));
+import { listActiveAccountApiKeys } from "@/data-access/account-api-keys";
 import { sendEmail } from "./send";
 import { sendPasswordChangedNotice, sendRemovedFromOrganizationNotice, sendRoleChangedNotice } from "./account-notices";
 import { orgRoleLabel } from "@/lib/org-role-label";
@@ -17,6 +19,7 @@ const APP_URL = env.NEXT_PUBLIC_APP_URL;
 afterEach(() => { env.NEXT_PUBLIC_APP_URL = APP_URL; });
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(listActiveAccountApiKeys).mockReset().mockResolvedValue([]);
   mocks.session.mockReset().mockResolvedValue({ user: { id: "actor-id", name: "Acting Admin" } });
   vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message" });
 });
@@ -116,4 +119,17 @@ it("gives each real event a unique provider key", async () => {
   const keys = vi.mocked(sendEmail).mock.calls.map(([input]) => input.idempotencyKey);
   expect(keys.every(key => key?.includes(MEMBER.memberId))).toBe(true);
   expect(new Set(keys).size).toBe(keys.length);
+});
+
+it("lists only the recipient's active key names and dates", async () => {
+  vi.mocked(listActiveAccountApiKeys).mockResolvedValue([{ name: "Automation", createdAt: new Date("2026-10-22T00:00:00Z") }]);
+  await sendPasswordChangedNotice(MEMBER, true);
+  expect(listActiveAccountApiKeys).toHaveBeenCalledExactlyOnceWith(MEMBER.userId);
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Automation. Created Oct 22, 2026.") }));
+});
+it("still sends the notice when the active key lookup fails", async () => {
+  vi.mocked(listActiveAccountApiKeys).mockRejectedValue(new Error(MEMBER.email));
+  await expect(sendPasswordChangedNotice(MEMBER, true)).resolves.toBeUndefined();
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("The active API key list could not be loaded.") }));
+  expect(mocks.warn).toHaveBeenCalledWith({ userId: MEMBER.userId }, "password notice API keys could not be loaded");
 });

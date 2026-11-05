@@ -110,11 +110,17 @@ function translateEmailError(error: unknown): never {
 
 export async function changeEmailFn(input: unknown) {
   return withAction(async () => {
-    const { newEmail } = changeEmailServerSchema.parse(input);
+    const { newEmail, currentPassword } = changeEmailServerSchema.parse(input);
+    const requestHeaders = await headers();
+    try {
+      await auth.api.verifyPassword({ body: { password: currentPassword }, headers: requestHeaders });
+    } catch (error) {
+      translatePasswordError(error);
+    }
     try {
       await auth.api.changeEmail({
         body: { newEmail, callbackURL: SETTINGS_PROFILE_HREF },
-        headers: await headers(),
+        headers: requestHeaders,
       });
     } catch (error) {
       translateEmailError(error);

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   changePassword: vi.fn(),
   changeEmail: vi.fn(),
+  verifyPassword: vi.fn(),
   revokeOtherSessions: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext }));
-vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { updateUser: mocks.updateUser, changeEmail: mocks.changeEmail, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
+vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { verifyPassword: mocks.verifyPassword, updateUser: mocks.updateUser, changeEmail: mocks.changeEmail, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
@@ -36,6 +37,7 @@ beforeEach(() => {
   __resetRateLimitForTests();
   mocks.requireOrgContext.mockResolvedValue({ userId: USER_ID, organizationId: "org-1", orgRole: "member", isPlatformAdmin: false });
   mocks.headers.mockResolvedValue(REQUEST_HEADERS);
+  mocks.verifyPassword.mockResolvedValue({ status: true });
   mocks.updateUser.mockResolvedValue({ status: true });
   mocks.changePassword.mockResolvedValue({ token: null, user: { id: USER_ID } });
   mocks.revokeOtherSessions.mockResolvedValue({ status: true });
@@ -136,14 +138,35 @@ describe("profile actions", () => {
 
 
 describe("changeEmailFn", () => {
-  const input = { newEmail: "new@example.test" };
+  const input = { newEmail: "new@example.test", currentPassword: "old-password" };
 
   it("validates and forwards only the new address and fixed callback with session headers", async () => {
-    expect(await changeEmailFn({ newEmail: "  new@example.test  ", callbackURL: "https://attacker.test", userId: "other-user" }))
+    expect(await changeEmailFn({ ...input, newEmail: "  new@example.test  ", callbackURL: "https://attacker.test", userId: "other-user" }))
       .toEqual({ success: true, data: { status: true } });
     expect(mocks.changeEmail).toHaveBeenCalledExactlyOnceWith({
-      body: { ...input, callbackURL: "/settings/profile" }, headers: REQUEST_HEADERS,
+      body: { newEmail: input.newEmail, callbackURL: "/settings/profile" }, headers: REQUEST_HEADERS,
     });
+  });
+
+  it.each([undefined, ""])("requires a current password (%s)", async currentPassword => {
+    expect(await changeEmailFn({ ...input, currentPassword })).toMatchObject({ success: false, code: "validation_failed",
+      issues: [expect.objectContaining({ path: ["currentPassword"], message: "Enter your current password." })] });
+    expect(mocks.verifyPassword).not.toHaveBeenCalled();
+    expect(mocks.changeEmail).not.toHaveBeenCalled();
+  });
+
+  it("verifies the current password before requesting the change", async () => {
+    await changeEmailFn(input);
+    expect(mocks.verifyPassword).toHaveBeenCalledExactlyOnceWith({ body: { password: input.currentPassword }, headers: REQUEST_HEADERS });
+    expect(mocks.verifyPassword.mock.invocationCallOrder[0]).toBeLessThan(mocks.changeEmail.mock.invocationCallOrder[0]);
+  });
+
+  it("refuses a wrong password with the password-change field error", async () => {
+    mocks.verifyPassword.mockRejectedValue(new APIError("BAD_REQUEST", { code: "INVALID_PASSWORD", message: input.currentPassword }));
+    expect(await changeEmailFn(input)).toMatchObject({ success: false, error: "That is not your current password.",
+      issues: [{ path: ["currentPassword"], code: "validation_failed", message: "That is not your current password." }] });
+    expect(mocks.changeEmail).not.toHaveBeenCalled();
+    expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 
   it("rejects malformed addresses on the server", async () => {

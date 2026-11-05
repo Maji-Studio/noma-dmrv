@@ -429,3 +429,6 @@ Notes, reasons and file names are never stored as activity values. Linked
 records store IDs only and resolve current labels in org-scoped reads.
 Stored idempotency outcome schema v2 includes value-free effect metadata;
 older outcomes answer `replay_unavailable` without a compatibility mapper.
+
+Email changes in Profile require the current password, verified by Better Auth, as well as a session less than 24 hours old and the existing rate limit; direct HTTP email changes are refused in favor of the guarded Profile action.
+Successful password changes and resets disconnect the user's OAuth apps across organizations, with failures logged by user ID without failing the password operation; API keys remain unchanged, and the existing password notice lists active key names and creation dates with a Settings, Developers revocation link.
