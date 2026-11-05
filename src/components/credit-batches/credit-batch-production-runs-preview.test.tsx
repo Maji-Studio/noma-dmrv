@@ -101,7 +101,7 @@ describe("CreditBatchProductionRunsPreview", () => {
       "Loading production runs",
     );
     expect(renderPreview({ isError: true })).toContain(
-      "Couldn&#x27;t load production runs for this window.",
+      "Production runs could not be loaded for this window.",
     );
     expect(renderPreview()).toContain("No matching production runs");
   });

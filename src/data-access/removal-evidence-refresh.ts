@@ -36,7 +36,7 @@ export async function requestRemovalEvidenceRefresh(
       throw new SafeError("Only an interrupted attempt without a registry GHG Entry can include new evidence. Refresh the Removal and retry its saved attempt.");
     }
     if (!canRefreshSubmissionEvidence(row.metadata)) {
-      throw new SafeError("This attempt may already have registry inputs. Retry its saved evidence; a new evidence version requires reconciliation of those inputs first.");
+      throw new SafeError("This attempt may already have registry inputs. Submit its saved evidence again; a new evidence version requires reconciliation of those inputs first.");
     }
     const candidates = await reconcile(row);
     const documentIds = [...new Set(candidates.map((candidate) => candidate.documentId))];

@@ -133,7 +133,7 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain(
       "Reports could not be loaded. Refresh the page and try again.",
     );
-    expect(html).toContain("Retry");
+    expect(html).toContain("Try again");
     expect(html).not.toContain("Generate report");
   });
 
@@ -166,7 +166,7 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain(
       "Reports could not be refreshed. Showing the last loaded versions.",
     );
-    expect(html).toContain("Retry");
+    expect(html).toContain("Try again");
     expect(html).not.toContain("Load the reports before reviewing");
   });
 

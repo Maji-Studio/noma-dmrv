@@ -165,7 +165,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]).toMatchObject({
       status: "rejected", lockedAt: null,
-      metadata: { lastError: "Removal submission failed unexpectedly. Retry the submission." },
+      metadata: { lastError: "Removal submission failed unexpectedly. Try the submission again." },
     });
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(durabilitySamples.submitDurabilityMeasurementSamples).not.toHaveBeenCalled();

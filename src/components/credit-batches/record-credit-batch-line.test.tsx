@@ -76,12 +76,12 @@ describe("RecordCreditBatchLine", () => {
     expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("offers Retry when the preview fails", () => {
+  it("offers Try again when the preview fails", () => {
     const refetch = vi.fn();
     previewHook.mockReturnValue(result({ isError: true, refetch }));
     render(<RecordCreditBatchLine kind="biochar-product" preview={{ kind: "biochar-product", bin: BIN, draw: null }} />);
     expect(screen.getByRole("status").textContent).toContain("Credit batch could not be checked.");
-    act(() => screen.getByRole("button", { name: "Retry" }).click());
+    act(() => screen.getByRole("button", { name: "Try again" }).click());
     expect(refetch).toHaveBeenCalled();
   });
 });

@@ -74,10 +74,10 @@ describe("read-only sheet sections", () => {
     const field = sections[0].fields.find((f) => f.label === "Delivery source");
     expect(field?.valuePresent).toBe(false);
     expect(field?.value).toBe("Could not load");
-    // The field states the failure; the notice gives only the step.
+    // The field names the failure in its value; the notice states it once.
     render(<>{sections[0].content}</>);
-    expect(screen.getByRole("status").textContent).toContain("Try again to load the delivery source.");
-    expect(screen.queryByText(/could not be loaded/i)).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("The delivery source could not be loaded.");
+    expect(screen.getAllByText(/could not be loaded/i)).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

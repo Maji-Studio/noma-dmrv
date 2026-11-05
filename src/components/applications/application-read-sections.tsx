@@ -17,7 +17,7 @@ import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import { Notice } from "@/components/ui/notice";
 
-const DELIVERY_RETRY_TEXT = "Try again to load the delivery source.";
+const DELIVERY_RETRY_TEXT = "The delivery source could not be loaded.";
 
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {

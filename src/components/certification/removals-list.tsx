@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useToast } from "@/components/ui/toast";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
@@ -269,7 +270,7 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
             void summary.retry?.();
           }}
         >
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       )}
     </span>

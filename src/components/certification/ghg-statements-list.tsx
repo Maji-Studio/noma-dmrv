@@ -17,6 +17,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
@@ -500,7 +501,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
                 onClick={() => void query.refetch()}
                 busy={query.isFetching}
               >
-                Retry
+                {TRY_AGAIN_LABEL}
               </Button>
             }
           >

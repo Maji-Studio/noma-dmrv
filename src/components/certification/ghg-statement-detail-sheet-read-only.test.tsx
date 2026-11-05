@@ -4,6 +4,7 @@
  * facility): no refresh, generate or submit, the reason is said once, and the
  * workflow states where the statement stands without telling anyone to act.
  */
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
@@ -110,7 +111,8 @@ describe("GhgStatementDetailSheet", () => {
   it.each(STATES)("gives no instruction when read only and %s", (_name, setUp) => {
     setUp();
     renderSheet(READ_ONLY);
-    expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+    // The failed reports read keeps its Try again button, which only reads again.
+    expect(document.body.textContent?.replace(TRY_AGAIN_LABEL, "")).not.toMatch(INSTRUCTION_WORDS);
   });
 
   it("gives no instruction when read only and the statement could not be loaded", () => {
@@ -134,13 +136,14 @@ describe("GhgStatementDetailSheet", () => {
   it.each(STATES)("gives a member no instruction when %s", (_name, setUp) => {
     setUp();
     render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
-    expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+    // A failed reports read keeps its Try again button for a member (tested below); no other text instructs.
+    expect(document.body.textContent?.replace(TRY_AGAIN_LABEL, "")).not.toMatch(INSTRUCTION_WORDS);
   });
 
-  it("offers a member Retry when the reports fail, which only reads them again", () => {
+  it("offers a member Try again when the reports fail, which only reads them again", () => {
     mocks.reportsError = new Error("reports");
     render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
-    screen.getByRole("button", { name: "Retry" }).click();
+    screen.getByRole("button", { name: "Try again" }).click();
     expect(mocks.refetchReports).toHaveBeenCalledOnce();
   });
 
