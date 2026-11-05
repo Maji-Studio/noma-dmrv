@@ -78,6 +78,7 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId) }),
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionsOverview(scope.facilityId) }),
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionAllocationPrefix() }),
     queryClient.invalidateQueries({ queryKey: energyKeys.all }),
     // Batch health, batch-health summaries, the certification overview, removal preflight and activity.
     invalidateCertificationReadiness(queryClient),
