@@ -46,6 +46,8 @@ enforces the list and rejects stale entries.
   `tests/helpers/isometric-sandbox-env.ts`. Requires sandbox credentials
   (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
   `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
+  `isometric-health.yml` loads the pair from 1Password; `pnpm env:run` with staging/prod
+  does not provide it because the pair is outside `.env.tpl`.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
 - `pnpm exec playwright test -c playwright.visual.config.ts` — the opt-in form
   capture harness in `tests/visual/` (skipped unless `FORM_CAPTURE=1`; Vitest

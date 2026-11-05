@@ -178,7 +178,10 @@ Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL
 
 ### Can't Create Admin User
 
-`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set — there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set; there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
+
+For staging/prod, run admin bootstrap through the `migrate.yml` workflow;
+`pnpm env:run` does not provide `ADMIN_EMAIL` there (see `docs/security.md`).
 
 ## Build & Deployment Issues
 
