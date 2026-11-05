@@ -51,6 +51,7 @@ import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 const ICON_SIZE = 14;
 const STALE_DETAIL_WARNING =
   "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
+const STALE_DETAIL_READ_ONLY = "Statement details could not be refreshed. Showing the last loaded details.";
 
 /** What the sheet needs of a statement: a list row, or the same fields read by link. */
 export type GhgStatementSheetItem = Pick<GhgStatementListItem, "statement" | "effectiveReportingPeriodEndOn" | "remotePeriodMissing">;
@@ -151,10 +152,12 @@ function DetailState({
   if (!hasGhgStatementDetailData(query)) {
     return (
       <>
-        <SlideOverPanel.Body>
+        <SlideOverPanel.Body className="flex flex-col gap-24">
+          {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
           <p className="body-small text-[var(--clr-red)]" role="alert">
-            Statement details could not be loaded. Refresh the page and try
-            again.
+            {readOnly
+              ? "Statement details could not be loaded."
+              : "Statement details could not be loaded. Refresh the page and try again."}
           </p>
         </SlideOverPanel.Body>
         <CloseFooter />
@@ -228,7 +231,7 @@ function DetailState({
         <EnvBanner isProduction={isProduction} variant="inline" />
 
         {!registryActionsAvailable && (
-          <Notice tone="warning">{STALE_DETAIL_WARNING}</Notice>
+          <Notice tone="warning">{readOnly ? STALE_DETAIL_READ_ONLY : STALE_DETAIL_WARNING}</Notice>
         )}
 
         <DetailSection title="Statement status" divider={false}>
@@ -415,7 +418,7 @@ function DetailState({
       />
 
       <SlideOverPanel.Footer>
-        {statementSubmission && !readOnly && (
+        {statementSubmission && !readOnly && canManageReports && (
           <Button
             variant="primary"
             onClick={handleRefresh}

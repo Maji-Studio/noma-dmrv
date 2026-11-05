@@ -9,7 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
-const mocks = vi.hoisted(() => ({ clockOverride: undefined as { timeZone?: string } | undefined, submitProps: null as Record<string, unknown> | null }));
+const mocks = vi.hoisted(() => ({
+  clockOverride: undefined as { timeZone?: string } | undefined,
+  submitProps: null as Record<string, unknown> | null,
+  // Each state a statement can be read in; the sheet must never tell a read-only viewer to act in any of them.
+  remote: { status: "FAILED_VERIFICATION", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 } as Record<string, unknown> | null,
+  reports: [] as { id: string; version: number; lifecycle: string; reviewUrl: string }[],
+  reportsError: null as Error | null,
+  stateError: null as Error | null,
+  stateData: true,
+}));
 
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -21,17 +30,17 @@ vi.mock("@/hooks/use-facility-context", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn(), success: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({
   useGhgStatementState: () => ({
-    isLoading: false, error: null,
-    data: {
+    isLoading: false, error: mocks.stateError,
+    data: !mocks.stateData ? undefined : {
       statement: { id: "st-1", facilityId: "facility-archived", reportingPeriodStartOn: "2026-01-01" },
       statementSubmission: { id: "sub-1", externalId: "ghg_1", version: 1, status: "submitted" },
       statementSubmissionForStatus: { id: "sub-1", externalId: "ghg_1", version: 1, status: "submitted" },
       linkedRemovals: [{ removal: { id: "r1", code: "RM-1", startedOn: null, completedOn: null }, submission: null, creditBatches: [] }],
-      remote: { status: "FAILED_VERIFICATION", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 },
+      remote: mocks.remote,
       recentSyncEvents: [],
     },
   }),
-  useGhgStatementReports: () => ({ data: [], error: null, isFetching: false, isLoading: false, refetch: vi.fn() }),
+  useGhgStatementReports: () => ({ data: mocks.reports, error: mocks.reportsError, isFetching: false, isLoading: false, refetch: vi.fn() }),
   useGhgStatementBreakdown: () => ({ data: { status: "available", message: "" }, isLoading: false, error: null }),
   useRefreshGhgStatementStatus: () => ({ isPending: false, mutate: vi.fn() }),
 }));
@@ -57,7 +66,21 @@ function renderSheet(readOnly?: SheetReadOnly) {
   render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports open onClose={vi.fn()} readOnly={readOnly} timeZone={readOnly ? "Africa/Dar_es_Salaam" : undefined} />);
 }
 
-beforeEach(() => { mocks.clockOverride = undefined; mocks.submitProps = null; });
+const INSTRUCTION_WORDS = /\b(resubmit|submit|refresh|retry|reload|generate|create|edit)\b|submit again|try again|when you submit|Use Refresh/i;
+const STATES: [string, () => void][] = [
+  ["failed verification", () => {}],
+  ["pending changes", () => { mocks.remote = { status: "DRAFT", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 }; }],
+  ["draft with no entries", () => { mocks.remote = { status: "DRAFT", ghg_entry_ids: [], pending_total_co2e_removed_kg: 100 }; }],
+  ["live data unavailable", () => { mocks.remote = null; mocks.stateError = new Error("stale"); }],
+  ["prepared report", () => { mocks.reports = [{ id: "r1", version: 2, lifecycle: "prepared", reviewUrl: "/r1" }]; }],
+  ["reports failed to load", () => { mocks.reportsError = new Error("reports"); }],
+];
+
+beforeEach(() => {
+  mocks.clockOverride = undefined; mocks.submitProps = null;
+  mocks.remote = { status: "FAILED_VERIFICATION", ghg_entry_ids: ["e1"], pending_total_co2e_removed_kg: 100 };
+  mocks.reports = []; mocks.reportsError = null; mocks.stateError = null; mocks.stateData = true;
+});
 afterEach(cleanup);
 
 describe("GhgStatementDetailSheet", () => {
@@ -81,6 +104,30 @@ describe("GhgStatementDetailSheet", () => {
     expect(text).toContain("Verification failed.");
     expect(text).not.toContain("then resubmit");
     expect(text).not.toContain("when you submit");
+  });
+
+  it.each(STATES)("gives no instruction when read only and %s", (_name, setUp) => {
+    setUp();
+    renderSheet(READ_ONLY);
+    expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+  });
+
+  it("gives no instruction when read only and the statement could not be loaded", () => {
+    mocks.stateData = false;
+    renderSheet(READ_ONLY);
+    expect(document.body.textContent).toContain("could not be loaded");
+    expect(document.body.textContent).not.toMatch(INSTRUCTION_WORDS);
+  });
+
+  it("keeps the instruction for an editable sheet in the same states", () => {
+    mocks.remote = null; mocks.stateError = new Error("stale");
+    renderSheet();
+    expect(document.body.textContent).toMatch(/Use Refresh/);
+  });
+
+  it("gives a member no Refresh", () => {
+    render(<GhgStatementDetailSheet item={ITEM} isProduction={false} canManageReports={false} open onClose={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
   });
 
   it("uses the archived facility's own timezone", () => {

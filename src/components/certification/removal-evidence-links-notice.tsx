@@ -16,18 +16,19 @@ function applications(count: number): string {
 
 export function evidenceLinksNoticeCopy(
   links: RemovalListRow["evidenceLinks"],
+  readOnly = false,
 ): { title: string; text: string } | null {
   if (!links) return null;
   if (links.mismatchCount > 0) {
     return {
       title: EVIDENCE_LINKS_MISMATCH_TITLE,
-      text: `Isometric lists different evidence on ${applications(links.mismatchCount)} than this Removal sent. Check the evidence on Isometric.`,
+      text: `Isometric lists different evidence on ${applications(links.mismatchCount)} than this Removal sent.${readOnly ? "" : " Check the evidence on Isometric."}`,
     };
   }
   if (links.unconfirmedCount > 0) {
     return {
       title: EVIDENCE_LINKS_UNCONFIRMED_TITLE,
-      text: `Isometric has not confirmed the evidence on ${applications(links.unconfirmedCount)}. Reload this page to check again.`,
+      text: `Isometric has not confirmed the evidence on ${applications(links.unconfirmedCount)}.${readOnly ? "" : " Reload this page to check again."}`,
     };
   }
   return null;
@@ -35,10 +36,12 @@ export function evidenceLinksNoticeCopy(
 
 export function RemovalEvidenceLinksNotice({
   links,
+  readOnly = false,
 }: {
   links: RemovalListRow["evidenceLinks"];
+  readOnly?: boolean;
 }) {
-  const copy = evidenceLinksNoticeCopy(links);
+  const copy = evidenceLinksNoticeCopy(links, readOnly);
   if (!copy) return null;
   return (
     <Notice tone="warning" title={copy.title} data-removal-evidence-links>

@@ -118,7 +118,10 @@ export function SubmissionOutcomeNotice({
   facilityId,
   timeZone,
   finalized = false,
+  readOnly = false,
 }: {
+  /** Nothing can be fixed or sent from here: the notice says what happened and stops there. */
+  readOnly?: boolean;
   outcome: NoticeOutcome;
   facilityId: string;
   timeZone: string;
@@ -139,8 +142,8 @@ export function SubmissionOutcomeNotice({
         </div>
       )}
       <p className="mt-8 body-small">
-        {fixLine(outcome, facilityId, finalized)}
-        {outcome.kind === "differs" && <ExplanationInfo title="Why it stopped" hint={whyItStopped(outcome, finalized)} />}
+        {!readOnly && fixLine(outcome, facilityId, finalized)}
+        {outcome.kind === "differs" && <ExplanationInfo title="Why it stopped" hint={whyItStopped(outcome, finalized || readOnly)} />}
       </p>
     </Notice>
   );

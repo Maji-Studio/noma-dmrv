@@ -101,7 +101,7 @@ export function GhgStatementWorkflow({
     : reportsUnavailable
       ? {
           status: "warning",
-          detail: "Reports could not be loaded. Refresh the page and try again.",
+          detail: readOnly ? "Reports could not be loaded." : "Reports could not be loaded. Refresh the page and try again.",
         }
       : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
@@ -134,7 +134,9 @@ export function GhgStatementWorkflow({
     : latestPrepared
       ? {
           status: "active",
-          detail: `Version ${latest?.version} will be approved automatically when you submit.`,
+          detail: readOnly
+            ? `Version ${latest?.version} prepared, not approved.`
+            : `Version ${latest?.version} will be approved automatically when you submit.`,
         }
       : approvedReport
         ? { status: "met", detail: `Version ${approvedReport.version} approved.` }
@@ -202,7 +204,7 @@ export function GhgStatementWorkflow({
       {reportsQuery.error && (
         <Notice
           tone="warning"
-          action={
+          action={readOnly ? undefined : (
             <Button
               size="small"
               variant="default"
@@ -211,7 +213,7 @@ export function GhgStatementWorkflow({
             >
               Retry
             </Button>
-          }
+          )}
         >
           {reportsRefreshFailed
             ? "Reports could not be refreshed. Showing the last loaded versions."

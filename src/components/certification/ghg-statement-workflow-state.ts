@@ -37,8 +37,9 @@ export function deriveVerifierStep(
     return remoteUnavailable
       ? {
           status: "warning",
-          detail:
-            "Live Isometric statement data is unavailable. Refresh and try again.",
+          detail: readOnly
+            ? "Live Isometric statement data is unavailable."
+            : "Live Isometric statement data is unavailable. Refresh and try again.",
         }
       : { status: "skipped" };
   }
@@ -68,7 +69,7 @@ export function deriveVerifierStep(
       if (!hasMembership) {
         return {
           status: "warning",
-          detail: "No GHG Entries are available to submit.",
+          detail: readOnly ? "No GHG Entries are linked." : "No GHG Entries are available to submit.",
         };
       }
       if (readOnly) return { status: "skipped", detail: "Not submitted yet." };

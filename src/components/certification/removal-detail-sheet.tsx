@@ -122,11 +122,14 @@ function SubmissionStatusSection({
   status,
   facilityId,
   timeZone,
+  readOnly = false,
 }: {
   summary: RemovalListRow;
   status: RemovalWorkflowStatus;
   facilityId: string;
   timeZone: string;
+  /** Nothing here can change the Removal, so no reason, retry or fix is offered. */
+  readOnly?: boolean;
 }) {
   const outcome = submissionOutcomeFor(summary, status);
   // The outcome notice replaces the two generic "review the history" reasons.
@@ -157,10 +160,11 @@ function SubmissionStatusSection({
           facilityId={facilityId}
           timeZone={timeZone}
           finalized={summary.hasFinalizedSubmission}
+          readOnly={readOnly}
         />
       )}
 
-      {reasons.length > 0 && (
+      {!readOnly && reasons.length > 0 && (
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
             {reasons.map((reason) => (
@@ -170,7 +174,7 @@ function SubmissionStatusSection({
         </Notice>
       )}
 
-      {status.canRetry && (
+      {status.canRetry && !readOnly && (
         <Button
           variant="default"
           size="small"
@@ -291,14 +295,14 @@ export function RemovalDetailSheet({
             {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} />
+            <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
             {correction ? (
               <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
             ) : (
-              <RemovalCorrectionNotice lock={lock} />
+              <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
             )}
             <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
-            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
+            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} readOnly={!!readOnly} />
 
             {summary.externalId && (
               <RemovalCarbonBreakdown
@@ -373,14 +377,14 @@ export function RemovalDetailSheet({
               facilityId={facilityId}
               sent={workflowStatus.kind === "submitted"}
             />
-            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} />
+            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} readOnly={!!readOnly} />
 
             {/*
               Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
               diesel the active template cannot carry. Distinct from readiness
               blockers above: the removal still submits.
             */}
-            <SubmissionNotes notes={submissionWarningNotes} />
+            {!readOnly && <SubmissionNotes notes={submissionWarningNotes} />}
 
             {/*
               Registry value sources prepare mapped evidence for its intended
@@ -391,10 +395,13 @@ export function RemovalDetailSheet({
               (Restores the mount lost when evidence-step.tsx was deleted in the
               2026-06-04 certify redesign.)
             */}
-            <SourcesPanel
-              removalId={summary.removalId}
-              isEditable={isActionable && !readOnly}
-            />
+            {/* Its files are prepared for the next submission, which this sheet cannot start. */}
+            {!readOnly && (
+              <SourcesPanel
+                removalId={summary.removalId}
+                isEditable={isActionable}
+              />
+            )}
 
             <SubmissionHistory
               attempts={summary.submissionAttempts}

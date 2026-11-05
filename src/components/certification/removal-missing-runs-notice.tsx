@@ -45,7 +45,7 @@ export function RemovalMissingRunsNotice({
             tone="warning"
             data-removal-missing-runs={batch.creditBatchId}
             title={`${one ? "1 completed run is" : `${batch.runs.length} completed runs are`} not in ${batch.creditBatchCode} yet`}
-            action={
+            action={readOnly ? undefined : (
               <span className="flex flex-wrap gap-x-16">
                 {addable.length > 0 && (
                   <Link href={batchHref} className={NOTICE_ACTION_LINK_CLASS}>
@@ -58,11 +58,11 @@ export function RemovalMissingRunsNotice({
                   </Link>
                 )}
               </span>
-            }
+            )}
           >
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
             {`. ${missingRunsCountedSentence(batch.runs.length)}`}
-            {refused.length > 0 && ` ${refusedRunsSentence(refused, addable.length === 0)}`}
+            {refused.length > 0 && !readOnly && ` ${refusedRunsSentence(refused, addable.length === 0)}`}
             {!canManage && !readOnly && addable.length > 0 && ` ${refused.length === 0
               ? missingRunsMemberSentence(addable.length)
               : missingRunsMemberNamedSentence(addable.map((run) => run.code))}`}

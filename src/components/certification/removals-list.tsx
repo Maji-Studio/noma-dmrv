@@ -409,21 +409,14 @@ function ListBody({
       return;
     }
     if (invalidRemovalId.current === removalId) return;
-    if (!linkedRemoval.data && (linkedRemoval.isError || linkedRemoval.isSuccess)) {
+    // Dead when the read finished without the Removal. A failed refresh while data is held keeps the sheet.
+    const archivedMissing = !!archivedFacilityId && ((archivedIdentities.isError && !archivedIdentities.data) || (!!archivedIdentities.data && archivedEntries.length === 0));
+    if (archivedMissing || (!linkedRemoval.data && (linkedRemoval.isError || linkedRemoval.isSuccess))) {
       invalidRemovalId.current = removalId;
       toast.error("Linked Removal could not be opened");
       void setRemovalId(null);
     }
-  }, [removalId, lookupEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, setRemovalId, toast]);
-
-  // The archived facility's list answered without this Removal, or could not answer: say so, like any other dead link.
-  const archivedMissing = !!archivedFacilityId && (archivedIdentities.isError || (!!archivedIdentities.data && archivedEntries.length === 0));
-  useEffect(() => {
-    if (!archivedMissing || invalidRemovalId.current === removalId) return;
-    invalidRemovalId.current = removalId;
-    toast.error("Linked Removal could not be opened");
-    void setRemovalId(null);
-  }, [archivedMissing, removalId, setRemovalId, toast]);
+  }, [removalId, lookupEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, archivedFacilityId, archivedIdentities.isError, archivedIdentities.data, archivedEntries.length, setRemovalId, toast]);
 
   const enrichmentByRemovalId = useRemovalPreflightSummaries(
     facilityId,

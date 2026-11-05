@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   listedFacilities: [] as string[],
   sheetProps: [] as Record<string, unknown>[],
   archivedEntries: true,
+  refetchError: false,
   toastError: vi.fn(),
 }));
 
@@ -46,7 +47,7 @@ vi.mock("@/hooks/use-certification", () => ({
   useRemovalsForFacility: (facilityId: string, enabled = true) => {
     if (enabled) mocks.listedFacilities.push(facilityId);
     return {
-      isLoading: false, error: null,
+      isLoading: false, error: null, isError: mocks.refetchError,
       data: !enabled ? undefined : { isProduction: false, removals: facilityId === ARCHIVED_FACILITY && mocks.archivedEntries ? [{ removal: { id: REMOVAL_ID } }] : [] },
     };
   },
@@ -71,6 +72,7 @@ beforeEach(() => {
   mocks.listedFacilities = [];
   mocks.sheetProps = [];
   mocks.archivedEntries = true;
+  mocks.refetchError = false;
   mocks.toastError.mockClear();
 });
 afterEach(cleanup);
@@ -90,6 +92,13 @@ describe("Removals link into an archived facility", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(mocks.toastError).toHaveBeenCalledWith("Linked Removal could not be opened");
     expect(mocks.query.removal).toBeNull();
+  });
+
+  it("keeps the sheet open when a background refresh of the archived list fails", () => {
+    mocks.refetchError = true;
+    render(<RemovalsList canManage />);
+    expect(screen.getByRole("dialog", { name: "RM-0001" })).toBeTruthy();
+    expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
   it("opens nothing read only for a facility that is not archived", () => {

@@ -30,6 +30,7 @@ const PANEL_TITLE = "Emissions from other credit batches";
 const PANEL_CAPTION = "Included automatically. Each stays part of its own credit batch, and Isometric gets a note saying so.";
 const SHEET_STATE = { draft: "Included automatically. Sent when this Removal is submitted.", sent: "Sent with this Removal." } as const;
 const REVISION_STATE = "Goes out when this Removal is resubmitted.";
+const REVISION_STATE_READ_ONLY = "Not part of the sent Removal.";
 const FALLBACK_NAME = "Emissions entry";
 // Phone: component and figure, then batch and date, then source. Desktop: five columns.
 const ROW_GRID =
@@ -135,10 +136,10 @@ export function CarriedEntriesSection({ entries, facilityId, sent }: { entries: 
  * takes when it is resubmitted. The title names the Removal, so rows skip the
  * "Recorded after" line.
  */
-export function RevisionLateEntriesSection({ entries, facilityId, removalCode }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; removalCode: string }) {
+export function RevisionLateEntriesSection({ entries, facilityId, removalCode, readOnly = false }: { entries: readonly CarriedEntry[] | undefined; facilityId: string; removalCode: string; readOnly?: boolean }) {
   if (!entries?.length) return null;
   return (
-    <EntriesSection title={`Recorded after ${removalCode} was sent`} state={REVISION_STATE} dataAttr="data-revision-late-entries">
+    <EntriesSection title={`Recorded after ${removalCode} was sent`} state={readOnly ? REVISION_STATE_READ_ONLY : REVISION_STATE} dataAttr="data-revision-late-entries">
       {entries.map((entry) => (
         <EntryItem key={entry.entryId} entry={entry} facilityId={facilityId} lead="In" recordedAfter={false} />
       ))}

@@ -128,10 +128,13 @@ export function CreateGateNotice({
   notice,
   facilityId,
   linkedFacilityCount,
+  isAdmin = true,
 }: {
   notice: GhgCreateGateNotice;
   facilityId: string;
   linkedFacilityCount: number | undefined;
+  /** A member cannot create a statement or open the link settings, so the notice states the fact. */
+  isAdmin?: boolean;
 }) {
   if (!notice) return null;
   return (
@@ -140,6 +143,8 @@ export function CreateGateNotice({
         <p>
           Isometric project link unavailable. Refresh to retry.
         </p>
+      ) : notice === "unlinked" && !isAdmin ? (
+        <p>This facility is not linked to an Isometric project, so statements cannot be synced. An admin can link it in Settings.</p>
       ) : notice === "unlinked" ? (
         <p>
           Link this facility to an Isometric project in{" "}
@@ -158,7 +163,7 @@ export function CreateGateNotice({
   );
 }
 
-/** `canManage`: the viewer is an admin, who alone may sync or create statements (the server requires it). */
+/** `canManage`: the viewer is an admin, who alone may create statements and refresh or submit them (the server requires it). Sync from registry is open to every member. */
 export function GhgStatementsList({ canManage = false }: { canManage?: boolean } = {}) {
   const { facilityId } = useFacilityContext();
 
@@ -481,6 +486,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
           notice={canManage || gate.notice !== "sharedProject" ? gate.notice : null}
           facilityId={facilityId}
           linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
+          isAdmin={canManage}
         />
 
         {query.error && (
