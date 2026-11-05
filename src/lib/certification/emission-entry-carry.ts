@@ -77,8 +77,7 @@ export function removalEntryCarryOwner(args: {
     if (!receiver.observation) return { receiver: null, waitingReason: "templateUnknown",
       waitingFor: { removalId: receiver.removalId, removalCode: receiver.code } };
     const line = entryLine(receiver.observation, entry.componentId);
-    if (line?.entryPolicy === "additive" &&
-      line.component.inputs.filter(input => input.type === "monitored").length === 1 &&
+    if (isCarryCompatibleLine(line) &&
       emissionEntryCounts(args.observation, receiver.observation, entry.componentId).counts) {
       return { receiver: { removalId: receiver.removalId, removalCode: receiver.code, creditBatchCodes: receiver.creditBatchCodes,
         creditBatchIds: [...receiver.creditBatchIds], anotherCreditBatch: true }, waitingReason: null };
@@ -93,11 +92,18 @@ export function recordedAfter(carried: { earlierRemovalId?: string; earlierRemov
     ? { removalId: carried.earlierRemovalId, removalCode: carried.earlierRemovalCode } : null;
 }
 
-/** A carry belongs to its elected, reserved, or sent Removal. */
+/** A line can take a carried entry: one added value with exactly one monitored input. */
+export function isCarryCompatibleLine(line: ReturnType<typeof entryLine>): boolean {
+  return line?.entryPolicy === "additive" &&
+    line.component.inputs.filter(input => input.type === "monitored").length === 1;
+}
+
+/** A carry belongs to its elected, reserved, sent, or holding Removal. */
 export function isCarriedToRemoval(
-  entry: Pick<RemovalEntryFact, "carry" | "reservedByRemovalId" | "sentByRemovalId">,
+  entry: Pick<RemovalEntryFact, "carry" | "reservedByRemovalId" | "sentByRemovalId" | "heldForRemovalId">,
   removalId: string,
 ): boolean {
   return entry.carry?.receiver?.removalId === removalId ||
-    entry.reservedByRemovalId === removalId || entry.sentByRemovalId === removalId;
+    entry.reservedByRemovalId === removalId || entry.sentByRemovalId === removalId ||
+    entry.heldForRemovalId === removalId;
 }

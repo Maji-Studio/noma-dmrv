@@ -7,7 +7,9 @@ import type { DbTransaction } from "@/db";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
 vi.mock("@/db", () => ({ db: {} }));
-const mocks = vi.hoisted(() => ({ locked: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ locked: vi.fn(), lineage: vi.fn(), members: vi.fn(), latest: vi.fn() }));
+vi.mock("./emission-entry-carry-queries", () => ({ listCarryRemovalMembers: mocks.members }));
+vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest }));
 vi.mock("./certification-lineage-guards", async importOriginal => ({
   ...await importOriginal<typeof import("./certification-lineage-guards")>(),
   getLockedCertifiedLineageForBatches: mocks.locked,
@@ -222,4 +224,55 @@ it("queries the edited batch's application owners once during discovery", async 
   const { ctx, tx, conditions } = correctionFixture();
   await discoverEmissionCorrectionScope(ctx, tx, "a");
   expect(conditions.filter(condition => new PgDialect().sqlToQuery(condition).params.includes("a"))).toHaveLength(1);
+});
+
+it("loads the receiver's latest observation by its own member pin within the locked union", async () => {
+  const { lockEmissionCorrectionScope, loadEmissionCorrectionReceiverObservation } = await import("./emission-entry-corrections");
+  const { ctx, tx } = correctionFixture();
+  await lockEmissionCorrectionScope(ctx, tx, "a");
+  mocks.members.mockResolvedValue([
+    { removal: { id: "origin" }, batch: { id: "a", facilityId: "facility", removalTemplateId: "origin-template" } },
+    { removal: { id: "receiver" }, batch: { id: "member", facilityId: "facility", removalTemplateId: "receiver-template" } },
+  ]);
+  const observation = { id: "latest-receiver-observation" };
+  mocks.latest.mockResolvedValue(observation);
+  mocks.members.mockClear();
+  mocks.latest.mockClear();
+  expect(await loadEmissionCorrectionReceiverObservation(ctx, tx, "a", "receiver", "facility")).toBe(observation);
+  expect(mocks.members).toHaveBeenCalledExactlyOnceWith(ctx, "facility", tx, ["a", "member", "neighbor"]);
+  expect(mocks.latest).toHaveBeenCalledExactlyOnceWith(ctx, "isometric", "receiver-template", tx);
+});
+
+it.each(["unlocked", "closed", "own-batch", "foreign-org"] as const)("does not read a receiver template outside a carried correction scope (%s)", async state => {
+  const { lockEmissionCorrectionScope, loadEmissionCorrectionReceiverObservation } = await import("./emission-entry-corrections");
+  const { ctx, tx } = correctionFixture("sent", "FAILED_VERIFICATION", state === "closed" ? "AWAITING_VERIFICATION" : "FAILED_VERIFICATION");
+  if (state !== "unlocked") await lockEmissionCorrectionScope(ctx, tx, "a");
+  mocks.members.mockClear();
+  mocks.latest.mockClear();
+  expect(await loadEmissionCorrectionReceiverObservation(state === "foreign-org" ? { ...ctx, organizationId: "foreign" } : ctx,
+    tx, "a", state === "own-batch" ? "origin" : "receiver", "facility")).toBeNull();
+  expect(mocks.members).not.toHaveBeenCalled();
+  expect(mocks.latest).not.toHaveBeenCalled();
+});
+
+it.each(["empty", "unpinned", "mixed", "other-facility"] as const)("does not resolve an unusable receiver pin (%s)", async state => {
+  const { lockEmissionCorrectionScope, loadEmissionCorrectionReceiverObservation } = await import("./emission-entry-corrections");
+  const { ctx, tx } = correctionFixture();
+  await lockEmissionCorrectionScope(ctx, tx, "a");
+  const member = { removal: { id: "receiver" }, batch: { id: "member", facilityId: "facility", removalTemplateId: "receiver-template" as string | null } };
+  if (state === "unpinned") member.batch.removalTemplateId = null;
+  if (state === "other-facility") member.batch.facilityId = "other-facility";
+  mocks.members.mockResolvedValue(state === "empty" ? [] : [member,
+    ...(state === "mixed" ? [{ ...member, batch: { ...member.batch, id: "second", removalTemplateId: "other-template" } }] : [])]);
+  mocks.latest.mockClear();
+  expect(await loadEmissionCorrectionReceiverObservation(ctx, tx, "a", "receiver", "facility")).toBeNull();
+  expect(mocks.latest).not.toHaveBeenCalled();
+});
+
+it("requires org scope before reading a receiver observation", async () => {
+  const { loadEmissionCorrectionReceiverObservation } = await import("./emission-entry-corrections");
+  mocks.members.mockClear();
+  await expect(loadEmissionCorrectionReceiverObservation({ ...makeTestOrgContext(), organizationId: "" },
+    {} as DbTransaction, "a", "receiver", "facility")).rejects.toThrow("Unauthorized");
+  expect(mocks.members).not.toHaveBeenCalled();
 });
