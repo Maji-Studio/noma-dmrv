@@ -23,15 +23,16 @@ import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
-  ITEM_PREFIX,
   REQUIRED_LOCAL_VARS,
   fetchItemFieldNames,
   filterTemplateToItem,
+  itemNameForEnvironment,
 } from "./env-tpl-utils";
 
 const TEMPLATE_FILE = ".env.local.tpl";
 const OUTPUT_FILE = ".env.local";
 const OP_ENV = "local";
+const ITEM_NAME = itemNameForEnvironment(OP_ENV);
 
 function check1PasswordAuth(): void {
   const result = spawnSync("op", ["whoami"], { encoding: "utf-8" });
@@ -72,7 +73,7 @@ function main(): void {
 
   if (missingRequired.length > 0) {
     console.error(
-      `Required field(s) missing from 1Password item "${ITEM_PREFIX} ${OP_ENV}": ` +
+      `Required field(s) missing from 1Password item "${ITEM_NAME}": ` +
         missingRequired.join(", ")
     );
     console.error("Add them to the item, then rerun: pnpm env:local");
@@ -100,7 +101,7 @@ function main(): void {
   if (skipped.length > 0) {
     console.warn(
       `\n⚠️  Skipped ${skipped.length} optional variable(s) — no matching field in ` +
-        `"${ITEM_PREFIX} ${OP_ENV}":`
+        `"${ITEM_NAME}":`
     );
     for (const name of skipped) console.warn(`     ${name}`);
     console.warn(
@@ -108,7 +109,7 @@ function main(): void {
         "   to the 1Password item and rerun pnpm env:local (pnpm env:check shows drift)."
     );
   }
-  console.log(`\nWrote ${OUTPUT_FILE} from ${TEMPLATE_FILE} ("${ITEM_PREFIX} ${OP_ENV}").`);
+  console.log(`\nWrote ${OUTPUT_FILE} from ${TEMPLATE_FILE} ("${ITEM_NAME}").`);
 }
 
 main();
