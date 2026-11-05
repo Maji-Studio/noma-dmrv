@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import {
+  BASEMAP_STYLE_TIMEOUT_MS,
   BASEMAP_STYLE_URL,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
@@ -27,7 +28,6 @@ const DATA_SOURCE_ID = `${OWN_LAYER_PREFIX}boundary`;
 const FILL_LAYER_ID = `${OWN_LAYER_PREFIX}boundary-fill`;
 const LINE_LAYER_ID = `${OWN_LAYER_PREFIX}boundary-line`;
 const SAT_TILE_SIZE = 256;
-const STYLE_LOAD_TIMEOUT_MS = 12_000;
 const FIT_PADDING_PX = 48;
 const FIT_DURATION_MS = 600;
 const ACCENT_TOKEN = "--clr-pink";
@@ -97,7 +97,7 @@ export default function GeoJsonPreviewMap({
       mapRef.current = null;
       queueMicrotask(() => setMapFailed(true));
     };
-    const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
+    const loadTimer = setTimeout(failIfUnloaded, BASEMAP_STYLE_TIMEOUT_MS);
     let styleParsed = false;
     let renderFailed = false;
     map.once("styledata", () => {

@@ -7,10 +7,13 @@
  */
 
 import type { BrowserContext, Page } from "@playwright/test";
+import { BASEMAP_STYLE_URL } from "@/config/geo";
 
-export const BASEMAP_URL_PATTERN = "**://tiles.openfreemap.org/**";
+const BASEMAP = new URL(BASEMAP_STYLE_URL);
 
-const BASEMAP_STYLE_PATH = "/styles/positron";
+export const BASEMAP_URL_PATTERN = `**://${BASEMAP.host}/**`;
+
+const BASEMAP_STYLE_PATH = BASEMAP.pathname;
 const BLANK_STYLE = { version: 8, sources: {}, layers: [] } as const;
 const CORS_HEADERS = { "access-control-allow-origin": "*" };
 

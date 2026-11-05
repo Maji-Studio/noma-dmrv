@@ -3,10 +3,10 @@
 // OpenFreeMap Positron basemap (no key) recoloured into a diagram (labels hidden, hairline boundaries), square
 // site markers, bowed legs with marching ants, distance chips and record cards.
 // Without WebGL the container keeps the dotted field (hero-map.css, .hm-map--blank).
+import { BASEMAP_BLANK_STYLE, BASEMAP_STYLE_TIMEOUT_MS, BASEMAP_STYLE_URL } from "../../../../config.js";
 import { SITES, LEGS, RECORDS, legKm } from "./data.js";
 import { recordCard as sharedCard } from "../../record-card.js";
 
-const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 const START = { center: [35.29, -8.32], zoom: 9.4 };
 
 const ARC_SEGMENTS = 32;
@@ -112,7 +112,7 @@ export async function createHeroMap(container, opts = {}) {
   try {
     map = new maplibregl.Map({
       container,
-      style: STYLE_URL,
+      style: BASEMAP_STYLE_URL,
       ...START,
       attributionControl: { compact: true },
       dragRotate: false,
@@ -128,8 +128,25 @@ export async function createHeroMap(container, opts = {}) {
     return null;
   }
   map.getCanvas().tabIndex = -1;
-  await new Promise((resolve) => map.once("load", resolve));
-  recolor(map, p);
+  // Race the style load against a timeout and a pre-parse error; on failure fall back to a blank style.
+  await new Promise((resolve) => {
+    let parsed = false;
+    const fallBack = () => {
+      clearTimeout(timer);
+      map.off("load", loaded);
+      map.off("error", onError);
+      container.classList.add("hm-map--blank");
+      map.once("style.load", resolve);
+      map.setStyle(BASEMAP_BLANK_STYLE);
+    };
+    const loaded = () => { clearTimeout(timer); map.off("error", onError); resolve(); };
+    const onError = () => { if (!parsed) fallBack(); };
+    const timer = setTimeout(fallBack, BASEMAP_STYLE_TIMEOUT_MS);
+    map.once("styledata", () => { parsed = true; });
+    map.on("error", onError);
+    map.once("load", loaded);
+  });
+  if (map.getStyle()?.layers?.length) recolor(map, p);
 
   const legFeatures = LEGS.map((leg, i) => {
     const a = byId[leg.from]; const b = byId[leg.to];

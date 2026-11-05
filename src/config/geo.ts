@@ -146,6 +146,12 @@ export const GIS_BOUNDARY_NORMALIZE_RATE_LIMIT = {
  */
 export const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 
+/** Empty MapLibre style: the fallback when the basemap style cannot load. */
+export const BLANK_BASEMAP_STYLE = { version: 8 as const, sources: {}, layers: [] };
+
+/** How long a map waits for its basemap style before falling back to blank (ms). */
+export const BASEMAP_STYLE_TIMEOUT_MS = 12_000;
+
 /** Esri World Imagery raster for the SAT toggle (no key required). */
 export const SAT_TILE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";

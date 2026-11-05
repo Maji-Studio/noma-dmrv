@@ -2,17 +2,15 @@
 // (same approach as the home hero map, home/hero-map/map.js), with the transport legs drawn on their
 // routed roads. If the style does not load in time it falls back to a blank style over a dotted field. Without WebGL
 // createJourneyMap returns null and the page leaves the map view out.
+import { BASEMAP_BLANK_STYLE, BASEMAP_STYLE_TIMEOUT_MS, BASEMAP_STYLE_URL } from "../../../config.js";
 import { HERO, J, LEGS, PLANT_LL, R, SUPS, TOWNS, apps, supShort, supTown } from "./model.js";
 import { lineAt, lineMeasure } from "./geo.js";
 import { createPlant } from "./plant.js";
 import { RM } from "./state.js";
 
-const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
-const BLANK = { version: 8, sources: {}, layers: [] };
 const START = { center: PLANT_LL, zoom: 9 };
 const MIN_ZOOM = 5.5;
 const MAX_ZOOM = 17.5;
-const STYLE_TIMEOUT_MS = 8000;
 const ARC_SEGMENTS = 32;
 const ARC_BOW = 0.16; // an unrouted leg bows by this fraction of its length
 const ANTS = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
@@ -119,7 +117,7 @@ export async function createJourneyMap(host, hooks) {
   let map;
   try {
     map = new maplibregl.Map({
-      container: host, style: STYLE_URL, ...START, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
+      container: host, style: BASEMAP_STYLE_URL, ...START, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
       attributionControl: false,
       dragRotate: false, pitchWithRotate: false, maxPitch: 0, keyboard: false, fadeDuration: 0,
     });
@@ -129,13 +127,20 @@ export async function createJourneyMap(host, hooks) {
   map.touchZoomRotate.disableRotation();
   map.getCanvas().tabIndex = -1;
   await new Promise((resolve) => {
-    const loaded = () => { clearTimeout(t); resolve(); };
-    const t = setTimeout(() => {
+    let parsed = false;
+    const fallBack = () => {
+      clearTimeout(t);
       map.off("load", loaded);
+      map.off("error", onError);
       host.classList.add("jr-map--blank");
       map.once("style.load", resolve);
-      map.setStyle(BLANK);
-    }, STYLE_TIMEOUT_MS);
+      map.setStyle(BASEMAP_BLANK_STYLE);
+    };
+    const loaded = () => { clearTimeout(t); map.off("error", onError); resolve(); };
+    const onError = () => { if (!parsed) fallBack(); }; // a style fetch failure; later errors are tiles
+    const t = setTimeout(fallBack, BASEMAP_STYLE_TIMEOUT_MS);
+    map.once("styledata", () => { parsed = true; });
+    map.on("error", onError);
     map.once("load", loaded);
   });
   if (map.getStyle()?.layers?.length) recolor(map, p);

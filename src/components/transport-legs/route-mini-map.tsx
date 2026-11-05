@@ -30,6 +30,7 @@ import {
 } from "@/config/geo";
 import {
   applyBrandRecolor,
+  armBasemapFallback,
   createMarkerElement,
   MapControls,
   type MapAccent,
@@ -401,7 +402,12 @@ export default function RouteMiniMap({
     const endpointState = endpointStateRef.current;
     map.on("click", () => closeCard(endpointRefs));
 
-    map.once("load", () => {
+    // Overlay setup runs once: on "load" of the real style, or after the
+    // blank fallback style is in place when the basemap cannot load.
+    let initialised = false;
+    const init = () => {
+      if (initialised) return;
+      initialised = true;
       applyBrandRecolor(map);
       map.addSource(SAT_SOURCE_ID, {
         type: "raster",
@@ -445,9 +451,14 @@ export default function RouteMiniMap({
         },
       });
       paintPreview(map, previewRef.current);
+    };
+    map.once("load", init);
+    const disarmFallback = armBasemapFallback(map, () => {
+      map.once("style.load", init);
     });
 
     return () => {
+      disarmFallback();
       clearHideTimer(endpointRefs);
       endpointState.buttons = {};
       popupRef.current?.remove();

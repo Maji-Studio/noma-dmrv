@@ -14,6 +14,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import {
+  BASEMAP_STYLE_TIMEOUT_MS,
   BASEMAP_STYLE_URL,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
@@ -35,12 +36,6 @@ const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}sat-layer`;
 const SAT_TILE_SIZE = 256;
 /** Ease animation when the position changes from outside the map (ms). */
 const EASE_DURATION_MS = 600;
-/**
- * If the basemap style never finishes loading within this window (a failed or
- * hanging basemap request: provider outage, offline, tile 5xx),
- * fall back to manual coordinates instead of leaving a silent blank box.
- */
-const STYLE_LOAD_TIMEOUT_MS = 12_000;
 /** ~0.1 m precision — more than enough to pin a site. */
 const COORD_DECIMALS = 6;
 
@@ -135,7 +130,7 @@ export default function PositionPickerMap({
       // Deferred so the effect never sets state synchronously (React Compiler).
       queueMicrotask(() => setMapFailed(true));
     };
-    const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
+    const loadTimer = setTimeout(failIfUnloaded, BASEMAP_STYLE_TIMEOUT_MS);
     // Tile/source requests only start once the style JSON has parsed
     // ("styledata"), so an error before that is the style fetch itself failing
     // (bad/expired key, domain-lock rejection, offline) — fatal. An error
