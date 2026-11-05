@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-11-05: Block a returned Removal from dropping a sent entry (#1575)
+
+An application-date correction can shrink a Removal's entry window. A sent value
+entry from a member credit batch outside the current window now produces
+`sentEntryOutsideWindow` in the shared contribution compiler. Review and submit
+surface the blocker with an Emissions destination.
+Sent ownership is unchanged. Carried entries, recorded zeros, entries inside the
+window and entries sent by other Removals keep their existing behavior. No
+registry contract or schema change.
+
 ## 2026-11-04: Correct carried entries under their receiving Removal (#1572)
 
 Emissions correction scopes include the member batches of Removals that sent,

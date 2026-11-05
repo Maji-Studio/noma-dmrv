@@ -1,10 +1,12 @@
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
+import { updateApplicationInTransaction } from "@/data-access/application-writes";
 import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
+import { sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { certificationSubmissions, certifierGhgStatements, certifierProjects, certifierRemovals, creditBatches,
+import { applications, certificationSubmissions, certifierGhgStatements, certifierProjects, certifierRemovals, creditBatches,
   emissionEntries, emissionEntryValues, facilities, removalTemplateObservations, users, activityEvents } from "@/db/schema";
 import { createLineageFixture, cleanupLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
@@ -26,12 +28,15 @@ import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import type { RemovalScope } from "@/fn/certification/removal-scope";
 
-const { ORIGINAL_EXTERNAL_ID } = vi.hoisted(() => ({ ORIGINAL_EXTERNAL_ID: `original-${crypto.randomUUID()}` }));
+const { ORIGINAL_EXTERNAL_ID, returnedEntryIds } = vi.hoisted(() => {
+  const id = `original-${crypto.randomUUID()}`;
+  return { ORIGINAL_EXTERNAL_ID: id, returnedEntryIds: [id] };
+});
 // Registry ids are globally unique in certification_submissions; keep them distinct per file.
 const FILE_TAG_LENGTH = 8;
 const FILE_TAG = crypto.randomUUID().slice(0, FILE_TAG_LENGTH);
 
-vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: [ORIGINAL_EXTERNAL_ID] }) }));
+vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: async () => ({ status: "FAILED_VERIFICATION", submitted_at: "2099-01-01T00:00:00Z", ghg_entry_ids: returnedEntryIds }) }));
 const userId = crypto.randomUUID();
 const org = { ...makeTestOrgContext(userId), orgRole: "admin" as const };
 let fixture: LineageFixture | undefined;
@@ -51,7 +56,12 @@ afterEach(async () => {
   await db.delete(users).where(eq(users.id, userId));
 });
 
-it.each([false, true])("submits a returned Removal through claim and freshness, interrupted before reservation: %s", async (interrupt) => {
+it.each([
+  { interrupt: false, shrink: false },
+  { interrupt: true, shrink: false },
+  { interrupt: false, shrink: true },
+])("submits a returned Removal through claim and freshness: %j", async ({ interrupt, shrink }) => {
+  returnedEntryIds.splice(0, returnedEntryIds.length, ORIGINAL_EXTERNAL_ID);
   // Restore transaction lock exports hidden by the general orchestrator harness.
   Object.assign(await import("@/data-access/facility-durability-lock"),
     await vi.importActual("@/data-access/facility-durability-lock"));
@@ -89,7 +99,7 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   await db.update(certifierRemovals).set({ ghgStatementId: statement.id }).where(and(eq(certifierRemovals.organizationId, org.organizationId), eq(certifierRemovals.id, f.removalId)));
   await db.insert(certificationSubmissions).values({ organizationId: org.organizationId, provider: "isometric", localEntityType: "ghgStatement", localEntityId: statement.id,
     submissionType: "ghg_statement", status: "submitted", version: 1, externalId: "returned-statement", submittedAt: new Date("2026-01-02"), metadata: { remoteStatus: "FAILED_VERIFICATION", removalIds: [ORIGINAL_EXTERNAL_ID] } });
-  const added = await createEmissionEntry(org, { creditBatchId: f.batchId, componentId: "line", occurredOn: "2026-06-10", values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2", unit: "kWh" }] });
+  const added = await createEmissionEntry(org, { creditBatchId: f.batchId, componentId: "line", occurredOn: shrink ? "2026-06-16" : "2026-06-10", values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "2", unit: "kWh" }] });
   const evidence = await insertDocument(org, { entityType: "emission_entry", entityId: added.id, documentType: "pdf", fileName: "Evidence.pdf", fileUrl: "https://example.test/evidence.pdf" });
   documentIds.push(evidence.id);
   const zeros = await recordEmissionZeros(org, { removalId: f.removalId, creditBatchId: f.batchId, componentIds: ["zero"] });
@@ -119,6 +129,9 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   };
   vi.mocked(context.resolveScopeForRemoval).mockResolvedValue({ memberBatches: [] } as unknown as RemovalScope);
   vi.mocked(context.loadRemovalSubmissionContext).mockImplementation(async (_org, _id, options) => {
+    const [application] = await db.select().from(applications).where(and(
+      eq(applications.organizationId, org.organizationId), eq(applications.id, f.applicationId)));
+    scope.lineages[0].application.applicationDate = application.applicationDate;
     const facts = await loadBatchEmissionContext(org, f.facilityId, scope.memberBatches, facilityFacts,
       { claimedAttempt: { removalId: f.removalId, submissionId: options?.claimedSubmissionId }, loadCorrection: loadRemovalEntryCorrection });
     const entries = await loadRemovalEntryContext(org, scope, facts, facilityFacts);
@@ -152,4 +165,28 @@ it.each([false, true])("submits a returned Removal through claim and freshness, 
   const [old] = await db.select().from(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.id, prior.id)));
   expect(old.status).toBe("superseded");
   expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
+  if (shrink) {
+    // The successful version above really reserved and stamped the entry. Return
+    // that version, then correct the application through the normal locked writer.
+    const sent = await realClaims.getLatestSubmission(org, { provider: "isometric", localEntityType: "removal", submissionType: "removal", localEntityId: f.removalId });
+    expect(sent?.externalId).toBeTruthy();
+    expect(sent?.payloadSnapshot).toMatchObject({ frozenEntrySet: expect.arrayContaining([
+      expect.objectContaining({ entryId: added.id }),
+    ]) });
+    returnedEntryIds.push(sent!.externalId!);
+    const [application] = await db.select().from(applications).where(and(
+      eq(applications.organizationId, org.organizationId), eq(applications.id, f.applicationId)));
+    await db.transaction(tx => updateApplicationInTransaction(org, tx, {
+      applicationId: application.id, expectedVersion: application.version,
+      applicationDate: new Date("2026-06-15T00:00:00Z"),
+    }));
+    await expect(submitRemoval({ orgCtx: org, removalId: f.removalId })).rejects.toThrow(
+      sentEntryOutsideRemovalPeriod("2026-06-16"),
+    );
+    expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
+    expect(await getEmissionEntry(org, added.id)).toMatchObject({ sentByRemovalId: f.removalId, sendReservedBySubmissionId: null });
+    const [stillSent] = await db.select().from(certificationSubmissions).where(and(
+      eq(certificationSubmissions.organizationId, org.organizationId), eq(certificationSubmissions.id, sent!.id)));
+    expect(stillSent.status).toBe("submitted");
+  }
 });
