@@ -88,6 +88,9 @@ export const auth = betterAuth({
     before: createAuthMiddleware(async (ctx) => {
       validateOrganizationRoleInput(ctx.path, ctx.body);
       if (ctx.path === "/change-email") {
+        // Password verification belongs to the rate-limited Profile action.
+        // Better Auth's HTTP endpoint has no current-password field.
+        if (ctx.request) throw new APIError("FORBIDDEN", { message: "Use the Profile email change form." });
         // 1.7.10's sensitiveSessionMiddleware re-reads the session but does not
         // check freshness. Enforce it here before any email can be sent.
         const session = await getAuthoritativeSessionFromCtx(ctx);

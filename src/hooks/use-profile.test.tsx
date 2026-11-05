@@ -22,7 +22,7 @@ function emailMutation() {
   }).result;
 }
 
-const INPUT = { newEmail: "new@example.test" };
+const INPUT = { newEmail: "new@example.test", currentPassword: "old-password" };
 
 it("unwraps a successful server action", async () => {
   vi.mocked(changeEmailFn).mockResolvedValue({ success: true, data: { status: true } });
