@@ -436,7 +436,7 @@ describe("GHG Statement parent list refreshes", () => {
     state.list.mockResolvedValue([listItem]);
     state.detail.mockResolvedValue(detail);
     let renderer: ReactTestRenderer;
-    await act(async () => { renderer = create(<GhgStatementsList />); });
+    await act(async () => { renderer = create(<GhgStatementsList canManage />); });
     await act(async () => {
       await vi.waitFor(() => expect(findButton(renderer!, "Open statement")).toBeDefined());
     });
@@ -447,7 +447,7 @@ describe("GHG Statement parent list refreshes", () => {
     await act(async () => findButton(renderer!, "Submit")!.props.onClick());
     await prepareAndReview(renderer!);
     await act(async () => renderer!.root.findByType("form").props.onSubmit());
-    await act(async () => renderer!.update(<GhgStatementsList />));
+    await act(async () => renderer!.update(<GhgStatementsList canManage />));
     expect(state.submit).toHaveBeenCalledOnce();
     expect(findButton(renderer!, "Done")).toBeDefined();
 
@@ -492,7 +492,7 @@ describe("GHG Statement parent list refreshes", () => {
     state.client!.removeQueries();
     state.list.mockRejectedValue(new Error("Initial load failed"));
     let renderer: ReactTestRenderer;
-    await act(async () => { renderer = create(<GhgStatementsList />); });
+    await act(async () => { renderer = create(<GhgStatementsList canManage />); });
     await act(async () => {
       await vi.waitFor(() => expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(1));
     });
@@ -505,7 +505,7 @@ describe("GHG Statement parent list refreshes", () => {
   it("retains an empty cached list after a failed background refetch", async () => {
     state.client!.setQueryData(GHG_LIST_QUERY_KEY, []);
     let renderer: ReactTestRenderer;
-    await act(async () => { renderer = create(<GhgStatementsList />); });
+    await act(async () => { renderer = create(<GhgStatementsList canManage />); });
     state.list.mockRejectedValue(new Error("List refresh failed"));
     await act(async () => { await state.client!.invalidateQueries(); });
     await act(async () => {

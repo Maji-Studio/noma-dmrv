@@ -54,6 +54,8 @@ import {
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
 import { Notice } from "@/components/ui/notice";
+import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
+import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
@@ -71,6 +73,8 @@ interface RemovalDetailSheetProps {
   onClose: () => void;
   /** Which Isometric returned, if any: shows "Correction needed" where the Removal has no `correction`. */
   lock?: RecordLockView;
+  /** Set when the Removal's facility is archived or unchecked: nothing here can change it. */
+  readOnly?: SheetReadOnly;
 }
 
 export function RemovalStorageSitesField({
@@ -205,6 +209,7 @@ export function RemovalDetailSheet({
   onClose,
   lock,
   canManage = false,
+  readOnly,
 }: RemovalDetailSheetProps) {
   const { timeZone } = useFacilityClock(facilityId);
   const { data: certifierSummary } = useFacilityCertifierSummary(
@@ -249,7 +254,7 @@ export function RemovalDetailSheet({
     open,
   );
   const touchesRegistry = removalDeletionTouchesRegistry(summary, deleteAccess);
-  const canDelete = canDeleteRemovalRow(summary, deleteAccess);
+  const canDelete = canDeleteRemovalRow(summary, deleteAccess) && !readOnly;
   const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
@@ -280,6 +285,7 @@ export function RemovalDetailSheet({
           </SlideOverPanel.Header>
 
           <SlideOverPanel.Body className="flex flex-col gap-24">
+            {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
             <EnvBanner isProduction={isProduction} variant="inline" />
 
             <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} />
@@ -288,7 +294,7 @@ export function RemovalDetailSheet({
             ) : (
               <RemovalCorrectionNotice lock={lock} />
             )}
-            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage} />
+            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} />
             <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (
@@ -384,7 +390,7 @@ export function RemovalDetailSheet({
             */}
             <SourcesPanel
               removalId={summary.removalId}
-              isEditable={isActionable}
+              isEditable={isActionable && !readOnly}
             />
 
             <SubmissionHistory
@@ -396,9 +402,9 @@ export function RemovalDetailSheet({
           </SlideOverPanel.Body>
 
           <SlideOverPanel.Footer>
-            <ResubmitRemovalAction correction={correction} facilityId={facilityId} />
+            {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
             <RemovalReviewAction
-              isActionable={isActionable}
+              isActionable={isActionable && !readOnly}
               reviewHref={reviewHref}
             />
             {canDelete && (

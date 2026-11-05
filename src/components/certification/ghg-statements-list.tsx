@@ -18,6 +18,7 @@
 "use client";
 
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
+import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
@@ -49,7 +50,7 @@ import { SubmittedOnCell, submittedOnSortingFn, submittedOnText } from "./submit
 import { LastSyncedCell, lastSyncedSortingFn, lastSyncedText } from "./last-synced-cell";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
-import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+import { GhgStatementDetailSheet, type GhgStatementSheetItem } from "./ghg-statement-detail-sheet";
 import { IsometricLink } from "./isometric-link";
 import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import { Notice } from "@/components/ui/notice";
@@ -157,7 +158,8 @@ export function CreateGateNotice({
   );
 }
 
-export function GhgStatementsList() {
+/** `canManage`: the viewer is an admin, who alone may sync or create statements (the server requires it). */
+export function GhgStatementsList({ canManage = false }: { canManage?: boolean } = {}) {
   const { facilityId } = useFacilityContext();
 
   return (
@@ -175,7 +177,7 @@ export function GhgStatementsList() {
           description="Select a facility to view its GHG Statements."
         />
       ) : (
-        <ListBody facilityId={facilityId} />
+        <ListBody facilityId={facilityId} canManage={canManage} />
       )}
     </div>
   );
@@ -337,7 +339,7 @@ const createColumns = (
   },
 ];
 
-function ListBody({ facilityId }: { facilityId: string }) {
+function ListBody({ facilityId, canManage }: { facilityId: string; canManage: boolean }) {
   const { timeZone } = useFacilityClock(facilityId);
   // DB-only summary — this page only needs link-presence + env. It must NOT pull
   // the management payload (available projects/templates, cross-facility link
@@ -359,7 +361,8 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
   const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
   const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
-  const linkedFacilityReady = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading).ready;
+  const linkedRecord = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading);
+  const linkedFacilityReady = linkedRecord.ready;
   useEffect(() => {
     // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
     if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
@@ -431,9 +434,13 @@ function ListBody({ facilityId }: { facilityId: string }) {
   }
 
   const statements = query.data ?? [];
-  const selected = statementId && (linkedInList || linkedFacilityReady)
+  const selectedInList = statementId && (linkedInList || linkedFacilityReady)
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
+  // A link into an archived facility is not on this list: open it read only from the linked read.
+  const linkedState = lookupEnabled && linkedFacilityReady ? linkedStatement.data : undefined;
+  const sheetReadOnly = selectedInList ? undefined : linkedRecordReadOnly(linkedRecord, linkedState?.statement, "GHG Statement");
+  const selected: GhgStatementSheetItem | undefined = selectedInList ?? (sheetReadOnly && linkedState ? linkedState : undefined);
 
   return (
     <>
@@ -445,32 +452,37 @@ function ListBody({ facilityId }: { facilityId: string }) {
               ({statements.length})
             </span>
           </h2>
-          <div className="flex max-w-full flex-wrap items-center gap-12">
-            <Button
-              variant="default"
-              onClick={syncFromRegistry}
-              busy={syncMutation.isPending}
-              disabled={!gate.canSync}
-            >
-              <ArrowsClockwiseIcon size={20} weight="bold" />
-              Sync from registry
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => setCreateOpen(true)}
-              disabled={!gate.canCreate}
-            >
-              <PlusIcon size={20} weight="bold" />
-              New GHG Statement
-            </Button>
-          </div>
+          {/* Members cannot sync or create (the server requires an admin), so they get no button, like the admin-only actions on Removals. */}
+          {canManage && (
+            <div className="flex max-w-full flex-wrap items-center gap-12">
+              <Button
+                variant="default"
+                onClick={syncFromRegistry}
+                busy={syncMutation.isPending}
+                disabled={!gate.canSync}
+              >
+                <ArrowsClockwiseIcon size={20} weight="bold" />
+                Sync from registry
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setCreateOpen(true)}
+                disabled={!gate.canCreate}
+              >
+                <PlusIcon size={20} weight="bold" />
+                New GHG Statement
+              </Button>
+            </div>
+          )}
         </div>
 
-        <CreateGateNotice
-          notice={gate.notice}
-          facilityId={facilityId}
-          linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
-        />
+        {canManage && (
+          <CreateGateNotice
+            notice={gate.notice}
+            facilityId={facilityId}
+            linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
+          />
+        )}
 
         {query.error && (
           <Notice
@@ -516,7 +528,9 @@ function ListBody({ facilityId }: { facilityId: string }) {
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
+                  : canManage
+                    ? "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
+                    : "An admin syncs or creates GHG Statements for submitted Removals."
               }
               padding="md"
             />
@@ -537,6 +551,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           item={selected}
           isProduction={isProduction}
           canManageReports={summaryQuery.data?.viewerCanManage ?? false}
+          readOnly={sheetReadOnly}
           open
           onClose={() => setStatementId(null)}
         />
@@ -547,7 +562,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           the operator's step state and the post-create result panel. New opens
           still require the gate via the disabled Create button, and the server
           backstop rejects shared-project creation regardless. */}
-      {(gate.canCreate || createOpen) && (
+      {canManage && (gate.canCreate || createOpen) && (
         <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}
