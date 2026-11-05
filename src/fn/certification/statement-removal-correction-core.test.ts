@@ -22,7 +22,7 @@ const semantic = { inputs: [{ rtcId: "energy", value: 12 }] };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listStatementRemovalIdentities).mockResolvedValue([{ id: "removal", code: "R-12" }]);
-  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: "statement" }]);
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: "statement", isSuperseded: false }]);
   vi.mocked(getSentRemovalForComparison).mockResolvedValue({ payloadSnapshot: { templateObservationId: "observation", semantic } } as never);
   vi.mocked(getCreditBatchesByRemovalId).mockResolvedValue([{ id: "batch", removalTemplateId: "template" }] as never);
   const observation = { definition: { groups: [{ components: [{ id: "energy" }] }] } };
@@ -51,7 +51,7 @@ it.each(["missing-attempt", "missing-snapshot", "missing-observation", "invalid-
     new SafeError("noma could not compare Removal R-12 with what it sent, so the GHG Statement was not sent. Open Removal R-12, then try again."));
 });
 it.each(["elsewhere", null])("refuses a noma-sent Removal linked to %s before compiling", async ghgStatementId => {
-  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId }]);
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId, isSuperseded: false }]);
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["remote"])).rejects.toThrow(
     "Removal R-12 is in this GHG Statement at Isometric but not in noma yet. Use Sync from registry on the GHG Statements page, then try again.");
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
@@ -67,7 +67,7 @@ it("allows a statement containing only registry-only entries", async () => {
 });
 it("lists all noma-sent Removals missing from the local statement", async () => {
   vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([
-    { id: "b", code: "R-13", ghgStatementId: null }, { id: "a", code: "R-12", ghgStatementId: "elsewhere" },
+    { id: "b", code: "R-13", ghgStatementId: null, isSuperseded: false }, { id: "a", code: "R-12", ghgStatementId: "elsewhere", isSuperseded: false },
   ]);
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["a", "b"])).rejects.toThrow(
     "Removals R-12, R-13 are in this GHG Statement at Isometric but not in noma yet. Use Sync from registry on the GHG Statements page, then try again.");
@@ -89,7 +89,7 @@ it("checks membership but skips member compilation on a first submission", async
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
 });
 it("still refuses an unlinked noma-sent Removal on a first submission", async () => {
-  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: null }]);
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([{ id: "removal", code: "R-12", ghgStatementId: null, isSuperseded: false }]);
   await expect(assertStatementRemovalsCurrent(ctx, "statement", ["unknown"], false)).rejects.toThrow("Use Sync from registry");
   expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
 });
@@ -113,4 +113,29 @@ it("logs expected comparison failures and names all affected Removals", async ()
     "noma could not compare Removals R-12, R-13 with what it sent, so the GHG Statement was not sent. Open Removals R-12, R-13, then try again.");
   expect(logger.warn).toHaveBeenCalledWith({ removalId: "a", statementId: "statement", reason: "missing_observation" },
     "GHG Statement member comparison failed");
+});
+
+const oldVersionMessage = "This GHG Statement includes an old version of Removal R-12. Remove the old version from the GHG Statement in Isometric, or ask Isometric to remove it. Then use Sync from registry on the GHG Statements page and try again.";
+
+it.each([{ remoteIds: ["E1"] }, { remoteIds: ["E1", "E2"] }])("refuses superseded entry membership $remoteIds even after the Removal content is current", async ({ remoteIds }) => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue(remoteIds.map(externalId => ({
+    id: "removal", code: "R-12", ghgStatementId: "statement", isSuperseded: externalId === "E1",
+  })));
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", remoteIds)).rejects.toEqual(new SafeError(oldVersionMessage));
+  expect(compileRemovalCorrectionContent).not.toHaveBeenCalled();
+});
+
+it("allows E2 alone and still compares its Removal content", async () => {
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["E2"])).resolves.toBeUndefined();
+  expect(compileRemovalCorrectionContent).toHaveBeenCalled();
+});
+
+it("names each affected Removal once in code order", async () => {
+  vi.mocked(listNomaSentRemovalsForRemoteEntries).mockResolvedValue([
+    { id: "b", code: "R-13", ghgStatementId: "statement", isSuperseded: true },
+    { id: "a", code: "R-12", ghgStatementId: "statement", isSuperseded: true },
+    { id: "a", code: "R-12", ghgStatementId: "statement", isSuperseded: true },
+  ]);
+  await expect(assertStatementRemovalsCurrent(ctx, "statement", ["E1", "E2", "E3"], false))
+    .rejects.toThrow("This GHG Statement includes an old version of Removals R-12, R-13.");
 });

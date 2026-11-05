@@ -12,6 +12,11 @@ import { comparisonUnavailableClause } from "@/lib/removal-correction-copy";
 export async function assertStatementRemovalsCurrent(ctx: OrgContext, statementId: string, remoteEntryIds?: readonly string[], compareMembers = true): Promise<void> {
   if (remoteEntryIds) {
     const mapped = await listNomaSentRemovalsForRemoteEntries(ctx, statementId, remoteEntryIds);
+    const supersededCodes = [...new Set(mapped.filter(row => row.isSuperseded).map(row => row.code))].sort();
+    if (supersededCodes.length) {
+      const subject = supersededCodes.length === 1 ? `Removal ${supersededCodes[0]}` : `Removals ${supersededCodes.join(", ")}`;
+      throw new SafeError(`This GHG Statement includes an old version of ${subject}. Remove the old version from the GHG Statement in Isometric, or ask Isometric to remove it. Then use Sync from registry on the GHG Statements page and try again.`);
+    }
     const missing = mapped.filter(row => row.ghgStatementId !== statementId);
     if (missing.length) {
       const codes = missing.map(row => row.code).sort().join(", ");
