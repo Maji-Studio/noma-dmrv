@@ -22,6 +22,7 @@ import { recordLockSheetProps } from "@/components/record-locks";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet } from "@/components/ui/entity-side-sheet";
 import { InUseDeleteDialog } from "@/components/ui/in-use-delete-dialog";
+import { useTablistKeys } from "@/components/ui/tablist-keys";
 import { useToast } from "@/components/ui/toast";
 import { useCreditBatchTodos } from "@/hooks/use-certification";
 import {
@@ -96,6 +97,12 @@ function revealTab(node: HTMLButtonElement | null) {
 
 function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement | null> }) {
   const { batch, tab, go, openItems } = useCreditBatchPage();
+  const tabProps = useTablistKeys({
+    keys: CREDIT_BATCH_PAGE_TABS,
+    selected: tab,
+    onSelect: go,
+    tabId: (key) => `credit-batch-tab-${key}`,
+  });
   return (
     <div ref={tabListRef} className="flex scroll-mt-24 items-stretch border-b border-[var(--color-border-secondary)]">
       {/* The tab row scrolls inside its bar on phones; the page never scrolls sideways. */}
@@ -112,6 +119,7 @@ function BatchTabs({ tabListRef }: { tabListRef: React.RefObject<HTMLDivElement 
               aria-controls="credit-batch-tab-panel"
               ref={tab === key ? revealTab : undefined}
               onClick={() => go(key)}
+              {...tabProps(key)}
               className={cn(
                 "-mb-px inline-flex h-44 shrink-0 items-center gap-8 border-b-2 px-16 body-medium first:pl-0",
                 FOCUS_RING,

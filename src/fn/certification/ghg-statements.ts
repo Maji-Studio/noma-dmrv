@@ -153,6 +153,9 @@ export interface GhgStatementState {
   remote: GhgStatement | null;
   recentSyncEvents: CertifierSyncEventRow[];
   isLockedInFlight: boolean;
+  /** The period fields the detail sheet shows, for a statement opened by link without a list row. */
+  effectiveReportingPeriodEndOn: string;
+  remotePeriodMissing: boolean;
 }
 
 export interface GhgStatementListItem {
@@ -797,6 +800,8 @@ export async function loadGhgStatementState(
       isLockedInFlight: statementSubmission
         ? computeIsLockedInFlight(statementSubmission)
         : false,
+      effectiveReportingPeriodEndOn: getEffectiveReportingPeriodEndOn(statement),
+      remotePeriodMissing: hasMissingRemotePeriod(statement),
     };
   });
 }
