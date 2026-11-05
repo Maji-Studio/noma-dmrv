@@ -30,7 +30,7 @@ import {
 } from "@/config/geo";
 import {
   applyBrandRecolor,
-  armBasemapFallback,
+  armBasemapFallback, BasemapUnavailableNote,
   createMarkerElement,
   MapControls,
   type MapAccent,
@@ -526,14 +526,7 @@ export default function RouteMiniMap({
         className={`h-full w-full ${basemapFailed ? "cvm-field" : "bg-[var(--color-background-white)]"}`}
         data-testid="transport-route-map-canvas"
       />
-      {basemapFailed && !satOn ? (
-        <div
-          className="absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
-          data-testid="route-map-no-basemap-note"
-        >
-          Basemap unavailable. Switch to SAT or reload.
-        </div>
-      ) : null}
+      {basemapFailed && !satOn ? <BasemapUnavailableNote testId="route-map-no-basemap-note" /> : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}

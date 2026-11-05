@@ -23,7 +23,7 @@ import {
   SAT_TILE_ATTRIBUTION,
   SAT_TILE_URL,
 } from "@/config/geo";
-import { applyBrandRecolor, armBasemapFallback, MapControls } from "@/components/map";
+import { applyBrandRecolor, armBasemapFallback, BasemapUnavailableNote, MapControls } from "@/components/map";
 import type { ChainOfCustodyGeoData } from "@/data-access/chain-of-custody-geo";
 import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import { formatDistanceKm } from "@/lib/format-utils";
@@ -487,14 +487,7 @@ export default function TraceMapCanvas({
         className={`h-full w-full ${basemapFailed ? "cvm-field" : "bg-[var(--color-background-white)]"}`}
         data-testid="carbon-viewer-map"
       />
-      {basemapFailed && !satOn ? (
-        <div
-          className="absolute bottom-16 left-16 z-10 max-w-[calc(100%-96px)] border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
-          data-testid="carbon-viewer-no-basemap-note"
-        >
-          Basemap unavailable. Switch to SAT or reload.
-        </div>
-      ) : null}
+      {basemapFailed && !satOn ? <BasemapUnavailableNote testId="carbon-viewer-no-basemap-note" /> : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}

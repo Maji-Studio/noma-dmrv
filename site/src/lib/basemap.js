@@ -3,8 +3,10 @@
 import { BASEMAP_BLANK_STYLE, BASEMAP_STYLE_TIMEOUT_MS } from "../config.js";
 
 /**
- * The timeout and the pre-parse error only cover a style that never parses; once "styledata" fires
- * the timer is cleared and "load" follows when the tiles settle. `onBlank` runs when falling back.
+ * One timer (BASEMAP_STYLE_TIMEOUT_MS) that is not cleared on "styledata": the Journey page races map
+ * start against an outer deadline (journey/app.js, 12 s) and discards a late map, so this must settle
+ * within 8 s even when the style parsed but its tiles hang. A pre-parse error falls back at once.
+ * `onBlank` runs when falling back.
  */
 export function loadBasemapOrBlank(map, onBlank) {
   return new Promise((resolve) => {
@@ -26,7 +28,7 @@ export function loadBasemapOrBlank(map, onBlank) {
       map.setStyle(BASEMAP_BLANK_STYLE, { diff: false });
     };
     const onLoad = () => { cleanup(); resolve(); };
-    const onStyleData = () => { parsed = true; clearTimeout(timer); };
+    const onStyleData = () => { parsed = true; };
     const onError = () => { if (!parsed) fallBack(); }; // a style fetch failure; later errors are tiles
     const timer = setTimeout(fallBack, BASEMAP_STYLE_TIMEOUT_MS);
     map.once("styledata", onStyleData);

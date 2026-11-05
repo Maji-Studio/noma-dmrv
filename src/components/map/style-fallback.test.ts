@@ -4,6 +4,7 @@ import { BLANK_BASEMAP_STYLE } from "@/config/geo";
 import { armBasemapFallback } from "./style-fallback";
 
 const TIMEOUT_MS = 1000;
+const BACKSTOP_MS = 5000;
 
 type Handler = () => void;
 
@@ -60,12 +61,34 @@ describe("armBasemapFallback", () => {
     expect(spy.setStyle).not.toHaveBeenCalled();
   });
 
-  it("does not time out once the style has parsed", () => {
+  it("does not use the style timeout once the style has parsed", () => {
     const { map, spy, emit } = fakeMap();
     const onFallback = vi.fn();
-    armBasemapFallback(map, onFallback, TIMEOUT_MS);
+    armBasemapFallback(map, onFallback, TIMEOUT_MS, BACKSTOP_MS);
     emit("styledata");
     vi.advanceTimersByTime(TIMEOUT_MS * 2);
+    expect(spy.setStyle).not.toHaveBeenCalled();
+    expect(onFallback).not.toHaveBeenCalled();
+  });
+
+  it("falls back once at the backstop when the style parsed but load never comes", () => {
+    const { map, spy, emit } = fakeMap();
+    const onFallback = vi.fn();
+    armBasemapFallback(map, onFallback, TIMEOUT_MS, BACKSTOP_MS);
+    emit("styledata");
+    vi.advanceTimersByTime(BACKSTOP_MS * 2);
+    expect(spy.setStyle).toHaveBeenCalledTimes(1);
+    expect(spy.setStyle).toHaveBeenCalledWith(BLANK_BASEMAP_STYLE, { diff: false });
+    expect(onFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("never falls back when load follows the parse", () => {
+    const { map, spy, emit } = fakeMap();
+    const onFallback = vi.fn();
+    armBasemapFallback(map, onFallback, TIMEOUT_MS, BACKSTOP_MS);
+    emit("styledata");
+    emit("load");
+    vi.advanceTimersByTime(BACKSTOP_MS * 2);
     expect(spy.setStyle).not.toHaveBeenCalled();
     expect(onFallback).not.toHaveBeenCalled();
   });

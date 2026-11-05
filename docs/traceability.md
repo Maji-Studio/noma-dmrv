@@ -289,7 +289,9 @@ and Split; its walk is controlled (`walk`, `onWalkChange`, pure `walkTo` /
 - **Degradation:** the basemap is OpenFreeMap and needs no key
   (`BASEMAP_STYLE_URL` in `src/config/geo.ts`). No `OPENROUTESERVICE_API_KEY`
   (declared in `src/config/env.ts`, see [docs/security.md](security.md)) → all
-  legs draw as dashed arcs and address search is disabled. No WebGL context → an
+  legs draw as dashed arcs and address search is disabled. If the basemap style
+  fails to load, the Carbon Viewer uses a blank style over the dotted field,
+  still draws markers and legs, and shows the "Basemap unavailable" note. No WebGL context → an
   explicit "map unavailable" notice with the stage list or walk still rendered.
 
 Map components live in `src/components/chain-of-custody/map/`; the shared
