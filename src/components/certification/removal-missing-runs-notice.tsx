@@ -21,11 +21,14 @@ export function RemovalMissingRunsNotice({
   batches,
   facilityId,
   canManage,
+  readOnly = false,
 }: {
   batches: RemovalPreflightSummary["missingProductionRuns"];
   facilityId: string;
   /** Admin: others are told who can add the run. */
   canManage: boolean;
+  /** Archived facility: nobody can add the run, so no one is pointed at Edit. */
+  readOnly?: boolean;
 }) {
   return (
     <>
@@ -60,7 +63,7 @@ export function RemovalMissingRunsNotice({
             <MissingRunLinks runs={batch.runs} facilityId={facilityId} />
             {`. ${missingRunsCountedSentence(batch.runs.length)}`}
             {refused.length > 0 && ` ${refusedRunsSentence(refused, addable.length === 0)}`}
-            {!canManage && addable.length > 0 && ` ${refused.length === 0
+            {!canManage && !readOnly && addable.length > 0 && ` ${refused.length === 0
               ? missingRunsMemberSentence(addable.length)
               : missingRunsMemberNamedSentence(addable.map((run) => run.code))}`}
             {canManage && sameDay && ` ${sameDay}`}

@@ -400,6 +400,7 @@ function ListBody({
   const archivedIdentities = useRemovalsForFacility(archivedFacilityId ?? "", !!archivedFacilityId);
   const archivedEntries = (archivedIdentities.data?.removals ?? []).filter((entry) => entry.removal.id === removalId);
   const archivedEnrichment = useRemovalPreflightSummaries(archivedFacilityId ?? "", archivedEntries.map((entry) => entry.removal.id));
+  const archivedLocks = useRecordLocks("removal", archivedEntries.map((entry) => entry.removal.id));
   const toast = useToast();
   const invalidRemovalId = useRef<string | null>(null);
   useEffect(() => {
@@ -414,6 +415,15 @@ function ListBody({
       void setRemovalId(null);
     }
   }, [removalId, lookupEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, setRemovalId, toast]);
+
+  // The archived facility's list answered without this Removal, or could not answer: say so, like any other dead link.
+  const archivedMissing = !!archivedFacilityId && (archivedIdentities.isError || (!!archivedIdentities.data && archivedEntries.length === 0));
+  useEffect(() => {
+    if (!archivedMissing || invalidRemovalId.current === removalId) return;
+    invalidRemovalId.current = removalId;
+    toast.error("Linked Removal could not be opened");
+    void setRemovalId(null);
+  }, [archivedMissing, removalId, setRemovalId, toast]);
 
   const enrichmentByRemovalId = useRemovalPreflightSummaries(
     facilityId,
@@ -532,7 +542,9 @@ function ListBody({
           summary={archivedRow}
           isProduction={archivedIdentities.data.isProduction}
           facilityId={archivedFacilityId}
+          lock={archivedLocks.locks[archivedRow.removalId]}
           readOnly={archivedReadOnly}
+          timeZone={linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined}
           open
           onClose={() => setRemovalId(null)}
         />

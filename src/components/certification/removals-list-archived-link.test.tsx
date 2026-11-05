@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   readOnly: null as null | { reason: "archived"; facilityId: string; facilityName: string; timezone: string },
   listedFacilities: [] as string[],
   sheetProps: [] as Record<string, unknown>[],
+  archivedEntries: true,
+  toastError: vi.fn(),
 }));
 
 vi.mock("nuqs", () => ({
@@ -27,7 +29,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
   useFacilityContext: () => ({ facilityId: WORKING_FACILITY, selectedFacility: { name: "Working", code: "WRK" }, facilities: [{ id: WORKING_FACILITY }], setFacilityId: vi.fn() }),
 }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn() }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toastError }) }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }) }));
 vi.mock("@/hooks/use-record-locks", () => ({ useRecordLocks: () => ({ locks: {} }) }));
 vi.mock("@/hooks/use-removal-carried-entries", () => ({
@@ -45,7 +47,7 @@ vi.mock("@/hooks/use-certification", () => ({
     if (enabled) mocks.listedFacilities.push(facilityId);
     return {
       isLoading: false, error: null,
-      data: !enabled ? undefined : { isProduction: false, removals: facilityId === ARCHIVED_FACILITY ? [{ removal: { id: REMOVAL_ID } }] : [] },
+      data: !enabled ? undefined : { isProduction: false, removals: facilityId === ARCHIVED_FACILITY && mocks.archivedEntries ? [{ removal: { id: REMOVAL_ID } }] : [] },
     };
   },
   useRemovalPreflightSummaries: () => ({}),
@@ -68,6 +70,8 @@ beforeEach(() => {
   mocks.readOnly = { reason: "archived", facilityId: ARCHIVED_FACILITY, facilityName: "Old Plant", timezone: "UTC" };
   mocks.listedFacilities = [];
   mocks.sheetProps = [];
+  mocks.archivedEntries = true;
+  mocks.toastError.mockClear();
 });
 afterEach(cleanup);
 
@@ -78,6 +82,14 @@ describe("Removals link into an archived facility", () => {
     expect(sheet.textContent).toBe("Old Plant is archived, so this Removal is read-only.");
     expect(mocks.sheetProps.at(-1)).toMatchObject({ facilityId: ARCHIVED_FACILITY });
     expect(mocks.listedFacilities).toContain(ARCHIVED_FACILITY);
+  });
+
+  it("says so when the archived facility's list does not hold the Removal", () => {
+    mocks.archivedEntries = false;
+    render(<RemovalsList canManage />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mocks.toastError).toHaveBeenCalledWith("Linked Removal could not be opened");
+    expect(mocks.query.removal).toBeNull();
   });
 
   it("opens nothing read only for a facility that is not archived", () => {

@@ -30,6 +30,8 @@ export function deriveVerifierStep(
   remote: GhgStatement | null,
   remoteUnavailable: boolean,
   hasMembership: boolean,
+  /** Read only: say where the statement stands, never what to do next. */
+  readOnly = false,
 ): WorkflowStepModel {
   if (!remote) {
     return remoteUnavailable
@@ -41,7 +43,7 @@ export function deriveVerifierStep(
       : { status: "skipped" };
   }
   if (chooseGhgSubmitMode(remote) === "resubmit" && remote.status !== "FAILED_VERIFICATION") {
-    return { status: "warning", detail: "This GHG Statement has pending changes. Generate and approve an updated report, then resubmit." };
+    return { status: "warning", detail: readOnly ? "This GHG Statement has pending changes." : "This GHG Statement has pending changes. Generate and approve an updated report, then resubmit." };
   }
   switch (remote.status) {
     case "AWAITING_VERIFICATION":
@@ -50,8 +52,9 @@ export function deriveVerifierStep(
       return chooseGhgSubmitMode(remote) === "resubmit"
         ? {
             status: "warning",
-            detail:
-              "Verified with pending changes. Resubmit to update the verifier.",
+            detail: readOnly
+              ? "Verified with pending changes."
+              : "Verified with pending changes. Resubmit to update the verifier.",
           }
         : { status: "met", detail: "Verified." };
     case "CREDITS_ISSUED":
@@ -59,7 +62,7 @@ export function deriveVerifierStep(
     case "FAILED_VERIFICATION":
       return {
         status: "warning",
-        detail: "Verification failed. Update the Removals, then resubmit.",
+        detail: readOnly ? "Verification failed." : "Verification failed. Update the Removals, then resubmit.",
       };
     default:
       if (!hasMembership) {
@@ -68,6 +71,7 @@ export function deriveVerifierStep(
           detail: "No GHG Entries are available to submit.",
         };
       }
+      if (readOnly) return { status: "skipped", detail: "Not submitted yet." };
       return {
         status: "active",
         detail:
@@ -82,7 +86,9 @@ export function deriveGhgStatementWorkflowState({
   remote,
   linkedRemovalCount,
   rollup,
+  readOnly = false,
 }: {
+  readOnly?: boolean;
   created: boolean;
   canManageReports: boolean;
   remote: GhgStatement | null;
@@ -141,6 +147,7 @@ export function deriveGhgStatementWorkflowState({
       remote,
       remoteUnavailable,
       hasMembership,
+      readOnly,
     ),
   };
 }

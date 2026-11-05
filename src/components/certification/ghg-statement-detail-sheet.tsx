@@ -61,6 +61,8 @@ interface GhgStatementDetailSheetProps {
   canManageReports: boolean;
   /** Set when the statement's facility is archived or unchecked: no refresh, generate or submit. */
   readOnly?: SheetReadOnly;
+  /** The archived facility's own timezone, which the working facility list does not carry. */
+  timeZone?: string;
   open: boolean;
   onClose: () => void;
 }
@@ -82,6 +84,7 @@ export function GhgStatementDetailSheet({
   isProduction,
   canManageReports,
   readOnly,
+  timeZone: facilityTimeZone,
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
@@ -97,6 +100,7 @@ export function GhgStatementDetailSheet({
           isProduction={isProduction}
           canManageReports={canManageReports && !readOnly}
           readOnly={readOnly}
+          timeZone={facilityTimeZone}
           open={open}
         />
       </SlideOverPanel.Content>
@@ -109,16 +113,18 @@ function DetailState({
   isProduction,
   canManageReports,
   readOnly,
+  timeZone: facilityTimeZone,
   open,
 }: {
   item: GhgStatementSheetItem;
   isProduction: boolean;
   canManageReports: boolean;
   readOnly?: SheetReadOnly;
+  timeZone?: string;
   open: boolean;
 }) {
   const { statement } = item;
-  const { timeZone } = useFacilityClock(statement.facilityId);
+  const { timeZone } = useFacilityClock(statement.facilityId, { timeZone: facilityTimeZone });
   const query = useGhgStatementState(statement.id);
   const reportsQuery = useGhgStatementReports(statement.id);
   const breakdownQuery = useGhgStatementBreakdown(statement.id, open);
@@ -178,6 +184,7 @@ function DetailState({
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
+    readOnly: !!readOnly,
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error
@@ -192,8 +199,9 @@ function DetailState({
   const registryActionsAvailable = canUseGhgStatementRegistryActions(query);
   const canGenerate = workflowState.canGenerate && registryActionsAvailable && !readOnly;
   const canSubmit = workflowState.canSubmit && registryActionsAvailable && !readOnly;
+  // The notice at the top says why; the ladder repeats nothing.
   const generationUnavailableReason = readOnly
-    ? readOnly.message
+    ? null
     : registryActionsAvailable
       ? workflowState.generationUnavailableReason
       : STALE_DETAIL_WARNING;
@@ -279,6 +287,7 @@ function DetailState({
               canSubmit ? () => setSubmitOpen(true) : undefined
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
+            readOnly={!!readOnly}
           />
         </DetailSection>
 

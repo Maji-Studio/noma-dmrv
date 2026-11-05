@@ -452,18 +452,18 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
               ({statements.length})
             </span>
           </h2>
-          {/* Members cannot sync or create (the server requires an admin), so they get no button, like the admin-only actions on Removals. */}
-          {canManage && (
-            <div className="flex max-w-full flex-wrap items-center gap-12">
-              <Button
-                variant="default"
-                onClick={syncFromRegistry}
-                busy={syncMutation.isPending}
-                disabled={!gate.canSync}
-              >
-                <ArrowsClockwiseIcon size={20} weight="bold" />
-                Sync from registry
-              </Button>
+          {/* Sync is open to every member on the server; creating a statement requires an admin, so only admins get that button. */}
+          <div className="flex max-w-full flex-wrap items-center gap-12">
+            <Button
+              variant="default"
+              onClick={syncFromRegistry}
+              busy={syncMutation.isPending}
+              disabled={!gate.canSync}
+            >
+              <ArrowsClockwiseIcon size={20} weight="bold" />
+              Sync from registry
+            </Button>
+            {canManage && (
               <Button
                 variant="primary"
                 onClick={() => setCreateOpen(true)}
@@ -472,17 +472,16 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
                 <PlusIcon size={20} weight="bold" />
                 New GHG Statement
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {canManage && (
-          <CreateGateNotice
-            notice={gate.notice}
-            facilityId={facilityId}
-            linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
-          />
-        )}
+        {/* The shared-project notice is about creating, which members cannot do. */}
+        <CreateGateNotice
+          notice={canManage || gate.notice !== "sharedProject" ? gate.notice : null}
+          facilityId={facilityId}
+          linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
+        />
 
         {query.error && (
           <Notice
@@ -530,7 +529,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
                   ? "Try clearing your search."
                   : canManage
                     ? "Sync existing statements from the registry above, or create one for submitted Removals in a reporting period."
-                    : "An admin syncs or creates GHG Statements for submitted Removals."
+                    : "Sync existing statements from the registry above."
               }
               padding="md"
             />
@@ -550,8 +549,9 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
         <GhgStatementDetailSheet
           item={selected}
           isProduction={isProduction}
-          canManageReports={summaryQuery.data?.viewerCanManage ?? false}
+          canManageReports={canManage}
           readOnly={sheetReadOnly}
+          timeZone={linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined}
           open
           onClose={() => setStatementId(null)}
         />

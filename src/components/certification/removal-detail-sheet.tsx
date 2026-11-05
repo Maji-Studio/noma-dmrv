@@ -75,6 +75,8 @@ interface RemovalDetailSheetProps {
   lock?: RecordLockView;
   /** Set when the Removal's facility is archived or unchecked: nothing here can change it. */
   readOnly?: SheetReadOnly;
+  /** The archived facility's own timezone, which the working facility list does not carry. */
+  timeZone?: string;
 }
 
 export function RemovalStorageSitesField({
@@ -210,8 +212,9 @@ export function RemovalDetailSheet({
   lock,
   canManage = false,
   readOnly,
+  timeZone: facilityTimeZone,
 }: RemovalDetailSheetProps) {
-  const { timeZone } = useFacilityClock(facilityId);
+  const { timeZone } = useFacilityClock(facilityId, { timeZone: facilityTimeZone });
   const { data: certifierSummary } = useFacilityCertifierSummary(
     facilityId,
     open,
@@ -290,11 +293,11 @@ export function RemovalDetailSheet({
 
             <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} />
             {correction ? (
-              <RemovalResubmitNotice correction={correction} facilityId={facilityId} />
+              <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
             ) : (
               <RemovalCorrectionNotice lock={lock} />
             )}
-            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} />
+            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
             <RemovalEvidenceLinksNotice links={summary.evidenceLinks} />
 
             {summary.externalId && (

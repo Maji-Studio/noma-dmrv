@@ -42,6 +42,8 @@ interface GhgStatementWorkflowProps {
    */
   onSubmit?: () => void;
   submitLabel?: string;
+  /** Read only: each step states where it stands and none says what to do. */
+  readOnly?: boolean;
 }
 
 export function findApprovedGhgStatementReport(
@@ -77,6 +79,7 @@ export function GhgStatementWorkflow({
   verifierStep,
   onSubmit,
   submitLabel = "Submit",
+  readOnly = false,
 }: GhgStatementWorkflowProps) {
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
@@ -102,6 +105,8 @@ export function GhgStatementWorkflow({
         }
       : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
+      : readOnly
+        ? { status: "skipped", detail: "No report generated." }
       : canGenerate
         ? {
             status: "active",
@@ -122,7 +127,7 @@ export function GhgStatementWorkflow({
     : !generated
     ? {
         status: "skipped",
-        detail: created
+        detail: created && !readOnly
           ? "The report is approved automatically when you submit."
           : undefined,
       }
@@ -145,7 +150,9 @@ export function GhgStatementWorkflow({
           detail={
             created
               ? registryRecord
-              : "Not in Isometric yet. Sync from registry to reconcile it."
+              : readOnly
+                ? "Not in Isometric yet."
+                : "Not in Isometric yet. Sync from registry to reconcile it."
           }
         />
         <CheckRow

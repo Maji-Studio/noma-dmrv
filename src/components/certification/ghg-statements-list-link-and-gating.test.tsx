@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * GHG Statements: a link to a statement of an archived facility opens its sheet
- * read only, and members (non-admins) get no Sync or New action, since the
- * server requires an admin for both.
+ * read only, and members (non-admins) get no New GHG Statement action, since
+ * the server requires an admin to create one. Sync is open to every member.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,9 +81,9 @@ describe("GHG Statements admin actions", () => {
     expect(screen.getByRole("button", { name: "New GHG Statement" })).toBeTruthy();
   });
 
-  it("gives a member neither action", () => {
+  it("gives a member Sync from registry but not New GHG Statement", () => {
     render(<GhgStatementsList />);
-    expect(screen.queryByRole("button", { name: "Sync from registry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sync from registry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "New GHG Statement" })).toBeNull();
   });
 });
