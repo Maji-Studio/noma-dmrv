@@ -12,6 +12,15 @@ import {
   buildRemovalTemplateDiagnostic,
   INPUT_NOT_IN_BLUEPRINT,
 } from "./removal-template-diagnostic";
+import { timeBasedEmissionsFixture } from "@/lib/isometric/template-observations/test-support";
+
+it("shows monitored operating hours while preserving the fixed rate's blueprint unit", () => {
+  const { template, blueprint } = timeBasedEmissionsFixture();
+  const diagnostic = buildRemovalTemplateDiagnostic({ template, blueprints: [blueprint] });
+  const inputs = diagnostic.groups[0].components[0].inputs;
+  expect(inputs.find((input) => input.inputKey === "time")?.expected.unit).toBe("hour");
+  expect(inputs.find((input) => input.inputKey === "emissions_per_unit_time")?.expected.unit).toBe("kgCO2e / day");
+});
 
 function template(
   blueprintKey: string,
