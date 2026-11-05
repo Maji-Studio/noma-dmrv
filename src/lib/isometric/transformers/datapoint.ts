@@ -1,6 +1,6 @@
 import { aggregatedProductionRunDatapointDescription, carriedEntryDatapointDescription, type CarriedEntryNote } from "@/lib/certification/emission-entry-carry-copy";
 import { sumFigures, type EmissionFigure } from "@/lib/certification/emission-lines";
-import { canonicalUnit } from "../template-observations/units";
+import { canonicalUnit, monitoredInputUnit } from "../template-observations/units";
 import { effectiveContract } from "../template-observations/line-sources";
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { emissionLineBindingDecision } from "@/lib/certification/emission-line-binding";
@@ -194,7 +194,8 @@ export function buildCreateDatapointRequest(
   const contract = lineContract && effectiveContract(lineContract);
   if (args.entryContribution) {
     if (contract?.scope !== "operating" || contract.entryPolicy === "none") throw new SafeError("This component does not take manual entries.");
-    const unit = canonicalUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit);
+    const wireUnit = monitoredInputUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit);
+    const unit = canonicalUnit(blueprintInput.quantity_kind, wireUnit);
     if (!unit || args.entryContribution.unit !== unit || rtcInput.quantity_kind !== blueprintInput.quantity_kind) throw new SafeError("The emissions entry unit does not match this template input.");
     let figure = args.entryContribution;
     const mapping = lookupInputMapping(groupKey, componentBlueprintKey, rtcInput.input_key, lineContract);
@@ -206,7 +207,7 @@ export function buildCreateDatapointRequest(
     const magnitude = Number(figure.magnitude);
     if (!Number.isFinite(magnitude)) throw new SafeError("The emissions entry value is too large to submit.");
     return { description: carriedEntryDatapointDescription(args.carriedEntries ?? []), display_name: blueprintInput.input_key, project_id: projectId,
-      quantity: { magnitude, unit: blueprintInput.compatible_unit }, source_ids: sourceIds ?? [], supplier_reference_id: supplierRefId, type: "REPORTED" };
+      quantity: { magnitude, unit: wireUnit }, source_ids: sourceIds ?? [], supplier_reference_id: supplierRefId, type: "REPORTED" };
   }
   const inputKey = rtcInput.input_key;
   const componentLabel =

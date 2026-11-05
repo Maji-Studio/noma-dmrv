@@ -18,6 +18,10 @@ export const BOOTSTRAP_LINE_SOURCES: Readonly<Record<string, Readonly<LineContra
   rtc_1M4ZRBJ4GSBXWASX: { scope: "operating", entryPolicy: "single", origin: "bootstrap" },
   // Pyrolyzer CO emissions
   rtc_1M4ZREMX2SBXAY8H: { scope: "operating", entryPolicy: "single", origin: "bootstrap" },
+  // Pyrolyzer CH₄ time emissions (time_based_emissions, added 2026-11-05)
+  rtc_1M6NMG60MSBXQ6VN: { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },
+  // Pyrolyzer CO time emissions (time_based_emissions, added 2026-11-05)
+  rtc_1M6NM8QWWSBX8KD1: { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },
   // Biochar transportation to storage site via truck
   rtc_1KVDECAX5SBXEHD0: { scope: "operating", automaticSource: "delivery-transport", entryPolicy: "additive", origin: "bootstrap" },
   // Biochar sequestration, 1000 year durability

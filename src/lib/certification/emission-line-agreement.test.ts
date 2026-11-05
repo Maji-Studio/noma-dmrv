@@ -12,6 +12,30 @@ import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapo
 import { SafeError } from "@/lib/errors";
 import { deriveBatchEmissionLines } from "./emission-lines";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness, type RemovalReadinessFacts } from "./readiness";
+import { timeBasedEmissionsFixture } from "@/lib/isometric/template-observations/test-support";
+import { storedRemovalTemplateFacts } from "@/fn/certification/stored-removal-template";
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
+
+it.each(["live", "stored"])("submits time entries as REPORTED hours using the %s template contract", (source) => {
+  const { template, blueprint, enrichment } = timeBasedEmissionsFixture();
+  const lineSources: LineSources = { "time-line": { scope: "operating", entryPolicy: "additive", origin: "reviewed" } };
+  const stored = storedRemovalTemplateFacts({ externalTemplateId: template.id, externalProjectId: template.project_id,
+    definition: normalizeTemplateDefinition(template), enrichment, lineSources } as RemovalTemplateObservation);
+  const blueprintInput = (source === "live" ? blueprint : stored.blueprintsForTemplate[0]).inputs.find((input) => input.input_key === "time")!;
+  const group = template.groups[0];
+  const component = group.components[0];
+  const args = { groupKey: group.key, componentBlueprintKey: component.blueprint_key, lineContract: lineSources[component.id],
+    rtcInput: component.inputs.find((input) => input.input_key === "time")!, blueprintInput,
+    agg: { ...aggregateProductionRuns([{ id: "run", code: "RUN", startTime: new Date("2026-10-01"), endTime: new Date("2026-10-02") } as ProductionRunForCertification]),
+      weightedOrganicCarbonPercent: null, weightedHToCorgRatio: null, weightedOToCorgRatio: null },
+    projectId: template.project_id, supplierRefId: "time-entry", sourceIds: ["entry-source"],
+    entryContribution: { magnitude: "70080", unit: "h" } };
+  expect(buildCreateDatapointRequest(args)).toMatchObject({
+    quantity: { magnitude: 70080, unit: "hour" }, type: "REPORTED", source_ids: ["entry-source"],
+  });
+  expect(() => buildCreateDatapointRequest({ ...args, entryContribution: { magnitude: "70080", unit: "s" } }))
+    .toThrow("The emissions entry unit does not match this template input.");
+});
 
 const original = fixture as GhgEntryTemplate;
 const automatic = original.groups.find((group) => group.key === "pyrolysis")!.components.find((line) => line.blueprint_key === "grid_electricity_use")!;

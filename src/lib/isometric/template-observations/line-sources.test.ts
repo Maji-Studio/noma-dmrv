@@ -3,6 +3,7 @@ import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-
 import lcaTemplate from "../../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.json";
+import timeSandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-11-05.json";
 import { acceptAllProposals } from "./test-support";
 import {
   lineNeedsReview, AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
@@ -10,7 +11,7 @@ import {
   type GhgEntryTemplate, type LineContract, type LineSources, type TemplateComponent,
 } from "./index";
 
-const definitions = [sandbox, lcaTemplate, production, olderSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
+const definitions = [sandbox, lcaTemplate, production, olderSandbox, timeSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
 const definition = definitions[0];
 const components = definition.groups.flatMap((group) => group.components);
 const component = (id: string) => components.find((line) => line.id === id)!;
@@ -62,6 +63,19 @@ describe("line contracts", () => {
     expect(allowedEntryPolicies(adHoc("future", [{ key: "unknown", type: "monitored", quantityKind: "volume" }]))).toEqual(["none"]);
     expect(allowedEntryPolicies({ ...meter, inputs: meter.inputs.filter((input) => input.key !== "final_readout") })).toEqual(["none"]);
     expect(allowedEntryPolicies({ ...component(GENSET), inputs: [...component(GENSET).inputs, { key: "future", type: "monitored", quantityKind: "volume" }] })).toEqual(["none"]);
+    const hours = adHoc("time_based_emissions", [
+      { key: "emissions_per_unit_time", type: "fixed", quantityKind: "time_emission_factor", fixedDatapointId: "dtp_rate" },
+      { key: "time", type: "monitored", quantityKind: "time" },
+    ]);
+    expect(allowedEntryPolicies(hours)).toEqual(["none", "additive"]);
+    expect(allowedEntryPolicies(adHoc("future", [{ key: "time", type: "monitored", quantityKind: "volume" }]))).toEqual(["none"]);
+  });
+
+  it("bootstraps the November time-based pyrolyzer lines as additive hour entries", () => {
+    const sources = resolveLineSources({ definition: definitions[4] });
+    for (const id of ["rtc_1M6NMG60MSBXQ6VN", "rtc_1M6NM8QWWSBX8KD1"]) {
+      expect(sources[id]).toEqual({ scope: "operating", entryPolicy: "additive", origin: "bootstrap" });
+    }
   });
 
   it("reports single with automatic source, source clashes, foreign sources and disallowed policies", () => {

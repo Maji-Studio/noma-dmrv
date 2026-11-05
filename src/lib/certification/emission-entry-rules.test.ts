@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { timeBasedEmissionsFixture } from "@/lib/isometric/template-observations/test-support";
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
 import {
   normalizedEntryValues,
   resolveEmissionEntryDate,
@@ -62,6 +64,17 @@ function args() {
     activeValueCount: 0,
   };
 }
+
+it("accepts operating hours and rejects seconds for a time-based emissions entry", () => {
+  const { template, enrichment } = timeBasedEmissionsFixture();
+  const input = { ...args(), componentId: "time-line", observation: {
+    externalTemplateId: template.id, definition: normalizeTemplateDefinition(template), enrichment,
+    lineSources: { "time-line": { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+  } satisfies EntryObservation, values: [{ inputKey: "time", quantityKind: "time", magnitude: "70080", unit: "h" } satisfies EntryValueInput] };
+  expect(validateEmissionEntry(input).lineRule).toBe("additive");
+  expect(() => validateEmissionEntry({ ...input, values: [{ ...input.values[0], unit: "s" }] }))
+    .toThrow("Choose a supported unit for this input.");
+});
 describe("entry guards", () => {
   it("accepts the batch start date and additive siblings west of UTC", () => {
     expect(validateEmissionEntry({ ...args(), activeValueCount: 8 }).lineRule).toBe("additive");
