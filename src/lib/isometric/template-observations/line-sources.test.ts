@@ -11,7 +11,7 @@ import {
   type GhgEntryTemplate, type LineContract, type LineSources, type TemplateComponent,
 } from "./index";
 
-const definitions = [sandbox, lcaTemplate, production, olderSandbox, timeSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
+const definitions = [sandbox, lcaTemplate, production, olderSandbox].map((fixture) => normalizeTemplateDefinition(fixture as GhgEntryTemplate));
 const definition = definitions[0];
 const components = definition.groups.flatMap((group) => group.components);
 const component = (id: string) => components.find((line) => line.id === id)!;
@@ -71,11 +71,13 @@ describe("line contracts", () => {
     expect(allowedEntryPolicies(adHoc("future", [{ key: "time", type: "monitored", quantityKind: "volume" }]))).toEqual(["none"]);
   });
 
-  it("bootstraps the November time-based pyrolyzer lines as additive hour entries", () => {
-    const sources = resolveLineSources({ definition: definitions[4] });
-    for (const id of ["rtc_1M6NMG60MSBXQ6VN", "rtc_1M6NM8QWWSBX8KD1"]) {
-      expect(sources[id]).toEqual({ scope: "operating", entryPolicy: "additive", origin: "bootstrap" });
-    }
+  it("leaves the November time-based lines to the change review, where additive hours are valid", () => {
+    const timeDefinition = normalizeTemplateDefinition(timeSandbox as GhgEntryTemplate);
+    const ids = ["rtc_1M6NMG60MSBXQ6VN", "rtc_1M6NM8QWWSBX8KD1"];
+    const sources = resolveLineSources({ definition: timeDefinition, previous: { definition, lineSources: resolveLineSources({ definition }) } });
+    for (const id of ids) expect(sources[id]).toEqual({ scope: "unassigned", entryPolicy: "none", origin: "proposed" });
+    const reviewed = { ...sources, ...Object.fromEntries(ids.map((id) => [id, { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as LineContract])) };
+    expect(validateLineSources(timeDefinition, reviewed).filter((problem) => ids.includes(problem.componentId))).toEqual([]);
   });
 
   it("reports single with automatic source, source clashes, foreign sources and disallowed policies", () => {
