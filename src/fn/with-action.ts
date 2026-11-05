@@ -1,10 +1,10 @@
 // Deliberately not a "use server" module: `withAction` is a helper that
 // action modules import, not an action the browser may call.
 import { z } from "zod";
-import { requireOrgContext } from "@/lib/auth/server";
+import { getUser, requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { ActionConflictError } from "@/lib/errors";
+import { ActionConflictError, SafeError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
 import { toActionFailure } from "./action-errors";
@@ -52,6 +52,27 @@ export async function withAction<T, E extends MappedFailure = never>(
   fn: (ctx: OrgContext) => Promise<T>,
   options?: WithActionOptions<E>
 ): Promise<ActionResult<T> | E> {
+  return runAction(requireOrgContext, fn, options);
+}
+
+/** User-owned actions authenticate without requiring an active organization. */
+export async function withAuthAction<T, E extends MappedFailure = never>(
+  fn: (ctx: { userId: string }) => Promise<T>,
+  options?: WithActionOptions<E>,
+): Promise<ActionResult<T> | E> {
+  return runAction(async () => {
+    const user = await getUser();
+    if (!user) throw new SafeError("You must be signed in.");
+    return { userId: user.id };
+  }, fn, options);
+}
+
+/** Keep error formatting and per-user throttling identical across both guards. */
+async function runAction<C extends { userId: string }, T, E extends MappedFailure>(
+  resolveContext: () => Promise<C>,
+  fn: (ctx: C) => Promise<T>,
+  options?: WithActionOptions<E>,
+): Promise<ActionResult<T> | E> {
   const {
     zodErrorPrefix,
     fallbackMessage = "The action could not be completed. Try again.",
@@ -61,7 +82,7 @@ export async function withAction<T, E extends MappedFailure = never>(
   } = options ?? {};
 
   try {
-    const ctx = await requireOrgContext();
+    const ctx = await resolveContext();
     if (rateLimit) {
       const verdict = checkRateLimit({
         key: `${rateLimit.key}:${ctx.userId}`,
