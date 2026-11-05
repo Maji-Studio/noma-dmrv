@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
 import { FacilitySettingsPane, SOIL_DRAFT_BLOCKS_TIER_TEXT } from "./facility-settings-pane";
 
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";

@@ -4,7 +4,7 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
 import { SettingsConsole } from "./settings-console";
 
 const state = vi.hoisted(() => ({
@@ -58,6 +58,21 @@ beforeEach(() => {
 });
 
 describe("SettingsConsole", () => {
+  it("renders only Profile in the rail and phone select without an organization", () => {
+    state.facilityId = null;
+    const html = renderToStaticMarkup(
+      <SettingsConsole pane="profile" viewer={{ organizationId: null, organizationName: null, isPlatformAdmin: true, canManage: false, canManageApiKeys: false, registryKeysSaved: false, isProduction: false }}>
+        <div>Profile form</div>
+      </SettingsConsole>,
+    );
+    expect(html).toContain('href="/settings/profile"');
+    expect(html).toContain('<option value="/settings/profile" selected="">Profile</option>');
+    expect(html).not.toContain('href="/settings/general"');
+    expect(html).not.toContain('href="/settings/connected-apps"');
+    expect(html).not.toContain('href="/settings/registry"');
+    expect(html).toContain("Profile form");
+  });
+
   it("lists the groups in order with the organization name on its group", () => {
     const html = render("general", { isPlatformAdmin: true });
     const order = ["You", "Organization", "Dark Earth Carbon", "Certification"].map((label) =>

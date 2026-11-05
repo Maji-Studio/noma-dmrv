@@ -9,7 +9,7 @@
 "use client";
 
 import { DetailSection } from "@/components/ui/detail-panel";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
 import { OrganizationDefaultsForm } from "./organization-defaults-form";
 import { OrganizationNameForm } from "./organization-name-form";
 

@@ -20,7 +20,7 @@ import { ServerError } from "@/components/forms";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
 import { DurabilityTierSettings } from "./durability-tier-settings";
 import { Notice } from "@/components/ui/notice";
 import { PaneSection } from "./pane-section";

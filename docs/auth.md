@@ -82,6 +82,13 @@ and multi-role inputs are rejected.
 
 ## Server actions
 
+`withAuthAction` in `src/fn/with-action.ts` is the user-owned Profile seam:
+it resolves `getUser()`, throws `SafeError` when signed out, and passes only
+`userId`. It shares error formatting and per-user throttling with `withAction`.
+Profile mutations still use Better Auth with the caller's session headers,
+including email freshness and current-password checks. The Profile settings
+loader explicitly allows a missing organization; other panes keep their org guard.
+
 `withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Nearly all exported server actions end in `Fn` (e.g. `createFacilityFn`); `src/fn/organizations.ts` uses the `Action` suffix.
 
 ```ts

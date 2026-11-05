@@ -118,7 +118,7 @@ export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: S
   const railGroups: SettingsRailGroup[] = groups.map((group) => ({
     key: group.key,
     label: group.label,
-    detail: group.key === "organization" ? viewer.organizationName : undefined,
+    detail: group.key === "organization" ? viewer.organizationName ?? undefined : undefined,
     items: group.panes.map((item) => ({
       key: item.key,
       label: item.label,
@@ -181,7 +181,7 @@ function ScopeLine({
   facilityName,
 }: {
   pane: SettingsPaneMeta;
-  organizationName: string;
+  organizationName: string | null;
   facilityName: string | undefined;
 }) {
   const ScopeIcon = SCOPE_ICONS[pane.scope];

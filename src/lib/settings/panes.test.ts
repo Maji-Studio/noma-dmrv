@@ -9,13 +9,17 @@ import {
   type SettingsPaneAccess,
 } from "./panes";
 
-const member: SettingsPaneAccess = { isPlatformAdmin: false, canManageApiKeys: false, registryKeysSaved: true };
+const member: SettingsPaneAccess = { organizationId: "org-1", isPlatformAdmin: false, canManageApiKeys: false, registryKeysSaved: true };
 const admin: SettingsPaneAccess = { ...member, canManageApiKeys: true };
 const platformAdmin: SettingsPaneAccess = { ...member, isPlatformAdmin: true };
 
 const keys = (access: SettingsPaneAccess) => visibleSettingsPanes(access).map((pane) => pane.key);
 
 describe("settings console rail", () => {
+  it.each([member, platformAdmin])("shows only Profile without an organization", (access) => {
+    expect(keys({ ...access, organizationId: null })).toEqual(["profile"]);
+  });
+
   it("groups panes as You, Organization, Certification", () => {
     expect(settingsPaneGroups(platformAdmin).map((group) => [group.label, group.panes.map((pane) => pane.label)])).toEqual([
       ["You", ["Profile", "Connected apps"]],

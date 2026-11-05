@@ -24,7 +24,7 @@ import { Notice } from "@/components/ui/notice";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer as SettingsViewer } from "@/lib/settings/panes";
 import { PaneSection } from "./pane-section";
 
 export const REGISTRY_UNLOCKS_TEXT = `Saving the ${REGISTRY_NAME} keys unlocks Removal templates and Facilities, where each facility is linked to its ${REGISTRY_NAME} project.`;

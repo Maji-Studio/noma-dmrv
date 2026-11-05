@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { assertSettingsPaneVisible, loadSettingsViewer, type SettingsViewer } from "./settings-viewer";
 
+import { settingsPaneGroups, SETTINGS_PANES } from "./panes";
+import { readActiveOrganization } from "@/lib/read-models";
+import { readOrganizationRegistryStatus } from "@/lib/read-models/organization-registry-status";
+
+const auth = vi.hoisted(() => vi.fn());
 const context = vi.hoisted(() => vi.fn());
 const registry = vi.hoisted(() => ({ keysSaved: true, isProduction: false }));
 
@@ -14,13 +19,13 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/server", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/server")>("@/lib/auth/server");
-  return { hasOrgRole: actual.hasOrgRole, getOrgContext: context };
+  return { hasOrgRole: actual.hasOrgRole, getOrgContext: context, requireAuth: auth };
 });
 vi.mock("@/lib/read-models", () => ({
-  readActiveOrganization: async () => ({ name: "Org One", slug: "org-one" }),
+  readActiveOrganization: vi.fn(async () => ({ name: "Org One", slug: "org-one" })),
 }));
 vi.mock("@/lib/read-models/organization-registry-status", () => ({
-  readOrganizationRegistryStatus: async () => registry,
+  readOrganizationRegistryStatus: vi.fn(async () => registry),
 }));
 
 const viewer: SettingsViewer = {
@@ -34,10 +39,34 @@ const viewer: SettingsViewer = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  auth.mockResolvedValue({ id: "user-1", role: "user" });
   registry.keysSaved = true;
 });
 
 describe("loadSettingsViewer", () => {
+  it.each(["user", "admin"])("shows only Profile without an organization for %s", async (role) => {
+    context.mockResolvedValue(null);
+    auth.mockResolvedValue({ id: "user-1", role });
+    const result = await loadSettingsViewer("profile");
+    expect(result.ctx).toBeNull();
+    expect(readActiveOrganization).not.toHaveBeenCalled();
+    expect(readOrganizationRegistryStatus).not.toHaveBeenCalled();
+    expect(result.viewer).toMatchObject({ organizationId: null, organizationName: null, canManage: false });
+    expect(settingsPaneGroups(result.viewer).map((group) => ({ key: group.key, panes: group.panes.map((pane) => pane.key) })))
+      .toEqual([{ key: "you", panes: ["profile"] }]);
+    expect(() => assertSettingsPaneVisible(result.viewer, "profile")).not.toThrow();
+    for (const pane of SETTINGS_PANES.filter((pane) => pane.key !== "profile")) {
+      expect(() => assertSettingsPaneVisible(result.viewer, pane.key)).toThrow("redirect:/dashboard");
+    }
+  });
+
+  it("requires a session for the no-org Profile route", async () => {
+    context.mockResolvedValue(null);
+    auth.mockImplementation(() => { throw new Error("redirect:/login"); });
+    await expect(loadSettingsViewer("profile")).rejects.toThrow("redirect:/login");
+  });
+
   it.each([
     ["admin", false, true, true],
     ["member", false, false, false],
