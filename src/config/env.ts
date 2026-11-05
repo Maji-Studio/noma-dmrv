@@ -49,6 +49,8 @@ const envSchema = z.object({
   MULTI_BIN_RUNS_ENABLED: featureEnabledSchema,
   // Database
   DATABASE_URL: z.string().url(),
+  // Read by src/lib/pg-pool-config.ts.
+  DATABASE_CA_CERT: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
   // App URL (used by Better Auth and other services)
   NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -73,7 +75,6 @@ const envSchema = z.object({
   API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
-  ADMIN_EMAIL: z.string().email().optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()

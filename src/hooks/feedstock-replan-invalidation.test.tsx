@@ -20,6 +20,8 @@ const KEYS = [
   productionRunKeys.detail("run-1"),
   creditBatchKeys.pageModel("cb-1"),
   creditBatchKeys.emissionLines("fac", "cb-1"),
+  creditBatchKeys.emissionAllocation({ creditBatchId: "cb-1" }),
+  creditBatchKeys.emissionAllocation({ removalId: "rm-1" }),
   chainOfCustodyKeys.batch("cb-1"),
   certificationKeys.overview("fac"),
 ];
