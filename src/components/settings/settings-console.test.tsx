@@ -73,7 +73,7 @@ describe("SettingsConsole", () => {
     expect(html).toContain("Profile form");
     expect(html).toContain("Your name, email and password.");
     expect(html).not.toContain("every organization you belong to");
-    expect(html).toContain("Other settings appear once an Admin adds you to an organization.");
+    expect(html).toContain("Other settings appear once you are in an organization.");
   });
 
   it("lists the groups in order with the organization name on its group", () => {

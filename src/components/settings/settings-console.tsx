@@ -99,7 +99,7 @@ function useRegistryKeysSaved(viewer: SettingsViewer): boolean {
 
 // Without an organization only Profile opens; its usual caption names organizations.
 const NO_ORGANIZATION_PROFILE_CAPTION = "Your name, email and password.";
-const NO_ORGANIZATION_HIDDEN_LINE = "Other settings appear once an Admin adds you to an organization.";
+const NO_ORGANIZATION_HIDDEN_LINE = "Other settings appear once you are in an organization.";
 
 export function SettingsConsole({ pane: paneKey, viewer, subtitle, children }: SettingsConsoleProps) {
   const router = useRouter();
