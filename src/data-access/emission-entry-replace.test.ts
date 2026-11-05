@@ -3,17 +3,18 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import { documents, emissionEntries, emissionEntryValues } from "@/db/schema";
-import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
+import { emissionEntryCounts, entryLine, type EntryObservation } from "@/lib/certification/emission-entry-rules";
+import { isCarryCompatibleLine } from "@/lib/certification/emission-entry-carry";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn(), carried: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn(), carried: vi.fn(), receiver: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
 vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(),
   emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow,
-  isCarriedEmissionCorrection: mocks.carried }));
+  isCarriedEmissionCorrection: mocks.carried, loadEmissionCorrectionReceiverObservation: mocks.receiver }));
 import { replaceEmissionEntry, tombstoneEmissionZeros } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
@@ -88,6 +89,7 @@ beforeEach(() => {
   const tx = { select, update, insert, delete: () => query(() => []) } as unknown as DbTransaction;
   mocks.transaction.mockImplementation((callback: (tx: DbTransaction) => unknown) => callback(tx));
   mocks.latest.mockImplementation(async () => current);
+  mocks.receiver.mockImplementation(async () => current);
   mocks.previous.mockResolvedValue(previous);
 });
 
@@ -198,6 +200,7 @@ it.each(["sent", "held"])("holds Enter again for a %s carried entry under its re
   mocks.carried.mockReturnValue(true);
   await replaceEmissionEntry(ctx, input);
   expect(mocks.carried).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver");
+  expect(mocks.receiver).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver", batch.facilityId);
   expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({
     replacesEntryId: holding === "sent" ? id : "sent-original",
   }));
@@ -215,7 +218,7 @@ it.each(["sent", "held"] as const)("refuses carry-ineligible new contracts for a
   mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
   mocks.carried.mockReturnValue(true);
   current.lineSources = { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } };
-  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The template changed how this component is recorded");
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The receiving Removal's template cannot count this carried entry");
   expect(update).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
   expect(moved).not.toHaveBeenCalled();
@@ -230,7 +233,43 @@ it.each([0, 2])("refuses a carried replacement with %s monitored inputs before w
     ...current.definition.groups[0].components[0],
     inputs: Array.from({ length: count }, (_, index) => ({ ...shape[0], key: `input_${index}` })),
   }] }] };
-  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The template changed how this component is recorded");
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The receiving Removal's template cannot count this carried entry");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(moved).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
+});
+
+it.each(["sent", "held"] as const)("refuses an incompatible receiver for a %s entry even when the origin allows carry", async holding => {
+  if (holding === "sent") locked.sentByRemovalId = "receiver";
+  else {
+    locked.replacesEntryId = "sent-original";
+    mocks.holds.mockResolvedValue(new Map([[id, "receiver"]]));
+  }
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  expect(isCarryCompatibleLine(entryLine(current, "line"))).toBe(true);
+  const receiver = { ...current, id: "receiver-observation", externalTemplateId: "receiver-template" };
+  mocks.receiver.mockResolvedValue(receiver);
+  expect(emissionEntryCounts(current, receiver, "line").counts).toBe(false);
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("Nothing changed.");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(moved).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
+});
+
+it.each(["single", "two-inputs", "unit-changed", "unread"] as const)("refuses a %s receiver before writing while the origin template is compatible", async state => {
+  locked.sentByRemovalId = "receiver";
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  const receiver = structuredClone(current);
+  if (state === "single") receiver.lineSources.line.entryPolicy = "single";
+  if (state === "two-inputs") receiver.definition.groups[0].components[0].inputs.push({ ...shape[0], key: "other_input" });
+  if (state === "unit-changed") receiver.enrichment = previous.enrichment;
+  mocks.receiver.mockResolvedValue(state === "unread" ? null : receiver);
+  expect(isCarryCompatibleLine(entryLine(current, "line"))).toBe(true);
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("Nothing changed.");
   expect(update).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
   expect(moved).not.toHaveBeenCalled();

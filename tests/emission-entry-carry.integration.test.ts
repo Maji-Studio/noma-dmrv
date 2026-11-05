@@ -524,7 +524,7 @@ it.each([...["FAILED_VERIFICATION", "DRAFT", null].flatMap(status => ["additive"
 });
 
 
-it("keeps Enter again in the returned carry receiver's manifest and out of other Removals", async () => {
+it("refuses Enter again for a different receiver pin, then keeps a compatible replacement in that receiver's manifest", async () => {
   const row = await attempt();
   await reserve(row);
   await markSubmissionSubmitted(ctx, row.id, { externalId: "carried", expectedLockedAt: row.lockedAt!,
@@ -545,7 +545,38 @@ it("keeps Enter again in the returned carry receiver's manifest and out of other
   }).returning();
   let replacementId: string | undefined;
   let second: LineageFixture | undefined;
+  let receiverObservationId: string | undefined;
   try {
+    const [receiverObservation] = await db.insert(removalTemplateObservations).values({ ...current, id: undefined,
+      externalTemplateId: `receiver-${crypto.randomUUID()}`,
+    }).returning();
+    receiverObservationId = receiverObservation.id;
+    await db.update(creditBatches).set({ removalTemplateId: receiverObservation.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
+    const before = await getEmissionEntry(ctx, entry.id);
+    const replacementInput = { id: before.id, expectedVersion: before.version, occurredOn: before.occurredOn,
+      values: [{ inputKey: "electricity_use", quantityKind: "energy" as const, magnitude: "125", unit: "MJ" }] };
+    const originEntries = () => db.select().from(emissionEntries).where(and(
+      eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, origin.batchId),
+    )).orderBy(emissionEntries.id);
+    const entriesBefore = await originEntries();
+    const activities = () => db.select().from(activityEvents).where(and(
+      eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.actorUserId, userId),
+    )).orderBy(activityEvents.id);
+    const activitiesBefore = await activities();
+    expect((await resolveScopeForRemoval(ctx, receiving.removalId)).memberBatches[0].removalTemplateId)
+      .toBe(receiverObservation.externalTemplateId);
+    expect(receiverObservation.externalTemplateId).not.toBe(current.externalTemplateId);
+    await expect(replaceEmissionEntry(ctx, replacementInput)).rejects.toThrow(
+      "The receiving Removal's template cannot count this carried entry");
+    expect(await getEmissionEntry(ctx, entry.id)).toEqual(before);
+    expect(await originEntries()).toEqual(entriesBefore);
+    expect(await activities()).toEqual(activitiesBefore);
+    // Counting requires the same template identity as well as a compatible component.
+    await db.update(creditBatches).set({ removalTemplateId: current.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
     const facility = { templatesById: { [current.externalTemplateId]: { observation: current } } };
     const contributionsFor = async (removalId: string) => {
       const scope = await resolveScopeForRemoval(ctx, removalId);
@@ -596,6 +627,12 @@ it("keeps Enter again in the returned carry receiver's manifest and out of other
       await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, replacementId));
       await db.delete(emissionEntries).where(eq(emissionEntries.id, replacementId));
     }
+    await db.update(creditBatches).set({ removalTemplateId: observation.externalTemplateId }).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, receiving.batchId),
+    ));
+    if (receiverObservationId) await db.delete(removalTemplateObservations).where(and(
+      eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, receiverObservationId),
+    ));
     await db.delete(removalTemplateObservations).where(eq(removalTemplateObservations.id, current.id));
   }
 });

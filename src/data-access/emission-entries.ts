@@ -1,7 +1,7 @@
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { isCarryCompatibleLine } from "@/lib/certification/emission-entry-carry";
 import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
-import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection } from "./emission-entry-corrections";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection, loadEmissionCorrectionReceiverObservation } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -316,8 +316,12 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
       throw new SafeError("This entry still counts. Edit that entry instead.");
     const holdingRemovalId = entryHoldingRemovalId(entry);
     if (holdingRemovalId && isCarriedEmissionCorrection(ctx, tx, entry.creditBatchId, holdingRemovalId)) {
-      if (!isCarryCompatibleLine(entryLine(context.observation, entry.componentId)))
-        throw new SafeError("The template changed how this component is recorded, so a carried entry cannot be entered again for it. Nothing changed.");
+      const receiverObservation = await loadEmissionCorrectionReceiverObservation(
+        ctx, tx, entry.creditBatchId, holdingRemovalId, context.batch.facilityId,
+      );
+      if (!receiverObservation || !isCarryCompatibleLine(entryLine(receiverObservation, entry.componentId)) ||
+        !emissionEntryCounts(context.observation, receiverObservation, entry.componentId).counts)
+        throw new SafeError("The receiving Removal's template cannot count this carried entry. Review the component in Removal templates before entering it again. Nothing changed.");
     }
     const [deleted] = await tx.update(emissionEntries).set({
       deletedAt: new Date(), updatedAt: new Date(),
