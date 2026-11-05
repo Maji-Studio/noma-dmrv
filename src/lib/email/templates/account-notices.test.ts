@@ -52,13 +52,14 @@ it("password changed: names the account and time, links to reset, no organizatio
   expect(changed.text).toContain(`The password for ${TO} was changed on Oct 22, 2026 at 14:32 UTC.`);
   expect(changed.text).toContain(`If you did not change it, reset your password now.\n${RESET_URL}\n`);
   expect(changed.text).toContain("Your connected apps were disconnected. Connect them again when you need them.");
-  expect(changed.text).toContain(`Your API keys still work. Review and revoke them at ${APP}/settings/developers.`);
+  expect(changed.text).toContain(`Your API key still works. Review or revoke it at ${APP}/settings/developers.`);
   expect(changed.text).toContain("Automation, created Oct 22, 2026.");
   expect(changed.text).toContain(`Sent to ${TO} about your noma account.`);
   expect(changed.html).toContain(`href="${RESET_URL}"`);
   expect(changed.html).toContain(`src="${APP}/email/password-changed.png"`);
   expect(changed.html).not.toContain("Confirm");
-  expect(changed.text).toContain("If you made this change, you do not need to do anything.");
+  // The email asks the reader to review a key, so it does not also say there is nothing to do.
+  expect(changed.text).not.toContain("you do not need to do anything");
 });
 
 it("email change confirm: before to after, 24 hours, current address, button", () => {
@@ -152,7 +153,10 @@ it("escapes API key names and handles an empty active list", () => {
   const crafted = passwordChangedEmail({ ...input, activeApiKeys: [{ name: CRAFTED, createdAt: WHEN }] });
   expect(crafted.html).toContain(CRAFTED_ESCAPED);
   expect(crafted.html).not.toContain("<img src=x");
-  expect(passwordChangedEmail({ ...input, activeApiKeys: [] }).text).not.toContain("API key");
+  const quiet = passwordChangedEmail({ ...input, activeApiKeys: [] }).text;
+  expect(quiet).not.toContain("API key");
+  expect(quiet).toContain("If you made this change, you do not need to do anything.");
+  expect(passwordChangedEmail({ ...input, connectedAppsDisconnected: null, activeApiKeys: [] }).text).not.toContain("connected apps");
   const many = Array.from({ length: 12 }, (_, index) => ({ name: `Key ${index + 1}`, createdAt: WHEN }));
   const capped = passwordChangedEmail({ ...input, activeApiKeys: many }).text;
   expect(capped).toContain("Key 10, created");

@@ -22,7 +22,7 @@ function context(path: string, returned: unknown) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(revokeUserOAuthGrants).mockResolvedValue(undefined);
+  vi.mocked(revokeUserOAuthGrants).mockResolvedValue(2);
   vi.mocked(sendPasswordChangedNotice).mockResolvedValue(undefined);
 });
 it.each(["/change-password", "/reset-password"])("%s revokes before sending the notice", async path => {
@@ -34,6 +34,12 @@ it.each(["/change-password", "/reset-password"])("%s revokes before sending the 
     expect.objectContaining({ userId: USER.id, email: USER.email }), true);
   expect(vi.mocked(revokeUserOAuthGrants).mock.invocationCallOrder[0])
     .toBeLessThan(vi.mocked(sendPasswordChangedNotice).mock.invocationCallOrder[0]);
+});
+it("says nothing about connected apps when there were none", async () => {
+  vi.mocked(revokeUserOAuthGrants).mockResolvedValue(0);
+  const ctx = context("/change-password", { user: USER });
+  await deliverPasswordNotice(ctx);
+  expect(sendPasswordChangedNotice).toHaveBeenCalledWith(expect.objectContaining({ userId: USER.id }), null);
 });
 it.each(["/change-password", "/reset-password"])("%s tolerates revocation failure and logs only the ID", async path => {
   vi.mocked(revokeUserOAuthGrants).mockRejectedValue(new Error(USER.email));

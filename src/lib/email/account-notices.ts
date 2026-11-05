@@ -50,7 +50,7 @@ async function currentActor(expectedUserId?: string) {
   }
 }
 
-export async function sendPasswordChangedNotice(recipient: NoticeRecipient, connectedAppsDisconnected = false): Promise<void> {
+export async function sendPasswordChangedNotice(recipient: NoticeRecipient, connectedAppsDisconnected: boolean | null = false): Promise<void> {
   const appUrl = getEmailAppUrl();
   const resetUrl = `${appUrl}/forgot-password`;
   await deliverNotice("password-changed", recipient, async () => {
