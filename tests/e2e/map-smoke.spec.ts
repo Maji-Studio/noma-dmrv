@@ -5,12 +5,12 @@
  * Guards against the maplibre-gl 6 break (PR #752, fixed by #870): Turbopack
  * rewrote the worker URL to file://, MapLibre ran `new Worker("")`, and since
  * the worker fetches tiles, no vector tile request ever left the page. Unit
- * tests mock MapLibre and CI has no MapTiler key, so nothing noticed for 20
- * days.
+ * tests mock MapLibre and CI never loaded a live basemap, so nothing noticed
+ * for 20 days.
  *
  * The page /e2e/map-smoke renders the real GIS boundary preview map against a
  * fixture style on an `.invalid` host; this spec answers those requests via
- * `page.route`, so no MapTiler key and no network are needed. SwiftShader
+ * `page.route`, so no live basemap and no network are needed. SwiftShader
  * gives headless Chromium the WebGL2 context MapLibre requires (issue #801).
  */
 
@@ -21,6 +21,7 @@ import {
   MAP_SMOKE_STYLE_URL,
 } from "@/app/e2e/map-smoke/map-smoke-fixture";
 import { test, expect } from "./fixtures";
+import { stubBasemap } from "./helpers/basemap-route";
 import { fullExtentVectorTile, mapSmokeStyle } from "./helpers/map-smoke-tiles";
 
 const MAP_SMOKE_PATH = "/e2e/map-smoke";
@@ -39,7 +40,7 @@ async function serveFixtureBasemap(page: Page): Promise<string[]> {
   const tile = fullExtentVectorTile();
 
   // Keep the page offline even if a real basemap host is ever requested.
-  await page.route("**://api.maptiler.com/**", (route) => route.abort());
+  await stubBasemap(page);
   await page.route("**://server.arcgisonline.com/**", (route) => route.abort());
 
   await page.route(`${MAP_SMOKE_FIXTURE_ORIGIN}/**`, async (route) => {

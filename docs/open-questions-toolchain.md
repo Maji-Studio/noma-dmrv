@@ -74,7 +74,7 @@ and need no follow-up.
   `maplibre-gl` semver-major updates for this reason.
 - Accepted risk: GHSA-jrc7-96c5-q579 (attribution sanitizer XSS) is fixed only
   in 6.4.1+. It needs untrusted attribution strings; ours are
-  `SAT_TILE_ATTRIBUTION` plus MapTiler's style attribution (see
+  `SAT_TILE_ATTRIBUTION` plus the OpenFreeMap and OpenStreetMap style attribution (see
   `src/components/applications/geojson-preview-map.tsx`). The four Dependabot
   alerts were dismissed as tolerable risk on that basis. Revisit if any map
   ever takes an attribution from user or third-party input.

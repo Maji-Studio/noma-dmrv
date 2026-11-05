@@ -83,7 +83,6 @@ the site project's Vercel env vars when deployed.
 | Variable | Effect |
 | --- | --- |
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
-| `PUBLIC_MAPTILER_KEY` | Basemap for the Home hero map (the app's domain-locked MapTiler key; the site domain must be allowed on it). Unset plots the sites on a dotted field. |
 
 ## Vercel Projects and Domains
 
@@ -109,7 +108,10 @@ invocations. Crons run only on Production deployments, never Preview (staging).
 | Environment | App | Site |
 | --- | --- | --- |
 | Staging | `staging.app.noma.maji.studio` | `staging.noma.maji.studio` |
-| Production (planned) | `app.noma.maji.studio` | `noma.maji.studio` |
+| Production | `app.noma.maji.studio` | `noma.maji.studio` |
+
+On the site hosts, old app paths redirect (308) to the matching app host.
+`tests/site-host-redirects.test.ts` fails when an app route is missing from the redirect list.
 
 Domain and project settings changes are made in the Vercel dashboard by the
 owner; the repository carries `vercel.json` and the ignore script.

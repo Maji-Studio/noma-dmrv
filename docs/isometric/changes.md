@@ -9,6 +9,16 @@ include held replacements, keeping them in that Removal’s contribution manifes
 and out of other Removals. Existing correction locks and refusals still apply.
 No binding, revision or schema change.
 
+## 2026-11-05: Block a returned Removal from dropping a sent entry (#1575)
+
+An application-date correction can shrink a Removal's entry window. A sent value
+entry outside the current window (after its end, for a carried entry) now produces
+`sentEntryOutsideWindow` in the shared contribution compiler. Review and submit
+surface the blocker with an Emissions destination.
+Sent ownership is unchanged. Recorded zeros, entries inside the
+window and entries sent by other Removals keep their existing behavior. No
+registry contract or schema change.
+
 ## 2026-11-04: Correct carried entries under their receiving Removal (#1572)
 
 Emissions correction scopes include the member batches of Removals that sent,

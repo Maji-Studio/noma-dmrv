@@ -15,3 +15,5 @@ export function formatEmissionEntryMessageLabel(parts: {
 
 export const EMISSION_ENTRY_FILE_UNAVAILABLE = (label: string) => `A file on ${label} is unavailable. Refresh the Removal and submit again.`;
 export const EMISSION_ENTRY_FILE_DUPLICATE = (label: string) => `A file on ${label} is attached to more than one entry. Remove the duplicate file and submit again.`;
+export const sentEntryOutsideRemovalPeriod = (label: string) =>
+  `This Removal sent ${label}, which is now outside the Removal period. Change the entry date to fit the period, or change the application date back.`;

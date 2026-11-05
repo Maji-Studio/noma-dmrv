@@ -24,9 +24,11 @@ v3 is proprietary.
 ## Decision
 
 - **Renderer:** MapLibre GL JS, client-side.
-- **Basemap:** MapTiler vector tiles + style behind a **single config
-  constant** (public, domain-locked key — browser-safe). Swapping to
-  Protomaps-on-our-S3 or Mapbox is a config change.
+- **Basemap:** OpenFreeMap Positron vector tiles + style behind a **single
+  config constant** (`BASEMAP_STYLE_URL`, no key). Swapping to
+  Protomaps-on-our-S3 or Mapbox is a config change. *(2026-11-05: moved from
+  MapTiler to OpenFreeMap. The MapTiler key was domain-locked and its Free
+  plan is non-commercial.)*
 - **Geocoding + routing:** OpenRouteService behind a **server-side
   `src/lib/geo/` client interface**, invoked through `fn/` server actions.
   The secret key never reaches the browser. This mirrors the
@@ -67,7 +69,7 @@ v3 is proprietary.
 - A routed distance is a *map estimate*, never a measurement — provenance is
   tracked via `distanceSource` (see the plan). The geo client logs entity IDs
   and action only, never addresses or coordinates.
-- **Revisit if** volume outgrows the MapTiler/ORS free tiers (→ Protomaps on
+- **Revisit if** volume outgrows the OpenFreeMap/ORS free tiers (→ Protomaps on
   existing S3, or a paid tier), or if the open stack proves fiddly enough to
   justify Mapbox — at which point reopen this ADR and resolve the route-cache
   caveat first.

@@ -52,7 +52,7 @@ async function createOrderViaUi(
 
   // Selecting a location surfaces the read-only details panel with the
   // delivery route at the stored facility distance (issue #196). The route
-  // map is not asserted: it needs a MapTiler key absent in hermetic CI.
+  // map is not asserted: the basemap is stubbed blank in hermetic CI.
   await expect(page.getByTestId("order-location-details")).toBeVisible({
     timeout: 8000,
   });

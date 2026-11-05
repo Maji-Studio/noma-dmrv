@@ -49,6 +49,8 @@ const envSchema = z.object({
   MULTI_BIN_RUNS_ENABLED: featureEnabledSchema,
   // Database
   DATABASE_URL: z.string().url(),
+  // Read by src/lib/pg-pool-config.ts.
+  DATABASE_CA_CERT: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
   // App URL (used by Better Auth and other services)
   NEXT_PUBLIC_APP_URL: z.string().url(),
@@ -73,7 +75,6 @@ const envSchema = z.object({
   API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
-  ADMIN_EMAIL: z.string().email().optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
@@ -132,17 +133,13 @@ const envSchema = z.object({
     z.string().min(1).optional(),
   ),
 
-  // Geo (map integration — ADR 0009). BOTH keys are optional by design:
+  // Geo (map integration — ADR 0009). The routing key is optional by design:
   // env parses at import time, so a required geo key would break every
   // command (build, db scripts, e2e) in environments not yet updated.
   // Degradation is gated where the feature renders, never at parse time.
-  // No OPENROUTESERVICE_API_KEY → CALC + address search disabled (tooltip);
-  // no NEXT_PUBLIC_MAPTILER_KEY → no basemap, manual lat/lng fallback.
+  // No OPENROUTESERVICE_API_KEY → CALC + address search disabled (tooltip).
+  // The basemap (OpenFreeMap) needs no key.
   OPENROUTESERVICE_API_KEY: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
-  NEXT_PUBLIC_MAPTILER_KEY: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional()
   ),
