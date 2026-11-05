@@ -1,6 +1,6 @@
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
-import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow } from "./emission-entry-corrections";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -313,6 +313,12 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
     if (!previous) throw new SafeError("The entry's template observation was not found.");
     if (emissionEntryCounts(previous, context.observation, entry.componentId).counts)
       throw new SafeError("This entry still counts. Edit that entry instead.");
+    const holdingRemovalId = entryHoldingRemovalId(entry);
+    if (holdingRemovalId && isCarriedEmissionCorrection(ctx, tx, entry.creditBatchId, holdingRemovalId)) {
+      const line = entryLine(context.observation, entry.componentId);
+      if (line?.entryPolicy !== "additive" || line.component.inputs.filter(input => input.type === "monitored").length !== 1)
+        throw new SafeError("The template changed how this component is recorded, so a carried entry cannot be entered again for it. Nothing changed.");
+    }
     const [deleted] = await tx.update(emissionEntries).set({
       deletedAt: new Date(), updatedAt: new Date(),
       version: nextVersion(emissionEntries.version),

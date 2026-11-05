@@ -581,7 +581,11 @@ it("keeps Enter again in the returned carry receiver's manifest and out of other
     expect(await listCarryCandidates(ctx, origin.facilityId, db, { entryIds: [replacement.id] })).toEqual([]);
     expect((await loadFacilityEmissionEntryCarry(ctx, origin.facilityId, db, undefined,
       { ownedBatchIds: [origin.batchId] })).entries.find(value => value.id === replacement.id))
-      .toMatchObject({ heldForRemovalId: receiving.removalId, carry: { receiver: null, waitingReason: null } });
+      .toMatchObject({ heldForRemovalId: receiving.removalId, carry: {
+        receiver: { removalId: receiving.removalId, removalCode: expect.any(String),
+          creditBatchIds: [receiving.batchId], creditBatchCodes: [expect.any(String)], anotherCreditBatch: true },
+        waitingReason: null,
+      } });
   } finally {
     if (second) {
       await db.update(creditBatchApplications).set({ creditBatchId: second.batchId }).where(eq(creditBatchApplications.removalId, second.removalId));

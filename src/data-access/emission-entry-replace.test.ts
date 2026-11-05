@@ -197,12 +197,44 @@ it.each(["sent", "held"])("holds Enter again for a %s carried entry under its re
   mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
   mocks.carried.mockReturnValue(true);
   await replaceEmissionEntry(ctx, input);
+  expect(mocks.carried).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver");
   expect(inserted).toHaveBeenCalledWith(emissionEntries, expect.objectContaining({
     replacesEntryId: holding === "sent" ? id : "sent-original",
   }));
   expect(saved.sentByRemovalId).toBeNull();
   expect(mocks.assertWindow).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver", batch.endDate);
   expect(mocks.activity.mock.calls.map(call => call[2])).toEqual(["deleted", "created"]);
+});
+
+it.each(["sent", "held"] as const)("refuses carry-ineligible new contracts for a %s entry before writing", async holding => {
+  if (holding === "sent") locked.sentByRemovalId = "receiver";
+  else {
+    locked.replacesEntryId = "sent-original";
+    mocks.holds.mockResolvedValue(new Map([[id, "receiver"]]));
+  }
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  current.lineSources = { line: { scope: "operating", entryPolicy: "single", origin: "reviewed" } };
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The template changed how this component is recorded");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(moved).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
+});
+
+it.each([0, 2])("refuses a carried replacement with %s monitored inputs before writing", async count => {
+  locked.sentByRemovalId = "receiver";
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  current.definition = { groups: [{ ...current.definition.groups[0], components: [{
+    ...current.definition.groups[0].components[0],
+    inputs: Array.from({ length: count }, (_, index) => ({ ...shape[0], key: `input_${index}` })),
+  }] }] };
+  await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("The template changed how this component is recorded");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(moved).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
 });
 
 it.each([null, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {
