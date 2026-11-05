@@ -10,7 +10,7 @@ import * as schema from '../../db/schema';
 import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { hashPassword } from 'better-auth/crypto';
 import { encryptSecret } from '../crypto/secrets';
-import { getPgPoolConfig } from '../pg-pool-config';
+import { getPgPoolConfig, isLocalDatabaseTarget } from '../pg-pool-config';
 import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from '../../config/auth';
 import {
   DEV_BOOTSTRAP_OVERRIDE,
@@ -25,7 +25,6 @@ export type EnsureAdminDb = NodePgDatabase<typeof schema>;
 const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 const CREDENTIAL_PROVIDER = 'credential';
-const LOCAL_DATABASE_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 export type BootstrapMode = 'development' | 'production';
 
@@ -55,14 +54,14 @@ export function resolveBootstrapMode(
     throw new Error('DATABASE_URL environment variable is not set or is blank');
   }
 
-  let hostname: string;
+  let isLocal: boolean;
   try {
-    hostname = new URL(databaseUrl).hostname.replace(/^\[|\]$/g, '');
+    isLocal = isLocalDatabaseTarget(databaseUrl);
   } catch {
     throw new Error('DATABASE_URL environment variable is not a valid URL');
   }
 
-  if (LOCAL_DATABASE_HOSTS.has(hostname)) return 'development';
+  if (isLocal) return 'development';
   if (environment.ALLOW_DEV_BOOTSTRAP === DEV_BOOTSTRAP_OVERRIDE) {
     return 'development';
   }
