@@ -158,6 +158,21 @@ describe("ProfileSettingsPane", () => {
     expect(screen.queryByText(/Open the link again/)).toBeNull();
   });
 
+  it("puts a wrong current password at the email form's field", async () => {
+    const message = "That is not your current password.";
+    emailMutation.mutateAsync.mockRejectedValue(new ActionError({
+      error: message, code: "validation_failed",
+      issues: [{ path: ["currentPassword"], code: "validation_failed", message }],
+    }));
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
+    type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("wrong-password");
+    fireEvent.click(screen.getByRole("button", { name: "Send link" }));
+
+    await waitFor(() => expect(document.getElementById("emailCurrentPassword")!.getAttribute("aria-invalid")).toBe("true"));
+    expect((await screen.findAllByText(message)).length).toBeGreaterThan(0);
+  });
+
   it("shows the server message and wait time for other refusals", async () => {
     emailMutation.mutateAsync.mockRejectedValue(new ActionError({ error: "Too many requests. Try again in 30 seconds." }));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);

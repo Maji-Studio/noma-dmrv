@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   changeEmail: vi.fn(),
   verifyPassword: vi.fn(),
   revokeOtherSessions: vi.fn(),
+  revokeUserOAuthGrants: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
   headers: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext }));
 vi.mock("@/lib/auth/better-auth", () => ({ auth: { api: { verifyPassword: mocks.verifyPassword, updateUser: mocks.updateUser, changeEmail: mocks.changeEmail, changePassword: mocks.changePassword, revokeOtherSessions: mocks.revokeOtherSessions } } }));
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
+vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ revokeUserOAuthGrants: mocks.revokeUserOAuthGrants }));
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
   sanitizeErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
@@ -41,11 +43,27 @@ beforeEach(() => {
   mocks.updateUser.mockResolvedValue({ status: true });
   mocks.changePassword.mockResolvedValue({ token: null, user: { id: USER_ID } });
   mocks.revokeOtherSessions.mockResolvedValue({ status: true });
+  mocks.revokeUserOAuthGrants.mockResolvedValue(undefined);
 });
 
 afterEach(() => { vi.useRealTimers(); });
 
 describe("profile actions", () => {
+  it("disconnects apps again after other devices are signed out", async () => {
+    const order: string[] = [];
+    mocks.revokeOtherSessions.mockImplementation(async () => { order.push("sessions"); return { status: true }; });
+    mocks.revokeUserOAuthGrants.mockImplementation(async () => { order.push("apps"); });
+    expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: true, data: { otherDevicesSignedOut: true } });
+    expect(order).toEqual(["sessions", "apps"]);
+    expect(mocks.revokeUserOAuthGrants).toHaveBeenCalledWith(USER_ID);
+  });
+
+  it("still reports the password change when the final disconnect fails", async () => {
+    mocks.revokeUserOAuthGrants.mockRejectedValue(new Error("db down"));
+    expect(await changePasswordFn(PASSWORD_INPUT)).toEqual({ success: true, data: { otherDevicesSignedOut: true } });
+    expect(mocks.loggerWarn).toHaveBeenCalledWith({ op: "change-password", userId: USER_ID }, "connected apps were not disconnected after sign-out");
+  });
+
   it("sends only the trimmed name to updateUser", async () => {
     expect(await updateProfileNameFn({ name: "  Example  ", email: "example@example.com", role: "admin", userId: "other-user" }))
       .toEqual({ success: true, data: { name: "Example" } });

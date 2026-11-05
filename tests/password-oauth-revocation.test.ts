@@ -12,7 +12,7 @@ let b: OAuthFixture;
 beforeEach(async () => { a = await createOAuthFixture(); b = await createOAuthFixture(); });
 afterEach(async () => { await b?.cleanup(); await a?.cleanup(); });
 
-it("revokes all of A's grants, tokens and consents across organizations without affecting B or API keys", async () => {
+it("revokes all of A's grants and consents across organizations without affecting B or API keys", async () => {
   const first = await a.accessToken();
   const second = await a.accessToken({ organizationIndex: 1 });
   const other = await b.accessToken();
@@ -31,8 +31,9 @@ it("revokes all of A's grants, tokens and consents across organizations without 
   const grants = await db.select().from(oauthGrants).where(inArray(oauthGrants.id, [first.grant.id, second.grant.id]));
   expect(grants).toHaveLength(2);
   for (const grant of grants) expect(grant).toMatchObject({ revokedAt: expect.any(Date), revocationReason: "disconnected", version: 2 });
-  expect(await db.select().from(oauthAccessTokens).where(eq(oauthAccessTokens.userId, a.userId))).toEqual([]);
-  expect(await db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.userId, a.userId))).toEqual([]);
+  // Token rows stay until purge, as for any application revocation; their generation is revoked.
+  expect(await db.select().from(oauthAccessTokens).where(eq(oauthAccessTokens.userId, a.userId))).toHaveLength(2);
+  expect(await db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.userId, a.userId))).toHaveLength(2);
   expect(await db.select().from(oauthConsents).where(eq(oauthConsents.userId, a.userId))).toEqual([]);
   expect(await db.select().from(oauthGrants).where(eq(oauthGrants.id, other.grant.id))).toEqual([other.grant]);
   expect(await db.select().from(oauthAccessTokens).where(eq(oauthAccessTokens.userId, b.userId))).toEqual([other.token]);

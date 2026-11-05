@@ -125,11 +125,11 @@ it("lists only the recipient's active key names and dates", async () => {
   vi.mocked(listActiveAccountApiKeys).mockResolvedValue([{ name: "Automation", createdAt: new Date("2026-10-22T00:00:00Z") }]);
   await sendPasswordChangedNotice(MEMBER, true);
   expect(listActiveAccountApiKeys).toHaveBeenCalledExactlyOnceWith(MEMBER.userId);
-  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Automation. Created Oct 22, 2026.") }));
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Automation, created Oct 22, 2026.") }));
 });
 it("still sends the notice when the active key lookup fails", async () => {
   vi.mocked(listActiveAccountApiKeys).mockRejectedValue(new Error(MEMBER.email));
   await expect(sendPasswordChangedNotice(MEMBER, true)).resolves.toBeUndefined();
-  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("The active API key list could not be loaded.") }));
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Your API keys still work. Review and revoke them at") }));
   expect(mocks.warn).toHaveBeenCalledWith({ userId: MEMBER.userId }, "password notice API keys could not be loaded");
 });

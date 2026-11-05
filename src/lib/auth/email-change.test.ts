@@ -159,7 +159,7 @@ it("does not silently change an unverified user's address", async () => {
   expect(sendEmail).toHaveBeenCalledTimes(2);
 });
 
-it("rejects a session at the default freshness boundary with SESSION_EXPIRED", async () => {
+it("rejects a stale session with SESSION_EXPIRED; the browser endpoint is closed", async () => {
   const ctx = await auth.$context;
   expect(ctx.sessionConfig.freshAge).toBe(24 * ONE_HOUR_SECONDS);
   memory.session[0].createdAt = new Date(Date.now() - ctx.sessionConfig.freshAge * MILLISECONDS_PER_SECOND);

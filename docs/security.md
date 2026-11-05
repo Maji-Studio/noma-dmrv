@@ -389,6 +389,11 @@ their own mapping:
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
 3. `/removals` opens without redirecting to Settings, Registry.
 
+## Account changes
+
+- Changing the email in Profile needs the current password (Better Auth `verifyPassword`), a session under 24 hours old and the per-user rate limit. The HTTP `/change-email` endpoint refuses browser calls, so the Profile action is the only way in.
+- A successful password change or reset disconnects the person's connected apps in every organization: each OAuth grant is revoked like any other application revocation (see `docs/auth.md`). A Profile change sweeps again after other sessions are signed out. API keys keep working; the password-changed email lists the active ones (names and dates) with the Settings, Developers address.
+
 ## Operational Defaults
 
 - Better Auth rate limits are on by default, stricter for auth-sensitive
@@ -429,6 +434,3 @@ Notes, reasons and file names are never stored as activity values. Linked
 records store IDs only and resolve current labels in org-scoped reads.
 Stored idempotency outcome schema v2 includes value-free effect metadata;
 older outcomes answer `replay_unavailable` without a compatibility mapper.
-
-Email changes in Profile require the current password, verified by Better Auth, as well as a session less than 24 hours old and the existing rate limit; direct HTTP email changes are refused in favor of the guarded Profile action.
-Successful password changes and resets disconnect the user's OAuth apps across organizations, with failures logged by user ID without failing the password operation; API keys remain unchanged, and the existing password notice lists active key names and creation dates with a Settings, Developers revocation link.
