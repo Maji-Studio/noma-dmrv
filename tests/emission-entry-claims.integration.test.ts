@@ -613,7 +613,7 @@ it.each([false, true])("tombstones a correction zero when an in-window value rep
   expect(after.sentByRemovalId).toBe(sent ? fixture.removalId : null);
 });
 
-it("preserves another Removal's correctable zero when a held replacement is redated into its window", async () => {
+it("redate under a held correction scope keeps another Removal's correctable zero", async () => {
   const { zeroIds, statement } = await sentCorrectionEntry(true);
   second = await createLineageFixture("none");
   const holdingRemovalId = second.removalId;
@@ -662,6 +662,8 @@ it("preserves another Removal's correctable zero when a held replacement is reda
   }))));
   expect(await getEmissionEntry(ctx, replacement.id)).toMatchObject({ heldForRemovalId: holdingRemovalId, deletedAt: null });
 
+  // Contract test for syncCreditBatchEntryDates: updateCreditBatch takes no
+  // correction scope today, so there no sent zero is correctable at all.
   await db.transaction(async (tx) => {
     const { batch } = await lockEmissionEntryBatch(ctx, tx, fixture.batchId);
     const window = emissionCorrectionWindow(ctx, tx, fixture.batchId, fixture.removalId);
