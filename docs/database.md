@@ -288,9 +288,9 @@ runs separately from refused runs. Certification refusals identify the blocking
 run and Removal codes when the guard supplies them, or the blocked feedstock for
 a transport ownership refusal.
 
-`--include-sent` requires a local database target, checked from `DATABASE_URL`
-regardless of `NODE_ENV`; a `host` or `hostaddr` query parameter makes it non-local. Remote targets require the explicit
-`--allow-remote-include-sent` override, including for dry runs.
+`--include-sent` checks `DATABASE_URL` using the [local database target rule](#local-database-targets),
+regardless of `NODE_ENV`. Remote targets require `--allow-remote-include-sent`,
+including for dry runs.
 
 For the one-off pre-production staging rebuild, confirm `DATABASE_URL` targets
 staging, then run
@@ -354,6 +354,21 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 Deliveries inherit their destination from `orders.customer_location_id`. Drawn
 products resolve through `output_stock_allocations`; deliveries have no destination
 override or direct product column. The nullable driver and vehicle references remain.
+
+## Local database targets
+
+`isLocalDatabaseTarget` in `src/lib/pg-pool-config.ts` treats a database URL as
+local only when its hostname is `localhost`, `127.0.0.1` or `::1` (including
+`[::1]` in URLs), and every `host` and `hostaddr` query parameter value is one
+of those loopback names or a Unix socket directory starting with `/`. Every
+entry in repeated parameters and comma-separated lists must qualify.
+
+These scripts share the rule, with explicit overrides for remote targets:
+
+- `pnpm db:reset` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
+- `pnpm db:assert-local` (`assert-local-db.ts`): `DB_MIGRATE_ALLOW_REMOTE=true`.
+- `pnpm feedstock:recalculate --include-sent`: `--allow-remote-include-sent`.
+- `pnpm db:ensure-admin` development bootstrap: `ALLOW_DEV_BOOTSTRAP=1`.
 
 ## Local Setup & Commands
 

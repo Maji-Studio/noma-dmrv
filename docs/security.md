@@ -225,9 +225,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
   `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
   it.
-- `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
-  literal string `"true"` permits a remote reset; the manually confirmed staging
-  and production reset jobs load it from their matching 1Password item.
+- `DB_RESET_ALLOW_REMOTE`: consumed only by the database-reset CLI. Only the
+  literal string `"true"` overrides the [local database target rule](./database.md#local-database-targets);
+  the manually confirmed staging and production reset jobs load it from their
+  matching 1Password item.
 - `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
   to register the pool with Fluid Compute lifecycle hooks and to tag pool
   telemetry with the compute region. `VERCEL` also controls whether
