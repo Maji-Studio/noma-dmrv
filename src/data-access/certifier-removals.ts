@@ -12,7 +12,7 @@ import {
   REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY,
   removalMayHaveExternalMutation,
 } from "@/lib/certification/removal-external-mutation";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { applications } from "@/db/schema/application";
 import {
   certifierRemovals,
@@ -62,6 +62,7 @@ export interface ProductionClaimDraftContender {
 export async function listProductionClaimDraftContenders(
   ctx: OrgContext,
   creditBatchIds: string[],
+  executor: typeof db | DbTransaction = db,
 ): Promise<ProductionClaimDraftContender[]> {
   requireOrgScope(ctx);
   if (creditBatchIds.length === 0) return [];
@@ -73,7 +74,7 @@ export async function listProductionClaimDraftContenders(
     applications,
     "production_claim_removal_applications",
   );
-  return db
+  return executor
     .select({
       creditBatchId: creditBatchApplications.creditBatchId,
       removalId: certificationSubmissions.localEntityId,

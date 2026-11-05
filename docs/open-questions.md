@@ -13,6 +13,10 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Unfinished features behind env switches
+
+MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not ready yet: they still lack testing and concept work. `MCP_ENABLED`, `STOCK_ADJUSTMENTS_ENABLED` and `MULTI_BIN_RUNS_ENABLED` are off on staging and production and on locally and in CI. Gates: `src/lib/feature-switches.ts:mcpEnabled`, `requireStockAdjustmentsEnabled`, `requireMultiBinRunsEnabled`; UI: `src/components/providers/feature-switches-provider.tsx:useFeatureSwitches`. Finish the testing and concept work before setting a switch on a deployment.
+
 ## Counted transport IDs when an ownership write precedes a claim (#1490)
 
 - `src/fn/certification/submit-removal.ts:submitRemoval` builds tentative inputs

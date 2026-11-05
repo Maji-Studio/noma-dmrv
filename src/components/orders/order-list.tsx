@@ -1,5 +1,7 @@
 "use client";
 
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
 import { recordHref, ORDER_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
@@ -179,8 +181,15 @@ export function OrderList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderFulfillmentStatus | "">("");
   const [customerFilter, setCustomerFilter] = useState("");
+  const {
+    ids: affectedOrderIds,
+    normalized: affectedOrderNormalized,
+    clear: clearAffectedOrderIds,
+  } = useExactIdFilterParam();
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
-    useListPagination(facilityId);
+    useListPagination(
+      `${facilityId ?? ""}:${affectedOrderNormalized ?? ""}`,
+    );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // `?order=<id>` deep-links the view sheet (customer and credit-batch
@@ -212,6 +221,7 @@ export function OrderList() {
     facilityId: facilityId || undefined,
     status: statusFilter || undefined,
     customerId: customerFilter || undefined,
+    ids: affectedOrderIds.length > 0 ? affectedOrderIds : undefined,
     page: currentPage,
     pageSize,
     sortBy: "orderDate",
@@ -364,9 +374,14 @@ export function OrderList() {
     setSearchQuery("");
     setStatusFilter("");
     setCustomerFilter("");
+    void clearAffectedOrderIds();
     setCurrentPage(1);
   };
-  const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
+  const hasActiveFilters =
+    !!searchQuery ||
+    !!statusFilter ||
+    !!customerFilter ||
+    affectedOrderIds.length > 0;
 
   const columns = createColumns(openEdit, handleDelete, orderLocks.locks);
 
@@ -489,6 +504,13 @@ export function OrderList() {
         }
       >
         <DataTable.Toolbar>
+          {affectedOrderIds.length > 0 && (
+            <AffectedRecordsChip
+                count={affectedOrderIds.length}
+                singular="order"
+                plural="orders"
+              />
+          )}
           <DataTable.Search
             placeholder="Search by order code..."
             aria-label="Search orders by code"

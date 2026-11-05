@@ -5,10 +5,12 @@ import type { CreditBatch } from "@/db/schema/credits";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode } from "@/lib/conflict-ref";
+import { entryHoldingRemovalId } from "@/lib/certification/removal-emission-contributions";
 import { formatCreditBatchEntryDateConflict } from "@/lib/credit-batch-entry-dates";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
 import { recordActivityChange } from "./activity-events";
+import { loadEmissionEntryHolds } from "./emission-entry-holds";
 import { getTemplateObservationsByIds } from "./removal-template-observations";
 import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
@@ -70,5 +72,8 @@ export async function syncCreditBatchEntryDates(
       action: "updated", source: "form",
     }, before, after);
   }
-  for (const entry of redatedValues) await tombstoneEmissionZeros(ctx, tx, entry);
+  const holds = await loadEmissionEntryHolds(ctx, redatedValues, tx);
+  for (const entry of redatedValues) await tombstoneEmissionZeros(ctx, tx, {
+    ...entry, holdingRemovalId: entryHoldingRemovalId({ ...entry, heldForRemovalId: holds.get(entry.id) ?? null }),
+  });
 }

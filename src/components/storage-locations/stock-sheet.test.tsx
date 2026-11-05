@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({ output: [] as OutputStockHistoryEntry[], feeds
   balance: undefined as { beforeEstimatedWetKg: number | null; beforeDryKg: number; lane: "product" | "biochar" } | undefined }));
 vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: state.output }), useOutputStockBalance: (bin: unknown) => ({ data: bin ? state.balance : undefined }),
   useRemoveOutputLoss: () => ({ mutateAsync: state.removeOutputLoss, isPending: false }) }));
+const switches = vi.hoisted(() => ({ stockAdjustments: true }));
+vi.mock("@/components/providers/feature-switches-provider", () => ({ useFeatureSwitches: () => ({ multiBinRuns: true, ...switches }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 vi.mock("@/hooks/use-bin-movements", () => ({ useFeedstockBinStock: () => ({ data: state.feedstock, dataUpdatedAt: Date.parse("2026-10-03T12:00:00Z") }) }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC" }) }));
@@ -246,4 +248,38 @@ it("intended: a split bay whose wet is below its solids is sized by solids and i
   expect(bands).toEqual(["80%", "37.5%"]);
   expect(JSON.stringify(renderer.toJSON())).not.toContain("Water, estimated");
   await act(async () => renderer.unmount());
+});
+
+it("hides Edit and Delete on a Lost mass entry when stock adjustments are off, and shows them when on", async () => {
+  state.output = [entry({ id: "latest", editLockedReason: null })];
+  const labels = async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+    await act(async () => renderer.root.findByType("button").props.onClick());
+    const found = renderer.root.findAllByType("button").map(text);
+    expect(text(renderer.root)).toContain("Spilled");
+    await act(async () => renderer.unmount());
+    return found;
+  };
+  switches.stockAdjustments = false;
+  expect(await labels()).not.toContain("Edit");
+  expect(await labels()).not.toContain("Delete");
+  switches.stockAdjustments = true;
+  expect(await labels()).toContain("Edit");
+  expect(await labels()).toContain("Delete");
+});
+
+it("hides the Adjust stock action on a feedstock bin card when stock adjustments are off", async () => {
+  state.feedstock = { currentWetKg: 50, batches: [], entries: [] };
+  const render = async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} onAdjust={vi.fn()} />); });
+    const found = renderer.root.findAllByType("button").map(text);
+    await act(async () => renderer.unmount());
+    return found;
+  };
+  switches.stockAdjustments = false;
+  expect((await render()).some(label => label.includes("Adjust stock"))).toBe(false);
+  switches.stockAdjustments = true;
+  expect((await render()).some(label => label.includes("Adjust stock"))).toBe(true);
 });

@@ -13,6 +13,7 @@
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import { requireStockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
 import { correctFeedstockLoss } from "@/data-access/feedstock-loss-corrections";
 import type { ActionResult } from "@/types/actions";
@@ -49,6 +50,7 @@ export async function recordStockTakeFn(
   data: z.infer<typeof recordStockTakeSchema>
 ): Promise<RecordStockTakeActionResult> {
   return withAction(async (ctx) => {
+    requireStockAdjustmentsEnabled();
     const validated = recordStockTakeSchema.parse(data);
 
     const movement = await recordStockTakeMovement(ctx, {
@@ -75,6 +77,7 @@ export async function recordLossFn(
   data: z.infer<typeof recordLossSchema>
 ): Promise<RecordLossActionResult> {
   return withAction(async (ctx) => {
+    requireStockAdjustmentsEnabled();
     const validated = recordLossSchema.parse(data);
     if (validated.correctsMovementId) {
       if (validated.lane !== "feedstock") {
@@ -115,6 +118,7 @@ export async function recordLossFn(
 /** Remove Lost mass by appending a bounded reversal. */
 export async function removeLossFn(data: z.infer<typeof removeLossSchema>): Promise<RecordLossActionResult> {
   return withAction(async (ctx) => {
+    requireStockAdjustmentsEnabled();
     const validated = removeLossSchema.parse(data);
     return correctFeedstockLoss(ctx, { ...validated, replacement: null });
   }, {

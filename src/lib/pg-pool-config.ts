@@ -1,6 +1,19 @@
 import type { PoolConfig } from 'pg';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+// pg lets these query parameters override the URL's host; an override is local
+// only when it is a loopback name or a Unix socket directory.
+const HOST_OVERRIDE_PARAMS = ['host', 'hostaddr'];
+
+// The test guards in tests/helpers/local-host.ts are stricter on purpose.
+function isLoopbackOrSocketHost(value: string): boolean {
+  return LOCAL_HOSTS.has(value.replace(/^\[(.*)\]$/, '$1')) || value.startsWith('/');
+}
+
+function isLocalUrl(url: URL): boolean {
+  return isLoopbackOrSocketHost(url.hostname) &&
+    HOST_OVERRIDE_PARAMS.every((param) => url.searchParams.getAll(param).flatMap((value) => value.split(',')).every(isLoopbackOrSocketHost));
+}
 
 function parseDatabaseUrl(databaseUrl: string): URL {
   try {
@@ -11,7 +24,7 @@ function parseDatabaseUrl(databaseUrl: string): URL {
 }
 
 export function isLocalDatabaseTarget(databaseUrl: string): boolean {
-  return LOCAL_HOSTS.has(parseDatabaseUrl(databaseUrl).hostname);
+  return isLocalUrl(parseDatabaseUrl(databaseUrl));
 }
 
 export function describeDatabaseTarget(databaseUrl: string): string {
@@ -22,7 +35,7 @@ export function describeDatabaseTarget(databaseUrl: string): string {
 
 export function getPgPoolConfig(databaseUrl: string): PoolConfig {
   const url = parseDatabaseUrl(databaseUrl);
-  const isLocal = LOCAL_HOSTS.has(url.hostname);
+  const isLocal = isLocalUrl(url);
 
   // pg 8.18 derives ssl behavior from sslmode in the connection string and can
   // override explicit ssl options. Strip it so the pool config stays in control.

@@ -12,6 +12,9 @@ permissions:
 
 env:
   NODE_MAJOR: 22
+  MCP_ENABLED: "true"
+  STOCK_ADJUSTMENTS_ENABLED: "true"
+  MULTI_BIN_RUNS_ENABLED: "true"
 
 # Cancel superseded runs on the same ref (e.g. new push to an open PR).
 concurrency:
@@ -124,7 +127,10 @@ jobs:
   quality-tests:
     name: quality-tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Shard 1 takes 9 to 15 minutes depending on the runner; a passing shard was
+    # cancelled at 15 minutes (#1570). Keep 2 shards because the staging ruleset's
+    # required checks are named per shard.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

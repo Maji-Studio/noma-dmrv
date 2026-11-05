@@ -53,7 +53,7 @@ export const REQUIRED_LOCAL_VARS = new Set([
 
 /**
  * Vars a Vercel deployment cannot boot without (NODE_ENV=production at
- * runtime): the core trio, the cron secret, credential encryption key, and s3-compatible
+ * runtime): the core trio, the Isometric environment, cron secret, credential encryption key, and s3-compatible
  * storage set and the three email settings that env.ts mandates in production. Everything else in
  * .env.tpl degrades gracefully.
  */
@@ -62,6 +62,7 @@ export const REQUIRED_DEPLOYED_VARS = new Set([
   "NEXT_PUBLIC_APP_URL",
   "BETTER_AUTH_SECRET",
   "CRON_SECRET",
+  "ISOMETRIC_ENVIRONMENT",
   "CREDENTIALS_ENCRYPTION_KEY",
   "STORAGE_PROVIDER",
   "STORAGE_BUCKET",

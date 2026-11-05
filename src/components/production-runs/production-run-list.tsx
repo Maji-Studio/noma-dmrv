@@ -53,7 +53,8 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { parseExactIdFilter } from "@/lib/exact-id-filter";
+import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
+import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import type { SaveRefusalHandler } from "@/components/forms/use-save-refusal";
@@ -239,29 +240,16 @@ export function ProductionRunList() {
     RECORD_LINKS.productionRun.param,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
-  const [affectedRunIdsParam, setAffectedRunIdsParam] = useQueryState(
-    "ids",
-    parseAsString.withOptions({ shallow: true, history: "replace" }),
-  );
   const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
     "creditBatch",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const affectedRunFilter = parseExactIdFilter(affectedRunIdsParam);
-  const affectedRunIds = affectedRunFilter.ids;
-  useEffect(() => {
-    if (
-      affectedRunIdsParam &&
-      affectedRunFilter.normalized !== affectedRunIdsParam
-    ) {
-      void setAffectedRunIdsParam(affectedRunFilter.normalized);
-    }
-  }, [
-    affectedRunFilter.normalized,
-    affectedRunIdsParam,
-    setAffectedRunIdsParam,
-  ]);
+  const {
+    ids: affectedRunIds,
+    normalized: affectedRunNormalized,
+    clear: clearAffectedRunIds,
+  } = useExactIdFilterParam();
   const handledInvalidRunIdRef = useRef<string | null>(null);
 
   // Filter state
@@ -269,7 +257,7 @@ export function ProductionRunList() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(
-      `${facilityId ?? ""}:${creditBatchFilter}:${affectedRunFilter.normalized ?? ""}`,
+      `${facilityId ?? ""}:${creditBatchFilter}:${affectedRunNormalized ?? ""}`,
     );
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
@@ -455,7 +443,7 @@ export function ProductionRunList() {
     setSearchQuery("");
     setStatusFilter("");
     setCreditBatchFilter(null);
-    setAffectedRunIdsParam(null);
+    void clearAffectedRunIds();
     setCurrentPage(1);
   };
   const hasActiveFilters =
@@ -688,9 +676,12 @@ export function ProductionRunList() {
         <DataTable.Toolbar>
           <div className="flex w-full flex-col gap-8 sm:flex-1 sm:flex-row sm:items-center">
             {affectedRunIds.length > 0 && (
-              <span className="inline-flex h-32 shrink-0 items-center self-start border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)] sm:self-auto">
-                {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
-              </span>
+              <AffectedRecordsChip
+                count={affectedRunIds.length}
+                singular="production run"
+                plural="production runs"
+                className="shrink-0 self-start sm:self-auto"
+              />
             )}
             <DataTable.Search
               placeholder="Search production runs..."

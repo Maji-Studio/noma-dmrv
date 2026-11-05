@@ -1,7 +1,10 @@
 import type { ProductionRunCreditBatchPreviewInput } from "@/schemas/production-run-credit-batch-preview";
 import type { RecordCreditBatchPreviewInput, RecordCreditBatchesInput } from "@/schemas/record-credit-batches";
+import type { EmissionAllocationInput } from "@/types/emission-allocation";
 
 export const creditBatchKeys = {
+  emissionAllocationPrefix: () => ["creditBatches", "emissionAllocation"] as const,
+  emissionAllocation: (input: EmissionAllocationInput | null) => [...creditBatchKeys.emissionAllocationPrefix(), input] as const,
   emissionsOverview: (facilityId: string) => ["creditBatches", "emissionsOverview", facilityId] as const,
   emissionLines: (facilityId: string, creditBatchId: string) => ["creditBatches", "emissionLines", facilityId, creditBatchId] as const,
   all: ["creditBatches"] as const,

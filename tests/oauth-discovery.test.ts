@@ -109,3 +109,14 @@ it("configures provider limits and the consent/continue custom rules", async () 
     rateLimit: { token: { window: 60, max: 120 }, authorize: { window: 60, max: 120 }, revoke: { window: 60, max: 120 } },
   });
 });
+
+it("hides both MCP discovery URLs while REST and issuer discovery stay open", async () => {
+  vi.stubEnv("MCP_ENABLED", "false");
+  for (const { load, audience } of resourceRoutes) {
+    const response = await (await load()).GET();
+    expect(response.status).toBe(audience === "/api/mcp" ? 404 : 200);
+    if (audience === "/api/mcp") expect(await response.text()).toBe("");
+  }
+  const { GET } = await import("@/app/.well-known/oauth-authorization-server/api/auth/route");
+  expect((await GET(new Request("http://localhost:3100/.well-known/oauth-authorization-server/api/auth"))).status).toBe(200);
+});

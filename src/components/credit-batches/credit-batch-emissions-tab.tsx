@@ -5,6 +5,7 @@
  * read and recorded (KPI strip, lines, manual entries, previous / next batch
  * when opened from the Emissions list).
  */
+import { EmissionAllocationSection } from "@/components/emissions/allocation";
 import { BatchEmissions } from "@/components/emissions/batch-emissions";
 import { TemplatePermissionProvider } from "@/components/emissions/template-permission";
 import { useCreditBatchPage } from "./credit-batch-page-context";
@@ -23,6 +24,7 @@ export function CreditBatchEmissionsTab() {
           batch={{ creditBatchId: batch.id, code: batch.code, startDate: batch.startDate, endDate: batch.endDate }}
         />
       </TemplatePermissionProvider>
+      <div className="mt-32"><EmissionAllocationSection creditBatchId={batch.id} /></div>
     </div>
   );
 }

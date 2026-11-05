@@ -1,3 +1,4 @@
+import { useExactIdChunkedList } from "./exact-id-chunked-list";
 import { useIntentMutation } from "./use-create-intent-key";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
@@ -9,6 +10,7 @@ import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Order } from "@/db/schema";
+import { MAX_ORDER_LIST_SIZE as EXACT_ID_CHUNK_SIZE } from "@/schemas/orders";
 import type {
   OrderFilterData,
   CreateOrderData,
@@ -73,10 +75,12 @@ export function useOrders(
   filters?: Partial<OrderFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: orderKeys.list(filters),
-    queryFn: async () => unwrap(await getOrdersFn(filters)),
-    staleTime: 30000, // 30 seconds
+  return useExactIdChunkedList({
+    filters,
+    chunkSize: EXACT_ID_CHUNK_SIZE,
+    queryKey: orderKeys.list,
+    fetcher: async (request) => unwrap(await getOrdersFn(request)),
+    staleTime: 30000,
     enabled: options?.enabled,
   });
 }

@@ -23,7 +23,6 @@ import type { SampleDocumentWarningKey } from "./sample-document-warnings";
 import {
   isCountedSubmissionBlocker,
   submissionBlockerGroupFact,
-  type CountedSubmissionBlockerKind,
   type SubmissionLineageBlocker,
 } from "./submission-readiness";
 import { blockerMessage } from "./blocker-message";
@@ -382,7 +381,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       }));
 }
 
-/** deliveryEvidence and deliveryDistances resolve to themselves (default): their to-dos link to their own filtered lists, so they keep their own rows. */
+/** Counted submission targets resolve to themselves: their filtered repair lists keep separate rows, regardless of the check key. */
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
     case "productionRuns":
@@ -518,15 +517,13 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
 }
 
 /**
- * Lineage blockers as to-dos. Proof and distance blockers, whose link filters
- * the deliveries list to the blocked records, become one check per kind: the
- * fact with a count (the coded fact for one record) and the repair step once.
- * Feedstock transport and customer location blockers stay one per record,
- * since their links open a single record or an unfiltered list.
+ * Lineage blockers with exact-list repair links become one check per kind:
+ * the fact with a count (the coded fact for one record) and the repair step once.
+ * Customer location blockers without an order retain their per-record checks.
  */
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   const lineageChecks: BatchHealthCheckBase[] = [];
-  const counted = new Map<CountedSubmissionBlockerKind, SubmissionLineageBlocker[]>();
+  const counted = new Map<SubmissionLineageBlocker["kind"], SubmissionLineageBlocker[]>();
   for (const blocker of facts.submissionLineageBlockers ?? []) {
     if (isCountedSubmissionBlocker(blocker)) {
       counted.set(blocker.kind, [...(counted.get(blocker.kind) ?? []), blocker]);
@@ -545,11 +542,11 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
       affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
     });
   }
-  for (const [kind, group] of counted) {
+  for (const group of counted.values()) {
     const [first] = group;
-    const fact = group.length === 1 ? first.fact : submissionBlockerGroupFact(kind, group.length);
+    const fact = submissionBlockerGroupFact(group);
     lineageChecks.push({
-      key: "entityReadiness",
+      key: first.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
       issueKey: `submission-${first.fixTarget}`,
       label: "Submission requirements complete",
       requirementLabel: SUBMISSION_BLOCKERS_LABEL,

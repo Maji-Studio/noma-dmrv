@@ -116,6 +116,17 @@ pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
 
 Non-obvious semantics only:
 
+- **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and
+  its protected-resource discovery return 404 before admission.
+- **`STOCK_ADJUSTMENTS_ENABLED`**: `true` or `false`, default `false`. When off,
+  lost mass, stock counts and lost mass edits/deletes are refused; reads remain.
+- **`MULTI_BIN_RUNS_ENABLED`**: `true` or `false`, default `false`. When off, a
+  run takes one source bin; older runs may keep or reduce their saved bins.
+- The three switches above share validation in `src/config/feature-switches.ts`,
+  read off in browser bundles, and are set `true` locally and in CI. The features
+  are not ready yet (they lack testing and concept work), so staging and
+  production leave them unset; see [open questions](./open-questions.md#unfinished-features-behind-env-switches).
+
 - **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
   builds and runtimes, including staging, except hermetic CI. Optional in
   development/test. The daily Vercel crons call `/api/cron/purge-api-records` at 03:00 UTC
@@ -233,19 +244,20 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
   `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
   it.
-- `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
-  literal string `"true"` permits a remote reset; the manually confirmed staging
-  and production reset jobs load it from their matching 1Password item.
+- `DB_RESET_ALLOW_REMOTE`: consumed only by the database-reset CLI. Only the
+  literal string `"true"` overrides the [local database target rule](./database.md#local-database-targets);
+  the manually confirmed staging and production reset jobs load it from their
+  matching 1Password item.
 - `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
   to register the pool with Fluid Compute lifecycle hooks and to tag pool
   telemetry with the compute region. `VERCEL` also controls whether
   `src/lib/api/client-ip.ts:clientIpBucketKey` trusts forwarded IP headers.
   Absent locally; never set by hand.
-- `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
-  `process.env.DISABLE_RATE_LIMIT !== "true"` read
-  (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
-  the literal string `"true"` disables them; E2E fixtures depend on that exact
-  literal ([testing.md](./testing.md)). API guards reuse this flag but ignore it
+- `DISABLE_RATE_LIMIT` — only the literal string `"true"` disables auth rate
+  limits in development/test, or in a CI production build that serves a loopback origin
+  (`src/lib/auth/rate-limit-policy.ts`). Production deployments always keep
+  auth limits on. A typo fails safe; E2E fixtures depend on that exact literal
+  ([testing.md](./testing.md)). API guards reuse this flag but ignore it
   in production. Their PostgreSQL token buckets charge pre-auth IPs (hashed,
   never stored raw), credentials and organizations before business transactions,
   including failures and dry runs. Forwarded IP headers are trusted only on Vercel.

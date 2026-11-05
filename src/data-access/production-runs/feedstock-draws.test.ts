@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 import { MASS_INPUT_MAX_KG } from "@/schemas/helpers";
 import {
@@ -59,5 +59,32 @@ it("points missing lower-id draws at their submitted index after repeated normal
   ]));
   await expect(validateProductionRunFeedstockDrawSources(ctx, tx, draws, "facility")).rejects.toMatchObject({
     code: "not_found", issues: [{ path: ["feedstockDraws", 1, "storageLocationId"] }],
+  });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("multi-bin switch off", () => {
+  const draws = [{ storageLocationId: BIN_A, wetMassKg: 1 }, { storageLocationId: BIN_B, wetMassKg: 2 }];
+  it("refuses new multi-bin runs with a feedstockDraws field error", () => {
+    vi.stubEnv("MULTI_BIN_RUNS_ENABLED", "false");
+    expect(() => normalizeProductionRunFeedstockDraws(draws)).toThrow(expect.objectContaining({
+      code: "validation_failed", issues: [{ path: ["feedstockDraws"], code: "validation_failed",
+        message: "Runs take feedstock from one bin. Several source bins are turned off on this server." }],
+    }));
+    expect(normalizeProductionRunFeedstockDraws(draws.slice(0, 1))).toEqual(draws.slice(0, 1));
+    expect(normalizeProductionRunFeedstockDraws([])).toEqual([]);
+  });
+  it("allows older runs to keep bins, change masses, reorder and remove bins", () => {
+    vi.stubEnv("MULTI_BIN_RUNS_ENABLED", "false");
+    const changed = [...draws].reverse().map(draw => ({ ...draw, wetMassKg: 3 }));
+    expect(normalizeProductionRunFeedstockDraws(changed, [BIN_A, BIN_B])).toEqual(changed);
+    expect(normalizeProductionRunFeedstockDraws([draws[0]], [BIN_A, BIN_B])).toEqual([draws[0]]);
+    expect(normalizeProductionRunFeedstockDraws([], [BIN_A, BIN_B])).toEqual([]);
+  });
+  it("refuses adding a bin to an older run when several bins result", () => {
+    vi.stubEnv("MULTI_BIN_RUNS_ENABLED", "false");
+    expect(() => normalizeProductionRunFeedstockDraws(draws, [BIN_A])).toThrow(/Several source bins/);
+    expect(normalizeProductionRunFeedstockDraws([draws[1]], [BIN_A])).toEqual([draws[1]]);
   });
 });

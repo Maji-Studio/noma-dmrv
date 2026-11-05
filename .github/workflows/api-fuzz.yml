@@ -41,6 +41,9 @@ jobs:
           --health-retries 10
 
     env:
+      MCP_ENABLED: "true"
+      STOCK_ADJUSTMENTS_ENABLED: "true"
+      MULTI_BIN_RUNS_ENABLED: "true"
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       API_FUZZ_BASE_URL: http://127.0.0.1:3100/api/v1

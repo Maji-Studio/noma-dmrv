@@ -1,3 +1,4 @@
+import { stockAdjustmentsEnabled } from "@/lib/feature-switches";
 import { randomUUID } from 'node:crypto';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, type StorageLocation } from '@/db/schema';
@@ -70,7 +71,7 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
       throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last.occurredAt)}. Switch it to split after that time.`);
     }
     if (layersHoldMaterial(layers)) {
-      throw new SafeError('Empty this bin before switching it to split. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into batches.');
+      throw new SafeError(`Empty this bin before switching it to split.${stockAdjustmentsEnabled() ? ' If nothing is left, record a stock count of zero first.' : ''} A mixed pile cannot be sorted back into batches.`);
     }
     await postModeChange(ctx, tx, existing, 'split', new Date(), balance);
     return 'split';

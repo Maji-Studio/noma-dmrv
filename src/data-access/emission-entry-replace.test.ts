@@ -1,17 +1,20 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import { documents, emissionEntries, emissionEntryValues } from "@/db/schema";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), latest: vi.fn(), previous: vi.fn(), activity: vi.fn(), holds: vi.fn(), window: vi.fn(), assertWindow: vi.fn(), carried: vi.fn() }));
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("./removal-template-observations", () => ({ getLatestTemplateObservation: mocks.latest, getTemplateObservationById: mocks.previous }));
 vi.mock("./emission-entry-activity", () => ({ recordEmissionEntryActivity: mocks.activity }));
 vi.mock("./emission-entry-holds", () => ({ loadEmissionEntryHolds: mocks.holds }));
 vi.mock("./emission-entry-corrections", () => ({ lockEmissionCorrectionScope: vi.fn(), revalidateEmissionCorrectionScope: vi.fn(),
-  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow }));
-import { replaceEmissionEntry } from "./emission-entries";
+  emissionCorrectionWindow: mocks.window, assertSentEntryInCorrectionWindow: mocks.assertWindow,
+  isCarriedEmissionCorrection: mocks.carried }));
+import { replaceEmissionEntry, tombstoneEmissionZeros } from "./emission-entries";
 
 const ctx = makeTestOrgContext();
 const id = "00000000-0000-4000-8000-000000000001";
@@ -57,6 +60,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   locks.length = 0;
   mocks.holds.mockResolvedValue(new Map());
+  mocks.carried.mockReturnValue(false);
   current = { ...previous, id: "current-observation", enrichment: { line: { electricity_use: { unit: "MJ" } } } };
   locked = { ...original };
   saved = { ...original, id: "replacement", observationId: current.id, version: 1, contentRevision: 1 };
@@ -182,4 +186,38 @@ it("refuses an unsent held replacement after the window closes", async () => {
   await expect(replaceEmissionEntry(ctx, input)).rejects.toThrow("reserved or sent");
   expect(update).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
+});
+
+it.each(["sent", "held"])("refuses Enter again for a %s carried entry before writing", async holding => {
+  if (holding === "sent") locked.sentByRemovalId = "receiver";
+  else {
+    locked.replacesEntryId = "sent-original";
+    mocks.holds.mockResolvedValue(new Map([[id, "receiver"]]));
+  }
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  mocks.carried.mockReturnValue(true);
+  await expect(replaceEmissionEntry(ctx, input))
+    .rejects.toThrow("This entry was carried into a later Removal, so it cannot be entered again.");
+  expect(mocks.carried).toHaveBeenCalledWith(ctx, expect.anything(), "batch", "receiver");
+  expect(update).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(mocks.activity).not.toHaveBeenCalled();
+});
+
+it.each([null, "origin", "receiver"])("limits correctable sent zeros to the value's holding Removal (%s)", async holdingRemovalId => {
+  const zero = { ...original, id: "origin-zero", kind: "zero", sentByRemovalId: "origin", confirmedForRemovalId: "origin" };
+  const where = vi.fn((_condition: SQL) => ({ returning: async () => [] }));
+  const tx = {
+    select: () => query(() => [zero]),
+    update: () => ({ set: () => ({ where }) }),
+  } as unknown as DbTransaction;
+  mocks.window.mockReturnValue({ start: "2026-01-01", end: "2026-01-31" });
+  await tombstoneEmissionZeros(ctx, tx, { ...original, holdingRemovalId });
+  const statement = new PgDialect().sqlToQuery(where.mock.calls[0][0]);
+  expect(statement.params).toContain(ctx.organizationId);
+  if (holdingRemovalId === "receiver") expect(statement.params).not.toContain(zero.id);
+  else expect(statement.params).toContain(zero.id);
+  // Draft invalidation remains a separate branch, gated on an unsent zero.
+  expect(statement.sql).toContain('"sent_by_removal_id" is null');
+  expect(statement.sql).toContain("not exists");
 });

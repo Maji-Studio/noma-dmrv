@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { useFeatureSwitches } from "@/components/providers/feature-switches-provider";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { useId, useState, type ReactNode } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -60,6 +61,7 @@ function FeedstockStockHistory({ storageLocationId, facilityId, timeZone, readOn
   moisturePercent: number | null;
   renderTrigger: (open: () => void, icon: ReactNode) => ReactNode;
 }) {
+  const { stockAdjustments } = useFeatureSwitches();
   const [open, setOpen] = useState(false);
   const historyTitleId = useId();
   const lostMassTitleId = useId();
@@ -86,7 +88,7 @@ function FeedstockStockHistory({ storageLocationId, facilityId, timeZone, readOn
             return <div key={entry.id}>
               {newDay && <LedgerDayHeader day={day} afterLabel={index === 0 ? "Wet stock after" : undefined} />}
               <FeedstockLedgerRow entry={entry} corrected={entry.correctsMovementId ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
-                timeZone={timeZone} facilityId={facilityId} onEdit={readOnly ? undefined : setEditing} onDelete={readOnly ? undefined : setDeleting} />
+                timeZone={timeZone} facilityId={facilityId} onEdit={readOnly || !stockAdjustments ? undefined : setEditing} onDelete={readOnly || !stockAdjustments ? undefined : setDeleting} />
             </div>;
           })}
         </div>}
