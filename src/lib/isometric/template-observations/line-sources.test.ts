@@ -3,6 +3,7 @@ import sandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-
 import lcaTemplate from "../../../../tests/fixtures/isometric/production-template-2026-10-15.json";
 import production from "../../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.json";
+import timeSandbox from "../../../../tests/fixtures/isometric/sandbox-template-2026-11-05.json";
 import { acceptAllProposals } from "./test-support";
 import {
   lineNeedsReview, AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
@@ -62,6 +63,21 @@ describe("line contracts", () => {
     expect(allowedEntryPolicies(adHoc("future", [{ key: "unknown", type: "monitored", quantityKind: "volume" }]))).toEqual(["none"]);
     expect(allowedEntryPolicies({ ...meter, inputs: meter.inputs.filter((input) => input.key !== "final_readout") })).toEqual(["none"]);
     expect(allowedEntryPolicies({ ...component(GENSET), inputs: [...component(GENSET).inputs, { key: "future", type: "monitored", quantityKind: "volume" }] })).toEqual(["none"]);
+    const hours = adHoc("time_based_emissions", [
+      { key: "emissions_per_unit_time", type: "fixed", quantityKind: "time_emission_factor", fixedDatapointId: "dtp_rate" },
+      { key: "time", type: "monitored", quantityKind: "time" },
+    ]);
+    expect(allowedEntryPolicies(hours)).toEqual(["none", "additive"]);
+    expect(allowedEntryPolicies(adHoc("future", [{ key: "time", type: "monitored", quantityKind: "volume" }]))).toEqual(["none"]);
+  });
+
+  it("leaves the November time-based lines to the change review, where additive hours are valid", () => {
+    const timeDefinition = normalizeTemplateDefinition(timeSandbox as GhgEntryTemplate);
+    const ids = ["rtc_1M6NMG60MSBXQ6VN", "rtc_1M6NM8QWWSBX8KD1"];
+    const sources = resolveLineSources({ definition: timeDefinition, previous: { definition, lineSources: resolveLineSources({ definition }) } });
+    for (const id of ids) expect(sources[id]).toEqual({ scope: "unassigned", entryPolicy: "none", origin: "proposed" });
+    const reviewed = { ...sources, ...Object.fromEntries(ids.map((id) => [id, { scope: "operating", entryPolicy: "additive", origin: "reviewed" } as LineContract])) };
+    expect(validateLineSources(timeDefinition, reviewed).filter((problem) => ids.includes(problem.componentId))).toEqual([]);
   });
 
   it("reports single with automatic source, source clashes, foreign sources and disallowed policies", () => {

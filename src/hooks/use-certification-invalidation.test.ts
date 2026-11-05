@@ -137,7 +137,8 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -277,7 +278,8 @@ describe("invalidateCertificationReadiness", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
@@ -294,7 +296,8 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });

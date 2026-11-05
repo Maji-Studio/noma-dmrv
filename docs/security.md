@@ -95,6 +95,25 @@ checks validate their credential pair and environment in `src/lib/isometric/clie
 `.env.local.tpl` (local 1Password item) and `.env.tpl` (staging item → Vercel
 sync). The app refuses to boot on an invalid or missing required var.
 
+**One-off commands against an environment.** Use `pnpm env:run` to run a command
+with the selected 1Password item's environment. It uses the same template
+filtering as the sync commands and stops on missing required fields. Missing
+optional fields warn and stay unset. Names declared in the template, including
+skipped fields, are removed from the inherited shell environment. Commands that
+load `.env.local` themselves can still fill unset names. Staging and prod runs
+list those names before running; their values are never printed.
+1Password asks for approval on the Mac. Use `--1p-env=local`, `staging`, or
+`prod`; production also requires `--allow-production` because commands can
+change live data. Staging one-off runs use `NODE_ENV=development` like local
+because staging holds test data, including the one-off
+`feedstock:recalculate --include-sent` rebuild. Prod runs force
+`NODE_ENV=production` so production guards apply. Local runs default to
+`NODE_ENV=development` when the shell sets none.
+
+```bash
+pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
+```
+
 Non-obvious semantics only:
 
 - **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and

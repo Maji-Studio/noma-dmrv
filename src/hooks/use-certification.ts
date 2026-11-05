@@ -231,6 +231,7 @@ export function invalidateCertificationReadiness(
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionAllocationPrefix() }),
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.details() }),
     // Removal codes and the not-in-a-Removal mass on the timeline's hover cards.
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.timelineFactsPrefix() }),

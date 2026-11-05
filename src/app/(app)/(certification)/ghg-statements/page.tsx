@@ -5,7 +5,10 @@
  * Protected by the requireAuth guard in the (app) layout.
  */
 import { GhgStatementsList } from "@/components/certification/ghg-statements-list";
+import { getOrgContext } from "@/lib/auth/server";
 
-export default function CertificationGhgStatementsPage() {
-  return <GhgStatementsList />;
+export default async function CertificationGhgStatementsPage() {
+  const ctx = await getOrgContext();
+  const canManage = !!ctx && (ctx.isPlatformAdmin || ctx.orgRole === "admin");
+  return <GhgStatementsList canManage={canManage} />;
 }

@@ -4,9 +4,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import {
+  BASEMAP_STYLE_TIMEOUT_MS,
+  BASEMAP_STYLE_URL,
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
-  maptilerStyleUrl,
   SAT_RASTER_SATURATION,
   SAT_TILE_ATTRIBUTION,
   SAT_TILE_URL,
@@ -21,17 +22,12 @@ import type {
   GisBoundaryCollection,
 } from "@/lib/geojson/types";
 
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-const DEFAULT_BASEMAP_STYLE_URL = MAPTILER_KEY
-  ? maptilerStyleUrl(MAPTILER_KEY)
-  : undefined;
 const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}sat`;
 const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}sat-layer`;
 const DATA_SOURCE_ID = `${OWN_LAYER_PREFIX}boundary`;
 const FILL_LAYER_ID = `${OWN_LAYER_PREFIX}boundary-fill`;
 const LINE_LAYER_ID = `${OWN_LAYER_PREFIX}boundary-line`;
 const SAT_TILE_SIZE = 256;
-const STYLE_LOAD_TIMEOUT_MS = 12_000;
 const FIT_PADDING_PX = 48;
 const FIT_DURATION_MS = 600;
 const ACCENT_TOKEN = "--clr-pink";
@@ -52,10 +48,9 @@ export interface GeoJsonPreviewMapProps {
   collection: GisBoundaryCollection;
   bbox: GisBoundaryBbox;
   /**
-   * Basemap style URL. Defaults to the MapTiler style when
-   * NEXT_PUBLIC_MAPTILER_KEY is set, otherwise no map renders. The E2E map
+   * Basemap style URL. Defaults to the OpenFreeMap style. The E2E map
    * smoke page (src/app/e2e/map-smoke) passes a fixture style so CI can
-   * render real vector tiles without a key.
+   * render real vector tiles without any network.
    */
   basemapStyleUrl?: string;
 }
@@ -63,7 +58,7 @@ export interface GeoJsonPreviewMapProps {
 export default function GeoJsonPreviewMap({
   collection,
   bbox,
-  basemapStyleUrl = DEFAULT_BASEMAP_STYLE_URL,
+  basemapStyleUrl = BASEMAP_STYLE_URL,
 }: GeoJsonPreviewMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -78,7 +73,7 @@ export default function GeoJsonPreviewMap({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !basemapStyleUrl) return;
+    if (!container) return;
 
     let map: maplibregl.Map;
     try {
@@ -102,7 +97,7 @@ export default function GeoJsonPreviewMap({
       mapRef.current = null;
       queueMicrotask(() => setMapFailed(true));
     };
-    const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
+    const loadTimer = setTimeout(failIfUnloaded, BASEMAP_STYLE_TIMEOUT_MS);
     let styleParsed = false;
     let renderFailed = false;
     map.once("styledata", () => {
@@ -181,7 +176,7 @@ export default function GeoJsonPreviewMap({
     map.setLayoutProperty(SAT_LAYER_ID, "visibility", next ? "visible" : "none");
   };
 
-  if (!basemapStyleUrl || mapFailed) {
+  if (mapFailed) {
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-light)] px-16 text-center">
         <span className="body-caption text-[var(--color-text-tertiary)]">

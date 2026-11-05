@@ -5,7 +5,7 @@
  */
 import { notFound, redirect } from "next/navigation";
 import { canOwnApiKey } from "@/lib/auth/api-scopes";
-import { getOrgContext, hasOrgRole, type OrgContext } from "@/lib/auth/server";
+import { getOrgContext, hasOrgRole, requireAuth, type OrgContext } from "@/lib/auth/server";
 import { readActiveOrganization } from "@/lib/read-models";
 // Not in the read-models barrel: it reaches the database through data-access
 // directly, and the barrel is imported by modules that must not load it.
@@ -20,6 +20,7 @@ import {
   settingsPaneHiddenReason,
   type SettingsPaneKey,
   type SettingsViewer,
+  type OrganizationSettingsViewer,
 } from "./panes";
 
 export type { SettingsViewer } from "./panes";
@@ -27,10 +28,27 @@ export type { SettingsViewer } from "./panes";
 /** Where a signed-in caller without an active organization resolves one. */
 const NO_ORGANIZATION_HREF = "/dashboard";
 
-export async function loadSettingsViewer(): Promise<{ ctx: OrgContext; viewer: SettingsViewer }> {
+export function loadSettingsViewer(): Promise<{ ctx: OrgContext; viewer: OrganizationSettingsViewer }>;
+export function loadSettingsViewer(scope: "profile"): Promise<{ ctx: OrgContext | null; viewer: SettingsViewer }>;
+export async function loadSettingsViewer(scope?: "profile"): Promise<{ ctx: OrgContext | null; viewer: SettingsViewer }> {
   const ctx = await getOrgContext();
   // No active organization selected: the dashboard's switcher resolves one.
-  if (!ctx) redirect(NO_ORGANIZATION_HREF);
+  if (!ctx) {
+    if (scope !== "profile") redirect(NO_ORGANIZATION_HREF);
+    const user = await requireAuth();
+    return {
+      ctx: null,
+      viewer: {
+        organizationId: null,
+        organizationName: null,
+        isPlatformAdmin: user.role === "admin",
+        canManage: false,
+        canManageApiKeys: false,
+        registryKeysSaved: false,
+        isProduction: false,
+      },
+    };
+  }
 
   const [organization, registry] = await Promise.all([
     readActiveOrganization(ctx),
@@ -63,6 +81,7 @@ export function assertSettingsPaneVisible(
   searchParams: SettingsSearchParams = {},
 ): void {
   const reason = settingsPaneHiddenReason(settingsPane(key), viewer);
+  if (reason === "no-organization") redirect(NO_ORGANIZATION_HREF);
   if (reason === "audience") notFound();
   if (reason === "registry-keys") {
     redirect(redirectPreservingQuery(SETTINGS_REGISTRY_HREF, searchParams));

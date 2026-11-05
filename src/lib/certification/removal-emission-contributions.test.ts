@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { deriveRemovalEntryContributions, deriveRemovalEntryWindow, entriesWithoutRemoval, isLiveEntryReservation, removalEntryOwner, type EntryContender, type RemovalEntryFact } from "./removal-emission-contributions";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { reviewPayloadHash } from "./removal-review-hash";
+import { sentEntryOutsideRemovalPeriod } from "./emission-entry-messages";
 
 const first: EntryContender = { contenderKind: "draft", removalId: "r1", createdAt: "2026-01-01", creditBatchIds: ["b1"], window: { start: "2026-01-01", end: "2026-02-01" } };
 const second: EntryContender = { ...first, removalId: "r2", window: { ...first.window, end: "2026-03-01" } };
@@ -168,4 +169,66 @@ it("omits another Removal's held single and keeps its follow-up batch line fille
   }, "b1", { entries: [held] }, contributions);
   expect(lines[0]).toMatchObject({ state: "filled", blocker: undefined });
   expect(held.sentByRemovalId).toBeNull();
+});
+
+
+describe("sent entries after a Removal window shrinks", () => {
+  it.each(["additive", "single"] as const)("blocks an out-of-window sent %s entry without transferring its claim", (lineRule) => {
+    const sent = entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1", lineRule });
+    const originalWindow = { start: "2026-01-01", end: "2026-03-15" };
+    expect(derive([sent], { window: originalWindow }).selectedEntryIds).toEqual([sent.id]);
+    const result = derive([sent], { window: { ...originalWindow, end: "2026-03-05" } });
+    expect(result.blockers).toEqual([{
+      code: "sentEntryOutsideWindow", fixTarget: "emissions", creditBatchId: "b1",
+      lineRef: { componentId: "c1", displayName: "c1" },
+      message: sentEntryOutsideRemovalPeriod("the emissions entry of 2026-03-10"),
+    }]);
+    expect(result.entrySet).toEqual([]);
+    expect(removalEntryOwner(sent, [second])).toBe("r1");
+    expect(entriesWithoutRemoval([sent], [], new Set(), [])).toEqual([]);
+    expect(derive([sent], { window: originalWindow }).blockers).toEqual([]);
+  });
+
+  it.each([first.window.start, first.window.end])("keeps a sent entry on the inclusive boundary %s", occurredOn => {
+    const result = derive([entry({ occurredOn, sentByRemovalId: "r1" })]);
+    expect(result.selectedEntryIds).toEqual(["e1"]);
+    expect(result.inputs).toEqual([{ componentId: "c1", inputKey: "energy", value: { magnitude: "1.2", unit: "kWh" } }]);
+    expect(result.blockers).toEqual([]);
+  });
+
+  it("also blocks when the start moves past the sent entry or the window disappears", () => {
+    for (const window of [{ start: "2026-01-11", end: "2026-02-01" }, null]) {
+      expect(derive([entry({ sentByRemovalId: "r1" })], { window }).blockers[0]?.code).toBe("sentEntryOutsideWindow");
+    }
+  });
+
+  it("names the component and credit batch when they are known", () => {
+    const result = derive([entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1" })], {
+      creditBatchCodes: { b1: "CB-26-001" },
+      monitoredInputs: [{ componentId: "c1", inputKey: "energy", unit: "kWh", componentDisplayName: "Electricity" }],
+    });
+    expect(result.blockers[0]?.message).toBe(
+      "This Removal sent the Electricity entry of 2026-03-10 (CB-26-001), which is now outside the Removal period. Change the entry date to fit the period, or change the application date back.");
+  });
+
+  it("blocks a carried sent entry only when it falls after the period end", () => {
+    const late = entry({ creditBatchId: "earlier-batch", occurredOn: "2026-03-10", sentByRemovalId: "r1" });
+    expect(derive([late]).blockers.map((blocker) => blocker.code)).toEqual(["sentEntryOutsideWindow"]);
+    expect(derive([late]).selectedEntryIds).toEqual([]);
+    const early = entry({ creditBatchId: "earlier-batch", occurredOn: "2025-12-01", sentByRemovalId: "r1" });
+    expect(derive([early]).selectedEntryIds).toEqual([early.id]);
+    expect(derive([early]).blockers).toEqual([]);
+  });
+
+  it("does not change zeros, tombstones or other Removals' entries", () => {
+    for (const overrides of [
+      { kind: "zero" as const, confirmedForRemovalId: "r1" },
+      { deletedAt: new Date("2026-03-01") },
+      { sentByRemovalId: "r2" },
+    ]) {
+      const result = derive([entry({ occurredOn: "2026-03-10", sentByRemovalId: "r1", ...overrides })]);
+      expect(result.blockers).toEqual([]);
+      expect(result.selectedEntryIds).toEqual([]);
+    }
+  });
 });

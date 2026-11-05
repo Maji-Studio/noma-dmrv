@@ -5,7 +5,7 @@
  * Icons and accents come from the Flow chart's node styles so Flow, Map and
  * Sankey read as siblings.
  */
-import { createElement, useState, type CSSProperties } from "react";
+import { createElement, useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import {
   ArrowSquareOutIcon,
@@ -20,6 +20,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import { Notice } from "@/components/ui/notice";
+import { HATCH_BACKGROUND, HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE } from "@/components/ui/chart-tokens";
+import { useMeasuredWidth } from "@/hooks/use-measured-width";
 import { formatMassKg } from "@/lib/format-utils";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import {
@@ -32,8 +34,6 @@ import {
   type WaterfallStage,
 } from "./waterfall-model";
 
-/** Width drawn before the first measurement. */
-const INITIAL_WIDTH_PX = 960;
 /** Below this content width the chart turns into rows, like the product page on a phone. */
 export const ROWS_BELOW_PX = 720;
 export const MINUS = "−";
@@ -73,25 +73,16 @@ export function itemInk(item: WaterfallItem): string {
   return LINEAGE_NODE_STYLES[item.recordKind].accentInk;
 }
 
-export const LIT_FILL = "var(--acc-dist)";
-export const LIT_INK = "var(--acc-dist-ink)";
-export const START_FILL = "var(--clr-dark-purple-5)";
-export const START_STROKE = "var(--clr-dark-purple-40)";
 export const STEP_STROKE = "var(--clr-dark-purple-60)";
 /** Every exit but water is a plain box; hatching is reserved for water. */
 export const STEP_FILL = "var(--clr-dark-purple-10)";
-export const HATCH_STROKE = "var(--clr-dark-purple-40)";
 
 /** The fill of a column: hatched for water, light for exits, the dry fill for biochar left in storage. */
 export function stepFill(item: WaterfallItem): string {
   return item.key === "in_storage" ? START_FILL : STEP_FILL;
 }
 
-/** The water hatch as CSS, for HTML bars. */
-export const HATCH_BACKGROUND: CSSProperties = {
-  backgroundImage:
-    "repeating-linear-gradient(135deg, var(--clr-dark-purple-40) 0 1px, transparent 1px 5px)",
-};
+export { HATCH_BACKGROUND, HATCH_STROKE, LIT_FILL, LIT_INK, START_FILL, START_STROKE, useMeasuredWidth };
 
 /** Number part of a mass ("1,563.5"), for figures that set the unit apart. */
 export function kgNumber(kg: number): string {
@@ -112,21 +103,6 @@ export function recordCountLabel(item: WaterfallItem): string {
   const count = item.records.length;
   const style = LINEAGE_NODE_STYLES[item.recordKind];
   return `${count} ${count === 1 ? style.label.toLowerCase() : style.plural}`;
-}
-
-/** Track the element's content width. Keeps the last width while it is hidden. */
-export function useMeasuredWidth(): [number, (element: HTMLDivElement | null) => (() => void) | undefined] {
-  const [width, setWidth] = useState(INITIAL_WIDTH_PX);
-  const measure = (element: HTMLDivElement | null) => {
-    if (!element || typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      const next = Math.round(entry.contentRect.width);
-      if (next > 0) setWidth(next);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  };
-  return [width, measure];
 }
 
 /** Hover previews a column; a click or tap pins it. */

@@ -1,4 +1,5 @@
 import type { LineSources, LineContract } from "@/lib/isometric/template-observations/line-sources";
+import { monitoredInputUnit } from "@/lib/isometric/template-observations/units";
 import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
@@ -264,7 +265,11 @@ function buildOrdinaryInputs(args: {
     const expected = {
       dataShape: blueprintInput?.data_shape ?? gap,
       quantityKind: blueprintInput?.quantity_kind ?? input.quantity_kind,
-      unit: blueprintInput?.compatible_unit ?? gap,
+      unit: blueprintInput
+        ? input.type === "monitored"
+          ? monitoredInputUnit(blueprintInput.quantity_kind, blueprintInput.compatible_unit)
+          : blueprintInput.compatible_unit
+        : gap,
     };
 
     if (!blueprint) {
