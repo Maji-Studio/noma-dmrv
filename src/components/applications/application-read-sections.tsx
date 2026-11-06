@@ -4,7 +4,7 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { LOAD_FAILED, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -17,7 +17,7 @@ import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import { Notice } from "@/components/ui/notice";
 
-const DELIVERY_RETRY_TEXT = "Try again to load the delivery source.";
+const DELIVERY_RETRY_TEXT = "The delivery source could not be loaded.";
 
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {
@@ -47,7 +47,8 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       title: "Application details",
       fields: [
         { label: "Application date", value: formatCalendarDate(application.applicationDate) },
-        {
+        // The failed read shows as the notice below, so the row is left out rather than say it twice.
+        ...(deliveryReadFailed ? [] : [{
           label: "Delivery source",
           value: context.delivery
             ? `${
@@ -55,10 +56,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
                 context.delivery.formulationName ??
                 "Biochar delivery"
               } · ${formatApplicationDeliveryDay(context.delivery)}`
-            : context.deliveryRead?.error ? LOAD_FAILED : null,
-          ...(deliveryReadFailed ? { valuePresent: false } : {}),
+            : null,
           ...(context.deliveryRead?.isPending && !context.delivery ? { pending: true } : {}),
-        },
+        }]),
         {
           label: "Biochar product applied",
           ...certificationDetailField("application", "biocharAppliedTons"),
@@ -77,7 +77,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       content: application.heldOutOfCredits || deliveryReadFailed ? (
         <>
           {deliveryReadFailed && (
-            // The field states the failure; the notice carries only the step.
+            // The Delivery source row is hidden while this shows, so the failure is stated once.
             <Notice
               tone="warning"
               action={<Button type="button" variant="weak" size="small" busy={context.deliveryRead?.isFetching} onClick={() => void context.deliveryRead?.refetch()}>{TRY_AGAIN_LABEL}</Button>}

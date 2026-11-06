@@ -53,7 +53,7 @@ describe("ApplicationStorageLocationSync", () => {
 
     expect(html).toContain("Sync failed");
     expect(html).toContain("Registry unavailable");
-    expect(html).toContain("Retry sync");
+    expect(html).toContain("Try again");
     expect(hookState.mutate).not.toHaveBeenCalled();
   });
 
@@ -63,7 +63,7 @@ describe("ApplicationStorageLocationSync", () => {
     );
 
     expect(html).toContain("Sync failed");
-    expect(html).not.toContain("Retry sync");
+    expect(html).not.toContain("Try again");
   });
 
   it("shows the immutable registry identity after synchronization", () => {

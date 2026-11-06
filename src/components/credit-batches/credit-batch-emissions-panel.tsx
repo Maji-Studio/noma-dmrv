@@ -70,7 +70,7 @@ export function CreditBatchEmissionsPanel({
           tone="warning"
           action={<Button variant="weak" size="small" busy={isRefetching} onClick={() => void refetch()}>{TRY_AGAIN_LABEL}</Button>}
         >
-          Emissions lines unavailable. Try again to load them.
+          Emissions lines could not be loaded.
         </Notice>
       </PanelSection>
     );

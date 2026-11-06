@@ -107,14 +107,14 @@ describe("ProductionReadingsDocuments certification lock", () => {
 
     expect(screen.getByText("1 attachment was not uploaded")).toBeTruthy();
     expect(screen.getByText("queued.csv")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
   });
 
   it("offers retries for failed queued uploads while unlocked", () => {
     render(<ProductionReadingsDocuments productionRunId="run-1" deferredAttachments={failedAttachments()} />);
 
-    expect(screen.getByRole("button", { name: "Retry uploads" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try all again" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
   it("closes an open delete confirmation when the lock resolves to locked", () => {

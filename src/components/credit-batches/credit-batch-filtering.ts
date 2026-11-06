@@ -21,8 +21,8 @@ export function readinessErrorMessage(
   readiness: CreditBatchReadinessFilter,
 ): string {
   return readiness === "all"
-    ? "Certification progress unavailable. Batches are still shown without lifecycle status."
-    : "Certification data status unavailable. Retry or clear the data-status filter to view batches.";
+    ? "Certification progress could not be loaded. Batches are still shown without lifecycle status."
+    : "Certification data status could not be loaded. Clear the data-status filter to view batches.";
 }
 
 /**

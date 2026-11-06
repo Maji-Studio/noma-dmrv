@@ -2,7 +2,7 @@
 /**
  * The footer line asks the server again as the form changes, and only ever
  * shows the answer for the current inputs: a late answer for earlier inputs
- * never appears as current. A failed check is not "no batch" and offers Retry.
+ * never appears as current. A failed check is not "no batch" and offers Try again.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -198,7 +198,7 @@ describe("ProductionRunCreditBatchPreview", () => {
     expect(screen.getByRole("button", { name: "How the credit batch is chosen" })).toBeTruthy();
   });
 
-  it("says a failed check failed, and Retry asks again", async () => {
+  it("says a failed check failed, and Try again asks again", async () => {
     renderLine();
     await waitFor(() => expect(calls).toHaveLength(1));
     await act(async () => {
@@ -207,7 +207,7 @@ describe("ProductionRunCreditBatchPreview", () => {
     await waitFor(() => expect(status().textContent).toContain("Credit batch could not be checked."));
     expect(status().textContent).not.toContain("No credit batch");
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(calls).toHaveLength(2));
     await act(async () => {
       calls[1].resolve({ success: true, data: { state: "no-match", basis: { ...BASIS, day: "2026-09-30" }, expected: false } });

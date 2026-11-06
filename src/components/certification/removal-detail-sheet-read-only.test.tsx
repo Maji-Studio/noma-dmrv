@@ -97,7 +97,7 @@ describe("RemovalDetailSheet", () => {
     expect(screen.queryByRole("link", { name: "Resubmit Removal" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Review & submit" })).toBeNull();
     expect(mocks.sourcesEditable).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(document.body.textContent).toContain("Old Plant");
     expect(screen.getByRole("button", { name: "Close", hidden: true })).toBeTruthy();
   });

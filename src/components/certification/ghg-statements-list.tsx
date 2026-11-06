@@ -17,6 +17,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
@@ -491,7 +492,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
                 onClick={() => void query.refetch()}
                 busy={query.isFetching}
               >
-                Retry
+                {TRY_AGAIN_LABEL}
               </Button>
             }
           >

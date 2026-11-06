@@ -32,23 +32,23 @@ describe("SampleCreditBatchLine", () => {
     expect(summary).toHaveBeenCalledWith("", false);
   });
 
-  it("offers Retry when the lookup failed", () => {
+  it("offers Try again when the lookup failed", () => {
     summary.mockReturnValue({ data: undefined, isError: true, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
-  it("shows the error and Retry when a refetch failed but data is retained", () => {
+  it("shows the error and Try again when a refetch failed but data is retained", () => {
     summary.mockReturnValue({ data: { creditBatchCode: "CB-26-009" }, isError: true, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("says the batch was not found, with no Retry, when the lookup succeeded but the batch is gone", () => {
+  it("says the batch was not found, with no Try again, when the lookup succeeded but the batch is gone", () => {
     summary.mockReturnValue({ data: null, isError: false, isSuccess: true, isFetching: false, refetch: vi.fn() });
     render(<SampleCreditBatchLine creditBatchId="batch-1" />);
     expect(screen.getByRole("status").textContent).toContain("Credit batch not found");
-    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });

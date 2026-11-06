@@ -14,6 +14,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -101,7 +102,7 @@ export function GhgStatementWorkflow({
     : reportsUnavailable
       ? {
           status: "warning",
-          detail: readOnly ? "Reports could not be loaded." : "Reports could not be loaded. Refresh the page and try again.",
+          detail: "Reports could not be loaded.",
         }
       : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
@@ -205,7 +206,7 @@ export function GhgStatementWorkflow({
       {reportsQuery.error && (
         <Notice
           tone="warning"
-          // Retry only reads the reports again, so a read-only or member sheet keeps it.
+          // Try again only reads the reports again, so a read-only or member sheet keeps it.
           action={(
             <Button
               size="small"
@@ -213,7 +214,7 @@ export function GhgStatementWorkflow({
               busy={reportsQuery.isFetching}
               onClick={() => void reportsQuery.refetch()}
             >
-              Retry
+              {TRY_AGAIN_LABEL}
             </Button>
           )}
         >

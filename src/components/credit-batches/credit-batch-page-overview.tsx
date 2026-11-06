@@ -189,7 +189,7 @@ function TodosUnavailable() {
       tone="warning"
       action={<Button variant="weak" size="small" busy={retryingTodos} onClick={retryTodos}>{TRY_AGAIN_LABEL}</Button>}
     >
-      Blocking items could not be checked. Try again to load them.
+      Blocking items could not be checked.
     </Notice>
   );
 }

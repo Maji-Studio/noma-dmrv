@@ -344,7 +344,7 @@ export function deriveRemovalWorkflowStatus({
     }
     if (enrichmentStatus === "unavailable" || !readiness) {
       return interruptedWorkflowStatus(
-        ["Status checks could not finish. Select Retry to check again."],
+        ["Status checks could not finish."],
         false,
         true,
       );
