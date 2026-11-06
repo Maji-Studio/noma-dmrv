@@ -93,12 +93,14 @@ describe("New Removal wizard with empty components", () => {
     expect(screen.getByText("Empty components")).toBeTruthy();
   });
 
-  it("lands a reopened draft with every component confirmed on submit, and keeps the step in the rail for Undo", () => {
+  it("lands a reopened draft with every component confirmed on Review & submit: its own header, no step rail, no step count", () => {
     mocks.landing.data = LAND_SUBMIT;
     mocks.query.data = CONFIRMED;
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Empty components/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Review & submit" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Empty components/ })).toBeNull();
+    expect(screen.queryByText(/^Step \d of \d$/)).toBeNull();
   });
 
   it("keeps the way back to Empty components from the submit step, for phones where the rail shows one step", () => {

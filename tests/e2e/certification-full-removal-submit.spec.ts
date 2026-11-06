@@ -153,9 +153,8 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         name: "Empty components",
         level: 3,
       });
-      const confirmStepItem = dialog
-        .locator('[aria-current="step"]')
-        .filter({ hasText: "Confirm & submit" });
+      // Review & submit is its own screen (no step rail): its heading is the signal.
+      const confirmStepItem = dialog.getByRole("heading", { name: "Review & submit", level: 2 });
       await expect(emptyComponentsHeading.or(confirmStepItem)).toBeVisible({
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
@@ -178,11 +177,10 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
           .click();
       }
 
-      // The step rail's active item flips to the final confirmation step...
-      await expect(dialog.locator('[aria-current="step"]')).toContainText(
-        "Confirm & submit",
-        { timeout: COLD_COMPILE_TIMEOUT_MS },
-      );
+      // ...the dialog is now on Review & submit...
+      await expect(
+        dialog.getByRole("heading", { name: "Review & submit", level: 2 }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // ...and the submission summary renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
       await expect(dialog.getByText("Biochar dry mass", { exact: true })).toBeVisible({
@@ -192,10 +190,13 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // The submit step lists every component with its source. A component
       // confirmed above reads as a recorded zero.
       if (confirmedEmptyComponents) {
+        // The component table sits behind "See what this Removal sends".
+        await dialog.getByRole("button", { name: "See what this Removal sends" }).click();
         await expect(
           dialog.getByRole("region", { name: "Components" }),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
         await expect(dialog.getByText("Recorded zero").first()).toBeVisible();
+        await dialog.getByRole("button", { name: "Back", exact: true }).first().click();
       }
 
       // Every facility-level check met ⇒ the submit button is enabled.
@@ -203,8 +204,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // `deriveRemovalReadiness(...).state === "ready"`). The COMMITTED assertion
       // stops here — no external write.
       const submitButton = dialog.getByRole("button", {
-        name: "Submit Removal",
-        exact: true,
+        name: /^Submit (Removal|to production)$/,
       });
       await expect(submitButton).toBeEnabled({
         timeout: COLD_COMPILE_TIMEOUT_MS,
