@@ -8,6 +8,7 @@ import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-
 import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { deriveEmissionEntryFacts } from "@/lib/certification/emission-entry-facts";
 import { canonicalUnit } from "@/lib/isometric/template-observations/units";
+import { TIME_BASED_BLUEPRINT_KEY, TIME_RATE_INPUT_KEY, timeEmissionRatePerHour } from "@/lib/isometric/template-observations/time-emission";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
 import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
@@ -104,6 +105,11 @@ export function buildBatchEmissionLines(
               : null,
         };
       });
+    // A time-based line: the template's fixed rate in kgCO2e per hour (null when it is missing or its unit unknown).
+    const rate = observation.enrichment[component.id]?.[TIME_RATE_INPUT_KEY];
+    const timeEmission = component.blueprintKey === TIME_BASED_BLUEPRINT_KEY
+      ? { ratePerHour: rate && !("status" in rate) ? timeEmissionRatePerHour(rate.unit, rate.fixedValue) : null }
+      : null;
     // Retired entry components remain visible for re-entry, but their comments do not.
     const removedFromTemplate = !currentComponents.has(line.componentId);
     const comment = removedFromTemplate ? undefined : commentsByComponent.get(line.componentId);
@@ -112,6 +118,7 @@ export function buildBatchEmissionLines(
       label: line.displayName,
       description: component.description,
       inputShape,
+      timeEmission,
       unit: inputShape.length === 1 ? inputShape[0].unit : null,
       entryPolicy: line.contract?.entryPolicy ?? "none",
       entries: entries.filter((entry) => entry.componentId === line.componentId),

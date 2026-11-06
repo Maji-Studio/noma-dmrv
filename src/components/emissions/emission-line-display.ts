@@ -10,8 +10,10 @@
 import type { EmissionEntry, EmissionLine, LineRecords, RecordsSource } from "@/hooks/use-emission-entries";
 import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
+import { timeEmissionKg } from "@/lib/isometric/template-observations/time-emission";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { formatCo2e } from "@/lib/format-utils";
 import { recordHref } from "@/lib/record-links";
 import { entryFieldName, isDecimal } from "@/schemas/emission-entry-form";
 
@@ -63,6 +65,13 @@ export function displayUnit(unit: string | null | undefined): string {
     .join(" ")
     .replace(/ \* /g, "·")
     .replace(/ \/ /g, "/");
+}
+
+/** "12.5 h · 5 kg CO₂e" on a time-based line with a readable rate (a preview, Isometric calculates the official figure); the figure alone otherwise. */
+export function withTimeEmission(line: Pick<EmissionLine, "timeEmission">, figure: EmissionFigure): string {
+  const hours = formatFigure(figure);
+  const kg = line.timeEmission ? timeEmissionKg(figure, line.timeEmission.ratePerHour) : null;
+  return kg === null ? hours : `${hours} · ${formatCo2e(kg)}`;
 }
 
 export function formatFigure(figure: EmissionFigure | null | undefined): string {
@@ -249,7 +258,7 @@ function entryFigureText(entry: EmissionEntry): string {
  */
 export function lineTotalText(line: EmissionLine): string | null {
   if (line.state === "needsSetup") return EMISSION_LINE_STATE_LABELS.needsSetup;
-  if (line.total) return formatFigure(line.total);
+  if (line.total) return withTimeEmission(line, line.total);
   if (isCalculatedByRegistry(line.records)) return CALCULATED_BY_ISOMETRIC;
   const values = valueEntries(line);
   if (values.length === 1 && values[0].values.length > 1) return entryFigureText(values[0]);
@@ -334,6 +343,9 @@ export function lineCounts(lines: EmissionLine[]): LineCounts {
 
 export interface EntryFieldSpec { key: string; label: string; unit: string; inputKey: string; part: "value" | "mass" | "distance" }
 
+/** The monitored time of a time-based line is the hours the pyrolyzer ran. */
+const OPERATING_HOURS_LABEL = "Operating hours";
+
 const INPUT_LABELS: Partial<Record<QuantityKind, string>> = {
   energy: "Energy used",
   volume: "Volume",
@@ -353,7 +365,9 @@ export function entryFields(line: EmissionLine): EntryFieldSpec[] {
         { key: `${input.key}:distance`, label: "Distance", unit: displayUnit(units?.distance), inputKey: input.key, part: "distance" },
       ];
     }
-    const label = gas && input.quantityKind === "mass" ? "Total mass flow of gas" : (INPUT_LABELS[input.quantityKind] ?? "Value");
+    const label = gas && input.quantityKind === "mass" ? "Total mass flow of gas"
+      : line.timeEmission && input.quantityKind === "time" ? OPERATING_HOURS_LABEL
+        : (INPUT_LABELS[input.quantityKind] ?? "Value");
     return [{ key: input.key, label, unit: displayUnit(input.unit), inputKey: input.key, part: "value" }];
   });
 }

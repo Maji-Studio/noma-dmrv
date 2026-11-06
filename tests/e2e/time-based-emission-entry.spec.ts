@@ -21,6 +21,8 @@ const SHOT_DIR = path.join(process.cwd(), "artifacts", "time-based-emission-entr
 const WIDTHS = { desktop: { width: 1440, height: 1000 }, phone: { width: 390, height: 844 } } as const;
 type Size = keyof typeof WIDTHS;
 const HOURS = "12.5";
+// 12.5 h at the template's 0.41264 kgCO2e per hour, rounded to whole kg by formatCo2e.
+const TOTAL_TEXT = "12.5 h · 5 kg CO₂e";
 
 async function shoot(page: Page, name: string, size: Size) {
   if (!PHASE) return;
@@ -54,7 +56,7 @@ test.describe("Time-based emission line", () => {
         await add.click();
         const dialog = page.getByRole("dialog");
         await expect(dialog).toContainText(`${TIME_LINE_NAME}, ${seeded.creditBatchCode}`);
-        const hours = dialog.getByRole("textbox", { name: /^Value/ });
+        const hours = dialog.getByRole("textbox", { name: /^Operating hours/ });
         await expect(hours).toBeVisible();
         await expect(dialog.getByText("h", { exact: true })).toBeVisible();
         await shoot(page, "add-entry-form", size);
@@ -68,6 +70,10 @@ test.describe("Time-based emission line", () => {
         await page.getByRole("button", { name: /close|dismiss/i }).last().click({ timeout: 2_000 }).catch(() => undefined);
         await table.scrollIntoViewIfNeeded();
         await shoot(page, "line-with-entry", size);
+
+        // The line total repeats the hours with their CO2e (phones show it on the collapsed row).
+        if (size === "phone") await toggle.click();
+        await expect(page.getByText(TOTAL_TEXT, { exact: true }).locator("visible=true").first()).toBeVisible();
       } finally {
         await seeded.cleanup();
       }
