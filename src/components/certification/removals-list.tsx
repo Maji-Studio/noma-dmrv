@@ -18,8 +18,9 @@
 
 import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useToast } from "@/components/ui/toast";
+import { ArchivedRemovalSheet, LinkedRemovalWithoutFacility } from "./archived-removal-sheet";
+import { useLinkedRemoval } from "./use-linked-removal";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
-import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import type { CellContext, ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
@@ -112,7 +113,10 @@ export function RemovalsList({ initialCreate = false, canManage = false }: { ini
       />
 
       {!facilityId ? (
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
+        <>
+          <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its Removals." />
+          <LinkedRemovalWithoutFacility enabled={!resume} />
+        </>
       ) : (
         <ListBody facilityId={facilityId} canManage={canManage} linkedSheetEnabled={!resume} onNewRemoval={() => setDialogOpen(true)} />
       )}
@@ -391,33 +395,7 @@ function ListBody({
   // A Removal already on this facility's list opens at once; only a link from elsewhere looks up its facility.
   const linkedInList = !!removalId && identityRows.some((entry) => entry.removal.id === removalId);
   const lookupEnabled = linkedSheetEnabled && !linkedInList && !identities.isLoading;
-  const linkedRemoval = useRemovalCarriedEntries(removalId, { enabled: lookupEnabled });
-  const linkedRecord = useLinkedRecordFacility(lookupEnabled ? linkedRemoval.data : undefined, linkedRemoval.isLoading);
-  const linkedFacilityReady = linkedRecord.ready;
-  // A link into an archived facility never joins this list (the working facility stays put), so read
-  // that facility's own list for the one Removal and open it read only.
-  const archivedFacilityId = lookupEnabled && linkedRecord.readOnly ? linkedRemoval.data?.facilityId : undefined;
-  const archivedIdentities = useRemovalsForFacility(archivedFacilityId ?? "", !!archivedFacilityId);
-  const archivedEntries = (archivedIdentities.data?.removals ?? []).filter((entry) => entry.removal.id === removalId);
-  const archivedEnrichment = useRemovalPreflightSummaries(archivedFacilityId ?? "", archivedEntries.map((entry) => entry.removal.id));
-  const archivedLocks = useRecordLocks("removal", archivedEntries.map((entry) => entry.removal.id));
-  const toast = useToast();
-  const invalidRemovalId = useRef<string | null>(null);
-  useEffect(() => {
-    if (!removalId || !lookupEnabled) {
-      invalidRemovalId.current = null;
-      return;
-    }
-    if (invalidRemovalId.current === removalId) return;
-    // Dead when the read finished without the Removal. A failed refresh while data is held keeps the sheet.
-    const archivedMissing = !!archivedFacilityId && ((archivedIdentities.isError && !archivedIdentities.data) || (!!archivedIdentities.data && archivedEntries.length === 0));
-    if (archivedMissing || (!linkedRemoval.data && (linkedRemoval.isError || linkedRemoval.isSuccess))) {
-      invalidRemovalId.current = removalId;
-      toast.error("Linked Removal could not be opened");
-      void setRemovalId(null);
-    }
-  }, [removalId, lookupEnabled, linkedRemoval.data, linkedRemoval.isError, linkedRemoval.isSuccess, archivedFacilityId, archivedIdentities.isError, archivedIdentities.data, archivedEntries.length, setRemovalId, toast]);
-
+  const { linkedFacilityReady, archived } = useLinkedRemoval(removalId, lookupEnabled, setRemovalId);
   const enrichmentByRemovalId = useRemovalPreflightSummaries(
     facilityId,
     identityRows.map((entry) => entry.removal.id),
@@ -454,8 +432,6 @@ function ListBody({
   const selectedInList = removalId && (linkedInList || linkedFacilityReady)
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
-  const archivedRow = archivedFacilityId ? buildRemovalListRows(archivedEntries, archivedEnrichment)[0] : undefined;
-  const archivedReadOnly = archivedRow ? linkedRecordReadOnly(linkedRecord, { facilityId: archivedFacilityId }, "Removal") : undefined;
 
   return (
     <>
@@ -530,17 +506,8 @@ function ListBody({
           onClose={() => setRemovalId(null)}
         />
       )}
-      {!selectedInList && archivedRow && archivedReadOnly && archivedFacilityId && archivedIdentities.data && (
-        <RemovalDetailSheet
-          summary={archivedRow}
-          isProduction={archivedIdentities.data.isProduction}
-          facilityId={archivedFacilityId}
-          lock={archivedLocks.locks[archivedRow.removalId]}
-          readOnly={archivedReadOnly}
-          timeZone={linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined}
-          open
-          onClose={() => setRemovalId(null)}
-        />
+      {!selectedInList && archived && (
+        <ArchivedRemovalSheet archived={archived} onClose={() => setRemovalId(null)} />
       )}
     </>
   );
