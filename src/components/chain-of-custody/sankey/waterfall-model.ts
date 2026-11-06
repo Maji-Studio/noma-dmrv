@@ -9,8 +9,8 @@
  * runs' dry feedstock), otherwise dry. Steps: the lib's exits in flow order.
  * End column: the dry biochar applied, lit.
  * Step masses and their record masses are display-rounded differences of
- * display-rounded inputs, like the lib's exits; start, end and the balance
- * check stay raw.
+ * display-rounded inputs, like the lib's exits. Start and end stay raw;
+ * the balance check uses raw masses, independently of the displayed levels.
  */
 import { sourceBiocharMassFlowKg } from "@/lib/biochar-product-mass";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
@@ -316,6 +316,7 @@ export function buildWaterfall(
 
   const items: WaterfallItem[] = [];
   let level = startKg;
+  let rawLevel = startKg;
   items.push({
     key: "feedstock", kind: "start", label: "Feedstock in", massKg: startKg, top: startKg, bottom: 0,
     basis: startBasis, stage: null, recordKind: "feedstock",
@@ -331,8 +332,10 @@ export function buildWaterfall(
     pushStep("water_driven_off", "Water driven off", waterKg, "productionRuns", "productionRun",
       runRecords((run) => [run.wetInKg, run.dryInKg],
         ROW_WORDS.water_driven_off));
+    rawLevel -= rawWaterKg ?? 0;
   }
   for (const exit of sankey.exits) {
+    rawLevel -= exit.rawKg;
     const stage = STAGE_OF_COLUMN[exit.fromColumn] ?? "productionRuns";
     if (exit.key === "conversion_loss") {
       pushStep(exit.key, exit.label, exit.massKg, stage, "productionRun",
@@ -354,9 +357,9 @@ export function buildWaterfall(
 
   // Hidden residuals keep their signs; their sum can exceed one tolerance.
   const omittedWaterKg = startsWet && !hasWater ? (rawWaterKg ?? 0) : 0;
-  const closingLevel = level - sankey.omittedResidualKg - omittedWaterKg;
+  const rawClosingLevel = rawLevel - sankey.omittedResidualKg - omittedWaterKg;
   // A floating step would invent a level when the records cannot close.
-  const balanced = closingLevel >= -EPSILON_KG && Math.abs(closingLevel - endKg) <= EPSILON_KG;
+  const balanced = rawClosingLevel >= -EPSILON_KG && Math.abs(rawClosingLevel - endKg) <= EPSILON_KG;
   if (!balanced) {
     for (const item of items) {
       if (item.kind === "step") {
