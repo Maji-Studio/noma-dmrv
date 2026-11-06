@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 /** Exercise email changes through the real auth config with an in-memory store. */
 import { createHmac } from "node:crypto";
 import { createEmailVerificationToken } from "better-auth/api";
@@ -14,6 +15,8 @@ const memory = vi.hoisted(() => ({
 }));
 // Session creation consults the app database for an organization preference.
 // This auth-only store has no organization rows.
+vi.mock("@/data-access/oauth-grant-lifecycle", async importOriginal => ({ ...(await importOriginal<typeof import("@/data-access/oauth-grant-lifecycle")>()), revokeUserOAuthGrants: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/data-access/account-api-keys", () => ({ listActiveAccountApiKeys: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/db", () => ({
   db: { select: () => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) }) },
 }));
@@ -76,11 +79,16 @@ async function sessionHeaders(token = SESSION_TOKEN) {
   });
 }
 
+// The HTTP endpoint is closed to browsers (Profile verifies the password first),
+// so drive the server call the Profile action makes and map its errors to a Response.
 async function requestChange(newEmail = NEW_EMAIL) {
-  return auth.handler(new Request(`${ORIGIN}/api/auth/change-email`, {
-    method: "POST", headers: await sessionHeaders(),
-    body: JSON.stringify({ newEmail, callbackURL: CALLBACK_URL }),
-  }));
+  try {
+    return await auth.api.changeEmail({ headers: await sessionHeaders(),
+      body: { newEmail, callbackURL: CALLBACK_URL }, asResponse: true });
+  } catch (error) {
+    if (!(error instanceof APIError)) throw error;
+    return new Response(JSON.stringify(error.body ?? {}), { status: error.statusCode });
+  }
 }
 
 it("sends confirmation to the new address and a notice to the old address, then changes only on confirmation", async () => {
@@ -151,7 +159,7 @@ it("does not silently change an unverified user's address", async () => {
   expect(sendEmail).toHaveBeenCalledTimes(2);
 });
 
-it("rejects a session at the default freshness boundary with SESSION_EXPIRED", async () => {
+it("rejects a stale session with SESSION_EXPIRED; the browser endpoint is closed", async () => {
   const ctx = await auth.$context;
   expect(ctx.sessionConfig.freshAge).toBe(24 * ONE_HOUR_SECONDS);
   memory.session[0].createdAt = new Date(Date.now() - ctx.sessionConfig.freshAge * MILLISECONDS_PER_SECOND);
@@ -166,8 +174,9 @@ it("rejects a session at the default freshness boundary with SESSION_EXPIRED", a
       customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
     },
   });
+  // The browser client cannot reach the endpoint at all: Profile verifies the password first.
   const result = await client.changeEmail({ newEmail: NEW_EMAIL, callbackURL: CALLBACK_URL });
-  expect(result.error).toMatchObject({ code: "SESSION_EXPIRED", status: 400 });
+  expect(result.error).toMatchObject({ status: 403 });
   expect(sendEmail).not.toHaveBeenCalled();
 });
 
@@ -344,4 +353,13 @@ it("runs the freshness before-hook for direct auth.api.changeEmail calls", async
 it("configures the HTTP email change limit and password-reset revocation", () => {
   expect(auth.options.rateLimit.customRules["/change-email"]).toEqual({ window: 15 * 60, max: 5 });
   expect(auth.options.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+});
+
+it("blocks the passwordless HTTP email-change endpoint", async () => {
+  const response = await auth.handler(new Request(`${ORIGIN}/api/auth/change-email`, {
+    method: "POST", headers: await sessionHeaders(),
+    body: JSON.stringify({ newEmail: NEW_EMAIL, callbackURL: CALLBACK_URL }),
+  }));
+  expect(response.status).toBe(403);
+  expect(sendEmail).not.toHaveBeenCalled();
 });
