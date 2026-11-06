@@ -15,6 +15,7 @@ import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import { SETTINGS_PROFILE_HREF } from "@/lib/settings/links";
 import { changeEmailServerSchema, changePasswordSchema, profileNameSchema } from "@/schemas/profile";
+import { revokeUserOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { withAuthAction } from "./with-action";
 
 // Guessing the current password through this form is throttled per user.
@@ -85,6 +86,14 @@ export async function changePasswordFn(input: unknown) {
     }
     try {
       await auth.api.revokeOtherSessions({ headers: requestHeaders });
+      // The after-hook already disconnected apps, but another session could
+      // connect one before it was signed out. With those sessions gone no new
+      // grant can start (a grant needs a live session), so this sweep is final.
+      try {
+        await revokeUserOAuthGrants(ctx.userId);
+      } catch {
+        logger.warn({ op: "change-password", userId: ctx.userId }, "connected apps were not disconnected after sign-out");
+      }
       return { otherDevicesSignedOut: true };
     } catch {
       // The password changed; only the sign-out of other devices failed. The
@@ -110,11 +119,17 @@ function translateEmailError(error: unknown): never {
 
 export async function changeEmailFn(input: unknown) {
   return withAuthAction(async () => {
-    const { newEmail } = changeEmailServerSchema.parse(input);
+    const { newEmail, currentPassword } = changeEmailServerSchema.parse(input);
+    const requestHeaders = await headers();
+    try {
+      await auth.api.verifyPassword({ body: { password: currentPassword }, headers: requestHeaders });
+    } catch (error) {
+      translatePasswordError(error);
+    }
     try {
       await auth.api.changeEmail({
         body: { newEmail, callbackURL: SETTINGS_PROFILE_HREF },
-        headers: await headers(),
+        headers: requestHeaders,
       });
     } catch (error) {
       translateEmailError(error);

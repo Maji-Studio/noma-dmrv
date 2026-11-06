@@ -41,6 +41,11 @@ function type(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
+/** The email form's password field; the Password form has its own "Current password". */
+function typeEmailPassword(value: string) {
+  fireEvent.change(document.getElementById("emailCurrentPassword")!, { target: { value } });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   nameMutation.mutateAsync.mockResolvedValue({ name: "New Name" });
@@ -60,9 +65,10 @@ describe("ProfileSettingsPane", () => {
   it("asks for a link and shows the change as pending until it is opened", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
-    await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenCalledWith({ newEmail: "new@example.com" }));
+    await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenCalledWith({ newEmail: "new@example.com", currentPassword: "old-password" }));
     expect(
       await screen.findByText(
         "We sent a link to new@example.com. Your email changes when you open it.",
@@ -75,13 +81,25 @@ describe("ProfileSettingsPane", () => {
   it("accepts a second address after the first link was sent", async () => {
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
     await screen.findByText(/We sent a link to new@example.com/);
+    expect((document.getElementById("emailCurrentPassword") as HTMLInputElement).value).toBe("");
     type(NEW_EMAIL, "other@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
-    await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenLastCalledWith({ newEmail: "other@example.com" }));
+    await waitFor(() => expect(emailMutation.mutateAsync).toHaveBeenLastCalledWith({ newEmail: "other@example.com", currentPassword: "old-password" }));
     expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+  });
+
+  it("asks for the current password before sending a link", async () => {
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
+    type(NEW_EMAIL, "new@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Send link" }));
+
+    expect((await screen.findAllByText("Enter your current password.")).length).toBeGreaterThan(0);
+    expect(emailMutation.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("refuses the current address, in any case, before calling the server", async () => {
@@ -106,6 +124,7 @@ describe("ProfileSettingsPane", () => {
     emailMutation.mutateAsync.mockRejectedValue(new ActionError({ code: SESSION_EXPIRED, error: "Your sign-in is too old to change your email. Sign out and sign in again, then try again." }));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect(await screen.findByText("Your sign-in is too old to change your email.")).toBeTruthy();
@@ -139,10 +158,26 @@ describe("ProfileSettingsPane", () => {
     expect(screen.queryByText(/Open the link again/)).toBeNull();
   });
 
+  it("puts a wrong current password at the email form's field", async () => {
+    const message = "That is not your current password.";
+    emailMutation.mutateAsync.mockRejectedValue(new ActionError({
+      error: message, code: "validation_failed",
+      issues: [{ path: ["currentPassword"], code: "validation_failed", message }],
+    }));
+    render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
+    type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("wrong-password");
+    fireEvent.click(screen.getByRole("button", { name: "Send link" }));
+
+    await waitFor(() => expect(document.getElementById("emailCurrentPassword")!.getAttribute("aria-invalid")).toBe("true"));
+    expect((await screen.findAllByText(message)).length).toBeGreaterThan(0);
+  });
+
   it("shows the server message and wait time for other refusals", async () => {
     emailMutation.mutateAsync.mockRejectedValue(new ActionError({ error: "Too many requests. Try again in 30 seconds." }));
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
 
     expect(await screen.findByText("Too many requests.")).toBeTruthy();
@@ -154,6 +189,7 @@ describe("ProfileSettingsPane", () => {
     emailMutation.mutateAsync.mockRejectedValue(error);
     render(<ProfileSettingsPane name={NAME} email={EMAIL} />);
     type(NEW_EMAIL, "new@example.com");
+    typeEmailPassword("old-password");
     fireEvent.click(screen.getByRole("button", { name: "Send link" }));
     expect(await screen.findByText("Your email was not changed.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
