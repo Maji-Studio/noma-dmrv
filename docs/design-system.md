@@ -277,18 +277,19 @@ use at most four text styles:
 | Style | Classes | Used for |
 |---|---|---|
 | Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, `FormField` cues, calculation rows' labels |
-| Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
+| Label | `body-small font-medium` | field labels (secondary ink) |
+| Section title | `body-lead font-medium` | `FormSection` / `DetailSection` titles (primary ink); the sheet title above them is `title-heading-3` (24px) |
 | Value | `body-small` | figures in a derived block's rows (`StockRows`) |
 | Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
 
 Control text (inputs, selects, the entity select trigger) is the primitives'
 own 16px `--text-s`, and read-sheet `DetailField` values are `body-medium`, the
 same 16px, so a field reads at one size in its form and its read view. Neither
-is restyled inside a form. Hierarchy runs section title, field label, value,
+is restyled inside a form. Hierarchy runs sheet title (24px), section title (20px), field label, value,
 caption.
 
 - **No eyebrows.** `SectionLabel` (the `FormSection` title) is a sentence case
-  `body-small font-medium` title in primary ink on a `min-h-24` row, not an
+  `body-lead font-medium` (20px) title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
   forms, sheets, dialogs or read views either (accordion triggers, side

@@ -239,7 +239,7 @@ export function TransportEvidencePanel({
           so no row of its own is left holding a lone icon. */}
       {!embedded && (
         <div className="flex items-center gap-6">
-          <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+          <h3 className="body-lead font-medium text-[var(--color-text-primary)]">
             {heading}
           </h3>
           <InfoHint label={`About ${heading.toLowerCase()}`}>

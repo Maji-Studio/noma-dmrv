@@ -119,7 +119,7 @@ export function ProductionIncidentTable({
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+        <h3 className="body-lead font-medium text-[var(--color-text-primary)]">
           Production incidents
         </h3>
         {!readOnly && !formDialog.open && (
