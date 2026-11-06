@@ -53,6 +53,8 @@ function titleClearanceCss(id: string): string {
   return `${POPUP_SELECTOR} [id="${escaped}"]{padding-inline-end:${TITLE_CLEARANCE}}`;
 }
 
+type DialogPopupInitialFocus = Dialog.Popup.Props["initialFocus"];
+
 export type ModalWidth = keyof typeof WIDTH_CLASSES;
 
 export interface ModalProps {
@@ -96,6 +98,12 @@ export interface ModalProps {
    * dialog. Set false only while an irreversible request is in progress.
    */
   dismissible?: boolean;
+  /**
+   * Where focus goes on open (Base UI `initialFocus`). Defaults to the first
+   * tabbable element. Pass a function returning the heading (with
+   * `tabIndex={-1}`) when the first tabbable would be a link in the body.
+   */
+  initialFocus?: DialogPopupInitialFocus;
   children: ReactNode;
 }
 
@@ -118,6 +126,7 @@ export function Modal({
   contentClassName = "p-24",
   dismissOnClickOutside = true,
   dismissible = true,
+  initialFocus,
   children,
 }: ModalProps) {
   // A modal dialog with no accessible name is announced as just "dialog" by
@@ -168,6 +177,7 @@ export function Modal({
         />
         <Dialog.Popup
           data-overlay-layer="dialog"
+          initialFocus={initialFocus}
           aria-labelledby={ariaLabelledBy}
           aria-label={ariaLabel}
           aria-describedby={ariaDescribedBy}
