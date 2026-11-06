@@ -149,17 +149,22 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
   const [sessionExpired, setSessionExpired] = useState(false);
   // Held only for this page session: the server stores nothing about a pending change.
   const [pendingEmail, setPendingEmail] = useState("");
+  const emailFormId = useId();
   const {
     control,
     register,
     handleSubmit,
     setValue,
+    setError,
+    resetField,
     trigger,
     formState: { errors },
   } = useForm<ChangeEmailFormData>({
     resolver: zodResolver(changeEmailSchema(email)),
-    defaultValues: { newEmail: "" },
+    defaultValues: { newEmail: "", currentPassword: "" },
   });
+  // A wrong current password comes back as a field refusal and shows at the field.
+  const refuseSave = useSaveRefusal({ control, setError, resetField, formId: emailFormId });
 
   const onSubmit = latched(
     handleSubmit(async (values) => {
@@ -169,16 +174,17 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
         await mutation.mutateAsync(values);
         setPendingEmail(values.newEmail);
         setValue("newEmail", "");
+        setValue("currentPassword", "");
       } catch (error) {
         setPendingEmail("");
         setSessionExpired(error instanceof ActionError && error.code === SESSION_EXPIRED);
-        setServerError(error instanceof Error && error.message ? error.message : EMAIL_NOT_CHANGED);
+        setServerError(refuseSave(error, error instanceof Error && error.message ? error.message : EMAIL_NOT_CHANGED) ?? "");
       }
     }),
   );
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-24">
+    <form id={emailFormId} onSubmit={onSubmit} noValidate className="flex flex-col gap-24">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSection title="Email">
         <DetailField label="Current email" value={email} />
@@ -199,6 +205,16 @@ function EmailForm({ email, linkError }: { email: string; linkError?: string }) 
             autoComplete="email"
             error={!!errors.newEmail}
             {...register("newEmail")}
+          />
+        </FormField>
+        {/* Same rule as a password change (#1576). Its own id: the Password form below has currentPassword. */}
+        <FormField id="emailCurrentPassword" label="Current password" required error={errors.currentPassword?.message}>
+          <FormInput
+            id="emailCurrentPassword"
+            type="password"
+            autoComplete="current-password"
+            error={!!errors.currentPassword}
+            {...register("currentPassword")}
           />
         </FormField>
       </FormSection>

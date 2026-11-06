@@ -22,6 +22,7 @@ export const changePasswordSchema = z.object({
 });
 
 export const changeEmailServerSchema = z.object({
+  currentPassword: z.string({ error: "Enter your current password." }).min(1, "Enter your current password."),
   newEmail: z.string().trim().pipe(z.email({ error: "Enter a valid email address." })),
 });
 

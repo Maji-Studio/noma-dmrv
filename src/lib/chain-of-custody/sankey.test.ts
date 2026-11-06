@@ -57,6 +57,7 @@ describe("buildBatchSankey", () => {
     // floating-point subtraction in the displayed-figures assertion.
     const displayedTenths = (massKg: number) => Math.round(Number(formatMassKg(massKg).replace(/[^\d.-]/g, "")) * 10);
     result.exits.forEach((exit, index) => {
+      expect(exit.rawKg).toBeCloseTo([39.98, 20.02, 19.98][index]);
       expect(displayedTenths(result.columns[index].massKg) - displayedTenths(exit.massKg))
         .toBe(displayedTenths(result.columns[index + 1].massKg));
     });
@@ -112,11 +113,13 @@ describe("buildBatchSankey", () => {
       expect.objectContaining({
         key: "conversion_loss",
         massKg: 7_000,
+        rawKg: 7_000,
         fromColumn: "productionRuns",
       }),
       expect.objectContaining({
         key: "in_storage",
         massKg: 1_000,
+        rawKg: 1_000,
         fromColumn: "biocharLots",
       }),
     ]);
@@ -172,7 +175,11 @@ describe("buildBatchSankey", () => {
       application: { id: "app-1", biocharAppliedDryTons: kgToTonnes(appliedKg) },
     })]);
 
-    expect(result.exits).toEqual([expect.objectContaining({ key: "conversion_loss", massKg: ROUNDING_CONVERSION_KG })]);
+    expect(result.exits).toEqual([expect.objectContaining({
+      key: "conversion_loss",
+      massKg: ROUNDING_CONVERSION_KG,
+      rawKg: expect.closeTo(ROUNDING_CONVERSION_KG),
+    })]);
     expect(result.warnings).toEqual([]);
     expect(result.omittedResidualKg).toBeCloseTo(ROUNDING_DOWNSTREAM_KG + ROUNDING_DOWNSTREAM_KG);
     expect(result.columns[0].massKg - ROUNDING_CONVERSION_KG - result.omittedResidualKg).toBeCloseTo(result.columns[3].massKg);

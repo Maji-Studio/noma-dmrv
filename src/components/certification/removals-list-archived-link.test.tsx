@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   sheetProps: [] as Record<string, unknown>[],
   archivedEntries: true,
   refetchError: false,
+  workingFacility: "facility-working" as string | null,
   toastError: vi.fn(),
 }));
 
@@ -28,7 +29,7 @@ vi.mock("nuqs", () => ({
 }));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }),
-  useFacilityContext: () => ({ facilityId: WORKING_FACILITY, selectedFacility: { name: "Working", code: "WRK" }, facilities: [{ id: WORKING_FACILITY }], setFacilityId: vi.fn() }),
+  useFacilityContext: () => ({ facilityId: mocks.workingFacility, selectedFacility: { name: "Working", code: "WRK" }, facilities: [{ id: WORKING_FACILITY }], setFacilityId: vi.fn() }),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toastError }) }));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => ({ isOpen: false, clear: vi.fn() }) }));
@@ -73,6 +74,7 @@ beforeEach(() => {
   mocks.sheetProps = [];
   mocks.archivedEntries = true;
   mocks.refetchError = false;
+  mocks.workingFacility = WORKING_FACILITY;
   mocks.toastError.mockClear();
 });
 afterEach(cleanup);
@@ -106,5 +108,34 @@ describe("Removals link into an archived facility", () => {
     render(<RemovalsList canManage />);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(mocks.listedFacilities).not.toContain(ARCHIVED_FACILITY);
+  });
+
+  describe("with no active facility", () => {
+    beforeEach(() => {
+      mocks.workingFacility = null;
+    });
+
+    it("still opens the Removal's sheet read only over the Select a facility state", () => {
+      render(<RemovalsList canManage />);
+      expect(screen.getByText("Select a facility")).toBeTruthy();
+      const sheet = screen.getByRole("dialog", { name: "RM-0001" });
+      expect(sheet.textContent).toBe("Old Plant is archived, so this Removal is read-only.");
+      expect(mocks.sheetProps.at(-1)).toMatchObject({ facilityId: ARCHIVED_FACILITY, readOnly: expect.anything() });
+    });
+
+    it("opens no sheet for a facility that is not archived", () => {
+      mocks.readOnly = null;
+      render(<RemovalsList canManage />);
+      expect(screen.getByText("Select a facility")).toBeTruthy();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("says so when the archived facility's list does not hold the Removal", () => {
+      mocks.archivedEntries = false;
+      render(<RemovalsList canManage />);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(mocks.toastError).toHaveBeenCalledWith("Linked Removal could not be opened");
+      expect(mocks.query.removal).toBeNull();
+    });
   });
 });
