@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { requireOrgFacility } from "@/data-access/utils";
+import { loadDraftRemovalReadiness } from "@/fn/certification/draft-removal-readiness";
+import { draftRemovalAttentionItems } from "@/lib/certification/removal-attention";
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityIdSchema } from "./facility-id";
 
@@ -22,5 +24,12 @@ export type DashboardOverviewInput = z.input<typeof dashboardOverviewInputSchema
 export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   const { facilityId, range } = dashboardOverviewInputSchema.parse(input);
   await requireOrgFacility(ctx, facilityId);
-  return getDashboardOverview(ctx, facilityId, range);
+  const overview = await getDashboardOverview(ctx, facilityId, range);
+  // Draft Removals need the operator too; their readiness comes from the Removals list's read path.
+  const drafts = draftRemovalAttentionItems(await loadDraftRemovalReadiness(ctx, facilityId), facilityId);
+  return {
+    ...overview,
+    attention: [...drafts, ...overview.attention],
+    attentionTotal: overview.attentionTotal + drafts.length,
+  };
 }

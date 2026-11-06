@@ -61,6 +61,7 @@ import {
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { facilityListHref } from "@/lib/dashboard-links";
+import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import { loadReturnedRemovalIds } from "./dashboard-returned-removals";
 import {
@@ -766,7 +767,7 @@ export async function getDashboardAttentionItems(
         id: `removal-interrupted-${removal.id}`,
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
-        title: removal.status.label,
+        title: REMOVAL_INTERRUPTED_ATTENTION_TITLE,
         href: removalResubmitHref(removal.id, facilityId),
       });
     }
