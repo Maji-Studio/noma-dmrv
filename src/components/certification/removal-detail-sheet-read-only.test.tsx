@@ -27,8 +27,8 @@ vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({ data: { mapping: { externalProjectId: "prj_1" } } }),
 }));
 vi.mock("@/hooks/use-removal-carried-entries", () => ({ useRemovalCarriedEntries: () => ({ data: undefined }) }));
-// The allocation section has its own tests and needs a router and query client.
-vi.mock("@/components/emissions/allocation", () => ({ EmissionAllocationSection: () => null }));
+// The records read has its own tests and needs a query client.
+vi.mock("./removal-records", () => ({ RemovalRecords: () => null }));
 vi.mock("@/hooks/use-removal-delete-access", () => ({
   useRemovalDeleteAccess: () => ({ viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: false }),
 }));

@@ -201,7 +201,7 @@ test.describe("Certification workspace — status history", () => {
 
       // React events bubble through the portal to the row: a press on plain
       // popover content must not open the row's detail sheet.
-      const sheet = page.getByRole("dialog").filter({ has: page.getByText("Submission status") });
+      const sheet = page.getByRole("dialog").filter({ has: page.getByText("Reporting window", { exact: true }) });
       await entries.nth(1).getByText("Version 1").click();
       await expect(history).toBeVisible();
       await expect(page).not.toHaveURL(/removal=/);
