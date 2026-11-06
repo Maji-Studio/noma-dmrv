@@ -17,14 +17,12 @@
  */
 "use client";
 
-import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
-import { linkedRecordReadOnly } from "@/lib/linked-record-read-only";
 import { recordHref, GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/record-links";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { isSortedDescending } from "./undated-last-sort";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowsClockwiseIcon,
   ClipboardTextIcon,
@@ -36,7 +34,6 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
-  useGhgStatementState,
   useSyncGhgStatementsFromRegistry,
 } from "@/hooks/use-certification";
 import { useToast } from "@/components/ui/toast";
@@ -51,6 +48,8 @@ import { LastSyncedCell, lastSyncedSortingFn, lastSyncedText } from "./last-sync
 import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet, type GhgStatementSheetItem } from "./ghg-statement-detail-sheet";
+import { LinkedGhgStatementWithoutFacility } from "./linked-ghg-statement-without-facility";
+import { useLinkedGhgStatement } from "./use-linked-ghg-statement";
 import { IsometricLink } from "./isometric-link";
 import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import { Notice } from "@/components/ui/notice";
@@ -176,11 +175,14 @@ export function GhgStatementsList({ canManage = false }: { canManage?: boolean }
       />
 
       {!facilityId ? (
-        <EmptyState
-          icon={<ClipboardTextIcon size={48} />}
-          title="Select a facility"
-          description="Select a facility to view its GHG Statements."
-        />
+        <>
+          <EmptyState
+            icon={<ClipboardTextIcon size={48} />}
+            title="Select a facility"
+            description="Select a facility to view its GHG Statements."
+          />
+          <LinkedGhgStatementWithoutFacility canManage={canManage} />
+        </>
       ) : (
         <ListBody facilityId={facilityId} canManage={canManage} />
       )}
@@ -365,16 +367,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
   // only a link from elsewhere waits for the detail read to learn its facility.
   const linkedInList = !!statementId && !!query.data?.some((s) => s.statement.id === statementId);
   const lookupEnabled = !!statementId && !linkedInList && !query.isLoading;
-  const linkedStatement = useGhgStatementState(statementId ?? "", lookupEnabled);
-  const linkedRecord = useLinkedRecordFacility(lookupEnabled ? linkedStatement.data?.statement : undefined, linkedStatement.isLoading);
-  const linkedFacilityReady = linkedRecord.ready;
-  useEffect(() => {
-    // A failed refresh of a statement already shown keeps its sheet; only one that never loaded closes.
-    if (lookupEnabled && !linkedStatement.data && (linkedStatement.isError || linkedStatement.isSuccess)) {
-      toast.error("Linked GHG Statement could not be opened");
-      void setStatementId(null);
-    }
-  }, [lookupEnabled, linkedStatement.isError, linkedStatement.isSuccess, linkedStatement.data, setStatementId, toast]);
+  const { linkedFacilityReady, linkedState, readOnly: linkedReadOnly, timeZone: linkedTimeZone } = useLinkedGhgStatement(statementId, lookupEnabled, setStatementId);
 
   const isProduction = summaryQuery.data?.isProduction ?? false;
   const externalProjectId =
@@ -442,9 +435,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
   const selectedInList = statementId && (linkedInList || linkedFacilityReady)
     ? statements.find((s) => s.statement.id === statementId)
     : undefined;
-  // A link into an archived facility is not on this list: open it read only from the linked read.
-  const linkedState = lookupEnabled && linkedFacilityReady ? linkedStatement.data : undefined;
-  const sheetReadOnly = selectedInList ? undefined : linkedRecordReadOnly(linkedRecord, linkedState?.statement, "GHG Statement");
+  const sheetReadOnly = selectedInList ? undefined : linkedReadOnly;
   const selected: GhgStatementSheetItem | undefined = selectedInList ?? (sheetReadOnly && linkedState ? linkedState : undefined);
 
   return (
@@ -557,7 +548,7 @@ function ListBody({ facilityId, canManage }: { facilityId: string; canManage: bo
           isProduction={isProduction}
           canManageReports={canManage}
           readOnly={sheetReadOnly}
-          timeZone={linkedRecord.readOnly?.reason === "archived" ? linkedRecord.readOnly.timezone : undefined}
+          timeZone={linkedTimeZone}
           open
           onClose={() => setStatementId(null)}
         />
