@@ -40,13 +40,15 @@ test.describe("Settings, Profile", () => {
       // The sidebar's user row follows without a reload.
       await expect(page.locator("aside").getByText(NEW_NAME)).toBeVisible();
 
-      await page.getByLabel("Current password").fill("not-the-password");
+      // The Email form has its own "Current password" (#1576); this is the Password form's.
+      const passwordFormCurrent = page.locator("#currentPassword");
+      await passwordFormCurrent.fill("not-the-password");
       await page.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD);
       await page.getByLabel("Confirm new password").fill(NEW_PASSWORD);
       await page.getByRole("button", { name: "Change password" }).click();
       await expect(page.getByText("That is not your current password.").first()).toBeVisible();
 
-      await page.getByLabel("Current password").fill(fixture.user.password);
+      await passwordFormCurrent.fill(fixture.user.password);
       await page.getByRole("button", { name: "Change password" }).click();
       await expect(page.getByText("Password changed. Other devices are signed out within 5 minutes.")).toBeVisible();
 

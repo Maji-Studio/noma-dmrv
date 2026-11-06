@@ -1,18 +1,55 @@
+import { SETTINGS_CONNECTED_APPS_HREF, SETTINGS_DEVELOPERS_HREF } from "@/lib/settings/links";
 import { composeEmail } from "./compose-email";
-import { formatDateTimeUtc } from "./format-duration";
+import { formatDateTimeUtc, formatDateUtc } from "./format-duration";
 
-export function passwordChangedEmail(input: { to: string; changedAt: Date; resetUrl: string; appUrl: string }) {
+/** Keep the note short for people with many keys. */
+const MAX_LISTED_API_KEYS = 10;
+
+type ApiKeyLine = { name: string | null; createdAt: Date };
+
+function connectedAppsSentence(appUrl: string, disconnected: boolean | null | undefined): string | null {
+  if (disconnected === null) return null;
+  return disconnected
+    ? "Your connected apps were disconnected. Connect them again when you need them."
+    : `Connected apps could not be disconnected. Disconnect them at ${appUrl}${SETTINGS_CONNECTED_APPS_HREF}.`;
+}
+
+function apiKeySentence(appUrl: string, keys: ApiKeyLine[] | null | undefined): string | null {
+  const developersUrl = `${appUrl}${SETTINGS_DEVELOPERS_HREF}`;
+  if (keys == null) return `Your API keys still work. Review and revoke them at ${developersUrl}.`;
+  if (!keys.length) return null;
+  const listed = keys.slice(0, MAX_LISTED_API_KEYS)
+    .map((key) => `${key.name || "Unnamed API key"} (created ${formatDateUtc(key.createdAt)})`);
+  const more = keys.length - listed.length;
+  const names = `${listed.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
+  return keys.length === 1
+    ? `Your API key ${names} still works. Review or revoke it at ${developersUrl}.`
+    : `Your API keys ${names} still work. Review and revoke them at ${developersUrl}.`;
+}
+
+export function passwordChangedEmail(input: { to: string; changedAt: Date; resetUrl: string; appUrl: string;
+  /** null: there were no connected apps. */
+  connectedAppsDisconnected?: boolean | null;
+  activeApiKeys?: ApiKeyLine[] | null;
+}) {
+  const appsSentence = connectedAppsSentence(input.appUrl, input.connectedAppsDisconnected);
+  const keysSentence = apiKeySentence(input.appUrl, input.activeApiKeys);
+  const note = [appsSentence, keysSentence].filter(Boolean).join(" ");
+  // Only when the email asks nothing else of the reader.
+  const nothingToDo = input.connectedAppsDisconnected !== false && !keysSentence;
   return composeEmail({
     subject: "Your noma password was changed",
     preheader: "If you did not change it, reset your password now.",
     art: "password-changed",
     heading: "Your password was changed",
+    // The reset comes first: the link follows the last body paragraph.
     body: [
       ["The password for ", { strong: input.to }, ` was changed on ${formatDateTimeUtc(input.changedAt)}.`],
       ["If you did not change it, reset your password now."],
     ],
     link: { text: input.resetUrl, url: input.resetUrl },
-    small: "If you made this change, you do not need to do anything.",
+    ...(note ? { note } : {}),
+    ...(nothingToDo ? { small: "If you made this change, you do not need to do anything." } : {}),
     to: input.to,
     reason: "about your noma account.",
     appUrl: input.appUrl,

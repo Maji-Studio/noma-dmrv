@@ -1,3 +1,4 @@
+import { listActiveAccountApiKeys } from "@/data-access/account-api-keys";
 import { randomUUID } from "node:crypto";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import { logger } from "@/lib/log";
@@ -49,12 +50,21 @@ async function currentActor(expectedUserId?: string) {
   }
 }
 
-export async function sendPasswordChangedNotice(recipient: NoticeRecipient): Promise<void> {
+export async function sendPasswordChangedNotice(recipient: NoticeRecipient, connectedAppsDisconnected: boolean | null = false): Promise<void> {
   const appUrl = getEmailAppUrl();
   const resetUrl = `${appUrl}/forgot-password`;
-  await deliverNotice("password-changed", recipient, async () => passwordChangedEmail({
-    to: recipient.email, changedAt: new Date(), resetUrl, appUrl,
-  }), resetUrl);
+  await deliverNotice("password-changed", recipient, async () => {
+    let activeApiKeys: Awaited<ReturnType<typeof listActiveAccountApiKeys>> | null = null;
+    try {
+      activeApiKeys = await listActiveAccountApiKeys(recipient.userId);
+    } catch {
+      logger.warn({ userId: recipient.userId }, "password notice API keys could not be loaded");
+    }
+    return passwordChangedEmail({
+      to: recipient.email, changedAt: new Date(), resetUrl, appUrl,
+      connectedAppsDisconnected, activeApiKeys,
+    });
+  }, resetUrl);
 }
 
 /** Notify the current address when confirmation is sent to the new address. */

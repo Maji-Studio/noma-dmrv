@@ -166,3 +166,18 @@ export async function getOAuthOrganizationSelection(input: { sessionId: string; 
   return { memberships, autoSelectOrganizationId: eligible.length === 1 ? eligible[0].organizationId : null,
     preselectedOrganizationId: recent && eligible.some(member => member.organizationId === recent.organizationId) ? recent.organizationId : null };
 }
+
+/** Trusted password-change/reset hooks supply the authenticated account ID. Returns how many grants it revoked. */
+// org-scope-ok: password security events revoke the user's grants across all organizations.
+export async function revokeUserOAuthGrants(userId: string): Promise<number> {
+  return db.transaction(async tx => {
+    // org-scope-ok: account-wide revocation, independent of the active organization.
+    const grants = await tx.select({ id: oauthGrants.id }).from(oauthGrants)
+      .where(and(eq(oauthGrants.userId, userId), isNull(oauthGrants.revokedAt)))
+      .orderBy(oauthGrants.id).for("update");
+    // Same rule as any application revocation: mark the generation and drop its
+    // consent; plugin token rows stay until purge and no longer resolve.
+    for (const grant of grants) await revokeGeneration(grant.id, "disconnected", tx);
+    return grants.length;
+  });
+}
