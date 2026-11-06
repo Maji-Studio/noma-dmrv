@@ -112,7 +112,7 @@ describe("credit batch page to-dos", () => {
   it("shows the notice and Try again, and no to-do groups or counts, when the read fails", async () => {
     harness.loadTodos.mockResolvedValue({ success: false, error: "boom" });
     renderPage();
-    expect(await screen.findByText("Blocking items could not be checked. Try again to load them.")).toBeTruthy();
+    expect(await screen.findByText("Blocking items could not be checked.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     for (const title of ["Blocking", "Check", "Waiting"]) expect(screen.queryByText(title)).toBeNull();
     expect(screen.queryByText(/produced but not applied yet/)).toBeNull();
@@ -135,7 +135,7 @@ describe("credit batch page to-dos", () => {
     expect(await screen.findByText("No lab Samples")).toBeTruthy();
     harness.loadTodos.mockResolvedValueOnce({ success: false, error: "boom" });
     await client.refetchQueries({ queryKey: certificationKeys.batchTodos("facility-1", "batch-1") });
-    expect(await screen.findByText("Blocking items could not be checked. Try again to load them.")).toBeTruthy();
+    expect(await screen.findByText("Blocking items could not be checked.")).toBeTruthy();
     expect(screen.queryByText("No lab Samples")).toBeNull();
     for (const title of ["Blocking", "Check", "Waiting"]) expect(screen.queryByText(title)).toBeNull();
     expect(screen.queryByText(/produced but not applied yet/)).toBeNull();

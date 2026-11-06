@@ -60,7 +60,7 @@ export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolea
  * The row's dry applied biochar: never the wet figure, never a guess. `null`
  * while the facts load. A batch the facts do not cover leaves the figure out,
  * since it is only a sum. A failed read leaves it out too: the list's Notice
- * above the rows says the read failed and carries Retry, so no row repeats it.
+ * above the rows says the read failed and carries Try again, so no row repeats it.
  */
 export function appliedDryLabel(
   facts: CreditBatchTimelineFacts | undefined,
@@ -115,7 +115,7 @@ function BatchState({
           {view.openTodoCount > 0 && <BlockingCount count={view.openTodoCount} role="img" aria-label={todosLabel(view.openTodoCount)} />}
         </span>
       ) : readinessStatus === "loading" && (
-        // A failed read shows nothing here: the list's Notice says so once, with Retry.
+        // A failed read shows nothing here: the list's Notice says so once, with Try again.
         <Skeleton width={STATE_SKELETON_WIDTH_PX} height={SKELETON_HEIGHT_PX} />
       )}
       <LockChip lock={lock} state={view.state} className="hidden xl:inline-flex" />

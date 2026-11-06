@@ -108,9 +108,9 @@ describe("readinessErrorWithholdsResults", () => {
     expect(readinessErrorWithholdsResults("needs_attention", error)).toBe(true);
   });
 
-  it("directs operators to retry or clear an unevaluable active filter", () => {
+  it("directs operators to clear an unevaluable active filter", () => {
     expect(readinessErrorMessage("ready")).toContain(
-      "clear the data-status filter",
+      "Clear the data-status filter",
     );
   });
 });

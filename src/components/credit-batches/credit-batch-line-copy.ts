@@ -37,7 +37,7 @@ export interface CreditBatchLineCopy {
   info: string | null;
   /** Names the ⓘ for a screen reader; defaults to `CREDIT_BATCH_INFO_LABEL`. */
   infoLabel?: string;
-  /** The check failed: offer Retry. */
+  /** The check failed: offer Try again. */
   retry: boolean;
   busy: boolean;
 }

@@ -52,6 +52,9 @@ export const LOAD_FAILED = "Could not load";
 
 export const TRY_AGAIN_LABEL = "Try again";
 
+/** The bulk button beside per-item Try again buttons, so the two read apart. */
+export const TRY_ALL_AGAIN_LABEL = "Try all again";
+
 /** What a registry record says when the ID noma saved no longer resolves on Isometric. */
 export const NOT_FOUND_ON_ISOMETRIC = "Not found on Isometric";
 

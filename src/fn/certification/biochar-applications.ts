@@ -117,7 +117,7 @@ export async function ensureRemovalBiocharApplications(args: {
       !storage
     ) {
       throw new SafeError(
-        `Application ${intent.applicationCode} could not resolve its registered Production Batch or Storage Location. Retry the Removal submission.`,
+        `Application ${intent.applicationCode} could not resolve its registered Production Batch or Storage Location. Submit the Removal again.`,
       );
     }
     await ensureBiocharApplication({
@@ -164,7 +164,7 @@ async function ensureBiocharApplication(args: {
         currentStorage.externalStorageLocationId !== args.externalStorageLocationId
       ) {
         throw new SafeError(
-          "The Storage Location changed while the Biochar Application was being prepared. Retry the Removal submission.",
+          "The Storage Location changed while the Biochar Application was being prepared. Submit the Removal again.",
         );
       }
       let registration = await getBiocharApplicationRegistration(

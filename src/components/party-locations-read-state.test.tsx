@@ -31,8 +31,8 @@ describe.each(["Customer", "Supplier"] as const)("%s locations read state", (par
     );
 
     expect(html).toContain('role="status"');
-    expect(html).toContain(`${partyLabel} locations unavailable`);
-    expect(html).toContain("Retry");
+    expect(html).toContain(`${partyLabel} locations could not be loaded`);
+    expect(html).toContain("Try again");
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('disabled=""');
   });

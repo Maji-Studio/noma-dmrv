@@ -33,7 +33,7 @@ describe("RemovalDetailSheet sync history contract", () => {
     );
 
     expect(source).toContain("status.canRetry");
-    expect(source).toMatch(/<Button[\s\S]*?>\s*Retry\s*<\/Button>/);
+    expect(source).toMatch(/<Button[\s\S]*?>\s*\{TRY_AGAIN_LABEL\}\s*<\/Button>/);
     expect(source).toMatch(
       /<SourcesPanel[\s\S]*?removalId=\{summary\.removalId\}[\s\S]*?\/>/,
     );

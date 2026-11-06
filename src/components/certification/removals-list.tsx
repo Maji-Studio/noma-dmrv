@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useToast } from "@/components/ui/toast";
 import { ArchivedRemovalSheet, LinkedRemovalWithoutFacility } from "./archived-removal-sheet";
@@ -273,7 +274,7 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
             void summary.retry?.();
           }}
         >
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       )}
     </span>

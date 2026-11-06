@@ -11,7 +11,7 @@ export function isRetryableTransactionError(error: unknown): boolean {
 /** Backoff after a failed attempt; throws the shared concurrent_write_retry error once attempts are exhausted. */
 export function nextRetryDelayOrThrow(attempt: number): number {
   if (attempt === OPERATION_MAX_ATTEMPTS) {
-    throw new DomainError("concurrent_write_retry", "Concurrent changes prevented saving. Retry shortly.", { retryable: true });
+    throw new DomainError("concurrent_write_retry", "Concurrent changes prevented saving. Try again shortly.", { retryable: true });
   }
   return OPERATION_RETRY_MIN_DELAY_MS + Math.floor(
     Math.random() * (OPERATION_RETRY_MAX_DELAY_MS - OPERATION_RETRY_MIN_DELAY_MS + 1),

@@ -176,7 +176,7 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html.match(/On submit/g)).toHaveLength(2);
     expect(html).toContain("3 files linked");
     expect(html).not.toContain(">Mirror<");
-    expect(html).not.toContain(">Retry<");
+    expect(html).not.toContain(">Try again<");
     expect(html).not.toContain("<button");
   });
 

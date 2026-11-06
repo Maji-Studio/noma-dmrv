@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
@@ -183,7 +184,7 @@ function SubmissionStatusSection({
           className="relative self-start"
           onClick={() => void summary.retry?.()}
         >
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       )}
     </DetailSection>

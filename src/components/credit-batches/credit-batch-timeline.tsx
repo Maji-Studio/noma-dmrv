@@ -7,6 +7,7 @@
  * Hover (or focus, or a first tap) on a bar shows its facts; pressing a bar
  * (the second tap on touch) opens the batch page, so each bar is a real link.
  */
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { creditBatchName, creditBatchNameWithCode } from "@/lib/credit-batch-label";
 import { recordHref } from "@/lib/record-links";
 import { useState } from "react";
@@ -226,7 +227,7 @@ export function CreditBatchTimeline({
                 if (factsFailed) void factsQuery.refetch();
               }}
             >
-              Retry
+              {TRY_AGAIN_LABEL}
             </Button>
           }
         >

@@ -1,4 +1,5 @@
 import { recordHref } from "@/lib/record-links";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -208,11 +209,11 @@ export function CreditBatchProductionRunsPreview({
               onClick={onRetry}
             >
               <ArrowsClockwiseIcon size={14} aria-hidden />
-              Retry
+              {TRY_AGAIN_LABEL}
             </Button>
           }
         >
-          Couldn&apos;t load production runs for this window. Try again.
+          Production runs could not be loaded for this window.
         </Notice>
       ) : isLoading ? (
         <span
