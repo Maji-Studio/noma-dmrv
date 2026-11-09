@@ -13,7 +13,6 @@ import { PRODUCT_SECTIONS } from "../../../config.js";
 import "./ask-section.css";
 
 const [RUN, CREDITS, PROOF] = PRODUCT_SECTIONS;
-const REGISTRY_NOTE = "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.";
 const CELLS = [
   {
     id: "bin", who: RUN.label, href: `/product#${RUN.id}`, link: "See how the plant runs",
@@ -53,7 +52,6 @@ const CELLS = [
       </article>
     ))}
   </div>
-  <p class="t-caption ask-note">Illustrative records. {REGISTRY_NOTE}</p>
 </GridFrame>
 <style>
   .oc :global(.oc-phone) { min-height: 0; }
