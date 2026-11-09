@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { loadDraftRemovalCarriedEntries } from "./removal-draft-carried-entries";
-import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
+import { loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
 import { loadFacilityEmissionEntryCarry } from "./emission-entry-carry";
 import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 

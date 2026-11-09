@@ -468,3 +468,18 @@ Parquet and reactor MeasurementSamples are outside the approved submission route
 Do not use generated operation counts as a freshness signal. A green check
 means only that the checked contract still matches its source, not that an
 unimplemented protocol requirement has been satisfied.
+
+## Submission execution and crash recovery
+
+The progress route registers its running submission promise with `waitUntil`,
+so closing the browser stops progress delivery but keeps server work alive up to
+its 600-second deadline, within Pro Fluid compute's allowance and the submission
+lock TTL. Before a claimed Removal or GHG Statement draft begins registry writes,
+an organization-, draft-status- and exact-attempt-lock-guarded write persists `externalMutation: "possible"`, preserving `"confirmed"` if present.
+This does not mark the live attempt interrupted or bypass its lock TTL. A crash
+therefore leaves uncertainty durable: retry preserves the saved Removal snapshot
+and versioned supplier references for reconciliation. A proven mutation-free
+failure clears the marker on rejection and releases production claims; successful
+finalization clears attempt metadata. Possible or confirmed failures retain their
+marker and reservations. Source mirroring before the submission draft exists
+continues to use its separate durable mirror ledger.

@@ -6,15 +6,15 @@ import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, t
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import type { IsometricComponentBlueprint } from "@/lib/isometric";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
-import { resolveRemovalTemplate } from "./resolve-removal-template";
-import { prepareRemovalSubmission } from "./removal-submission-prepare";
-import { resolveTemplateInputs } from "./removal-template-inputs";
-import { buildSubmissionWarnings } from "./submission-warnings";
-import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
-import type { TransportLegsByCategory } from "./shared";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
+import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
+import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
+import { resolveTemplateInputs } from "@/lib/certification/removal-template-inputs";
+import { buildSubmissionWarnings } from "@/lib/certification/submission-warnings";
+import { deriveRequiredTransportCategories } from "@/lib/certification/certify-transport-coverage";
+import type { TransportLegsByCategory } from "@/lib/certification/shared";
 
-vi.mock("./durability-measurement-samples", () => ({
+vi.mock("@/lib/certification/durability-measurement-samples", () => ({
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED: true, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE: "Unavailable.",
 }));
 

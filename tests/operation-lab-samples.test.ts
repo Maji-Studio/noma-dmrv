@@ -17,7 +17,7 @@ import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "@
 import { generateNextCodes } from "@/data-access/code-generator";
 import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createTransportLeg } from "@/data-access/transport-legs";
-import { loadDurabilityBatchData } from "@/fn/certification/durability-readiness";
+import { loadDurabilityBatchData } from "@/lib/certification/durability-readiness";
 import { deriveSampleRatios } from "@/lib/calculations/sample-ratios";
 import { deleteLabSample, recordLabSample, updateLabSample } from "@/lib/operations/lab-samples";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";

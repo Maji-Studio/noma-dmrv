@@ -39,7 +39,7 @@ import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
-} from "./shared";
+} from "@/lib/certification/shared";
 import { flushStagedSyncEvents, ghgStatementSyncEvent } from "./ghg-statement-last-synced";
 import type { AppendSyncEventInput } from "@/data-access/certifier-sync-events";
 import { withStagedSyncEvents, type SyncEventStage } from "./sync-event-stage";

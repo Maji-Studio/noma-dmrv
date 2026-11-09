@@ -20,7 +20,7 @@ import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples"
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import {
   loadCertifyContextForCreditBatchForUser,
-} from "@/fn/certification/certify-context-core";
+} from "@/lib/certification/certify-context-core";
 import {
   mockNormalizedLineageFacts,
 } from "./fixtures/certify-context";

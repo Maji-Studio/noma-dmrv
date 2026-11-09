@@ -37,7 +37,7 @@ vi.mock("@/lib/auth/server", () => ({
     isPlatformAdmin: false,
   })),
 }));
-vi.mock("@/fn/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: vi.fn(async () => undefined) }));
+vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: vi.fn(async () => undefined) }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
@@ -134,7 +134,7 @@ import { mirrorDocumentToSource } from "@/fn/certification/sources";
 import {
   loadCandidateDocumentsForRemovalForUser,
   type CandidateSourceDocument,
-} from "@/fn/certification/source-candidates";
+} from "@/lib/certification/source-candidates";
 import {
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSourceForUser,

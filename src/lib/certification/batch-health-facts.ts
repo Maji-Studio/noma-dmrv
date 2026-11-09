@@ -13,7 +13,7 @@
  * the wizard only ever health-checks ungrouped batches.
  */
 
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { sampleDocumentWarningKeys, sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";

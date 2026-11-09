@@ -95,7 +95,7 @@ describe("binding tuple literals", () => {
   });
 
   it("fails on a new pair in a known-mirror file", () => {
-    const file = "src/fn/certification/submission-warnings.ts";
+    const file = "src/lib/certification/submission-warnings.ts";
     const text = `${readFileSync(join(ROOT, file), "utf8")}\nconst x = ["grid_electricity_use", "electricity_use"];`;
     expect(mirroredPairs(text)).not.toEqual(KNOWN_MIRRORS[file]);
   });

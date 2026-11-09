@@ -1,4 +1,5 @@
 import { insertRemovalFixture } from "./helpers/removal-fixture";
+import { getMetadataValue } from "@/lib/certification/submission-metadata";
 /**
  * DB-backed coverage for the pre-POST whole-batch production claim reservation.
  * Competing Removal submissions must serialize on the credit-batch row, while
@@ -7,7 +8,7 @@ import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { markSubmissionSubmitted } from "@/data-access/certification";
-import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
+import { markSubmissionAttemptStarted, markSubmissionInterrupted } from "@/data-access/certification-submissions";
 import { deleteDocumentApp } from "@/lib/operations/documents";
 import { runOperationInProcess } from "@/lib/operations/runner";
 const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
@@ -443,4 +444,53 @@ it("transfers only a mutation-free reviewed predecessor to its linked version of
   expect(prior.status).toBe("draft");
 });
 
+});
+
+
+describe("attempt-started marker guards and terminal cleanup", () => {
+  it("guards org, draft status and exact lock, preserves confirmed, and leaves the TTL bypass closed", async () => {
+    const fixture = await createFixture();
+    const row = await insertDraft(fixture.removalAId, 1);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const read = async () => (await db.select().from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, row.id)))[0];
+    expect(await markSubmissionAttemptStarted({ ...ctx, organizationId: "another-org" }, row.id, row.lockedAt)).toBe(false);
+    expect(await markSubmissionAttemptStarted(ctx, row.id, new Date(0))).toBe(false);
+    expect(getMetadataValue((await read()).metadata, "externalMutation")).toBeNull();
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(true);
+    expect(await read()).toMatchObject({ lockedAt: row.lockedAt, metadata: { externalMutation: "possible" } });
+    expect(getMetadataValue((await read()).metadata, "lastAttemptOutcome")).toBeNull();
+    await db.update(certificationSubmissions).set({ metadata: { externalMutation: "confirmed" } })
+      .where(eq(certificationSubmissions.id, row.id));
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(true);
+    expect(getMetadataValue((await read()).metadata, "externalMutation")).toBe("confirmed");
+    await db.update(certificationSubmissions).set({ status: "submitted" })
+      .where(eq(certificationSubmissions.id, row.id));
+    expect(await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt)).toBe(false);
+  });
+
+  it.each(["possible", "confirmed"] as const)("only releases a proven mutation-free attempt's possible marker (%s)", async (mutation) => {
+    const fixture = await createFixture();
+    const row = await insertDraft(fixture.removalAId, 1);
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    await reserveProductionEmissionsClaims(ctx, {
+      removalId: fixture.removalAId, submissionId: row.id, creditBatchIds: [fixture.batchId], now: row.lockedAt,
+    });
+    await markSubmissionAttemptStarted(ctx, row.id, row.lockedAt);
+    if (mutation === "confirmed") {
+      await db.update(certificationSubmissions).set({ metadata: { externalMutation: mutation } })
+        .where(eq(certificationSubmissions.id, row.id));
+    }
+    const reject = (expectedLockedAt: Date, mutationFreeAttempt?: true) => rejectSubmissionAndReleaseProductionClaims(ctx, {
+      submissionId: row.id, expectedLockedAt, mutationFreeAttempt, errorMessage: "Definitive refusal",
+    });
+    await reject(row.lockedAt);
+    await reject(new Date(0), true);
+    expect(await readReservation(fixture.batchId)).toBe(row.id);
+    await reject(row.lockedAt, true);
+    const [saved] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, row.id));
+    expect(saved.status).toBe(mutation === "possible" ? "rejected" : "draft");
+    expect(getMetadataValue(saved.metadata, "externalMutation")).toBe(mutation === "possible" ? null : "confirmed");
+    expect(await readReservation(fixture.batchId)).toBe(mutation === "possible" ? null : row.id);
+  });
 });

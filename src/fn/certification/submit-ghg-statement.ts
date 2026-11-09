@@ -70,7 +70,7 @@ import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
-} from "./shared";
+} from "@/lib/certification/shared";
 import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
 import { ghgStatementSyncEvent } from "./ghg-statement-last-synced";
 

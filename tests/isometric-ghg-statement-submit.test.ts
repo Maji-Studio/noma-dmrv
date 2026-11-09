@@ -31,7 +31,8 @@ vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
 }));
 
-import { makeTestOrgContext } from "./helpers/test-org";
+import { makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { clearAttemptMetadataFake, markAttemptStartedFake } from "./fixtures/submission-attempt-marker";
 
 import type {
   CertificationSubmissionRow,
@@ -54,7 +55,7 @@ import type { GhgStatement } from "@/lib/isometric";
 // ---------------------------------------------------------------------------
 
 // Keep the statement guard real; content comparison has its own agreement tests.
-vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+vi.mock("@/lib/certification/removal-content-comparison-core", () => ({
   compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
     state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
   })),
@@ -289,6 +290,7 @@ function newLedgerRow(
 ): CertificationSubmissionRow {
   return {
     id: `sub-${nextLedgerRowId++}`,
+    organizationId: TEST_ORG_ID,
     provider: input.provider,
     submissionType: input.submissionType,
     localEntityType: input.localEntityType,
@@ -317,6 +319,9 @@ beforeEach(() => {
   // tests here run as the same synthetic user, so clear it between tests.
   __resetRateLimitForTests();
   storedLedger = [];
+  vi.mocked(ledgerClaim.markSubmissionAttemptStarted).mockImplementation(
+    async (ctx, id, lockedAt) => markAttemptStartedFake(storedLedger, ctx.organizationId, id, lockedAt),
+  );
   storedStatements = [makeStatementRow()];
   nextLedgerRowId = 1;
 
@@ -389,6 +394,7 @@ beforeEach(() => {
     async (_userId, id, args) => {
       const row = storedLedger.find((r) => r.id === id);
       if (row) {
+        clearAttemptMetadataFake(row);
         row.status = "submitted";
         row.externalId = args.externalId;
         row.submittedAt = new Date();
@@ -408,6 +414,7 @@ beforeEach(() => {
     async (_userId, id, args) => {
       const row = storedLedger.find((candidate) => candidate.id === id);
       if (row) {
+        clearAttemptMetadataFake(row);
         row.status = "rejected";
         row.lockedAt = null;
         row.metadata = {

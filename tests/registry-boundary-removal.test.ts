@@ -65,7 +65,7 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const { createFakeClientModule } = await import("./fixtures/fake-registry");
   return createFakeClientModule(actual);
 });
-vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/lib/certification/certify-context-core");
 // Pass-through unless a test sets a remote GHG Statement (correction window).
 vi.mock("@/lib/isometric/ghg-statements", async (importOriginal) => {
   const actual =
@@ -73,10 +73,10 @@ vi.mock("@/lib/isometric/ghg-statements", async (importOriginal) => {
   return { ...actual, getGhgStatement: vi.fn(actual.getGhgStatement) };
 });
 vi.mock(
-  "@/fn/certification/biochar-application-intents",
+  "@/lib/certification/biochar-application-intents",
   async (importOriginal) => ({
     ...(await importOriginal<
-      typeof import("@/fn/certification/biochar-application-intents")
+      typeof import("@/lib/certification/biochar-application-intents")
     >()),
     compileBiocharApplicationIntents: vi.fn(async () => []),
   }),
@@ -84,9 +84,9 @@ vi.mock(
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));
-vi.mock("@/fn/certification/source-candidates", async (importOriginal) => ({
+vi.mock("@/lib/certification/source-candidates", async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import("@/fn/certification/source-candidates")
+    typeof import("@/lib/certification/source-candidates")
   >()),
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
     "doc-boundary-1",
@@ -121,8 +121,8 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import { getGhgStatement } from "@/lib/isometric/ghg-statements";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
-import * as certifyContext from "@/fn/certification/certify-context-core";
-import * as sources from "@/fn/certification/source-candidates";
+import * as certifyContext from "@/lib/certification/certify-context-core";
+import * as sources from "@/lib/certification/source-candidates";
 import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { SafeError } from "@/lib/errors";

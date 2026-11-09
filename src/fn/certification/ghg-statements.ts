@@ -1,5 +1,6 @@
 "use server";
 
+import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
@@ -78,7 +79,7 @@ import {
   ghgStatementLookup,
   performRegistryCreate,
   type RegistryExternalMutation,
-} from "./registry-create";
+} from "@/lib/certification/registry-create";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
@@ -98,8 +99,8 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
   submitRateLimit,
-} from "./shared";
-import { readRemovalReportingWindow } from "./removal-reporting-window";
+} from "@/lib/certification/shared";
+import { readRemovalReportingWindow } from "@/lib/certification/removal-reporting-window";
 import {
   GHG_STATEMENT_SYNC_OPERATION,
   getGhgStatementLastSyncedAt,
@@ -527,6 +528,7 @@ async function createGhgStatementRemote(args: {
   // the failure instead of a bare in-progress row until the lock TTL expires.
   let externalMutation: RegistryExternalMutation | null = null;
   try {
+    await startSubmissionRegistryAttempt(orgCtx, row);
     const { externalId, source } = await performRegistryCreate({
       orgCtx,
       entityType: GHG_STATEMENT_ENTITY_TYPE,

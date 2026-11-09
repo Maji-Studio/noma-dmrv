@@ -1,6 +1,10 @@
 import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
 import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import {
+  REMOVAL_TEMPLATE_BLOCKERS,
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlocker,
+} from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
  * "can this removal be submitted, and if not why?" surface: the Overview work
@@ -26,7 +30,6 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META, EMISSION_ENTRIES_TO_CHECK_LABEL, NO_REMOVAL_TEMPLATE_LABEL, templateLinesUnmetLabel } from "./requirement-labels";
-import { removalTemplateBlockerDestination, type RemovalTemplateBlocker } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
