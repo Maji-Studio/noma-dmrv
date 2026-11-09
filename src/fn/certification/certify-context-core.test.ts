@@ -1,37 +1,37 @@
-vi.mock("./removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
+vi.mock("@/lib/certification/removal-correction-core", () => ({ loadRemovalEntryCorrection: vi.fn(async () => ({ windowOpen: false, correctionNeeded: false, changedComponentIds: [], message: null })) }));
 import { beforeEach, expect, it, vi } from "vitest";
-import { collectFutureDatedMeasurements } from "./future-dated-measurements";
+import { collectFutureDatedMeasurements } from "@/lib/certification/future-dated-measurements";
 
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
-import type { FacilityCertifierFacts } from "./facility-certifier-facts";
-import type { RemovalScope } from "./removal-scope";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
+import type { RemovalScope } from "@/lib/certification/removal-scope";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
-import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
-import { loadFacilityCertifierFacts } from "./facility-certifier-facts";
-import { resolveScopeForRemoval } from "./removal-scope";
-import { buildRemovalContext, loadRemovalSubmissionContext } from "./certify-context-core";
+import { deriveRequiredTransportCategories } from "@/lib/certification/certify-transport-coverage";
+import { loadFacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
+import { resolveScopeForRemoval } from "@/lib/certification/removal-scope";
+import { buildRemovalContext, loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 
-vi.mock("./facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn() }));
-vi.mock("./removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
+vi.mock("@/lib/certification/facility-certifier-facts", () => ({ loadFacilityCertifierFacts: vi.fn() }));
+vi.mock("@/lib/certification/removal-scope", () => ({ resolveScopeForRemoval: vi.fn() }));
 vi.mock("@/data-access/biochar-delivery-transport", () => ({ loadBiocharDeliveryTransportLegs: vi.fn() }));
 vi.mock("@/data-access/transport-legs", () => ({ getTransportLegsWithEvidenceForEntities: vi.fn() }));
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/certification-submissions", () => ({ getLatestSubmission: vi.fn(async () => null), hasFinalizedSubmission: vi.fn(async () => false) }));
 vi.mock("@/data-access/production-runs", () => ({ getProductionRunsForCertification: vi.fn(async () => []) }));
-vi.mock("./linked-ghg-statement-status", () => ({ loadLinkedGhgStatementStatus: vi.fn(async () => null) }));
-vi.mock("./evidence-mirror-summary", () => ({ loadEvidenceMirrorSummaryForScope: vi.fn(async () => []) }));
-vi.mock("./durability-readiness", () => ({ loadDurabilityBatchData: vi.fn(async () => ({ batchesWithSamples: [], blockers: [], warnings: [], blockersByBatchId: {} })) }));
-vi.mock("./certify-entity-readiness", () => ({ buildCertifyEntityReadiness: vi.fn(async () => ({ gaps: [], warnings: [], issues: [] })) }));
-vi.mock("./certify-lineage-blockers", () => ({ buildSubmissionLineageBlockers: vi.fn(() => []) }));
-vi.mock("./future-dated-measurements", () => ({ collectFutureDatedMeasurements: vi.fn(() => []) }));
+vi.mock("@/lib/certification/linked-ghg-statement-status", () => ({ loadLinkedGhgStatementStatus: vi.fn(async () => null) }));
+vi.mock("@/lib/certification/evidence-mirror-summary", () => ({ loadEvidenceMirrorSummaryForScope: vi.fn(async () => []) }));
+vi.mock("@/lib/certification/durability-readiness", () => ({ loadDurabilityBatchData: vi.fn(async () => ({ batchesWithSamples: [], blockers: [], warnings: [], blockersByBatchId: {} })) }));
+vi.mock("@/lib/certification/certify-entity-readiness", () => ({ buildCertifyEntityReadiness: vi.fn(async () => ({ gaps: [], warnings: [], issues: [] })) }));
+vi.mock("@/lib/certification/certify-lineage-blockers", () => ({ buildSubmissionLineageBlockers: vi.fn(() => []) }));
+vi.mock("@/lib/certification/future-dated-measurements", () => ({ collectFutureDatedMeasurements: vi.fn(() => []) }));
 vi.mock("@/lib/certification/production-readiness-from-lineage", () => ({ productionReadinessGapForScope: vi.fn(() => null) }));
 vi.mock("@/lib/certification/mass-accounting", () => ({ buildMassAccounting: vi.fn(() => ({ attributionByRunId: new Map(), runSummary: {} })), EMPTY_RUN_SUMMARY: {} }));
-vi.mock("./member-credit-batch", () => ({ toMemberCreditBatchView: vi.fn((batch) => batch) }));
-vi.mock("./production-claim-transport-scope", () => ({
+vi.mock("@/lib/certification/member-credit-batch", () => ({ toMemberCreditBatchView: vi.fn((batch) => batch) }));
+vi.mock("@/lib/certification/production-claim-transport-scope", () => ({
   collectProductionClaimAwareRequiredTransportCategories: vi.fn((input) => input.requiredTransportCategories),
   collectProductionClaimAwareTransportEntityIds: vi.fn(() => ({ feedstockIds: ["feedstock-1"], biocharProductIds: ["product-1"], sampleIds: [] })),
 }));
@@ -97,20 +97,20 @@ vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/utils", async (original) => ({ ...await original<typeof import("@/data-access/utils")>(), requireOrgFacility: vi.fn() }));
 vi.mock("@/data-access/credit-batch-missing-production-runs", () => ({ loadCreditBatchesMissingProductionRuns: vi.fn(async () => new Map()) }));
 vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
-vi.mock("./batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
+vi.mock("@/lib/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));
 vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(async () => []), listRemovalAttemptEvents: vi.fn(async () => []) }));
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
 vi.mock("@/data-access/emission-zeros", () => ({ isRemovalZeroEditable: vi.fn(async () => true) }));
-vi.mock("../../fn/certification/biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
-vi.mock("../../fn/with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
+vi.mock("@/fn/certification/biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
+vi.mock("@/fn/with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
-import { loadBatchEmissionContext } from "./batch-emission-context";
-import { loadCertificationOverview } from "../../fn/certification/overview";
-import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
+import { loadBatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import { loadCertificationOverview } from "@/fn/certification/overview";
+import { loadRemovalEmptyLines } from "@/lib/certification/removal-empty-lines-core";
 
 it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {
   const template = structuredClone(fixture) as GhgEntryTemplate;

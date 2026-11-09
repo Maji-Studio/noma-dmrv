@@ -1,4 +1,3 @@
-import type { CandidateLineageEntity, CandidateDocument } from "@/fn/certification/source-candidates";
 import { includesProductionInputs } from "./production-claim-policy";
 import { EMISSION_ENTRY_FILE_UNAVAILABLE, formatEmissionEntryMessageLabel } from "@/lib/certification/emission-entry-messages";
 import { withEmissionEntryEvidenceDiagnostics } from "./emission-entry-evidence-diagnostics";
@@ -34,6 +33,33 @@ import {
 } from "@/lib/certification/removal-source-bindings";
 import { SafeError } from "@/lib/errors";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
+
+export type CandidateLineageEntityType =
+  | "application"
+  | "delivery"
+  | "feedstock"
+  | "credit_batch"
+  | "sample"
+  | "emission_entry";
+
+export interface CandidateLineageEntity {
+  entityType: CandidateLineageEntityType;
+  entityId: string;
+  entityLabel: string;
+}
+
+export interface CandidateDocument {
+  includedInSubmission?: boolean;
+  document: DocumentRow;
+  lineageEntity: CandidateLineageEntity;
+  binding: ClassifiedRemovalSource | null;
+  biocharApplicationId?: string | null;
+  mirror: {
+    externalDocumentId: string;
+    isPublic: boolean;
+    mirroredAt: Date;
+  } | null;
+}
 
 export interface CandidateDocumentsForRemoval {
   evidenceRefreshSubmissionId?: string | null;

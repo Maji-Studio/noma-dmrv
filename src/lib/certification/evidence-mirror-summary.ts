@@ -10,7 +10,7 @@ import { getStorageProvider } from "@/lib/storage";
 import { SOURCES_MAX_BYTES } from "@/schemas/certification-sources";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ISOMETRIC_PROVIDER } from "./shared";
-import type { CandidateLineageEntityType } from "@/fn/certification/source-candidates";
+import type { CandidateLineageEntityType } from "@/lib/certification/source-candidates";
 import { sourceCandidateEligibility, type CandidateSourceDocument } from "./source-candidates";
 import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 

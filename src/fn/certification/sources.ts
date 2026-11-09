@@ -85,7 +85,7 @@ export async function mirrorDocumentToSource(
 }
 
 export type { MirrorResult } from "./sources-mirror-core";
-export type { CandidateDocument, CandidateLineageEntity } from "./source-candidates";
+export type { CandidateDocument, CandidateLineageEntity } from "@/lib/certification/source-candidates";
 export type {
   CandidateDocumentsForRemoval,
   CandidateSourceDocument,

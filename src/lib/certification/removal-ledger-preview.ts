@@ -1,4 +1,3 @@
-import type { RemovalLedgerInput, RemovalLedgerClaim, RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { type RemovalRunSummary } from "@/lib/certification/mass-accounting";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -13,6 +12,38 @@ import {
   includesProductionInputs,
   productionClaimContribution,
 } from "./production-claim-policy";
+
+export interface RemovalLedgerInput {
+  id: string;
+  component: string;
+  input: string;
+  magnitude: number | null;
+  unit: string;
+  /** Why a required input has no magnitude. Null whenever `magnitude` is set. */
+  missingReason: string | null;
+}
+
+export interface RemovalLedgerClaim {
+  creditBatchId: string;
+  creditBatchCode: string;
+  claimingRemovalId: string | null;
+  claimingRemovalCode: string | null;
+  contribution: "production-and-delivery" | "delivery-only";
+}
+
+export interface RemovalLedgerPreview {
+  inputs: RemovalLedgerInput[];
+  inputsUnavailable: boolean;
+  claims: RemovalLedgerClaim[];
+  creditBatches: Array<{ id: string; code: string }>;
+  productionRuns: Array<{ id: string; code: string | null }>;
+  applications: Array<{
+    id: string;
+    code: string;
+    deliveryCode: string;
+    creditBatchIds: string[];
+  }>;
+}
 
 /** A required transport category with no legs recorded. */
 export const NO_LEGS_RECORDED = "No legs recorded";

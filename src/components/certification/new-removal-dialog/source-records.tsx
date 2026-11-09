@@ -7,7 +7,7 @@
 
 import { recordHref } from "@/lib/record-links";
 import { Accordion } from "@/components/ui/accordion";
-import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
+import type { RemovalLedgerPreview } from "@/lib/certification/removal-ledger-preview";
 import { traceabilityApplicationHref } from "@/lib/certification/links";
 import { countLabel } from "./submission-facts";
 import { NewTabLink } from "./link-label";

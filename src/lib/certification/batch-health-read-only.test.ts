@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
 import { buildDurabilityBatchGates } from "@/lib/certification/durability-readiness";
 import { buildSubmissionLineageBlockers } from "@/lib/certification/certify-lineage-blockers";
 import { buildCreditBatchOpenItems, openItemText } from "@/lib/credit-batches/open-items";

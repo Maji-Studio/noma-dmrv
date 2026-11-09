@@ -27,9 +27,9 @@ Status terms:
 
 | Method and path | Use | Current call site |
 |---|---|---|
-| `GET /projects` | Project picker, mapping validation, submission context | `src/lib/isometric/projects.ts` → `listProjects`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
-| `GET /projects/{project_id}/ghg_entry_templates` | Template picker and live submission compilation | `src/lib/isometric/projects.ts` → `listGhgEntryTemplates`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
-| `GET /component_blueprints` | Validate live template inputs and units | `src/lib/isometric/projects.ts` → `listComponentBlueprints`; consumer in `src/lib/certification/certify-context-core.ts` |
+| `GET /projects` | Project picker, mapping validation, submission context | `src/lib/isometric/projects.ts` → `listProjects`; consumers in `src/fn/certification/facility-mapping.ts` and `src/lib/certification/facility-certifier-facts.ts` (loaded by `src/lib/certification/certify-context-core.ts`) |
+| `GET /projects/{project_id}/ghg_entry_templates` | Template picker and live submission compilation | `src/lib/isometric/projects.ts` → `listGhgEntryTemplates`; consumers in `src/fn/certification/facility-mapping.ts` and `src/lib/certification/facility-certifier-facts.ts` (loaded by `src/lib/certification/certify-context-core.ts`) |
+| `GET /component_blueprints` | Validate live template inputs and units | `src/lib/isometric/projects.ts` → `listComponentBlueprints`; consumer in `src/lib/certification/facility-certifier-facts.ts` (loaded by `src/lib/certification/certify-context-core.ts`) |
 | `GET /feedstock_types` | Read-only registry catalog in the local feedstock-type workflow | `src/lib/isometric/feedstock-types.ts`; consumer in `src/fn/certification/feedstock-types.ts` |
 
 ## Removal/GHG Entry and Datapoint operations

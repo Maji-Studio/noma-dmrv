@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
 import { deriveBatchHealth } from "./batch-health";
 import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
 import { batchHealthFixLinkFor } from "./batch-health-links";
