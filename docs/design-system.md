@@ -589,7 +589,7 @@ Always use `Button`; never a raw `<button>` with manual styling.
 - **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
   full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
   layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw
-  `<button>` with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`). "Show all N"
+  `<button>` with the focus ring and a 44px row (`min-h-44`). "Show all N"
   is not an exception: it is `TextAction` (`ui/text-action.tsx`), a `noOutline` Button with
   a 44px hit area and its label flush with the text above, mono uppercase like every text
   button ("Show the top N" in the energy record list too).

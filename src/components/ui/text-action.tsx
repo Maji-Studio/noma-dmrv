@@ -16,7 +16,8 @@ const TEXT_ACTION_BLEED = "-ml-16";
  * same `noOutline` Button as "Back to summary", its label flush with the
  * content above and a 44px hit area at every width. Put it in a flex column.
  */
-export function TextAction({ className, ...props }: React.ComponentProps<typeof Button>) {
+/** `size` and `variant` are fixed: the bleed above is tied to the default size's padding. */
+export function TextAction({ className, ...props }: Omit<React.ComponentProps<typeof Button>, "size" | "variant">) {
   return (
     <div className={cn("self-start", TEXT_ACTION_BLEED)}>
       <Button variant="noOutline" className={cn(INLINE_HIT_AREA, className)} {...props} />
