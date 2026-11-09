@@ -78,3 +78,11 @@ describe("projectBatchRecords with split shares", () => {
     expect(feedstock[0]).toMatchObject({ massKg: 1000, basis: "wet" });
   });
 });
+
+describe("projectBatchRecords delivery day", () => {
+  it("uses the facility's calendar day for a delivery instant", () => {
+    const chain = { ...CHAIN, rollForwards: [], lineages: [{ chain: { application: { id: "ap", code: "AP", applicationDate: "2026-03-01", fieldIdentifier: null, biocharAppliedDryTons: 1 }, delivery: { id: "dl", code: "DL", deliveryDate: new Date("2026-02-19T21:30:00Z"), massDryKg: 1, deliveredWetMassKg: null } } }] } as unknown as CreditBatchChainData;
+    expect(projectBatchRecords(chain, "Africa/Dar_es_Salaam").deliveries[0].date).toBe("2026-02-20");
+    expect(projectBatchRecords(chain, "UTC").deliveries[0].date).toBe("2026-02-19");
+  });
+});

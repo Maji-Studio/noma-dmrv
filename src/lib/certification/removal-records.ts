@@ -6,6 +6,7 @@
  */
 import type { CreditBatchChainData } from "@/data-access/chain-of-custody-batch";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { formatFacilityDate, UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 
 export type RemovalRecordKind = "productionRun" | "application" | "delivery" | "feedstock";
 
@@ -46,7 +47,8 @@ function unique(records: RemovalRecord[]): RemovalRecord[] {
   return [...new Map(records.map((record) => [record.id, record])).values()].sort(byDate);
 }
 
-export function projectBatchRecords(chain: CreditBatchChainData): RemovalBatchRecords {
+/** A delivery is an instant, so its day is the facility's calendar day (as the delivery's own page reads it). */
+export function projectBatchRecords(chain: CreditBatchChainData, timeZone: string = UNKNOWN_FACILITY_TIMEZONE): RemovalBatchRecords {
   const productionRuns: RemovalRecord[] = [];
   const feedstock: RemovalRecord[] = [];
   // One intake can feed several runs: its mass is the sum of the distinct runs' draws.
@@ -105,7 +107,7 @@ export function projectBatchRecords(chain: CreditBatchChainData): RemovalBatchRe
       id: delivery.id,
       code: delivery.code,
       kind: "delivery",
-      date: day(delivery.deliveryDate),
+      date: delivery.deliveryDate ? formatFacilityDate(new Date(delivery.deliveryDate), timeZone) : "",
       place: application.fieldIdentifier,
       massKg: delivery.massDryKg ?? delivery.deliveredWetMassKg ?? null,
       basis: delivery.massDryKg != null ? "dry" : "wet",
