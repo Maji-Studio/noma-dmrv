@@ -4,8 +4,23 @@
  */
 import { Suspense } from "react";
 import { SetPasswordForm } from "@/components/auth";
+import { getInvitationBootstrapState } from "@/fn/invitation-bootstrap";
 
-export default function SetPasswordPage() {
+export default async function SetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invitation?: string | string[] }>;
+}) {
+  const { invitation: invitationParam } = await searchParams;
+  const invitationId = typeof invitationParam === "string" ? invitationParam : null;
+  // An invalid or expired invitation falls back to the plain flow.
+  const state = invitationId
+    ? await getInvitationBootstrapState({ invitationId })
+    : null;
+  const invitation = state?.success
+    ? { id: state.data.invitationId, email: state.data.email }
+    : undefined;
+
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
@@ -20,7 +35,7 @@ export default function SetPasswordPage() {
             </div>
           }
         >
-          <SetPasswordForm />
+          <SetPasswordForm invitation={invitation} />
         </Suspense>
       </div>
     </div>

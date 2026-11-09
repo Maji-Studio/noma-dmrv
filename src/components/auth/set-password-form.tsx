@@ -15,16 +15,28 @@ import {
   ServerError,
 } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
+import { AuthPrimaryLink } from "./auth-result";
 
-function SetPasswordFormContent() {
+export interface SetPasswordInvitation {
+  id: string;
+  email: string;
+}
+
+function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvitation }) {
   const [success, setSuccess] = useState(false);
+  // Stays busy through the sign-in and the navigation to the accept page.
+  const [joining, setJoining] = useState(false);
   const [serverError, setServerError] = useState("");
 
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { resetPassword, getCurrentUserEmail } = useAuth();
+  const { resetPassword, getCurrentUserEmail, signIn } = useAuth();
 
   const token = searchParams.get("token");
+  const linkFailed = Boolean(searchParams.get("error"));
+  const acceptPath = invitation
+    ? `/accept-invitation/${encodeURIComponent(invitation.id)}`
+    : null;
 
   const {
     register,
@@ -51,6 +63,19 @@ function SetPasswordFormContent() {
 
     const result = await resetPassword(token, data.password);
 
+    if (result.success && invitation && acceptPath) {
+      setJoining(true);
+      // The link confirms the mailbox but starts no session: sign in with
+      // the password just set, then accept through the signed-in path.
+      const signedIn = await signIn(invitation.email, data.password);
+      router.push(
+        signedIn.success
+          ? acceptPath
+          : `/login?from=${encodeURIComponent(acceptPath)}`,
+      );
+      return;
+    }
+
     if (result.success) {
       setSuccess(true);
 
@@ -69,6 +94,18 @@ function SetPasswordFormContent() {
         result.error || "The password was not set. Check the form and try again.",
       );
     }
+  }
+
+  if (invitation && acceptPath && (!token || linkFailed)) {
+    return (
+      <div className="space-y-24">
+        <Notice tone="error" title="This link has expired">
+          Open your invitation to send a new link to {invitation.email}.
+        </Notice>
+
+        <AuthPrimaryLink href={acceptPath}>Open invitation</AuthPrimaryLink>
+      </div>
+    );
   }
 
   // Show error if no token in URL
@@ -106,6 +143,11 @@ function SetPasswordFormContent() {
             <h2 className="body-large-bold text-[var(--color-text-primary)]">
               Set your password
             </h2>
+            {invitation && (
+              <p className="body-medium text-[var(--color-text-secondary)] mt-6">
+                Set a password for {invitation.email} to join your organization.
+              </p>
+            )}
           </div>
 
           <FormField
@@ -147,9 +189,9 @@ function SetPasswordFormContent() {
             type="submit"
             variant="primary"
             width="full"
-            busy={isSubmitting}
+            busy={isSubmitting || joining}
           >
-            Set password
+            {invitation ? "Set password and join" : "Set password"}
           </Button>
         </>
       )}
@@ -161,6 +203,6 @@ function SetPasswordFormContent() {
  * SetPasswordForm component for new user invitations
  * Must be wrapped in Suspense boundary when used in a page
  */
-export function SetPasswordForm() {
-  return <SetPasswordFormContent />;
+export function SetPasswordForm({ invitation }: { invitation?: SetPasswordInvitation } = {}) {
+  return <SetPasswordFormContent invitation={invitation} />;
 }

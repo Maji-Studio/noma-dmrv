@@ -9,7 +9,12 @@ import { FormField, FormInput } from "@/components/forms";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 import { Button } from "@/components/ui/button";
-import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
+import { Notice } from "@/components/ui/notice";
+import { AuthResult } from "@/components/auth/auth-result";
+import {
+  bootstrapInvitationAccountAction,
+  resendInvitationSetPasswordAction,
+} from "@/fn/invitation-bootstrap";
 import {
   invitationBootstrapSchema,
   type InvitationBootstrapInput,
@@ -18,10 +23,14 @@ import {
 export function InvitationBootstrapForm({
   invitationId,
   email,
+  account = "none",
 }: {
   invitationId: string;
   email: string;
+  /** "pending": the account exists and only waits for the emailed link. */
+  account?: "none" | "pending";
 }) {
+  const [sent, setSent] = useState(account === "pending");
   const formId = useId();
   // Read on every submit, so the error summary can name and order the fields.
   const [directory, setDirectory] = useState<FieldDirectory | null>(null);
@@ -48,8 +57,13 @@ export function InvitationBootstrapForm({
       setServerError(refuseSave(new ActionError(result), result.error) ?? "");
       return;
     }
+    setSent(true);
   }
   const busy = isSubmitting;
+
+  if (sent) {
+    return <CheckEmail invitationId={invitationId} email={email} />;
+  }
 
   return (
     <form id={formId} onSubmit={handleSubmit(submit)} onSubmitCapture={(event) => setDirectory(readFieldDirectory(event.currentTarget))} className="space-y-24">
@@ -76,8 +90,47 @@ export function InvitationBootstrapForm({
         message={serverError}
       />
       <Button type="submit" variant="primary" width="full" busy={busy}>
-        Create account and join
+        Send set-password link
       </Button>
     </form>
+  );
+}
+
+function CheckEmail({ invitationId, email }: { invitationId: string; email: string }) {
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [error, setError] = useState("");
+
+  async function resend() {
+    setResending(true);
+    setError("");
+    setResent(false);
+    const result = await resendInvitationSetPasswordAction({ invitationId });
+    setResending(false);
+    if (result.success) setResent(true);
+    else setError(result.error);
+  }
+
+  return (
+    <AuthResult
+      framed={false}
+      tone="info"
+      title="Check your email"
+      actions={
+        <>
+          {resent && (
+            <Notice tone="success">
+              Link requested. If it is not there in a few minutes, check your spam folder.
+            </Notice>
+          )}
+          {error && <Notice tone="error">{error}</Notice>}
+          <Button type="button" variant="default" width="full" busy={resending} onClick={resend}>
+            Send again
+          </Button>
+        </>
+      }
+    >
+      We sent a link to {email}. Open it to set your password and join.
+    </AuthResult>
   );
 }

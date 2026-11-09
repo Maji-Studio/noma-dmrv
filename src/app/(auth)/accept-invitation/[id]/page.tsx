@@ -56,6 +56,7 @@ export default async function AcceptInvitationPage({
         <InvitationBootstrapForm
           invitationId={id}
           email={invitation.email}
+          account={invitation.account === "pending" ? "pending" : "none"}
         />
       )}
     </InvitationCard>
