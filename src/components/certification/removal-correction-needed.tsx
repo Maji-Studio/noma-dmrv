@@ -14,7 +14,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
  */
 export const CORRECTION_NEEDED_LABEL = CORRECTION_NEEDED_STATUS_LABEL;
 
-function firstReturn(lock: RecordLockView | undefined) {
+export function firstReturn(lock: RecordLockView | undefined) {
   return lock && lock.level !== "sent" ? lock.returnedBy[0] : undefined;
 }
 

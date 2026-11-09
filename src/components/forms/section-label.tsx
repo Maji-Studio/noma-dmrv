@@ -1,8 +1,8 @@
 /**
  * SectionLabel — reusable form section header
  *
- * A sentence case title in the field label style, in primary ink. It sits
- * under the sheet title (`title-heading-4`) and beside the spine's numbered
+ * A sentence case 20px medium title (`body-lead font-medium`, #1554 Q18), in primary ink. It sits
+ * under the 24px sheet title (`title-heading-3`) and beside the spine's numbered
  * marker, which already carry the hierarchy, so the title needs no eyebrow
  * treatment and no size of its own.
  *
@@ -47,7 +47,7 @@ export function SectionLabel({
   icon?: React.ReactNode;
 }) {
   return (
-    <h3 className="flex min-h-24 items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+    <h3 className="flex min-h-24 items-center gap-6 body-lead font-medium text-[var(--color-text-primary)]">
       {icon != null && (
         <span className="inline-flex shrink-0 text-[var(--color-text-secondary)]">
           {icon}

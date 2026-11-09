@@ -13,7 +13,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
-import { DetailSection } from "@/components/ui/detail-panel";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatFigure } from "@/components/emissions/emission-line-display";
 import { pluralize } from "@/lib/copy-utils";
@@ -149,10 +148,12 @@ export function RevisionLateEntriesSection({ entries, facilityId, removalCode, r
 
 function EntriesSection({ title, state, dataAttr = "data-carried-entries", children }: { title: string; state: string; dataAttr?: string; children: ReactNode }) {
   return (
-    <DetailSection title={title}>
+    // A sub-part of the sheet's Records section, so its title is a sub-heading, not a section title.
+    <div className="flex flex-col gap-8">
+      <h3 className="body-small font-medium">{title}</h3>
       <ul className="flex flex-col" {...{ [dataAttr]: true }}>{children}</ul>
       <p className="body-small">{state}</p>
-    </DetailSection>
+    </div>
   );
 }
 

@@ -11,13 +11,11 @@
  */
 "use client";
 
-import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
-import { EmissionAllocationSection } from "@/components/emissions/allocation";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useRemovalCarriedEntries } from "@/hooks/use-removal-carried-entries";
 import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
@@ -28,14 +26,18 @@ import {
   useDeleteRemoval,
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
+import { useRemovalSheetFacts } from "@/hooks/use-removal-sheet-facts";
+import type { RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { recordHref } from "@/lib/record-links";
 import {
   deriveRemovalWorkflowStatus,
   REMOVAL_FAILED_REVIEW_REASON,
   REMOVAL_INTERRUPTED_RECONCILE_REASON,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
-import { pluralize } from "@/lib/copy-utils";
-import { formatDateRange } from "@/lib/format-utils";
+import { pluralize, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
@@ -47,6 +49,7 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SubmissionHistory } from "./submission-history";
+import { RemovalRecords } from "./removal-records";
 import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import {
@@ -55,15 +58,21 @@ import {
   type RemovalListRow,
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
+import type { StatusValue } from "@/components/ui/status-badge";
 import { Notice } from "@/components/ui/notice";
 import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
 import { correctionStatus } from "@/lib/removal-correction-copy";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
+
+const ESTIMATE_NOTE = "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
+const CO2E_DIGITS = 1;
+const DRY_MASS_DIGITS = 1;
+const ALLOCATION_HINT = "Allocation is on each credit batch's Emissions tab.";
 
 interface RemovalDetailSheetProps {
   /** Admin: may add a missed run to a credit batch. */
@@ -108,6 +117,23 @@ export function RemovalStorageSitesField({
   );
 }
 
+/** Each credit batch code links to its page; codes alone until the facts load. */
+function CreditBatchLinks({ facts, codes, facilityId }: { facts: RemovalSheetFacts | undefined; codes: string[]; facilityId: string }) {
+  if (!facts) return <span className="font-mono">{codes.join(", ")}</span>;
+  return (
+    <span>
+      {facts.batches.map((batch, index) => (
+        <span key={batch.id}>
+          {index > 0 && ", "}
+          <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={RECORD_CODE_LINK}>
+            {batch.code}
+          </Link>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** The outcome the notice under the status tells, or null when nothing needs saying. */
 export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWorkflowStatus): NoticeOutcome | null {
   if (status.kind === "submitted" || status.kind === "submitting" || status.kind === "superseded") return null;
@@ -119,14 +145,55 @@ export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWor
   return latest && latest.kind !== "submitted" ? latest : null;
 }
 
-function SubmissionStatusSection({
+/**
+ * What the sheet header's badge says. A draft reads "Not submitted" whether or
+ * not it can be sent yet: the count of things to fix sits in the footer next
+ * to Review & submit, not in the status (#1554).
+ */
+export function sheetStatusFor(status: RemovalWorkflowStatus): { value: StatusValue; label: string } {
+  if (status.kind === "blocked" || status.kind === "ready") return { value: "draft", label: "Not submitted" };
+  return { value: status.value, label: status.label };
+}
+
+/** The one next step for states no notice speaks for, or null. */
+export function nextStepLine(status: RemovalWorkflowStatus): string | null {
+  switch (status.kind) {
+    // "checking": the header badge already says so.
+    case "unavailable":
+      return "The checks could not load.";
+    case "submitting":
+      return "noma is sending this Removal to Isometric. This can take a few minutes.";
+    case "submitted":
+      return "Isometric verifies it with the GHG Statement for its reporting period.";
+    default:
+      return null;
+  }
+}
+
+/** The footer line next to Review & submit: how many things block sending, or that nothing does. */
+export function thingsToFixLine(status: RemovalWorkflowStatus): string | null {
+  if (status.kind === "ready") return "Ready to submit";
+  if (status.kind !== "blocked" || status.reasons.length === 0) return null;
+  const count = status.reasons.length;
+  return `${count} ${pluralize(count, "thing", "things")} to fix before submitting`;
+}
+
+/**
+ * The untitled block under the header: the one next step, the outcome notice
+ * and Retry. The sheet adds the returned, missing-runs and evidence-links
+ * notices beside it. Empty states render nothing, so the block is gone.
+ */
+function SheetStatusBlock({
   summary,
   status,
   facilityId,
   timeZone,
+  returned = false,
   readOnly = false,
 }: {
   summary: RemovalListRow;
+  /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
+  returned?: boolean;
   status: RemovalWorkflowStatus;
   facilityId: string;
   timeZone: string;
@@ -135,26 +202,19 @@ function SubmissionStatusSection({
 }) {
   const outcome = submissionOutcomeFor(summary, status);
   // The outcome notice replaces the two generic "review the history" reasons.
-  const reasons = outcome
-    ? status.reasons.filter((reason) => reason !== REMOVAL_FAILED_REVIEW_REASON && reason !== REMOVAL_INTERRUPTED_RECONCILE_REASON)
-    : status.reasons;
+  // Readiness blockers belong to Review & submit, whatever the state, so the sheet never lists them.
+  const blockers = summary.readiness?.state === "blocked" ? summary.readiness.reasons : [];
+  const reasons = status.kind === "blocked"
+    ? []
+    : status.reasons.filter((reason) =>
+        !blockers.includes(reason)
+        && !(outcome && (reason === REMOVAL_FAILED_REVIEW_REASON || reason === REMOVAL_INTERRUPTED_RECONCILE_REASON)));
+  // A returned Removal has its own notice below; "Isometric verifies it" would contradict it.
+  const line = returned ? null : nextStepLine(status);
   return (
-    <DetailSection title="Submission status" divider={false}>
-      <DetailField
-        label="Status"
-        // The label paints above the badge's 44px hit area, which reaches 6px
-        // into it, so a press on the label text stays on the label.
-        className="[&>span:first-child]:relative [&>span:first-child]:z-10"
-        value={
-          <CertificationStatusBadge
-            entityType="removal"
-            entityId={summary.removalId}
-            status={status.value}
-            label={status.label}
-          />
-        }
-        valuePresent
-      />
+    <>
+      {/* A Notice announces itself, so progress and check changes reach assistive tech. */}
+      {line && <Notice tone={status.kind === "unavailable" ? "warning" : "info"}>{line}</Notice>}
 
       {outcome && (
         <SubmissionOutcomeNotice
@@ -177,17 +237,11 @@ function SubmissionStatusSection({
       )}
 
       {status.canRetry && !readOnly && (
-        <Button
-          variant="default"
-          size="small"
-          // `relative` paints it above the status badge's expanded hit area.
-          className="relative self-start"
-          onClick={() => void summary.retry?.()}
-        >
+        <Button variant="default" size="small" className="self-start" onClick={() => void summary.retry?.()}>
           {TRY_AGAIN_LABEL}
         </Button>
       )}
-    </DetailSection>
+    </>
   );
 }
 
@@ -274,6 +328,14 @@ export function RemovalDetailSheet({
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
 
+  const sheetFacts = useRemovalSheetFacts(summary.removalId, { enabled: open });
+  const facts = sheetFacts.data;
+  // noma's own estimate from the credit batches; the registry's net figure stays in the registry card below.
+  const co2eTonnes = facts?.co2eEstimateTonnes ?? null;
+  // A failed facts read is a load failure, not missing data: hide the figures it feeds and offer a retry.
+  const factsFailed = sheetFacts.isError;
+  const headerStatus = sheetStatusFor(shownStatus);
+  const thingsToFix = thingsToFixLine(workflowStatus);
   const hasReportingWindow = summary.startedOn && summary.completedOn;
   const window =
     hasReportingWindow
@@ -285,9 +347,18 @@ export function RemovalDetailSheet({
       <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
         <SlideOverPanel.Content size="default">
           <SlideOverPanel.Header showClose>
-            <SlideOverPanel.Title>
-              {summary.code}
-            </SlideOverPanel.Title>
+            {/* The badge follows the code on its line and wraps under it on a phone; the code never truncates. */}
+            <div className="flex flex-wrap items-center gap-x-12">
+              <SlideOverPanel.Title>
+                {summary.code}
+              </SlideOverPanel.Title>
+              <CertificationStatusBadge
+                entityType="removal"
+                entityId={summary.removalId}
+                status={headerStatus.value}
+                label={headerStatus.label}
+              />
+            </div>
             {hasReportingWindow && (
               <SlideOverPanel.Description>{window}</SlideOverPanel.Description>
             )}
@@ -297,39 +368,89 @@ export function RemovalDetailSheet({
             {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
             <EnvBanner isProduction={isProduction} variant="inline" />
 
-            <SubmissionStatusSection summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
-            {correction ? (
-              <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
-            ) : (
-              <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
-            )}
-            <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
-            <RemovalEvidenceLinksNotice links={summary.evidenceLinks} readOnly={!!readOnly} />
+            {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
+            <div className="peer/status flex flex-col gap-12 empty:hidden">
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
+              {correction ? (
+                <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
+              ) : (
+                <RemovalCorrectionNotice lock={lock} readOnly={!!readOnly} />
+              )}
+              <RemovalMissingRunsNotice batches={summary.missingProductionRuns} facilityId={facilityId} canManage={canManage && !readOnly} readOnly={!!readOnly} />
+              <RemovalEvidenceLinksNotice links={summary.evidenceLinks} readOnly={!!readOnly} />
+            </div>
 
-            {summary.externalId && (
-              <RemovalCarbonBreakdown
-                removalId={summary.removalId}
-                enabled={open}
-              />
-            )}
-
-            <DetailSection title="Removal">
+            <DetailSection title="Removal" className="peer-empty/status:border-t-0 peer-empty/status:pt-0">
+              {factsFailed && (
+                <Notice
+                  tone="error"
+                  action={<Button variant="weak" size="small" busy={sheetFacts.isFetching} onClick={() => void sheetFacts.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+                >
+                  The figures for this Removal could not be loaded.
+                </Notice>
+              )}
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+                {!factsFailed && <DetailField
+                  label="Estimated CO₂e stored"
+                  hint={ESTIMATE_NOTE}
+                  value={co2eTonnes == null ? null : formatTonnes(co2eTonnes, { digits: CO2E_DIGITS, unit: "t CO₂e" })}
+                  emptySituation="notYetComputed"
+                  pending={sheetFacts.isLoading}
+                />}
+                {!factsFailed && <DetailField
+                  label="Biochar dry mass"
+                  value={facts?.dryTonnes == null ? null : formatTonnes(facts.dryTonnes, { digits: DRY_MASS_DIGITS })}
+                  emptySituation="notYetComputed"
+                  pending={sheetFacts.isLoading}
+                />}
                 <DetailField
                   label="Reporting window"
                   value={window}
                   valuePresent={Boolean(hasReportingWindow)}
                 />
+                {summary.memberBatchCodes.length > 0 && (
+                  <DetailField
+                    label={summary.memberBatchCodes.length === 1 ? "Credit batch" : `Credit batches (${summary.memberBatchCodes.length})`}
+                    explanation={ALLOCATION_HINT}
+                    explanationTitle="Credit batches"
+                    value={<CreditBatchLinks facts={facts} codes={summary.memberBatchCodes} facilityId={facilityId} />}
+                  />
+                )}
+                {!factsFailed && <DetailField label="Facility" value={facts?.facilityName ?? null} pending={sheetFacts.isLoading} />}
+              </div>
+
+              {summary.externalId && (
+                <RemovalCarbonBreakdown
+                  removalId={summary.removalId}
+                  enabled={open}
+                />
+              )}
+            </DetailSection>
+
+            <DetailSection title="Isometric">
+              <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
                 <DetailField
-                  label={`Credit batches (${summary.memberBatchCodes.length})`}
+                  label="Project"
                   value={
-                    summary.memberBatchCodes.length > 0 ? (
-                      <span className="font-mono">
-                        {summary.memberBatchCodes.join(", ")}
-                      </span>
+                    externalProjectId ? (
+                      <IsometricLink
+                        label={externalProjectId}
+                        href={isometricRegistry.certifyProject({ environment: isProduction ? "production" : "sandbox", externalProjectId })}
+                      />
                     ) : null
                   }
-                  emptySituation="none"
+                  valuePresent={Boolean(externalProjectId)}
+                />
+                {!factsFailed && <DetailField
+                  className="sm:col-span-2"
+                  label="Durability and sampling"
+                  value={facts?.durabilityLabel ? `${facts.durabilityLabel}, ${facts.samplingLabel?.toLowerCase()}` : null}
+                  pending={sheetFacts.isLoading}
+                />}
+
+                <RemovalStorageSitesField
+                  externalProjectId={externalProjectId}
+                  isProduction={isProduction}
                 />
 
                 {summary.externalId && (
@@ -353,11 +474,6 @@ export function RemovalDetailSheet({
                   enabled={open}
                 />
 
-                <RemovalStorageSitesField
-                  externalProjectId={externalProjectId}
-                  isProduction={isProduction}
-                />
-
                 {summary.evidenceHealth && (
                   <DetailField
                     label="Evidence attachments"
@@ -372,50 +488,52 @@ export function RemovalDetailSheet({
                   />
                 )}
               </div>
+
+              {/*
+                Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
+                diesel the active template cannot carry. Distinct from readiness
+                blockers: the removal still submits.
+              */}
+              {!readOnly && <SubmissionNotes notes={submissionWarningNotes} />}
+
+              {/*
+                Registry value sources prepare mapped evidence for its intended
+                registry Datapoint targets. Application evidence stays on its
+                owning Application until the Biochar Application integration can
+                submit source_ids. This is the only place the candidate set is
+                consumed: submit is resolve-only and never auto-mirrors.
+                Its files are prepared for the next submission, which this sheet cannot start.
+              */}
+              {!readOnly && (
+                <SourcesPanel
+                  removalId={summary.removalId}
+                  isEditable={isActionable}
+                />
+              )}
+
+              <SubmissionHistory
+                attempts={summary.submissionAttempts}
+                events={summary.recentSyncEvents}
+                facilityId={facilityId}
+                timeZone={timeZone}
+              />
             </DetailSection>
 
-            <CarriedEntriesSection
-              entries={carriedEntries}
-              facilityId={facilityId}
-              sent={workflowStatus.kind === "submitted"}
-              readOnly={!!readOnly}
-            />
-            <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} readOnly={!!readOnly} />
-
-            {/*
-              Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
-              diesel the active template cannot carry. Distinct from readiness
-              blockers above: the removal still submits.
-            */}
-            {!readOnly && <SubmissionNotes notes={submissionWarningNotes} />}
-
-            {/*
-              Registry value sources prepare mapped evidence for its intended
-              registry Datapoint targets. Application evidence stays on its
-              owning Application until the Biochar Application integration can
-              submit source_ids. This is the only place the candidate set is
-              consumed: submit is resolve-only and never auto-mirrors.
-              (Restores the mount lost when evidence-step.tsx was deleted in the
-              2026-06-04 certify redesign.)
-            */}
-            {/* Its files are prepared for the next submission, which this sheet cannot start. */}
-            {!readOnly && (
-              <SourcesPanel
-                removalId={summary.removalId}
-                isEditable={isActionable}
+            <DetailSection title="Records">
+              <RemovalRecords removalId={summary.removalId} facilityId={facilityId} enabled={open} />
+              <CarriedEntriesSection
+                entries={carriedEntries}
+                facilityId={facilityId}
+                sent={workflowStatus.kind === "submitted"}
+                readOnly={!!readOnly}
               />
-            )}
-
-            <EmissionAllocationSection removalId={summary.removalId} />
-            <SubmissionHistory
-              attempts={summary.submissionAttempts}
-              events={summary.recentSyncEvents}
-              facilityId={facilityId}
-              timeZone={timeZone}
-            />
+              <RevisionLateEntriesSection entries={lateEntries} facilityId={facilityId} removalCode={summary.code} readOnly={!!readOnly} />
+            </DetailSection>
           </SlideOverPanel.Body>
 
-          <SlideOverPanel.Footer>
+          <SlideOverPanel.Footer
+            preview={!readOnly && thingsToFix ? <p className="body-small text-[var(--color-text-secondary)]">{thingsToFix}</p> : undefined}
+          >
             {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
             <RemovalReviewAction
               isActionable={isActionable && !readOnly}
