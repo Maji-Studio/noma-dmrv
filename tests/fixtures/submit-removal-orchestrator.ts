@@ -1,3 +1,5 @@
+import { TEST_ORG_ID } from "../helpers/test-org";
+import { markAttemptStartedFake } from "./submission-attempt-marker";
 vi.mock("@/data-access/credit-batch-removal-holders", () => ({
   getCreditBatchUndeletableRemovalCodes: vi.fn<
     typeof import("@/data-access/credit-batch-removal-holders").getCreditBatchUndeletableRemovalCodes
@@ -261,6 +263,7 @@ export function newLedgerRow(
 ): CertificationSubmissionRow {
   return {
     id: `sub-${nextLedgerRowId++}`,
+    organizationId: TEST_ORG_ID,
     provider: input.provider,
     submissionType: input.submissionType,
     localEntityType: input.localEntityType,
@@ -640,6 +643,9 @@ function storedLatest(): CertificationSubmissionRow | null {
 beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
+  vi.mocked(ledgerClaim.markSubmissionAttemptStarted).mockImplementation(
+    async (ctx, id, lockedAt) => markAttemptStartedFake(storedRows, ctx.organizationId, id, lockedAt),
+  );
   nextLedgerRowId = 1;
   setStoredRemovalReportingWindow(null, null);
   durabilityFlag.live = false;
@@ -771,7 +777,10 @@ beforeEach(() => {
     // rejected (the fake rejection checks draft status and lock ownership).
     const row = storedRows.find((candidate) => candidate.id === args.submissionId);
     const mutation = getMetadataValue(row?.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
-    if (BLOCKING_EXTERNAL_MUTATIONS.has(mutation)) return;
+    const canClear = args.mutationFreeAttempt && row?.status === "draft" &&
+      row.lockedAt?.getTime() === args.expectedLockedAt.getTime() &&
+      !row.externalId && mutation === "possible";
+    if (BLOCKING_EXTERNAL_MUTATIONS.has(mutation) && !canClear) return;
     await ledger.markSubmissionRejected(ctx, args.submissionId, {
       errorMessage: args.errorMessage,
       expectedLockedAt: args.expectedLockedAt,
@@ -875,7 +884,7 @@ beforeEach(() => {
       ({
         ...input,
         id: "cpb-test-1",
-        organizationId: "org_test_fixtures",
+        organizationId: TEST_ORG_ID,
         provider: "isometric",
         createdAt: new Date(),
         updatedAt: new Date(),

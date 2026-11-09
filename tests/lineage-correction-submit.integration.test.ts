@@ -157,6 +157,7 @@ it.each(["run", "distance"] as const)("detects a %s-only correction, fences the 
   vi.mocked(claims.getLatestSubmission).mockImplementation(realClaims.getLatestSubmission);
   vi.mocked(claims.getLatestSubmissionWithExecutor).mockImplementation(realClaims.getLatestSubmissionWithExecutor);
   vi.mocked(claims.recordConfirmedSubmissionIdentity).mockImplementation(realClaims.recordConfirmedSubmissionIdentity);
+  vi.mocked(claims.markSubmissionAttemptStarted).mockImplementation(realClaims.markSubmissionAttemptStarted);
   const realReservations = await vi.importActual<typeof reservations>("@/data-access/production-claim-reservations");
   vi.mocked(reservations.reserveProductionEmissionsClaims).mockImplementation(realReservations.reserveProductionEmissionsClaims);
   const transitions = await import("@/data-access/submission-ledger-transitions");
