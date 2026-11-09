@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { accounts, invitations, organizations, sessions, users, verifications } from "../../src/db/schema";
+import { accounts, apiRateLimitBuckets, invitations, organizations, sessions, users, verifications } from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
 const VALIDITY_MS = 60_000;
@@ -100,6 +100,7 @@ for (const role of ["admin", "member"] as const) {
       await db.delete(invitations).where(eq(invitations.organizationId, organizationId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
       if (invitee) {
+        await db.delete(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, `invitation-set-password:${invitee.id}`));
         await db.delete(verifications).where(eq(verifications.value, invitee.id));
         await db.delete(sessions).where(eq(sessions.userId, invitee.id));
         await db.delete(accounts).where(eq(accounts.userId, invitee.id));

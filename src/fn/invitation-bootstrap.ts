@@ -16,6 +16,7 @@ import {
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
 import { auth } from "@/lib/auth/better-auth";
+import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
   invitationBootstrapSchema,
@@ -85,10 +86,16 @@ export async function bootstrapInvitationAccountAction(
   return toResult(async () => {
     const { invitationId, name } = invitationBootstrapSchema.parse(input);
     await requireSignedOut();
-    const state = await readInvitationBootstrapState(invitationId);
+    let state = await readInvitationBootstrapState(invitationId);
     refuseConfirmedAccount(state);
     if (state.account === "none") {
-      await createInvitedAccount({ invitationId, name });
+      try {
+        await createInvitedAccount({ invitationId, name });
+      } catch (error) {
+        if (!(error instanceof InvitationAccountExistsError)) throw error;
+        state = await readInvitationBootstrapState(invitationId);
+        if (state.account !== "pending") throw error;
+      }
     }
     return sendInvitationSetPassword(state);
   }, INVITATION_BOOTSTRAP_FALLBACK);

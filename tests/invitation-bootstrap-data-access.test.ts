@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
 import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 
 const mockSelect = vi.fn();
@@ -93,11 +94,7 @@ describe("createInvitedAccount", () => {
         invitationId: INVITATION_ID,
         name: "Invitee",
       })
-    ).rejects.toEqual(
-      new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      )
-    );
+    ).rejects.toEqual(new InvitationAccountExistsError());
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
@@ -131,11 +128,7 @@ describe("createInvitedAccount", () => {
         invitationId: INVITATION_ID,
         name: "Invitee",
       })
-    ).rejects.toEqual(
-      new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      )
-    );
+    ).rejects.toEqual(new InvitationAccountExistsError());
   });
 });
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
 
 const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
 vi.mock("@/lib/log", () => ({
@@ -174,6 +175,31 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(mockSetActiveOrganization).not.toHaveBeenCalled();
     expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true, data: { emailSent: true } });
+  });
+
+  it.each(["pending", "confirmed"])("rechecks a concurrent bootstrap winner with a %s account", async account => {
+    mockCreateAccount.mockRejectedValueOnce(new InvitationAccountExistsError());
+    mockReadState.mockResolvedValueOnce({
+      invitationId: INVITATION_ID, organizationId: ORGANIZATION_ID, email: EMAIL, account: "none",
+    }).mockResolvedValueOnce({
+      invitationId: INVITATION_ID, organizationId: ORGANIZATION_ID, email: EMAIL, account,
+    });
+
+    expect(await bootstrapInvitationAccountAction(VALID_INPUT)).toEqual(account === "pending"
+      ? { success: true, data: { emailSent: true } }
+      : { success: false, error: "An account already exists for this invitation. Sign in instead." });
+    expect(mockReadState).toHaveBeenCalledTimes(2);
+    expect(mockReadState).toHaveBeenNthCalledWith(2, INVITATION_ID);
+    expect(mockCreateAccount).toHaveBeenCalledExactlyOnceWith(VALID_INPUT);
+    if (account === "pending") {
+      expect(mockConsumeSetPasswordRateLimit).toHaveBeenCalledExactlyOnceWith(INVITATION_ID);
+      expect(mockRequestPasswordReset).toHaveBeenCalledExactlyOnceWith({ body: {
+        email: EMAIL, redirectTo: `/set-password?invitation=${INVITATION_ID}`,
+      } });
+    } else {
+      expect(mockConsumeSetPasswordRateLimit).not.toHaveBeenCalled();
+      expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+    }
   });
 
   it.each([false, true])("retries pending setup without changing the user, sending allowed=%s", async allowed => {

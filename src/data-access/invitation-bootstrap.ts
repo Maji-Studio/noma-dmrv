@@ -4,12 +4,11 @@ import { isPgUniqueViolation } from "@/db/errors";
 import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 import { invitations, users } from "@/db/schema";
 import { consumeRateLimit } from "@/data-access/api-rate-limits";
+import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError } from "@/lib/errors";
 
 const USERS_EMAIL_UNIQUE_CONSTRAINT = "users_email_unique";
-const EXISTING_ACCOUNT_MESSAGE =
-  "An account already exists for this invitation. Sign in instead.";
 
 export type InvitationBootstrapState = {
   invitationId: string;
@@ -86,7 +85,7 @@ export async function createInvitedAccount(input: {
 }): Promise<{ userId: string; email: string; organizationId: string }> {
   const invitation = await readValidInvitation(input.invitationId);
   if (await findUserByEmail(db, invitation.email)) {
-    throw new SafeError(EXISTING_ACCOUNT_MESSAGE);
+    throw new InvitationAccountExistsError();
   }
 
   const email = invitation.email.toLowerCase();
@@ -102,7 +101,7 @@ export async function createInvitedAccount(input: {
     // Normalized email plus the database uniqueness constraint is the race
     // backstop when two bootstrap requests pass the anonymous pre-check.
     if (isPgUniqueViolation(error, USERS_EMAIL_UNIQUE_CONSTRAINT)) {
-      throw new SafeError(EXISTING_ACCOUNT_MESSAGE);
+      throw new InvitationAccountExistsError();
     }
     throw error;
   }
