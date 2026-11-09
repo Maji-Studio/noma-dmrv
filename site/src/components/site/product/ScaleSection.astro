@@ -1,0 +1,84 @@
+---
+/**
+ * ScaleSection (#scale, the "Across your sites" chapter): one organization with two sites, their reactors
+ * and bins, the team's two roles and the API and MCP link to other tools, drawn as an outline tree on the
+ * hatch; four cells underneath say what each part does. Site, reactor and bin counts are illustrative.
+ * Roles are the app's two (admin, member; owners are admins). No props.
+ */
+import GridFrame from "../GridFrame.astro";
+
+const SITES = [
+  { name: "Site A", reactors: ["Reactor 1", "Reactor 2"], bins: 6, x: 40 },
+  { name: "Site B", reactors: ["Reactor 1"], bins: 3, x: 330 },
+];
+const CELLS = [
+  { title: "Several sites, one account", text: "Each site keeps its own reactors, bins and records. Switch between them from the same account." },
+  { title: "Roles for your team", text: "Admins manage settings and people. Members record the work at the site." },
+  { title: "Entry on a phone", text: "The same forms work at the reactor, at the weighbridge and in the office." },
+  { title: "Open API and MCP", text: "Connect your own software and AI tools to the records, with keys you control." },
+];
+const ALT = "One organization with two sites. Site A has two reactors and six bins, Site B one reactor and three bins. Admins and members work across both, and an API and MCP connection links the records to other tools.";
+---
+<GridFrame id="scale" pad="none" flush aria-labelledby="scale-title">
+  <div class="pd-head">
+    <h2 id="scale-title" class="t-h2">Run it across your sites.</h2>
+    <p class="t-lead">Add reactors and sites without starting a new spreadsheet. One account holds every site, and your team works in it with the access their role allows.</p>
+  </div>
+  <div class="sc-sheet">
+    <svg class="sc-tree" viewBox="0 0 620 300" role="img" aria-label={ALT}>
+      <rect class="sc-box sc-org" x="210" y="10" width="200" height="44" />
+      <text class="sc-t" x="310" y="37" text-anchor="middle">Your organization</text>
+      <path class="sc-line" d="M310 54V84M135 84H475M135 84V110M475 84V110" />
+      {SITES.map((s) => (
+        <g>
+          <rect class="sc-box" x={s.x} y="110" width="250" height="44" />
+          <text class="sc-t" x={s.x + 125} y="137" text-anchor="middle">{s.name}</text>
+          {s.reactors.map((r, i) => (
+            <g>
+              <path class="sc-line" d={`M${s.x + 30 + i * 110} 154V184`} />
+              <rect class="sc-box sc-small" x={s.x + i * 110} y="184" width="100" height="32" />
+              <text class="sc-s" x={s.x + 50 + i * 110} y="205" text-anchor="middle">{r}</text>
+            </g>
+          ))}
+          <g>
+            {Array.from({ length: s.bins }, (_, i) => <rect class="sc-bin" x={s.x + (i % 6) * 22} y={232 + Math.floor(i / 6) * 22} width="16" height="16" />)}
+            <text class="sc-s sc-dim" x={s.x + 136} y="245">{s.bins} bins</text>
+          </g>
+        </g>
+      ))}
+      <path class="sc-line sc-dash" d="M410 32H520" />
+      <rect class="sc-box sc-lit" x="520" y="14" width="90" height="36" />
+      <text class="sc-s" x="565" y="37" text-anchor="middle">API · MCP</text>
+      <path class="sc-line sc-dash" d="M210 32H100" />
+      <rect class="sc-box sc-small" x="10" y="14" width="90" height="36" />
+      <text class="sc-s" x="55" y="37" text-anchor="middle">Your team</text>
+    </svg>
+  </div>
+  <div class="gf-cells sc-cells" style="--cols:4">
+    {CELLS.map((c) => (
+      <div class="stack-tight">
+        <h3 class="sc-title">{c.title}</h3>
+        <p class="t-body t-muted">{c.text}</p>
+      </div>
+    ))}
+  </div>
+</GridFrame>
+<style>
+  .sc-sheet { display: grid; place-items: center; padding: var(--space-8) var(--frame-pad); background: var(--hatch); border-top: var(--hairline) solid var(--rule); overflow-x: auto; }
+  .sc-tree { width: min(100%, 720px); min-width: 520px; overflow: visible; }
+  .sc-box { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .sc-small { stroke: var(--rule-strong); stroke-width: 1; }
+  .sc-org { stroke: var(--accent); stroke-width: 2; }
+  .sc-lit { fill: var(--clr-purple-5); stroke: var(--accent); }
+  .sc-line { fill: none; stroke: var(--rule-strong); stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+  .sc-dash { stroke-dasharray: 4 4; stroke: var(--accent); }
+  .sc-bin { fill: var(--l2); }
+  .sc-t { font-size: 15px; fill: var(--ink); }
+  .sc-s { font-size: 12px; fill: var(--ink); }
+  .sc-dim { fill: var(--ink-2); }
+  .sc-cells { border-top: var(--hairline) solid var(--rule); }
+  .sc-cells .t-body { font-size: var(--fs-ui); }
+  .sc-title { margin: 0; font-size: var(--fs-h4); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.2; }
+  @media (max-width: 1100px) { .gf-cells.sc-cells { --cols: 2 !important; } }
+  @media (max-width: 760px) { .gf-cells.sc-cells { --cols: 1 !important; } }
+</style>

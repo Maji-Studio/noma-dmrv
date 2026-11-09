@@ -1,0 +1,30 @@
+---
+/**
+ * JourneySection (#journey): the buyer view. Copy left with a link to the example /journey page, the
+ * JourneyPhone on the hatch right. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import JourneyPhone from "../JourneyPhone.astro";
+---
+<GridFrame id="journey" pad="none" flush aria-labelledby="journey-title">
+  <div class="jn">
+    <div class="jn-copy stack">
+      <h2 id="journey-title" class="t-h2">Show buyers where their biochar went.</h2>
+      <p class="t-lead">Give a buyer a page for their credit batch. They open it on their phone and follow the biochar from the field back to the feedstock, with the record behind each step.</p>
+      <TextLink href="/journey">Open an example journey</TextLink>
+    </div>
+    <div class="jn-art"><JourneyPhone /></div>
+  </div>
+</GridFrame>
+<style>
+  .jn { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 0; }
+  .jn-copy { align-content: center; padding: var(--section) var(--frame-pad); }
+  .jn-copy h2 { max-width: 14ch; }
+  .jn-art { display: grid; place-items: center; padding: var(--space-8) var(--frame-pad); background: var(--hatch); border-left: var(--hairline) solid var(--rule); }
+  @media (max-width: 860px) {
+    .jn { grid-template-columns: minmax(0, 1fr); }
+    .jn-copy { padding-bottom: var(--space-7); }
+    .jn-art { border-left: 0; border-top: var(--hairline) solid var(--rule); }
+  }
+</style>

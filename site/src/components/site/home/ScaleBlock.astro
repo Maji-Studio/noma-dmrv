@@ -1,0 +1,32 @@
+---
+/**
+ * ScaleBlock: Home's scale section. One line, the sites drawing large, the four facts as one sentence, and
+ * a link to the full picture on /product#scale (ScaleSection). No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import HomeArt from "./HomeArt.astro";
+import "./big.css";
+
+const FACTS = [
+  "Several sites and reactors in one account",
+  "Admins and members, each with their own access",
+  "Forms that work on a phone at the reactor",
+  "An open API and MCP for your other tools",
+];
+---
+<GridFrame class="hb" aria-labelledby="sb-title">
+  <div class="hb-head">
+    <h2 id="sb-title" class="t-h2">From one reactor to many sites.</h2>
+    <p class="t-lead">Add reactors and sites without starting a new spreadsheet.</p>
+  </div>
+  <div class="sb-art"><HomeArt kind="sites" /></div>
+  <p class="sb-line">{FACTS.join(". ")}.</p>
+  <TextLink href="/product#scale">See how it scales</TextLink>
+</GridFrame>
+<style>
+  .sb-art { width: min(100%, 760px); }
+  .sb-art :global(.ha) { padding: var(--space-6); }
+  .sb-art :global(.ha > svg) { max-width: 640px; }
+  .sb-line { max-width: 52ch; margin: 0; font-size: var(--fs-lead); color: var(--ink-2); }
+</style>

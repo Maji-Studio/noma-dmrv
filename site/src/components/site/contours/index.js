@@ -3,7 +3,7 @@
 // (each drawing is its own small chunk) and contourNode() turns it into the same markup. Either way
 // scopeSvg() prefixes the drawing's ids, because the same drawing can appear more than once on a page.
 
-/** One line per station, shared by every card that shows the station (TraceStage, the product trace). */
+/** One line per station, shared by every card that shows the station (the hero tour, the product trace). */
 export const STATION_LINES = {
   source: "Where the wood residues came from.",
   "feedstock-delivery": "Weighed at the gate, before anything burns.",
