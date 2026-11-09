@@ -5,10 +5,15 @@ const mocks = vi.hoisted(() => ({
   rows: [] as Array<{ id: string; code: string; createdAt: Date; startedOn: null; completedOn: null }>,
   submissions: new Map<string, { status: string; lockedAt: null; metadata: null }>(),
   built: [] as string[],
+  returnedIds: new Set<string>(),
 }));
 
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: async () => mocks.rows }));
 vi.mock("@/data-access/certification", () => ({ getLatestSubmissionsForEntities: async () => mocks.submissions }));
+vi.mock("@/data-access/dashboard-returned-removals", () => ({ loadReturnedRemovalIds: async () => mocks.returnedIds }));
+vi.mock("@/lib/certification/removal-entry-correction", () => ({
+  correctionForRemoval: (id: string) => (id === "returned-open" ? { resubmitNeeded: true } : undefined),
+}));
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: () => undefined }));
 vi.mock("@/lib/isometric/utils/lock", () => ({ isLockedInFlight: () => false }));
 vi.mock("@/lib/certification/from-submission", () => ({ isRemovalSubmissionInterruptedFromSubmission: () => false }));
@@ -37,34 +42,47 @@ describe("loadDraftRemovalReadiness", () => {
     mocks.rows = [row("blocked"), row("ready"), row("sent")];
     mocks.submissions = new Map([["sent", { status: "submitted", lockedAt: null, metadata: null }]]);
     mocks.built = [];
+    mocks.returnedIds = new Set();
   });
 
   it("returns the readiness of each draft and leaves a submitted Removal out", async () => {
     const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
-    expect(drafts.map((draft) => [draft.removalId, draft.readiness?.state])).toEqual([
+    expect(drafts.drafts.map((draft) => [draft.removalId, draft.readiness.state])).toEqual([
       ["blocked", "blocked"],
       ["ready", "ready"],
     ]);
     expect(mocks.built).not.toContain("sent");
   });
 
-  it("builds nothing when no Removal is a draft", async () => {
+  it("builds nothing when no Removal is a draft or returned", async () => {
     mocks.rows = [row("sent")];
-    expect(await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual([]);
+    expect(await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual({ drafts: [], rejected: [], returned: [] });
     expect(mocks.built).toEqual([]);
   });
 
   it("leaves out a draft whose build rejects and keeps the others", async () => {
     mocks.rows = [row("broken"), row("ready")];
-    const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    const { drafts } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(drafts.map((draft) => draft.removalId)).toEqual(["ready"]);
   });
 
   it("adds a Removal whose last submission was rejected, without building it", async () => {
     mocks.rows = [row("bounced")];
     mocks.submissions = new Map([["bounced", { status: "rejected", lockedAt: null, metadata: null }]]);
-    const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
-    expect(drafts.map((draft) => draft.removalId)).toEqual(["bounced"]);
+    const { rejected } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(rejected.map((removal) => removal.removalId)).toEqual(["bounced"]);
     expect(mocks.built).toEqual([]);
+  });
+
+  it("adds each submitted Removal the verifier returned, with its correction state", async () => {
+    mocks.rows = [row("returned-open"), row("returned-closed"), row("quiet")];
+    mocks.submissions = new Map(["returned-open", "returned-closed", "quiet"].map((id) => [id, { status: "submitted", lockedAt: null, metadata: null }]));
+    mocks.returnedIds = new Set(["returned-open", "returned-closed"]);
+    const { returned } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(returned.map((removal) => [removal.removalId, removal.correction?.resubmitNeeded])).toEqual([
+      ["returned-open", true],
+      ["returned-closed", undefined],
+    ]);
+    expect(mocks.built).not.toContain("quiet");
   });
 });

@@ -199,7 +199,7 @@ const REMOVAL_SUBMITTING: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"
   label: "Submitting",
 };
 
-const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+export const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
   kind: "failed",
   value: "failed",
   label: "Submission failed",

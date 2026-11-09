@@ -1,24 +1,28 @@
 /**
- * Readiness of the facility's draft Removals, plus the Removals whose last
- * submission was rejected (they need the operator and carry no readiness
- * here), for the dashboard's attention list. It reuses the Removals list's read path (`buildRemovalContext`, then
- * `toRemovalReadinessFacts` + `deriveRemovalReadiness`), so the dashboard and
- * the list can never disagree about "N to fix".
+ * What the dashboard's attention list needs to know about the facility's
+ * Removals: the readiness of each draft, the Removals whose last submission
+ * was rejected, and the submitted Removals the verifier returned (with their
+ * correction state). It reuses the Removals list's read path
+ * (`buildRemovalContext`, then `toRemovalReadinessFacts` +
+ * `deriveRemovalReadiness`, `correctionForRemoval`), so the dashboard and the
+ * list can never disagree.
  *
  * Not a server action (no "use server"): the dashboard read model calls it
  * with the request's OrgContext. Cost per dashboard load: one Removal list
  * query and one latest-submission query; then, only when a draft exists, the
- * facility facts once and one Removal context build per draft, in chunks.
+ * facility facts once and one Removal context build per draft or returned Removal, in chunks.
  */
 import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import { listRemovalsForFacility } from "@/data-access/certifier-removals";
+import { loadReturnedRemovalIds } from "@/data-access/dashboard-returned-removals";
 import { requireOrgScope } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certification/from-submission";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import type { DraftRemovalReadiness, RejectedRemoval } from "@/lib/certification/removal-attention";
+import { correctionForRemoval } from "@/lib/certification/removal-entry-correction";
+import type { RemovalAttentionSources } from "@/lib/certification/removal-attention";
 import { deriveRemovalStatus, type LocalSubmissionStatus } from "@/lib/certification/status";
 import {
   ISOMETRIC_PROVIDER,
@@ -32,10 +36,12 @@ import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval
 /** Same bound the Removals list uses for its per-Removal builds. */
 const READINESS_CONCURRENCY = 8;
 
-export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: string): Promise<(DraftRemovalReadiness | RejectedRemoval)[]> {
+const NO_SOURCES: RemovalAttentionSources = { drafts: [], rejected: [], returned: [] };
+
+export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: string): Promise<RemovalAttentionSources> {
   requireOrgScope(orgCtx);
   const removalRows = await listRemovalsForFacility(orgCtx, facilityId);
-  if (removalRows.length === 0) return [];
+  if (removalRows.length === 0) return NO_SOURCES;
   const submissions = await getLatestSubmissionsForEntities(
     orgCtx,
     {
@@ -46,8 +52,8 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
     },
     facilityId,
   );
-  // A draft is a Removal never sent, or whose attempt left nothing running or interrupted.
-  const kindOf = (removal: (typeof removalRows)[number]) => {
+  type Row = (typeof removalRows)[number];
+  const kindOf = (removal: Row) => {
     const latest = submissions.get(removal.id) ?? null;
     return deriveRemovalStatus({
       local: (latest?.status ?? null) as LocalSubmissionStatus | null,
@@ -58,40 +64,64 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
       }),
     }).kind;
   };
+  // A draft is a Removal never sent, or whose attempt left nothing running or interrupted.
   const drafts = removalRows.filter((removal) => kindOf(removal) === "not-submitted");
-  const rejected: RejectedRemoval[] = removalRows
+  const rejected = removalRows
     .filter((removal) => kindOf(removal) === "rejected")
     .map((removal) => ({ removalId: removal.id, code: removal.code, createdAt: removal.createdAt }));
-  if (drafts.length === 0) return rejected;
+  const submitted = removalRows.filter((removal) => kindOf(removal) === "submitted");
+  // Best effort: a failing lineage read, facts load or Removal build drops those rows, never the dashboard.
+  const returnedIds = submitted.length
+    ? await loadReturnedRemovalIds(
+        orgCtx,
+        submitted.map((removal) => ({ removalId: removal.id, ghgStatementId: removal.ghgStatementId ?? null })),
+      ).catch(() => {
+        logger.warn({ facilityId }, "Returned Removal rows skipped: lineage failed to load");
+        return new Set<string>();
+      })
+    : new Set<string>();
+  const returned = submitted.filter((removal) => returnedIds.has(removal.id));
+  if (drafts.length === 0 && returned.length === 0) return { ...NO_SOURCES, rejected };
 
-  // Best effort: a failing facts load or draft build drops those rows, never the dashboard.
   let facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>;
   try {
     facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
   } catch {
     logger.warn({ facilityId }, "Draft Removal readiness skipped: facility facts failed to load");
-    return rejected;
+    return { ...NO_SOURCES, rejected };
   }
   const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
-  const result: (DraftRemovalReadiness | RejectedRemoval)[] = [];
-  for (let i = 0; i < drafts.length; i += READINESS_CONCURRENCY) {
-    const chunk = drafts.slice(i, i + READINESS_CONCURRENCY);
-    const settled = await Promise.allSettled(
-      chunk.map(async (removal) => {
-        const scope = await resolveScopeForRemoval(orgCtx, removal.id);
-        const ctx = await buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads });
-        return {
-          removalId: removal.id,
-          code: removal.code,
-          createdAt: removal.createdAt,
-          readiness: deriveRemovalReadiness(toRemovalReadinessFacts(ctx)),
-        };
-      }),
-    );
-    settled.forEach((outcome, index) => {
-      if (outcome.status === "fulfilled") result.push(outcome.value);
-      else logger.warn({ removalId: chunk[index]?.id }, "Draft Removal readiness skipped: build failed");
-    });
+  /** One Removal context per Removal, in bounded chunks; a failed build is logged by id and left out. */
+  async function project<T>(removals: readonly Row[], pick: (removal: Row, ctx: Awaited<ReturnType<typeof buildRemovalContext>>) => T): Promise<T[]> {
+    const result: T[] = [];
+    for (let i = 0; i < removals.length; i += READINESS_CONCURRENCY) {
+      const chunk = removals.slice(i, i + READINESS_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        chunk.map(async (removal) => {
+          const scope = await resolveScopeForRemoval(orgCtx, removal.id);
+          return pick(removal, await buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads }));
+        }),
+      );
+      settled.forEach((outcome, index) => {
+        if (outcome.status === "fulfilled") result.push(outcome.value);
+        else logger.warn({ removalId: chunk[index]?.id }, "Removal attention skipped: build failed");
+      });
+    }
+    return result;
   }
-  return [...result, ...rejected];
+  const [draftRows, returnedRows] = await Promise.all([
+    project(drafts, (removal, ctx) => ({
+      removalId: removal.id,
+      code: removal.code,
+      createdAt: removal.createdAt,
+      readiness: deriveRemovalReadiness(toRemovalReadinessFacts(ctx)),
+    })),
+    project(returned, (removal, ctx) => ({
+      removalId: removal.id,
+      code: removal.code,
+      createdAt: removal.createdAt,
+      correction: correctionForRemoval(removal.id, Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat()),
+    })),
+  ]);
+  return { drafts: draftRows, rejected, returned: returnedRows };
 }

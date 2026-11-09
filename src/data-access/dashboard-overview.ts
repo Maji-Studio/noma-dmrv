@@ -61,7 +61,12 @@ import {
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { facilityListHref } from "@/lib/dashboard-links";
-import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
+import {
+  NO_REMOVAL_ATTENTION,
+  REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+  REMOVAL_REJECTED_ATTENTION_TITLE,
+  type RemovalAttentionRows,
+} from "@/lib/certification/removal-attention";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import { loadReturnedRemovalIds } from "./dashboard-returned-removals";
 import {
@@ -197,6 +202,8 @@ export async function getDashboardOverview(
   ctx: OrgContext,
   facilityId: string,
   range: DashboardRange,
+  /** Draft, rejected and returned Removal rows (read model); this aggregate orders, caps and counts them. */
+  removalAttention: Promise<RemovalAttentionRows> = Promise.resolve(NO_REMOVAL_ATTENTION),
 ): Promise<DashboardOverview> {
   requireOrgScope(ctx);
   const allocationAggregate = sourceAllocationAggregate(ctx);
@@ -338,7 +345,7 @@ export async function getDashboardOverview(
             ),
           ),
       ]),
-      getDashboardAttentionItems(ctx, facilityId, todayStr),
+      getDashboardAttentionItems(ctx, facilityId, todayStr, removalAttention),
       getDashboardStations(ctx, facilityId),
       loadDashboardStructuralGapCounts(ctx, facilityId),
     ]);
@@ -658,6 +665,7 @@ export async function getDashboardAttentionItems(
   ctx: OrgContext,
   facilityId: string,
   todayStr: string,
+  removalAttention: Promise<RemovalAttentionRows> = Promise.resolve(NO_REMOVAL_ATTENTION),
 ): Promise<{ items: DashboardAttentionItem[]; batches: DashboardBatchAttentionCounts }> {
   requireOrgScope(ctx);
   const orgId = ctx.organizationId;
@@ -753,6 +761,10 @@ export async function getDashboardAttentionItems(
     .flatMap(({ row }) => row.removals.map((removal) => ({ removalId: removal.id, ghgStatementId: removal.ghgStatementId })));
   const returnedRemovalIds = await loadReturnedRemovalIds(ctx, submittedHolders);
 
+  const removalRows = await removalAttention;
+  // One row per returned Removal replaces the per-credit-batch rows it already covers.
+  const coveredReturned = new Set(removalRows.returned.map((row) => row.removalId));
+  let returnedBatchCount = 0;
   const interrupted = new Map<string, DashboardAttentionItem>();
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
@@ -771,6 +783,9 @@ export async function getDashboardAttentionItems(
         href: removalResubmitHref(removal.id, facilityId),
       });
     }
+    const returnedHere = removals.filter((removal) => returnedRemovalIds.has(removal.id));
+    if (attention.period === "returned") returnedBatchCount += 1;
+    if (attention.period === "returned" && returnedHere.length > 0 && returnedHere.every((removal) => coveredReturned.has(removal.id))) continue;
     if (attention.period === "notSubmitted" || attention.period === "returned") {
       (attention.period === "returned" ? returned : notSubmitted).push({
         id: `batch-pending-${row.id}`,
@@ -806,12 +821,18 @@ export async function getDashboardAttentionItems(
     items: [
       ...capOrGroup(interruptedRows, interruptedRows.length, () =>
         groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
+      ...capOrGroup(removalRows.drafts, removalRows.drafts.length, () =>
+        groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList)),
+      ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
+        groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList)),
       ...flags,
+      ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>
+        groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList)),
       ...capOrGroup(returned, returned.length, () =>
         groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList)),
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
         groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
     ],
-    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length, returned: returned.length },
+    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length, returned: returnedBatchCount },
   };
 }
