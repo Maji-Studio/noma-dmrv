@@ -28,14 +28,18 @@ export async function waitForFacilityHydration(
 /**
  * Waits for the client to hydrate on any page, whichever facility is active.
  * The sidebar facility selector renders a skeleton until FacilityProvider
- * resolves on the client, then its button. Target it by test id: the org
- * switcher is also a listbox button once a second organization exists. The
- * desktop sidebar stays in the DOM below `md` (only hidden), so this works at
- * phone width too.
+ * resolves on the client, then its button, or the "Add first facility" link
+ * when the organization has no facility yet. Target the button by test id:
+ * the org switcher is also a listbox button once a second organization
+ * exists. The desktop sidebar stays in the DOM below `md` (only hidden), so
+ * this works at phone width too.
  */
 export async function waitForAppHydration(page: Page) {
+  const sidebar = page.locator("aside");
   await expect(
-    page.locator('aside [data-testid="facility-selector"]'),
+    sidebar
+      .locator('[data-testid="facility-selector"]')
+      .or(sidebar.getByRole("link", { name: "Add first facility" })),
   ).toBeAttached({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
 }
 
