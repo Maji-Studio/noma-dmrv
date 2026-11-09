@@ -206,7 +206,8 @@ function SheetStatusBlock({
     : status.reasons.filter((reason) =>
         !blockers.includes(reason)
         && !(outcome && (reason === REMOVAL_FAILED_REVIEW_REASON || reason === REMOVAL_INTERRUPTED_RECONCILE_REASON)));
-  const line = nextStepLine(status);
+  // A returned Removal has its own notice below; "Isometric verifies it" would contradict it.
+  const line = summary.correction ? null : nextStepLine(status);
   return (
     <>
       {/* A Notice announces itself, so progress and check changes reach assistive tech. */}

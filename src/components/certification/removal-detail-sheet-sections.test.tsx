@@ -176,6 +176,13 @@ describe("RemovalDetailSheet status line", () => {
   });
 });
 
+describe("RemovalDetailSheet returned Removal", () => {
+  it("does not say Isometric is verifying a Removal that was returned", () => {
+    renderSheet({ ...SUMMARY, local: "submitted", externalId: "rmv_1", readiness: { state: "submitted", reasons: [] }, correction: { removalId: "rem-1", removalCode: "RM-0001", windowOpen: true, resubmitNeeded: true, statement: { id: "st", status: "FAILED_VERIFICATION", reportingPeriodStartOn: "2026-02-02", reportingPeriodEndOn: "2026-03-20" }, batches: [], changed: [] } } as unknown as RemovalListRow);
+    expect(document.body.textContent).not.toContain("Isometric verifies it");
+  });
+});
+
 describe("sheet status helpers", () => {
   it("maps a draft to Not submitted and keeps other states", () => {
     expect(sheetStatusFor(BLOCKED)).toEqual({ value: "draft", label: "Not submitted" });
