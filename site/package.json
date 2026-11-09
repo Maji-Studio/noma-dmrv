@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --port 3120",
-    "build": "astro build",
+    "build": "node ../scripts/fetch-fonts.mjs --out public/fonts && astro build",
     "preview": "astro preview --port 3120",
     "check": "astro check",
     "check:assets": "node scripts/check-public-assets.mjs"
