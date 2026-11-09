@@ -104,6 +104,13 @@ test.describe("Deferred create attachments", () => {
       "aria-busy",
       "false",
     );
+    // The snapshot reads the row Actions buttons, which render after the rows.
+    // Wait for the seeded feedstock's button, or it counts as newly created.
+    await expect(
+      page.getByRole("button", {
+        name: `${ACTION_LABEL_PREFIX}${seededData.feedstock.code}`,
+      }),
+    ).toBeVisible();
     const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
     await page.click('button:has-text("New feedstock")');
