@@ -15,7 +15,8 @@ import {
   ListBulletsIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { EmptyState } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import {
   rankRecords,
   recordHasMissingReadings,
@@ -242,13 +243,9 @@ export function EnergyRecordList({
           </div>
         )}
         {ranked.length > TOP_ROWS && (
-          <button
-            type="button"
-            onClick={() => setShowAll(!showAll)}
-            className="self-start body-small font-medium text-[var(--color-interaction)] underline-offset-4 hover:underline"
-          >
+          <Button variant="noOutline" size="small" className={cn("-ml-12 self-start", PHONE_TOUCH_TARGET)} onClick={() => setShowAll(!showAll)}>
             {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
-          </button>
+          </Button>
         )}
       </div>
     </section>

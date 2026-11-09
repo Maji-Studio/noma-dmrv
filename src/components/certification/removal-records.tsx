@@ -14,7 +14,7 @@ import { Button, EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { INLINE_HIT_AREA, INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA, PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -35,11 +35,6 @@ const RECORD_KIND_LINK: Record<RemovalRecord["kind"], RecordKind> = {
   feedstock: "feedstock",
 };
 
-const TEXT_LINK = cn(
-  "inline-flex min-h-44 shrink-0 items-center self-start body-small text-[var(--color-text-primary)] underline underline-offset-4 sm:min-h-0",
-  INLINE_HIT_AREA_FROM_SM,
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
-);
 /** 44px tall on a phone, text height from sm; the sibling rows keep their own spacing, so targets never overlap. */
 const PHONE_TARGET = "inline-flex min-h-44 items-center sm:min-h-0";
 const ROW_DIVIDER = "[border-top:var(--row-divider)] first:[border-top:none]";
@@ -116,10 +111,10 @@ export function RecordGroup({ title, records, facilityId, mode }: { title: strin
         ))}
       </ul>
       {!showAll && hidden > 0 && (
-        <button type="button" onClick={revealRest} className={TEXT_LINK}>
+        <Button variant="noOutline" size="small" className={cn("-ml-12 self-start", PHONE_TOUCH_TARGET)} onClick={revealRest}>
           Show all {records.length}
           <span className="sr-only"> {title.toLowerCase()}</span>
-        </button>
+        </Button>
       )}
     </div>
   );
