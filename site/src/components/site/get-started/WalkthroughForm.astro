@@ -19,8 +19,11 @@ const ERRORS: Record<string, string> = {
   name: "Enter your name.",
   email: "Enter your work email, like name@company.com.",
   company: "Enter your company name.",
+  size: "Choose a plant size.",
 };
-const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "text" | "email" }[] = [
+// Same caps as the app's WALKTHROUGH_FIELD_LIMITS (src/config/walkthrough.ts), so the browser stops overlong input.
+const MAX = { name: 200, email: 320, company: 200, message: 4000 };
+const TEXT_FIELDS: { name: "name" | "email" | "company"; label: string; autocomplete: string; type: "text" | "email" }[] = [
   { name: "name", label: w.fields.name, autocomplete: "name", type: "text" },
   { name: "email", label: w.fields.email, autocomplete: "email", type: "email" },
   { name: "company", label: w.fields.company, autocomplete: "organization", type: "text" },
@@ -31,17 +34,18 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
     {TEXT_FIELDS.map((f) => (
       <div class="wf-field" data-wf-field>
         <label for={id(f.name)}>{f.label}</label>
-        <input id={id(f.name)} name={f.name} type={f.type} autocomplete={f.autocomplete} required aria-describedby={id(`${f.name}-error`)} />
+        <input id={id(f.name)} name={f.name} type={f.type} autocomplete={f.autocomplete} maxlength={MAX[f.name]} required aria-describedby={id(`${f.name}-error`)} />
         <p class="wf-error" id={id(`${f.name}-error`)} data-message={ERRORS[f.name]}></p>
       </div>
     ))}
-    <div class="wf-field">
+    <div class="wf-field" data-wf-field>
       <label for={id("size")}>{w.fields.size}</label>
-      <span class="wf-select"><select id={id("size")} name="size"><option value="" disabled selected>Choose a size</option>{w.sizes.map((s) => <option>{s}</option>)}</select></span>
+      <span class="wf-select"><select id={id("size")} name="size" required aria-describedby={id("size-error")}><option value="" disabled selected>Choose a size</option>{w.sizes.map((s) => <option>{s}</option>)}</select></span>
+      <p class="wf-error" id={id("size-error")} data-message={ERRORS.size}></p>
     </div>
     <div class="wf-field wf-field--wide">
       <label for={id("msg")}>{w.fields.message}</label>
-      <textarea id={id("msg")} name="message" rows="4"></textarea>
+      <textarea id={id("msg")} name="message" rows="4" maxlength={MAX.message}></textarea>
     </div>
   </div>
   <input class="wf-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
@@ -58,20 +62,21 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
     sent: "Thanks. We'll be in touch.",
     rate_limited: "Too many requests from this connection. Try again in an hour.",
     error: "We could not send your request. Try again in a few minutes.",
+    invalid: "Check the highlighted fields.",
   };
   document.querySelectorAll<HTMLFormElement>("form[data-wf]").forEach((form) => {
     const status = form.querySelector<HTMLElement>("[data-wf-status]");
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const fields = [...form.querySelectorAll<HTMLInputElement>("[data-wf-field] input")];
+    const fields = [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-wf-field] :is(input, select)")];
     const say = (text: string) => { if (status) status.textContent = text; };
-    const check = (input: HTMLInputElement) => {
+    const mark = (input: HTMLInputElement | HTMLSelectElement, ok: boolean) => {
       const error = document.getElementById(input.getAttribute("aria-describedby") || "");
-      const ok = input.value.trim() !== "" && input.checkValidity();
       if (ok) input.removeAttribute("aria-invalid"); else input.setAttribute("aria-invalid", "true");
       if (error) error.textContent = ok ? "" : error.dataset.message || "";
       return ok;
     };
-    fields.forEach((input) => input.addEventListener("input", () => { if (input.hasAttribute("aria-invalid")) check(input); }));
+    const check = (input: HTMLInputElement | HTMLSelectElement) => mark(input, input.value.trim() !== "" && input.checkValidity());
+    fields.forEach((input) => ["input", "change"].forEach((type) => input.addEventListener(type, () => { if (input.hasAttribute("aria-invalid")) check(input); })));
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       say("");
@@ -89,7 +94,16 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
           say(MESSAGES.sent);
           return;
         }
-        say(res.status === 429 ? MESSAGES.rate_limited : MESSAGES.error);
+        if (res.status === 400) {
+          // The app names the fields it refused (never their values); show them like a client-side error.
+          const body = await res.json().catch(() => ({}));
+          const named = fields.filter((input) => Array.isArray(body.fields) && body.fields.includes(input.name));
+          named.forEach((input) => mark(input, false));
+          named[0]?.focus();
+          say(MESSAGES.invalid);
+        } else {
+          say(res.status === 429 ? MESSAGES.rate_limited : MESSAGES.error);
+        }
       } catch {
         say(MESSAGES.error);
       }

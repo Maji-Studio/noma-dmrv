@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { env } from "@/config/env";
 import {
+  WALKTHROUGH_DAILY_BUDGET,
   WALKTHROUGH_LOCAL_ORIGINS,
   WALKTHROUGH_MAX_BODY_BYTES,
   WALKTHROUGH_ORIGINS,
@@ -119,6 +120,16 @@ export async function POST(request: Request): Promise<Response> {
 
   if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL || !env.WALKTHROUGH_TO) {
     return response.json(STATUS.unavailable, { error: "unavailable" }, "not_configured");
+  }
+  // Only valid, human-looking requests spend the site-wide budget.
+  try {
+    const budget = await consumeRateLimit(WALKTHROUGH_DAILY_BUDGET);
+    if (!budget.allowed) {
+      response.headers.set("Retry-After", String(budget.retryAfterSeconds));
+      return response.json(STATUS.rateLimited, { error: "rate_limited" }, "daily_budget");
+    }
+  } catch {
+    return response.json(STATUS.unavailable, { error: "unavailable" }, "rate_limit_unavailable");
   }
   const email = walkthroughRequestEmail({ ...input, to: env.WALKTHROUGH_TO, appUrl: env.NEXT_PUBLIC_APP_URL });
   try {

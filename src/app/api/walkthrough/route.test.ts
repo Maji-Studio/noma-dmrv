@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { WALKTHROUGH_FIELD_LIMITS, WALKTHROUGH_MAX_BODY_BYTES, WALKTHROUGH_RATE_LIMIT } from "@/config/walkthrough";
+import { WALKTHROUGH_DAILY_BUDGET, WALKTHROUGH_FIELD_LIMITS, WALKTHROUGH_MAX_BODY_BYTES, WALKTHROUGH_RATE_LIMIT } from "@/config/walkthrough";
 import { clientIpBucketKey } from "@/lib/api/client-ip";
 
 const mocks = vi.hoisted(() => ({
@@ -88,7 +88,8 @@ it.each(["http://localhost:3120", "http://127.0.0.1:3120"])("allows local origin
   const response = await POST(request(INPUT, origin));
   expect(response.status).toBe(403);
   expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  expect(mocks.consume).toHaveBeenCalledOnce();
+  // The allowed send spent the IP bucket and the daily budget; the refused one spent nothing.
+  expect(mocks.consume).toHaveBeenCalledTimes(2);
 });
 
 it.each([
@@ -192,6 +193,16 @@ it.each([
 it.each(["name", "company", "size", "message"] as const)("enforces the %s field cap", async field => {
   await expectJson(await POST(request({ ...INPUT, [field]: "x".repeat(WALKTHROUGH_FIELD_LIMITS[field] + 1) })),
     400, { error: "invalid", fields: [field] });
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it("spends the site-wide daily budget only on a valid request, and stops at it", async () => {
+  mocks.consume.mockResolvedValueOnce(ADMITTED)
+    .mockResolvedValueOnce({ ...ADMITTED, allowed: false, remaining: 0, retryAfterSeconds: 1728 });
+  const response = await POST(request());
+  await expectJson(response, 429, { error: "rate_limited" });
+  expect(response.headers.get("Retry-After")).toBe("1728");
+  expect(mocks.consume).toHaveBeenLastCalledWith(WALKTHROUGH_DAILY_BUDGET);
   expect(mocks.send).not.toHaveBeenCalled();
 });
 
