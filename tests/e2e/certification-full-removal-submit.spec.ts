@@ -196,7 +196,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
           dialog.getByRole("region", { name: "Components" }),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
         await expect(dialog.getByText("Recorded zero").first()).toBeVisible();
-        await dialog.getByRole("button", { name: "Back", exact: true }).first().click();
+        await dialog.getByRole("button", { name: "Back to summary", exact: true }).click();
       }
 
       // Every facility-level check met ⇒ the submit button is enabled.

@@ -307,17 +307,27 @@ describe("SubmitStep", () => {
   describe("footer", () => {
     const idle = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: false, data: undefined, error: null, reset: vi.fn() };
 
-    async function renderStep(ctx: RemovalCertifyContext) {
+    async function renderStep(ctx: RemovalCertifyContext, onBackToEmpty?: () => void) {
       let renderer: ReactTestRenderer | undefined;
       await act(async () => {
         renderer = create(
-          <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={idle as never} />,
+          <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={idle as never} onBackToEmpty={onBackToEmpty} />,
         );
       });
       return renderer!;
     }
 
-    it("has no footer at all while something blocks: no Submit, no Discard, no Close", async () => {
+    it("keeps only the way back to Empty components while blocked, for a draft with confirmed zeros", async () => {
+      factsState.state = "blocked";
+      const onBackToEmpty = vi.fn();
+      const renderer = await renderStep(CONTEXT, onBackToEmpty);
+      const buttons = renderer.root.findAllByType("button");
+      expect(buttons).toHaveLength(1);
+      await act(async () => findButton(renderer, "Back to Empty components")?.props.onClick());
+      expect(onBackToEmpty).toHaveBeenCalledTimes(1);
+    });
+
+    it("has no footer at all while something blocks and no way back is offered: no Submit, no Discard, no Close", async () => {
       factsState.state = "blocked";
       const renderer = await renderStep(CONTEXT);
       expect(renderer.root.findAllByType("button")).toHaveLength(0);

@@ -58,7 +58,7 @@ import { ReviewDetails } from "./review-details";
 import { buildReviewItems } from "./review-items";
 import { REVIEW_TITLE_ID, type ChangedFigure } from "./review-parts";
 import { useFixProgress, useRecheckOnReturn } from "./use-fix-progress";
-import { buildSubmissionFacts, isRemovalCompilationReady } from "./submission-facts";
+import { actionableSubmissionChecks, buildSubmissionFacts, isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
@@ -71,6 +71,8 @@ import { CarriedEntriesPanel } from "../carried-entries";
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
 
+const BACK_TO_EMPTY_LABEL = "Back to Empty components";
+
 // Design-system icon tier for icons inside button controls.
 const ACTION_ICON_SIZE = 20;
 
@@ -80,7 +82,7 @@ interface SubmitStepProps {
   facilityId: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
-  /** Back to the Empty components step, to undo a recorded zero. Shown on phones only, where the rail shows one step. */
+  /** Back to the Empty components step, to undo a recorded zero. Offered even while the review is blocked. */
   onBackToEmpty?: () => void;
 }
 
@@ -471,8 +473,15 @@ export function SubmitStep({
       {submitLabel}
     </Button>
   );
-  // Blocked, the fixes are the only job: no footer at all (the X and Esc close it).
-  const showFooter = submissionFacts.state !== "blocked";
+  // Blocked, the fixes are the only job: no Submit and no Discard (the X and Esc close it).
+  // The way back to Empty components stays, as a footer holding only that button.
+  const blocked = submissionFacts.state === "blocked";
+  const backToEmpty = onBackToEmpty ? (
+    <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onBackToEmpty} data-phone-back>
+      {BACK_TO_EMPTY_LABEL}
+    </Button>
+  ) : null;
+  const showFooter = !blocked || backToEmpty !== null;
 
   return (
     <div className="flex flex-col gap-24">
@@ -485,6 +494,9 @@ export function SubmitStep({
           compilation={compilationQuery.data ?? null}
           isCompilationLoading={compilationQuery.isLoading}
           compilationError={compilationQuery.error}
+          passedChecks={actionableSubmissionChecks(checklist)
+            .filter((check) => check.status === "met")
+            .map((check) => check.label)}
           onBack={() => showDetails(false)}
           onRetryCompilation={() => {
             void compilationQuery.refetch();
@@ -520,13 +532,9 @@ export function SubmitStep({
 
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
-          {submitButton}
-          {onBackToEmpty && (
-            <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onBackToEmpty} data-phone-back>
-              Back
-            </Button>
-          )}
-          {canDeleteRemoval ? (
+          {!blocked && submitButton}
+          {backToEmpty}
+          {!blocked && canDeleteRemoval ? (
             <Button
               variant="weak"
               className={PHONE_TOUCH_TARGET}

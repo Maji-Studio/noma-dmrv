@@ -7,10 +7,11 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
+  CaretDownIcon,
   CheckCircleIcon,
   CircleDashedIcon,
   ShieldWarningIcon,
@@ -130,7 +131,7 @@ export function FixList({ entries, onFix }: { entries: readonly FixEntry[]; onFi
   const open = entries.filter((entry) => !entry.fixed).length;
   return (
     <section aria-labelledby="review-fix" className="flex flex-col gap-12">
-      <h3 id="review-fix" className="title-heading-3">
+      <h3 id="review-fix" className="body-lead font-medium">
         {open === 1 ? "Fix this to submit" : "Fix these to submit"}
       </h3>
       <ul aria-label="To fix before submitting" className="flex flex-col">
@@ -147,6 +148,40 @@ export function FixedAck({ entries }: { entries: readonly FixEntry[] }) {
   const fixed = entries.filter((entry) => entry.fixed).length;
   if (fixed === 0 || fixed < entries.length) return null;
   return <Notice tone="success" title={`${fixed === 1 ? "Fixed" : `All ${fixed} fixed`}. Ready to submit.`} />;
+}
+
+/** "N checks passed": a count the operator can open, each passed check with its tick. */
+export function PassedChecks({ checks }: { checks: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  if (checks.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "inline-flex min-h-44 items-center gap-6 self-start body-small hover:text-[var(--color-text-primary)] sm:min-h-32",
+          MUTED,
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
+        )}
+      >
+        <CheckCircleIcon size={16} weight="fill" aria-hidden className="text-[var(--st-ok)]" />
+        {checks.length} {pluralize(checks.length, "check", "checks")} passed
+        <CaretDownIcon size={12} aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <ul className="flex flex-col gap-4 pl-4">
+          {checks.map((check) => (
+            <li key={check} className={cn("flex items-baseline gap-6 body-caption", MUTED)}>
+              <CheckCircleIcon size={12} weight="fill" aria-hidden className="shrink-0 translate-y-2 text-[var(--st-ok)]" />
+              {check}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- returned
@@ -179,7 +214,7 @@ export function ChangedGroup({ changes }: { changes: readonly ChangedFigure[] })
   return (
     <section aria-labelledby="review-changed" className="flex flex-col gap-16">
       <div className="flex flex-col gap-4">
-        <h3 id="review-changed" className="title-heading-3">
+        <h3 id="review-changed" className="body-lead font-medium">
           {changes.length} {pluralize(changes.length, "figure", "figures")} changed since you submitted
         </h3>
         <p className={cn("body-small", MUTED)}>

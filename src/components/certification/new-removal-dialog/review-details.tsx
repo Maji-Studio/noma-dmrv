@@ -10,6 +10,8 @@
 "use client";
 
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { ExplanationInfo } from "@/components/ui/explanation-info";
 import type { RemovalCompilationView } from "@/fn/certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
@@ -19,6 +21,7 @@ import { CarriedEntriesPanel } from "../carried-entries";
 import { ComponentTable } from "./component-table";
 import type { ComponentTable as ComponentTableModel } from "./component-table-model";
 import { DebugDrawer } from "./debug-drawer";
+import { PassedChecks } from "./review-parts";
 import { SourceRecords } from "./source-records";
 import type { SubmissionFacts } from "./submission-facts";
 
@@ -54,6 +57,7 @@ export function ReviewDetails({
   compilation,
   isCompilationLoading,
   compilationError,
+  passedChecks,
   onBack,
   onRetryCompilation,
 }: {
@@ -64,6 +68,8 @@ export function ReviewDetails({
   compilation: RemovalCompilationView | null;
   isCompilationLoading: boolean;
   compilationError: Error | null;
+  /** Labels of the checks that passed, behind "N checks passed". */
+  passedChecks: readonly string[];
   onBack: () => void;
   onRetryCompilation: () => void;
 }) {
@@ -71,19 +77,13 @@ export function ReviewDetails({
   return (
     <div className="flex flex-col gap-24">
       <div className="-my-8 flex flex-col">
-        <button
-          type="button"
-          onClick={onBack}
-          className={cn(
-            "inline-flex min-h-44 items-center gap-4 self-start body-small text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
-          )}
-        >
+        <Button variant="noOutline" className={cn("self-start", PHONE_TOUCH_TARGET)} onClick={onBack}>
           <CaretLeftIcon size={16} aria-hidden />
-          Back
-        </button>
+          Back to summary
+        </Button>
       </div>
       <FactsLine facts={facts} />
+      <PassedChecks checks={passedChecks} />
       <ComponentTable table={table} facilityId={facilityId} />
       <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
       <SourceRecords
