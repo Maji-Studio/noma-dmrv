@@ -142,7 +142,7 @@ describe("credit batch page model", () => {
       await db.update(certificationSubmissions).set({ status: "draft", metadata: {}, lockedAt: null })
         .where(and(eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.id, submission.id)));
       const draftAttention = await getDashboardAttentionItems(makeTestOrgContext(), fixture.facilityId, "2099-01-01");
-      expect(draftAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended · not submitted yet" }));
+      expect(draftAttention.items).toContainEqual(expect.objectContaining({ title: "Period ended, not submitted yet" }));
 
     } finally {
       await cleanupLineageFixture(fixture);

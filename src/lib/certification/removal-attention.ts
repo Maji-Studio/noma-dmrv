@@ -1,8 +1,9 @@
 /**
  * What the dashboard's "Needs attention" list says about a Removal (#1554).
  * One row per Removal that needs the operator, in the label form of the other
- * rows: a draft reads "N to fix" or "Ready to submit"; a rejected one reads as
- * the Removals list calls it ("Submission failed"); a returned one reads
+ * rows: a draft reads "N to fix", "Ready to submit" or "Couldn't check";
+ * a rejected one reads as the Removals list calls it ("Submission failed");
+ * a returned one reads
  * "Correction needed" or "Resubmit needed"; a submitted Removal has no row.
  * Pure, so the list and its tests share one source. The data-access aggregate
  * (`getDashboardOverview`) takes these rows and owns ordering, caps and totals.
@@ -15,11 +16,14 @@ import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-
 import { correctionStatus } from "@/lib/removal-correction-copy";
 import { recordHref } from "@/lib/record-links";
 
+export const REMOVAL_READINESS_UNAVAILABLE_TITLE = "Couldn't check. Open it to see what is left.";
+
 export const REMOVAL_INTERRUPTED_ATTENTION_TITLE = "Submission interrupted";
 export const REMOVAL_REJECTED_ATTENTION_TITLE = REMOVAL_SUBMISSION_FAILED.label;
 
 /** A draft's title, or null when it needs nothing from the operator right now (a submission is running). */
-export function draftRemovalAttentionTitle(readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount">): string | null {
+export function draftRemovalAttentionTitle(readiness: DraftRemovalReadiness["readiness"]): string | null {
+  if (readiness === null) return REMOVAL_READINESS_UNAVAILABLE_TITLE;
   if (readiness.state === "ready") return "Ready to submit";
   if (readiness.state === "blocked") return `${readiness.fixCount ?? readiness.reasons.length} to fix`;
   return null;
@@ -32,7 +36,8 @@ interface RemovalAttentionBase {
 }
 
 export type DraftRemovalReadiness = RemovalAttentionBase & {
-  readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount">;
+  /** Null means readiness failed to load; the draft still needs an operator row. */
+  readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount"> | null;
 };
 
 /** A Removal whose last submission was rejected: it stays with the operator. */
@@ -61,6 +66,7 @@ export const NO_REMOVAL_ATTENTION: RemovalAttentionRows = { drafts: [], rejected
 function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string): DashboardAttentionItem {
   return {
     id: `removal-draft-${removal.removalId}`,
+    recordIds: [removal.removalId],
     entityCode: removal.code,
     date: removal.createdAt,
     title,

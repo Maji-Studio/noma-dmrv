@@ -496,6 +496,8 @@ answer with the same `ActionResult` envelope, `conflict` included. Route
 handlers stay thin: they name the read, its log context, and its fallback
 message. A migrated read has no Server Action wrapper left; adding one back
 means wrapping the same core in `withAction`, never a second copy of the query.
+Dashboard overview and batch scope use `/api/reads/dashboard/overview` and
+`/api/reads/dashboard/batch-scope`, with facility guards in their read cores.
 
 Status mapping belongs to the adapter alone: a denied org context answers 401
 when there is no session and 403 when the caller has no usable organization
@@ -833,29 +835,51 @@ Facility-scoped operations dashboard at `/dashboard`
 - Fresh organizations first see the computed setup guide (or the member
   setup-in-progress state); it collapses to a strip and disappears as setup
   records are created. Setup steps are derived, not saved checklist state.
-- The current Flow Hero body is a four-stat KPI band, the traceability hero
-  (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
-  and Certification panels. Week/month/all only changes the range-scoped KPI
-  and mass-flow values. Each KPI counts by its own record date (runs by start
-  day, applications by application date, the CO₂e estimate by the batch's
-  period end), and its (i) says which.
-- One `getDashboardOverview` action supplies the page. Its aggregate lives in
+- The body is a four-stat KPI band, the stage band (landscape scene, six stage
+  cells with counts, open-items bubbles and record actions), then To do, Bins
+  and Recent activity. The header's credit batch filter (`?batch=`) scopes the
+  KPIs, stage counts, To do and activity to records traceable to one batch, or
+  to any unarchived batch ("All credit batches"); a Removal row stays when the
+  Removal holds one of those batches. Grouped rows carry every represented
+  record id and stay when any is in scope, with their count and `ids` list
+  link narrowed to those ids. One scoped record shows its own single row (its
+  own link) when available; otherwise it stays grouped. Structural gaps are
+  facility setup and stay out. Stage bubbles count scoped records (a grouped
+  row adds its count). For all credit batches the downstream run-forward walk
+  is best effort: if it fails closed, the read retries without it and returns
+  `downstreamComplete: false`, and the page says Biochar and Delivery may be
+  low. Bins stay facility-wide.
+  The figures come from one org-scoped read, `getDashboardBatchScope`
+  (`src/data-access/dashboard-batch-scope.ts`, projected by
+  `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
+  set-based `loadCreditBatchAccounting` call, so its round trips do not grow
+  with the batch count. Activity filters record ids before each entity's top
+  eight and the final newest-first merge. All-batches reads skip batches deleted
+  mid-read; a missing selected batch fails. A split application counts once and
+  adds both batches' slices; CO₂e needs an estimate for every chosen batch.
+- The overview read (`getDashboardOverview`) supplies To do rows with range
+  `all`; batch scope supplies activity directly. The overview's aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
   gaps and credit batch rows on their flow station (batches on Production).
   Draft, rejected and returned Removals need the operator too: the read core
   `src/lib/read-models/dashboard-overview.ts` loads them best effort
-  (`removal-attention-sources.ts`, worded by `removal-attention.ts`) and hands
-  them to the aggregate, which orders them (after interrupted submissions),
+  (`removal-attention-sources.ts`, worded by `removal-attention.ts`). The Removal
+  list and latest submissions load first; if either fails, there are no Removal
+  rows. A draft whose readiness cannot load stays as "Couldn't check. Open it
+  to see what is left." Shared facility-facts failure marks every draft;
+  context-build or readiness-derivation failure marks only that draft. Rejected
+  and returned rows remain best effort. The core hands the rows to the
+  aggregate, which orders them (after interrupted submissions),
   caps and counts them like any other check; one row per returned Removal
   replaces that Removal's per-credit-batch returned rows.
-- The Attention panel lists each check's records while there are at most two,
-  else one grouped "N affected" row (linking to the list filtered by `ids`
-  where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row
-  per GPS gap. "N open" counts records: single rows, grouped counts and gap
-  counts, so every counted record is reachable from a row. A batch whose
-  Removal is submitted waits on the verifier and is left out entirely.
+- The overview lists each check's records while there are at most two, else one
+  grouped "N affected" row (linking to the list filtered by `ids` where the
+  list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row per GPS
+  gap. The dashboard's To do shows the single and grouped rows the batch filter
+  keeps. A batch whose Removal is submitted waits on the verifier and is left
+  out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).

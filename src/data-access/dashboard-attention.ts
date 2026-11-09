@@ -72,7 +72,7 @@ export function pendingBatchesWhere(
   );
 }
 
-export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended · not submitted yet";
+export const PERIOD_ENDED_NOT_SUBMITTED_TITLE = "Period ended, not submitted yet";
 
 /**
  * A closed period waits on the verifier ("submitted"), on the operator's

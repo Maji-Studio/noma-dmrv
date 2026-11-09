@@ -12,7 +12,6 @@ export { dashboardOverviewKeys };
 // refetching on every mount (project React Query convention).
 const DASHBOARD_OVERVIEW_STALE_TIME_MS = 30_000;
 
-
 /**
  * Facility dashboard overview (KPI band, traceability stations, mass flow,
  * attention queue, activity, certification). Disabled until a facility is
