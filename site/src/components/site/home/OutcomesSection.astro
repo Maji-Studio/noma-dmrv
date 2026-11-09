@@ -1,0 +1,60 @@
+---
+/**
+ * OutcomesSection: Home's three outcomes for an owner, one cell each, every cell linking to its Product
+ * chapter (PRODUCT_SECTIONS): Run the plant (bin A after a draw, AskAnswer "bin"), Get credits issued (what a
+ * removal still misses, AskAnswer "missing") and Sell with proof (the buyer's phone, JourneyPhone). Cells
+ * share subgrid rows like the old Ask section. One column under 900px. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import AskAnswer from "./AskAnswer.astro";
+import JourneyPhone from "../JourneyPhone.astro";
+import { PRODUCT_SECTIONS } from "../../../config.js";
+import "./ask-section.css";
+
+const [RUN, CREDITS, PROOF] = PRODUCT_SECTIONS;
+const REGISTRY_NOTE = "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.";
+const CELLS = [
+  {
+    id: "bin", who: RUN.label, href: `/product#${RUN.id}`, link: "See how the plant runs",
+    title: "Know what is in every bin.",
+    text: "Every run lands in its bin with its dry mass and moisture. Every draw comes off the stock, oldest first, newest first or mixed.",
+    alt: "Bin A after its last draw: 410 kg of dry biochar left, 170 kg placed on 10 September and 240 kg on 12 September, holding 72 kg of water.",
+  },
+  {
+    id: "missing", who: CREDITS.label, href: `/product#${CREDITS.id}`, link: "See how credits add up",
+    title: "See what a removal still needs.",
+    text: "Each removal lists the records and evidence behind it, and shows what is missing before you prepare the submission.",
+    alt: "Removal on the coffee field, 270 kg of dry biochar applied. Four checks are in place; the lab result for PR-002 is missing.",
+  },
+  {
+    id: "journey", who: PROOF.label, href: `/product#${PROOF.id}`, link: "See the buyer’s view",
+    title: "Show buyers where it went.",
+    text: "Give a buyer a page for their credit batch, from the field back to the sawmill, with the record behind each step.",
+    alt: "A phone showing 270 kg of dry biochar on the coffee field, followed back through delivery DL-001, product BP-001, the mix bin and production run PR-001 to feedstock delivery FD-001 from Sawmill A.",
+  },
+];
+---
+<GridFrame class="ask oc" pad="none" flush aria-labelledby="oc-title">
+  <div class="ask-head">
+    <h2 id="oc-title" class="t-h2">One set of records, three jobs done.</h2>
+    <p class="t-lead">Your team records the work once. The same records run the plant, get your removals ready for the registry, and show buyers what they paid for.</p>
+  </div>
+  <div class="gf-cells ask-cells" style="--cols:3">
+    {CELLS.map((c) => (
+      <article aria-labelledby={`oc-${c.id}`}>
+        <p class="ask-who">{c.who}</p>
+        <h3 id={`oc-${c.id}`} class="t-h3">{c.title}</h3>
+        <div class="ask-art" role="img" aria-label={c.alt}>
+          {c.id === "journey" ? <JourneyPhone class="oc-phone" /> : <AskAnswer kind={c.id} />}
+        </div>
+        <p class="t-body t-muted">{c.text}</p>
+        <TextLink href={c.href}>{c.link}</TextLink>
+      </article>
+    ))}
+  </div>
+  <p class="t-caption ask-note">Illustrative records. {REGISTRY_NOTE}</p>
+</GridFrame>
+<style>
+  .oc :global(.oc-phone) { min-height: 0; }
+</style>

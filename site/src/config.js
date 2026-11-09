@@ -22,13 +22,13 @@ export const NAV = [
 ];
 export const NAV_CTA = { key: "get-started", label: "Get started", href: "/get-started" };
 
-// Section anchors. Home links to these; the Product and Why pages must use the same ids.
+// Product chapters (the sticky index) and the section ids inside them. Home links to these; the Product page
+// must use the same ids. Each chapter id sits on its ChapterHead; the sections keep their own ids.
 export const PRODUCT_SECTIONS = [
-  { id: "trace", label: "Trace" },
-  { id: "bins", label: "Bins and stock" },
-  { id: "emissions", label: "Emissions" },
-  { id: "evidence", label: "Evidence and reporting" },
-  { id: "next", label: "What’s next" },
+  { id: "run", label: "Run the plant" },
+  { id: "credits", label: "Get credits issued" },
+  { id: "proof", label: "Sell with proof" },
+  { id: "scale", label: "Across your sites" },
 ];
 // /why is five principles (the hero lists them as the page index); principle 1 compares with spreadsheets and paper, and other biochar dMRVs.
 // Home links to #who (the hero's audiences), #open-source and #mafinga.

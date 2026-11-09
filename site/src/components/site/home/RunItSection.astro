@@ -1,0 +1,47 @@
+---
+/**
+ * RunItSection: "How you run it", the two ways to run noma, side by side: host it yourself (MIT, free) or
+ * let MAJI run it (hosting, updates, help moving spreadsheets into records; priced per operation, no figures
+ * on the site). Each cell ends in its action. No props.
+ */
+import { GITHUB_URL } from "../../../config.js";
+import GridFrame from "../GridFrame.astro";
+import Button from "../Button.astro";
+
+const WAYS = [
+  {
+    k: "Self-host", title: "Run it yourself.", cost: "Free, MIT licence",
+    points: ["Your servers, your database", "Every line of code to inspect and change", "Setup instructions in the repository"],
+    cta: { href: GITHUB_URL, label: "View on GitHub", variant: "secondary", external: true },
+  },
+  {
+    k: "Run by MAJI", title: "Let us run it.", cost: "Priced per operation",
+    points: ["We host and update noma for you", "We help move your spreadsheets into records", "The same open code, so you can leave with your data"],
+    cta: { href: "/get-started", label: "Book a walkthrough", variant: "primary", external: false },
+  },
+];
+---
+<GridFrame class="ri" pad="none" flush aria-labelledby="ri-title">
+  <div class="ask-head ri-head">
+    <h2 id="ri-title" class="t-h2">Two ways to run it. Your data either way.</h2>
+    <p class="t-lead">Host noma on your own servers, or let us run it for you. It is the same open-source code, and your records stay yours.</p>
+  </div>
+  <div class="gf-cells ri-cells" style="--cols:2">
+    {WAYS.map((w) => (
+      <article class="stack">
+        <p class="t-category">{w.k}</p>
+        <h3 class="t-h3">{w.title}</h3>
+        <p class="ri-cost">{w.cost}</p>
+        <ul class="ri-points">{w.points.map((p) => <li>{p}</li>)}</ul>
+        <div class="actions"><Button href={w.cta.href} variant={w.cta.variant} external={w.cta.external}>{w.cta.label}</Button></div>
+      </article>
+    ))}
+  </div>
+</GridFrame>
+<style>
+  .ri-cells { border-top: var(--hairline) solid var(--rule); }
+  .ri-cells .t-h3, .ri-cells .t-category { margin: 0; }
+  .ri-cost { margin: 0; font-size: var(--fs-ui); color: var(--accent); }
+  .ri-points { display: grid; margin: 0; padding: 0; list-style: none; border-top: var(--hairline) solid var(--rule); }
+  .ri-points li { padding-block: var(--space-3); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-ui); }
+</style>
