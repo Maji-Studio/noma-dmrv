@@ -61,18 +61,20 @@ describe("applyBatchScope", () => {
     expect(byKey("suppliers").totalLabel).toBe("1 supplier");
   });
 
-  it("keeps only in-scope To do and activity rows and drops grouped rows and gaps", () => {
-    expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a3"]);
-    expect(scoped.structuralGaps).toEqual([]);
-    expect(scoped.attentionTotal).toBe(2);
+  it("keeps every To do row and gap, and only in-scope activity rows", () => {
+    expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a2", "a3", "a4"]);
+    expect(scoped.structuralGaps).toEqual([{ key: "gap" }]);
+    expect(scoped.attentionTotal).toBe(4);
     expect(scoped.activity.map((item) => item.id)).toEqual(["x1"]);
   });
 
-  it("counts credit batch rows on the Production bubble with the stage's own rows", () => {
-    expect(byKey("production").attention).toBe(2);
+  it("counts each stage's To do rows and the credit batch rows on the Production bubble", () => {
+    expect(byKey("production").attention).toBe(4);
     expect(byKey("production").reasons.map((reason) => reason.text)).toEqual([
       "PR-1: Run missing data",
+      "PR-2: Run in another batch",
       "CB-1: Period ended, not submitted yet",
+      "Production runs: Missing data",
     ]);
     expect(byKey("feedstock").attention).toBe(0);
   });

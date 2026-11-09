@@ -3,28 +3,21 @@
  * shape one batch (or all of them) contributes: the batch ids, each stage's
  * record count, the four KPI figures and the ids of every record in the
  * batches' roll-ups. `applyBatchScope` narrows the facility overview to it:
- * the stage counts and labels, the KPIs with hints that name the scope, only
- * the To do and activity rows that link to one of its records, and each
- * stage's open-items bubble.
+ * the stage counts and labels, the KPIs with hints that name the scope, and
+ * only the activity rows that link to one of its records. To do is work, so
+ * no filter hides it: every row, grouped row and structural gap stays, and
+ * each stage's open-items bubble counts the To do rows filed under it.
  */
 import type {
   DashboardKpi,
   DashboardOverview,
   DashboardStationKey,
 } from "@/data-access/dashboard-overview";
+import type { DashboardBatchScope } from "@/data-access/dashboard-batch-scope";
 import { plural } from "@/lib/dashboard-links";
 
-export interface DashboardBatchScopeView {
-  batchIds: string[];
-  stationTotals: Record<DashboardStationKey, number>;
-  kpis: {
-    feedstockProcessedDryTonnes: number | null;
-    biocharProducedDryTonnes: number | null;
-    appliedToSoilDryTonnes: number | null;
-    co2eStoredTonnes: number | null;
-  };
-  recordIds: string[];
-}
+/** The server read's shape (`getDashboardBatchScope`). */
+export type DashboardBatchScopeView = DashboardBatchScope;
 
 /** The count words the station read uses, so a batch count reads the same. */
 const STAGE_COUNT_WORDS: Record<DashboardStationKey, [string, string]> = {
@@ -69,9 +62,7 @@ function scopedKpis(base: DashboardKpi[], scope: DashboardBatchScopeView): Dashb
 export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView): DashboardOverview {
   const recordIds = scope.recordIds;
   const inScope = (href: string) => recordIds.some((id) => href.includes(id));
-  // Grouped rows and structural gaps count records across the facility, so
-  // they are left out.
-  const attention = overview.attention.filter((item) => item.count == null && inScope(item.href));
+  const attention = overview.attention;
   const stations = overview.stations.map((station) => {
     const listPath = pathOf(station.href);
     const own = attention.filter(
@@ -88,9 +79,6 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
     ...overview,
     stations,
     kpis: scopedKpis(overview.kpis, scope),
-    attention,
-    structuralGaps: [],
-    attentionTotal: attention.length,
     activity: overview.activity.filter((item) => inScope(item.href)),
   };
 }

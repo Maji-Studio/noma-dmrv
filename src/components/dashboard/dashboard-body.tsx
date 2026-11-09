@@ -1,14 +1,15 @@
 /**
  * The dashboard body for an onboarded facility: the KPI band, the stage band
  * (landscape scene, stage cells, record actions), then To do, Bins and Recent
- * activity. Everything above Bins reads the chosen credit batch (or all of
- * them); Bins stays facility-wide.
+ * activity. The KPIs, stage counts and activity read the chosen credit batch
+ * (or all of them); To do and Bins stay facility-wide.
  */
 "use client";
 
 import type { DashboardOverview } from "@/data-access/dashboard-overview";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { useDashboardBatchScope } from "@/hooks/use-dashboard-batch-scope";
 import { applyBatchScope } from "./batch-scope";
 import { BinsCard } from "./bins-card";
 import { useFlowActions } from "./flow-actions";
@@ -25,7 +26,6 @@ import {
   activityRows,
   todoRows,
 } from "./shared";
-import { useBatchScopeClient } from "./use-batch-scope-client";
 
 /** Recent activity rows: as many as the Bins card shows. */
 const ACTIVITY_ROWS = 5;
@@ -42,7 +42,7 @@ interface DashboardBodyProps {
 }
 
 export function DashboardBody({ data: overview, isLoading: overviewLoading, error, onRetry, facilityId, timeZone, status }: DashboardBodyProps) {
-  const scope = useBatchScopeClient(facilityId, useSelectedBatchId());
+  const scope = useDashboardBatchScope(facilityId, useSelectedBatchId());
   const data = overview && scope.data ? applyBatchScope(overview, scope.data) : undefined;
   const isLoading = overviewLoading || (data == null && scope.error == null);
   // What the facility can record now does not depend on the batch filter.
