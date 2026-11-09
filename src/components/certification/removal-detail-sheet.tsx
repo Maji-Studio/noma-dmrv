@@ -427,7 +427,6 @@ export function RemovalDetailSheet({
 
             <DetailSection title="Isometric">
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-                <DetailField label="Destination" value={isProduction ? "Production" : "Sandbox"} valuePresent />
                 <DetailField
                   label="Project"
                   value={

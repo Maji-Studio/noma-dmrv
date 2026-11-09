@@ -92,6 +92,7 @@ describe("RemovalDetailSheet structure", () => {
   it("holds the project and durability and sampling in Isometric", () => {
     renderSheet();
     const section = screen.getByText("Isometric", { exact: true }).closest("[data-detail-section]")!;
+    expect(section.textContent).not.toContain("Destination");
     expect(section.textContent).toContain("Project");
     expect(section.querySelector("a[href*='/project/prj_1']")?.textContent).toContain("prj_1");
     expect(section.textContent).toContain("Durability and sampling");
