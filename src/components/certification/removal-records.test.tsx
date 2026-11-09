@@ -121,9 +121,10 @@ describe("RemovalRecords states", () => {
 });
 
 describe("RemovalRecordsList link modes", () => {
-  it("keeps the sheet's links in the same tab by default", () => {
-    render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" />);
+  it("keeps the sheet's links in the same tab by default, with no external-link icon", () => {
+    const { container } = render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" />);
     open();
+    expect(container.querySelectorAll("svg[aria-hidden]").length).toBe(1); // the batch caret only
     for (const link of screen.getAllByRole("link")) {
       expect(link.getAttribute("target")).toBeNull();
     }
@@ -135,6 +136,8 @@ describe("RemovalRecordsList link modes", () => {
     open();
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(2);
+    // Each link carries the external-link icon, as the step's other new-tab links do.
+    for (const link of links) expect(link.querySelector("svg")).toBeTruthy();
     for (const link of links) {
       expect(link.getAttribute("target")).toBe("_blank");
       expect(link.getAttribute("rel")).toBe("noopener noreferrer");

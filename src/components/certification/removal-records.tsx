@@ -21,6 +21,7 @@ import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDateRange, formatDayString, formatTonnes } from "@/lib/format-utils";
 import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { recordHref, type RecordKind } from "@/lib/record-links";
+import { LinkLabel } from "./new-removal-dialog/link-label";
 import { cn } from "@/lib/utils";
 
 /** An open credit batch shows this many records per group before "Show all N". */
@@ -72,6 +73,11 @@ function linkAttrs(mode: RecordLinkMode | undefined) {
   };
 }
 
+/** A code link's text; in new-tab mode it carries the same external-link icon as the step's other new-tab links. */
+function CodeLabel({ code, mode }: { code: string; mode: RecordLinkMode | undefined }) {
+  return mode?.newTab ? <LinkLabel>{code}</LinkLabel> : <>{code}</>;
+}
+
 function RecordLine({ record, facilityId, mode }: { record: RemovalRecord; facilityId: string; mode?: RecordLinkMode }) {
   const mass = recordMassText(record);
   const href = recordHref(RECORD_KIND_LINK[record.kind], record.id, { facilityId });
@@ -83,7 +89,7 @@ function RecordLine({ record, facilityId, mode }: { record: RemovalRecord; facil
         {mass && <> · <span className="tabular-nums">{mass}</span></>}
       </span>
       <Link href={href} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "text-[length:var(--text-xs)]")}>
-        {record.code}
+        <CodeLabel code={record.code} mode={mode} />
       </Link>
     </li>
   );
@@ -133,7 +139,7 @@ function BatchRow({ batch, facilityId, summarize, mode }: { batch: RemovalBatchR
     <li className={cn("flex flex-col", ROW_DIVIDER)}>
       <div className="flex items-center gap-12">
         <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
-          {batch.code}
+          <CodeLabel code={batch.code} mode={mode} />
         </Link>
         <button
           type="button"
