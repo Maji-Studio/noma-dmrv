@@ -17,6 +17,7 @@ import {
   selectEntity,
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { createDbConnection } from "./fixtures/db";
 import { DEC_ORG_ID } from "@/db/org-defaults";
@@ -309,7 +310,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     // Navigate to samples
     await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     // Click "New Sample"
     await page.click('button:has-text("New Sample")');
@@ -338,7 +339,6 @@ test.describe("Production Run + Sample UI CRUD", () => {
     );
 
     // Verify sample appears in list
-    await page.waitForLoadState("networkidle");
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });

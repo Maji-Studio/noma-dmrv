@@ -9,6 +9,7 @@ import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
  *   dropzone, no delete buttons); edit mode exposes the upload controls
  */
 import { test, expect } from "./fixtures";
+import { waitForFacilityHydration } from "./fixtures/page-helpers";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
 import { eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
@@ -78,7 +79,7 @@ test.describe("Feedstock UI CRUD", () => {
   }) => {
     // Navigate to feedstocks list with facility context
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     // Open the create side sheet
     await page.click('button:has-text("New feedstock")');
@@ -125,7 +126,6 @@ test.describe("Feedstock UI CRUD", () => {
     await waitForSideSheetClose(page);
 
     // Verify feedstock appears in list
-    await page.waitForLoadState("networkidle");
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
@@ -195,7 +195,7 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
@@ -287,7 +287,7 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
@@ -310,7 +310,7 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
@@ -354,7 +354,8 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
+    await expect(page.locator("table tbody tr", { hasText: seededData.feedstock.code }).first()).toBeVisible();
 
     // Open the seeded feedstock's row into VIEW mode (rows are clickable via
     // onRowClick; filter by the seeded code so sort order doesn't matter).

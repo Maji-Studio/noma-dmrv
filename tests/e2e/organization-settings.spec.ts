@@ -5,9 +5,11 @@ import * as schema from "../../src/db/schema";
 import { test as authTest, expect } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { enterDefaultOrganization } from "./fixtures/organization-helpers";
+import { waitForAppHydration } from "./fixtures/page-helpers";
 
 const ORGANIZATION_NAME = "Dark Earth Carbon";
 const INVITEE_EMAIL = "org-e2e-invitee@example.com";
+const INVITATION_SETTLE_TIMEOUT_MS = 5_000;
 
 const test = authTest.extend<{ secondOrganizationName: string }>({
   secondOrganizationName: async ({}, provide) => {
@@ -40,13 +42,22 @@ function sectionWithHeading(page: Page, heading: string): Locator {
 async function openOrganizationSettings(page: Page): Promise<void> {
   await enterDefaultOrganization(page);
   await page.goto("/settings/members");
+  await waitForAppHydration(page);
   // First render may hit a dev-server compile of this route; allow extra time.
   // The route is now a pane inside the settings console: `Members` is both the
   // page title and the pane heading, and the rail carries the rest.
   await expect(
     page.getByRole("heading", { name: "Members", exact: true, level: 1 }),
   ).toBeVisible({ timeout: 30_000 });
-  await page.waitForLoadState("networkidle");
+  await expect(
+    sectionWithHeading(page, "Current members").getByRole("listitem").first(),
+  ).toBeVisible();
+  const pendingSection = sectionWithHeading(page, "Pending invitations");
+  await expect(
+    pendingSection.getByRole("listitem").first().or(
+      pendingSection.getByText("No pending invitations", { exact: true }),
+    ),
+  ).toBeVisible();
 }
 
 async function revokeInviteIfPresent(
@@ -128,7 +139,11 @@ test.describe("Organization foundation UI", () => {
       // Role text is lowercase in the DOM; the uppercase styling is CSS-only.
       await expect(pendingInvitation).toContainText(/member/i);
     } finally {
-      await page.waitForLoadState("networkidle");
+      // Cleanup must still run without masking the test's own failure.
+      await pendingInvitation.waitFor({
+        state: "visible",
+        timeout: INVITATION_SETTLE_TIMEOUT_MS,
+      }).catch(() => {});
       await revokeInviteIfPresent(page, pendingSection);
     }
 

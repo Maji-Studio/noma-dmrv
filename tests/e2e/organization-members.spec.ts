@@ -52,7 +52,6 @@ async function openMembers(page: Page, fixture: Fixture) {
   await expect(page.getByRole("heading", { name: "Members", exact: true, level: 1 })).toBeVisible({ timeout: HYDRATION_TIMEOUT_MS });
   // Typing before hydration loses the values (docs/testing.md).
   await expect(page.locator("aside").getByText(fixture.user.name)).toBeVisible({ timeout: HYDRATION_TIMEOUT_MS });
-  await page.waitForLoadState("networkidle");
 }
 
 async function signedInAs(fixture: Fixture, browser: Parameters<typeof createDirectAuthContext>[0], baseURL: string) {

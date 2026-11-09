@@ -27,6 +27,7 @@ import {
   selectEntity,
   selectFirstEntity,
   waitForFacilityHydration,
+  waitForAppHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -44,7 +45,6 @@ async function createApplicationForLineage(
 ) {
   // Order (biochar product is the one wired to the seeded production run).
   await page.goto(`/orders?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New order")');
   await waitForSideSheet(page);
@@ -63,7 +63,6 @@ async function createApplicationForLineage(
 
   // Delivery, already delivered (applications require a delivered delivery).
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New delivery")');
   await waitForSideSheet(page);
@@ -77,7 +76,6 @@ async function createApplicationForLineage(
 
   // Application against that delivery: 5000 kg (5 tonnes) initially.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New application")');
   await waitForSideSheet(page);
@@ -103,7 +101,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     // Baseline: visit /credit-batches and read the pre-edit applied (dry) figure.
     await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     const row = creditBatchRow(page, lineage.creditBatchCode);
     await expect(row).toBeVisible({ timeout: 10000 });
@@ -113,9 +111,10 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     // QueryClient created once in providers.tsx survives the route change).
     await page.locator("nav").getByRole("link", { name: "Applications" }).click();
     await page.waitForURL(/\/applications/);
-    await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
 
     const applicationRow = page.locator("table tbody tr").filter({ has: page.locator("[data-row-link]") }).first();
+    await expect(applicationRow).toBeVisible();
     await applicationRow.click();
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit application" }).click();
@@ -130,7 +129,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     // invalidated by the application mutation, or this would still read 4.50 t.
     await page.locator("nav").getByRole("link", { name: "Credit batches" }).click();
     await page.waitForURL(/\/credit-batches(\?|$)/);
-    await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     // The sidebar link opens the timeline; the row figures live in the list view.
     await page.getByRole("button", { name: "List", exact: true }).click();
 
