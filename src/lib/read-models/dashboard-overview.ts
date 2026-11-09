@@ -4,7 +4,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { loadRemovalAttentionSources } from "./removal-attention-sources";
 import { NO_REMOVAL_ATTENTION, removalAttentionRows } from "@/lib/certification/removal-attention";
 import type { OrgContext } from "@/lib/auth/server";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { facilityIdSchema } from "./facility-id";
 
 const dashboardOverviewInputSchema = z.object({
@@ -30,8 +30,19 @@ export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   // aggregate owns their order, caps and totals; they load alongside its own reads.
   const removalAttention = loadRemovalAttentionSources(ctx, facilityId)
     .then((sources) => removalAttentionRows(sources, facilityId))
-    .catch(() => {
-      logger.warn({ facilityId }, "Removal attention rows skipped: readiness failed to load");
+    .catch((error: unknown) => {
+      const cause = error instanceof Error && typeof error.cause === "object" && error.cause !== null
+        ? error.cause : undefined;
+      const code = (error instanceof Error && "code" in error ? error.code : undefined)
+        ?? (cause && "code" in cause ? cause.code : undefined);
+      logger.warn({
+        facilityId,
+        errorType: error instanceof Error ? sanitizeErrorMessage(error.name) : typeof error,
+        errorCode: typeof code === "string" || typeof code === "number" ? sanitizeErrorMessage(String(code)) : undefined,
+        errorMessage: sanitizeErrorMessage(error),
+        errorCauseMessage: cause && "message" in cause && typeof cause.message === "string"
+          ? sanitizeErrorMessage(cause.message) : undefined,
+      }, "Removal attention rows skipped: readiness failed to load");
       return NO_REMOVAL_ATTENTION;
     });
   return getDashboardOverview(ctx, facilityId, range, removalAttention);

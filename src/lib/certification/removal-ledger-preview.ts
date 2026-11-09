@@ -23,17 +23,6 @@ export interface RemovalLedgerInput {
   missingReason: string | null;
 }
 
-/** A required transport category with no legs recorded. */
-export const NO_LEGS_RECORDED = "No legs recorded";
-/** Legs exist but the category gives no single sum (a leg without a load mass or distance, or mixed factors). */
-export const LEGS_CANNOT_BE_SUMMED = "Recorded legs cannot be summed";
-
-/** Why a required transport input has no mass-distance: no legs, or legs the sum refuses. */
-function transportGap(magnitude: number | null, legCount: number): string | null {
-  if (magnitude != null) return null;
-  return legCount === 0 ? NO_LEGS_RECORDED : LEGS_CANNOT_BE_SUMMED;
-}
-
 export interface RemovalLedgerClaim {
   creditBatchId: string;
   creditBatchCode: string;
@@ -54,6 +43,17 @@ export interface RemovalLedgerPreview {
     deliveryCode: string;
     creditBatchIds: string[];
   }>;
+}
+
+/** A required transport category with no legs recorded. */
+export const NO_LEGS_RECORDED = "No legs recorded";
+/** Legs exist but the category gives no single sum (a leg without a load mass or distance, or mixed factors). */
+export const LEGS_CANNOT_BE_SUMMED = "Recorded legs cannot be summed";
+
+/** Why a required transport input has no mass-distance: no legs, or legs the sum refuses. */
+function transportGap(magnitude: number | null, legCount: number): string | null {
+  if (magnitude != null) return null;
+  return legCount === 0 ? NO_LEGS_RECORDED : LEGS_CANNOT_BE_SUMMED;
 }
 
 interface MemberBatchClaim {

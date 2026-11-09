@@ -50,7 +50,7 @@ Dated API observations and current readback rules belong in
 
 ### Method-B process history and registry contract (`certification/method-b-unlock-track-2`, `needs-registry-check`)
 
-- **Anchor:** `src/lib/isometric/storage-blueprints.ts:STORAGE_BLUEPRINTS` and `src/fn/certification/durability-readiness.ts`.
+- **Anchor:** `src/lib/isometric/storage-blueprints.ts:STORAGE_BLUEPRINTS` and `src/lib/certification/durability-readiness.ts`.
 - **Gap:** Track 2 shipped in #301; historical Method-B reasoning in [ADR 0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md), including its 2026-07-12 amendments, is not authority for the v1.1 pin. Unsampled 200-year binding is gated; unsampled 1,000-year is unsupported. Historical sandbox-only experiments do not establish a production wire contract.
 - **To resolve:** Before enabling Method B, confirm the unsampled representation and trailing historical sample pool/average, independent/distributed sampling gate versus warning, and the full production-process cadence window (#417). Synthetic same-day rows are not eligibility evidence. Reverify the v1.1 rule with the blueprint contract (#278), coordinating with #291. DEC was recorded as Method A only; do not infer current operator usage from that historical note.
 
@@ -62,7 +62,7 @@ Dated API observations and current readback rules belong in
 
 ### Ambiguous reconciliation lacks a failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
 
-- **Anchor:** `src/fn/certification/registry-create.ts:reconcileToResult`.
+- **Anchor:** `src/lib/certification/registry-create.ts:reconcileToResult`.
 - **Gap:** Multiple candidates reject the ledger row and retain `metadata.lastError` but append no failed sync event. GHG Statements can produce this ambiguity for a project/end date; `tests/registry-boundary-ghg-statement.test.ts` pins the silence.
 - **To resolve:** Decide whether to append `ghg_statement:create` failure with ambiguity wording and no response body; update the boundary assertion.
 
@@ -74,7 +74,7 @@ Dated API observations and current readback rules belong in
 
 ### Application future dates need the facility day (`isometric/application-future-facility-day`, opened 2026-10-21)
 
-- **Anchor:** `src/fn/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture`.
+- **Anchor:** `src/lib/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture`.
 - **Gap:** The stored UTC-midnight calendar day is compared with the current instant. East of UTC a valid same-day Application can fail; west of UTC a next-day Application can pass.
 - **To resolve:** Compare the application day with `src/lib/date-utils.ts:formatFacilityDate` using the current instant and facility timezone. Keep production-end checks as instant comparisons.
 
@@ -158,7 +158,7 @@ Dated API observations and current readback rules belong in
 
 ### Changed-hash orphan cleanup (`isometric/phase-5-changed-hash-orphans`, deferred)
 
-- **Anchor:** `src/fn/certification/submit-removal.ts:submitRemoval` and `src/fn/certification/registry-create.ts:performRegistryCreate`.
+- **Anchor:** `src/fn/certification/submit-removal.ts:submitRemoval` and `src/lib/certification/registry-create.ts:performRegistryCreate`.
 - **Gap:** Same-hash retries reconcile saved references; changed inputs intentionally create fresh version references. Resources from an older failed hash can remain unused.
 - **To resolve:** Reconcile/report these only if real partial-failure traffic warrants per-Datapoint bookkeeping.
 

@@ -53,7 +53,7 @@ are owned by `src/fn/certification/biochar-application-source-readback.ts`.
 The 2026-10-30 investigation recorded Datapoint Source PATCH as **full-list
 replacement**, not append. PR [#1510](https://github.com/Maji-Studio/noma-dmrv/pull/1510)
 implements GET, skip-if-present, then sorted-union PATCH in
-`src/fn/certification/durability-measurement-samples.ts`. Retry the idempotent
+`src/lib/certification/durability-measurement-samples.ts`. Retry the idempotent
 union without dropping existing Sources. This code behavior was checked during
 the cleanup; the provider semantics were not probed again.
 

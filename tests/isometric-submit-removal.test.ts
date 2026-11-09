@@ -43,12 +43,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { submitRemoval } from "@/fn/certification/submit-removal";
-import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
+import { compileRemovalSubmission } from "@/lib/certification/removal-submission-build";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 

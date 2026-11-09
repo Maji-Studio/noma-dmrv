@@ -1,24 +1,24 @@
 import { makeContext, makeTemplate, fakeExternalIds, makeInventorySourceDocument } from "./fixtures/submit-removal-orchestrator";
 // The harness registers its module mocks on import, so it must load before any module that pulls in the mocked ones.
 import type { TransportLeg } from "@/db/schema";
-import { generatedEvidenceFacts } from "@/fn/certification/generated-evidence-facts";
-import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
+import { generatedEvidenceFacts } from "@/lib/certification/generated-evidence-facts";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
 import * as evidenceStorage from "@/fn/certification/evidence-ledger-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import { logger } from "@/lib/log";
-import * as comparisonContext from "@/fn/certification/removal-context-build";
-vi.mock("@/fn/certification/removal-context-build");
+import * as comparisonContext from "@/lib/certification/removal-context-build";
+vi.mock("@/lib/certification/removal-context-build");
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { makeRemoteStatement } from "./fixtures/isometric-ghg-statement";
-import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
+import { loadRemovalEntryCorrection } from "@/lib/certification/removal-correction-core";
 import { assertStatementRemovalsCurrent } from "@/fn/certification/statement-removal-correction-core";
 import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import { getRecordLock } from "@/data-access/certification-lineage-guards";
 import { createProductionRun, updateProductionRun } from "@/data-access/production-runs";
-import { buildRemovalSubmissionBuild } from "@/fn/certification/removal-submission-build";
-import { requirePreparedRemovalSubmission } from "@/fn/certification/removal-submission-prepare";
-import * as scopeReader from "@/fn/certification/removal-scope";
+import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
+import { requirePreparedRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
+import * as scopeReader from "@/lib/certification/removal-scope";
 /** DB-backed claim/freshness/reservation regression. Registry I/O uses the orchestrator harness. */
 import { afterEach, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
@@ -35,16 +35,16 @@ import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import * as claims from "@/data-access/certification-submissions";
 import * as ledger from "@/data-access/certification";
 import * as reservations from "@/data-access/production-claim-reservations";
-import * as context from "@/fn/certification/certify-context-core";
-import * as sources from "@/fn/certification/source-candidates";
+import * as context from "@/lib/certification/certify-context-core";
+import * as sources from "@/lib/certification/source-candidates";
 import * as isometric from "@/lib/isometric";
-import { loadBatchEmissionContext } from "@/fn/certification/batch-emission-context";
-import { loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
+import { loadBatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import { loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
 
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { submitRemoval } from "@/fn/certification/submit-removal";
-import type { RemovalScope } from "@/fn/certification/removal-scope";
+import type { RemovalScope } from "@/lib/certification/removal-scope";
 
 // Registry ids are globally unique in certification_submissions; keep them distinct per file.
 const FILE_TAG_LENGTH = 8;

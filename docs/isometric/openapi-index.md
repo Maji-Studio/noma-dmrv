@@ -9,17 +9,17 @@ GraphQL ID filter and account-specific authentication observations.
 ## Code lookup
 
 Wrapper paths below are relative to `src/lib/isometric/`; consumer paths are
-relative to `src/fn/certification/`. A wrapper's presence alone does not prove
+relative to `src/fn/certification/` unless written in full. A wrapper's presence alone does not prove
 that an operation is invoked by the app.
 
 | Resource | Wrapper | Application consumer and boundary |
 |---|---|---|
-| Projects, templates, blueprints | `projects.ts` | `facility-mapping.ts`, `certify-context-core.ts`; read/select/validate |
+| Projects, templates, blueprints | `projects.ts` | `facility-mapping.ts`, `src/lib/certification/facility-certifier-facts.ts` (loaded by `src/lib/certification/certify-context-core.ts`); read/select/validate |
 | Feedstock catalog | `feedstock-types.ts` | `feedstock-types.ts`; read only |
-| Datapoints, Components, GHG Entries and attributions | `submissions.ts` | `submit-removal.ts`, `durability-measurement-samples.ts`, `removal-breakdown.ts`; Source verification in `src/lib/isometric/source-binding-verification.ts` |
+| Datapoints, Components, GHG Entries and attributions | `submissions.ts` | `submit-removal.ts`, `src/lib/certification/durability-measurement-samples.ts`, `removal-breakdown.ts`; Source verification in `src/lib/isometric/source-binding-verification.ts` |
 | GHG Statements | `ghg-statements.ts` | `ghg-statements.ts`, `ghg-statement-reconciliation.ts`, `ghg-statement-reports.ts`; discover/create/read/submit/resubmit |
 | Sources and signed uploads | `sources.ts` | `sources.ts`, `sources-transfer.ts`; reconcile/create/upload |
-| Measurement samples | `measurement-samples.ts` | `durability-measurement-samples.ts`; sampled 1,000-year sandbox creation; exact lookup also supports deletion |
+| Measurement samples | `measurement-samples.ts` | `src/lib/certification/durability-measurement-samples.ts`; sampled 1,000-year sandbox creation; exact lookup also supports deletion |
 | Production Batches | `production-batches.ts` | `production-batches.ts`; list/create/read/reconcile |
 | Storage Locations | `storage-locations.ts` | `storage-locations.ts`, `storage-location-actions.ts`; project-scoped list/create/read/recover |
 | Biochar Applications | `biochar-applications.ts` | `biochar-applications.ts`; list/create/read/reconcile per immutable slice |

@@ -97,6 +97,9 @@ components (UI)
   are not exported from a `"use server"` file; the caller authenticates first.
   Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
   same read wraps the core in `withAction` rather than duplicating it.
+- Shared certification context composition lives in directive-free
+  `src/lib/certification/` modules, below both read models and actions.
+  Read models import those helpers directly; `withAction` wrappers stay in `fn/`.
 - `data-access/` owns query composition **and** org-scope enforcement. A
   partial update reads `undefined` as omitted, `null` as an explicit clear,
   and `0` as zero; values the server owns (derived masses) and cross-field

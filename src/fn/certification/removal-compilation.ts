@@ -7,16 +7,16 @@ import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import {
   compileRemovalSubmission,
   REMOVAL_COMPILATION_FAILED_MESSAGE,
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
-} from "./removal-submission-build";
+} from "@/lib/certification/removal-submission-build";
 import { evaluateRemovalBlockers } from "./removal-blockers-gate";
 import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
-import { prepareRemovalSubmission } from "./removal-submission-prepare";
+import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
 export interface RemovalCompilationView {

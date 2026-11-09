@@ -52,7 +52,7 @@ Dates use facility calendar days. Completion is the latest Application date and
 requires an Application. Start currently uses earliest production start, not
 feedstock sourcing. This is a known gap against the historical pinned protocol
 interpretation, not a conformant reporting boundary. See
-`src/fn/certification/removal-reporting-window.ts` and the
+`src/lib/certification/removal-reporting-window.ts` and the
 [requirements shortlist](./requirements-shortlist.md).
 
 ## Immutable versions and evidence
@@ -61,7 +61,7 @@ interpretation, not a conformant reporting boundary. See
 snapshots. Same-hash retries reuse confirmed identities or reconcile by stable
 supplier reference before creating. Changed reviewed inputs create a superseding
 version. See `src/data-access/certification-submissions.ts` and
-`src/fn/certification/registry-create.ts`.
+`src/lib/certification/registry-create.ts`.
 
 A draft retry keeps its frozen operator-evidence tuple. Submitted and accepted
 Removals retain that evidence on supersession while deterministic ledgers are

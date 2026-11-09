@@ -1,6 +1,6 @@
-import { buildTransportCoverage } from "./certify-transport-coverage";
+import { buildTransportCoverage } from "@/lib/certification/certify-transport-coverage";
 import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
-import { buildSelectableBatchesData } from "./selectable-batches";
+import { buildSelectableBatchesData } from "@/lib/certification/selectable-batches";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,7 @@ vi.mock("@/lib/log", () => ({
   },
 }));
 
-vi.mock("@/fn/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   buildCreditBatchContexts: mocks.buildCreditBatchContexts,
   loadFacilityCertifierFacts: mocks.loadFacilityCertifierFacts,
 }));
@@ -115,7 +115,7 @@ it.each([
   const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
   expect(result).toEqual({ success: true, data: { removalId: "removal-1" } });
   const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
-    facts as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+    facts as unknown as import("@/lib/certification/facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
   expect(selectable.facilitySetupGaps).toEqual([]);
   expect(selectable.facilitySetupComplete).toBe(true);
   expect(selectable.batches[0].health.state).toBe("ready");
@@ -132,7 +132,7 @@ it("rejects an unready pin even when the facility default is clean", async () =>
   expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   mocks.listUngroupedCreditBatches.mockResolvedValue([{ id: CREDIT_BATCH_ID }]);
   const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
-    CONNECTED as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+    CONNECTED as unknown as import("@/lib/certification/facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
   expect(selectable.facilitySetupComplete).toBe(true);
   expect(selectable.batches[0].health.state).toBe("incomplete");
 });

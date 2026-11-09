@@ -8,7 +8,7 @@ import { getFeedstockTransportOwners } from "@/data-access/feedstock-transport-o
 import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction, uploadFactsFor } from "@/data-access/document-writes";
 import { inspectUploadOwner } from "@/data-access/document-upload-preparation";
 import { renewDocumentUploadInTransaction } from "@/data-access/document-upload-renewal";
-import { collectCandidateSourceDocumentsForRemoval, loadCandidateDocumentsForRemovalForUser } from "@/fn/certification/source-candidates";
+import { collectCandidateSourceDocumentsForRemoval, loadCandidateDocumentsForRemovalForUser } from "@/lib/certification/source-candidates";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 

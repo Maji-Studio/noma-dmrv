@@ -63,7 +63,7 @@ export function isApplicationBoundaryLogbookEvidenceType(
  * certification submission. It is evaluated by the shared SQL builder
  * (`src/data-access/application-evidence-sql.ts`), which feeds the informational
  * evidence-health counts on the applications list and the dashboard, and by the
- * JS twin (`src/fn/certification/application-evidence-readiness.ts`), retained
+ * JS twin (`src/lib/certification/application-evidence-readiness.ts`), retained
  * as that builder's test oracle. Both read the document types from here so the
  * taxonomy cannot silently drift when evidence rules change again.
  */

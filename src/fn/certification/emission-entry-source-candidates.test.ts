@@ -2,7 +2,7 @@ import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, EMISSION_ENTRY
 import { beforeEach, expect, it, vi } from "vitest";
 import type { RemovalEntryContributions } from "@/lib/certification/removal-emission-contributions";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
-import { collectCandidateSourceDocumentsForRemoval, loadCandidateDocumentsForRemovalForUser } from "./source-candidates";
+import { collectCandidateSourceDocumentsForRemoval, loadCandidateDocumentsForRemovalForUser } from "@/lib/certification/source-candidates";
 
 const mocks = vi.hoisted(() => ({ documents: vi.fn(), contributions: vi.fn(), warn: vi.fn() }));
 vi.mock("@/lib/log", async (importOriginal) => {
@@ -10,7 +10,7 @@ vi.mock("@/lib/log", async (importOriginal) => {
   return { ...actual, logger: { ...actual.logger, warn: mocks.warn } };
 });
 vi.mock("@/data-access/documents", () => ({ listEmissionEntryDocumentsByIds: mocks.documents, listDocumentsForEntity: vi.fn() }));
-vi.mock("./emission-entry-source-context", () => ({ loadEntrySourceContributions: mocks.contributions }));
+vi.mock("@/lib/certification/emission-entry-source-context", () => ({ loadEntrySourceContributions: mocks.contributions }));
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(async () => ({ facilityId: "facility" })),
   getCreditBatchesByRemovalId: vi.fn(async () => []),

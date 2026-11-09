@@ -3,7 +3,7 @@ import { beforeAll, expect, it } from "vitest";
 import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
-import { buildEntityReadinessResult } from "@/fn/certification/certify-readiness-gaps";
+import { buildEntityReadinessResult } from "@/lib/certification/certify-readiness-gaps";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";

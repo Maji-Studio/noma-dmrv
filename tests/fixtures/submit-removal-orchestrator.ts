@@ -74,7 +74,7 @@ vi.mock("@/data-access/facility-certification-boundary-lock", () => ({
 vi.mock("@/lib/certification/submission-lock", () => ({
   acquireCertificationArtifactLocksSorted: vi.fn(),
 }));
-vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/lib/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
 vi.mock("@/fn/certification/biochar-applications", () => ({
   ensureRemovalBiocharApplications: vi.fn(),
@@ -82,10 +82,10 @@ vi.mock("@/fn/certification/biochar-applications", () => ({
 // Removal submission fails closed unless every candidate document has a
 // validated mirrored Source ID. Tests that exercise missing/partial mirrors
 // override these healthy defaults.
-vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
+vi.mock("@/lib/certification/source-candidates", async (importOriginal) => {
   return {
     ...(await importOriginal<
-      typeof import("@/fn/certification/source-candidates")
+      typeof import("@/lib/certification/source-candidates")
     >()),
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
     resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
@@ -145,9 +145,9 @@ const isometricClientFake = vi.hoisted(() => ({
 // two sandbox confirms are pending). Tests that exercise the durability path
 // expose it through a mutable getter and stub the POST-ing submitter.
 const durabilityFlag = vi.hoisted(() => ({ live: false }));
-vi.mock("@/fn/certification/durability-measurement-samples", async (importOriginal) => {
+vi.mock("@/lib/certification/durability-measurement-samples", async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import("@/fn/certification/durability-measurement-samples")
+    typeof import("@/lib/certification/durability-measurement-samples")
   >();
   return {
     ...actual,
@@ -169,9 +169,9 @@ import * as productionBatchesDA from "@/data-access/certifier-production-batches
 import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
 import * as productionClaimReservations from "@/data-access/production-claim-reservations";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
-import * as sources from "@/fn/certification/source-candidates";
+import * as sources from "@/lib/certification/source-candidates";
 import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as isometric from "@/lib/isometric";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
