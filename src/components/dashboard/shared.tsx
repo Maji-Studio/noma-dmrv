@@ -25,12 +25,11 @@ import type {
   DashboardStationKey,
 } from "@/data-access/dashboard-overview";
 import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { formatFacilityTime } from "@/lib/date-utils";
+import { formatFacilityShortDateTime, formatFacilityShortDay } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 
 export const FOCUS_RING =
@@ -43,17 +42,6 @@ export interface QuickAction {
   icon: Icon;
   /** The stage whose list this action records into, when it has one. */
   stage?: DashboardStationKey;
-}
-
-/** A quick action as a button-styled link, for the empty states. */
-export function QuickActionLink({ action }: { action: QuickAction }) {
-  const ActionIcon = action.icon;
-  return (
-    <Link href={action.href} className={cn(buttonVariants({ variant: "default", size: "default" }), PHONE_TOUCH_TARGET)}>
-      <ActionIcon size={16} weight="bold" aria-hidden />
-      {action.label}
-    </Link>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -93,17 +81,9 @@ export interface DashRowData {
   href: string;
 }
 
-/**
- * A short day for one-line rows: "Sep 30", with the year only when it is not
- * this year. Calendar days (UTC-midnight business dates) read in UTC.
- */
+/** A short day for one-line rows ("Sep 30"; the year only when it is not this year), or null when there is none. */
 export function shortDay(value: string | Date | null, timeZone: string, calendarDay = false): string | null {
-  if (value == null) return null;
-  const date = typeof value === "string" ? new Date(value.length === 10 ? `${value}T00:00:00Z` : value) : value;
-  if (Number.isNaN(date.getTime())) return null;
-  const zone = calendarDay || (typeof value === "string" && value.length === 10) ? "UTC" : timeZone;
-  const sameYear = formatFacilityTime(date, zone, "yyyy") === formatFacilityTime(new Date(), zone, "yyyy");
-  return formatFacilityTime(date, zone, sameYear ? "MMM d" : "MMM d, yyyy");
+  return value == null ? null : formatFacilityShortDay(value, timeZone, { calendarDay });
 }
 
 export function todoRows(
@@ -139,9 +119,7 @@ export function activityRows(
     // carry a business date only, so they show the day alone.
     meta: item.calendarDay
       ? (shortDay(item.dateIso, timeZone, true) ?? "")
-      : [shortDay(item.dateIso, timeZone), formatFacilityTime(new Date(item.dateIso), timeZone, "HH:mm")]
-          .filter(Boolean)
-          .join(", "),
+      : formatFacilityShortDateTime(item.dateIso, timeZone),
     href: item.href,
   }));
 }
@@ -256,17 +234,18 @@ export function DashSection({
   );
 }
 
-/** A quiet sentence-case link for a section's title row, e.g. "Open traceability". */
+/** A section's title-row link, styled like the stage actions: quiet sentence case with a trailing arrow. */
 export function SectionLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
       className={cn(
-        "flex min-h-44 items-center body-small text-[var(--color-text-secondary)] underline underline-offset-2 hover:text-[var(--color-text-primary)]",
+        "inline-flex min-h-44 items-center gap-6 px-6 body-small font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-medium)]",
         FOCUS_RING,
       )}
     >
       {children}
+      <ArrowRightIcon size={14} weight="bold" className="text-[var(--color-interaction)]" aria-hidden />
     </Link>
   );
 }
@@ -275,34 +254,35 @@ export function SectionLink({ href, children }: { href: string; children: ReactN
 // States
 // ---------------------------------------------------------------------------
 
-/** Nothing to fix: the next thing to do is record, so it offers that. */
-export function TodoEmpty({ action }: { action?: QuickAction }) {
+/** Nothing to fix. No action: the stage band above already offers every record action. */
+export function TodoEmpty() {
   return (
     <div className="p-16">
-      <EmptyState
-        padding="sm"
-        icon={<CheckCircleIcon size={32} weight="bold" />}
-        title="Nothing to fix"
-        action={action ? <QuickActionLink action={action} /> : undefined}
-      />
+      <EmptyState padding="sm" icon={<CheckCircleIcon size={32} weight="bold" />} title="Nothing to fix" />
     </div>
   );
 }
 
-export function ActivityEmpty({ action }: { action?: QuickAction }) {
+/**
+ * No activity in the filter's scope. The filter always applies, so the title
+ * names it: one batch offers the way back to all, and all credit batches says
+ * nothing traceable to a batch has happened yet.
+ */
+export function ActivityEmpty({ clearFilterHref }: { clearFilterHref: string | null }) {
   return (
     <div className="p-16">
       <EmptyState
         padding="sm"
         icon={<LeafIcon size={32} weight="bold" />}
-        title="No records yet"
-        action={action ? <QuickActionLink action={action} /> : undefined}
+        title={clearFilterHref ? "No recent activity for this credit batch" : "No credit batch activity yet"}
+        action={clearFilterHref ? <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink> : undefined}
       />
     </div>
   );
 }
 
-export function LoadError({ onRetry }: { onRetry: () => void }) {
+/** The read's own safe message, never a guessed cause. */
+export function LoadError({ message, onRetry }: { message: string | null; onRetry: () => void }) {
   return (
     <Notice
       tone="error"
@@ -313,7 +293,7 @@ export function LoadError({ onRetry }: { onRetry: () => void }) {
         </Button>
       }
     >
-      Check your connection, then try again.
+      {message}
     </Notice>
   );
 }

@@ -14,7 +14,7 @@ import { applyBatchScope } from "./batch-scope";
 import { BinsCard } from "./bins-card";
 import { useFlowActions } from "./flow-actions";
 import { HeroKpiBand } from "./hero-kpi-band";
-import { useSelectedBatchId } from "./scope";
+import { useAllBatchesHref, useSelectedBatchId } from "./scope";
 import { StageBand } from "./stage-band";
 import {
   ActivityEmpty,
@@ -49,10 +49,12 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const isLoading = overviewLoading || (data == null && scope.error == null);
   // What the facility can record now does not depend on the batch filter.
   const actions = useFlowActions(status, facilityId, overview);
+  const allBatchesHref = useAllBatchesHref();
 
   if ((error && !overview) || scope.error) {
     return (
       <LoadError
+        message={(scope.error ?? error)?.message ?? null}
         onRetry={() => {
           onRetry();
           void scope.refetch();
@@ -85,7 +87,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
           {pending ? (
             <RowsSkeleton />
           ) : todos.length === 0 ? (
-            <TodoEmpty action={actions[0]} />
+            <TodoEmpty />
           ) : (
             <DashRowList rows={todos} label="To do" />
           )}
@@ -97,7 +99,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
           {pending ? (
             <RowsSkeleton />
           ) : activity.length === 0 ? (
-            <ActivityEmpty action={actions[0]} />
+            <ActivityEmpty clearFilterHref={batchId ? allBatchesHref : null} />
           ) : (
             <DashRowList rows={activity.slice(0, ACTIVITY_ROWS)} label="Recent activity" />
           )}

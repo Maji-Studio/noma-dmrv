@@ -26,6 +26,15 @@ export function useSelectedBatchId(facilityId: string): string | null | undefine
   return batches.some((batch) => batch.id === requested) ? requested : null;
 }
 
+/** The current page without `?batch=`: "Show all credit batches". */
+export function useAllBatchesHref(): string {
+  const pathname = usePathname();
+  const next = new URLSearchParams(useSearchParams().toString());
+  next.delete(BATCH_PARAM);
+  const query = next.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function BatchFilter({ facilityId }: { facilityId: string }) {
   const router = useRouter();
   const pathname = usePathname();
