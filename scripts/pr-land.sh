@@ -25,6 +25,7 @@ EXIT_FAILURE=1
 EXIT_USAGE=2
 EXIT_HEAD_MOVED=3
 EXIT_TIMEOUT=4
+EXIT_TEARDOWN_FAILED=5
 PR_NUMBER_PATTERN='^[1-9][0-9]*$'
 POSITIVE_INTEGER_PATTERN='^[1-9][0-9]*$'
 WORKTREE_NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
@@ -59,7 +60,7 @@ Exit codes:
   2  Invalid arguments, configuration, or missing dependency
   3  Head changed while waiting or preparing to enqueue
   4  Merge state, head sync, checks, missing-check grace, or queue watch timed out
-Teardown failures are reported as exit 1, after printing the merge commit.
+  5  MERGED, but teardown failed (merge commit printed)
 EOF
 }
 
@@ -157,7 +158,7 @@ watch_queue() {
       if [ -n "$TEARDOWN" ]; then
         # worktree.sh refuses to run from inside its target, so run it from the main checkout.
         (cd "$MAIN_CHECKOUT" && "$SCRIPT_DIR/worktree.sh" teardown "$TEARDOWN") ||
-          die "$EXIT_FAILURE" "#$PR merged at $oid, but teardown of $TEARDOWN failed"
+          die "$EXIT_TEARDOWN_FAILED" "#$PR merged at $oid, but teardown of $TEARDOWN failed"
       fi
       return 0
     fi

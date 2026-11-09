@@ -16,9 +16,11 @@ or acting on real accounts/data).
 
 ## Safety preamble
 
-Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it):
+Every Codex prompt this skill writes opens with the text of `codex-safety-preamble.md`, the file beside this skill's folder (in noma-dmrv: `.agents/skills/codex-safety-preamble.md`); the review target or task follows it. Write the task part to `$ARTIFACT_DIR/task.md` with the Write tool, then join the two into `$PROMPT`:
 
-> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+```bash
+cat "<this skill's folder>/../codex-safety-preamble.md" "$ARTIFACT_DIR/task.md" > "$PROMPT"
+```
 
 When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
 
@@ -34,7 +36,8 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
   CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
   ```
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
-  `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
+  `timeout` to the Bash tool, or start the command with `run_in_background` and read `$REPORT`
+  when its exit notification arrives. The notification is the signal; leave the run alone until then.
 - If `codex` is not installed or the command fails, report the error, then fall back to the
   **claude-in-chrome MCP** tools (or offer to verify directly).
 
@@ -88,7 +91,7 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 ## Example prompt skeleton
 
 ```text
-<Safety preamble, verbatim>
+<text of codex-safety-preamble.md>
 
 Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 Artifact directory: <ARTIFACT_DIR> (save screenshots here; write your report to report.md here)

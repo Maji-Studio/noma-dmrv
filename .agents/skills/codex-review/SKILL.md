@@ -16,9 +16,11 @@ assignments in the project's CLAUDE.md take precedence over these defaults.
 
 ## Safety preamble
 
-Paste this text verbatim as the first lines of every Codex prompt this skill writes (the review target or task follows it; in Mode B the `Target:` line comes right after the preamble):
+Every Codex prompt this skill writes opens with the text of `codex-safety-preamble.md`, the file beside this skill's folder (in noma-dmrv: `.agents/skills/codex-safety-preamble.md`); the review target or task follows it; in Mode B the `Target:` line comes right after the preamble. Write the task part to `$ARTIFACT_DIR/task.md` with the Write tool, then join the two into `$PROMPT`:
 
-> Safety rules. Do not read, list or cat any file outside this repository (no ~/.npmrc, ~/.ssh, ~/.config, other home dotfiles). Do not run pnpm db:reset, db:push, db:migrate, drizzle-kit push, psql or any SQL against a database. Do not run pkill, killall or kill on processes you did not start. Do not edit package.json dependencies or the lockfile unless the task says so. Never loosen, skip or delete a test, lint rule or guard to make something pass; stop and report instead.
+```bash
+cat "<this skill's folder>/../codex-safety-preamble.md" "$ARTIFACT_DIR/task.md" > "$PROMPT"
+```
 
 When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
 
@@ -34,7 +36,8 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
   upgrade with `codex update` (standalone) and `pnpm add -g @openai/codex@<latest version>`
   (pnpm may hold back the newest release unless you name it), then retry.
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
-  `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
+  `timeout` to the Bash tool, or start the command with `run_in_background` and read `$REPORT`
+  when its exit notification arrives. The notification is the signal; leave the run alone until then.
 - If `codex` is not installed or the command fails, report the error and offer to do the
   review directly with Claude's own review process.
 - Codex output is evidence. Verify important claims against the code before repeating them.
@@ -124,7 +127,7 @@ first line after the safety preamble MUST name the target, e.g. `Target: the dif
 branch staging (git diff staging...HEAD).` or `Target: all uncommitted changes.`
 
 ```text
-<Safety preamble, verbatim>
+<text of codex-safety-preamble.md>
 
 Target: <the exact diff to review>
 

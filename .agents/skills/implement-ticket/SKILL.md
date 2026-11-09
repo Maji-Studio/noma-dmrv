@@ -87,6 +87,14 @@ Publish the merge card per the **pr** skill's Done state. Once Kenji's saved doc
 
 Done when: the PR state is MERGED, the worktree is torn down, and the issue is closed.
 
+## Waiting
+
+The suite, `scripts/pr-land.sh` and Codex runs are **background** work: start each with `run_in_background` and act on its exit notification. Until it arrives, work on another step or end the turn; the run needs no checking. When a look is needed (Kenji asks, a peer reports a change), `scripts/pr-status.sh <pr>...` prints one line per PR. `pr-land.sh --help` lists its exit codes; 5 means merged with teardown still owed.
+
+## Status
+
+When the ticket's state changes (PR opened, a review round ended, waiting on Kenji, merged) and at handoff, state four lines: **owns** (worktree, branch, PR), **waiting on**, **next step**, **handoff due** (yes once a batch has ended and no subagent is running). Write the same four lines to `~/.claude/projects/<project>/state/<worktree-name>.md`, replacing the file, so a crashed session is resumed from that file instead of its log. Delete the file after teardown.
+
 ## Report
 
 One compact summary per ticket: issue, branch, PR URL, local rounds with their P0-P3 counts, light-pass outcome, what shipped, merge state.
