@@ -143,6 +143,43 @@ it.each<Case>([
   expect(deriveEmissionEntryDisposition(input).entries[0].carry.receiver?.removalId ?? null).toBe(accepted ? "receiver" : null);
 });
 
+it.each<{
+  name: string;
+  change: (input: Input) => void;
+  carry: ReturnType<typeof deriveEmissionEntryDisposition>["entries"][number]["carry"];
+}>([
+  { name: "receiver elected from the right draft", change: i => {
+    const row = i.draftMembers[0];
+    i.draftMembers.unshift({ ...row,
+      removal: { ...row.removal, id: "later", code: "RM-later" },
+      batch: { ...row.batch, id: "later-batch", code: "CB-later" },
+      applicationDate: new Date("2026-04-01T00:00:00Z"),
+    });
+  }, carry: { receiver: { removalId: "receiver", removalCode: "RM-receiver",
+    creditBatchCodes: ["CB-next"], creditBatchIds: ["next"], anotherCreditBatch: true }, waitingReason: null } },
+  { name: "fully applied without a draft", change: i => { i.draftMembers = []; },
+    carry: { receiver: null, waitingReason: "noDraft", waitingFor: null } },
+  { name: "draft template has no latest observation", change: i => { i.draftMembers[0].batch.removalTemplateId = "unread"; },
+    carry: { receiver: null, waitingReason: "templateUnknown", waitingFor: { removalId: "receiver", removalCode: "RM-receiver" } } },
+  { name: "no compatible draft template", change: i => {
+    i.observations = [{ ...observationFixture(), definition: { groups: [] } }];
+  }, carry: { receiver: null, waitingReason: "incompatibleTemplate", waitingFor: null } },
+  { name: "not fully applied", change: i => { i.slices[0].allocatedDryMassKg = 0; },
+    carry: { receiver: null, waitingReason: null } },
+  { name: "observation matches the draft members' template pin", change: i => {
+    i.draftMembers[0].batch.removalTemplateId = "draft-template";
+    i.previous = [{ ...observationFixture(), externalTemplateId: "draft-template" }];
+    i.observations = [
+      { ...observationFixture(), definition: { groups: [] } },
+      { ...observationFixture(), id: "draft-observation", externalTemplateId: "draft-template" },
+    ];
+  }, carry: { receiver: { removalId: "receiver", removalCode: "RM-receiver",
+    creditBatchCodes: ["CB-next"], creditBatchIds: ["next"], anotherCreditBatch: true }, waitingReason: null } },
+])("carry disposition from loaded rows: $name", ({ change, carry }) => {
+  const input = fixture(); change(input);
+  expect(deriveEmissionEntryDisposition(input).entries[0].carry).toEqual(carry);
+});
+
 it.each<Case>([
   { name: "returned owner", change: () => {}, accepted: true },
   { name: "deleted", change: i => { i.stored[0].deletedAt = new Date(NOW); }, accepted: false },
