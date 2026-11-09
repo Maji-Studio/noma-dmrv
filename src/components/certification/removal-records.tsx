@@ -165,20 +165,21 @@ function BatchRow({ batch, facilityId, summarize, mode }: { batch: RemovalBatchR
   );
 }
 
-export function RemovalRecordsList({ batches, facilityId, mode }: { batches: RemovalBatchRecords[]; facilityId: string; mode?: RecordLinkMode }) {
+/** `showSummary: false` leaves the dates and dry mass out of the batch rows, for a host that already names them. */
+export function RemovalRecordsList({ batches, facilityId, mode, showSummary = true }: { batches: RemovalBatchRecords[]; facilityId: string; mode?: RecordLinkMode; showSummary?: boolean }) {
   if (batches.length === 0) {
     return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds one." />;
   }
   return (
     <ul className="flex flex-col">
       {batches.map((batch) => (
-        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={batches.length > 1} mode={mode} />
+        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={showSummary && batches.length > 1} mode={mode} />
       ))}
     </ul>
   );
 }
 
-export function RemovalRecords({ removalId, facilityId, enabled, mode }: { removalId: string; facilityId: string; enabled: boolean; mode?: RecordLinkMode }) {
+export function RemovalRecords({ removalId, facilityId, enabled, mode, showSummary }: { removalId: string; facilityId: string; enabled: boolean; mode?: RecordLinkMode; showSummary?: boolean }) {
   const query = useRemovalRecords(removalId, { enabled });
   if (query.isLoading) return <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className="h-96 w-full" /></div>;
   if (query.isError || !query.data) {
@@ -191,5 +192,5 @@ export function RemovalRecords({ removalId, facilityId, enabled, mode }: { remov
       </Notice>
     );
   }
-  return <RemovalRecordsList batches={query.data} facilityId={facilityId} mode={mode} />;
+  return <RemovalRecordsList batches={query.data} facilityId={facilityId} mode={mode} showSummary={showSummary} />;
 }

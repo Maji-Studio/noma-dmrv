@@ -24,7 +24,7 @@ describe("SourceRecords", () => {
     render(<SourceRecords removalId="rm-1" facilityId="facility-1" storageSitesHref={STORAGE} />);
     expect(screen.getByRole("heading", { name: "Records" })).toBeTruthy();
     expect(screen.getByText("Batch records")).toBeTruthy();
-    expect(records.props).toMatchObject({ removalId: "rm-1", facilityId: "facility-1", enabled: true, mode: { newTab: true } });
+    expect(records.props).toMatchObject({ removalId: "rm-1", facilityId: "facility-1", enabled: true, mode: { newTab: true }, showSummary: false });
     expect(screen.getByRole("link", { name: "View in Isometric" }).getAttribute("href")).toBe(STORAGE);
   });
 

@@ -143,3 +143,18 @@ describe("RemovalRecordsList link modes", () => {
     expect(onOpen).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("RemovalRecordsList summary", () => {
+  const two = [batch(1, 2), { ...batch(1, 2), creditBatchId: "cb-2", code: "CB-26-002" }];
+
+  it("shows each batch's dates and dry mass for two batches", () => {
+    render(<RemovalRecordsList batches={two} facilityId="f1" />);
+    expect(screen.getAllByText(/ dry$/).length).toBeGreaterThan(0);
+  });
+
+  it("leaves them out when the host already names them, keeping the batch button named", () => {
+    render(<RemovalRecordsList batches={two} facilityId="f1" showSummary={false} />);
+    expect(screen.queryByText(/ dry$/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Records of CB-26-002/ })).toBeTruthy();
+  });
+});

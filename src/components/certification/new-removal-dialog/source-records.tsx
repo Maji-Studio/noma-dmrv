@@ -24,7 +24,7 @@ export function SourceRecords({ removalId, facilityId, storageSitesHref, onFix }
       <h3 id="review-records" className="body-lead font-medium">
         Records
       </h3>
-      <RemovalRecords removalId={removalId} facilityId={facilityId} enabled mode={{ newTab: true, onOpen: onFix }} />
+      <RemovalRecords removalId={removalId} facilityId={facilityId} enabled showSummary={false} mode={{ newTab: true, onOpen: onFix }} />
       {storageSitesHref && (
         <p className="flex items-baseline justify-between gap-12 body-small text-[var(--color-text-secondary)]">
           <span>Storage sites</span>
