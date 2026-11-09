@@ -52,7 +52,6 @@ const REPORT_FILENAME = "report.json";
 const GENERATED_PAYLOAD_GLOBS = [
   "drizzle/meta/*_snapshot.json",
   "openapi/v1.json",
-  "site/src/components/site/contours/*.svg",
 ];
 const MAX_COMMENT_CHARS = 60_000;
 const INTERRUPT_EXIT_CODE = 130;
@@ -487,7 +486,8 @@ async function selfTest() {
   const generated = (path) => GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob));
   if (
     !generated("drizzle/meta/0121_snapshot.json") ||
-    !generated("site/src/components/site/contours/sample.svg") ||
+    !generated("openapi/v1.json") ||
+    generated("public/illustrations/sample.svg") ||
     generated("drizzle/0121_add_bins.sql") ||
     generated("drizzle/meta/_journal.json") ||
     generated("pnpm-lock.yaml")

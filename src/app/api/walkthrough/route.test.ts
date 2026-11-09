@@ -73,7 +73,7 @@ afterEach(() => {
 });
 
 it.each([
-  "https://noma.maji.studio", "https://staging.noma.maji.studio",
+  "https://noma.maji.studio",
   "https://noma-site-abc123-maji-studio.vercel.app",
   "https://noma-site-git-feature-branch-maji-studio.vercel.app",
 ])("allows production site origin %s", async origin => {
@@ -96,7 +96,7 @@ it.each([
   null, "null", "https://attacker.example.test", "https://noma.maji.studio.attacker.test",
   "http://noma.maji.studio", "https://noma-site-abc-maji-studio.vercel.app.attacker.test",
   "https://other-project-abc-maji-studio.vercel.app", "https://noma-site-ABC-maji-studio.vercel.app",
-  "http://localhost:3121",
+  "http://localhost:3121", "https://staging.noma.maji.studio",
 ])("refuses missing or disallowed origin %s before admission for both methods", async origin => {
   for (const handler of [POST, OPTIONS]) {
     const response = await handler(request(INPUT, origin));

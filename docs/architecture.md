@@ -7,6 +7,18 @@ a `fn/` action, a `data-access/` query, or a new route group. Form detail lives
 in [forms.md](./forms.md); naming and React rules in
 [code-style.md](./code-style.md); "why" decisions in [ADRs](./adr/).
 
+## Contracts with the marketing site
+
+The marketing site lives in the private `Maji-Studio/noma-site` repo (Vercel
+project `noma-site`). Its Log in link uses `PUBLIC_APP_URL`: Production
+`https://app.noma.maji.studio`, Preview `https://staging.app.noma.maji.studio`.
+
+Its walkthrough form POSTs to the app's `/api/walkthrough`. Allowed origins
+live in `src/config/walkthrough.ts`: `https://noma.maji.studio`, the preview-host
+regex, and local `http://localhost:3120` for site dev against a local app.
+Local origins are allowed only outside production. Changing either contract
+means updating both repos.
+
 ## Layers
 
 ```text

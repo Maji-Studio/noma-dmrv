@@ -66,11 +66,10 @@ and need no follow-up.
 
 ### maplibre-gl v6 upgrade (`maps/maplibre-v6`, opened 2026-10-02)
 
-- Still open: `package.json` and `site/package.json` pin `maplibre-gl` ^5.24.0
+- Still open: `package.json` pins `maplibre-gl` ^5.24.0
   (PR #870) because v6 derives its web-worker URL from `import.meta.url`, which
   Turbopack rewrites to a `file://` URL, so the worker never starts and every
-  basemap renders blank (PR #752). The site build additionally breaks on v6's
-  missing default export (PR #897). `.github/dependabot.yml` ignores
+  basemap renders blank (PR #752). `.github/dependabot.yml` ignores
   `maplibre-gl` semver-major updates for this reason.
 - Accepted risk: GHSA-jrc7-96c5-q579 (attribution sanitizer XSS) is fixed only
   in 6.4.1+. It needs untrusted attribution strings; ours are
@@ -82,15 +81,6 @@ and need no follow-up.
   correctly served worker file, kept green by the E2E map smoke test from PR #907, which
   fails on the broken worker.
   Then drop the Dependabot ignore (S).
-
-### Keyboard and accessibility checks for the site (`site/a11y-ci`, opened 2026-10-05)
-
-- `.github/workflows/site.yml:jobs.site` type-checks, builds and checks asset
-  references (`site/scripts/check-public-assets.mjs`), but nothing drives the
-  built pages. Keyboard paths through the walkthroughs, the section index and
-  the hero map, plus an axe pass per page, are unchecked.
-- **Resolve via:** a Playwright run against `astro preview` in that workflow,
-  using `@playwright/test` and `@axe-core/playwright` in `site/` (M).
 
 ### Form-audit capture generator lost (`tooling/form-audit`, opened 2026-10-05)
 
