@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalWorkflowStatus } from "@/lib/certification/status";
+import type { RecordLockView } from "@/lib/record-lock-view";
 import type { RemovalListRow } from "./removal-list-state";
 import { RemovalDetailSheet, sheetStatusFor, thingsToFixLine } from "./removal-detail-sheet";
 
@@ -59,8 +60,8 @@ const SUMMARY = {
   readiness: { state: "blocked", reasons: ["Add a lab report.", "Link a delivery proof."] },
 } as unknown as RemovalListRow;
 
-function renderSheet(summary: RemovalListRow = SUMMARY) {
-  render(<RemovalDetailSheet summary={summary} isProduction={false} facilityId="f1" open onClose={vi.fn()} />);
+function renderSheet(summary: RemovalListRow = SUMMARY, lock?: RecordLockView) {
+  render(<RemovalDetailSheet summary={summary} lock={lock} isProduction={false} facilityId="f1" open onClose={vi.fn()} />);
 }
 
 describe("RemovalDetailSheet structure", () => {
@@ -179,6 +180,15 @@ describe("RemovalDetailSheet status line", () => {
 describe("RemovalDetailSheet returned Removal", () => {
   it("does not say Isometric is verifying a Removal that was returned", () => {
     renderSheet({ ...SUMMARY, local: "submitted", externalId: "rmv_1", readiness: { state: "submitted", reasons: [] }, correction: { removalId: "rem-1", removalCode: "RM-0001", windowOpen: true, resubmitNeeded: true, statement: { id: "st", status: "FAILED_VERIFICATION", reportingPeriodStartOn: "2026-02-02", reportingPeriodEndOn: "2026-03-20" }, batches: [], changed: [] } } as unknown as RemovalListRow);
+    expect(document.body.textContent).not.toContain("Isometric verifies it");
+  });
+});
+
+describe("RemovalDetailSheet returned by lock", () => {
+  it("does not say Isometric is verifying when the return arrives through the lock and there is no correction", () => {
+    const lock = { level: "open", returnedBy: [{ statement: { kind: "ghgStatement", id: "st", label: null, facilityId: "f1", period: { startedOn: "2026-02-02", completedOn: "2026-03-20" } }, statementStatus: "FAILED_VERIFICATION" }] } as unknown as RecordLockView;
+    renderSheet({ ...SUMMARY, local: "submitted", externalId: "rmv_1", readiness: { state: "submitted", reasons: [] } } as unknown as RemovalListRow, lock);
+    expect(document.body.textContent).toContain("failed verification");
     expect(document.body.textContent).not.toContain("Isometric verifies it");
   });
 });

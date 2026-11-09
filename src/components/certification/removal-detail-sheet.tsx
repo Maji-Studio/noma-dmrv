@@ -63,7 +63,7 @@ import { Notice } from "@/components/ui/notice";
 import { ReadOnlyNotice } from "@/components/ui/read-only-notice";
 import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
-import { RemovalCorrectionNotice } from "./removal-correction-needed";
+import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
 import { correctionStatus } from "@/lib/removal-correction-copy";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
@@ -188,9 +188,12 @@ function SheetStatusBlock({
   status,
   facilityId,
   timeZone,
+  returned = false,
   readOnly = false,
 }: {
   summary: RemovalListRow;
+  /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
+  returned?: boolean;
   status: RemovalWorkflowStatus;
   facilityId: string;
   timeZone: string;
@@ -207,7 +210,7 @@ function SheetStatusBlock({
         !blockers.includes(reason)
         && !(outcome && (reason === REMOVAL_FAILED_REVIEW_REASON || reason === REMOVAL_INTERRUPTED_RECONCILE_REASON)));
   // A returned Removal has its own notice below; "Isometric verifies it" would contradict it.
-  const line = summary.correction ? null : nextStepLine(status);
+  const line = returned ? null : nextStepLine(status);
   return (
     <>
       {/* A Notice announces itself, so progress and check changes reach assistive tech. */}
@@ -367,7 +370,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (
