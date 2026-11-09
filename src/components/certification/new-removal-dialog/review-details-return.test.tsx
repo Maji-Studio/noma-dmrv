@@ -44,11 +44,19 @@ const TABLE = {
 
 const refresh = vi.fn();
 
-function Host() {
+const CARRIED = [
+  {
+    entryId: "e1", creditBatchCode: "CB-26-009", creditBatchId: "cb-9", occurredOn: "2026-09-14",
+    componentId: "diesel", componentName: "Diesel use", value: { magnitude: "120", unit: "l" },
+    evidenceDocumentIds: [], earlierRemovalCode: "RM-26-009", earlierRemovalId: "rm-9",
+  },
+];
+
+function Host({ carriedEntries = [] }: { carriedEntries?: unknown[] }) {
   const markFixUsed = useRecheckOnReturn(refresh);
   return (
     <ReviewDetails
-      ctx={{ carriedEntries: [], mapping: null, isProduction: false } as never}
+      ctx={{ carriedEntries, mapping: null, isProduction: false } as never}
       facilityId="f1"
       removalId="rm-1"
       facts={{ durabilityTiers: ["1000-year"], samplingLabel: "Sampled credit batches" } as never}
@@ -83,6 +91,20 @@ describe("details view re-check", () => {
     fireEvent.click(within(screen.getByRole("region", { name: "Components" })).getByRole("link", { name: /CB-26-001/ }));
     returnToTab();
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the review again after a link in the carried emissions panel was used", () => {
+    render(<Host carriedEntries={CARRIED} />);
+    const panel = screen.getByRole("region", { name: "Emissions from other credit batches" });
+    fireEvent.click(within(panel).getByRole("link", { name: /RM-26-009/ }));
+    returnToTab();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    fireEvent.click(within(panel).getAllByRole("link", { name: /CB-26-009/ })[0]);
+    returnToTab();
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it("reads the review again after a record link in Records was used, on each return", () => {
