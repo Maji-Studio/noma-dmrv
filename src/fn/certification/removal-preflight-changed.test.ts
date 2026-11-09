@@ -11,7 +11,8 @@ import { createDatapoint, createGhgEntry } from "@/lib/isometric";
 import { InterruptedRemovalChangedError, CHANGED_SINCE_REVIEW_FAILURE_KIND } from "@/lib/certification/interrupted-removal-copy";
 import { SafeError } from "@/lib/errors";
 import { submitRemoval } from "./submit-removal";
-import { assertRemovalPreflightBlockers } from "./removal-submission-freshness";
+import { assertRemovalPreflightBlockers, hasRemovalRecheckFailure } from "./removal-submission-freshness";
+import { collectContextRemovalBlockers } from "./removal-blockers-gate";
 
 const SETTINGS_MESSAGE = "The template settings changed.";
 const SETTINGS_BLOCKER = { code: "notRemovalTemplate" as const, message: SETTINGS_MESSAGE };
@@ -81,10 +82,33 @@ describe("possibly sent Removal preflight", () => {
     expectNoClaimOrSend();
   });
 
-  it.each(["templateNotFullyRead", "noCredentials", "noProject"])("treats %s as an incomplete read", (code) => {
+  it.each(["templateNotFullyRead", "noCredentials", "noProject", "buildRefused", "reviewIncomplete", "durabilityUnresolved"])("treats %s as an incomplete read", (code) => {
+    expect(hasRemovalRecheckFailure([SETTINGS_BLOCKER, { code }])).toBe(true);
     expect(() => assertRemovalPreflightBlockers(draft("rmv-1", null), [
       SETTINGS_BLOCKER, { code, message: "Could not read." },
     ])).toThrow(SETTINGS_MESSAGE);
+  });
+
+  it.each([
+    { code: "reviewIncomplete", message: "The Removal review did not finish. Refresh the review before submitting.", fixTarget: null },
+    { code: "durabilityUnresolved", message: "Facility durability tier could not be resolved. Reload and retry.", fixTarget: "certificationTemplates" },
+  ])("keeps a generic refusal when $code on a possibly sent draft", async ({ code, message, fixTarget }) => {
+    const ctx = makeContext(undefined, { latestSubmission: draft(null, { externalMutation: "possible" }) });
+    if (code === "reviewIncomplete") {
+      // The fixture defaults omitted gaps to [], so remove them after construction.
+      Object.assign(ctx, { entityReadinessGaps: undefined });
+    } else {
+      Object.assign(ctx.batchesWithSamples[0], { durabilityOption: null });
+    }
+    expect(collectContextRemovalBlockers(ctx)).toContainEqual({ code, message, fixTarget });
+    const error = await submit(ctx).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(SafeError);
+    expect(error).not.toBeInstanceOf(InterruptedRemovalChangedError);
+    expect(error).toHaveProperty("message", message);
+    expectNoClaimOrSend();
+    expect(appendSyncEvent).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      responsePayload: expect.objectContaining({ failure_kind: CHANGED_SINCE_REVIEW_FAILURE_KIND }),
+    }));
   });
 
   it.each([null, draft(null, null), { ...draft("rmv-1", null), status: "submitted" as const }])(

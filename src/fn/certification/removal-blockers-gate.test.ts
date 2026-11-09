@@ -121,7 +121,7 @@ describe("Removal preflight", () => {
       entityReadinessIssues: [{ key: "sampleMoisture", label: "Sample moisture", fixTarget: "labSamples", affectedRecords: [] }],
       batchesWithSamples: [],
     }));
-    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityTier"]);
+    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityUnresolved"]);
     expect(blockers[1].fixTarget).toBe("labSamples");
   });
 

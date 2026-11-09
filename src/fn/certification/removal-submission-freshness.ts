@@ -17,6 +17,8 @@ const RECHECK_FAILURE_BLOCKERS: ReadonlySet<string> = new Set([
   "noCredentials",
   "noProject",
   "buildRefused",
+  "reviewIncomplete",
+  "durabilityUnresolved",
 ]);
 
 /** An incomplete recheck cannot prove drift, even when other blockers accompany it. */

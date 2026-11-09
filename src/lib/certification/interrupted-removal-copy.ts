@@ -3,6 +3,7 @@ import { SafeError } from "@/lib/errors";
 export const CHANGED_SINCE_REVIEW_LABEL = "Changed since review";
 export const CHANGED_FACT = "Part of it may already be in Isometric.";
 export const ASK_ADMIN_TO_DELETE = "Ask an Admin to delete it. Then create the Removal again.";
+export const OPEN_REMOVAL_TO_DELETE = "Open the Removal and select Delete Removal. Then create the Removal again.";
 export const REMOVAL_BEING_DELETED = "This Removal is being deleted. Reload the page to see the result.";
 export const FINALIZED_NO_DELETE = "This Removal is finalized, so it cannot be deleted. Contact an Admin.";
 

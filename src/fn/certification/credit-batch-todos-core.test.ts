@@ -5,6 +5,7 @@ import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-removal-display", () => ({ loadCreditBatchRemovalDisplays: vi.fn() }));
 vi.mock("@/data-access/certifier-sync-events", () => ({ listRemovalAttemptEvents: vi.fn() }));
+vi.mock("@/data-access/certification-submissions", () => ({ hasFinalizedSubmission: vi.fn() }));
 vi.mock("@/data-access/removal-deletion-lease", () => ({ getDeletionLeasedRemovalIds: vi.fn() }));
 vi.mock("@/data-access/credit-batch-samples", () => ({ getCreditBatchesWithSamples: vi.fn(async () => []) }));
 vi.mock("@/data-access/credit-batch-missing-production-runs", () => ({ loadCreditBatchesMissingProductionRuns: vi.fn(async () => new Map()) }));
@@ -23,8 +24,11 @@ vi.mock("@/lib/certification/batch-health", () => ({
 
 import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { listRemovalAttemptEvents } from "@/data-access/certifier-sync-events";
+import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import { getDeletionLeasedRemovalIds } from "@/data-access/removal-deletion-lease";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
+import { ASK_ADMIN_TO_DELETE, FINALIZED_NO_DELETE, OPEN_REMOVAL_TO_DELETE } from "@/lib/certification/interrupted-removal-copy";
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/certification/shared";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
 
 const ORG_CTX = makeTestOrgContext();
@@ -48,7 +52,27 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     vi.clearAllMocks();
     vi.mocked(loadCreditBatchRemovalDisplays).mockResolvedValue(new Map(BATCHES.map(({ id }) => [id, [INTERRUPTED]])));
     vi.mocked(listRemovalAttemptEvents).mockResolvedValue([CHANGED]);
+    vi.mocked(hasFinalizedSubmission).mockResolvedValue(false);
     vi.mocked(getDeletionLeasedRemovalIds).mockResolvedValue(new Set());
+  });
+
+  it("refuses deletion after a superseded finalized version even when the changed draft phase is draft", async () => {
+    vi.mocked(hasFinalizedSubmission).mockResolvedValue(true);
+    const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
+    expect(hasFinalizedSubmission).toHaveBeenCalledExactlyOnceWith(ORG_CTX, {
+      provider: ISOMETRIC_PROVIDER, submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE, localEntityId: INTERRUPTED.id,
+    });
+    for (const todos of result.values()) expect(todos.check[0]?.instruction).toBe(FINALIZED_NO_DELETE);
+  });
+
+  it.each([
+    { orgRole: "admin" as const, isPlatformAdmin: false, instruction: OPEN_REMOVAL_TO_DELETE },
+    { orgRole: "member" as const, isPlatformAdmin: false, instruction: ASK_ADMIN_TO_DELETE },
+    { orgRole: "member" as const, isPlatformAdmin: true, instruction: OPEN_REMOVAL_TO_DELETE },
+  ])("uses registry deletion access for $orgRole, platform admin=$isPlatformAdmin", async ({ orgRole, isPlatformAdmin, instruction }) => {
+    const result = await loadCreditBatchTodos({ ...ORG_CTX, orgRole, isPlatformAdmin }, "facility", BATCHES);
+    for (const todos of result.values()) expect(todos.check[0]?.instruction).toBe(instruction);
   });
 
   it("reads each interrupted Removal once across batches and uses its newest outcome", async () => {
@@ -81,6 +105,7 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     vi.mocked(listRemovalAttemptEvents).mockResolvedValue(events);
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
     expect(getDeletionLeasedRemovalIds).toHaveBeenCalledExactlyOnceWith(ORG_CTX, []);
+    expect(hasFinalizedSubmission).not.toHaveBeenCalled();
     expect(result.get("batch-1")?.check[0]).toMatchObject({
       title: "RM-26-003: Submission interrupted",
       instruction: "Open the Removal and finish Review & submit.",
@@ -93,6 +118,7 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     ]]]));
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
     expect(listRemovalAttemptEvents).not.toHaveBeenCalled();
+    expect(hasFinalizedSubmission).not.toHaveBeenCalled();
     expect(result.get("batch-1")?.check).toEqual([]);
   });
 });

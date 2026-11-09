@@ -6,13 +6,19 @@ import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./d
 import { ATTENTION_PER_CHECK } from "./dashboard-attention";
 import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 import type { RemovalAttentionRows } from "@/lib/certification/removal-attention";
+import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
+import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
+import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
+import type { CertifierSyncEventRow } from "./certifier-sync-events";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
   returned: vi.fn(async (): Promise<Set<string>> => new Set()),
+  attempts: vi.fn(async (): Promise<CertifierSyncEventRow[]> => []),
 }));
+vi.mock("./certifier-sync-events", () => ({ listRemovalAttemptEvents: mocks.attempts }));
 vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
 // Batch rows carry already-derived Removal displays in these tests.
 vi.mock("./credit-batch-removal-display", () => ({
@@ -77,6 +83,8 @@ type Row = Record<string, unknown>;
 let rowsByTable: Record<string, Row[]>;
 
 beforeEach(() => {
+  mocks.attempts.mockClear();
+  mocks.attempts.mockResolvedValue([]);
   mocks.union.mockResolvedValue([]);
   mocks.returned.mockResolvedValue(new Set());
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
@@ -291,6 +299,35 @@ describe("needs attention rows", () => {
       kind: "batch-pending", id: "cb-i", code: "CB-I", dateDay: "2026-09-30", dateMs: null, ord: 1, total: 1, allIds: [],
       removals: [{ id: "rm-i", code: "RM-I", ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
     };
+
+    it.each([
+      { failureKinds: ["changed_since_review"], changed: true },
+      { failureKinds: ["changed_since_review", "other"], changed: false },
+      { failureKinds: [], changed: false },
+    ])("routes the latest interrupted outcome with changed=$changed: $failureKinds", async ({ failureKinds, changed }) => {
+      mocks.attempts.mockResolvedValue(failureKinds.map((failureKind, index) => ({
+        id: `attempt-${index}`, operation: ATTEMPT_SUMMARY_OPERATION, status: "failed",
+        attemptedAt: new Date(Date.UTC(2026, 10, index + 1)), createdAt: new Date(Date.UTC(2026, 10, index + 1)), errorMessage: null,
+        responsePayload: { failure_kind: failureKind },
+      } as CertifierSyncEventRow)));
+      mocks.union.mockResolvedValue([interruptedBatch, { ...interruptedBatch, id: "cb-2", code: "CB-2" }]);
+      const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.attempts).toHaveBeenCalledExactlyOnceWith(CTX, { removalId: "rm-i" });
+      expect(items).toContainEqual(expect.objectContaining({
+        id: "removal-interrupted-rm-i", entityCode: "RM-I · CB-I · CB-2",
+        title: changed ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: `/removals?facility=${FACILITY_ID}&${changed ? "removal" : "resume"}=rm-i`,
+      }));
+    });
+
+    it("does not read attempts for a Removal that is not interrupted", async () => {
+      mocks.union.mockResolvedValue([{
+        ...interruptedBatch,
+        removals: [{ ...interruptedBatch.removals[0], status: { kind: "submitted" }, phase: "submitted" }],
+      }]);
+      await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.attempts).not.toHaveBeenCalled();
+    });
 
     it("puts draft rows after the interrupted rows, groups them past the cap, and counts every Removal", async () => {
       mocks.union.mockResolvedValue([interruptedBatch, ...runRows(["run-0"])]);

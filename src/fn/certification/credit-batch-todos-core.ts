@@ -1,10 +1,12 @@
-import { listRemovalAttemptEvents } from "@/data-access/certifier-sync-events";
+import { isLatestRemovalAttemptChanged } from "@/data-access/removal-latest-attempt";
+import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import { getDeletionLeasedRemovalIds } from "@/data-access/removal-deletion-lease";
-import { deriveSubmissionAttempts } from "@/lib/certification/submission-attempts";
+import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/certification/shared";
 import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
 import { findInterruptedRemoval } from "@/lib/certification/status";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthState } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
@@ -53,21 +55,29 @@ export async function loadCreditBatchTodos(
     removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id),
   ));
   const changedByRemoval = new Map(await Promise.all([...interruptedIds].map(async (removalId) => {
-    const events = await listRemovalAttemptEvents(ctx, { removalId });
-    return [removalId, deriveSubmissionAttempts(events)[0]?.outcome.kind === "changed"] as const;
+    return [removalId, await isLatestRemovalAttemptChanged(ctx, removalId)] as const;
   })));
-  const deletionLeasedIds = await getDeletionLeasedRemovalIds(ctx,
-    [...changedByRemoval].filter(([, changed]) => changed).map(([removalId]) => removalId));
+  const changedIds = [...changedByRemoval].filter(([, changed]) => changed).map(([removalId]) => removalId);
+  const [deletionLeasedIds, finalizedEntries] = await Promise.all([
+    getDeletionLeasedRemovalIds(ctx, changedIds),
+    Promise.all(changedIds.map(async (localEntityId) => [localEntityId, await hasFinalizedSubmission(ctx, {
+      provider: ISOMETRIC_PROVIDER, submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE, localEntityId,
+    })] as const)),
+  ]);
+  const finalizedByRemoval = new Map(finalizedEntries);
   const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
+  const canDeleteRegistryRemovals = hasOrgRole(ctx, REMOVAL_REGISTRY_DELETION_MIN_ROLE);
   return new Map(ids.map((id) => {
     const health = healthByBatch.get(id)!;
     const emissionDisplay = emissionDisplayByBatch.get(id);
     const removals = removalsByBatch.get(id);
     const { blocking, check } = buildCreditBatchOpenItems({
-      facilityId, creditBatchId: id, canManage, health,
+      facilityId, creditBatchId: id, canManage, canDeleteRegistryRemovals, health,
       removals: removals?.map((removal) => ({
         ...removal,
         ...(changedByRemoval.get(removal.id) ? { changedSinceReview: true as const } : {}),
+        ...(finalizedByRemoval.get(removal.id) ? { finalized: true as const } : {}),
         ...(deletionLeasedIds.has(removal.id) ? { deletionInProgress: true as const } : {}),
       })),
       durability: durabilityByBatch.get(id),
