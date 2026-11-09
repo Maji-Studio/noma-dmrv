@@ -102,6 +102,7 @@ function render(overrides: {
   loading?: boolean;
   rejectionMessage?: string | null;
   isProduction?: boolean;
+  readinessState?: "ready" | "inProgress";
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
@@ -111,7 +112,7 @@ function render(overrides: {
       isCompilationLoading={overrides.loading ?? false}
       compilationError={overrides.compilationError ?? null}
       checks={overrides.checks ?? PASSING_CHECKS}
-      readiness={{ state: "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
+      readiness={{ state: overrides.readinessState ?? "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
       rejectionMessage={overrides.rejectionMessage ?? null}
       entries={overrides.entries ?? []}
       changes={overrides.changes ?? []}
@@ -242,5 +243,25 @@ describe("SubmissionSummary, blocked", () => {
     const html = render({ rejectionMessage: "This Removal was rejected in Isometric." });
     expect(html).toContain("This Removal was rejected in Isometric.");
     expect(html).toContain('role="alert"');
+  });
+
+  it("states the rejection or the running submission above the fixes while fixes are open", () => {
+    const rejected = render({ rejectionMessage: "This Removal was rejected in Isometric.", checks: UNMET_CHECKS, entries: OPEN });
+    expect(rejected).toContain("This Removal was rejected in Isometric.");
+    expect(rejected.indexOf("This Removal was rejected")).toBeLessThan(rejected.indexOf("Fix this to submit"));
+    const running = render({ readinessState: "inProgress", checks: UNMET_CHECKS, entries: OPEN });
+    expect(running).toContain("Submission in progress");
+    expect(running).toContain("Fix this to submit");
+  });
+
+  it("leaves the generic checks verdict to the fix list", () => {
+    const html = render({ checks: UNMET_CHECKS, entries: OPEN });
+    expect(html).not.toContain("issue blocks submission");
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it("does not repeat Not yet computed under a failed compile", () => {
+    const html = render({ compilation: null, compilationError: new Error("boom") });
+    expect(html).not.toContain("Not yet computed");
   });
 });

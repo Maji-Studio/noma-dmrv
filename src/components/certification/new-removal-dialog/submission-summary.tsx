@@ -63,7 +63,11 @@ function BlockRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-/** The block's last row: the whole row opens the details. */
+/**
+ * The block's last row: the whole row opens the details. A raw button on
+ * purpose: `Button` is a centred, bordered action, and this is a full-width
+ * disclosure row inside the block.
+ */
 function DetailsRow({ onOpen }: { onOpen: () => void }) {
   return (
     <button
@@ -101,6 +105,7 @@ export function SubmissionSummary({
   const estimate = factsInput.compilation?.estimatedStoredCo2eTonnes ?? null;
   const compileFailed = !factsInput.isCompilationLoading && (Boolean(factsInput.compilationError) || !factsInput.compilation);
   const openFixes = entries.filter((entry) => !entry.fixed);
+  const refusal = Boolean(factsInput.rejectionMessage) || factsInput.readiness.state === "inProgress";
 
   if (facts.state === "loading") {
     return (
@@ -126,21 +131,15 @@ export function SubmissionSummary({
             The submission details could not be prepared.
           </Notice>
         )}
-        {/* A refusal that no fix row carries (rejected in Isometric, a submission running) says so itself. */}
-        {!compileFailed && openFixes.length === 0 && (
+        {/* A refusal that no fix row carries (rejected in Isometric, a submission running) says so itself,
+            whatever is still open. Only the generic checks/blockers verdict is left to the fix list. */}
+        {(refusal || (!compileFailed && openFixes.length === 0)) && (
           <Notice tone="error" title={facts.headline}>
             {facts.detail}
           </Notice>
         )}
         {entries.length > 0 && <FixList entries={entries} onFix={onFix} />}
         <div className={BLOCK_BORDER}>
-          {compileFailed && (
-            <dl className="px-16 py-4">
-              <BlockRow label="Estimated CO₂e stored">
-                <span className="text-[var(--color-text-tertiary)]">{MISSING_VALUE.notYetComputed}</span>
-              </BlockRow>
-            </dl>
-          )}
           <DetailsRow onOpen={onOpenDetails} />
         </div>
       </div>
@@ -189,7 +188,7 @@ export function SubmissionSummary({
 
       {hasNotes && (
         <section aria-labelledby="review-notes" className="flex flex-col gap-8">
-          <h3 id="review-notes" className="body-small font-medium">
+          <h3 id="review-notes" className="body-lead font-medium">
             Check before submitting
           </h3>
           <div className="flex flex-col gap-8 body-small text-[var(--color-text-secondary)]">
