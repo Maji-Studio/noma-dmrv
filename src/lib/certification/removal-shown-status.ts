@@ -4,12 +4,19 @@
  * (a returned Removal with its window open, or a returning record lock) into
  * the state, the badge per surface and the next step line. Surfaces read their
  * own output and never overlay a correction themselves. Pure.
+ *
+ * The dashboard's attention rows read a narrow projection (readiness, or the
+ * correction) by design, not a full workflow input, so they go through
+ * `removalAttentionTitle`, which shares this module's wording and correction
+ * badge.
  */
 import type { StatusValue } from "@/components/ui/status-badge";
 import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
+import type { RemovalReadiness } from "@/lib/certification/readiness";
 import {
   deriveRemovalWorkflowStatus,
+  REMOVAL_SUBMISSION_FAILED,
   type RemovalWorkflowStatus,
   type RemovalWorkflowStatusInput,
 } from "@/lib/certification/status";
@@ -31,9 +38,6 @@ export interface RemovalShownStatusInput {
 export interface RemovalShownStatus {
   /** The Removal's own workflow status, before any overlay. */
   workflow: RemovalWorkflowStatus;
-  overlay: "none" | "correction-needed" | "resubmit-needed";
-  /** Isometric returned the Removal, by correction or by lock: a returned notice speaks for it. */
-  returned: boolean;
   /** The badge on a Removals list cell. */
   list: ShownBadge;
   /** The badge in the Removal sheet header. */
@@ -46,6 +50,9 @@ export interface RemovalShownStatus {
   nextStep: string | null;
 }
 
+export const REMOVAL_READINESS_UNAVAILABLE_TITLE = "Couldn't check. Open it to see what is left.";
+export const REMOVAL_REJECTED_ATTENTION_TITLE = REMOVAL_SUBMISSION_FAILED.label;
+
 const CORRECTION_BADGE_VALUE = "pending" satisfies StatusValue;
 
 /**
@@ -54,8 +61,16 @@ const CORRECTION_BADGE_VALUE = "pending" satisfies StatusValue;
  * on the sheet and in Review & submit. Every other state keeps its own label.
  */
 export function listStatusLabel(status: { kind: string; label: string; reasons: readonly string[]; fixCount?: number }): string {
-  const count = status.fixCount ?? status.reasons.length;
-  return status.kind === "blocked" && count > 0 ? `${count} to fix` : status.label;
+  const count = fixCountOf(status);
+  return status.kind === "blocked" && count > 0 ? toFixLabel(count) : status.label;
+}
+
+function fixCountOf(status: { reasons: readonly string[]; fixCount?: number }): number {
+  return status.fixCount ?? status.reasons.length;
+}
+
+function toFixLabel(count: number): string {
+  return `${count} to fix`;
 }
 
 /** The badge a returned Removal shows in place of its own status. */
@@ -63,10 +78,10 @@ function correctionBadge(correction: RemovalCorrection): ShownBadge {
   return { value: CORRECTION_BADGE_VALUE, label: correction.resubmitNeeded ? RESUBMIT_NEEDED_LABEL : CORRECTION_NEEDED_STATUS_LABEL };
 }
 
-/** A draft reads "Not submitted" on the sheet whether or not it can be sent yet (#1554). */
-function sheetBadge(workflow: RemovalWorkflowStatus): ShownBadge {
+/** A draft reads "Not submitted" on the sheet whether or not it can be sent yet (#1554); otherwise the correction, else the workflow's own badge. */
+function sheetBadge(workflow: RemovalWorkflowStatus, correction: ShownBadge | null): ShownBadge {
   if (workflow.kind === "blocked" || workflow.kind === "ready") return { value: "draft", label: "Not submitted" };
-  return { value: workflow.value, label: workflow.label };
+  return correction ?? { value: workflow.value, label: workflow.label };
 }
 
 function nextStepFor(workflow: RemovalWorkflowStatus): string | null {
@@ -85,26 +100,40 @@ function nextStepFor(workflow: RemovalWorkflowStatus): string | null {
 
 export function deriveRemovalShownStatus(input: RemovalShownStatusInput): RemovalShownStatus {
   const workflow = deriveRemovalWorkflowStatus(input.workflow);
-  const { correction } = input;
-  const returned = !!correction || !!input.returnedByLock;
-  const ownList: ShownBadge = { value: workflow.value, label: listStatusLabel(workflow) };
-  const overlay = correction ? correctionBadge(correction) : null;
-  const lockSuffix = !correction && input.returnedByLock ? ` ${CORRECTION_NEEDED_STATUS_LABEL}` : "";
+  const badge = input.correction ? correctionBadge(input.correction) : null;
+  const returned = !!badge || !!input.returnedByLock;
+  const ownLabel = listStatusLabel(workflow);
+  const returnedSuffix = badge ? ` ${badge.label}` : input.returnedByLock ? ` ${CORRECTION_NEEDED_STATUS_LABEL}` : "";
   return {
     workflow,
-    overlay: !correction ? "none" : correction.resubmitNeeded ? "resubmit-needed" : "correction-needed",
-    returned,
-    list: overlay ?? ownList,
-    // The sheet overlays value and label but keeps the workflow's "Not submitted" rule keyed on its own kind.
-    sheet: workflow.kind === "blocked" || workflow.kind === "ready" ? sheetBadge(workflow) : (overlay ?? sheetBadge(workflow)),
-    searchText: `${ownList.label}${correction ? ` ${correctionBadge(correction).label}` : lockSuffix}`,
-    showLockCell: !correction,
+    list: badge ?? { value: workflow.value, label: ownLabel },
+    sheet: sheetBadge(workflow, badge),
+    searchText: `${ownLabel}${returnedSuffix}`,
+    showLockCell: !badge,
     // A returned Removal has its own notice; "Isometric verifies it" would contradict it.
     nextStep: returned ? null : nextStepFor(workflow),
   };
 }
 
-/** What a dashboard attention row calls a Removal Isometric returned: the correction state while its window is open, else the plain return. */
-export function returnedRemovalAttentionLabel(correction: RemovalCorrection | undefined): string {
-  return correction ? correctionBadge(correction).label : RETURNED_BY_ISOMETRIC_LABEL;
+/** What the dashboard's "Needs attention" list says about a Removal. Null: nothing needs the operator (a submission is running). */
+export type RemovalAttentionSource =
+  | { kind: "draft"; /** Null means readiness failed to load. */ readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount"> | null }
+  | { kind: "rejected" }
+  | { kind: "returned"; correction: RemovalCorrection | undefined };
+
+export function removalAttentionTitle(source: RemovalAttentionSource): string | null {
+  switch (source.kind) {
+    case "rejected":
+      return REMOVAL_REJECTED_ATTENTION_TITLE;
+    case "returned":
+      return source.correction ? correctionBadge(source.correction).label : RETURNED_BY_ISOMETRIC_LABEL;
+    case "draft": {
+      const { readiness } = source;
+      if (readiness === null) return REMOVAL_READINESS_UNAVAILABLE_TITLE;
+      if (readiness.state === "ready") return "Ready to submit";
+      // Unlike the list cell, a blocked draft always reads its count here, even 0.
+      if (readiness.state === "blocked") return toFixLabel(fixCountOf(readiness));
+      return null;
+    }
+  }
 }

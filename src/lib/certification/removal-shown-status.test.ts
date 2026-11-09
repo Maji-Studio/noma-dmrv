@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RemovalCorrection } from "./removal-entry-correction";
 import type { RemovalWorkflowStatusInput } from "./status";
-import { deriveRemovalShownStatus, listStatusLabel, returnedRemovalAttentionLabel } from "./removal-shown-status";
+import { deriveRemovalShownStatus, listStatusLabel, removalAttentionTitle, type RemovalAttentionSource } from "./removal-shown-status";
 
 const blocked = { state: "blocked", reasons: ["A.", "B.", "C."], fixCount: 2 };
 const ready = { state: "ready", reasons: [] };
@@ -44,8 +44,6 @@ describe("deriveRemovalShownStatus", () => {
     it("shows the workflow's own status on every surface", () => {
       const shown = deriveRemovalShownStatus({ workflow });
       expect(shown.workflow.kind).toBe(kind);
-      expect(shown.overlay).toBe("none");
-      expect(shown.returned).toBe(false);
       expect(shown.list).toEqual({ value: own.value, label: own.label });
       expect(shown.sheet).toEqual({ value: own.sheetValue, label: own.sheetLabel });
       expect(shown.searchText).toBe(own.label);
@@ -55,8 +53,6 @@ describe("deriveRemovalShownStatus", () => {
 
     it("appends the lock return to the search text only and silences the next step", () => {
       const shown = deriveRemovalShownStatus({ workflow, returnedByLock: true });
-      expect(shown.overlay).toBe("none");
-      expect(shown.returned).toBe(true);
       expect(shown.list).toEqual({ value: own.value, label: own.label });
       expect(shown.sheet).toEqual({ value: own.sheetValue, label: own.sheetLabel });
       expect(shown.searchText).toBe(`${own.label} Correction needed`);
@@ -65,13 +61,11 @@ describe("deriveRemovalShownStatus", () => {
     });
 
     it.each([
-      [false, "Correction needed", "correction-needed"],
-      [true, "Resubmit needed", "resubmit-needed"],
-    ] as const)("overlays the correction (resubmitNeeded %s)", (resubmitNeeded, label, overlay) => {
+      [false, "Correction needed"],
+      [true, "Resubmit needed"],
+    ] as const)("overlays the correction (resubmitNeeded %s)", (resubmitNeeded, label) => {
       const shown = deriveRemovalShownStatus({ workflow, correction: correction(resubmitNeeded), returnedByLock: true });
       expect(shown.workflow.kind).toBe(kind);
-      expect(shown.overlay).toBe(overlay);
-      expect(shown.returned).toBe(true);
       expect(shown.list).toEqual({ value: "pending", label });
       // The sheet keeps "Not submitted" for a draft that is not sent yet, even under a correction.
       const draft = kind === "ready" || kind === "blocked";
@@ -100,10 +94,27 @@ describe("listStatusLabel", () => {
   });
 });
 
-describe("returnedRemovalAttentionLabel", () => {
+describe("removalAttentionTitle", () => {
+  const draft = (readiness: Extract<RemovalAttentionSource, { kind: "draft" }>["readiness"]) => removalAttentionTitle({ kind: "draft", readiness });
+
+  it.each([
+    ["unavailable", null, "Couldn't check. Open it to see what is left."],
+    ["ready", { state: "ready", reasons: [] }, "Ready to submit"],
+    ["blocked by reasons", { state: "blocked", reasons: ["A.", "B.", "C."] }, "3 to fix"],
+    ["blocked with fixCount", { state: "blocked", reasons: ["A.", "B.", "C."], fixCount: 1 }, "1 to fix"],
+    ["blocked with none", { state: "blocked", reasons: [] }, "0 to fix"],
+    ["submitting", { state: "inProgress", reasons: [] }, null],
+  ] as const)("draft %s", (_name, readiness, title) => {
+    expect(draft(readiness as Extract<RemovalAttentionSource, { kind: "draft" }>["readiness"])).toBe(title);
+  });
+
+  it("words a rejected Removal as the list does", () => {
+    expect(removalAttentionTitle({ kind: "rejected" })).toBe("Submission failed");
+  });
+
   it("names the correction state while its window is open, else the plain return", () => {
-    expect(returnedRemovalAttentionLabel(correction(false))).toBe("Correction needed");
-    expect(returnedRemovalAttentionLabel(correction(true))).toBe("Resubmit needed");
-    expect(returnedRemovalAttentionLabel(undefined)).toBe("Returned by Isometric");
+    expect(removalAttentionTitle({ kind: "returned", correction: correction(false) })).toBe("Correction needed");
+    expect(removalAttentionTitle({ kind: "returned", correction: correction(true) })).toBe("Resubmit needed");
+    expect(removalAttentionTitle({ kind: "returned", correction: undefined })).toBe("Returned by Isometric");
   });
 });

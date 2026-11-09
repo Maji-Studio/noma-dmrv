@@ -267,7 +267,6 @@ export function RemovalDetailSheet({
   const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
   const carriedEntries = removalEntries?.carriedEntries;
   const lateEntries = removalEntries?.lateEntries;
-  // A returned Removal with its correction window open shows one notice in place of #1134's lock-based one.
   const submissionWarningNotes = buildSubmissionWarningNotes(
     [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
