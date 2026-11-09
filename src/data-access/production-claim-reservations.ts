@@ -235,6 +235,8 @@ export async function rejectSubmissionAndReleaseProductionClaims(
     submissionId: string;
     expectedLockedAt: Date;
     errorMessage: string;
+    /** Owning attempt observed no writes, including any uncertainty inherited on resume. */
+    mutationFreeAttempt?: true;
   },
 ): Promise<void> {
   requireOrgScope(ctx);
@@ -259,7 +261,17 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         ),
       )
       .for("update");
-    if (!submission || hasPossibleExternalMutation(submission)) return;
+    if (!submission) return;
+
+    // Only the exact live attempt may discharge its pre-write crash marker.
+    // Confirmed identities and uncertainty inherited from prior attempts stay protected.
+    const canClearAttemptMarker = args.mutationFreeAttempt &&
+      submission.status === "draft" &&
+      submission.lockedAt?.getTime() === args.expectedLockedAt.getTime() &&
+      !submission.externalId &&
+      getMetadataValue(submission.metadata, SUBMISSION_METADATA_KEYS.externalMutation) ===
+        SUBMISSION_EXTERNAL_MUTATIONS.possible;
+    if (hasPossibleExternalMutation(submission) && !canClearAttemptMarker) return;
 
     const exactDraftAttempt =
       submission.status === "draft" &&

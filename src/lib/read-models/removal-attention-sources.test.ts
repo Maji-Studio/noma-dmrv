@@ -17,7 +17,7 @@ vi.mock("@/lib/certification/removal-entry-correction", () => ({
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: () => undefined }));
 vi.mock("@/lib/isometric/utils/lock", () => ({ isLockedInFlight: () => false }));
 vi.mock("@/lib/certification/from-submission", () => ({ isRemovalSubmissionInterruptedFromSubmission: () => false }));
-vi.mock("@/fn/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadFacilityCertifierFacts: async () => ({}),
   resolveScopeForRemoval: async (_ctx: unknown, id: string) => ({ id }),
   buildRemovalContext: async (_ctx: unknown, scope: { id: string }) => {

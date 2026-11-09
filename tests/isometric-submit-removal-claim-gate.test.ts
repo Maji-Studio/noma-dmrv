@@ -19,7 +19,7 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
 import * as productionBatchesDA from "@/data-access/certifier-production-batches";
 import * as ledgerClaim from "@/data-access/certification-submissions";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import * as removalsDA from "@/data-access/certifier-removals";
 import { assertRegisteredProductionBatchesMatch } from "@/fn/certification/production-batch-precheck";
 import { submitRemoval } from "@/fn/certification/submit-removal";

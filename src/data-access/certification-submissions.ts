@@ -88,6 +88,34 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
   metadata?: Record<string, unknown> | null;
 }
 
+/** Persist uncertainty before registry I/O without granting the interrupted TTL bypass. */
+export async function markSubmissionAttemptStarted(
+  ctx: OrgContext,
+  id: string,
+  expectedLockedAt: Date,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const updated = await db
+    .update(certificationSubmissions)
+    .set({
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object(
+        ${SUBMISSION_METADATA_KEYS.externalMutation}::text,
+        case when ${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}
+          then ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}::text
+          else ${SUBMISSION_EXTERNAL_MUTATIONS.possible}::text end
+      )`,
+    })
+    .where(and(
+      eq(certificationSubmissions.id, id),
+      eq(certificationSubmissions.organizationId, ctx.organizationId),
+      eq(certificationSubmissions.status, "draft"),
+      eq(certificationSubmissions.lockedAt, expectedLockedAt),
+    ))
+    .returning({ id: certificationSubmissions.id });
+  return updated.length > 0;
+}
+
 /**
  * Compare-and-set: records the interruption only while the row is still a
  * draft holding this attempt's exact lock. Returns false when the CAS missed

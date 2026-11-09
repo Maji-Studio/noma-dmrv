@@ -153,7 +153,7 @@ design:
 - `samples`: independent per-credit-batch laboratory Samples and evidence.
 - `src/lib/isometric/transformers/measurement-sample.ts`: current optional
   `productionBatchId` wire seam.
-- `src/fn/certification/durability-measurement-samples.ts`: current
+- `src/lib/certification/durability-measurement-samples.ts`: current
   removal-scoped durability representation.
 - `certifier_sensors` and
   [src/fn/certification/submit-telemetry.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/fn/certification/submit-telemetry.ts): existing sensor/upload seam.

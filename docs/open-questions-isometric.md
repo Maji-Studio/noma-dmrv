@@ -236,7 +236,7 @@ uses it.
 - **When a registry create's reconcile lookup finds MULTIPLE candidates** (today
   only reachable for GHG Statements — several DRAFT statements for one
   `(project, end_on)`), `performRegistryCreate`
-  (`src/fn/certification/registry-create.ts`) rejects the ledger row and throws
+  (`src/lib/certification/registry-create.ts`) rejects the ledger row and throws
   the caller's ambiguity message **without writing a failed sync event**.
   Deliberate Phase 2 parity with the pre-module GHG behavior.
 - Not blind: the reason survives in the ledger row's `metadata.lastError` and
@@ -277,7 +277,7 @@ uses it.
 
 ### Future-application check compares a calendar date with an instant (`isometric/application-future-facility-day`, opened 2026-10-21)
 
-- **Observed:** `src/fn/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture` compares the application's UTC-midnight
+- **Observed:** `src/lib/certification/removal-reporting-window.ts:assertRemovalDatesNotFuture` compares the application's UTC-midnight
   calendar date with `now` as an instant. East of UTC a valid same-day application
   is refused until UTC midnight; west of UTC a next-day application passes while
   the facility is still on the earlier day.
@@ -677,7 +677,7 @@ authority-vs-docs-vs-code gap list before re-pinning.
 ### Submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
 
 - Two N+1s remain in the shared submission-context builder, now living in
-  `src/fn/certification/certify-context-core.ts` (`certify-context.ts` keeps
+  `src/lib/certification/certify-context-core.ts` (`certify-context.ts` keeps
   `loadSelectableBatchesForFacility` only as a thin re-export). The
   selectable-batches path loops a full `buildRemovalContext` per ungrouped batch
   — each iteration walks that batch's applications through

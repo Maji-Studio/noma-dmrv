@@ -25,7 +25,7 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
   with that claim, including draft Removals. If the ownership write wins first,
   `src/fn/certification/removal-submission-freshness.ts:assertClaimedRemovalPayloadFresh`
   rebuilds and compares the semantic hash, but
-  `src/fn/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
+  `src/lib/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
   keeps `transportFeedstockIds` outside the semantic payload. Decide how to
   revalidate that counted-ID snapshot when ownership changes without changing
   the semantic hash (for example equal transport totals with unchanged evidence
@@ -206,7 +206,7 @@ code today; breaking one compiles cleanly and fails silently.
   required at submission for sampled 1,000-year credit batches by the replicate
   gate (`evaluateSampled1000YearReplicates` in
   `src/lib/certification/durability-1000-replicates.ts`, called by
-  `src/fn/certification/durability-readiness.ts`). Dropping the percentage-to-fraction
+  `src/lib/certification/durability-readiness.ts`). Dropping the percentage-to-fraction
   conversion puts a 100× error into a credit-bearing input.
 
 ## Schema
@@ -307,7 +307,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
   transport categories are projections of it). The authoring doc now omits that
-  legacy row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  legacy row. `src/lib/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
 - Two explanations are open and only a registry probe separates them: the
@@ -523,7 +523,7 @@ selectors. See [`docs/testing.md`](./testing.md).
   the failing summary query and shows a warning banner, and
   `deriveRemovalReadiness` (`src/lib/certification/readiness.ts`) blocks
   readiness when `!facts.hasMapping`.
-- **Still open:** `safeListIfConfigured` (`src/fn/certification/shared.ts`) —
+- **Still open:** `safeListIfConfigured` (`src/lib/certification/shared.ts`) —
   treat 404/422 as non-retryable, return an empty/flagged result instead of
   throwing, and surface a warning chip on the registry-connection card (M).
 
@@ -587,19 +587,6 @@ locations, no new site can be registered. `needs-registry-check`: whether
 `GET /storage_locations` supports server-side filtering by
 `supplier_reference_id`, which would remove the scan entirely.
 
-### Crash-window interruption still loses the confirmed-write marker (`certification/interrupted-marker-crash-window`)
-
-The interrupted markers written by
-`recordClaimedRemovalSubmissionFailureBestEffort`
-(`src/fn/certification/removal-submission-failure.ts`) and the GHG create path
-are in-process best-effort writes inside a `catch`; a SIGTERM/timeout mid-POST
-records nothing. On retry `readRemovalSubmissionExternalMutation` reports
-`"none"`, so payload drift retires the draft without
-`preserveForReconciliation` and the next version re-POSTs datapoints and
-measurement samples under new version-suffixed supplier refs — a duplicate
-GHG entry. **Resolve via:** persisting an attempt-started marker before the
-first registry POST, or reconciling by unversioned keys.
-
 ### Order/delivery repoint does not guard the target lineage (`orders/repoint-target-lineage-guard`)
 
 `updateSample` and `updateApplication` call the certification lineage guard on
@@ -632,7 +619,7 @@ null-method facet branch in `src/data-access/applications.ts` is unreachable
 PR #660 (titled as gap routing) also made `productionReadinessGapForScope`
 (`src/lib/certification/production-readiness-from-lineage.ts`) return a gap for
 any completed member run with zero applications, and `hasSubmittableRuns` in
-`src/fn/certification/certify-context-core.ts` turns that into a hard blocker
+`src/lib/certification/certify-context-core.ts` turns that into a hard blocker
 for the whole Removal. Batch membership is date-window auto-assignment
 (`src/data-access/credit-batch-membership.ts`), and biochar is typically
 applied weeks after production, so a run completed late in a crediting period

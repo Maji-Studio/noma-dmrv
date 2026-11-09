@@ -8,7 +8,7 @@ import type { GhgStatement } from "@/lib/isometric";
 // Keep ledger reads, status writes, and activity persistence real; stub the
 // registry and unrelated report/session-lock dependencies of the submit core.
 // Keep the statement guard real; content comparison has its own agreement tests.
-vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+vi.mock("@/lib/certification/removal-content-comparison-core", () => ({
   compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
     state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
   })),

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
 import { deriveBatchHealth } from "./batch-health";
 import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
 import { batchHealthFixLinkFor } from "./batch-health-links";
-import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "@/lib/certification/certify-lineage-blockers";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "./readiness";
 import { toRemovalReadinessFacts } from "./readiness-facts";
 import { collectFeedstockTypeMappingGaps } from "./feedstock-type-mapping";

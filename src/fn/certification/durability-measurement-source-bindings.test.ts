@@ -6,7 +6,7 @@ import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import { TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
-import { patchMeasurementSampleSourceBindings } from "./durability-measurement-samples";
+import { patchMeasurementSampleSourceBindings } from "@/lib/certification/durability-measurement-samples";
 
 const log = vi.hoisted(() => {
   const log = { child: vi.fn(), debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };

@@ -19,7 +19,7 @@ import { createProductionRun, updateProductionRun } from "@/data-access/producti
 import { evaluateRemovalBlockers } from "@/fn/certification/removal-blockers-gate";
 import { deleteRemoval } from "@/fn/certification/delete-removal";
 import { ensureProductionBatchesForCreditBatches } from "@/fn/certification/production-batches";
-import type { RemovalSubmissionContext } from "@/fn/certification/certify-context-types";
+import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-types";
 import { getCreditBatchProductionSpanIssue } from "@/lib/credit-batch-production-span";
 import { logger } from "@/lib/log";
 import { withLineageFixture, type LineageFixture } from "./helpers/certification-lineage-fixture";

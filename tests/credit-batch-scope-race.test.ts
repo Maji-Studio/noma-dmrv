@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
-import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { loadCertifyContextForCreditBatchForUser } from "@/lib/certification/certify-context-core";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({

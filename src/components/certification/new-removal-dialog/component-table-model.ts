@@ -20,7 +20,7 @@ import {
 } from "@/components/emissions/emission-line-display";
 import type { RemovalCompilationView } from "@/fn/certification";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
-import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
+import type { RemovalLedgerPreview } from "@/lib/certification/removal-ledger-preview";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import {
   OPEN_REMOVAL_TEMPLATES_LINK_LABEL,

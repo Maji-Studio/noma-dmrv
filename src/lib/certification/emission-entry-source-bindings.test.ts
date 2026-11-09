@@ -3,7 +3,7 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { emissionEntrySourceCandidates } from "./emission-entry-source-bindings";
 import type { RemovalEntryContributions } from "./removal-emission-contributions";
 import { buildRemovalSourceBindingPlan, buildRemovalSourceDescription, sourceIdsForDatapointTarget } from "./removal-source-bindings";
-import { readRemovalCandidateSources, readRemovalSourceBindingPlan } from "@/fn/certification/removal-snapshot-readers";
+import { readRemovalCandidateSources, readRemovalSourceBindingPlan } from "@/lib/certification/removal-snapshot-readers";
 
 import { EmissionEntryEvidenceError } from "./emission-entry-evidence-error";
 import { EMISSION_ENTRIES_CHANGED, EMISSION_ENTRY_FILE_DUPLICATE, EMISSION_ENTRY_FILE_MISMATCH } from "./emission-entry-messages";

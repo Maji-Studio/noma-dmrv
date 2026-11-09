@@ -31,7 +31,7 @@ import {
 } from "@/lib/isometric/utils/constants";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
-import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
+import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
 
 /** Same bound the Removals list uses for its per-Removal builds. */
 const READINESS_CONCURRENCY = 8;

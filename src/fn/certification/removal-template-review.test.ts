@@ -5,8 +5,8 @@ import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
 import { requireOrgFacility } from "@/data-access/utils";
 import { listComponentBlueprints, listGhgEntryTemplates, type IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { loadRemovalTemplateFacts } from "./removal-template-facts";
-import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "./observe-removal-template";
+import { loadRemovalTemplateFacts } from "@/lib/certification/removal-template-facts";
+import { observeRemovalTemplate, TEMPLATE_ENRICHMENT_TTL_MS } from "@/lib/certification/observe-removal-template";
 import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import { enrichmentProblems, fullFingerprint, isAcceptableProposal, lineNeedsReview, lineSourcesForObservation, normalizeTemplateDefinition, resolveLineSources, semanticFingerprint, validateLineSources, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/load-enrichment";
@@ -20,15 +20,15 @@ vi.mock("../with-action", async () => {
 vi.mock("@/data-access/credit-batches", () => ({ getCreditBatchById: vi.fn() }));
 vi.mock("@/data-access/removal-template-observations", () => ({ reviewLineContracts: vi.fn(), getPreviousTemplateObservation: vi.fn(), getLatestTemplateObservation: vi.fn(async () => null) }));
 vi.mock("@/lib/isometric/template-observations/load-enrichment", () => ({ loadTemplateEnrichment: vi.fn(async () => ({})) }));
-vi.mock("./observe-removal-template", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./observe-removal-template")>(),
+vi.mock("@/lib/certification/observe-removal-template", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/certification/observe-removal-template")>(),
   observeRemovalTemplate: vi.fn(),
 }));
 vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn(async () => []) }));
 vi.mock("@/data-access/certification", () => ({ getCertifierProjectByFacility: vi.fn() }));
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn(async () => ({})), hasCertifierCredentials: vi.fn(async () => true) }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn() }));
-vi.mock("./removal-template-facts", () => ({ loadRemovalTemplateFacts: vi.fn() }));
+vi.mock("@/lib/certification/removal-template-facts", () => ({ loadRemovalTemplateFacts: vi.fn() }));
 vi.mock("@/lib/isometric", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric")>(),
   listGhgEntryTemplates: vi.fn(), listComponentBlueprints: vi.fn(async () => []),

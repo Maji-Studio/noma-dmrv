@@ -17,10 +17,6 @@ import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transpo
 
 export type { TransportLegsByCategory };
 
-// Re-exported from the non-server constants module so the existing
-// `@/fn/certification/shared` import surface keeps working for the fn/
-// layer, while utils that can't cross the "use server" boundary import
-// directly from `@/lib/isometric/utils/constants`.
 export {
   ISOMETRIC_PROVIDER,
   REMOVAL_SUBMISSION_TYPE,

@@ -16,7 +16,7 @@ import {
   removalEvidenceRoleLabelsForTarget,
   SOURCE_BINDING_MAPPING_REVISION,
 } from "@/lib/certification/removal-source-bindings";
-import { readRemovalCandidateSources } from "@/fn/certification/removal-snapshot-readers";
+import { readRemovalCandidateSources } from "@/lib/certification/removal-snapshot-readers";
 import {
   classifySequestration1000YearComponent,
   expectedSequestrationBlueprintKeys,
