@@ -12,6 +12,7 @@ import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 
 const BATCH_PARAM = "batch";
 const ALL_BATCHES = "All credit batches";
+const SELECTED_BATCH = "Selected credit batch";
 
 /**
  * The chosen batch: the URL's `?batch=` when the facility lists that batch,
@@ -61,6 +62,10 @@ export function BatchFilter({ facilityId }: { facilityId: string }) {
       onChange={(event) => choose(event.target.value)}
     >
       <option value="">{ALL_BATCHES}</option>
+      {/* The list failed to load but the URL names a batch: say it is selected, so the figures never sit under "All". */}
+      {selectedId && !batches.some((batch) => batch.id === selectedId) && (
+        <option value={selectedId}>{SELECTED_BATCH}</option>
+      )}
       {batches.map((batch) => (
         <option key={batch.id} value={batch.id}>
           {creditBatchOptionLabel(batch)}

@@ -822,10 +822,13 @@ Facility-scoped operations dashboard at `/dashboard`
   KPIs, stage counts, To do and activity to records traceable to one batch, or
   to any unarchived batch ("All credit batches"); a Removal row stays when the
   Removal holds one of those batches. Grouped rows carry every represented
-  record id and stay when any is in scope, with their count narrowed to those
-  ids. One scoped record uses its single-row details when available, keeping
-  the overview's href; otherwise it stays grouped. Structural gaps are facility
-  setup and stay out. Stage bubbles count scoped rows. Bins stay facility-wide.
+  record id and stay when any is in scope, with their count and `ids` list
+  link narrowed to those ids. One scoped record shows its own single row (its
+  own link) when available; otherwise it stays grouped. Structural gaps are
+  facility setup and stay out. Stage bubbles count scoped records (a grouped
+  row adds its count). For all credit batches the downstream run-forward walk
+  is best effort: if it fails closed, the read retries without it. Bins stay
+  facility-wide.
   The figures come from one org-scoped read, `getDashboardBatchScope`
   (`src/data-access/dashboard-batch-scope.ts`, projected by
   `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one

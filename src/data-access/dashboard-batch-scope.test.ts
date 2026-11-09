@@ -75,3 +75,23 @@ describe("getDashboardBatchScope concurrent changes", () => {
     expect(mocks.select).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("getDashboardBatchScope run forwards", () => {
+  it("reads all credit batches without run forwards when that walk fails closed", async () => {
+    selectBatches();
+    mocks.accounting
+      .mockRejectedValueOnce(new Error("delivery allocations are inconsistent"))
+      .mockResolvedValueOnce({ [BATCH_A]: rollup(BATCH_A), [BATCH_B]: rollup(BATCH_B) });
+    const scope = await getDashboardBatchScope(ctx, FACILITY_ID, null);
+    expect(scope.batchIds).toEqual([BATCH_A, BATCH_B]);
+    expect(mocks.accounting).toHaveBeenNthCalledWith(1, ctx, [BATCH_A, BATCH_B], { includeRunForwards: true });
+    expect(mocks.accounting).toHaveBeenNthCalledWith(2, ctx, [BATCH_A, BATCH_B]);
+  });
+
+  it("lets one selected batch fail closed, so its own error shows", async () => {
+    selectBatches([{ id: BATCH_A, claimedByRemovalId: null }]);
+    mocks.accounting.mockRejectedValueOnce(new Error("delivery allocations are inconsistent"));
+    await expect(getDashboardBatchScope(ctx, FACILITY_ID, BATCH_A)).rejects.toThrow("delivery allocations are inconsistent");
+    expect(mocks.accounting).toHaveBeenCalledTimes(1);
+  });
+});

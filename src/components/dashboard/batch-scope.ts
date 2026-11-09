@@ -20,6 +20,9 @@ import { plural, STATION_COUNT_WORDS } from "@/lib/dashboard-links";
 /** The server read's shape (`getDashboardBatchScope`). */
 export type DashboardBatchScopeView = DashboardBatchScope;
 
+/** The list filter param grouped rows link with (`facilityListHref`). */
+const IDS_PARAM = "ids";
+
 /** Removals and credit batches: their reasons belong to no stage, so they count on Production. */
 const BATCH_REASON_PATHS = ["/credit-batches", "/removals"];
 
@@ -30,6 +33,19 @@ function batchKpiHints(subject: string): Record<DashboardKpi["key"], string> {
     appliedToSoil: `Dry mass of ${subject} biochar applied to soil.`,
     co2eStored: `Carbon stored in ${subject} biochar, before project emissions are subtracted.`,
   };
+}
+
+/** A grouped row's list link (`?ids=`) narrowed to the in-scope records, so its count and its list agree. */
+function withScopedIds(href: string, ids: readonly string[]): string {
+  const [path, query = ""] = href.split("?");
+  const params = new URLSearchParams(query);
+  if (!params.has(IDS_PARAM)) return href;
+  params.set(IDS_PARAM, ids.join(","));
+  return `${path}?${params.toString().replaceAll("%2C", ",")}`;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 function pathOf(href: string): string {
@@ -61,7 +77,7 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
     const recordItems = item.recordItems?.filter((record) => record.recordIds?.some((id) => scopedIds.has(id)));
     const single = ids.length === 1 ? recordItems?.find((record) => record.recordIds?.includes(ids[0])) : undefined;
     if (single) return [single];
-    return [{ ...item, recordIds: ids, ...(recordItems ? { recordItems } : {}), count: ids.length }];
+    return [{ ...item, href: withScopedIds(item.href, ids), recordIds: ids, ...(recordItems ? { recordItems } : {}), count: ids.length }];
   });
   const stations = overview.stations.map((station) => {
     const listPath = pathOf(station.href);
@@ -70,10 +86,17 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
         pathOf(item.href) === listPath ||
         (station.key === "production" && BATCH_REASON_PATHS.some((path) => pathOf(item.href).startsWith(path))),
     );
-    const reasons = own.map((item) => ({ state: "warning" as const, text: `${item.entityCode}: ${item.title}`, href: item.href }));
+    const reasons = own.map((item) => ({
+      state: "warning" as const,
+      // A grouped row says how many, as To do does ("Production runs: 3 affected, missing mass data").
+      text: item.count == null ? `${item.entityCode}: ${item.title}` : `${item.entityCode}: ${item.count} affected, ${lowerFirst(item.title)}`,
+      href: item.href,
+    }));
     const total = scope.stationTotals[station.key];
     const [one, many] = STATION_COUNT_WORDS[station.key];
-    return { ...station, total, totalLabel: plural(total, one, many), attention: reasons.length, reasons };
+    // The bubble counts records, so a grouped row adds its count.
+    const openRecords = own.reduce((sum, item) => sum + (item.count ?? 1), 0);
+    return { ...station, total, totalLabel: plural(total, one, many), attention: openRecords, reasons };
   });
   return {
     ...overview,

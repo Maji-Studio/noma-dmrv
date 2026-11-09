@@ -290,15 +290,27 @@ export function ActivityEmpty({ clearFilterHref }: { clearFilterHref: string | n
 }
 
 /** The read's own safe message, never a guessed cause. */
-export function LoadError({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+export function LoadError({
+  message,
+  onRetry,
+  clearFilterHref,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  /** With one batch selected, the way out when that batch is the problem. */
+  clearFilterHref: string | null;
+}) {
   return (
     <Notice
       tone="error"
       title="The dashboard could not be loaded."
       action={
-        <Button variant="default" size="small" onClick={onRetry}>
-          Try again
-        </Button>
+        <span className="flex flex-wrap items-center gap-12">
+          <Button variant="default" size="small" onClick={onRetry}>
+            Try again
+          </Button>
+          {clearFilterHref && <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink>}
+        </span>
       }
     >
       {message}

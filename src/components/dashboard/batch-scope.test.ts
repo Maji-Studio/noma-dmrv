@@ -74,12 +74,20 @@ describe("applyBatchScope", () => {
     expect(scoped.activity.map((item) => item.id)).toEqual(["older-scoped"]);
   });
 
-  it("keeps grouped rows with their scoped count and keeps the overview href", () => {
+  it("keeps grouped rows with their scoped count, records in the bubble and a narrowed list link", () => {
+    const group = { ...overview.attention[3], recordIds: ["run-1", "run-2", "run-9"], href: "/production-runs?facility=f1&ids=run-1,run-2,run-9" };
+    const result = applyBatchScope({ ...overview, attention: [group] }, { ...scope, recordIds: ["run-1", "run-2"] });
+    expect(result.attention).toEqual([{ ...group, href: "/production-runs?facility=f1&ids=run-1,run-2", recordIds: ["run-1", "run-2"], count: 2 }]);
+    expect(result.attentionTotal).toBe(1);
+    const production = result.stations.find((station) => station.key === "production");
+    expect(production?.attention).toBe(2);
+    expect(production?.reasons.map((reason) => reason.text)).toEqual(["Production runs: 2 affected, missing data"]);
+  });
+
+  it("keeps a grouped link without an ids filter as it is", () => {
     const group = { ...overview.attention[3], recordIds: ["run-1", "run-2", "run-9"] };
     const result = applyBatchScope({ ...overview, attention: [group] }, { ...scope, recordIds: ["run-1", "run-2"] });
-    expect(result.attention).toEqual([{ ...group, recordIds: ["run-1", "run-2"], count: 2 }]);
-    expect(result.attentionTotal).toBe(1);
-    expect(result.stations.find((station) => station.key === "production")?.attention).toBe(1);
+    expect(result.attention[0]?.href).toBe(group.href);
   });
 
   it("drops a grouped row with no in-scope ids even when its href contains a scoped id", () => {

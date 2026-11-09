@@ -1,9 +1,11 @@
 import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
+import { pgErrorCode } from "@/db/errors";
 import { creditBatchApplications, creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { projectDashboardBatchScope } from "@/lib/dashboard-batch-scope";
 import { SafeError } from "@/lib/errors";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { loadCreditBatchAccounting } from "./credit-batch-accounting";
 import type { DashboardActivityItem, DashboardStationKey } from "./dashboard-overview";
 import { getDashboardScopedActivity } from "./dashboard-stations";
@@ -46,11 +48,7 @@ export async function getDashboardBatchScope(
   if (creditBatchId !== null && batches.length === 0) {
     throw new SafeError("Credit batch was not found.");
   }
-  const accounting = await loadCreditBatchAccounting(
-    ctx,
-    batches.map(({ id }) => id),
-    { includeRunForwards: true },
-  );
+  const accounting = await loadScopeAccounting(ctx, batches.map(({ id }) => id), creditBatchId === null, facilityId);
   const survivingBatches = batches.filter(({ id }) => {
     const rollup = accounting[id];
     if (rollup && rollup.batch.facilityId === facilityId) return true;
@@ -66,6 +64,32 @@ export async function getDashboardBatchScope(
   const recordIds = [...new Set([...projected.recordIds, ...removalIds])].sort();
   const activity = await getDashboardScopedActivity(ctx, facilityId, recordIds);
   return { ...projected, recordIds, activity };
+}
+
+/**
+ * The chosen batches' accounting with their runs' downstream records. For all
+ * credit batches the downstream walk is best effort: one batch's inconsistent
+ * saved allocations fail that walk closed, and the default dashboard must not
+ * go dark for it, so the read falls back to the walk without run forwards
+ * (products and deliveries then come from applications only). One batch keeps
+ * failing closed, so its page says what is wrong.
+ */
+async function loadScopeAccounting(
+  ctx: OrgContext,
+  batchIds: string[],
+  allBatches: boolean,
+  facilityId: string,
+) {
+  if (!allBatches) return loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true });
+  try {
+    return await loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true });
+  } catch (error: unknown) {
+    logger.warn(
+      { facilityId, errorType: error instanceof Error ? sanitizeErrorMessage(error.name) : typeof error, errorCode: pgErrorCode(error), errorMessage: sanitizeErrorMessage(error) },
+      "Dashboard batch scope: run forwards failed, reading all credit batches without them",
+    );
+    return loadCreditBatchAccounting(ctx, batchIds);
+  }
 }
 
 /**

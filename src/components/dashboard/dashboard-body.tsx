@@ -55,6 +55,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
     return (
       <LoadError
         message={(scope.error ?? error)?.message ?? null}
+        clearFilterHref={batchId ? allBatchesHref : null}
         onRetry={() => {
           onRetry();
           void scope.refetch();

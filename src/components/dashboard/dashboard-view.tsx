@@ -53,12 +53,16 @@ export function DashboardView() {
       <header className="flex flex-wrap items-start justify-between gap-24">
         <div className="flex min-w-0 flex-col gap-6">
           <h1 className="title-heading-2">Dashboard</h1>
-          {facilityId && !data ? (
+          {facilityId && !data && isLoading ? (
             // Holds the "Updated 16:16" line's place, so the header does not shift.
             <Skeleton height={UPDATED_LINE_HEIGHT} width={UPDATED_LINE_WIDTH} />
           ) : (
             <p className="body-small text-[var(--color-text-secondary)]">
-              {data ? updatedLabel(data.generatedAt, timeZone) : "Select a facility to monitor its carbon removal."}
+              {data
+                ? updatedLabel(data.generatedAt, timeZone)
+                : facilityId
+                  ? null
+                  : "Select a facility to monitor its carbon removal."}
             </p>
           )}
         </div>
