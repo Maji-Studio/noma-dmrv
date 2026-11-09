@@ -10,14 +10,16 @@ export interface RemovalSheetBatchInput {
   code: string;
   durabilityOption: DurabilityOption;
   sampling: string;
-  appliedWeightTons: number;
+  /** Dry tonnes applied in this Removal's scope; null when any application has no dry mass or there is none. */
+  appliedDryTons: number | null;
   co2eStoredTonnes: number | null;
 }
 
 export interface RemovalSheetFacts {
   batches: { id: string; code: string }[];
   facilityName: string | null;
-  dryTonnes: number;
+  /** Dry tonnes; null unless every batch reports one, so the field can read "not yet computed". */
+  dryTonnes: number | null;
   /** Sum of the credit batches' local estimates; null unless every batch has one. */
   co2eEstimateTonnes: number | null;
   /** "200-year (H:Corg)", or several when the batches differ; null with no batch. */
@@ -34,11 +36,14 @@ const labels = (values: string[]) => (values.length === 0 ? null : [...new Set(v
 
 export function projectRemovalSheetFacts(batches: RemovalSheetBatchInput[], facilityName: string | null): RemovalSheetFacts {
   const sorted = [...batches].sort((a, b) => a.code.localeCompare(b.code));
+  const dry = sorted.map((batch) => batch.appliedDryTons);
   const estimates = sorted.map((batch) => batch.co2eStoredTonnes);
   return {
     batches: sorted.map(({ id, code }) => ({ id, code })),
     facilityName,
-    dryTonnes: sorted.reduce((sum, batch) => sum + batch.appliedWeightTons, 0),
+    dryTonnes: sorted.length > 0 && dry.every((value): value is number => value != null)
+      ? dry.reduce((sum, value) => sum + value, 0)
+      : null,
     co2eEstimateTonnes: sorted.length > 0 && estimates.every((value): value is number => value != null)
       ? estimates.reduce((sum, value) => sum + value, 0)
       : null,

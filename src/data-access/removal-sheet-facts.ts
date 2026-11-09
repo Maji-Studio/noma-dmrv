@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { projectRemovalSheetFacts, type RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
+import { deriveAppliedDryTons } from "@/fn/certification/applied-dry-tons";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 import { loadCreditBatchAccounting } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
@@ -26,7 +27,7 @@ export async function loadRemovalSheetFacts(ctx: OrgContext, removalId: string):
       code: batch.code,
       durabilityOption: batch.durabilityOption,
       sampling: batch.sampling,
-      appliedWeightTons: accounting[batch.id]?.appliedWeightTons ?? 0,
+      appliedDryTons: deriveAppliedDryTons(accounting[batch.id]?.lineageFacts.applications ?? []),
       co2eStoredTonnes: accounting[batch.id]?.co2ePreview.co2eStoredTonnes ?? null,
     })),
     facility?.name ?? null,

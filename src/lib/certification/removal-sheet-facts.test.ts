@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { projectRemovalSheetFacts } from "./removal-sheet-facts";
 
 const batch = (code: string, over = {}) => ({
-  id: `id-${code}`, code, durabilityOption: "1000_year" as const, sampling: "sampled", appliedWeightTons: 2, co2eStoredTonnes: 5, ...over,
+  id: `id-${code}`, code, durabilityOption: "1000_year" as const, sampling: "sampled", appliedDryTons: 2, co2eStoredTonnes: 5, ...over,
 });
 
 describe("projectRemovalSheetFacts", () => {
@@ -15,6 +15,12 @@ describe("projectRemovalSheetFacts", () => {
   it("gives no estimate unless every batch has one", () => {
     expect(projectRemovalSheetFacts([batch("A"), batch("B", { co2eStoredTonnes: null })], null).co2eEstimateTonnes).toBeNull();
     expect(projectRemovalSheetFacts([], null)).toMatchObject({ co2eEstimateTonnes: null, durabilityLabel: null });
+  });
+
+  it("gives no dry mass when a batch lacks one or there are no batches", () => {
+    expect(projectRemovalSheetFacts([batch("A"), batch("B", { appliedDryTons: null })], null).dryTonnes).toBeNull();
+    expect(projectRemovalSheetFacts([], null).dryTonnes).toBeNull();
+    expect(projectRemovalSheetFacts([batch("A", { appliedDryTons: 0 })], null).dryTonnes).toBe(0);
   });
 
   it("lists both labels when batches differ", () => {

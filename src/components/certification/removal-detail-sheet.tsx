@@ -387,7 +387,8 @@ export function RemovalDetailSheet({
                 />
                 <DetailField
                   label="Biochar dry mass"
-                  value={facts ? formatTonnes(facts.dryTonnes, { digits: DRY_MASS_DIGITS }) : null}
+                  value={facts?.dryTonnes == null ? null : formatTonnes(facts.dryTonnes, { digits: DRY_MASS_DIGITS })}
+                  emptySituation="notYetComputed"
                   pending={sheetFacts.isLoading}
                 />
                 <DetailField
