@@ -3,7 +3,7 @@ import {
   loadApplicationStorageLocationSync,
   syncApplicationStorageLocation,
 } from "@/fn/certification";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { unwrap } from "@/hooks/types";
 
 const storageLocationSyncKeys = {

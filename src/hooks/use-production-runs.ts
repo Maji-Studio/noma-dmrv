@@ -37,7 +37,7 @@ import {
   getProductionRunStatsRead,
 } from "@/lib/read-api/client";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";

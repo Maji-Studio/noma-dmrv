@@ -7,7 +7,6 @@
 import { RECORD_LOCK_TOUCHES, recordLockMeta } from "./record-lock-query-keys";
 import { activityKeys } from "./activity-query-keys";
 import {
-  type QueryClient,
   useMutation,
   useQueries,
   useQuery,
@@ -73,8 +72,10 @@ import type {
   ApproveGhgStatementReportInput,
 } from "@/schemas/certification";
 import type { StatusHistoryEntityType } from "@/lib/certification/status-history";
+import { certificationKeys } from "./certification-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { unwrap } from "@/hooks/types";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
@@ -115,142 +116,6 @@ export function getRemovalPreflightRefetchInterval(
   return data?.lockInFlight || data?.deletionInProgress
     ? LOCKED_REFETCH_INTERVAL_MS
     : false;
-}
-
-export const certificationKeys = {
-  removalCarriedEntries: (removalId: string) => ["certification", "removal-carried-entries", removalId] as const,
-  removalRecords: (removalId: string) => ["certification", "removal-records", removalId] as const,
-  removalSheetFacts: (removalId: string) => ["certification", "removal-sheet-facts", removalId] as const,
-  removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
-  removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,
-  all: ["certification"] as const,
-  /** Whether a submitted Removal or GHG statement freezes the record's files. */
-  recordLocks: () => [...certificationKeys.all, "record-lock"] as const,
-  /** A scoped read appends its scope, so invalidating the unscoped key (a prefix) reaches both. */
-  recordLock: (entityType: string, entityId?: string, scope?: "transport") =>
-    (scope
-      ? [...certificationKeys.all, "record-lock", entityType, entityId, scope]
-      : [...certificationKeys.all, "record-lock", entityType, entityId]) as readonly unknown[],
-  facilityMapping: (facilityId: string) =>
-    [...certificationKeys.all, "facility-mapping", facilityId] as const,
-  facilitySummary: (facilityId: string) =>
-    [...certificationKeys.all, "facility-summary", facilityId] as const,
-  projectTemplates: (externalProjectId: string) =>
-    [...certificationKeys.all, "project-templates", externalProjectId] as const,
-  feedstockTypes: () =>
-    [...certificationKeys.all, "feedstock-types"] as const,
-  certifyContextForCreditBatch: (creditBatchId: string) =>
-    [
-      ...certificationKeys.all,
-      "certify-context",
-      "credit-batch",
-      creditBatchId,
-    ] as const,
-  batchTodos: (facilityId: string, creditBatchId: string) =>
-    [...certificationKeys.all, "batch-todos", facilityId, creditBatchId] as const,
-  batchDurabilitySummary: (creditBatchId: string) =>
-    [
-      ...certificationKeys.all,
-      "batch-durability-summary",
-      creditBatchId,
-    ] as const,
-  batchHealthSummaries: (facilityId: string, batchIds: string[]) =>
-    [
-      ...certificationKeys.all,
-      "batch-health-summaries",
-      facilityId,
-      batchIds,
-    ] as const,
-  certifyContextForRemoval: (facilityId: string, removalId: string) =>
-    [
-      ...certificationKeys.all,
-      "certify-context",
-      "removal",
-      facilityId,
-      removalId,
-    ] as const,
-  removalPreflight: (facilityId: string, removalId: string) =>
-    [
-      ...certificationKeys.all,
-      "removal-preflight",
-      facilityId,
-      removalId,
-    ] as const,
-  removalCompilation: (facilityId: string, removalId: string) =>
-    [
-      ...certificationKeys.all,
-      "removal-compilation",
-      facilityId,
-      removalId,
-    ] as const,
-  removalTemplateDiagnostic: (facilityId: string) =>
-    [
-      ...certificationKeys.all,
-      "removal-template-diagnostic",
-      facilityId,
-    ] as const,
-  removalsForFacility: (facilityId: string) =>
-    [...certificationKeys.all, "removals", facilityId] as const,
-  removalBreakdown: (removalId: string) =>
-    [...certificationKeys.all, "removal-breakdown", removalId] as const,
-  removalProductionBatches: (removalId: string) =>
-    [...certificationKeys.all, "removal-production-batches", removalId] as const,
-  selectableBatches: (facilityId: string) =>
-    [...certificationKeys.all, "selectable-batches", facilityId] as const,
-  ghgStatementsForFacility: (facilityId: string) =>
-    [...certificationKeys.all, "ghg-statements", facilityId] as const,
-  ghgStatementState: (ghgStatementId: string) =>
-    [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
-  ghgStatementBreakdown: (ghgStatementId: string) =>
-    [
-      ...certificationKeys.all,
-      "ghg-statement-breakdown",
-      ghgStatementId,
-    ] as const,
-  ghgStatementReports: (ghgStatementId: string) =>
-    [
-      ...certificationKeys.all,
-      "ghg-statement-reports",
-      ghgStatementId,
-    ] as const,
-  openRemovalsForFacility: (facilityId: string) =>
-    [...certificationKeys.all, "open-removals", facilityId] as const,
-  registryGhgStatementsForFacility: (facilityId: string) =>
-    [...certificationKeys.all, "registry-ghg-statements", facilityId] as const,
-  overview: (facilityId: string) =>
-    [...certificationKeys.all, "overview", facilityId] as const,
-  /** Status history behind a Removal or GHG Statement badge. */
-  statusHistory: (entityType: StatusHistoryEntityType, entityId: string) =>
-    [...certificationKeys.all, "status-history", entityType, entityId] as const,
-  health: () => [...certificationKeys.all, "health"] as const,
-  registrySourceVisibility: () =>
-    [...certificationKeys.all, "registry-source-visibility"] as const,
-};
-
-/** Refresh cached readiness and activity and, when relevant, derived CO₂e previews. */
-export function invalidateCertificationReadiness(
-  queryClient: QueryClient,
-  options?: { creditBatchPreviews?: boolean },
-) {
-  const invalidations = [
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionAllocationPrefix() }),
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.details() }),
-    // Removal codes and the not-in-a-Removal mass on the timeline's hover cards.
-    queryClient.invalidateQueries({ queryKey: creditBatchKeys.timelineFactsPrefix() }),
-    // Readiness-affecting mutations also change the batch activity history.
-    queryClient.invalidateQueries({ queryKey: activityKeys.all }),
-    queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
-    // The dashboard's Needs attention counts draft Removals ("N to fix") from the same readiness.
-    queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
-  ];
-  if (options?.creditBatchPreviews) {
-    invalidations.push(
-      queryClient.invalidateQueries({
-        queryKey: creditBatchKeys.previewsPrefix(),
-      }),
-    );
-  }
-  return Promise.all(invalidations);
 }
 
 // Server-owned readiness payload for the Removals hub. Heavier than the other

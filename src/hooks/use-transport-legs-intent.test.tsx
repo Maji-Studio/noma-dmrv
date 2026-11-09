@@ -8,7 +8,7 @@ import type { CreateTransportLegData } from "@/schemas/transport-legs";
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("@/fn/transport-legs", () => ({ createTransportLegFn: create }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 vi.mock("./use-dashboard-overview", () => ({ dashboardOverviewKeys: { all: ["dashboard"] } }));
 vi.mock("./use-chain-of-custody", () => ({ chainOfCustodyKeys: { all: ["chain"] } }));
 afterEach(cleanup);

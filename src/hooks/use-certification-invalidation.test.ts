@@ -17,21 +17,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   return { ...actual, ...reactQueryMocks };
 });
 
-import {
-  certificationKeys,
-  getRemovalCertifyRefetchInterval,
-  getRemovalPreflightRefetchInterval,
-  getRemovalsHubRefetchInterval,
-  invalidateCertificationReadiness,
-  useFacilityCertifierSummary,
-  useRemovalPreflightSummaries,
-  useRemovalsForFacility,
-  useSaveFacilityCertifierMapping,
-  useSubmitGhgStatementToVerifier,
-  useCreateRemovalWithBatches,
-  useDeleteRemoval,
-  useSubmitRemoval,
-} from "./use-certification";
+import { getRemovalCertifyRefetchInterval, getRemovalPreflightRefetchInterval, getRemovalsHubRefetchInterval, useFacilityCertifierSummary, useRemovalPreflightSummaries, useRemovalsForFacility, useSaveFacilityCertifierMapping, useSubmitGhgStatementToVerifier, useCreateRemovalWithBatches, useDeleteRemoval, useSubmitRemoval } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 describe("certificationKeys", () => {

@@ -10,7 +10,7 @@ import { onboardingKeys } from "./use-onboarding";
 const mocks = vi.hoisted(() => ({ create: vi.fn(), readiness: vi.fn() }));
 vi.mock("@/fn/credit-batches", () => ({ createCreditBatchFn: mocks.create }));
 vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: mocks.readiness }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: mocks.readiness }));
 
 const row = { id: "batch-1", facilityId: "facility-1", code: "CB-001" };
 const input = { facilityId: row.facilityId } as CreditBatchFormData;

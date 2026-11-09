@@ -17,8 +17,7 @@ vi.mock("@/fn/emission-entries", () => ({
   restoreEmissionEntryFn: vi.fn(),
   replaceEmissionEntryFn: vi.fn(),
 }));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
-vi.mock("./use-energy", () => ({ energyKeys: { all: ["energy"] } }));
+vi.mock("./stale-reads", () => ({ invalidateEmissionEntryReads: vi.fn() }));
 
 const DEFAULT_QUERY_RETRY_LIMIT = 3;
 const scope = { facilityId: "facility", creditBatchId: "batch" };

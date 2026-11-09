@@ -38,7 +38,7 @@ import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { orderKeys } from "./use-orders";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================

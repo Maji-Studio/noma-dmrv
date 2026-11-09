@@ -13,7 +13,7 @@ import { orderKeys } from "./use-orders";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { deliveryKeys } from "./use-deliveries";
 import { storageLocationKeys } from "./use-storage-locations";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { unwrap } from "@/hooks/types";
 import type { BiocharProductRecord, Delivery } from "@/db/schema";

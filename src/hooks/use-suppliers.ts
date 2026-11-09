@@ -2,7 +2,7 @@ import { useIntentMutation } from "./use-create-intent-key";
 import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { feedstockKeys } from "./use-feedstocks";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 /**
  * Suppliers React Query Hooks
  * Client-side state management for supplier operations

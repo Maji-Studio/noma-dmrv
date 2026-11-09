@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
-import { certificationKeys } from "@/hooks/use-certification";
+import { certificationKeys } from "@/hooks/certification-query-keys";
 import { CreditBatchPage } from "./credit-batch-page";
 
 const harness = vi.hoisted(() => ({

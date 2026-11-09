@@ -4,7 +4,7 @@ import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { requestUpload, deleteDocument } from "@/fn/documents";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { documentKeys, useDeleteDocument, useRequestUpload } from "./use-documents";
 import { invalidateRecordLocksAfter, recordLockKeys } from "./record-lock-query-keys";
 

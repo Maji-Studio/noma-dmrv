@@ -6,8 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getEmissionAllocationFn } from "@/fn/emission-allocation";
 import { useEmissionAllocation } from "./use-emission-allocation";
 import { creditBatchKeys } from "./credit-batch-query-keys";
-import { invalidateEmissionEntryReads } from "./use-emission-entries";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness, invalidateEmissionEntryReads } from "./stale-reads";
 
 vi.mock("@/fn/emission-allocation", () => ({ getEmissionAllocationFn: vi.fn() }));
 
