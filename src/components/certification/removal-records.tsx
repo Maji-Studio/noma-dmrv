@@ -9,8 +9,8 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { CaretDownIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
@@ -112,7 +112,8 @@ function batchDryKg(batch: RemovalBatchRecords): number | null {
   return masses.length > 0 && masses.every((kg): kg is number => kg != null) ? masses.reduce((sum, kg) => sum + kg, 0) : null;
 }
 
-function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityId: string }) {
+/** `summarize`: with several batches the row tells them apart by dates and dry mass; a lone batch repeats the Removal's own figures. */
+function BatchRow({ batch, facilityId, summarize }: { batch: RemovalBatchRecords; facilityId: string; summarize: boolean }) {
   const [open, setOpen] = useState(false);
   const dryKg = batchDryKg(batch);
   return (
@@ -128,10 +129,14 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
           className="flex min-h-44 min-w-0 flex-1 items-center gap-12 text-left body-small focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
         >
           <span className="sr-only">Records of {batch.code}, </span>
-          <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-16 text-[var(--color-text-secondary)]">
-            <span className="whitespace-nowrap">{formatDateRange(batch.startDate, batch.endDate)}</span>
-            {dryKg != null && <span className="whitespace-nowrap tabular-nums">{formatTonnes(dryKg / KG_PER_TONNE, { digits: MASS_DIGITS })} dry</span>}
-          </span>
+          {summarize ? (
+            <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-16 text-[var(--color-text-secondary)]">
+              <span className="whitespace-nowrap">{formatDateRange(batch.startDate, batch.endDate)}</span>
+              {dryKg != null && <span className="whitespace-nowrap tabular-nums">{formatTonnes(dryKg / KG_PER_TONNE, { digits: MASS_DIGITS })} dry</span>}
+            </span>
+          ) : (
+            <span className="flex-1" />
+          )}
           <CaretDownIcon size={16} aria-hidden className={cn("shrink-0 text-[var(--color-text-tertiary)] transition-transform", !open && "-rotate-90")} />
         </button>
       </div>
@@ -149,12 +154,12 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
 
 export function RemovalRecordsList({ batches, facilityId }: { batches: RemovalBatchRecords[]; facilityId: string }) {
   if (batches.length === 0) {
-    return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds a credit batch." />;
+    return <p className="body-small text-[var(--color-text-secondary)]">No credit batches yet. Records appear here once this Removal holds one.</p>;
   }
   return (
     <ul className="flex flex-col">
       {batches.map((batch) => (
-        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} />
+        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={batches.length > 1} />
       ))}
     </ul>
   );

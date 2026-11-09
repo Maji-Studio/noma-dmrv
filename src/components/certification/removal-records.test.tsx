@@ -78,7 +78,7 @@ describe("RemovalRecordsList", () => {
 
 describe("batch row and links", () => {
   it("summarises the batch's dry biochar and opens record codes in the same tab", () => {
-    render(<RemovalRecordsList batches={[batch(1, 2)]} facilityId="f1" />);
+    render(<RemovalRecordsList batches={[batch(1, 2), { ...batch(1, 0), creditBatchId: "cb-2", code: "CB-26-002" }]} facilityId="f1" />);
     expect(screen.getByRole("button", { name: /Records of CB-26-001/ }).textContent).toMatch(/6\.4.t.dry/);
     open();
     const code = screen.getByRole("link", { name: "PR-1" });
@@ -87,6 +87,13 @@ describe("batch row and links", () => {
     expect(code.className).toContain("font-mono");
     expect(screen.getByRole("link", { name: "CB-26-001" }).className).toContain("min-h-44");
     expect(screen.getByRole("heading", { name: "Production runs" })).toBeTruthy();
+  });
+});
+
+describe("a lone credit batch", () => {
+  it("shows no dates or dry mass beside its code, since the Removal already says them", () => {
+    render(<RemovalRecordsList batches={[batch(1, 2)]} facilityId="f1" />);
+    expect(screen.getByRole("button", { name: /Records of CB-26-001/ }).textContent).not.toMatch(/dry/);
   });
 });
 
@@ -105,10 +112,11 @@ describe("RemovalRecords states", () => {
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("uses one EmptyState when there are no credit batches", () => {
+  it("says once, in quiet body text, that there are no credit batches", () => {
     mocks.query = { isLoading: false, isError: false, data: [] };
     render(<RemovalRecords removalId="r" facilityId="f1" enabled />);
-    expect(screen.getAllByRole("heading", { name: "No credit batches yet" })).toHaveLength(1);
+    expect(screen.getAllByText(/No credit batches yet/)).toHaveLength(1);
+    expect(screen.queryByRole("heading")).toBeNull();
     expect(document.body.textContent).not.toMatch(/none/i);
   });
 });
