@@ -296,6 +296,7 @@ async function loadLineageWithExecutor(
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
           wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
+          supplierId: suppliers.id,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
         })
@@ -803,7 +804,12 @@ export async function loadCreditBatchAccountingSafely(
 export async function loadCreditBatchAccounting(
   ctx: OrgContext,
   batchIds: string[],
-  options?: { removalId?: string; unassignedOnly?: boolean },
+  options?: {
+    removalId?: string;
+    unassignedOnly?: boolean;
+    /** Include member runs' downstream records in the accounting snapshot. */
+    includeRunForwards?: boolean;
+  },
 ): Promise<CreditBatchAccountingByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -817,6 +823,7 @@ export async function loadCreditBatchAccounting(
         tx,
         options?.removalId,
         options?.unassignedOnly,
+        options?.includeRunForwards,
       );
       const rollups = ids.flatMap((id) => {
         const rollup = rollupsByBatch[id];

@@ -18,6 +18,7 @@ import { facilitiesWithLinked, linkedRecordReadOnly } from "@/lib/linked-record-
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { recordLockSheetProps, recordLockTitleMark, RecordLockListNotice } from "@/components/record-locks";
 import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -420,6 +421,8 @@ export function DeliveryList() {
     createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
+  // A create link (`?create=true`, e.g. from the dashboard) opens this sheet.
+  useOpenCreateIntent(openCreate);
 
   const openView = (delivery: DeliverySheetRecord) => {
     setFocusedDeliveryId(delivery.id);

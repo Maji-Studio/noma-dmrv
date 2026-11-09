@@ -52,6 +52,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { AffectedRecordsChip } from "@/components/ui/affected-records-chip";
 import { useExactIdFilterParam } from "@/hooks/use-exact-id-filter-param";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 import {
@@ -494,6 +495,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
+  // A create link (`?create=true`, e.g. from the dashboard) opens this sheet.
+  useOpenCreateIntent(openCreate);
   const openView = (application: ApplicationListItem) => {
     void setFocusedApplicationId(application.id);
     setSideSheet({ entity: application, mode: "view" });

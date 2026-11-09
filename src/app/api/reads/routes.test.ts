@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getActiveOrganization: vi.fn(),
   getOnboardingStatus: vi.fn(),
   getDashboardOverview: vi.fn(),
+  getDashboardBatchScope: vi.fn(),
   getProductionRuns: vi.fn(),
   getProductionRunStats: vi.fn(),
   getCreditBatches: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock("@/data-access/certification", () => ({
 }));
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
+vi.mock("@/data-access/dashboard-batch-scope", () => ({ getDashboardBatchScope: mocks.getDashboardBatchScope }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
 vi.mock("@/lib/read-models/removal-attention-sources", () => ({
   loadRemovalAttentionSources: async () => ({ drafts: [], rejected: [], returned: [] }),
@@ -76,6 +78,7 @@ import { POST as productionRunStatsRoute } from "./production-runs/stats/route";
 import { POST as facilityRoute } from "./facilities/[facilityId]/route";
 import { POST as activeOrganizationRoute } from "./organizations/active/route";
 import { POST as onboardingRoute } from "./onboarding/status/route";
+import { POST as batchScopeRoute } from "./dashboard/batch-scope/route";
 import { POST as dashboardRoute } from "./dashboard/overview/route";
 import { DASHBOARD_SCHEMA_MISMATCH_MESSAGE } from "@/lib/read-models/dashboard-overview";
 
@@ -166,6 +169,15 @@ const endpoints: Record<string, ReadEndpoint> = {
     badInput: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: MALFORMED_ID })),
     badInputError: "Invalid onboarding filters: Choose a valid facility.",
     badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
+  },
+  "dashboard batch scope": {
+    ok: () => batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: FACILITY_ID, creditBatchId: null })),
+    data: { batchIds: [], activity: [] },
+    badInput: () => batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: MALFORMED_ID, creditBatchId: null })),
+    badInputError: "Invalid dashboard batch scope: Choose a valid facility.",
+    badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
+    foreignFacility: () => batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: FOREIGN_FACILITY_ID, creditBatchId: CREDIT_BATCH.id })),
+    guardedRead: () => mocks.getDashboardBatchScope,
   },
   "dashboard overview": {
     ok: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID })),
@@ -279,6 +291,7 @@ describe.each(Object.entries(endpoints))(
       mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID, version: FACILITY_VERSION });
       mocks.getActiveOrganization.mockResolvedValue({ id: ORG_CONTEXT.organizationId });
       mocks.getOnboardingStatus.mockResolvedValue({ facilityCount: 1 });
+      mocks.getDashboardBatchScope.mockResolvedValue({ batchIds: [], activity: [] });
       mocks.getDashboardOverview.mockResolvedValue({ generatedAt: "2026-09-15T10:00:00.000Z" });
       mocks.getProductionRuns.mockResolvedValue(EMPTY_PAGE);
       mocks.getProductionRunStats.mockResolvedValue(RUN_STATS);
@@ -415,6 +428,26 @@ describe("startup read contracts", () => {
     await onboardingRoute(post("/api/reads/onboarding/status", { facilityId: null }));
     expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     expect(mocks.getOnboardingStatus).toHaveBeenCalledWith(ORG_CONTEXT, null);
+  });
+
+  it.each([null, CREDIT_BATCH.id])("passes the batch scope %s through the guarded read core", async (creditBatchId) => {
+    await batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: FACILITY_ID, creditBatchId }));
+    expect(mocks.requireOrgFacility).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID);
+    expect(mocks.getDashboardBatchScope).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, creditBatchId);
+  });
+
+  it("rejects a malformed batch id before the facility guard or data access", async () => {
+    const response = await batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: FACILITY_ID, creditBatchId: MALFORMED_ID }));
+    expect(response.status).toBe(400);
+    expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
+    expect(mocks.getDashboardBatchScope).not.toHaveBeenCalled();
+  });
+
+  it("preserves a selected batch's final missing-record message", async () => {
+    mocks.getDashboardBatchScope.mockRejectedValueOnce(new SafeError("Credit batch was not found."));
+    const response = await batchScopeRoute(post("/api/reads/dashboard/batch-scope", { facilityId: FACILITY_ID, creditBatchId: CREDIT_BATCH.id }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ success: false, error: "Credit batch was not found." });
   });
 
   it("defaults the dashboard range to month", async () => {

@@ -1,16 +1,12 @@
 /**
- * DashboardView — the Flow Hero dashboard, deliberately simple: the display
- * headline, the 4-stat KPI band, the isometric traceability hero (the single
- * "see the chain" surface with its Overview / Flow / Needs-attention views),
- * and a supporting row below — the open-items list, the recent-activity feed,
- * and the certification summary. All facility-scoped via the sidebar selector
- * like every other page.
+ * DashboardView — the dashboard page: the title with its credit batch filter,
+ * then the body (KPI band, stage band, To do, Bins, Recent activity). All
+ * facility-scoped via the sidebar selector like every other page; the setup
+ * guide takes over the body for a facility that is not set up yet.
  */
 "use client";
 
 import { useState } from "react";
-import { WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
-import { EmptyState } from "@/components/ui/empty-state";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
   SetupGuide,
@@ -23,24 +19,20 @@ import { SetupCreateSheet } from "@/components/onboarding/setup-create-sheet";
 import { RegistryConnectionDialog } from "@/components/certification/registry-connection-dialog";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
-import type { DashboardRange } from "@/data-access/dashboard-overview";
-import { formatFacilityDateTime } from "@/lib/format-utils";
-import { HeroKpiBand } from "./hero-kpi-band";
-import { FlowHero } from "./flow-hero";
-import { AttentionList } from "./attention-list";
-import { ActivityFeed } from "./activity-feed";
-import { CertificationBlock } from "./certification-block";
-import { RangeToggle } from "./range-toggle";
+import { DashboardBody } from "./dashboard-body";
+import { BatchFilter } from "./scope";
+import { updatedLabel } from "./updated-label";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 
-const DEFAULT_RANGE: DashboardRange = "month";
+/** The "Updated 16:16" line's box while the overview loads (body-small). */
+const UPDATED_LINE_HEIGHT = 20;
+const UPDATED_LINE_WIDTH = 96;
 
 export function DashboardView() {
-  const { activeOrganizationId, facilityId, selectedFacility } =
-    useFacilityContext();
+  const { activeOrganizationId, facilityId, selectedFacility } = useFacilityContext();
   const { timeZone } = useFacilityClock(facilityId);
   const [setupSurface, setSetupSurface] = useState<"facility" | "reactor" | "registry" | null>(null);
-  const [range, setRange] = useState<DashboardRange>(DEFAULT_RANGE);
-  const { data, isLoading, error } = useDashboardOverview(facilityId, range);
+  const { data, isLoading, error, refetch } = useDashboardOverview(facilityId, "all");
 
   // First-run onboarding decides whether the setup surfaces take over the body
   // (a fresh facility would render meaningless zeros), recede to a strip, or
@@ -58,31 +50,23 @@ export function DashboardView() {
 
   return (
     <div className="container-max page-shell">
-      <header className="flex flex-wrap items-end justify-between gap-24">
+      <header className="flex flex-wrap items-start justify-between gap-24">
         <div className="flex min-w-0 flex-col gap-6">
-          {/* Facility rides in the eyebrow (per the hero design) so long names
-              never truncate the display title. Blank/whitespace-only names
-              (legacy/manual data — the schema now trims on every write) fall
-              back to the always-present code (#378). */}
-          <p className="label-micro truncate text-[var(--color-text-tertiary)]">
-            {facilityId
-              ? selectedFacility
-                ? selectedFacility.name?.trim() || selectedFacility.code
-                : "Facility"
-              : "Operations"}
-          </p>
           <h1 className="title-heading-2">Dashboard</h1>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            {facilityId
-              ? data
-                ? `Live operations · updated ${formatFacilityDateTime(data.generatedAt, timeZone)}`
-                : "Live operations across this facility"
-              : "Select a facility to monitor its carbon removal."}
-          </p>
+          {facilityId && !data && isLoading ? (
+            // Holds the "Updated 16:16" line's place, so the header does not shift.
+            <Skeleton height={UPDATED_LINE_HEIGHT} width={UPDATED_LINE_WIDTH} />
+          ) : (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              {data
+                ? updatedLabel(data.generatedAt, timeZone)
+                : facilityId
+                  ? null
+                  : "Select a facility to monitor its carbon removal."}
+            </p>
+          )}
         </div>
-        {facilityId && !isTakeover && (
-          <RangeToggle value={range} onChange={setRange} />
-        )}
+        {facilityId && !isTakeover && <BatchFilter facilityId={facilityId} />}
       </header>
 
       {onboarding.mode === "loading" ? (
@@ -108,18 +92,15 @@ export function DashboardView() {
           )}
           {!facilityId ? (
             <SelectFacilityEmptyState description="Choose a facility from the sidebar to monitor its carbon removal." />
-          ) : error ? (
-            <EmptyState
-              padding="md"
-              icon={<WarningOctagonIcon size={40} />}
-              title="The dashboard could not be loaded"
-              description={error.message}
-            />
           ) : (
             <DashboardBody
               data={data}
               isLoading={isLoading}
+              error={error}
+              onRetry={() => void refetch()}
               facilityId={facilityId}
+              timeZone={timeZone}
+              status={onboarding.status}
             />
           )}
         </>
@@ -138,47 +119,5 @@ export function DashboardView() {
         />
       )}
     </div>
-  );
-}
-
-function DashboardBody({
-  data,
-  isLoading,
-  facilityId,
-}: {
-  data: ReturnType<typeof useDashboardOverview>["data"];
-  isLoading: boolean;
-  facilityId: string;
-}) {
-  const { timeZone } = useFacilityClock(facilityId);
-  return (
-    <>
-      <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
-
-      <FlowHero
-        stations={data?.stations}
-        massFlow={data?.massFlow}
-        runningRuns={data?.runningRuns ?? 0}
-        isLoading={isLoading}
-        facilityId={facilityId}
-      />
-
-      {/* Supporting row — only with data; an empty "all clear" list during
-          loading would read as a (false) signal. */}
-      {data && (
-        <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
-          <AttentionList
-            attention={data.attention}
-            structuralGaps={data.structuralGaps}
-            total={data.attentionTotal}
-          />
-          <ActivityFeed activity={data.activity} timeZone={timeZone} />
-          <CertificationBlock
-            certification={data.certification}
-            facilityId={facilityId}
-          />
-        </div>
-      )}
-    </>
   );
 }

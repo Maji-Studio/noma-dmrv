@@ -29,6 +29,7 @@ import type { OrderWithRelations } from "@/data-access/orders";
 import type { Order } from "@/db/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import {
   useListPagination,
   useReconcileListPage,
@@ -272,6 +273,8 @@ export function OrderList() {
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
+  // A create link (`?create=true`, e.g. from the dashboard) opens this sheet.
+  useOpenCreateIntent(openCreate);
 
   const openView = (order: OrderWithRelations) => {
     setFormError(null);

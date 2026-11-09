@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getFacilitiesRead, getProductionRunsRead, getFacilityRead, getActiveOrganizationRead } from "./client";
+import { getFacilitiesRead, getProductionRunsRead, getFacilityRead, getActiveOrganizationRead, getDashboardBatchScopeRead } from "./client";
 
 const TRANSPORT_ERROR =
   "The server could not be reached. Refresh the page and try again.";
@@ -437,4 +437,49 @@ it("decodes summary latest timestamps and preserves an empty summary", async () 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/reads/credit-batches/activity/summary");
     expect(await getCreditBatchActivitySummaryRead({ creditBatchId: RUN_ID })).toEqual({ success: true, data: { total: 0, counts: [], latest: null } });
   } finally { vi.unstubAllGlobals(); }
+});
+
+
+describe("dashboard batch scope read client", () => {
+  const input = { facilityId: FACILITY_ID, creditBatchId: null };
+  const data = {
+    batchIds: [RUN_ID], recordIds: [RUN_ID],
+    stationTotals: { suppliers: 0, feedstock: 0, production: 1, products: 0, deliveries: 0, applications: 0 },
+    kpis: { feedstockProcessedDryTonnes: null, biocharProducedDryTonnes: 0, appliedToSoilDryTonnes: 0, co2eStoredTonnes: null },
+    activity: [{ id: "event", code: "PR-1", title: "Production run completed", dateIso: "2026-01-01T10:00:00.000Z", href: `/production-runs?id=${RUN_ID}`, calendarDay: false }],
+    downstreamComplete: true,
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("posts nullable batch input with cancellation and validates activity without converting ISO strings", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ success: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+    const signal = new AbortController().signal;
+    await expect(getDashboardBatchScopeRead(input, { signal })).resolves.toEqual({ success: true, data });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith("/api/reads/dashboard/batch-scope", expect.objectContaining({
+      method: "POST", cache: "no-store", signal, body: JSON.stringify(input),
+    }));
+  });
+
+  it.each([
+    null,
+    { ...data, activity: undefined },
+    { ...data, activity: [{ ...data.activity[0], dateIso: "not-a-date" }] },
+    { ...data, activity: [{ ...data.activity[0], href: null }] },
+    { ...data, stationTotals: { ...data.stationTotals, production: "1" } },
+    { ...data, kpis: { ...data.kpis, appliedToSoilDryTonnes: "0" } },
+    { ...data, recordIds: [null] },
+    { ...data, downstreamComplete: undefined },
+  ])("refuses malformed successful scope data %#", async (invalid) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: invalid })));
+    await expect(getDashboardBatchScopeRead(input)).resolves.toEqual({
+      success: false, error: "The server returned an unreadable response. Refresh the page and try again.",
+    });
+  });
+
+  it("preserves a selected batch's missing-record failure", async () => {
+    const failure = { success: false, error: "Credit batch was not found." };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(failure, { status: 400 })));
+    await expect(getDashboardBatchScopeRead({ ...input, creditBatchId: RUN_ID })).resolves.toEqual(failure);
+  });
 });
