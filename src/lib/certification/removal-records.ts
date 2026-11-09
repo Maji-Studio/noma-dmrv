@@ -47,7 +47,7 @@ function unique(records: RemovalRecord[]): RemovalRecord[] {
   return [...new Map(records.map((record) => [record.id, record])).values()].sort(byDate);
 }
 
-/** Deliveries and feedstock intakes are instants: their day is the facility's calendar day, as their own pages read it. */
+/** A delivery is an instant: its day is the facility's calendar day, as the delivery list reads it. A feedstock intake keeps its stored calendar day, as the intake sheet shows it. */
 export function projectBatchRecords(chain: CreditBatchChainData, timeZone: string = UNKNOWN_FACILITY_TIMEZONE): RemovalBatchRecords {
   const productionRuns: RemovalRecord[] = [];
   const feedstock: RemovalRecord[] = [];
@@ -76,7 +76,7 @@ export function projectBatchRecords(chain: CreditBatchChainData, timeZone: strin
         id: intake.id,
         code: intake.code,
         kind: "feedstock",
-        date: intake.deliveryDate ? formatFacilityDate(new Date(intake.deliveryDate), timeZone) : "",
+        date: day(intake.deliveryDate),
         place: intake.supplierName,
         massKg: allWet ? shares.reduce<number>((sum, share) => sum + (share ?? 0), 0) : noneWet ? intake.massDryKg : null,
         basis: noneWet ? "dry" : "wet",

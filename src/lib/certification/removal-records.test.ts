@@ -86,8 +86,8 @@ describe("projectBatchRecords delivery day", () => {
     expect(projectBatchRecords(chain, "UTC").deliveries[0].date).toBe("2026-02-19");
   });
 
-  it("reads a feedstock intake's day the same way (00:30 in Dar es Salaam)", () => {
-    const chain = { ...CHAIN, lineages: [], rollForwards: [{ source: { productionRun: { id: "r", code: "PR", date: new Date("2026-02-10T08:00:00Z"), biocharDryMassKg: 1, biocharStorageName: null }, reactor: null, feedstocks: [{ id: "fs", code: "FS", deliveryDate: new Date("2026-02-19T21:30:00Z"), supplierName: "Mill", wetMassUsedKg: 5, massDryKg: 2 }] } }] } as unknown as CreditBatchChainData;
-    expect(projectBatchRecords(chain, "Africa/Dar_es_Salaam").feedstock[0].date).toBe("2026-02-20");
+  it("keeps a feedstock intake's stored calendar day at a facility west of UTC", () => {
+    const chain = { ...CHAIN, lineages: [], rollForwards: [{ source: { productionRun: { id: "r", code: "PR", date: new Date("2026-02-10T08:00:00Z"), biocharDryMassKg: 1, biocharStorageName: null }, reactor: null, feedstocks: [{ id: "fs", code: "FS", deliveryDate: new Date("2026-02-20T00:00:00Z"), supplierName: "Mill", wetMassUsedKg: 5, massDryKg: 2 }] } }] } as unknown as CreditBatchChainData;
+    expect(projectBatchRecords(chain, "America/Los_Angeles").feedstock[0].date).toBe("2026-02-20");
   });
 });
