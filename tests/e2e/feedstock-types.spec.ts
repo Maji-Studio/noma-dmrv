@@ -19,7 +19,6 @@ test.describe("Feedstock Types navigation", () => {
     adminPage: page,
   }) => {
     await page.goto("/feedstock-types");
-    await page.waitForLoadState("networkidle");
 
     const sidebar = page.locator("aside, nav").first();
     await expect(
@@ -53,7 +52,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     const editedName = `${uniqueName} Edited`;
 
     await page.goto("/feedstock-types");
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("button", { name: "New feedstock type" })).toBeEnabled();
 
     // ── Create ────────────────────────────────────────────────────────────
     await page.click('button:has-text("New feedstock type")');
@@ -137,7 +136,6 @@ test.describe("Feedstock Types UI CRUD", () => {
     // The seeded facility has no registry mapping, so the Isometric-gated
     // sampling surface must stay hidden even for a pyrolysis-usage type.
     await page.goto(`/feedstock-types?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
 
     const seededRow = page.locator("table tbody tr", {
       hasText: seededData.feedstockType.name,

@@ -19,13 +19,12 @@ const SEARCH_TIMEOUT_MS = 15_000;
 
 async function openList(page: Page, path: "suppliers" | "customers", facilityId: string, code: string) {
   await page.goto(`/${path}?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("textbox", { name: path === "suppliers" ? "Search suppliers" : "Search customers" })).toBeVisible();
   await page.getByRole("textbox", { name: path === "suppliers" ? "Search suppliers" : "Search customers" }).fill(code);
   const rows = page.locator("table tbody tr");
   await expect(rows.filter({ hasText: code }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
   // The debounced search query re-renders the list; wait until it has settled on the match.
   await expect(rows.filter({ hasNotText: code })).toHaveCount(0, { timeout: SEARCH_TIMEOUT_MS });
-  await page.waitForLoadState("networkidle");
 }
 
 async function rowAction(page: Page, code: string, item: string) {

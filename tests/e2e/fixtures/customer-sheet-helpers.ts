@@ -15,13 +15,12 @@ export const SECOND_LOCATION_NAME = "E2E North Block";
 /** Search the Customers list for `code`, open its row menu's Edit and return the sheet dialog. */
 export async function openCustomerSheet(page: Page, facilityId: string, code: string) {
   await page.goto(`/customers?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("textbox", { name: "Search customers" })).toBeVisible();
   await page.getByRole("textbox", { name: "Search customers" }).fill(code);
   // The list is a table on desktop and cards on a phone: wait on the row menu, not on `table`.
   const menu = page.getByRole("button", { name: `Actions for ${code}` }).first();
   await expect(menu).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
   await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(1, { timeout: SEARCH_TIMEOUT_MS });
-  await page.waitForLoadState("networkidle");
   await clickRowMenuItem(page, menu, "Edit");
   await waitForSideSheet(page);
   return page.getByRole("dialog");

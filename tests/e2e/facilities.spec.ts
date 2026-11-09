@@ -7,6 +7,7 @@
  * - DB-level duplicate code enforcement (preserved from original test suite)
  */
 import { test, expect } from "./fixtures";
+import { waitForFacilityHydration } from "./fixtures/page-helpers";
 import {
   createTestFacility,
   deleteTestFacility,
@@ -160,7 +161,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Navigate to reactors list
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
     await expect(page).toHaveURL(/\/reactors/);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     // Open the create side sheet
     await page.getByRole("button", { name: /New Reactor/i }).click();
@@ -185,8 +186,8 @@ test.describe("Facility + Reactor UI CRUD", () => {
       timeout: 10000,
     });
 
-    // Wait for the list to reload after mutation
-    await page.waitForLoadState("networkidle");
+    // Wait for the search control used to find the new reactor.
+    await expect(page.getByPlaceholder(/search/i)).toBeVisible();
     await page.waitForTimeout(1000);
 
     // Search for the new reactor (list may be paginated with many entries)

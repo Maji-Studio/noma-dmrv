@@ -23,6 +23,7 @@ import {
   selectEntity as selectEntityById,
   selectFirstCreditBatchProductionRun,
   selectFirstEntity,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -383,7 +384,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 1. FACILITY ───────────────────────────────────────
     await test.step("Create facility", async () => {
       await page.goto("/facilities");
-      await page.waitForLoadState("networkidle");
+      await expect(page.getByRole("button", { name: "New facility" })).toBeEnabled();
 
       await page.click('button:has-text("New facility")');
       await waitForSideSheet(page);
@@ -423,7 +424,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 2. REACTOR ────────────────────────────────────────
     await test.step("Create reactor", async () => {
       await page.goto(`/reactors?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New reactor")');
       await waitForSideSheet(page);
@@ -447,7 +448,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 3. PRODUCTION RUN ─────────────────────────────────
     await test.step("Create production run", async () => {
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
       const existingRunCodes = await getListedActionCodes(page);
 
       await page.click('button:has-text("New production run")');
@@ -521,7 +522,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 4. ORDER ──────────────────────────────────────────
     await test.step("Create order", async () => {
       await page.goto(`/orders?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New order")');
       await waitForSideSheet(page);
@@ -556,7 +557,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 5. DELIVERY ───────────────────────────────────────
     await test.step("Create delivery", async () => {
       await page.goto(`/deliveries?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New delivery")');
       await waitForSideSheet(page);
@@ -581,7 +582,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 6. APPLICATION ────────────────────────────────────
     await test.step("Create application", async () => {
       await page.goto(`/applications?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New application")');
       await waitForSideSheet(page);
@@ -607,7 +608,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 7. CREDIT BATCH ───────────────────────────────────
     await test.step("Create credit batch", async () => {
       await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New credit batch")');
       await waitForSideSheet(page);
@@ -628,7 +629,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // first — the sample is the last link in the chain.
     await test.step("Create Sample", async () => {
       await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
-      await page.waitForLoadState("networkidle");
+      await waitForFacilityHydration(page, seededData.facility.name);
 
       await page.click('button:has-text("New Sample")');
       await waitForSideSheet(page);

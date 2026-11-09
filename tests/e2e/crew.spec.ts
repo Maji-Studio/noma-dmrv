@@ -31,7 +31,7 @@ test.describe("Crew", () => {
     const row = (text: string) => page.locator("table tbody tr", { hasText: text });
 
     await page.goto("/crew");
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("button", { name: "New driver" })).toBeEnabled();
     await expect(page.getByRole("tab", { name: /^Drivers/ })).toHaveAttribute("aria-selected", "true");
 
     // Create

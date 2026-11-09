@@ -4,6 +4,7 @@ import {
   selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
@@ -64,7 +65,7 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
   const fieldIdentifier = `E2E GIS ${seededData.facility.code}`;
 
   await page.goto(`/orders?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByRole("button", { name: "New order" }).click();
   await waitForSideSheet(page);
   await page.locator("#orderDate").fill(today);
@@ -83,7 +84,7 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
   await waitForSideSheetClose(page);
 
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByRole("button", { name: "New delivery" }).click();
   await waitForSideSheet(page);
   await selectFirstEntity(page, "Order");
@@ -97,7 +98,7 @@ test("adds, reads and replaces a GIS boundary, and keeps it when removal would l
   await waitForSideSheetClose(page);
 
   await page.goto(applicationsUrl);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByRole("button", { name: "New application" }).click();
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);

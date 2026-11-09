@@ -79,7 +79,7 @@ test.describe("Formulation archive and restore", () => {
 
   async function openList(page: Page, code: string) {
     await page.goto("/formulations");
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("textbox", { name: "Search formulations" })).toBeVisible();
     await page.getByRole("textbox", { name: "Search formulations" }).fill(code);
     await expect(page.locator("table tbody tr", { hasText: code })).toBeVisible({ timeout: 15000 });
   }
@@ -110,7 +110,7 @@ test.describe("Formulation archive and restore", () => {
 
   test("an empty archived view shows an empty state", async ({ adminPage: page }) => {
     await page.goto("/formulations");
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("button", { name: "Archived", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Archived", exact: true }).click();
     await page.getByRole("textbox", { name: "Search formulations" }).fill("no-such-formulation-code");
     await expect(page.getByText("No archived formulations match")).toBeVisible({ timeout: 15000 });

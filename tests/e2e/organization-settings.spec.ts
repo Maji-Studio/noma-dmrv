@@ -46,7 +46,15 @@ async function openOrganizationSettings(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Members", exact: true, level: 1 }),
   ).toBeVisible({ timeout: 30_000 });
-  await page.waitForLoadState("networkidle");
+  await expect(
+    sectionWithHeading(page, "Current members").getByRole("listitem").first(),
+  ).toBeVisible();
+  const pendingSection = sectionWithHeading(page, "Pending invitations");
+  await expect(
+    pendingSection.getByRole("listitem").first().or(
+      pendingSection.getByText("No pending invitations", { exact: true }),
+    ),
+  ).toBeVisible();
 }
 
 async function revokeInviteIfPresent(
@@ -128,7 +136,7 @@ test.describe("Organization foundation UI", () => {
       // Role text is lowercase in the DOM; the uppercase styling is CSS-only.
       await expect(pendingInvitation).toContainText(/member/i);
     } finally {
-      await page.waitForLoadState("networkidle");
+      await expect(pendingInvitation).toBeVisible();
       await revokeInviteIfPresent(page, pendingSection);
     }
 
