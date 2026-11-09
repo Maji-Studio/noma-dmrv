@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { requireOrgFacility } from "@/data-access/utils";
-import { loadDraftRemovalReadiness } from "./draft-removal-readiness";
+import { loadRemovalAttentionSources } from "./removal-attention-sources";
 import { NO_REMOVAL_ATTENTION, removalAttentionRows } from "@/lib/certification/removal-attention";
 import type { OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
@@ -28,7 +28,7 @@ export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   // Removals the operator has to act on (drafts, rejected, returned) join the attention queue. They do not
   // depend on the range and are best effort: a failure drops those rows, never the dashboard. The data-access
   // aggregate owns their order, caps and totals; they load alongside its own reads.
-  const removalAttention = loadDraftRemovalReadiness(ctx, facilityId)
+  const removalAttention = loadRemovalAttentionSources(ctx, facilityId)
     .then((sources) => removalAttentionRows(sources, facilityId))
     .catch(() => {
       logger.warn({ facilityId }, "Removal attention rows skipped: readiness failed to load");

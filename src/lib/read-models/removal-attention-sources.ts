@@ -38,7 +38,7 @@ const READINESS_CONCURRENCY = 8;
 
 const NO_SOURCES: RemovalAttentionSources = { drafts: [], rejected: [], returned: [] };
 
-export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: string): Promise<RemovalAttentionSources> {
+export async function loadRemovalAttentionSources(orgCtx: OrgContext, facilityId: string): Promise<RemovalAttentionSources> {
   requireOrgScope(orgCtx);
   const removalRows = await listRemovalsForFacility(orgCtx, facilityId);
   if (removalRows.length === 0) return NO_SOURCES;

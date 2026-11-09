@@ -15,7 +15,7 @@ vi.mock("@/data-access/dashboard-overview", () => ({
   },
 }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: async () => undefined }));
-vi.mock("./draft-removal-readiness", () => ({ loadDraftRemovalReadiness: () => mocks.loadSources() }));
+vi.mock("./removal-attention-sources", () => ({ loadRemovalAttentionSources: () => mocks.loadSources() }));
 
 import { readDashboardOverview } from "./dashboard-overview";
 
@@ -45,6 +45,6 @@ describe("readDashboardOverview", () => {
     };
     const result = await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
     expect(result.attentionTotal).toBe(0);
-    expect(await mocks.passed).toEqual({ drafts: [], rejected: [], returned: [] });
+    expect(await mocks.passed).toEqual({ drafts: [], rejected: [], returned: [], covered: new Set() });
   });
 });

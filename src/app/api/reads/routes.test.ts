@@ -49,8 +49,8 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
-vi.mock("@/lib/read-models/draft-removal-readiness", () => ({
-  loadDraftRemovalReadiness: async () => ({ drafts: [], rejected: [], returned: [] }),
+vi.mock("@/lib/read-models/removal-attention-sources", () => ({
+  loadRemovalAttentionSources: async () => ({ drafts: [], rejected: [], returned: [] }),
 }));
 vi.mock("@/config/env", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/config/env")>();

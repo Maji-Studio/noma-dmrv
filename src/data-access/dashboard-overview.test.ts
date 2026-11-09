@@ -258,7 +258,7 @@ describe("needs attention rows", () => {
   describe("Removal rows from the read model", () => {
     const row = (removalId: string, title: string) => ({ id: `removal-draft-${removalId}`, entityCode: `RM-${removalId}`, date: null, title, href: `/removals?removal=${removalId}` });
     const rows = (over: Partial<RemovalAttentionRows>): Promise<RemovalAttentionRows> =>
-      Promise.resolve({ drafts: [], rejected: [], returned: [], ...over });
+      Promise.resolve({ drafts: [], rejected: [], returned: [], covered: new Set<string>(), ...over });
     const interruptedBatch = {
       kind: "batch-pending", id: "cb-i", code: "CB-I", dateDay: "2026-09-30", dateMs: null, ord: 1, total: 1, allIds: [],
       removals: [{ id: "rm-i", code: "RM-I", ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
@@ -277,6 +277,17 @@ describe("needs attention rows", () => {
       const overview = await getDashboardOverview(CTX, FACILITY_ID, "month", rows({ drafts: [row("d", "2 to fix")], rejected: [row("x", "Submission failed")] }));
       expect(overview.attention.map((item) => item.title)).toEqual(["2 to fix", "Submission failed"]);
       expect(overview.attentionTotal).toBe(2);
+    });
+
+    it("drops the not-submitted credit batch row a draft Removal row already covers, and still counts the batch", async () => {
+      const closedBatch = {
+        kind: "batch-pending", id: "cb-d", code: "CB-D", dateDay: "2026-09-30", dateMs: null, ord: 1, total: 1, allIds: [],
+        removals: [{ id: "rm-d", code: "RM-D", ghgStatementId: null, status: { kind: "not-submitted" }, phase: "draft" }],
+      };
+      mocks.union.mockResolvedValue([closedBatch]);
+      const { items, batches } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY, rows({ drafts: [row("d", "2 to fix")], covered: new Set(["rm-d"]) }));
+      expect(items.map((item) => item.title)).toEqual(["2 to fix"]);
+      expect(batches.notSubmitted).toBe(1);
     });
 
     it("shows a returned Removal as one row and drops the credit batch rows it replaces", async () => {

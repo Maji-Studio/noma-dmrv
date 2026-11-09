@@ -32,12 +32,12 @@ vi.mock("@/lib/certification/readiness", () => ({
     facts.id === "blocked" ? { state: "blocked", reasons: ["One.", "Two."] } : { state: "ready", reasons: [] },
 }));
 
-import { loadDraftRemovalReadiness } from "./draft-removal-readiness";
+import { loadRemovalAttentionSources } from "./removal-attention-sources";
 
 const createdAt = new Date("2026-11-01T00:00:00Z");
 const row = (id: string) => ({ id, code: `RM-${id}`, createdAt, startedOn: null, completedOn: null });
 
-describe("loadDraftRemovalReadiness", () => {
+describe("loadRemovalAttentionSources", () => {
   beforeEach(() => {
     mocks.rows = [row("blocked"), row("ready"), row("sent")];
     mocks.submissions = new Map([["sent", { status: "submitted", lockedAt: null, metadata: null }]]);
@@ -46,7 +46,7 @@ describe("loadDraftRemovalReadiness", () => {
   });
 
   it("returns the readiness of each draft and leaves a submitted Removal out", async () => {
-    const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    const drafts = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(drafts.drafts.map((draft) => [draft.removalId, draft.readiness.state])).toEqual([
       ["blocked", "blocked"],
       ["ready", "ready"],
@@ -56,20 +56,20 @@ describe("loadDraftRemovalReadiness", () => {
 
   it("builds nothing when no Removal is a draft or returned", async () => {
     mocks.rows = [row("sent")];
-    expect(await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual({ drafts: [], rejected: [], returned: [] });
+    expect(await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual({ drafts: [], rejected: [], returned: [] });
     expect(mocks.built).toEqual([]);
   });
 
   it("leaves out a draft whose build rejects and keeps the others", async () => {
     mocks.rows = [row("broken"), row("ready")];
-    const { drafts } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    const { drafts } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(drafts.map((draft) => draft.removalId)).toEqual(["ready"]);
   });
 
   it("adds a Removal whose last submission was rejected, without building it", async () => {
     mocks.rows = [row("bounced")];
     mocks.submissions = new Map([["bounced", { status: "rejected", lockedAt: null, metadata: null }]]);
-    const { rejected } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    const { rejected } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(rejected.map((removal) => removal.removalId)).toEqual(["bounced"]);
     expect(mocks.built).toEqual([]);
   });
@@ -78,7 +78,7 @@ describe("loadDraftRemovalReadiness", () => {
     mocks.rows = [row("returned-open"), row("returned-closed"), row("quiet")];
     mocks.submissions = new Map(["returned-open", "returned-closed", "quiet"].map((id) => [id, { status: "submitted", lockedAt: null, metadata: null }]));
     mocks.returnedIds = new Set(["returned-open", "returned-closed"]);
-    const { returned } = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    const { returned } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(returned.map((removal) => [removal.removalId, removal.correction?.resubmitNeeded])).toEqual([
       ["returned-open", true],
       ["returned-closed", undefined],

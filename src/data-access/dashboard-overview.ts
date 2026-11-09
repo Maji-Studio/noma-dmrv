@@ -765,6 +765,7 @@ export async function getDashboardAttentionItems(
   // One row per returned Removal replaces the per-credit-batch rows it already covers.
   const coveredReturned = new Set(removalRows.returned.map((row) => row.removalId));
   let returnedBatchCount = 0;
+  let notSubmittedBatchCount = 0;
   const interrupted = new Map<string, DashboardAttentionItem>();
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
@@ -785,6 +786,9 @@ export async function getDashboardAttentionItems(
     }
     const returnedHere = removals.filter((removal) => returnedRemovalIds.has(removal.id));
     if (attention.period === "returned") returnedBatchCount += 1;
+    if (attention.period === "notSubmitted") notSubmittedBatchCount += 1;
+    // A draft or rejected Removal row already says this job: the batch row would count it twice.
+    if (attention.period === "notSubmitted" && removals.length > 0 && removals.every((removal) => removalRows.covered.has(removal.id))) continue;
     if (attention.period === "returned" && returnedHere.length > 0 && returnedHere.every((removal) => coveredReturned.has(removal.id))) continue;
     if (attention.period === "notSubmitted" || attention.period === "returned") {
       (attention.period === "returned" ? returned : notSubmitted).push({
@@ -833,6 +837,6 @@ export async function getDashboardAttentionItems(
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
         groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
     ],
-    batches: { interrupted: interrupted.size, notSubmitted: notSubmitted.length, returned: returnedBatchCount },
+    batches: { interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
   };
 }

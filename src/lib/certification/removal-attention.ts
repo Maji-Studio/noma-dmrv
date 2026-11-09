@@ -52,9 +52,11 @@ export interface RemovalAttentionRows {
   rejected: DashboardAttentionItem[];
   /** Keyed by Removal id, so the aggregate can drop the per-credit-batch rows these replace. */
   returned: { removalId: string; item: DashboardAttentionItem }[];
+  /** Removals a draft or rejected row stands for, so the aggregate drops the credit batch "not submitted" rows they replace. */
+  covered: ReadonlySet<string>;
 }
 
-export const NO_REMOVAL_ATTENTION: RemovalAttentionRows = { drafts: [], rejected: [], returned: [] };
+export const NO_REMOVAL_ATTENTION: RemovalAttentionRows = { drafts: [], rejected: [], returned: [], covered: new Set() };
 
 function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string): DashboardAttentionItem {
   return {
@@ -67,12 +69,11 @@ function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string
 }
 
 export function removalAttentionRows(sources: RemovalAttentionSources, facilityId: string): RemovalAttentionRows {
+  const drafts = sources.drafts.filter((draft) => draftRemovalAttentionTitle(draft.readiness) !== null);
   return {
-    drafts: sources.drafts.flatMap((draft) => {
-      const title = draftRemovalAttentionTitle(draft.readiness);
-      return title ? [rowFor(draft, title, facilityId)] : [];
-    }),
+    drafts: drafts.map((draft) => rowFor(draft, draftRemovalAttentionTitle(draft.readiness) ?? "", facilityId)),
     rejected: sources.rejected.map((removal) => rowFor(removal, REMOVAL_REJECTED_ATTENTION_TITLE, facilityId)),
+    covered: new Set([...drafts, ...sources.rejected].map((removal) => removal.removalId)),
     returned: sources.returned.map((removal) => ({
       removalId: removal.removalId,
       item: {
