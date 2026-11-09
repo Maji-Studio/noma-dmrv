@@ -30,8 +30,10 @@ const build = vi.hoisted(() => ({
   checks: [] as unknown[],
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("next/link", () => ({
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()), useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("next/link", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/link")>()),
   default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 vi.mock("@/components/ui", async (importOriginal) => ({
@@ -41,23 +43,36 @@ vi.mock("@/components/ui", async (importOriginal) => ({
   ),
   buttonVariants: () => "button",
 }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
-vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
-vi.mock("@/components/ui/tooltip", () => ({ Tooltip: ({ children }: { children: ReactNode }) => children, InfoHint: () => null }));
-vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <div>{message}</div> }));
-vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
-vi.mock("../submission-outcome-notice", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../submission-outcome-notice")>()),
+vi.mock("@/components/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui/toast")>()), useToast: () => ({ success: vi.fn() }) }));
+vi.mock("@/components/ui/delete-confirm-dialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui/delete-confirm-dialog")>()), DeleteConfirmDialog: () => null }));
+vi.mock("@/components/ui/tooltip", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui/tooltip")>()), Tooltip: ({ children }: { children: ReactNode }) => children, InfoHint: () => null }));
+vi.mock("@/components/forms", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/forms")>()), ServerError: ({ message }: { message: string }) => <div>{message}</div> }));
+vi.mock("@/hooks/use-facility-context", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-facility-context")>()), useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
+vi.mock("@/components/certification/submission-outcome-notice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/submission-outcome-notice")>()),
   SubmissionOutcomeNotice: () => null,
 }));
-vi.mock("./component-table", () => ({ ComponentTable: () => null }));
-vi.mock("./source-records", () => ({ SourceRecords: () => null }));
-vi.mock("./debug-drawer", () => ({ DebugDrawer: () => null }));
-vi.mock("./review-details", () => ({ ReviewDetails: () => null }));
-vi.mock("../submit-confirm-dialog", () => ({ SubmitConfirmDialog: () => null }));
-vi.mock("./shared-source-file-notices", () => ({ useSharedSourceFiles: () => [] }));
-vi.mock("@/hooks/use-removal-empty-components", () => ({ useRefreshRemovalReview: () => vi.fn() }));
-vi.mock("@/hooks/use-removal-delete-access", () => ({
+vi.mock("@/components/certification/new-removal-dialog/component-table", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/component-table")>()), ComponentTable: () => null }));
+vi.mock("@/components/certification/new-removal-dialog/source-records", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/source-records")>()), SourceRecords: () => null }));
+vi.mock("@/components/certification/new-removal-dialog/debug-drawer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/debug-drawer")>()), DebugDrawer: () => null }));
+vi.mock("@/components/certification/new-removal-dialog/review-details", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/review-details")>()), ReviewDetails: () => null }));
+vi.mock("@/components/certification/submit-confirm-dialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/submit-confirm-dialog")>()), SubmitConfirmDialog: () => null }));
+vi.mock("@/components/certification/new-removal-dialog/shared-source-file-notices", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/shared-source-file-notices")>()), useSharedSourceFiles: () => [] }));
+vi.mock("@/hooks/use-removal-empty-components", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-removal-empty-components")>()), useRefreshRemovalReview: () => vi.fn() }));
+vi.mock("@/hooks/use-removal-delete-access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-removal-delete-access")>()),
   useRemovalDeleteAccess: () => ({ viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: false }),
 }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
@@ -66,22 +81,25 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   useDeleteRemoval: () => ({ mutate: vi.fn(), isPending: false, error: null, reset: vi.fn() }),
   useRemovalCompilation: () => ({ ...build.query, refetch: vi.fn() }),
 }));
-vi.mock("@/lib/certification/readiness-facts", () => ({ toRemovalReadinessFacts: () => ({}) }));
+vi.mock("@/lib/certification/readiness-facts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/certification/readiness-facts")>()), toRemovalReadinessFacts: () => ({}) }));
 vi.mock("@/lib/certification/readiness", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/certification/readiness")>()),
   buildRemovalRequirementsChecklist: () => build.checks,
   deriveRemovalReadiness: () => ({ state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] }),
 }));
-vi.mock("./component-table-model", () => ({
+vi.mock("@/components/certification/new-removal-dialog/component-table-model", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/component-table-model")>()),
   buildComponentTable: () => ({ loading: false, batches: [], rows: build.rows, groups: [] }),
 }));
 // The focus listener needs a browser; the fix list itself is real.
-vi.mock("./use-fix-progress", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./use-fix-progress")>()),
+vi.mock("@/components/certification/new-removal-dialog/use-fix-progress", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/use-fix-progress")>()),
   useRecheckOnReturn: () => () => undefined,
 }));
 // Real fix list and summary; the verdict is the one thing derived here: loading while the build is read, else blocked.
-vi.mock("./submission-facts", () => ({
+vi.mock("@/components/certification/new-removal-dialog/submission-facts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/certification/new-removal-dialog/submission-facts")>()),
   isRemovalCompilationReady: () => true,
   actionableSubmissionChecks: (checks: unknown[]) => checks,
   buildSubmissionFacts: ({ isCompilationLoading }: { isCompilationLoading: boolean }) => ({
