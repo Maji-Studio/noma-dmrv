@@ -19,6 +19,7 @@ import {
   selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 import { chooseRunStatus } from "./helpers/run-status";
@@ -31,7 +32,7 @@ async function createProductionRunForCreditBatch(
   date: string,
 ) {
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   const existingRunCodes = await getListedActionCodes(page);
 
   await page.click('button:has-text("New production run")');
@@ -106,7 +107,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // First, we need a delivery to exist. Create an order and delivery first.
     // Step 1: Create an order
     await page.goto(ordersUrl);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
     await page.click('button:has-text("New order")');
     await waitForSideSheet(page);
 
@@ -130,7 +131,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Step 2: Create a delivery for this order
     await page.goto(deliveriesUrl);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
     await page.click('button:has-text("New delivery")');
     await waitForSideSheet(page);
 
@@ -146,7 +147,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Step 3: Create an application
     await page.goto(applicationsUrl);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
@@ -191,7 +192,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheetClose(page);
 
     // Verify application appears in list
-    await page.waitForLoadState("networkidle");
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
@@ -225,7 +225,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Step 1: Create an order
     await page.goto(`/orders?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
     await page.click('button:has-text("New order")');
     await waitForSideSheet(page);
 
@@ -245,7 +245,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // An order reserves no stock and is not an application source. Without a
     // posted delivery, custody cannot advance to application.
     await page.goto(`/applications?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
     await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
     await expectNoEntityOptions(page, "Delivery");
@@ -265,7 +265,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     );
 
     await page.goto(`/credit-batches?facility=${seededData.facility.id}&view=list`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New credit batch")');
     await waitForSideSheet(page);
@@ -283,7 +283,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheetClose(page);
 
     // Verify credit batch appears in list
-    await page.waitForLoadState("networkidle");
     await expect(creditBatchRows(page).first()).toBeVisible({ timeout: 10000 });
   });
 });

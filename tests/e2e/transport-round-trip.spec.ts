@@ -17,6 +17,7 @@ import {
   selectEntity,
   selectEntityByText,
   waitForFacilityHydration,
+  waitForAppHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -54,7 +55,6 @@ test.describe("Transport round trip (#852)", () => {
   }) => {
     void cleanupTestData;
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
 
     await waitForFacilityHydration(page, seededData.facility.name);
 
@@ -98,7 +98,7 @@ test.describe("Transport round trip (#852)", () => {
     await waitForSideSheetClose(page);
 
     // Reopen: the route rail shows the one-way entry with the counted round trip.
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first()).toBeVisible();
     // Target the row by its date: a bare first row can race the re-sort.
     await page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
@@ -142,7 +142,7 @@ test.describe("Transport round trip (#852)", () => {
     await page.click('button[type="submit"]:has-text("Create delivery")');
     await waitForSideSheetClose(page);
 
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first()).toBeVisible();
     // Target the row by its date: a bare first row can race the re-sort.
     await page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
@@ -187,7 +187,7 @@ test.describe("Transport round trip (#852)", () => {
 
     // Customer detail → Add location dialog.
     await page.goto(`/customers?customer=${seededData.customer.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "Edit customer" }).click();
     await page.getByRole("button", { name: "Add location" }).click();
     // The locations table header now carries the same copy (QA detail-view

@@ -25,7 +25,6 @@ async function openPartyEditSheet(
   facilityName: string,
 ) {
   await page.goto(`${path}?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
   await expect(
     page.locator("aside").getByText(facilityName, { exact: false }),
   ).toBeVisible();
@@ -36,7 +35,6 @@ async function openPartyEditSheet(
     exact: true,
   });
   await expect(actions).toBeVisible();
-  await page.waitForLoadState("networkidle");
   await clickRowMenuItem(page, actions, "Edit", { exact: true });
 }
 

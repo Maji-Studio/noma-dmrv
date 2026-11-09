@@ -82,6 +82,7 @@ export function FacilitySelector() {
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
+          data-testid="facility-selector"
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-controls={listboxId}

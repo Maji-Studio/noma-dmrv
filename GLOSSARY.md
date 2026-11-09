@@ -78,7 +78,9 @@ submission data noma does not measure directly. Distinct from a measured value.
 kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
 electricity, tonne-km of road freight). Isometric applies its own **fixed
 constants** on the template to what is submitted; noma shows recorded
-activity only (ADR 0031).
+activity only (ADR 0031), except a time-based line, which shows a
+display-only CO₂e preview next to its hours from the template's fixed rate
+([#1600](https://github.com/Maji-Studio/noma-dmrv/issues/1600)).
 _Avoid_: carbon intensity (the registry's word for its template factor),
 emission estimate (a submission input, above).
 

@@ -19,6 +19,7 @@
  */
 import { test, expect } from "./fixtures";
 import type { Page } from "@playwright/test";
+import { waitForAppHydration } from "./fixtures/page-helpers";
 
 // iPhone 12/13/14 logical viewport — the size the pass was verified at.
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
@@ -92,9 +93,15 @@ test.describe("Mobile responsiveness (390×844)", () => {
       // Desktop rail (`hidden md:flex`) must not be on screen at this width.
       await expect(page.getByRole("complementary")).toBeHidden();
 
-      // Let async data settle so a late-loading wide table is included in the
-      // overflow check; cap the wait since React Query polling never idles.
-      await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+      // Measure the page content after its heading renders and loading
+      // placeholders have been replaced by the resolved layout.
+      const main = page.getByRole("main");
+      await expect(main.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(
+        main.locator('[aria-busy="true"], .animate-skeleton'),
+      ).toHaveCount(0);
+      // Traceability shows its loading states as text ("Loading lineage...").
+      await expect(main.getByText(/^Loading\b/)).toHaveCount(0);
 
       await expectNoHorizontalOverflow(page, route);
     });
@@ -144,10 +151,11 @@ test.describe("Mobile responsiveness (390×844)", () => {
     // a clickable card row in both dev and CI. (`/facilities` rows aren't
     // clickable; `/orders` isn't seeded — neither exercises the card contract.)
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await waitForAppHydration(page);
     await expect(hamburger(page)).toBeVisible();
 
     // Let the async reactor query resolve so the rows exist before asserting.
-    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await expect(page.locator("[data-row-link]:visible").first()).toBeVisible();
 
     // No desktop `<table>` is visible below `md` (the `hidden md:block` wrapper
     // collapses it); the stacked card view takes over.
@@ -176,8 +184,9 @@ test.describe("Mobile responsiveness (390×844)", () => {
     const page = adminPage;
     // Open the seeded reactor's read-only view sheet via its mobile card row.
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await waitForAppHydration(page);
     await expect(hamburger(page)).toBeVisible();
-    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await expect(page.locator("[data-row-link]:visible").first()).toBeVisible();
     await page.locator("[data-row-link]:visible").first().click();
 
     const sheet = page.getByRole("dialog");

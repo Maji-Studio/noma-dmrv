@@ -14,6 +14,8 @@
 > [open-questions.md](../open-questions.md#energy-estimates-paused-energyemission-factors---dormant));
 > resuming means rebuilding the settings form and the read.
 
+> **Amended 2026-11-05** ([#1600](https://github.com/Maji-Studio/noma-dmrv/issues/1600), Kenji's decision): the pause above covers the facility-factor energy estimates, and it stays. One exception: a time-based line (`time_based_emissions`, such as the pyrolyzer CH₄ and CO lines) shows a CO₂e preview next to its operating hours, computed from the template's own fixed rate (`emissions_per_unit_time`). The preview is display only and never submitted. Isometric's figure is the official one and can differ by rounding.
+
 > **Amended 2026-10-19** (proposed 2026-10-15): [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
 > moves operating emissions onto Removals as per-batch emissions entries.
 > Estimates stay display only. ADR 0032 was accepted on 2026-10-19. The text
