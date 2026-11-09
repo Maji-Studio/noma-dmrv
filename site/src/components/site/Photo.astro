@@ -1,0 +1,15 @@
+---
+/**
+ * Photo: one of the Mafinga stills (PHOTOS in src/lib/assets.js) as a responsive WebP <img>, cropped by the
+ * caller's CSS (object-fit: cover is set here; the caller sets aspect-ratio and object-position).
+ * Props: photo: keyof PHOTOS, sizes?: string (default "100vw"), class?: string, eager?: boolean
+ */
+import { PHOTOS } from "../../lib/assets.js";
+interface Props { photo: keyof typeof PHOTOS; sizes?: string; class?: string; eager?: boolean }
+const { photo, sizes = "100vw", class: className, eager = false } = Astro.props;
+const p = PHOTOS[photo];
+---
+<img class:list={["photo", className]} src={p.src} srcset={p.srcset} sizes={sizes} alt={p.alt} width={p.width} height={p.height} loading={eager ? "eager" : "lazy"} decoding="async" />
+<style>
+  .photo { display: block; width: 100%; height: auto; object-fit: cover; background: var(--stage); }
+</style>

@@ -85,7 +85,7 @@
 
 /* 5. Mafinga: photo across the frame, then four places. */
 .maf-figure { position: relative; margin: 0; }
-.maf-figure img { display: block; width: 100%; height: auto; aspect-ratio: 21 / 8; min-height: var(--photo-min); object-fit: cover; object-position: center 60%; }
+.maf-figure .photo { aspect-ratio: 21 / 8; min-height: var(--photo-min); object-position: center 35%; }
 .maf-figure .photo-missing { aspect-ratio: 21 / 8; min-height: var(--photo-min); }
 .maf-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
 
@@ -107,6 +107,6 @@
   .own-table thead th { font-size: var(--fs-body); }
   .own-same-text { font-size: var(--fs-small); }
   .own-same { display: none; }
-  .maf-figure img, .maf-figure .photo-missing { aspect-ratio: 4 / 3; min-height: 0; }
+  .maf-figure .photo, .maf-figure .photo-missing { aspect-ratio: 4 / 3; min-height: 0; }
   .maf-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
 }

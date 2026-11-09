@@ -1,14 +1,12 @@
 ---
 /**
- * Mafinga: proof for principle 5 (wide). The field-trial photo across the frame. No props.
+ * Mafinga: proof for principle 5 (wide). The team still (PHOTOS.team) across the frame. No props.
  */
-import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
+import Photo from "../Photo.astro";
 ---
 <div class="maf">
   <figure class="maf-figure">
-    {HAS_MAFINGA_PHOTO
-      ? <img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
-      : <div class="photo-missing" role="img" aria-label="Field trial plots in Mafinga, Tanzania" />}
-    <figcaption class="t-caption">Field trial plots, Mafinga, Tanzania</figcaption>
+    <Photo photo="team" />
+    <figcaption class="t-caption">Going through the records with Dark Earth Carbon, Mafinga, Tanzania</figcaption>
   </figure>
 </div>

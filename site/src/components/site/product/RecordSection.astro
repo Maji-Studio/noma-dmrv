@@ -1,6 +1,6 @@
 ---
 /**
- * RecordSection (#record): data entry at the reactor. Two phones on the hatch, each a simplified app form
+ * RecordSection (#record): data entry at the reactor. The phone still from Mafinga (PHOTOS.phone), then two phones on the hatch, each a simplified app form
  * with one typo the app refuses: moisture typed as 180 on feedstock delivery FD-001, and a run's biochar
  * typed as 2,700 kg dry against 820 kg dry in. The refusal lines are the app's own messages
  * (src/schemas/feedstocks.ts, src/lib/production-runs/lifecycle.ts). Records match the site's example
@@ -8,6 +8,7 @@
  */
 import GridFrame from "../GridFrame.astro";
 import Phone from "../Phone.astro";
+import Photo from "../Photo.astro";
 
 const MOISTURE_REFUSAL = "Moisture must be below 100";
 const DRY_REFUSAL = "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.";
@@ -41,6 +42,10 @@ const FORMS: { label: string; alt: string; fields: Field[]; action: string }[] =
     <h2 id="record-title" class="t-h2">Record it once, at the reactor.</h2>
     <p class="t-lead">Your team logs deliveries, runs and draws on a phone where the work happens. Each entry links to the one before it, and noma refuses values that cannot be true before they reach a report.</p>
   </div>
+  <figure class="rc-figure">
+    <Photo photo="phone" />
+    <figcaption class="t-caption">noma on a phone at the plant, Mafinga, Tanzania</figcaption>
+  </figure>
   <div class="rc-sheet">
     {FORMS.map((f) => (
       <div role="img" aria-label={f.alt}>
@@ -59,6 +64,13 @@ const FORMS: { label: string; alt: string; fields: Field[]; action: string }[] =
   </div>
 </GridFrame>
 <style>
+  .rc-figure { position: relative; margin: 0; border-top: var(--hairline) solid var(--rule); }
+  .rc-figure :global(.photo) { aspect-ratio: 21 / 8; min-height: var(--photo-min); object-position: center 40%; }
+  .rc-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
+  @media (max-width: 760px) {
+    .rc-figure :global(.photo) { aspect-ratio: 4 / 3; min-height: 0; }
+    .rc-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
+  }
   .rc-sheet { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-7); padding: var(--space-8) var(--frame-pad); background: var(--hatch); border-top: var(--hairline) solid var(--rule); }
   .rc-sheet > div { display: grid; justify-items: center; flex: 1 1 15rem; max-width: 18rem; }
   .rc-field { display: grid; gap: var(--space-1); }

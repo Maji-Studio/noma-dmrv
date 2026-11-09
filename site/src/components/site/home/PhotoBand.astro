@@ -1,0 +1,23 @@
+---
+/**
+ * PhotoBand: one full-width Mafinga still between Home sections, with a short caption. No figures, no claim:
+ * it shows the work the records describe. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import Photo from "../Photo.astro";
+---
+<GridFrame class="pb" pad="none" flush>
+  <figure class="pb-figure">
+    <Photo photo="biochar" class="pb-img" />
+    <figcaption class="t-caption">Biochar from a production run, Mafinga, Tanzania</figcaption>
+  </figure>
+</GridFrame>
+<style>
+  .pb-figure { position: relative; margin: 0; }
+  .pb-figure :global(.pb-img) { aspect-ratio: 21 / 8; min-height: var(--photo-min); object-position: center 45%; }
+  .pb-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
+  @media (max-width: 760px) {
+    .pb-figure :global(.pb-img) { aspect-ratio: 4 / 3; min-height: 0; }
+    .pb-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
+  }
+</style>
