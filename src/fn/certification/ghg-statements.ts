@@ -1,5 +1,6 @@
 "use server";
 
+import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
@@ -527,6 +528,7 @@ async function createGhgStatementRemote(args: {
   // the failure instead of a bare in-progress row until the lock TTL expires.
   let externalMutation: RegistryExternalMutation | null = null;
   try {
+    await startSubmissionRegistryAttempt(orgCtx, row);
     const { externalId, source } = await performRegistryCreate({
       orgCtx,
       entityType: GHG_STATEMENT_ENTITY_TYPE,

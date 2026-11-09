@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 import { requireOrgContext, requireOrgRole } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
@@ -18,6 +19,9 @@ import type {
 } from "@/lib/certification/submission-progress";
 
 export const runtime = "nodejs";
+// Sequential Removal calls need minutes, within Pro Fluid
+// compute's 800s limit. Stop by the 10-minute claim TTL to avoid live reclaim.
+export const maxDuration = 600;
 
 const progressRequestSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("removal"), input: submitRemovalSchema }),
@@ -119,7 +123,7 @@ export async function POST(request: Request): Promise<Response> {
         send({ type: "ping" });
       }, SUBMISSION_STREAM_PING_INTERVAL_MS);
 
-      void (async () => {
+      const core = (async () => {
         try {
           const result =
             body.kind === "removal"
@@ -157,10 +161,11 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
       })();
+      waitUntil(core);
     },
     cancel() {
-      // Do not deliberately cancel the core. A disconnect does not guarantee
-      // that serverless execution will continue after the response is gone.
+      // waitUntil keeps the core alive after disconnect, up to maxDuration.
+      // Cancellation only closes the progress transport.
       streamOpen = false;
       stopPings();
     },

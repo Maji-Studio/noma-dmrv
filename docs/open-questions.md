@@ -587,19 +587,6 @@ locations, no new site can be registered. `needs-registry-check`: whether
 `GET /storage_locations` supports server-side filtering by
 `supplier_reference_id`, which would remove the scan entirely.
 
-### Crash-window interruption still loses the confirmed-write marker (`certification/interrupted-marker-crash-window`)
-
-The interrupted markers written by
-`recordClaimedRemovalSubmissionFailureBestEffort`
-(`src/fn/certification/removal-submission-failure.ts`) and the GHG create path
-are in-process best-effort writes inside a `catch`; a SIGTERM/timeout mid-POST
-records nothing. On retry `readRemovalSubmissionExternalMutation` reports
-`"none"`, so payload drift retires the draft without
-`preserveForReconciliation` and the next version re-POSTs datapoints and
-measurement samples under new version-suffixed supplier refs — a duplicate
-GHG entry. **Resolve via:** persisting an attempt-started marker before the
-first registry POST, or reconciling by unversioned keys.
-
 ### Order/delivery repoint does not guard the target lineage (`orders/repoint-target-lineage-guard`)
 
 `updateSample` and `updateApplication` call the certification lineage guard on
