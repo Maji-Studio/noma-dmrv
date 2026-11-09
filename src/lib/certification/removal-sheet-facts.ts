@@ -27,10 +27,14 @@ export interface RemovalSheetFacts {
   samplingLabel: string | null;
 }
 
-const DURABILITY_LABELS: Record<DurabilityOption, string> = {
+/** Sentence-case durability labels, shared with the Review & submit summary. */
+export const DURABILITY_LABELS: Record<DurabilityOption, string> = {
   "200_year": "200-year (H:Corg)",
   "1000_year": "1000-year (R₀ reflectance)",
 };
+
+/** "Sampled" or "Not sampled", shared with the Review & submit summary. */
+export const samplingLabel = (sampling: string) => (sampling === "sampled" ? "Sampled" : "Not sampled");
 
 const labels = (values: string[]) => (values.length === 0 ? null : [...new Set(values)].join(", "));
 
@@ -48,6 +52,6 @@ export function projectRemovalSheetFacts(batches: RemovalSheetBatchInput[], faci
       ? estimates.reduce((sum, value) => sum + value, 0)
       : null,
     durabilityLabel: labels(sorted.map((batch) => DURABILITY_LABELS[batch.durabilityOption])),
-    samplingLabel: labels(sorted.map((batch) => (batch.sampling === "sampled" ? "Sampled" : "Not sampled"))),
+    samplingLabel: labels(sorted.map((batch) => samplingLabel(batch.sampling))),
   };
 }

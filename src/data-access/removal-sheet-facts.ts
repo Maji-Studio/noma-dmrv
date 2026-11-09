@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { projectRemovalSheetFacts, type RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
-import { deriveAppliedDryTons } from "@/fn/certification/applied-dry-tons";
+import { deriveAppliedDryTons } from "@/lib/certification/applied-dry-tons";
 import { getCreditBatchesByRemovalId } from "./certifier-removals";
 import { loadCreditBatchAccounting } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
