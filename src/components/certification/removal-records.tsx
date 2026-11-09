@@ -9,8 +9,8 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
+import { CaretDownIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button, EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
@@ -154,7 +154,7 @@ function BatchRow({ batch, facilityId, summarize }: { batch: RemovalBatchRecords
 
 export function RemovalRecordsList({ batches, facilityId }: { batches: RemovalBatchRecords[]; facilityId: string }) {
   if (batches.length === 0) {
-    return <p className="body-small text-[var(--color-text-secondary)]">No credit batches yet. Records appear here once this Removal holds one.</p>;
+    return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds one." />;
   }
   return (
     <ul className="flex flex-col">
