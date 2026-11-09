@@ -238,7 +238,7 @@ function SheetStatusBlock({
 
       {status.canRetry && !readOnly && (
         <Button variant="default" size="small" className="self-start" onClick={() => void summary.retry?.()}>
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       )}
     </>
