@@ -5,7 +5,7 @@ import { recordEmissionZeros, undoEmissionZeros } from "@/data-access/emission-z
 import { recordEmissionZerosSchema, undoEmissionZerosSchema } from "@/schemas/emission-zeros";
 import { uuidSchema } from "@/schemas/helpers";
 import type { ActionResult } from "@/types/actions";
-import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
+import { loadRemovalEmptyLines } from "@/lib/certification/removal-empty-lines-core";
 
 export async function recordEmissionZerosFn(input: z.input<typeof recordEmissionZerosSchema>): Promise<ActionResult<Awaited<ReturnType<typeof recordEmissionZeros>>>> {
   return withAction((ctx) => {

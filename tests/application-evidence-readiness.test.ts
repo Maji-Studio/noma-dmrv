@@ -2,7 +2,7 @@ import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
-import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
+import { buildApplicationEvidenceGaps } from "@/lib/certification/application-evidence-readiness";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,

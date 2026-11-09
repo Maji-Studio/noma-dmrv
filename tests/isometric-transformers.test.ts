@@ -1,4 +1,4 @@
-import { resolveRemovalReportingWindow } from "@/fn/certification/removal-reporting-window";
+import { resolveRemovalReportingWindow } from "@/lib/certification/removal-reporting-window";
 import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";

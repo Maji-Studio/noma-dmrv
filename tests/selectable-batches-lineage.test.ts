@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listUngroupedCreditBatches } from "@/data-access/certifier-removals";
 import type { OrgContext } from "@/lib/auth/server";
-import { buildSelectableBatchesData } from "@/fn/certification/selectable-batches";
+import { buildSelectableBatchesData } from "@/lib/certification/selectable-batches";
 
 vi.mock("@/data-access/certifier-removals", () => ({
   listUngroupedCreditBatches: vi.fn(),

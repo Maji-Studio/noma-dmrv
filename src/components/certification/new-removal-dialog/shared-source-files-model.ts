@@ -3,7 +3,7 @@
  * sheet) into file uses for the shared-file note on Review & submit (#1531).
  * The grouping itself lives in `@/lib/certification/shared-source-files`.
  */
-import type { CandidateDocument, CandidateLineageEntityType } from "@/fn/certification/source-candidates";
+import type { CandidateDocument, CandidateLineageEntityType } from "@/lib/certification/source-candidates";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import type { BatchEmissionLine } from "@/lib/certification/emission-lines";
 import {

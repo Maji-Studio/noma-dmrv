@@ -14,7 +14,7 @@ import {
   sourceCandidateEligibility,
   type CandidateLineageEntityType,
   type CandidateSourceDocument,
-} from "./source-candidates";
+} from "@/lib/certification/source-candidates";
 import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
 
 export interface EvidenceMirrorSummary {
