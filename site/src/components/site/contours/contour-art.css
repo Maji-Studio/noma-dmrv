@@ -1,4 +1,4 @@
-/* Station line drawings (ContourArt.astro), shared by TraceStage and the home hero. The owner sets size and
+/* Station line drawings (ContourArt.astro), shared by the home hero and the Home and Product sections. The owner sets size and
    colour; an ancestor's .is-plotting draws the contour in once, and .is-active runs the loop overlays
    written into each SVG by scripts/export-contours.mjs. The overlays fade in as the plot finishes: trucks
    roll (wheel spokes turn, the lane line scrolls past at the same speed, about 2 m/s), the kiln smokes,

@@ -1,13 +1,13 @@
 ---
 /**
- * AskAnswer: the answer drawing for one AskSection question, built from illustrative records. Readable
- * markup (no aria-hidden); AskSection wraps it in role="img" with a full text alternative.
+ * AskAnswer: an answer drawing built from example records, used by OutcomesSection on Home and by /why.
+ * Readable markup (no aria-hidden); the caller wraps it in role="img" with a full text alternative.
  * Props: kind: "bin" | "missing" | "number"
  *   bin      bin A after its last draw: what is left, layer by layer, and the water in it. Same bin as
  *            /product#bins: BIN_LAYERS, 400 kg dry drawn oldest layer first, 15% moisture.
  *   missing  one removal and the records behind it, with the lab result for PR-002 missing
  *   number   270 kg dry on the coffee field, followed back to each production run's share. Same records
- *            as TraceStage: DL-001, BP-001 (540 kg dry from the mix bin), PR-001 and PR-002.
+ *            as the hero tour: DL-001, BP-001 (540 kg dry from the mix bin), PR-001 and PR-002.
  * Bin SVG geometry is in user units: a square is 16 with a 20 pitch, 10 kg each, ten to a row.
  */
 import { BIN_LAYERS } from "../../../data/data.js";

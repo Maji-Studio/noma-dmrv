@@ -1,4 +1,4 @@
-/* AskSection (AskSection.astro) and its answer drawings (AskAnswer.astro). Light editorial: hairline cells,
+/* Home's outcome cells (OutcomesSection.astro) and the answer drawings (AskAnswer.astro). Light editorial: hairline cells,
    square corners, each answer on the hatch. Bin colours are the Product bin's layer tokens. */
 
 .ask-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
@@ -11,7 +11,6 @@
 .ask-cells .t-body { font-size: var(--fs-ui); }
 .ask-who { margin: 0; font-size: var(--fs-ui); color: var(--accent); }
 .ask-art { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; min-width: 0; min-height: 24rem; margin-block: var(--space-3); padding: var(--space-6) var(--space-5); background: var(--hatch); }
-.ask-note { padding: var(--space-4) var(--frame-pad); border-top: var(--hairline) solid var(--rule); }
 
 /* Answer drawings */
 .aa { display: grid; gap: var(--space-5); justify-items: center; width: 100%; color: var(--ink); }

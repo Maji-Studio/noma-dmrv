@@ -1,19 +1,20 @@
 ---
 // Home: the business case for an owner. Hero (who it's for), the problem (spreadsheets vs noma, the page's
-// one dark stage), three outcomes linking to the Product chapters, scale, what runs today, how you run it.
+// one dark stage), three outcomes linking to the Product chapters, then the big pictures: scale, what runs
+// today, how you run it.
 import SiteShell from "../components/site/SiteShell.astro";
 import HomeHero from "../components/site/home/HomeHero.astro";
 import CompareStage from "../components/site/why/CompareStage.astro";
 import OutcomesSection from "../components/site/home/OutcomesSection.astro";
-import ScaleRow from "../components/site/home/ScaleRow.astro";
+import ScaleBlock from "../components/site/home/ScaleBlock.astro";
 import TodaySection from "../components/site/home/TodaySection.astro";
 import RunItSection from "../components/site/home/RunItSection.astro";
 import GetStartedBand from "../components/site/GetStartedBand.astro";
 ---
 <SiteShell
   current="home"
-  title="noma, biochar records that hold up from the reactor to the buyer"
-  description="Software for biochar producers running several reactors or sites: record the work once, keep stock in every bin, prepare what the registry asks for and show buyers where their biochar went."
+  title="noma, open MRV for carbon removal"
+  description="Open MRV for carbon removal: run the plant, get credits issued and show buyers the proof, on records you own."
 >
   <HomeHero />
   <CompareStage
@@ -22,7 +23,7 @@ import GetStartedBand from "../components/site/GetStartedBand.astro";
     lead="At one reactor, a sheet works. With more runs, bins and sites, following a tonne back to its feedstock becomes work done by hand, for every verifier question. In noma the records are connected as they are made."
   />
   <OutcomesSection />
-  <ScaleRow />
+  <ScaleBlock />
   <TodaySection />
   <RunItSection />
   <GetStartedBand title="See it with your own operation." text="We’ll walk through noma with an example shaped like your plant: your sites, your bins, your registry." />

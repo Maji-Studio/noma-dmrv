@@ -4,7 +4,7 @@
  * traceability Map tab). "Follow one journey" (in the copy panel) enters a scroll tour down the chain: the map pins in a
  * sticky layer and each step card that crosses the middle of the viewport moves the camera to its stop,
  * closing in on the plant for production, storage and product. Each stop card carries its station's line
- * drawing (ContourArt, the same drawings as TraceStage), plotted in when the card becomes active; the map's
+ * drawing (ContourArt), plotted in when the card becomes active; the map's
  * record card stays text only. Until then the hero is just the map.
  * The tour ends with "Exit tour", Escape, "Back to the map" on the last card, or scrolling past it.
  * Map and tour: hero-map/ (data.js, map.js, hero-tour.js, hero-map.css). The basemap is
@@ -14,27 +14,19 @@
 import Button from "../Button.astro";
 import ContourArt from "../contours/ContourArt.astro";
 import { STOPS } from "./hero-map/data.js";
-import { HEROES } from "./hero-variants.js";
-import HeroSwitch from "./HeroSwitch.astro";
-import "./home.css";
 import "./hero-map/hero-map.css";
 const pad = (n: number) => String(n).padStart(2, "0");
-const HERO = HEROES[0];
 ---
 <section class="home-hero is-resting" aria-labelledby="home-title" data-home-hero>
   <div class="home-hero-steps gf">
     <div class="gf-in">
       <div class="home-hero-step home-hero-step--rest is-active" data-step>
         <div class="home-hero-panel">
-          <p class="t-category">Built for biochar producers running several reactors or sites</p>
-          <h1 id="home-title" data-hero-h>{HERO.h}</h1>
-          <p class="t-lead" data-hero-l>{HERO.l}</p>
+          <h1 id="home-title">Open MRV for carbon removal.</h1>
+          <p class="t-lead">Run the plant, get credits issued and show buyers the proof, on records you own.</p>
           <div class="actions">
             <Button href="/get-started">Book a walkthrough</Button>
-            <button type="button" class="home-hero-tour" data-tour-open>
-              <span class="home-hero-play" aria-hidden="true"></span>
-              <span>Follow one journey</span>
-            </button>
+            <Button variant="secondary" class="home-hero-tour" data-tour-open>Follow one journey</Button>
           </div>
         </div>
       </div>
@@ -65,8 +57,6 @@ const HERO = HEROES[0];
     </ol>
   </div>
 </section>
-
-<HeroSwitch />
 
 <script>
   import { initHomeHero } from "./hero-map/hero-tour.js";

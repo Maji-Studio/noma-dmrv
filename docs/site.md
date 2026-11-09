@@ -42,9 +42,9 @@ drifting into Product's detail is the usual way it happens.
 
 | Page | Owns | Dark stage |
 | --- | --- | --- |
-| Home (`index.astro`) | A short tour: one block per destination, each linking deeper by anchor (`site/src/config.js`). It shows, it doesn't explain. | `TraceStage` |
-| Product (`product.astro`) | What the software does: Trace, Bins and stock, Emissions, Evidence and reporting, What's next (`PRODUCT_SECTIONS`). | `EvidenceStage` |
-| Why noma (`why.astro`) | Why it is built this way: the five principles (`WHY_PRINCIPLES`), the comparison with spreadsheets and other dMRVs, open source, ownership, Mafinga. | `CompareStage` |
+| Home (`index.astro`) | The business case for an owner: the problem (spreadsheets do not grow with the plant), three outcomes that link to the Product chapters by anchor (`site/src/config.js`), then one big picture each for scale, what runs today and the two ways to run it. It shows, it doesn't explain. | `CompareStage` (the problem) |
+| Product (`product.astro`) | What the software does, in three chapters (Run the plant, Get credits issued, Sell with proof), then Across your sites (`PRODUCT_SECTIONS`). | `EvidenceStage` |
+| Why noma (`why.astro`) | Why it is built this way: the five principles (`WHY_PRINCIPLES`), open source, ownership, Mafinga. | none |
 | Get started (`get-started.astro`) | The two actions only: book a walkthrough, or self-host from GitHub. | none |
 
 The light pages with one dark keynote stage each are a settled decision, set out
