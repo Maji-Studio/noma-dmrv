@@ -28,12 +28,14 @@ export async function waitForFacilityHydration(
 /**
  * Waits for the client to hydrate on any page, whichever facility is active.
  * The sidebar facility selector renders a skeleton until FacilityProvider
- * resolves on the client, then its listbox button. The desktop sidebar stays
- * in the DOM below `md` (only hidden), so this works at phone width too.
+ * resolves on the client, then its button. Target it by test id: the org
+ * switcher is also a listbox button once a second organization exists. The
+ * desktop sidebar stays in the DOM below `md` (only hidden), so this works at
+ * phone width too.
  */
 export async function waitForAppHydration(page: Page) {
   await expect(
-    page.locator('aside button[aria-haspopup="listbox"]'),
+    page.locator('aside [data-testid="facility-selector"]'),
   ).toBeAttached({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
 }
 
