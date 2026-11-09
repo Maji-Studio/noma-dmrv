@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     durabilityLabel: "1000-year (R₀ reflectance)",
     samplingLabel: "Sampled",
   } as object | undefined,
+  breakdown: undefined as object | undefined,
 }));
 
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
@@ -22,7 +23,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ time
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn(), success: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({
   useDeleteRemoval: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn() }),
-  useRemovalBreakdown: () => ({ data: undefined }),
+  useRemovalBreakdown: () => ({ data: mocks.breakdown }),
   useFacilityCertifierSummary: () => ({ data: { mapping: { externalProjectId: "prj_1" } } }),
 }));
 vi.mock("@/hooks/use-removal-sheet-facts", () => ({ useRemovalSheetFacts: () => ({ data: mocks.facts, isLoading: false }) }));
@@ -86,6 +87,14 @@ describe("RemovalDetailSheet structure", () => {
     expect(section.querySelector("a[href*='/project/prj_1']")?.textContent).toContain("prj_1");
     expect(section.textContent).toContain("Durability and sampling");
     expect(section.textContent).toContain("1000-year (R₀ reflectance), sampled");
+  });
+
+  it("keeps Estimated CO₂e stored on the local estimate when the registry has a net figure", () => {
+    mocks.breakdown = { status: "available", value: { netRemovedKg: 99000 } };
+    renderSheet();
+    const section = screen.getByText("Removal", { exact: true }).closest("[data-detail-section]")!;
+    expect(section.textContent).toContain("30.0 t CO₂e");
+    expect(section.textContent).not.toContain("99.0 t");
   });
 
   it("shows Not yet computed when no estimate exists", () => {

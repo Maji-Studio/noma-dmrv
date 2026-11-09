@@ -25,7 +25,6 @@ import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
   useFacilityCertifierSummary,
-  useRemovalBreakdown,
 } from "@/hooks/use-certification";
 import { useRemovalSheetFacts } from "@/hooks/use-removal-sheet-facts";
 import type { RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
@@ -71,7 +70,6 @@ import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
 const ESTIMATE_NOTE = "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
-const KG_PER_TONNE = 1000;
 const CO2E_DIGITS = 1;
 const DRY_MASS_DIGITS = 1;
 const ALLOCATION_HINT = "Allocation is on each credit batch's Emissions tab.";
@@ -326,10 +324,8 @@ export function RemovalDetailSheet({
 
   const sheetFacts = useRemovalSheetFacts(summary.removalId, { enabled: open });
   const facts = sheetFacts.data;
-  // The registry's figure when Isometric has returned one; else noma's own estimate from the credit batches.
-  const breakdown = useRemovalBreakdown(summary.removalId, open && !!summary.externalId);
-  const registryNetKg = breakdown.data?.status === "available" ? breakdown.data.value.netRemovedKg : null;
-  const co2eTonnes = registryNetKg != null ? registryNetKg / KG_PER_TONNE : (facts?.co2eEstimateTonnes ?? null);
+  // noma's own estimate from the credit batches; the registry's net figure stays in the registry card below.
+  const co2eTonnes = facts?.co2eEstimateTonnes ?? null;
   const headerStatus = sheetStatusFor(shownStatus);
   const thingsToFix = thingsToFixLine(workflowStatus);
   const hasReportingWindow = summary.startedOn && summary.completedOn;
@@ -383,7 +379,7 @@ export function RemovalDetailSheet({
                   hint={ESTIMATE_NOTE}
                   value={co2eTonnes == null ? null : formatTonnes(co2eTonnes, { digits: CO2E_DIGITS, unit: "t CO₂e" })}
                   emptySituation="notYetComputed"
-                  pending={sheetFacts.isLoading && registryNetKg == null}
+                  pending={sheetFacts.isLoading}
                 />
                 <DetailField
                   label="Biochar dry mass"
