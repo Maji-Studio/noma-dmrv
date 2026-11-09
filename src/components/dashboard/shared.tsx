@@ -97,12 +97,16 @@ export function todoRows(
       meta: gap.metadata,
       href: gap.href,
     })),
-    // One line at a third of the page: the title, then only the record's day
-    // (a grouped row says how many). The code is on the record it opens.
+    // One line at a third of the page: the title, then the record's code and
+    // day, so two rows with the same problem can be told apart (Kenji, Q14).
+    // A grouped row says how many instead.
     ...attention.map((item) => ({
       id: item.id,
       title: item.title,
-      meta: item.count == null ? (shortDay(item.date, "UTC", true) ?? "") : `${item.count} affected`,
+      meta:
+        item.count == null
+          ? [item.entityCode, shortDay(item.date, "UTC", true)].filter(Boolean).join(" · ")
+          : `${item.count} affected`,
       href: item.href,
     })),
   ];

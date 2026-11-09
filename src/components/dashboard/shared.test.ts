@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DashboardActivityItem } from "@/data-access/dashboard-overview";
-import { activityRows, shortDay } from "./shared";
+import { activityRows, shortDay, todoRows } from "./shared";
 
 const ZONE = "Africa/Dar_es_Salaam";
 const item = (over: Partial<DashboardActivityItem>): DashboardActivityItem => ({
@@ -42,5 +42,18 @@ describe("shortDay", () => {
 
   it("is null for no date", () => {
     expect(shortDay(null, ZONE)).toBeNull();
+  });
+});
+
+describe("todoRows", () => {
+  it("shows a record row's code before its day, and a grouped row's count", () => {
+    const rows = todoRows(
+      [
+        { id: "a", entityCode: "PR-26-004", date: "2026-11-03T00:00:00Z", title: "Run missing mass data", href: "/x" },
+        { id: "b", entityCode: "Production runs", count: 3, date: null, title: "Run missing mass data", href: "/y" },
+      ],
+      [],
+    );
+    expect(rows.map((row) => row.meta)).toEqual(["PR-26-004 · Nov 3", "3 affected"]);
   });
 });
