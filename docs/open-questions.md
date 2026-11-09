@@ -34,21 +34,27 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
 ## Review step and submit gate disagree (`certification/readiness-gate-drift`, #1639)
 
 - Two states say ready in the review step but the submit gate refuses them
-  (#1639). A pinned template has no groups: preparation rejects it, but the
-  pinned template verdict does not. Durability measurement samples are switched
-  off while the template has durability components: preparation checks the
-  flag, but the context builder's durability fields do not.
+  (#1639). A pinned template has no groups:
+  `src/lib/certification/removal-submission-prepare.ts:prepareRemovalSubmission`
+  rejects it. The pinned verdict from
+  `src/lib/certification/removal-template-verdict.ts:removalTemplateVerdict`,
+  used by `src/lib/certification/resolve-removal-template.ts:resolveRemovalTemplate`,
+  does not. Durability measurement samples are switched off while the template
+  has durability components. Preparation checks the flag. The durability fields
+  in `src/lib/certification/removal-context-build.ts:buildRemovalContext` do not.
 - Six states block the review step while the before-confirmation prefix returns
-  nothing: missing transport, incomplete transport, production gap, future dated
-  measurements, delivery evidence and durability eligibility. The build refuses
-  them later in the submit by design. No change planned.
+  nothing in `src/fn/certification/removal-blockers-gate.ts:collectContextRemovalBlockers`:
+  missing transport, incomplete transport, production gap, future dated
+  measurements, delivery evidence and durability eligibility.
+  `src/lib/certification/removal-submission-build.ts:buildRemovalSubmissionBuild`
+  refuses them later in the submit by design. No change planned.
 - Pinned in the known drift table at
   `src/fn/certification/removal-readiness-gate-parity.test.ts:knownDrift`.
   When a state is fixed, move its row to the agreement table.
-- The larger "one blocker list" refactor was withdrawn in #1635. Facts are
-  computed once in
+- The larger "one blocker list" refactor was out of scope for #1635 because
+  facts are computed once in
   `src/lib/certification/removal-context-build.ts:buildRemovalContext`
-  and only projected.
+  and only projected. The drift found here is tracked in #1639.
 
 ## Open design picks (`ui/design-picks`)
 
