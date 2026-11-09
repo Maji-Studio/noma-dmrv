@@ -180,7 +180,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "Open Technical details below to retry. It shows why the build failed.",
+        "Open See what this Removal sends, then Technical details, to retry. It shows why the build failed.",
     };
 
     expect(facts({ compilation: null })).toMatchObject(expected);
@@ -210,7 +210,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission is incomplete. Open Technical details below to see what is missing.",
+        "The submission is incomplete. Open See what this Removal sends, then Technical details, to see what is missing.",
     });
   });
 
@@ -330,7 +330,7 @@ describe("buildSubmissionFacts panel data", () => {
       applicationCount: 4,
       reportingWindowLabel: "Jun 5 to Aug 20, 2026",
       durabilityLabel: "1000-year (R₀ reflectance), 200-year (H:Corg)",
-      samplingLabel: "Sampled, Not sampled",
+      samplingLabel: "Some credit batches sampled",
     });
   });
 

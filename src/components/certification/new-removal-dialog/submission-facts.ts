@@ -122,6 +122,13 @@ function sum(
   return batches.reduce((total, batch) => total + value(batch), 0);
 }
 
+/** A whole phrase, so mixed sampling reads as English: "Sampled credit batches", "Credit batches not sampled", "Some credit batches sampled". */
+function samplingPhrase(batches: MemberCreditBatch[]): string {
+  const sampled = batches.filter((batch) => batch.sampling === "sampled").length;
+  if (sampled === batches.length) return "Sampled credit batches";
+  return sampled === 0 ? "Credit batches not sampled" : "Some credit batches sampled";
+}
+
 function uniqueLabels(values: string[]): string {
   return [...new Set(values)].join(", ");
 }
@@ -230,14 +237,14 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
-      "Open Technical details below to retry. It shows why the build failed.";
+      "Open See what this Removal sends, then Technical details, to retry. It shows why the build failed.";
   } else if (!compilationReady) {
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
       blockers.length > 0
         ? "Clear the blockers below."
-        : "The submission is incomplete. Open Technical details below to see what is missing.";
+        : "The submission is incomplete. Open See what this Removal sends, then Technical details, to see what is missing.";
   } else if (!allowsRemovalSubmission(readiness.state)) {
     // The gate still refuses for a reason no checklist row carried. Show the
     // readiness reasons rather than claim the removal is ready.
@@ -266,11 +273,7 @@ export function buildSubmissionFacts({
     durabilityLabel: uniqueLabels(
       batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption]),
     ),
-    samplingLabel: uniqueLabels(
-      batches.map((batch) =>
-        batch.sampling === "sampled" ? "Sampled" : "Not sampled",
-      ),
-    ),
+    samplingLabel: samplingPhrase(batches),
     pendingDocuments: pendingDocumentCount(ctx, compilation),
     checksPassed,
     checksTotal: actionChecks.length,

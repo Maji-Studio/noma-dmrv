@@ -44,7 +44,7 @@ function FactsLine({ facts }: { facts: Pick<SubmissionFacts, "durabilityLabel" |
       <span aria-hidden className="max-sm:hidden">
         ·
       </span>
-      <span>{facts.samplingLabel} credit batches</span>
+      <span>{facts.samplingLabel}</span>
     </p>
   );
 }
