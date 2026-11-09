@@ -1,8 +1,8 @@
 /**
  * The dashboard body for an onboarded facility: the KPI band, the stage band
  * (landscape scene, stage cells, record actions), then To do, Bins and Recent
- * activity. The KPIs, stage counts and activity read the chosen credit batch
- * (or all of them); To do and Bins stay facility-wide.
+ * activity. Everything but Bins reads the chosen credit batch (or all of
+ * them); Bins stays facility-wide.
  */
 "use client";
 

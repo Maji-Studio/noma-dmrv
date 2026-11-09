@@ -814,16 +814,19 @@ Facility-scoped operations dashboard at `/dashboard`
 - The body is a four-stat KPI band, the stage band (landscape scene, six stage
   cells with counts, open-items bubbles and record actions), then To do, Bins
   and Recent activity. The header's credit batch filter (`?batch=`) scopes the
-  KPIs, stage counts and activity to records traceable to one batch, or to any
-  unarchived batch ("All credit batches"); To do and Bins stay facility-wide.
+  KPIs, stage counts, To do and activity to records traceable to one batch, or
+  to any unarchived batch ("All credit batches"); a Removal row stays when the
+  Removal holds one of those batches. Grouped rows and structural gaps count
+  across the facility, so the filter leaves them out. Bins stay facility-wide.
   The figures come from one org-scoped read, `getDashboardBatchScope`
   (`src/data-access/dashboard-batch-scope.ts`, projected by
   `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
   set-based `loadCreditBatchAccounting` call, so its round trips do not grow
   with the batch count. An application split across batches counts once and
   adds each batch's slice to the applied mass; CO₂e shows only when every
-  chosen batch has an estimate. The page reads the overview with range `all`.
-- One `getDashboardOverview` action supplies the page. Its aggregate lives in
+  chosen batch has an estimate.
+- The overview read (`getDashboardOverview`) supplies the rows, read with range
+  `all`, and the batch read above narrows them. The overview's aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
@@ -834,12 +837,12 @@ Facility-scoped operations dashboard at `/dashboard`
   them to the aggregate, which orders them (after interrupted submissions),
   caps and counts them like any other check; one row per returned Removal
   replaces that Removal's per-credit-batch returned rows.
-- The Attention panel lists each check's records while there are at most two,
-  else one grouped "N affected" row (linking to the list filtered by `ids`
-  where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row
-  per GPS gap. "N open" counts records: single rows, grouped counts and gap
-  counts, so every counted record is reachable from a row. A batch whose
-  Removal is submitted waits on the verifier and is left out entirely.
+- The overview lists each check's records while there are at most two, else one
+  grouped "N affected" row (linking to the list filtered by `ids` where the
+  list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row per GPS
+  gap. The dashboard's To do shows the single-record rows the batch filter
+  keeps. A batch whose Removal is submitted waits on the verifier and is left
+  out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `GLOSSARY.md`).

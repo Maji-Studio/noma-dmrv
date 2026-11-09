@@ -30,12 +30,14 @@ const overview = {
   runningRuns: 0,
   certification: {},
   structuralGaps: [{ key: "gap" }],
-  attentionTotal: 4,
+  attentionTotal: 6,
   attention: [
     { id: "a1", entityCode: "PR-1", date: null, title: "Run missing data", href: "/production-runs?facility=f1&id=run-1" },
     { id: "a2", entityCode: "PR-2", date: null, title: "Run in another batch", href: "/production-runs?facility=f1&id=run-9" },
     { id: "a3", entityCode: "CB-1", date: null, title: "Period ended, not submitted yet", href: "/credit-batches/batch-1?facility=f1" },
     { id: "a4", entityCode: "Production runs", count: 3, date: null, title: "Missing data", href: "/production-runs?facility=f1" },
+    { id: "a5", entityCode: "RM-1", date: null, title: "Couldn't check", href: "/removals?facility=f1&removal=removal-1" },
+    { id: "a6", entityCode: "RM-2", date: null, title: "Couldn't check", href: "/removals?facility=f1&removal=removal-2" },
   ],
   activity: [
     { id: "x1", code: "PR-1", title: "Run saved", dateIso: "2026-11-09T10:00:00Z", href: "/production-runs?id=run-1" },
@@ -47,7 +49,7 @@ const scope: DashboardBatchScopeView = {
   batchIds: ["batch-1"],
   stationTotals: { suppliers: 1, feedstock: 2, production: 3, products: 0, deliveries: 1, applications: 1 },
   kpis: { feedstockProcessedDryTonnes: 2.4, biocharProducedDryTonnes: null, appliedToSoilDryTonnes: 0, co2eStoredTonnes: 4.5 },
-  recordIds: ["batch-1", "run-1"],
+  recordIds: ["batch-1", "removal-1", "run-1"],
 };
 
 describe("applyBatchScope", () => {
@@ -61,20 +63,19 @@ describe("applyBatchScope", () => {
     expect(byKey("suppliers").totalLabel).toBe("1 supplier");
   });
 
-  it("keeps every To do row and gap, and only in-scope activity rows", () => {
-    expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a2", "a3", "a4"]);
-    expect(scoped.structuralGaps).toEqual([{ key: "gap" }]);
-    expect(scoped.attentionTotal).toBe(4);
+  it("keeps only in-scope To do and activity rows and drops grouped rows and gaps", () => {
+    expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a3", "a5"]);
+    expect(scoped.structuralGaps).toEqual([]);
+    expect(scoped.attentionTotal).toBe(3);
     expect(scoped.activity.map((item) => item.id)).toEqual(["x1"]);
   });
 
-  it("counts each stage's To do rows and the credit batch rows on the Production bubble", () => {
-    expect(byKey("production").attention).toBe(4);
+  it("counts in-scope credit batch and Removal rows on the Production bubble with the stage's own rows", () => {
+    expect(byKey("production").attention).toBe(3);
     expect(byKey("production").reasons.map((reason) => reason.text)).toEqual([
       "PR-1: Run missing data",
-      "PR-2: Run in another batch",
       "CB-1: Period ended, not submitted yet",
-      "Production runs: Missing data",
+      "RM-1: Couldn't check",
     ]);
     expect(byKey("feedstock").attention).toBe(0);
   });

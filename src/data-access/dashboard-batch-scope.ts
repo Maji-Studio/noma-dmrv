@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches } from "@/db/schema";
+import { creditBatchApplications, creditBatches } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { projectDashboardBatchScope } from "@/lib/dashboard-batch-scope";
 import { SafeError } from "@/lib/errors";
@@ -18,6 +18,7 @@ export interface DashboardBatchScope {
     appliedToSoilDryTonnes: number | null;
     co2eStoredTonnes: number | null;
   };
+  /** Batch ids, every record in their roll-ups, and the Removals holding them. */
   recordIds: string[];
 }
 
@@ -28,7 +29,10 @@ export async function getDashboardBatchScope(
   creditBatchId: string | null,
 ): Promise<DashboardBatchScope> {
   requireOrgScope(ctx);
-  const batches = await db.select({ id: creditBatches.id })
+  const batches = await db.select({
+    id: creditBatches.id,
+    claimedByRemovalId: creditBatches.productionEmissionsClaimedByRemovalId,
+  })
     .from(creditBatches)
     .where(and(
       eq(creditBatches.organizationId, ctx.organizationId),
@@ -45,7 +49,7 @@ export async function getDashboardBatchScope(
     batches.map(({ id }) => id),
     { includeRunForwards: true },
   );
-  return projectDashboardBatchScope(batches.map(({ id }) => {
+  const projected = projectDashboardBatchScope(batches.map(({ id }) => {
     const rollup = accounting[id];
     // A concurrent deletion must not silently turn a selected batch into zero.
     if (!rollup || rollup.batch.facilityId !== facilityId) {
@@ -56,4 +60,30 @@ export async function getDashboardBatchScope(
       co2eStoredTonnes: rollup.co2ePreview.co2eStoredTonnes,
     };
   }));
+  const removalIds = await loadScopeRemovalIds(ctx, batches);
+  return { ...projected, recordIds: [...new Set([...projected.recordIds, ...removalIds])].sort() };
+}
+
+/**
+ * The Removals that hold the chosen batches: those owning an application slice
+ * of one, and those that claimed a batch's production emissions. Their ids
+ * join the record ids, so a Removal's To do row follows the batch filter.
+ */
+async function loadScopeRemovalIds(
+  ctx: OrgContext,
+  batches: { id: string; claimedByRemovalId: string | null }[],
+): Promise<string[]> {
+  if (batches.length === 0) return [];
+  const slices = await db
+    .select({ removalId: creditBatchApplications.removalId })
+    .from(creditBatchApplications)
+    .where(and(
+      eq(creditBatchApplications.organizationId, ctx.organizationId),
+      inArray(creditBatchApplications.creditBatchId, batches.map(({ id }) => id)),
+      isNotNull(creditBatchApplications.removalId),
+    ));
+  return [
+    ...slices.map(({ removalId }) => removalId),
+    ...batches.map(({ claimedByRemovalId }) => claimedByRemovalId),
+  ].filter((id): id is string => id != null);
 }
