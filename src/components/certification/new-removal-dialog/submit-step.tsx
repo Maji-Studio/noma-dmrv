@@ -51,7 +51,8 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { SubmissionProgress } from "../submission-progress";
-import { SubmissionOutcomeNotice } from "../submission-outcome-notice";
+import { deleteAccessFor, SubmissionOutcomeNotice } from "../submission-outcome-notice";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import { ReviewDetails } from "./review-details";
@@ -130,8 +131,13 @@ export function SubmitStep({
   const endedAttempt = terminalError
     ? attemptsQuery.data?.[0]?.errorMessage === terminalError ? attemptsQuery.data[0] : undefined
     : undefined;
-  const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted" ? endedAttempt.outcome : null;
+  // The changed-since-review refusal is known from its text before the attempt summary loads (#1114).
+  const outcome = endedAttempt && endedAttempt.outcome.kind !== "submitted"
+    ? endedAttempt.outcome
+    : terminalError === INTERRUPTED_REMOVAL_CHANGED_MESSAGE ? ({ kind: "changed" } as const) : null;
   const stopped = outcome?.kind === "differs";
+  // A retry cannot clear this refusal: Delete Removal is the way out, so it leads and Try again goes.
+  const changedSinceReview = outcome?.kind === "changed";
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
@@ -248,6 +254,11 @@ export function SubmitStep({
     !submitMutation.isPending &&
     canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
+  const noticeDeleteAccess = deleteAccessFor(
+    canDeleteRemoval,
+    deleteAccess.viewerCanDeleteRegistryRemovals,
+    ctx.deletionInProgress,
+  );
 
   const deleteDialog = (
     <DeleteConfirmDialog
@@ -422,17 +433,32 @@ export function SubmitStep({
             facilityId={facilityId}
             timeZone={timeZone}
             finalized={ctx.hasFinalizedSubmission}
+            deleteAccess={noticeDeleteAccess}
           />
         ) : (
           terminalError && <ServerError message={terminalError} />
         )}
         <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
-            <div className="flex items-center gap-12">
-              {submissionStalled || stopped ? (
+            <div className="flex flex-wrap items-center gap-12">
+              {submissionStalled || stopped || (changedSinceReview && !canDeleteRemoval) ? (
                 <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
+              ) : changedSinceReview ? (
+                // No way back to Review: its Submit again only refuses again (#1114).
+                <>
+                  <Button
+                    variant="danger"
+                    className={PHONE_TOUCH_TARGET}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                  >
+                    {deleteCopy.actionLabel}
+                  </Button>
+                  <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onDone}>
+                    Close
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button
@@ -456,7 +482,7 @@ export function SubmitStep({
               )}
             </div>
           )}
-          {!stopped && (
+          {!stopped && !changedSinceReview && (
             <span className="body-caption text-[var(--color-text-tertiary)]">
               {submitMutation.isPending
                 ? "noma is submitting the Removal to Isometric."
@@ -467,6 +493,7 @@ export function SubmitStep({
           )}
         </div>
         {confirmDialog}
+        {deleteDialog}
       </div>
     );
   }
@@ -537,11 +564,22 @@ export function SubmitStep({
 
       {/* The persisted rejected state belongs to the summary above; this
           alert is only for what the last submit attempt returned. */}
-      {submitError && <ServerError message={submitError} />}
+      {submitError === INTERRUPTED_REMOVAL_CHANGED_MESSAGE ? (
+        <SubmissionOutcomeNotice
+          outcome={{ kind: "changed" }}
+          facilityId={facilityId}
+          timeZone={timeZone}
+          finalized={ctx.hasFinalizedSubmission}
+          deleteAccess={noticeDeleteAccess}
+        />
+      ) : (
+        submitError && <ServerError message={submitError} />
+      )}
 
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
-          {!blocked && submitButton}
+          {/* Under the changed-since-review stop Submit again only refuses again (#1114). */}
+          {!blocked && submitError !== INTERRUPTED_REMOVAL_CHANGED_MESSAGE && submitButton}
           {backToEmpty}
           {!blocked && canDeleteRemoval ? (
             <Button

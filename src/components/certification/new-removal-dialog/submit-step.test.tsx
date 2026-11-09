@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -79,8 +80,11 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
 }));
 
-vi.mock("../submission-outcome-notice", () => ({
-  SubmissionOutcomeNotice: ({ outcome }: { outcome: { kind: string } }) => <div>{`Outcome notice: ${outcome.kind}`}</div>,
+vi.mock("../submission-outcome-notice", async (importOriginal) => ({
+  deleteAccessFor: (await importOriginal<typeof import("../submission-outcome-notice")>()).deleteAccessFor,
+  SubmissionOutcomeNotice: ({ outcome, deleteAccess }: { outcome: { kind: string }; deleteAccess?: string }) => (
+    <div>{`Outcome notice: ${outcome.kind}${deleteAccess ? ` (${deleteAccess})` : ""}`}</div>
+  ),
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
@@ -450,6 +454,44 @@ describe("SubmitStep", () => {
       "Removal deleted. Credit batches are available again.",
     );
     await act(async () => renderer?.unmount());
+  });
+
+  describe("changed since review (#1114)", () => {
+    // The notice is mocked here; its wording per viewer is covered in submission-outcome-notice.test.tsx.
+    const ctx = { ...CONTEXT, latestSubmission: { status: "draft", lockedAt: null,
+      metadata: { lastAttemptOutcome: "interrupted", externalMutation: "possible" } } } as RemovalCertifyContext;
+    const labels = (r: ReactTestRenderer) => r.root.findAllByType("button").map((button) => button.children.join(""));
+    async function renderFailed(message: string) {
+      let renderer: ReactTestRenderer | undefined;
+      const mutation = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined, error: new Error(message), reset: vi.fn() };
+      await act(async () => {
+        renderer = create(<SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={mutation as never} />);
+      });
+      return renderer!;
+    }
+
+    it.each([false, true])("leads with Delete Removal and drops Try again (summary loaded: %s)", async (loaded) => {
+      if (loaded) state.attempts = [{ errorMessage: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, outcome: { kind: "changed" } }];
+      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
+      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (can)");
+      expect(JSON.stringify(renderer.toJSON())).not.toContain("safe retry");
+      expect(labels(renderer)).toEqual(["Delete Removal", "Close"]);
+      await act(async () => renderer.unmount());
+    });
+
+    it("asks a viewer below the role floor to get an Admin and offers only Close", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
+      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
+      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (ask-admin)");
+      expect(labels(renderer)).toEqual(["Close"]);
+      await act(async () => renderer.unmount());
+    });
+
+    it("keeps Try again and offers no deletion after an ordinary failure", async () => {
+      const renderer = await renderFailed("Registry check failed");
+      expect(labels(renderer)).toEqual(["Try again", "Review submission"]);
+      await act(async () => renderer.unmount());
+    });
   });
 
   describe("role floor (issue #746)", () => {

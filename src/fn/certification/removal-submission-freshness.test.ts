@@ -49,6 +49,11 @@ function retiredReason() {
   return vi.mocked(retireClaimedRemovalDraftForDrift).mock.calls[0]?.[0].reason;
 }
 
+/** Whether the retire call claimed a proven change, which a possibly sent draft turns into Delete Removal (#1114). */
+function retiredAsChanged() {
+  return vi.mocked(retireClaimedRemovalDraftForDrift).mock.calls[0]?.[0].changed;
+}
+
 describe("assertClaimedRemovalPayloadFresh", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -84,7 +89,22 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     expect(retiredReason()).toBe(
       "semantic payload rebuild failed after draft claim",
     );
+    expect(retiredAsChanged()).toBe(true);
     expect(buildRemovalSubmissionBuild).not.toHaveBeenCalled();
+  });
+
+  it("does not call a template that could not be read a change (#1114)", async () => {
+    vi.mocked(prepareRemovalSubmission).mockReturnValue({
+      prepared: null,
+      // An unread template also yields derived blockers; together they prove nothing.
+      blockers: [
+        { code: "templateNotFullyRead", message: "not fully read" },
+        { code: "templateLinesNeedReview", message: "lines to decide" },
+      ],
+    });
+
+    await expect(assertFresh()).rejects.toThrow();
+    expect(retiredAsChanged()).toBe(false);
   });
 
   it("names the durability gate when it is the only change", async () => {
@@ -111,6 +131,7 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     );
 
     await expect(assertFresh()).rejects.toThrow("lineage broke");
+    expect(retiredAsChanged()).toBe(false);
     expect(retiredReason()).toBe(
       "semantic payload rebuild failed after draft claim",
     );
@@ -131,5 +152,6 @@ describe("assertClaimedRemovalPayloadFresh", () => {
     expect(retiredReason()).toBe(
       "semantic payload drift: snapshot hash-claimed != current hash-current",
     );
+    expect(retiredAsChanged()).toBe(true);
   });
 });

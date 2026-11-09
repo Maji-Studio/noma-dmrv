@@ -1,6 +1,10 @@
 import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
+import {
+  CHANGED_SINCE_REVIEW_FAILURE_KIND,
+  InterruptedRemovalChangedError,
+} from "@/lib/certification/interrupted-removal-copy";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
 import { readRemovalEntrySnapshot } from "@/lib/certification/removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -183,7 +187,11 @@ export async function submitRemoval(
         error_class: safeError.errorClass,
         error_message: safeError.errorMessage,
         // Read back by the Removal sheet to say "Isometric did not answer".
-        failure_kind: isNoAnswerError(attemptError) ? "no_answer" : null,
+        failure_kind: isNoAnswerError(attemptError)
+          ? "no_answer"
+          : attemptError instanceof InterruptedRemovalChangedError
+            ? CHANGED_SINCE_REVIEW_FAILURE_KIND
+            : null,
         ghg_entry_external_mutation: attempt.externalMutation,
       },
       errorMessage: safeError.errorMessage,

@@ -39,7 +39,7 @@ export type OutcomeTone = "ok" | "stop" | "retry";
 
 export function outcomeTone(outcome: NoticeOutcome): OutcomeTone {
   if (outcome.kind === "submitted") return "ok";
-  if (outcome.kind === "differs") return "stop";
+  if (outcome.kind === "differs" || outcome.kind === "changed") return "stop";
   return "retry";
 }
 
@@ -57,6 +57,8 @@ export function outcomeLine(outcome: NoticeOutcome, facilityId: string): ReactNo
       );
     case "no-answer":
       return "Isometric did not answer";
+    case "changed":
+      return "Changed since review";
     case "interrupted":
       return "Submission interrupted";
     case "failed":
@@ -65,20 +67,51 @@ export function outcomeLine(outcome: NoticeOutcome, facilityId: string): ReactNo
 }
 
 function outcomeTitle(outcome: NoticeOutcome, facilityId: string): ReactNode {
-  // An interrupted attempt and a lost response may have committed, so neither claims "Not submitted".
-  if (outcome.kind === "interrupted" || outcome.kind === "no-answer") return outcomeLine(outcome, facilityId);
+  // An interrupted attempt, a lost response and a changed-since-review refusal may have committed, so none claims "Not submitted".
+  if (outcome.kind === "interrupted" || outcome.kind === "no-answer" || outcome.kind === "changed") return outcomeLine(outcome, facilityId);
   return <>Not submitted: {outcomeLine(outcome, facilityId)}</>;
 }
 
 const CHECK_RUNS = "Check the production runs in this credit batch for later edits.";
 
-function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean): ReactNode {
+const FINALIZED_NO_DELETE = "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.";
+const CHANGED_FACT = "Part of it may already be in Isometric.";
+
+/**
+ * Whether this viewer can take Delete Removal: "can" shows the button, "deleting" means a deletion
+ * already runs, "ask-admin" means the viewer is known to be below the role floor (#746), and
+ * "unavailable" covers access still loading. A finalized Removal (also any Removal in a GHG
+ * Statement, which only a submitted one can be) is worded by `finalized` first.
+ */
+export type DeleteAccess = "can" | "deleting" | "ask-admin" | "unavailable";
+
+export function deleteAccessFor(
+  canDelete: boolean,
+  viewerCanDeleteRegistryRemovals: boolean | null,
+  deletionInProgress: boolean,
+): DeleteAccess {
+  if (canDelete) return "can";
+  if (deletionInProgress) return "deleting";
+  return viewerCanDeleteRegistryRemovals === false ? "ask-admin" : "unavailable";
+}
+
+/** The way out of a changed-since-review refusal is Delete Removal; say who can take it, or why nobody can now. */
+function changedFixLine(finalized: boolean, deleteAccess: DeleteAccess): string {
+  if (finalized) return `${CHANGED_FACT} ${FINALIZED_NO_DELETE}`;
+  if (deleteAccess === "deleting") return `${CHANGED_FACT} This Removal is being deleted. Reload the page to see the result.`;
+  if (deleteAccess === "ask-admin") return `${CHANGED_FACT} Ask an Admin to delete it. Then create the Removal again.`;
+  // Access still loading: state the fact and let the line settle once access resolves.
+  if (deleteAccess === "unavailable") return CHANGED_FACT;
+  return `${CHANGED_FACT} Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.`;
+}
+
+function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean, deleteAccess: DeleteAccess): ReactNode {
   switch (outcome.kind) {
     case "submitted":
       return null;
     case "differs":
       if (finalized) {
-        return `${CHECK_RUNS} This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.`;
+        return `${CHECK_RUNS} ${FINALIZED_NO_DELETE}`;
       }
       if (outcome.shared) {
         return (
@@ -96,6 +129,8 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
       return `${CHECK_RUNS} If the figures in noma are right, delete this Removal and submit again.`;
     case "no-answer":
       return "Anything already sent stays in Isometric. Review and submit again to send the rest.";
+    case "changed":
+      return changedFixLine(finalized, deleteAccess);
     case "interrupted":
       return "Part of it may already be in Isometric. Review and submit again to finish it. Anything already sent is kept.";
     case "failed":
@@ -118,6 +153,7 @@ export function SubmissionOutcomeNotice({
   facilityId,
   timeZone,
   finalized = false,
+  deleteAccess = "can",
   readOnly = false,
 }: {
   /** Nothing can be fixed or sent from here: the notice says what happened and stops there. */
@@ -127,6 +163,8 @@ export function SubmissionOutcomeNotice({
   timeZone: string;
   /** A finalized Removal cannot be deleted, so the fix is outside noma. */
   finalized?: boolean;
+  /** Whether this viewer can take Delete Removal, for the changed-since-review stop (#1114). */
+  deleteAccess?: DeleteAccess;
 }) {
   const tone = outcomeTone(outcome);
   if (tone === "ok") return null;
@@ -142,7 +180,7 @@ export function SubmissionOutcomeNotice({
         </div>
       )}
       <p className="mt-8 body-small">
-        {!readOnly && fixLine(outcome, facilityId, finalized)}
+        {!readOnly && fixLine(outcome, facilityId, finalized, deleteAccess)}
         {outcome.kind === "differs" && <ExplanationInfo title="Why it stopped" hint={whyItStopped(outcome, finalized || readOnly)} />}
       </p>
     </Notice>

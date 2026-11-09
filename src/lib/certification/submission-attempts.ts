@@ -8,6 +8,7 @@
  */
 import type { DriftDetails } from "./production-batch-drift-details";
 import { readDriftDetails } from "./production-batch-drift-details";
+import { CHANGED_SINCE_REVIEW_FAILURE_KIND } from "./interrupted-removal-copy";
 
 export const ATTEMPT_SUMMARY_OPERATION = "removal:submit:attempt-summary";
 export const DRIFT_OPERATION_PREFIX = "production-batch:drift:";
@@ -18,6 +19,8 @@ export type AttemptOutcome =
   | { kind: "submitted" }
   | ({ kind: "differs" } & DriftDetails)
   | { kind: "no-answer" }
+  /** A retry of a possibly sent Removal refused: its data or settings changed since the review (#1114). */
+  | { kind: "changed" }
   | { kind: "failed"; message: string | null };
 
 export interface SubmissionAttempt {
@@ -73,6 +76,7 @@ export function deriveSubmissionAttempts(events: readonly AttemptEventInput[]): 
       return { ...base, outcome: { kind: "differs", ...details } };
     }
     if (payload.failure_kind === "no_answer") return { ...base, outcome: { kind: "no-answer" } };
+    if (payload.failure_kind === CHANGED_SINCE_REVIEW_FAILURE_KIND) return { ...base, outcome: { kind: "changed" } };
     return { ...base, outcome: { kind: "failed", message: summary.errorMessage } };
   });
 }
