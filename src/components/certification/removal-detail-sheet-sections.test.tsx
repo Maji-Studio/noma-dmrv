@@ -1,21 +1,24 @@
 // @vitest-environment jsdom
 /** The Removal sheet's structure (#1554): header badge, untitled status block, Removal, Isometric, Records. */
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalWorkflowStatus } from "@/lib/certification/status";
 import type { RemovalListRow } from "./removal-list-state";
 import { RemovalDetailSheet, sheetStatusFor, thingsToFixLine } from "./removal-detail-sheet";
 
+const BASE_FACTS = vi.hoisted(() => ({
+  batches: [{ id: "cb-1", code: "CB-26-001" }, { id: "cb-2", code: "CB-26-002" }],
+  facilityName: "Mafinga plant",
+  dryTonnes: 12.34,
+  co2eEstimateTonnes: 30.04,
+  durabilityLabel: "1000-year (R₀ reflectance)",
+  samplingLabel: "Sampled",
+}));
 const mocks = vi.hoisted(() => ({
-  facts: {
-    batches: [{ id: "cb-1", code: "CB-26-001" }, { id: "cb-2", code: "CB-26-002" }],
-    facilityName: "Mafinga plant",
-    dryTonnes: 12.34,
-    co2eEstimateTonnes: 30.04,
-    durabilityLabel: "1000-year (R₀ reflectance)",
-    samplingLabel: "Sampled",
-  } as object | undefined,
+  facts: undefined as object | undefined,
   breakdown: undefined as object | undefined,
+  factsError: false,
+  refetch: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
@@ -26,7 +29,7 @@ vi.mock("@/hooks/use-certification", () => ({
   useRemovalBreakdown: () => ({ data: mocks.breakdown }),
   useFacilityCertifierSummary: () => ({ data: { mapping: { externalProjectId: "prj_1" } } }),
 }));
-vi.mock("@/hooks/use-removal-sheet-facts", () => ({ useRemovalSheetFacts: () => ({ data: mocks.facts, isLoading: false }) }));
+vi.mock("@/hooks/use-removal-sheet-facts", () => ({ useRemovalSheetFacts: () => ({ data: mocks.facts, isLoading: false, isError: mocks.factsError, isFetching: false, refetch: mocks.refetch }) }));
 vi.mock("@/hooks/use-removal-carried-entries", () => ({ useRemovalCarriedEntries: () => ({ data: undefined }) }));
 vi.mock("@/hooks/use-removal-delete-access", () => ({
   useRemovalDeleteAccess: () => ({ viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: false }),
@@ -38,6 +41,12 @@ vi.mock("./submission-history", () => ({ SubmissionHistory: () => null }));
 vi.mock("./carried-entries", () => ({ CarriedEntriesSection: () => null, RevisionLateEntriesSection: () => null }));
 vi.mock("./removal-records", () => ({ RemovalRecords: () => <p>records</p> }));
 vi.mock("./certification-status-badge", () => ({ CertificationStatusBadge: ({ label }: { label: string }) => <span data-testid="badge">{label}</span> }));
+beforeEach(() => {
+  mocks.facts = { ...BASE_FACTS };
+  mocks.breakdown = undefined;
+  mocks.factsError = false;
+  mocks.refetch.mockClear();
+});
 afterEach(cleanup);
 
 
@@ -95,6 +104,17 @@ describe("RemovalDetailSheet structure", () => {
     const section = screen.getByText("Removal", { exact: true }).closest("[data-detail-section]")!;
     expect(section.textContent).toContain("30.0 t CO₂e");
     expect(section.textContent).not.toContain("99.0 t");
+  });
+
+  it("shows a load failure with Try again, not missing data, when the facts read fails", () => {
+    mocks.facts = undefined;
+    mocks.factsError = true;
+    renderSheet();
+    expect(screen.getByRole("alert").textContent).toContain("could not be loaded");
+    expect(screen.queryByText("Not yet computed")).toBeNull();
+    expect(document.body.textContent).toContain("Reporting window");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("shows Not yet computed when no estimate exists", () => {

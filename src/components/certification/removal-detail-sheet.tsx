@@ -36,7 +36,7 @@ import {
   REMOVAL_INTERRUPTED_RECONCILE_REASON,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
-import { pluralize } from "@/lib/copy-utils";
+import { pluralize, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
@@ -327,6 +327,8 @@ export function RemovalDetailSheet({
   const facts = sheetFacts.data;
   // noma's own estimate from the credit batches; the registry's net figure stays in the registry card below.
   const co2eTonnes = facts?.co2eEstimateTonnes ?? null;
+  // A failed facts read is a load failure, not missing data: hide the figures it feeds and offer a retry.
+  const factsFailed = sheetFacts.isError;
   const headerStatus = sheetStatusFor(shownStatus);
   const thingsToFix = thingsToFixLine(workflowStatus);
   const hasReportingWindow = summary.startedOn && summary.completedOn;
@@ -374,20 +376,28 @@ export function RemovalDetailSheet({
             </div>
 
             <DetailSection title="Removal" className="peer-empty/status:border-t-0 peer-empty/status:pt-0">
+              {factsFailed && (
+                <Notice
+                  tone="error"
+                  action={<Button variant="weak" size="small" busy={sheetFacts.isFetching} onClick={() => void sheetFacts.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+                >
+                  The figures for this Removal could not be loaded.
+                </Notice>
+              )}
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-                <DetailField
+                {!factsFailed && <DetailField
                   label="Estimated CO₂e stored"
                   hint={ESTIMATE_NOTE}
                   value={co2eTonnes == null ? null : formatTonnes(co2eTonnes, { digits: CO2E_DIGITS, unit: "t CO₂e" })}
                   emptySituation="notYetComputed"
                   pending={sheetFacts.isLoading}
-                />
-                <DetailField
+                />}
+                {!factsFailed && <DetailField
                   label="Biochar dry mass"
                   value={facts?.dryTonnes == null ? null : formatTonnes(facts.dryTonnes, { digits: DRY_MASS_DIGITS })}
                   emptySituation="notYetComputed"
                   pending={sheetFacts.isLoading}
-                />
+                />}
                 <DetailField
                   label="Reporting window"
                   value={window}
@@ -403,7 +413,7 @@ export function RemovalDetailSheet({
                   }
                   emptySituation="none"
                 />
-                <DetailField label="Facility" value={facts?.facilityName ?? null} pending={sheetFacts.isLoading} />
+                {!factsFailed && <DetailField label="Facility" value={facts?.facilityName ?? null} pending={sheetFacts.isLoading} />}
               </div>
 
               {summary.externalId && (
@@ -429,12 +439,12 @@ export function RemovalDetailSheet({
                   }
                   valuePresent={Boolean(externalProjectId)}
                 />
-                <DetailField
+                {!factsFailed && <DetailField
                   className="sm:col-span-2"
                   label="Durability and sampling"
                   value={facts?.durabilityLabel ? `${facts.durabilityLabel}, ${facts.samplingLabel?.toLowerCase()}` : null}
                   pending={sheetFacts.isLoading}
-                />
+                />}
 
                 <RemovalStorageSitesField
                   externalProjectId={externalProjectId}
