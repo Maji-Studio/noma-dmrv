@@ -239,14 +239,14 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
-      "Select See what this Removal sends below, then open Technical details to retry. It shows why the build failed.";
+      "Open \"See what this Removal sends\" below, then Technical details, to retry. It shows why the build failed.";
   } else if (!compilationReady) {
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
       blockers.length > 0
         ? "Clear the blockers below."
-        : "The submission is incomplete. Select See what this Removal sends below, then open Technical details to see what is missing.";
+        : "The submission is incomplete. Open \"See what this Removal sends\" below, then Technical details, to see what is missing.";
   } else if (!allowsRemovalSubmission(readiness.state)) {
     // The gate still refuses for a reason no checklist row carried. Show the
     // readiness reasons rather than claim the removal is ready.
