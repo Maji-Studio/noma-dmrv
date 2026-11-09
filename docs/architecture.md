@@ -421,11 +421,8 @@ runtime.
   `facilityKeys.detailWithRelations(facilityId)`), not hand-built arrays.
   Certification keys live in `src/hooks/certification-query-keys.ts`. A kind of
   change that makes several reads stale gets one named function in
-  `src/hooks/stale-reads.ts`; it holds certification readiness and emission
-  entry changes today, while `feedstock-replan-invalidation.ts`,
-  `document-lock-refresh.ts` and `use-transport-distance-refresh.ts` keep their
-  own for now. Put new kinds in `stale-reads.ts` rather than hand-listing keys
-  in a mutation hook.
+  `src/hooks/stale-reads.ts`. Put new kinds there rather than hand-listing
+  keys in a mutation hook.
 - `src/app/providers.tsx` sets global query defaults:
   `staleTime: 30_000` and `refetchOnWindowFocus: false`. Hooks override
   `staleTime` deliberately where the data needs a different freshness window

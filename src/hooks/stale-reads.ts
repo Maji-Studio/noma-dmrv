@@ -1,10 +1,7 @@
 /**
  * Home for "this kind of change makes these reads stale". Each exported
  * function names one kind of change and refreshes every cached read it can
- * affect. Today it holds certification readiness and emission entry changes;
- * feedstock-replan-invalidation.ts, document-lock-refresh.ts and
- * use-transport-distance-refresh.ts still hold their own. Add new kinds here
- * rather than hand-listing keys in a mutation hook.
+ * affect. Add new kinds here rather than hand-listing keys in a mutation hook.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { activityKeys } from "./activity-query-keys";

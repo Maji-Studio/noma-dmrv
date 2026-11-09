@@ -31,6 +31,15 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
   the semantic hash (for example equal transport totals with unchanged evidence
   sources). Artifact serialization alone does not prove this snapshot is fresh.
 
+## Refresh rules outside `stale-reads.ts` (#1634)
+
+- `src/hooks/stale-reads.ts` holds the certification readiness and emission
+  entry kinds of change. Three modules still list their own stale reads:
+  `src/hooks/feedstock-replan-invalidation.ts`,
+  `src/hooks/document-lock-refresh.ts` and
+  `src/hooks/use-transport-distance-refresh.ts`. Move each into
+  `stale-reads.ts` with a cache-state test when it is next touched.
+
 ## Open design picks (`ui/design-picks`)
 
 A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.
