@@ -43,6 +43,8 @@ const ROW_RULE = "border-t border-[var(--color-border-secondary)]";
 
 type SubmissionSummaryProps = SubmissionFactsInput & {
   facilityId: string;
+  /** The build is being read again after a fix: with nothing open, say so instead of the old verdict. */
+  rechecking?: boolean;
   /** Fixes in the order first seen, with the ones done since the step opened. */
   entries: readonly FixEntry[];
   /** Figures changed since the last submit; empty unless the Removal came back. */
@@ -94,6 +96,7 @@ export function SubmissionSummary({
   facilityId,
   entries,
   changes,
+  rechecking = false,
   sharedFiles = [],
   onFix,
   onOpenDetails,
@@ -133,10 +136,15 @@ export function SubmissionSummary({
         )}
         {/* A refusal that no fix row carries (rejected in Isometric, a submission running) says so itself,
             whatever is still open. Only the generic checks/blockers verdict is left to the fix list. */}
-        {(refusal || (!compileFailed && openFixes.length === 0)) && (
+        {(refusal || (!compileFailed && openFixes.length === 0 && !rechecking)) && (
           <Notice tone="error" title={facts.headline}>
             {facts.detail}
           </Notice>
+        )}
+        {!refusal && rechecking && openFixes.length === 0 && (
+          <p role="status" aria-live="polite" className="body-small text-[var(--color-text-secondary)]">
+            Checking again…
+          </p>
         )}
         {entries.length > 0 && <FixList entries={entries} onFix={onFix} />}
         <div className={BLOCK_BORDER}>

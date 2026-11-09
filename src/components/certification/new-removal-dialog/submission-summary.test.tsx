@@ -103,6 +103,7 @@ function render(overrides: {
   rejectionMessage?: string | null;
   isProduction?: boolean;
   readinessState?: "ready" | "inProgress";
+  rechecking?: boolean;
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
@@ -114,6 +115,7 @@ function render(overrides: {
       checks={overrides.checks ?? PASSING_CHECKS}
       readiness={{ state: overrides.readinessState ?? "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
       rejectionMessage={overrides.rejectionMessage ?? null}
+      rechecking={overrides.rechecking ?? false}
       entries={overrides.entries ?? []}
       changes={overrides.changes ?? []}
       onFix={() => undefined}
@@ -258,6 +260,21 @@ describe("SubmissionSummary, blocked", () => {
     const html = render({ checks: UNMET_CHECKS, entries: OPEN });
     expect(html).not.toContain("issue blocks submission");
     expect(html).not.toContain('role="alert"');
+  });
+
+  it("says Checking again instead of the old verdict while the build is read again with nothing open", () => {
+    const fixed: FixEntry[] = [{ item: ITEM, fixed: true }];
+    const html = render({ rechecking: true, checks: UNMET_CHECKS, entries: fixed });
+    expect(html).toContain("Checking again");
+    expect(html).toContain('aria-live="polite"');
+    expect(html).not.toContain("issue blocks submission");
+    expect(render({ rechecking: false, checks: UNMET_CHECKS, entries: fixed })).toContain("issue blocks submission");
+  });
+
+  it("still shows a rejection while rechecking", () => {
+    const html = render({ rechecking: true, rejectionMessage: "This Removal was rejected in Isometric.", entries: [{ item: ITEM, fixed: true }] });
+    expect(html).toContain("This Removal was rejected in Isometric.");
+    expect(html).not.toContain("Checking again");
   });
 
   it("does not repeat Not yet computed under a failed compile", () => {

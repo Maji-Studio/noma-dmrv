@@ -522,6 +522,7 @@ export function SubmitStep({
           sharedFiles={sharedFiles}
           readiness={readiness}
           rejectionMessage={rejectionMessage}
+          rechecking={compilationQuery.isFetching}
           entries={fixEntries}
           changes={changes}
           onFix={markFixUsed}
