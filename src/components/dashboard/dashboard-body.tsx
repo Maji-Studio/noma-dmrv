@@ -52,7 +52,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   const actions = useFlowActions(status, facilityId, overview);
   const allBatchesHref = useAllBatchesHref();
 
-  if ((error && !overview) || scope.error) {
+  if ((error && !overview) || (scope.error && !scope.data)) {
     return (
       <LoadError
         message={(scope.error ?? error)?.message ?? null}
