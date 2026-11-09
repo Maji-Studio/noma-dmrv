@@ -162,10 +162,12 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
-- **`RESEND_REPLY_TO`** — optional email address in the schema, applied to every
+- **`RESEND_REPLY_TO`** — optional email address in the schema, the default for every
   transactional email. Real production boot requires `RESEND_API_KEY`,
   `RESEND_FROM_EMAIL` and `RESEND_REPLY_TO`; one error names missing variables.
   Development/test and hermetic CI may omit them; see [mail setup](./mail-setup.md).
+- **`WALKTHROUGH_TO`**: optional validated inbox for public walkthrough requests;
+  blank is unset, and the endpoint returns 503 when mail is unconfigured.
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In

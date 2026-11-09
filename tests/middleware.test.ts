@@ -99,6 +99,24 @@ describe("REST proxy carve-out", () => {
   });
 });
 
+describe("walkthrough proxy boundary", () => {
+  it.each(["POST", "OPTIONS"])("passes unauthenticated %s without session lookup", async method => {
+    getSessionMock.mockReset();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost/api/walkthrough", { method }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each(["/api/walkthroughx", "/api/walkthrough/", "/api/walkthrough/child"])("protects %s", async path => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost${path}`))).status).toBe(401);
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});
+
 describe("cron proxy boundary", () => {
   it.each(["/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"])("passes %s before looking up a session", async (path) => {
     getSessionMock.mockReset();

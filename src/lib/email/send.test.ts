@@ -26,13 +26,22 @@ beforeEach(() => {
 });
 afterEach(() => { env.RESEND_FROM_EMAIL = "sender@example.test"; });
 
-it.each(["reset-password", "verify-email", "email-change-confirm", "email-change-notice", "org-invite", "password-changed", "role-changed", "removed-from-organization"] as const)("sends %s with configured from and replyTo", async (type) => {
+it.each(["reset-password", "verify-email", "email-change-confirm", "email-change-notice", "org-invite", "password-changed", "role-changed", "removed-from-organization", "walkthrough-request"] as const)("sends %s with configured from and replyTo", async (type) => {
   expect(await sendEmail({ ...INPUT, type })).toEqual({ sent: true, id: "message-123" });
   expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
     to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,
     from: env.RESEND_FROM_EMAIL, replyTo: env.RESEND_REPLY_TO,
   }, undefined);
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ messageId: "message-123", emailType: type }), "email sent");
+});
+
+it("passes a per-message replyTo to Resend instead of the configured default", async () => {
+  const replyTo = "visitor@example.test";
+  expect(await sendEmail({ ...INPUT, type: "walkthrough-request", replyTo })).toEqual({ sent: true, id: "message-123" });
+  expect(mocks.send).toHaveBeenCalledExactlyOnceWith({
+    to: INPUT.to, subject: INPUT.subject, html: INPUT.html, text: INPUT.text,
+    from: env.RESEND_FROM_EMAIL, replyTo,
+  }, undefined);
 });
 
 it("passes an idempotency key to Resend when provided", async () => {

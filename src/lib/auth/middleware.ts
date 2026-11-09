@@ -25,6 +25,9 @@ const PUBLIC_ROUTES = [
 
 const AUTH_ROUTES = ["/login", "/forgot-password"];
 
+// Public submissions enforce their own origin, input and abuse checks. Exact paths only.
+const PUBLIC_SUBMISSION_ROUTES = new Set(["/api/walkthrough"]);
+
 /**
  * Machine-client routes that authenticate their own bearer credential and
  * never accept a session cookie (data-entry API plan, section 6). They return
@@ -64,7 +67,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (DISCOVERY_ROUTES.has(pathname) || MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
+  if (PUBLIC_SUBMISSION_ROUTES.has(pathname) || DISCOVERY_ROUTES.has(pathname) || MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     return NextResponse.next();
   }
 

@@ -1,13 +1,15 @@
 ---
 /**
  * WalkthroughForm (site copy): the walkthrough request form for /get-started, square and editorial.
- * Carries the "Book a walkthrough" label, inline error states and an honest preview note.
- * PROTOTYPE: submit is stubbed and sends nothing; the real endpoint is plan slice 4.
+ * Carries the "Book a walkthrough" label and inline error states. Submit posts JSON to the app's
+ * POST /api/walkthrough (APP_URL from PUBLIC_APP_URL), which emails the request to MAJI (docs/site.md).
+ * States: idle, sending (button disabled), sent (form replaced by the thanks line) and error.
  * Props:
  *   idPrefix?: string   prefix for field ids, default "wf"
  * Fields and plant sizes come from src/content/copy.js (copy.walkthrough).
  */
 import { copy } from "../../../content/copy.js";
+import { APP_URL } from "../../../config.js";
 import Button from "../Button.astro";
 import "./get-started.css";
 const { idPrefix = "wf" } = Astro.props;
@@ -24,7 +26,7 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
   { name: "company", label: w.fields.company, autocomplete: "organization", type: "text" },
 ];
 ---
-<form class="wf" data-wf method="post" novalidate aria-describedby={id("note")}>
+<form class="wf" data-wf data-endpoint={APP_URL ? `${APP_URL}/api/walkthrough` : ""} method="post" novalidate>
   <div class="wf-grid">
     {TEXT_FIELDS.map((f) => (
       <div class="wf-field" data-wf-field>
@@ -45,17 +47,23 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
   <input class="wf-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
   <div class="wf-actions">
     <Button type="submit" disabled>Book a walkthrough</Button>
-    <p class="t-caption" id={id("note")}>Preview only. This form does not send a request.</p>
   </div>
-  <noscript><p class="t-caption">Enable JavaScript to try this preview form. No request will be sent.</p></noscript>
+  <noscript><p class="t-caption">This form needs JavaScript to send your request.</p></noscript>
   <p class="wf-status" role="status" data-wf-status></p>
 </form>
 <script>
-  // Validates on submit, then live per field once a field has shown an error. Sends nothing.
-  const SENT = "Nothing was sent. This preview does not send requests yet.";
+  // Validates on submit, then live per field once a field has shown an error, then posts to the app.
+  const MESSAGES = {
+    sending: "Sending your request.",
+    sent: "Thanks. We'll be in touch.",
+    rate_limited: "Too many requests from this connection. Try again in an hour.",
+    error: "We could not send your request. Try again in a few minutes.",
+  };
   document.querySelectorAll<HTMLFormElement>("form[data-wf]").forEach((form) => {
     const status = form.querySelector<HTMLElement>("[data-wf-status]");
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     const fields = [...form.querySelectorAll<HTMLInputElement>("[data-wf-field] input")];
+    const say = (text: string) => { if (status) status.textContent = text; };
     const check = (input: HTMLInputElement) => {
       const error = document.getElementById(input.getAttribute("aria-describedby") || "");
       const ok = input.value.trim() !== "" && input.checkValidity();
@@ -64,13 +72,29 @@ const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "t
       return ok;
     };
     fields.forEach((input) => input.addEventListener("input", () => { if (input.hasAttribute("aria-invalid")) check(input); }));
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (status) status.textContent = "";
+      say("");
       const invalid = fields.filter((input) => !check(input));
       if (invalid.length) { invalid[0].focus(); return; }
-      if (status) status.textContent = SENT;
+      const endpoint = form.dataset.endpoint;
+      if (!endpoint) { say(MESSAGES.error); return; }
+      const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
+      if (submit) submit.disabled = true;
+      say(MESSAGES.sending);
+      try {
+        const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+        if (res.ok) {
+          form.querySelectorAll<HTMLElement>(".wf-grid, .wf-actions").forEach((el) => { el.hidden = true; });
+          say(MESSAGES.sent);
+          return;
+        }
+        say(res.status === 429 ? MESSAGES.rate_limited : MESSAGES.error);
+      } catch {
+        say(MESSAGES.error);
+      }
+      if (submit) submit.disabled = false;
     });
-    form.querySelector<HTMLButtonElement>('button[type="submit"]')?.removeAttribute("disabled");
+    submit?.removeAttribute("disabled");
   });
 </script>

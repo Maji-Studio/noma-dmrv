@@ -64,6 +64,7 @@ const envSchema = z.object({
   RESEND_FROM_EMAIL: z.preprocess(emptyToUndefined, fromEmailSchema.optional()),
 
   RESEND_REPLY_TO: z.preprocess(emptyToUndefined, z.email().optional()),
+  WALKTHROUGH_TO: z.preprocess(emptyToUndefined, z.email().optional()),
 
   OAUTH_PROVIDER_ENABLED: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   OAUTH_CIMD_CLIENT_IDS: oauthClientIdsSchema,

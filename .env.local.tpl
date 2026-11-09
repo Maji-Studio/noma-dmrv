@@ -51,6 +51,7 @@ MULTI_BIN_RUNS_ENABLED="op://Environment Variables/noma-dmrv env local/MULTI_BIN
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env local/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env local/RESEND_FROM_EMAIL"
 RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env local/RESEND_REPLY_TO"
+WALKTHROUGH_TO="op://Environment Variables/noma-dmrv env local/WALKTHROUGH_TO"
 
 # -----------------------------------------------------------------------------
 # Isometric (sandbox)
