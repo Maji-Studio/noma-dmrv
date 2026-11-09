@@ -10,11 +10,11 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CaretDownIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, TextAction } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { INLINE_HIT_AREA, PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -111,13 +111,10 @@ export function RecordGroup({ title, records, facilityId, mode }: { title: strin
         ))}
       </ul>
       {!showAll && hidden > 0 && (
-        /* The wrapper takes the negative margin: `.label-button` resets `margin` on the button itself. */
-        <div className="-ml-12 self-start">
-          <Button variant="noOutline" size="small" className={PHONE_TOUCH_TARGET} onClick={revealRest}>
-            Show all {records.length}
-            <span className="sr-only"> {title.toLowerCase()}</span>
-          </Button>
-        </div>
+        <TextAction onClick={revealRest}>
+          Show all {records.length}
+          <span className="sr-only"> {title.toLowerCase()}</span>
+        </TextAction>
       )}
     </div>
   );

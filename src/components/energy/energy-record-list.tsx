@@ -15,8 +15,7 @@ import {
   ListBulletsIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
-import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { EmptyState, TextAction } from "@/components/ui";
 import {
   rankRecords,
   recordHasMissingReadings,
@@ -243,12 +242,9 @@ export function EnergyRecordList({
           </div>
         )}
         {ranked.length > TOP_ROWS && (
-          // The wrapper takes the negative margin: `.label-button` resets `margin` on the button itself.
-          <div className="-ml-12 self-start">
-            <Button variant="noOutline" size="small" className={PHONE_TOUCH_TARGET} onClick={() => setShowAll(!showAll)}>
-              {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
-            </Button>
-          </div>
+          <TextAction onClick={() => setShowAll(!showAll)}>
+            {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
+          </TextAction>
         )}
       </div>
     </section>
