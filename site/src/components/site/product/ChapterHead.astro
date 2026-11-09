@@ -1,25 +1,23 @@
 ---
 /**
- * ChapterHead: opens one Product chapter (PRODUCT_SECTIONS in src/config.js). A small "Chapter n of N"
- * line, the chapter name as a display heading and one lead, on the rose band so the chapters read as
- * breaks between the sections. The chapter id goes here, so the sticky index lands on the head.
- * Props: id: string, n: number, of: number, title: string, lead: string
+ * ChapterHead: opens one Product chapter (PRODUCT_SECTIONS in src/config.js). The chapter name as a
+ * display heading and one lead, on the rose band so the chapters read as breaks between the sections.
+ * The chapter id goes here, so the sticky index lands on the head.
+ * Props: id: string, title: string, lead: string
  */
 import GridFrame from "../GridFrame.astro";
-interface Props { id: string; n: number; of: number; title: string; lead: string }
-const { id, n, of, title, lead } = Astro.props;
+interface Props { id: string; title: string; lead: string }
+const { id, title, lead } = Astro.props;
 ---
 <GridFrame id={id} tone="rose" pad="none" class="ch" aria-labelledby={`${id}-title`}>
   <div class="ch-in">
-    <p class="t-category ch-n">Chapter {n} of {of}</p>
     <h2 id={`${id}-title`} class="t-display ch-title">{title}</h2>
     <p class="t-lead ch-lead">{lead}</p>
   </div>
 </GridFrame>
 <style>
-  .ch-in { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "n n" "title lead"; gap: var(--space-5) var(--gap); align-items: end; padding: var(--space-9) 0 var(--space-8); }
-  .ch-n { grid-area: n; margin: 0; }
+  .ch-in { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "title lead"; gap: var(--space-5) var(--gap); align-items: end; padding: var(--space-9) 0 var(--space-8); }
   .ch-title { grid-area: title; margin: 0; max-width: 12ch; }
   .ch-lead { grid-area: lead; margin: 0; }
-  @media (max-width: 760px) { .ch-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "n" "title" "lead"; padding-block: var(--space-8) var(--space-7); } }
+  @media (max-width: 760px) { .ch-in { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "lead"; padding-block: var(--space-8) var(--space-7); } }
 </style>
