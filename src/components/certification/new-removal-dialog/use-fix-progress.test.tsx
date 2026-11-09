@@ -61,15 +61,16 @@ describe("useFixProgress", () => {
 
 describe("useRecheckOnReturn", () => {
   const win = new EventTarget();
-  const doc = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  const view = { state: "visible" };
+  const doc = Object.defineProperty(new EventTarget(), "visibilityState", { get: () => view.state });
   const fire = (target: EventTarget, type: string) => target.dispatchEvent(new Event(type));
   const goAway = () => {
-    doc.visibilityState = "hidden";
+    view.state = "hidden";
     fire(win, "blur");
     fire(doc, "visibilitychange");
   };
   const comeBack = () => {
-    doc.visibilityState = "visible";
+    view.state = "visible";
     fire(doc, "visibilitychange");
     fire(win, "focus");
   };
@@ -79,16 +80,19 @@ describe("useRecheckOnReturn", () => {
     vi.stubGlobal("document", doc);
   });
   afterEach(() => {
-    doc.visibilityState = "visible";
+    view.state = "visible";
   });
 
+  function Hook({ refresh, onMark }: { refresh: () => void; onMark: (mark: () => void) => void }) {
+    onMark(useRecheckOnReturn(refresh));
+    return null;
+  }
   function mount(refresh: () => void) {
     const out = { markUsed: () => undefined as void };
-    function Hook() {
-      out.markUsed = useRecheckOnReturn(refresh);
-      return null;
-    }
-    return { out, render: () => act(async () => { create(<Hook />); }) };
+    const onMark = (mark: () => void) => {
+      out.markUsed = mark;
+    };
+    return { out, render: () => act(async () => { create(<Hook refresh={refresh} onMark={onMark} />); }) };
   }
 
   it("reads the review again on every return from a repair, not only the first", async () => {
