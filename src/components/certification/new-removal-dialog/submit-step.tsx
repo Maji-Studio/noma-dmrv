@@ -498,6 +498,7 @@ export function SubmitStep({
         <ReviewDetails
           ctx={ctx}
           facilityId={facilityId}
+          removalId={removalId}
           facts={submissionFacts}
           table={componentTable}
           compilation={compilationQuery.data ?? null}

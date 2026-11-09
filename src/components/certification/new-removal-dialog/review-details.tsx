@@ -1,11 +1,10 @@
 /**
  * The details view of Review & submit: everything the Removal sends, one view
  * that replaces the summary. The credit batches and the component table, the
- * emissions carried from other credit batches, the production runs and
- * applications behind it, and the technical details for support.
+ * emissions carried from other credit batches, the records behind it, and the
+ * technical details for support.
  *
- * Production runs carry no credit batch in the ledger, so the records stay in
- * one fold below the table instead of one fold per credit batch.
+ * The records sit under each credit batch, as on the Removal sheet.
  */
 "use client";
 
@@ -53,6 +52,7 @@ export function FactsLine({ facts }: { facts: Pick<SubmissionFacts, "durabilityT
 export function ReviewDetails({
   ctx,
   facilityId,
+  removalId,
   facts,
   table,
   compilation,
@@ -65,6 +65,7 @@ export function ReviewDetails({
 }: {
   ctx: RemovalCertifyContext;
   facilityId: string;
+  removalId: string;
   facts: SubmissionFacts;
   table: ComponentTableModel;
   compilation: RemovalCompilationView | null;
@@ -91,7 +92,7 @@ export function ReviewDetails({
       <ComponentTable table={table} facilityId={facilityId} onFix={onFix} />
       <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
       <SourceRecords
-        ledger={ctx.emissionsLedger}
+        removalId={removalId}
         facilityId={facilityId}
         storageSitesHref={
           externalProjectId
