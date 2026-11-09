@@ -161,6 +161,14 @@ describe("RemovalDetailSheet readiness blockers", () => {
   });
 });
 
+describe("RemovalDetailSheet status line", () => {
+  it("announces a changing status line through a live Notice", () => {
+    renderSheet({ ...SUMMARY, local: "draft", lockInFlight: true } as unknown as RemovalListRow);
+    const line = screen.getByText(/sending this Removal to Isometric/);
+    expect(line.closest("[role='status']")).not.toBeNull();
+  });
+});
+
 describe("sheet status helpers", () => {
   it("maps a draft to Not submitted and keeps other states", () => {
     expect(sheetStatusFor(BLOCKED)).toEqual({ value: "draft", label: "Not submitted" });

@@ -209,7 +209,8 @@ function SheetStatusBlock({
   const line = nextStepLine(status);
   return (
     <>
-      {line && <p className="body-small text-[var(--color-text-secondary)]">{line}</p>}
+      {/* A Notice announces itself, so progress and check changes reach assistive tech. */}
+      {line && <Notice tone={status.kind === "unavailable" ? "warning" : "info"}>{line}</Notice>}
 
       {outcome && (
         <SubmissionOutcomeNotice
