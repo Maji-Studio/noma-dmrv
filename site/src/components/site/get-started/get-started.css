@@ -32,7 +32,7 @@
 .wf option { color: var(--ink); }
 .wf :is(input, select, textarea):hover { border-color: var(--link); }
 .site .wf :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
-.wf input[aria-invalid="true"] { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+.wf :is(input, select)[aria-invalid="true"] { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
 .wf-error { font-size: var(--fs-small); color: var(--warn); }
 .wf-error:empty { display: none; }
 .wf-select { position: relative; display: block; }

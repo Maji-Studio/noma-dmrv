@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { env } from "@/config/env";
 import { logger } from "@/lib/log";
 
-export type EmailType = "reset-password" | "verify-email" | "email-change-confirm" | "email-change-notice" | "org-invite" | "password-changed" | "role-changed" | "removed-from-organization";
+export type EmailType = "reset-password" | "verify-email" | "email-change-confirm" | "email-change-notice" | "org-invite" | "password-changed" | "role-changed" | "removed-from-organization" | "walkthrough-request";
 export type EmailResult =
   | { sent: true; id: string }
   | { sent: false; reason: "not-configured" | "provider-error" };
@@ -15,6 +15,8 @@ type EmailInput = {
   organizationId?: string;
   idempotencyKey?: string;
   to: string;
+  /** Per-message reply address; defaults to the configured support mailbox. */
+  replyTo?: string;
   subject: string;
   html: string;
   /** Plain-text alternative; every email sends both. */
@@ -54,7 +56,7 @@ export async function sendEmail(input: EmailInput): Promise<EmailResult> {
   try {
     const { data, error } = await resend.emails.send({
       from: env.RESEND_FROM_EMAIL,
-      replyTo: env.RESEND_REPLY_TO,
+      replyTo: input.replyTo ?? env.RESEND_REPLY_TO,
       to: input.to,
       subject: input.subject,
       html: input.html,

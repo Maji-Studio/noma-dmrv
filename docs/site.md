@@ -87,6 +87,12 @@ the site project's Vercel env vars when deployed.
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
 | `FONTS_S3_ACCESS_KEY_ID`, `FONTS_S3_SECRET_ACCESS_KEY` | Build only: read-only key for the licensed GT Flexa files. Unset builds with fallback fonts. Set by hand on this project; see [Fonts](./design-system.md#fonts). |
 
+## Walkthrough form
+
+The static site posts JSON to `${PUBLIC_APP_URL}/api/walkthrough` on the app,
+which emails `WALKTHROUGH_TO` through the existing Resend sender. The app allows
+only the configured site origins and rate-limits submissions by client IP.
+
 ## Vercel Projects and Domains
 
 Two Vercel projects build from this one repository:
