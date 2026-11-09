@@ -253,9 +253,9 @@ Size tokens live in `src/app/globals.css`; the classes live in
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Every other link button keeps mono uppercase.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
-- **20px:** `.body-lead`
-- **24px:** `.title-heading-3` (subsection titles)
-- **32px:** `.title-heading-2` (section titles)
+- **20px:** `.body-lead`; with `font-medium` it is the title of every read sheet and form section (`SectionLabel`, shared by `DetailSection` and `FormSection`; #1554)
+- **24px:** `.title-heading-3` (subsection titles, and the `SlideOverPanel` sheet title so it still leads the 20px section titles)
+- **32px:** `.title-heading-2` (page-level headings)
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
