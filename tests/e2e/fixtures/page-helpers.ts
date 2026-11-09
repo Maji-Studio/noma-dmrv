@@ -25,6 +25,18 @@ export async function waitForFacilityHydration(
   ).toBeVisible({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
 }
 
+/**
+ * Waits for the client to hydrate on any page, whichever facility is active.
+ * The sidebar facility selector renders a skeleton until FacilityProvider
+ * resolves on the client, then its listbox button. The desktop sidebar stays
+ * in the DOM below `md` (only hidden), so this works at phone width too.
+ */
+export async function waitForAppHydration(page: Page) {
+  await expect(
+    page.locator('aside button[aria-haspopup="listbox"]'),
+  ).toBeAttached({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
+}
+
 export async function getListedActionCodes(
   page: Page,
 ): Promise<Set<string>> {

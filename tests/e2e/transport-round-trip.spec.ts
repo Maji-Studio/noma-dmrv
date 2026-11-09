@@ -17,6 +17,7 @@ import {
   selectEntity,
   selectEntityByText,
   waitForFacilityHydration,
+  waitForAppHydration,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -186,7 +187,7 @@ test.describe("Transport round trip (#852)", () => {
 
     // Customer detail → Add location dialog.
     await page.goto(`/customers?customer=${seededData.customer.id}`);
-    await expect(page.getByRole("button", { name: "Edit customer" })).toBeEnabled();
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "Edit customer" }).click();
     await page.getByRole("button", { name: "Add location" }).click();
     // The locations table header now carries the same copy (QA detail-view

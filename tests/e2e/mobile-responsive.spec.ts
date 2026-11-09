@@ -19,6 +19,7 @@
  */
 import { test, expect } from "./fixtures";
 import type { Page } from "@playwright/test";
+import { waitForAppHydration } from "./fixtures/page-helpers";
 
 // iPhone 12/13/14 logical viewport — the size the pass was verified at.
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
@@ -148,6 +149,7 @@ test.describe("Mobile responsiveness (390×844)", () => {
     // a clickable card row in both dev and CI. (`/facilities` rows aren't
     // clickable; `/orders` isn't seeded — neither exercises the card contract.)
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await waitForAppHydration(page);
     await expect(hamburger(page)).toBeVisible();
 
     // Let the async reactor query resolve so the rows exist before asserting.
@@ -180,6 +182,7 @@ test.describe("Mobile responsiveness (390×844)", () => {
     const page = adminPage;
     // Open the seeded reactor's read-only view sheet via its mobile card row.
     await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await waitForAppHydration(page);
     await expect(hamburger(page)).toBeVisible();
     await expect(page.locator("[data-row-link]:visible").first()).toBeVisible();
     await page.locator("[data-row-link]:visible").first().click();

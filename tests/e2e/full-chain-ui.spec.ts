@@ -24,6 +24,7 @@ import {
   selectFirstCreditBatchProductionRun,
   selectFirstEntity,
   waitForFacilityHydration,
+  waitForAppHydration,
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -384,7 +385,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     // ─── 1. FACILITY ───────────────────────────────────────
     await test.step("Create facility", async () => {
       await page.goto("/facilities");
-      await expect(page.getByRole("button", { name: "New facility" })).toBeEnabled();
+      await waitForAppHydration(page);
 
       await page.click('button:has-text("New facility")');
       await waitForSideSheet(page);

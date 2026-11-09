@@ -354,6 +354,7 @@ test.describe("Feedstock UI CRUD", () => {
     seededData,
   }) => {
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
+    await waitForFacilityHydration(page, seededData.facility.name);
     await expect(page.locator("table tbody tr", { hasText: seededData.feedstock.code }).first()).toBeVisible();
 
     // Open the seeded feedstock's row into VIEW mode (rows are clickable via

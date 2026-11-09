@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
-import { clickRowMenuItem, waitForSideSheet } from "./page-helpers";
+import { clickRowMenuItem, waitForAppHydration, waitForSideSheet } from "./page-helpers";
 
 const SEARCH_TIMEOUT_MS = 15_000;
 export const SECOND_LOCATION_NAME = "E2E North Block";
@@ -15,7 +15,7 @@ export const SECOND_LOCATION_NAME = "E2E North Block";
 /** Search the Customers list for `code`, open its row menu's Edit and return the sheet dialog. */
 export async function openCustomerSheet(page: Page, facilityId: string, code: string) {
   await page.goto(`/customers?facility=${facilityId}`);
-  await expect(page.getByRole("textbox", { name: "Search customers" })).toBeVisible();
+  await waitForAppHydration(page);
   await page.getByRole("textbox", { name: "Search customers" }).fill(code);
   // The list is a table on desktop and cards on a phone: wait on the row menu, not on `table`.
   const menu = page.getByRole("button", { name: `Actions for ${code}` }).first();

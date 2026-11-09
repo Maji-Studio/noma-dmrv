@@ -8,7 +8,7 @@
  */
 import { test, expect, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
 import { like } from "drizzle-orm";
-import { clickRowMenuItem } from "./fixtures/page-helpers";
+import { clickRowMenuItem, waitForAppHydration } from "./fixtures/page-helpers";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 
@@ -31,7 +31,7 @@ test.describe("Crew", () => {
     const row = (text: string) => page.locator("table tbody tr", { hasText: text });
 
     await page.goto("/crew");
-    await expect(page.getByRole("button", { name: "New driver" })).toBeEnabled();
+    await waitForAppHydration(page);
     await expect(page.getByRole("tab", { name: /^Drivers/ })).toHaveAttribute("aria-selected", "true");
 
     // Create

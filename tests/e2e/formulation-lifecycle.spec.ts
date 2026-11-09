@@ -22,7 +22,7 @@ import {
   type TestFormulation,
 } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { clickRowMenuItem, waitForSideSheet } from "./fixtures/page-helpers";
+import { clickRowMenuItem, waitForAppHydration, waitForSideSheet } from "./fixtures/page-helpers";
 
 const LINE_RATIO = 0.4;
 const SNAPSHOT_WET_KG = 10;
@@ -79,7 +79,7 @@ test.describe("Formulation archive and restore", () => {
 
   async function openList(page: Page, code: string) {
     await page.goto("/formulations");
-    await expect(page.getByRole("textbox", { name: "Search formulations" })).toBeVisible();
+    await waitForAppHydration(page);
     await page.getByRole("textbox", { name: "Search formulations" }).fill(code);
     await expect(page.locator("table tbody tr", { hasText: code })).toBeVisible({ timeout: 15000 });
   }
@@ -110,7 +110,7 @@ test.describe("Formulation archive and restore", () => {
 
   test("an empty archived view shows an empty state", async ({ adminPage: page }) => {
     await page.goto("/formulations");
-    await expect(page.getByRole("button", { name: "Archived", exact: true })).toBeEnabled();
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "Archived", exact: true }).click();
     await page.getByRole("textbox", { name: "Search formulations" }).fill("no-such-formulation-code");
     await expect(page.getByText("No archived formulations match")).toBeVisible({ timeout: 15000 });
