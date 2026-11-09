@@ -27,14 +27,12 @@ export interface RemovalSheetFacts {
   samplingLabel: string | null;
 }
 
-/** Sentence-case durability labels, shared with the Review & submit summary. */
-export const DURABILITY_LABELS: Record<DurabilityOption, string> = {
+const DURABILITY_LABELS: Record<DurabilityOption, string> = {
   "200_year": "200-year (H:Corg)",
   "1000_year": "1000-year (R₀ reflectance)",
 };
 
-/** "Sampled" or "Not sampled", shared with the Review & submit summary. */
-export const samplingLabel = (sampling: string) => (sampling === "sampled" ? "Sampled" : "Not sampled");
+const samplingLabel = (sampling: string) => (sampling === "sampled" ? "Sampled" : "Not sampled");
 
 const labels = (values: string[]) => (values.length === 0 ? null : [...new Set(values)].join(", "));
 

@@ -16,8 +16,8 @@ import type {
   RemovalRequirementCheck,
 } from "@/lib/certification/readiness";
 import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
-import { DURABILITY_LABELS, samplingLabel } from "@/lib/certification/removal-sheet-facts";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import type { DurabilityOption } from "@/schemas/credit-batches";
 import { allowsRemovalSubmission } from "./resume-state";
 
 /** Digits used for every dry-mass figure on this screen. */
@@ -74,6 +74,15 @@ export interface SubmissionFacts {
   /** Free-text notes that are not typed advisories. */
   warnings: string[];
 }
+
+/**
+ * Sentence case, unlike the shared `formatDurabilityOption`, which returns
+ * title case and is used on surfaces that want it that way.
+ */
+const DURABILITY_LABELS: Record<DurabilityOption, string> = {
+  "200_year": "200-year (H:Corg)",
+  "1000_year": "1000-year (R₀ reflectance)",
+};
 
 /**
  * The submit button gates on this: a compiled artifact with no blockers is the
@@ -261,7 +270,9 @@ export function buildSubmissionFacts({
       batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption]),
     ),
     samplingLabel: uniqueLabels(
-      batches.map((batch) => samplingLabel(batch.sampling)),
+      batches.map((batch) =>
+        batch.sampling === "sampled" ? "Sampled" : "Not sampled",
+      ),
     ),
     pendingDocuments: pendingDocumentCount(ctx, compilation),
     checksPassed,
