@@ -1,5 +1,9 @@
 import { SafeError } from "@/lib/errors";
 
+export const CHANGED_SINCE_REVIEW_LABEL = "Changed since review";
+export const CHANGED_FACT = "Part of it may already be in Isometric.";
+export const FINALIZED_NO_DELETE = "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.";
+
 // A retry of a Removal that may already be in Isometric cannot be rebuilt from
 // changed data: its registry references would send twice. Delete Removal
 // removes what reached Isometric (including unconfirmed sends), then the

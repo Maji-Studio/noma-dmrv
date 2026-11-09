@@ -1,3 +1,5 @@
+import { listRemovalAttemptEvents } from "@/data-access/certifier-sync-events";
+import { deriveSubmissionAttempts } from "@/lib/certification/submission-attempts";
 import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
@@ -46,6 +48,13 @@ export async function loadCreditBatchTodos(
   ]);
   const durabilityByBatch = new Map(buildDurabilityBatchSummaries(batchesWithSamples)
     .map((summary) => [summary.creditBatchId, summary]));
+  const interruptedIds = new Set([...removalsByBatch.values()].flatMap((removals) =>
+    removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id),
+  ));
+  const changedByRemoval = new Map(await Promise.all([...interruptedIds].map(async (removalId) => {
+    const events = await listRemovalAttemptEvents(ctx, { removalId });
+    return [removalId, deriveSubmissionAttempts(events)[0]?.outcome.kind === "changed"] as const;
+  })));
   const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
   return new Map(ids.map((id) => {
     const health = healthByBatch.get(id)!;
@@ -53,7 +62,10 @@ export async function loadCreditBatchTodos(
     const removals = removalsByBatch.get(id);
     const { blocking, check } = buildCreditBatchOpenItems({
       facilityId, creditBatchId: id, canManage, health,
-      removals,
+      removals: removals?.map((removal) => ({
+        ...removal,
+        ...(changedByRemoval.get(removal.id) ? { changedSinceReview: true as const } : {}),
+      })),
       durability: durabilityByBatch.get(id),
       emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,
       missingProductionRuns: missingProductionRunsByBatch.get(id),

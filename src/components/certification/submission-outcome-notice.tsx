@@ -13,6 +13,7 @@ import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 import type { AttemptOutcome } from "@/lib/certification/submission-attempts";
+import { CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE } from "@/lib/certification/interrupted-removal-copy";
 import { FigurePairs } from "./submission-outcome-figures";
 
 export type NoticeOutcome = AttemptOutcome | { kind: "interrupted" };
@@ -58,7 +59,7 @@ export function outcomeLine(outcome: NoticeOutcome, facilityId: string): ReactNo
     case "no-answer":
       return "Isometric did not answer";
     case "changed":
-      return "Changed since review";
+      return CHANGED_SINCE_REVIEW_LABEL;
     case "interrupted":
       return "Submission interrupted";
     case "failed":
@@ -73,9 +74,6 @@ function outcomeTitle(outcome: NoticeOutcome, facilityId: string): ReactNode {
 }
 
 const CHECK_RUNS = "Check the production runs in this credit batch for later edits.";
-
-const FINALIZED_NO_DELETE = "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.";
-const CHANGED_FACT = "Part of it may already be in Isometric.";
 
 /**
  * Whether this viewer can take Delete Removal: "can" shows the button, "deleting" means a deletion
