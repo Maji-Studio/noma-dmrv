@@ -2,18 +2,18 @@ name: Site
 
 # The marketing site (site/) is a standalone pnpm package that ci.yml never
 # installs, type-checks or builds (docs/site.md). This workflow runs only when
-# the site, the app fonts it reads, or this file change.
+# the site, the shared font fetcher, or this file change.
 on:
   pull_request:
     paths:
       - "site/**"
-      - "src/styles/fonts/**"
+      - "scripts/fetch-fonts.mjs"
       - ".github/workflows/site.yml"
   push:
     branches: [main, staging]
     paths:
       - "site/**"
-      - "src/styles/fonts/**"
+      - "scripts/fetch-fonts.mjs"
       - ".github/workflows/site.yml"
 
 permissions:
@@ -53,7 +53,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Root-relative files referenced from site/src must exist in site/public;
-      # the gitignored Mafinga photo is the one allowlisted exception.
+      # the gitignored photo and licensed fonts are explicitly allowlisted.
       - name: Public asset references
         run: pnpm check:assets
 

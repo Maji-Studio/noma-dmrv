@@ -62,7 +62,7 @@ export async function checkBiocharApplicationSourceReadback(args: {
     // last authoritative mismatch. Restore the submission blocker on retry.
     await markBiocharApplicationDrift(args.orgCtx, args.registrationId, "source_set_mismatch");
     throw new SafeError(
-      `Application ${args.applicationCode}: Isometric could not confirm a corrected evidence set. Retry the Removal submission later.`,
+      `Application ${args.applicationCode}: Isometric could not confirm a corrected evidence set. Submit the Removal again later.`,
     );
   }
   await recordBiocharApplicationSourceReadback(args.orgCtx, args.registrationId, result.outcome);

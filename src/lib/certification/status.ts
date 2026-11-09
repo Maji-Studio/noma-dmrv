@@ -170,6 +170,8 @@ export interface RemovalWorkflowStatus {
   label: string;
   /** Blocking reasons only; non-blocking notes live in their owning section. */
   reasons: string[];
+  /** Fixes Review & submit lists for a blocked draft; the list reads "N to fix" from it. */
+  fixCount?: number;
   isActionable: boolean;
   canRetry: boolean;
 }
@@ -197,7 +199,7 @@ const REMOVAL_SUBMITTING: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"
   label: "Submitting",
 };
 
-const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+export const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
   kind: "failed",
   value: "failed",
   label: "Submission failed",
@@ -344,7 +346,7 @@ export function deriveRemovalWorkflowStatus({
     }
     if (enrichmentStatus === "unavailable" || !readiness) {
       return interruptedWorkflowStatus(
-        ["Status checks could not finish. Select Retry to check again."],
+        ["Status checks could not finish."],
         false,
         true,
       );
@@ -426,6 +428,7 @@ export function deriveRemovalWorkflowStatus({
         value: "pending",
         label: "Needs attention",
         reasons: readiness.reasons,
+        fixCount: readiness.fixCount,
         isActionable: true,
         canRetry: false,
       };

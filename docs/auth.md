@@ -28,6 +28,9 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/platform/*` is gated by the platform layout's `requireAdmin()`.
 - Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys or OAuth access tokens with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and filters key tool discovery by scopes. OAuth discovers grantable writes for step-up. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
+- Exact `/api/walkthrough` bypasses session lookup for public POST and OPTIONS.
+  Its handler enforces site origins, IP rate limits, input limits and a honeypot;
+  neighboring paths remain protected. See [Walkthrough form](./site.md#walkthrough-form).
 
 ### Public verifier report capability
 
@@ -82,6 +85,13 @@ and multi-role inputs are rejected.
 
 ## Server actions
 
+`withAuthAction` in `src/fn/with-action.ts` is the user-owned Profile seam:
+it resolves `getUser()`, throws `SafeError` when signed out, and passes only
+`userId`. It shares error formatting and per-user throttling with `withAction`.
+Profile mutations still use Better Auth with the caller's session headers,
+including email freshness and current-password checks. The Profile settings
+loader explicitly allows a missing organization; other panes keep their org guard.
+
 `withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Nearly all exported server actions end in `Fn` (e.g. `createFacilityFn`); `src/fn/organizations.ts` uses the `Action` suffix.
 
 ```ts
@@ -112,7 +122,7 @@ Registry credentials are owned per organization and managed by its Admins (and b
 Two distinct limiters — a real trip hazard:
 
 1. Better Auth's limiter (`src/lib/auth/better-auth.ts`) is on unless `DISABLE_RATE_LIMIT === "true"` in development/test or in a CI production build on a loopback origin (policy in `src/lib/auth/rate-limit-policy.ts`, entry in [security.md](./security.md); E2E relies on it, see [testing.md](./testing.md)). Production deployments always keep it on. It has tightened custom rules on `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
-2. `withAction` has an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
+2. `withAction` and `withAuthAction` have an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
 
 ## Invitations
 
@@ -124,9 +134,14 @@ Organization Admins invite from organization settings; Better Auth enforces invi
 
 Settings, Profile (`src/fn/profile.ts`) changes only the caller's own user, through Better Auth with the request's session headers. `changePasswordFn` checks the current password with `changePassword` (`revokeOtherSessions: false`), then calls `revokeOtherSessions`, keeping this device's session. Better Auth's own `revokeOtherSessions: true` creates a replacement session inside its transaction, and the session-create hook in `better-auth.ts` then waits for a second pool connection, so the two calls stay separate. Other devices stop working within `SESSION_COOKIE_CACHE_SECONDS` (5 minutes), because each browser trusts its signed session snapshot that long. The change is limited to 5 attempts per 15 minutes per user.
 
-Email changes use `useChangeEmail` → `changeEmailFn` in `src/fn/profile.ts` → `auth.api.changeEmail`, with server-side Zod validation and a fixed Profile callback. The action limits requests to 5 per 15 minutes per user; the HTTP `/change-email` endpoint also limits requests to 5 per 15 minutes. A confirmation link goes to the new address and a best-effort notice goes to the old address when the request is made. The address changes only when the link is opened. Requests require a fresh session, using Better Auth's default `freshAge` of 24 hours. The app's before-hook enforces freshness because Better Auth 1.7.10's sensitive-session middleware checks session validity only. The before-hook runs for HTTP and direct API calls. A stale session returns `SESSION_EXPIRED`, translated by the action to `session_expired` and propagated by the hook as an `ActionError`; sign in again before retrying. Confirmation checks the authoritative session store, bypassing the cookie cache, and requires the requester's session creation time, floored to seconds, to be no later than the link's signed `iat`; password reset revokes all sessions, so a later sign-in cannot redeem the old link. Refusals redirect to the safe callback with `error=SIGN_IN_REQUIRED` for no session, `INVALID_TOKEN` for an already-used link or a session newer than the link, and `WRONG_ACCOUNT` for another account, without creating a session or setting a cookie. An address already belonging to an account returns the same `{ status: true }` and pending state, with neither email sent. Delivery failures for confirmation propagate like normal verification; notice failures never block the request.
+Successful password changes and resets disconnect the user's connected apps in every organization through `revokeUserOAuthGrants`, which revokes each generation like any application revocation (token rows stay until purge). A Profile change sweeps again after `revokeOtherSessions`, since a grant needs a live session. A failed disconnect is logged by user ID and never fails the password change; a reset refuses before the password write if it cannot identify the account to disconnect. API keys keep working; the password-changed email lists the active ones.
+
+Email changes use `useChangeEmail` → `changeEmailFn` in `src/fn/profile.ts` → `auth.api.changeEmail`, with server-side Zod validation and a fixed Profile callback. The action requires the current password through Better Auth’s `verifyPassword` and limits requests to 5 per 15 minutes per user; the HTTP `/change-email` endpoint is refused so it cannot bypass password verification. A confirmation link goes to the new address and a best-effort notice goes to the old address when the request is made. The address changes only when the link is opened. Requests require a fresh session, using Better Auth's default `freshAge` of 24 hours. The app's before-hook enforces freshness because Better Auth 1.7.10's sensitive-session middleware checks session validity only. The freshness before-hook runs for direct API calls; HTTP requests are refused first. A stale session returns `SESSION_EXPIRED`, translated by the action to `session_expired` and propagated by the hook as an `ActionError`; sign in again before retrying. Confirmation checks the authoritative session store, bypassing the cookie cache, and requires the requester's session creation time, floored to seconds, to be no later than the link's signed `iat`; password reset revokes all sessions, so a later sign-in cannot redeem the old link. Refusals redirect to the safe callback with `error=SIGN_IN_REQUIRED` for no session, `INVALID_TOKEN` for an already-used link or a session newer than the link, and `WRONG_ACCOUNT` for another account, without creating a session or setting a cookie. An address already belonging to an account returns the same `{ status: true }` and pending state, with neither email sent. Delivery failures for confirmation propagate like normal verification; notice failures never block the request.
 
 Memberships, credentials and Platform Admin authority use user IDs and stored roles, so changing an address preserves them. Pending invitations remain bound to their original recipient address; ask an Admin to cancel and re-invite the new address. The admin bootstrap CLI still finds its target by `ADMIN_EMAIL`: after a Platform Admin changes their email, update that operator configuration before rerunning bootstrap or it can create another admin at the old address.
+
+For staging/prod that configuration is `ADMIN_EMAIL` in the matching
+1Password item, and bootstrap runs through the `migrate.yml` workflow.
 
 ## Better Auth schema and credential identity
 

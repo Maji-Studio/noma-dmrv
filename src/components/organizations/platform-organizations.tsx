@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
@@ -82,11 +83,11 @@ export function PlatformOrganizations() {
         tone="error"
         action={
           <Button type="button" variant="weak" size="small" busy={directory.isFetching} onClick={() => directory.refetch()}>
-            Retry
+            {TRY_AGAIN_LABEL}
           </Button>
         }
       >
-        Organizations could not be loaded. Retry to see them.
+        Organizations could not be loaded.
       </Notice>
     );
   }

@@ -59,6 +59,8 @@ export interface SankeyExit {
   fromColumn: SankeyColumnKey;
   /** Display-rounded difference of display-rounded columns; columns and omittedResidualKg stay raw. */
   massKg: number;
+  /** Raw signed upstream minus downstream for balance checks; massKg stays the display figure. */
+  rawKg: number;
   /** alert = compliance-relevant (red); loss = expected/neutral exit. */
   tone: "alert" | "loss";
 }
@@ -221,6 +223,7 @@ export function buildBatchSankey(
       label: "Conversion loss",
       fromColumn: "productionRuns",
       massKg: conversionLoss.value,
+      rawKg: conversionLoss.raw,
       tone: "loss",
     });
   }
@@ -230,6 +233,7 @@ export function buildBatchSankey(
       label: allocatedByProductId.size ? "Outside these applications" : "Not bagged into lots",
       fromColumn: "productionRuns",
       massKg: unallocated.value,
+      rawKg: unallocated.raw,
       tone: "loss",
     });
   }
@@ -239,6 +243,7 @@ export function buildBatchSankey(
       label: "In storage / undelivered",
       fromColumn: "biocharLots",
       massKg: inStorage.value,
+      rawKg: inStorage.raw,
       tone: "loss",
     });
   }

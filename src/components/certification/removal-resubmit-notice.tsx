@@ -46,7 +46,7 @@ function BatchLink({ batch, facilityId }: { batch: { id: string; code: string };
  * Once a sent fact changed it says what and asks to resubmit; before that it
  * says the statement came back and where the sent entries are corrected.
  */
-export function RemovalResubmitNotice({ correction, facilityId }: { correction: RemovalCorrection; facilityId: string }) {
+export function RemovalResubmitNotice({ correction, facilityId, readOnly = false }: { correction: RemovalCorrection; facilityId: string; /** Nothing can be resubmitted from here: say what happened, not what to do. */ readOnly?: boolean }) {
   const statement = (
     <Link href={correctionStatementHref(correction, facilityId)} className={LINK_CLASS}>
       {correctionStatementLabel(correction.statement)}
@@ -67,8 +67,8 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
           </>
         ) : (
           "Records or files changed since this Removal was sent."
-        )}{" "}
-        Resubmit it, then resubmit {statement}.
+        )}
+        {readOnly ? null : <> Resubmit it, then resubmit {statement}.</>}
       </Notice>
     );
   }
@@ -79,11 +79,14 @@ export function RemovalResubmitNotice({ correction, facilityId }: { correction: 
       data-removal-correction="returned"
       action={<Link href={correctionStatementHref(correction, facilityId)} className={NOTICE_ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link>}
     >
-      {statement} {returnedStatementPhrase(correction.statement.status)}. Correct the records or emissions entries on{" "}
-      <JoinedParts parts={correction.batches.map((batch) => ({
-        key: batch.id,
-        node: <BatchLink batch={batch} facilityId={facilityId} />,
-      }))} />, then resubmit this Removal.
+      {statement} {returnedStatementPhrase(correction.statement.status)}.
+      {readOnly ? null : (
+        <> Correct the records or emissions entries on{" "}
+          <JoinedParts parts={correction.batches.map((batch) => ({
+            key: batch.id,
+            node: <BatchLink batch={batch} facilityId={facilityId} />,
+          }))} />, then resubmit this Removal.</>
+      )}
     </Notice>
   );
 }

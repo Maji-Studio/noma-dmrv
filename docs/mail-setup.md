@@ -10,7 +10,9 @@ hermetic-CI exception live in [security.md](./security.md).
 Real production refuses to boot unless `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
 and `RESEND_REPLY_TO` are all set. The error names every missing variable.
 Use a sender on a domain verified in Resend and a monitored reply-to mailbox.
-Every email uses the configured sender and reply-to address.
+Every email uses the configured sender and defaults to the configured reply-to address.
+Optional `WALKTHROUGH_TO` receives public walkthrough requests, with the visitor's
+email as reply-to. Blank is unset; missing mail configuration returns 503.
 
 The API key and from address remain a **both-or-neither pair** in every
 environment. `RESEND_REPLY_TO` is an optional, validated email address outside

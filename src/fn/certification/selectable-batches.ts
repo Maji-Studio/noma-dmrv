@@ -13,7 +13,7 @@ import {
   type FacilitySetupGap,
 } from "@/lib/certification/facility-setup-gaps";
 import type { OrgContext } from "@/lib/auth/server";
-import { deriveAppliedDryTons } from "./applied-dry-tons";
+import { deriveAppliedDryTons } from "@/lib/certification/applied-dry-tons";
 import type {
   CreditBatchContextSet,
   FacilityCertifierFacts,

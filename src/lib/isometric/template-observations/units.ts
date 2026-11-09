@@ -13,11 +13,17 @@ atoms("carbon", { gCO2e: ["g_co2e"], kgCO2e: ["kg_co2e"], tCO2e: ["tonne_co2e"] 
 atoms("distance", { m: ["meter", "metre"], km: ["kilometer", "kilometre"], mi: ["mile"] });
 atoms("volume", { L: ["liter", "litre", "l"], mL: ["ml", "milliliter", "millilitre"], "m^3": ["m3", "cubic_meter"] });
 atoms("energy", { kWh: ["kilowatt_hour"], Wh: ["watt_hour"], MWh: ["megawatt_hour"], MJ: ["megajoule"], J: ["joule"] });
-atoms("time", { s: ["second"], h: ["hour"], day: [] });
+atoms("time", { s: ["second"], h: ["hour"], day: ["d"], min: ["minute"] });
 atoms("", { "%": ["percent"], dimensionless: ["1"], ppm: [] });
+
+/** The canonical atom names of one dimension ("time", "carbon", ...), for tests that pin conversion tables to them. */
+export function canonicalAtoms(dimension: string): string[] {
+  return [...new Set(Object.values(ATOMS).filter((atom) => atom.dimension === dimension).map((atom) => atom.canonical))];
+}
 
 const KIND_DIMENSIONS: Partial<Record<QuantityKind, Dimensions>> = {
   mass: { mass: 1 }, distance: { distance: 1 }, energy: { energy: 1 }, volume: { volume: 1 },
+  time: { time: 1 }, time_emission_factor: { carbon: 1, time: -1 },
   mass_distance: { mass: 1, distance: 1 }, mass_carbon: { carbon: 1 },
   dimensionless: {}, dimensionless_ratio: {}, mass_fraction: {}, mass_fraction_dry_basis: {},
   mass_fraction_wet_basis: {}, mass_ratio: {}, volume_fraction: {},
@@ -84,6 +90,11 @@ export function canonicalUnit(kind: QuantityKind, unit: string): string | undefi
 
 export function unitsConvertible(kind: QuantityKind, a: string, b: string): boolean {
   return canonicalUnit(kind, a) !== undefined && canonicalUnit(kind, b) !== undefined;
+}
+
+/** Operators report monitored durations in hours, independent of blueprint scale. */
+export function monitoredInputUnit(kind: QuantityKind, compatibleUnit: string): string {
+  return kind === "time" ? "hour" : compatibleUnit;
 }
 
 // Bound expansion of exponent notation without rounding decimal strings through

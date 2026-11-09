@@ -57,10 +57,12 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
+import { useViewerOrg } from "./viewer-org";
 import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   SETTINGS_GENERAL_HREF,
+  SETTINGS_PROFILE_HREF,
   CREW_HREF,
   VEHICLES_HREF,
   withFacilityParam,
@@ -288,6 +290,7 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { facilityId: facilityParam } = useFacilityContext();
+  const viewerOrg = useViewerOrg();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
   const toast = useToast();
@@ -422,9 +425,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           {/* Straight to General rather than `/settings`, which only
               redirects there: the settings rail is the index, and General is
               the pane every member can open (Q15). The only link in the nav
-              named "Settings" since Certification lost its own. */}
+              named "Settings" since Certification lost its own. Without an
+              organization only Profile opens (#1577). */}
           <Link
-            href={withFacilityParam(SETTINGS_GENERAL_HREF, facilityParam)}
+            href={viewerOrg ? withFacilityParam(SETTINGS_GENERAL_HREF, facilityParam) : SETTINGS_PROFILE_HREF}
             onClick={onNavigate}
             className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-white transition-colors duration-150"
             aria-label="Settings"

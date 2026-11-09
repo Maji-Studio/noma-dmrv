@@ -25,12 +25,17 @@ site/
     └── styles/tokens.css
 ```
 
-Fonts are read from the app's `src/styles/fonts/` one directory up, so the site
-needs the whole repository checked out, not only `site/`.
+Licensed GT Flexa fonts are fetched from private object storage at build time
+into gitignored `site/public/fonts/`. Without credentials, builds use system
+fallback fonts. The dependency-free fetch script lives at `scripts/fetch-fonts.mjs`,
+so the site needs the whole repository checked out. See [Fonts](./design-system.md#fonts).
 
 The Mafinga photo (`site/public/images/mafinga-field-trial.jpg`) is gitignored
 because the repo is public and Dark Earth Carbon has not approved publishing it.
 A build without the file shows a hatched placeholder; never commit it.
+The pages use four committed film stills from Mafinga instead
+(`site/public/images/photos/`, `PHOTOS` in `site/src/lib/assets.js`, rendered by `Photo.astro`):
+WebP at 800 and 1600 px wide, made with `cwebp -q 72 -resize <w> 0 -metadata none`.
 
 ## Page Roles
 
@@ -40,9 +45,9 @@ drifting into Product's detail is the usual way it happens.
 
 | Page | Owns | Dark stage |
 | --- | --- | --- |
-| Home (`index.astro`) | A short tour: one block per destination, each linking deeper by anchor (`site/src/config.js`). It shows, it doesn't explain. | `TraceStage` |
-| Product (`product.astro`) | What the software does: Trace, Bins and stock, Emissions, Evidence and reporting, What's next (`PRODUCT_SECTIONS`). | `EvidenceStage` |
-| Why noma (`why.astro`) | Why it is built this way: the five principles (`WHY_PRINCIPLES`), the comparison with spreadsheets and other dMRVs, open source, ownership, Mafinga. | `CompareStage` |
+| Home (`index.astro`) | The business case for an owner: the problem (spreadsheets do not grow with the plant), three outcomes that link to the Product chapters by anchor (`site/src/config.js`), then one big picture each for scale, what runs today and the two ways to run it. It shows, it doesn't explain. | `CompareStage` (the problem) |
+| Product (`product.astro`) | What the software does, in three chapters (Run the plant, Get credits issued, Sell with proof), then Across your sites (`PRODUCT_SECTIONS`). | `EvidenceStage` |
+| Why noma (`why.astro`) | Why it is built this way: the five principles (`WHY_PRINCIPLES`), open source, ownership, Mafinga. | none |
 | Get started (`get-started.astro`) | The two actions only: book a walkthrough, or self-host from GitHub. | none |
 
 The light pages with one dark keynote stage each are a settled decision, set out
@@ -57,10 +62,10 @@ call the site's own scripts (`pnpm --dir site dev|build`). Install once with
 `pnpm install` inside `site/`. In a worktree, run a fresh install there; never
 symlink `node_modules` to the main checkout.
 
-`.github/workflows/site.yml` runs on changes to `site/`, `src/styles/fonts/` or
+`.github/workflows/site.yml` runs on changes to `site/`, `scripts/fetch-fonts.mjs` or
 itself: frozen install, `pnpm check:assets` (every root-relative file referenced
-from `site/src` exists in `site/public`; the private photo below is the one
-exception), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
+from `site/src` exists in `site/public`; the private photo and licensed fonts are explicit
+exceptions), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
 three from `site/` before pushing.
 
 For screenshots, use the opt-in capture spec `tests/visual/site-capture.spec.ts`
@@ -83,7 +88,13 @@ the site project's Vercel env vars when deployed.
 | Variable | Effect |
 | --- | --- |
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
-| `PUBLIC_MAPTILER_KEY` | Basemap for the Home hero map (the app's domain-locked MapTiler key; the site domain must be allowed on it). Unset plots the sites on a dotted field. |
+| `FONTS_S3_ACCESS_KEY_ID`, `FONTS_S3_SECRET_ACCESS_KEY` | Build only: read-only key for the licensed GT Flexa files. Unset builds with fallback fonts. Set by hand on this project; see [Fonts](./design-system.md#fonts). |
+
+## Walkthrough form
+
+The static site posts JSON to `${PUBLIC_APP_URL}/api/walkthrough` on the app,
+which emails `WALKTHROUGH_TO` through the existing Resend sender. The app allows
+only the configured site origins and rate-limits submissions by client IP.
 
 ## Vercel Projects and Domains
 
@@ -92,7 +103,7 @@ Two Vercel projects build from this one repository:
 | Project | Root directory | Skips a build when |
 | --- | --- | --- |
 | `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment |
-| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/`, `src/styles/fonts/` or the root `vercel.json` changed since the last successful deployment |
+| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/`, `scripts/fetch-fonts.mjs` or the root `vercel.json` changed since the last successful deployment |
 
 Both projects read the root `vercel.json`, whose `ignoreCommand` runs
 `scripts/vercel-ignore-build.sh` and overrides any Ignored Build Step set in the
@@ -109,7 +120,10 @@ invocations. Crons run only on Production deployments, never Preview (staging).
 | Environment | App | Site |
 | --- | --- | --- |
 | Staging | `staging.app.noma.maji.studio` | `staging.noma.maji.studio` |
-| Production (planned) | `app.noma.maji.studio` | `noma.maji.studio` |
+| Production | `app.noma.maji.studio` | `noma.maji.studio` |
+
+On the site hosts, old app paths redirect (308) to the matching app host.
+`tests/site-host-redirects.test.ts` fails when an app route is missing from the redirect list.
 
 Domain and project settings changes are made in the Vercel dashboard by the
 owner; the repository carries `vercel.json` and the ignore script.

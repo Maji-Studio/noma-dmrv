@@ -5,13 +5,14 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 // only when it is a loopback name or a Unix socket directory.
 const HOST_OVERRIDE_PARAMS = ['host', 'hostaddr'];
 
-function isLocalHost(value: string): boolean {
+// The test guards in tests/helpers/local-host.ts are stricter on purpose.
+function isLoopbackOrSocketHost(value: string): boolean {
   return LOCAL_HOSTS.has(value.replace(/^\[(.*)\]$/, '$1')) || value.startsWith('/');
 }
 
 function isLocalUrl(url: URL): boolean {
-  return LOCAL_HOSTS.has(url.hostname) &&
-    HOST_OVERRIDE_PARAMS.every((param) => url.searchParams.getAll(param).flatMap((value) => value.split(',')).every(isLocalHost));
+  return isLoopbackOrSocketHost(url.hostname) &&
+    HOST_OVERRIDE_PARAMS.every((param) => url.searchParams.getAll(param).flatMap((value) => value.split(',')).every(isLoopbackOrSocketHost));
 }
 
 function parseDatabaseUrl(databaseUrl: string): URL {

@@ -29,6 +29,10 @@ describe("getPgPoolConfig", () => {
     expect(config.ssl).toBe(true);
   });
 
+  it("disables SSL for IPv6 loopback connections", () => {
+    expect(getPgPoolConfig("postgresql://postgres@[::1]/app").ssl).toBe(false);
+  });
+
   it("enables relaxed SSL for remote connections when PG_ALLOW_UNVERIFIED_SSL is set", () => {
     process.env.PG_ALLOW_UNVERIFIED_SSL = "true";
     const config = getPgPoolConfig(
@@ -70,6 +74,8 @@ describe("isLocalDatabaseTarget", () => {
   it.each([
     ["postgresql://postgres@localhost:5432/noma_dmrv_dev", true],
     ["postgresql://postgres@127.0.0.1/noma_dmrv_dev?sslmode=disable", true],
+    ["postgresql://postgres@[::1]/app", true],
+    ["postgresql://postgres@[::1]/app?host=db.example.com", false],
     ["postgresql://app@db.example.com/noma_dmrv_prod", false],
     ["postgresql://postgres@localhost/app?host=db.example.com", false],
     ["postgresql://postgres@localhost/app?hostaddr=203.0.113.7", false],

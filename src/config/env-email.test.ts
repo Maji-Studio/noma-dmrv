@@ -12,7 +12,7 @@ beforeEach(() => {
   for (const [key, value] of Object.entries({
     DATABASE_URL: "postgresql://localhost/unused", NEXT_PUBLIC_APP_URL: "https://app.example.test",
     BETTER_AUTH_SECRET: randomBytes(32).toString("hex"), NODE_ENV: "production",
-    ...EMAIL_CONFIG, ISOMETRIC_CLIENT_SECRET: "", ISOMETRIC_ACCESS_TOKEN: "",
+    ...EMAIL_CONFIG, WALKTHROUGH_TO: "", ISOMETRIC_CLIENT_SECRET: "", ISOMETRIC_ACCESS_TOKEN: "",
     CREDENTIALS_ENCRYPTION_KEY: randomBytes(32).toString("hex"), ISOMETRIC_ENVIRONMENT: "production",
     CRON_SECRET: randomBytes(32).toString("hex"), GEO_PROVIDER: "ors",
     STORAGE_PROVIDER: "s3-compatible", STORAGE_BUCKET: "synthetic", STORAGE_REGION: "eu-central-1",
@@ -25,6 +25,23 @@ afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
 it("boots production with all three email settings", async () => {
   expect((await import("./env")).env).toMatchObject(EMAIL_CONFIG);
+});
+
+it.each([undefined, ""])("keeps walkthrough delivery optional when WALKTHROUGH_TO is %j", async value => {
+  vi.stubEnv("WALKTHROUGH_TO", value);
+  expect((await import("./env")).env.WALKTHROUGH_TO).toBeUndefined();
+});
+
+it("accepts a walkthrough inbox email address", async () => {
+  vi.stubEnv("WALKTHROUGH_TO", "inbox@example.test");
+  expect((await import("./env")).env.WALKTHROUGH_TO).toBe("inbox@example.test");
+});
+
+it("rejects an invalid walkthrough inbox", async () => {
+  vi.stubEnv("WALKTHROUGH_TO", "invalid");
+  await expect(import("./env")).rejects.toMatchObject({ issues: expect.arrayContaining([
+    expect.objectContaining({ path: ["WALKTHROUGH_TO"] }),
+  ]) });
 });
 
 it.each(Object.keys(EMAIL_CONFIG))("refuses production without %s and names it", async (key) => {

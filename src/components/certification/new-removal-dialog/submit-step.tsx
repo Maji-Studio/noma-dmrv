@@ -1,5 +1,5 @@
 /**
- * SubmitStep — the final "Confirm & submit" step of the New-Removal wizard. It
+ * SubmitStep — the final "Review & submit" step of the New-Removal wizard. It
  * folds in what used to be a separate "Requirements" step: the facility/registry-
  * level checks (project mapping, default template, cross-batch transport
  * uniformity) reach the operator through `SubmissionSummary` — a verdict line
@@ -24,13 +24,14 @@ import {
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useDeleteRemoval,
   useRemovalCompilation,
   useRemovalSubmissionAttempts,
 } from "@/hooks/use-certification";
+import { useRefreshRemovalReview } from "@/hooks/use-removal-empty-components";
+import { correctionForRemoval } from "@/lib/certification/removal-entry-correction";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useRemovalDeleteAccess } from "@/hooks/use-removal-delete-access";
 import {
@@ -53,21 +54,23 @@ import { SubmissionProgress } from "../submission-progress";
 import { SubmissionOutcomeNotice } from "../submission-outcome-notice";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
-import { DebugDrawer } from "./debug-drawer";
-import { isRemovalCompilationReady } from "./submission-facts";
+import { ReviewDetails } from "./review-details";
+import { buildReviewItems } from "./review-items";
+import { REVIEW_TITLE_ID, type ChangedFigure } from "./review-parts";
+import { useFixProgress, useRecheckOnReturn } from "./use-fix-progress";
+import { actionableSubmissionChecks, buildSubmissionFacts, isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
-import { cn } from "@/lib/utils";
-import { ComponentTable } from "./component-table";
-import { CarriedEntriesPanel } from "../carried-entries";
 import { buildComponentTable } from "./component-table-model";
-import { SourceRecords } from "./source-records";
 import { useSharedSourceFiles } from "./shared-source-file-notices";
+import { formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
+
+const BACK_TO_EMPTY_LABEL = "Back to Empty components";
 
 // Design-system icon tier for icons inside button controls.
 const ACTION_ICON_SIZE = 20;
@@ -76,21 +79,22 @@ interface SubmitStepProps {
   removalId: string;
   ctx: RemovalCertifyContext;
   facilityId: string;
-  facilityName: string;
   onDone: () => void;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
-  /** Back to the Empty components step, to undo a recorded zero. Shown on phones only, where the rail shows one step. */
+  /** Back to the Empty components step, to undo a recorded zero. Offered even while the review is blocked. */
   onBackToEmpty?: () => void;
+  /** Told when the details view opens or closes, so the dialog can keep its width for the table. */
+  onDetailsChange?: (open: boolean) => void;
 }
 
 export function SubmitStep({
   removalId,
   ctx,
   facilityId,
-  facilityName,
   onDone,
   submitMutation,
   onBackToEmpty,
+  onDetailsChange,
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
@@ -105,6 +109,7 @@ export function SubmitStep({
   const [attemptIsResubmission, setAttemptIsResubmission] = useState(
     () => Boolean(ctx.latestSubmission),
   );
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const hasStartedSubmission = useRef(false);
   const { timeZone } = useFacilityClock(facilityId);
   const [progressUpdates, setProgressUpdates] = useState<
@@ -151,6 +156,72 @@ export function SubmitStep({
   });
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
+  const rejectionMessage = rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null;
+  const submissionFacts = buildSubmissionFacts({
+    ctx,
+    compilation: compilationQuery.data ?? null,
+    isCompilationLoading: compilationQuery.isLoading,
+    compilationError: compilationQuery.error,
+    checks: checklist,
+    readiness,
+    rejectionMessage,
+  });
+  const unbindableInputs = ctx.unbindableTemplateInputs ?? [];
+  const fixEntries = useFixProgress(
+    buildReviewItems({
+      checks: checklist,
+      blockers: submissionFacts.blockers,
+      // The verdict is still being prepared: the rows already say Blocked, the list waits for it.
+      blockedRows:
+        submissionFacts.state === "loading"
+          ? []
+          : componentTable.rows.filter((row) => row.state === "blocked"),
+      creditBatches: submissionFacts.batches,
+      facilityId,
+      unbindableText: unbindableInputs.length
+        ? formatUnbindableTemplateInputsText(unbindableInputs)
+        : null,
+      unbindableComponentIds: unbindableInputs.map((input) => input.componentId),
+    }),
+    // A build being read again after a fix may still hold the old refusal: it must not add a row.
+    compilationQuery.isFetching,
+  );
+  const refreshReview = useRefreshRemovalReview();
+  // Back from a fix, read the readiness and the build again: a refusal the fix cleared must not stay open.
+  const markFixUsed = useRecheckOnReturn(() => {
+    refreshReview();
+    void compilationQuery.refetch();
+  });
+  const correction = correctionForRemoval(
+    removalId,
+    Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat(),
+  );
+  // The correction names what changed, not the figures before and after: those are not stored with it.
+  const changes: ChangedFigure[] =
+    correction?.resubmitNeeded
+      ? correction.changed.map((change) => ({
+          key: `${change.componentId}:${change.batchId}`,
+          component: change.componentName,
+          batchCode: change.batchCode,
+        }))
+      : [];
+  const interrupted = ctx.latestSubmission
+    ? isSubmissionAttemptInterrupted(ctx.latestSubmission.metadata)
+    : false;
+  const submitLabel = interrupted
+    ? "Submit again"
+    : externalId
+      ? ctx.isProduction ? "Resubmit to production" : "Resubmit Removal"
+      : ctx.isProduction ? "Submit to production" : "Submit Removal";
+  const showDetails = (open: boolean) => {
+    setDetailsOpen(open);
+    onDetailsChange?.(open);
+    // The details replace the screen: start at its top, with focus on the heading both views share.
+    document.querySelector("[data-overlay-layer=dialog]")?.scrollTo({ top: 0 });
+    window.requestAnimationFrame(() =>
+      document.getElementById(REVIEW_TITLE_ID)?.focus({ preventScroll: true }),
+    );
+  };
   // Anything short of "Submission complete" may be deleted. Once a ledger
   // row exists the server removes whatever the attempt created on Isometric
   // before releasing the batches; from then on only viewers at the role floor
@@ -408,84 +479,82 @@ export function SubmitStep({
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
     >
-      {externalId ? "Resubmit Removal" : "Submit Removal"}
+      {submitLabel}
     </Button>
   );
+  // Blocked, the fixes are the only job: no Submit and no Discard (the X and Esc close it).
+  // The way back to Empty components stays, as a footer holding only that button.
+  const blocked = submissionFacts.state === "blocked";
+  const backToEmpty = onBackToEmpty ? (
+    <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onBackToEmpty} data-phone-back>
+      {BACK_TO_EMPTY_LABEL}
+    </Button>
+  ) : null;
+  const showFooter = !blocked || backToEmpty !== null;
 
   return (
     <div className="flex flex-col gap-24">
-      <SubmissionSummary
-        ctx={ctx}
-        facilityId={facilityId}
-        facilityName={facilityName}
-        compilation={compilationQuery.data ?? null}
-        isCompilationLoading={compilationQuery.isLoading}
-        compilationError={compilationQuery.error}
-        checks={checklist}
-        table={componentTable}
-        sharedFiles={sharedFiles}
-        readiness={readiness}
-        rejectionMessage={
-          rejectedWithExternal ? REJECTED_IN_ISOMETRIC_MSG : null
-        }
-      />
+      {detailsOpen ? (
+        <ReviewDetails
+          ctx={ctx}
+          facilityId={facilityId}
+          removalId={removalId}
+          facts={submissionFacts}
+          table={componentTable}
+          compilation={compilationQuery.data ?? null}
+          isCompilationLoading={compilationQuery.isLoading}
+          compilationError={compilationQuery.error}
+          passedChecks={actionableSubmissionChecks(checklist)
+            .filter((check) => check.status === "met")
+            .map((check) => check.label)}
+          onBack={() => showDetails(false)}
+          onFix={markFixUsed}
+          onRetryCompilation={() => {
+            void compilationQuery.refetch();
+          }}
+        />
+      ) : (
+        <SubmissionSummary
+          ctx={ctx}
+          facilityId={facilityId}
+          compilation={compilationQuery.data ?? null}
+          isCompilationLoading={compilationQuery.isLoading}
+          compilationError={compilationQuery.error}
+          checks={checklist}
+          sharedFiles={sharedFiles}
+          readiness={readiness}
+          rejectionMessage={rejectionMessage}
+          rechecking={compilationQuery.isFetching}
+          entries={fixEntries}
+          changes={changes}
+          onFix={markFixUsed}
+          onOpenDetails={() => showDetails(true)}
+          onRetryCompilation={() => {
+            void compilationQuery.refetch();
+          }}
+        />
+      )}
 
-      <ComponentTable table={componentTable} facilityId={facilityId} />
-
-      <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
-
-      <SourceRecords
-        ledger={ctx.emissionsLedger}
-        facilityId={facilityId}
-        storageSitesHref={
-          ctx.mapping?.externalProjectId
-            ? isometricRegistry.storageSites({
-                environment: ctx.isProduction ? "production" : "sandbox",
-                externalProjectId: ctx.mapping.externalProjectId,
-              })
-            : null
-        }
-      />
-
-      <DebugDrawer
-        compilation={compilationQuery.data ?? null}
-        isCompilationLoading={compilationQuery.isLoading}
-        compilationError={compilationQuery.error}
-        onRetryCompilation={() => {
-          void compilationQuery.refetch();
-        }}
-      />
-
-      {/* The persisted rejected state belongs to the verdict line above; this
+      {/* The persisted rejected state belongs to the summary above; this
           alert is only for what the last submit attempt returned. */}
       {submitError && <ServerError message={submitError} />}
 
-      <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
-        {requirementsMet ? (
-          submitButton
-        ) : (
-          <Tooltip content="Resolve the issues above before submitting this Removal.">
-            <span className="inline-flex" tabIndex={0}>
-              {submitButton}
-            </span>
-          </Tooltip>
-        )}
-        {onBackToEmpty && (
-          <Button variant="weak" className={cn(PHONE_TOUCH_TARGET, "sm:hidden")} onClick={onBackToEmpty} data-phone-back>
-            Back
-          </Button>
-        )}
-        {canDeleteRemoval ? (
-          <Button
-            variant="weak"
-            className={PHONE_TOUCH_TARGET}
-            onClick={() => setDeleteConfirmOpen(true)}
-            disabled={submitMutation.isPending}
-          >
-            {deleteCopy.actionLabel}
-          </Button>
-        ) : null}
-      </div>
+      {showFooter && (
+        <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
+          {!blocked && submitButton}
+          {backToEmpty}
+          {!blocked && canDeleteRemoval ? (
+            <Button
+              variant="weak"
+              className={PHONE_TOUCH_TARGET}
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={submitMutation.isPending}
+            >
+              {deleteCopy.actionLabel}
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       {confirmDialog}
       {deleteDialog}

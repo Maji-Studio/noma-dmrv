@@ -1,0 +1,24 @@
+---
+/**
+ * Photo: one of the Mafinga stills (PHOTOS in src/lib/assets.js) as a responsive WebP <img>, cropped by the
+ * caller's CSS (object-fit: cover is set here; the caller sets aspect-ratio and object-position).
+ * Props: photo: keyof PHOTOS, sizes?: string (default "100vw"), class?: string, eager?: boolean
+ * Wide figures across the frame use the global .photo-wide pattern below: <figure class="photo-wide"> with the
+ * Photo and a <figcaption> (21:8 on desktop with the caption on the image, 4:3 on phones with it underneath).
+ */
+import { PHOTOS } from "../../lib/assets.js";
+interface Props { photo: keyof typeof PHOTOS; sizes?: string; class?: string; eager?: boolean }
+const { photo, sizes = "100vw", class: className, eager = false } = Astro.props;
+const p = PHOTOS[photo];
+---
+<img class:list={["photo", className]} src={p.src} srcset={p.srcset} sizes={sizes} alt={p.alt} width={p.width} height={p.height} loading={eager ? "eager" : "lazy"} decoding="async" />
+<style is:global>
+  .photo { display: block; width: 100%; height: auto; object-fit: cover; background: var(--stage); }
+  .photo-wide { position: relative; margin: 0; }
+  .photo-wide .photo { aspect-ratio: 21 / 8; min-height: var(--photo-min); object-position: center var(--photo-y, 50%); }
+  .photo-wide figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
+  @media (max-width: 760px) {
+    .photo-wide .photo { aspect-ratio: 4 / 3; min-height: 0; }
+    .photo-wide figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
+  }
+</style>

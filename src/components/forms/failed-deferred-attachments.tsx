@@ -1,5 +1,6 @@
 "use client";
 
+import { TRY_AGAIN_LABEL, TRY_ALL_AGAIN_LABEL } from "@/lib/copy-utils";
 import { useState } from "react";
 import { ArrowClockwiseIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ export function FailedDeferredAttachments({
             disabled={disabled || retryingKey !== null}
           >
             <ArrowClockwiseIcon size={14} weight="bold" />
-            Retry uploads
+            {TRY_ALL_AGAIN_LABEL}
           </Button>
         )}
       </div>
@@ -68,10 +69,7 @@ export function FailedDeferredAttachments({
                 {attachment.file.name}
               </p>
               <p className="body-caption text-[var(--color-status-error)]">
-                {attachment.error ??
-                  (retryable
-                    ? "The attachment was not uploaded. Try again."
-                    : "The attachment was not uploaded.")}
+                {attachment.error ?? "The attachment was not uploaded."}
               </p>
             </div>
             {retryable && (
@@ -83,7 +81,7 @@ export function FailedDeferredAttachments({
                 disabled={disabled || retryingKey !== null}
               >
                 <ArrowClockwiseIcon size={14} weight="bold" />
-                Retry
+                {TRY_AGAIN_LABEL}
               </Button>
             )}
             <Button

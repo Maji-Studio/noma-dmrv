@@ -3,7 +3,7 @@
  *
  * The `.invalid` TLD never resolves (RFC 2606), so only the spec's
  * `page.route` interception can answer these URLs: the page stays hermetic
- * and never reaches MapTiler.
+ * and never reaches the live basemap.
  */
 
 import type { GisBoundaryBbox, GisBoundaryCollection } from "@/lib/geojson/types";

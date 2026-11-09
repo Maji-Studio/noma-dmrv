@@ -32,9 +32,12 @@ import {
   REQUIRED_DEPLOYED_VARS,
   fetchItemFieldNames,
   filterTemplateToItem,
+  itemEnvironment,
+  itemNameForEnvironment,
+  readWorkflowOpReferences,
+  templateForEnvironment,
+  warnSkippedOptionalVars,
 } from "./env-tpl-utils";
-
-const ITEM_PREFIX = "noma-dmrv env";
 
 // CLI flags
 interface CliFlags {
@@ -95,7 +98,7 @@ function parseFlags(): CliFlags {
     process.exit(1);
   }
 
-  const normalizedOpEnv = opEnv === "prod" ? "production" : opEnv;
+  const normalizedOpEnv = itemEnvironment(opEnv);
   const expectedOpEnv = vercelEnv === "preview" ? "staging" : "production";
   if (normalizedOpEnv !== expectedOpEnv) {
     console.error(
@@ -179,8 +182,7 @@ function checkVercelProject(): void {
 }
 
 function fetchFromOnePassword(opEnv: string): Map<string, string> {
-  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
-  const itemName = `${ITEM_PREFIX} ${itemSuffix}`;
+  const itemName = itemNameForEnvironment(opEnv);
   console.log(`\nFetching from 1Password (${itemName})...`);
 
   const templatePath = join(process.cwd(), ".env.tpl");
@@ -194,13 +196,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
   }
 
   // Replace any checked-in item environment with the requested one.
-  const modifiedTemplate = template.replace(
-    new RegExp(
-      `${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`,
-      "g"
-    ),
-    itemName
-  );
+  const modifiedTemplate = templateForEnvironment(template, opEnv);
 
   if (!modifiedTemplate.trim()) {
     console.error("Template is empty after modification");
@@ -212,7 +208,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
   // fail only when a var the deployment cannot boot without is missing.
   let injectTemplate = modifiedTemplate;
   try {
-    const itemFields = fetchItemFieldNames(itemSuffix);
+    const itemFields = fetchItemFieldNames(opEnv);
     const { filtered, skipped, missingRequired } = filterTemplateToItem(
       modifiedTemplate,
       itemFields,
@@ -226,12 +222,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
       console.error("Add them to the item before syncing to Vercel.");
       process.exit(1);
     }
-    if (skipped.length > 0) {
-      console.warn(
-        `  ⚠️  Skipping ${skipped.length} optional variable(s) with no field in "${itemName}":`
-      );
-      for (const name of skipped) console.warn(`        ${name}`);
-    }
+    warnSkippedOptionalVars(skipped, itemName);
     injectTemplate = filtered;
   } catch (error) {
     console.warn(
@@ -314,19 +305,20 @@ export function parseInjectedEnv(output: string): Map<string, string> {
 
 /**
  * Warn about variables that exist in the 1Password item but are NOT referenced
- * by .env.tpl — they will silently NOT be synced. Surfacing them at sync time
+ * by .env.tpl or GitHub workflows. Surfacing them at sync time
  * lets the operator notice a newly-added secret and add it to the template
  * before continuing (or Ctrl+C and readjust). Field names only; never values.
  * Best-effort: a lookup failure warns but does not abort the sync.
  */
-function warnUntrackedOnePasswordVars(
+export function warnUntrackedOnePasswordVars(
   opEnv: string,
   syncedNames: Set<string>
 ): void {
-  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
   let itemFields: Set<string>;
+  let workflowFields: Map<string, Set<string>>;
   try {
-    itemFields = fetchItemFieldNames(itemSuffix);
+    itemFields = fetchItemFieldNames(opEnv);
+    workflowFields = readWorkflowOpReferences().get(itemEnvironment(opEnv)) ?? new Map();
   } catch (error) {
     console.warn(
       `\n  (Could not check for untracked 1Password vars: ${
@@ -336,25 +328,32 @@ function warnUntrackedOnePasswordVars(
     return;
   }
 
-  const untracked = [...itemFields]
+  const outsideTemplate = [...itemFields]
     .filter((name) => !syncedNames.has(name))
     .sort();
+  const workflowOnly = outsideTemplate.filter((name) => workflowFields.has(name));
+  const untracked = outsideTemplate.filter((name) => !workflowFields.has(name));
+
+  if (workflowOnly.length > 0) {
+    console.log("\n  Read only by GitHub workflows (keep out of .env.tpl):");
+    for (const name of workflowOnly) console.log(`        ${name}`);
+  }
 
   if (untracked.length === 0) {
     console.log(
-      `\n  .env.tpl covers every field in "${ITEM_PREFIX} ${itemSuffix}" — nothing untracked.`
+      `\n  .env.tpl and GitHub workflows cover every field in "${itemNameForEnvironment(opEnv)}"; nothing untracked.`
     );
     return;
   }
 
   console.warn(
-    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${ITEM_PREFIX} ${itemSuffix}") are NOT in .env.tpl`
+    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${itemNameForEnvironment(opEnv)}") are NOT in .env.tpl`
   );
   console.warn("      and will NOT be synced to Vercel:");
   for (const name of untracked) console.warn(`        ${name}`);
   console.warn(
     `      To include one, add to .env.tpl:\n` +
-      `        NAME="op://Environment Variables/${ITEM_PREFIX} staging/NAME"`
+      `        NAME="op://Environment Variables/${itemNameForEnvironment("staging")}/NAME"`
   );
 }
 
@@ -574,9 +573,8 @@ async function main() {
 
   const flags = parseFlags();
 
-  const itemSuffix = flags.opEnv === "prod" ? "production" : flags.opEnv;
   console.log("Configuration:");
-  console.log(`  1Password item: ${ITEM_PREFIX} ${itemSuffix}`);
+  console.log(`  1Password item: ${itemNameForEnvironment(flags.opEnv)}`);
   console.log(`  Vercel environment: ${flags.vercelEnv}`);
   console.log(`  Dry-run: ${flags.dryRun ? "yes" : "no"}`);
 

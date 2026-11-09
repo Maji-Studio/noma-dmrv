@@ -61,7 +61,8 @@ vi.mock("@/lib/read-api/client", () => ({
     return { success: true, data: {} };
   },
 }));
-vi.mock("./removal-list-state", () => ({
+vi.mock("./removal-list-state", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./removal-list-state")>(),
   buildRemovalListRows: (identities: { removal: { id: string } }[]) =>
     identities.map((identity) => ({
       removalId: identity.removal.id,

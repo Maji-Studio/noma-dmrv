@@ -23,6 +23,7 @@ import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
+import { BASEMAP_URL_PATTERN, stubBasemap } from "./helpers/basemap-route";
 import { clickRowMenuItem, waitForFacilityHydration, waitForSideSheetClose } from "./fixtures/page-helpers";
 import { routeGeometriesRequestSchema, type RouteGeometriesRequest } from "@/schemas/geo";
 
@@ -72,12 +73,10 @@ function traceabilityUrl(
   return `/traceability?${search.toString()}`;
 }
 
-/** Keep the suite offline: basemap/style/tile hosts are never real deps. */
+/** Keep the suite offline: basemap and satellite hosts are never real deps. */
 async function blockExternalMapHosts(page: Page) {
-  // A configured key must not make load depend on an aborted style request.
-  await page.route("**://api.maptiler.com/**", (route) =>
-    route.fulfill({ json: { version: 8, sources: {}, layers: [] } }),
-  );
+  // The basemap must not make load depend on an aborted style request.
+  await stubBasemap(page);
   await page.route("**://server.arcgisonline.com/**", (route) => route.abort());
 }
 
@@ -324,6 +323,16 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     void cleanupTestData;
     const lineage = await seedGeoLineage(seededData);
     await page.goto(traceabilityUrl(seededData.facility.id, { application: lineage.application.id, view: "map" }));
+    await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, DAR_POINT);
+  });
+
+  test("a failing basemap style falls back to a blank map that still paints the route", async ({ adminPage: page, seededData, cleanupTestData }) => {
+    void cleanupTestData;
+    // Registered after the beforeEach stub, so it wins: the style request fails.
+    await page.route(BASEMAP_URL_PATTERN, (route) => route.fulfill({ status: 500 }));
+    const lineage = await seedGeoLineage(seededData);
+    await page.goto(traceabilityUrl(seededData.facility.id, { application: lineage.application.id, view: "map" }));
+    await expect(page.getByTestId("carbon-viewer-no-basemap-note")).toBeVisible();
     await expectRenderedGeography(page, lineage.application.id, FIELD_POINT, DAR_POINT);
   });
 

@@ -14,12 +14,13 @@ import type { RecordLockView } from "@/lib/record-lock-view";
  */
 export const CORRECTION_NEEDED_LABEL = CORRECTION_NEEDED_STATUS_LABEL;
 
-function firstReturn(lock: RecordLockView | undefined) {
+export function firstReturn(lock: RecordLockView | undefined) {
   return lock && lock.level !== "sent" ? lock.returnedBy[0] : undefined;
 }
 
 /** "GHG Statement Jul 1 to Sep 30, 2026 failed verification. Correct this Removal's records, then resubmit." */
-function correctionSentence(returned: NonNullable<ReturnType<typeof firstReturn>>, where = ""): string {
+function correctionSentence(returned: NonNullable<ReturnType<typeof firstReturn>>, where = "", readOnly = false): string {
+  if (readOnly) return `${recordLockLinkText(returned.statement)} ${returnedStatementPhrase(returned.statementStatus)}.`;
   return `${recordLockLinkText(returned.statement)} ${returnedStatementPhrase(returned.statementStatus)}. Correct this Removal's records, then resubmit${where}.`;
 }
 
@@ -47,7 +48,8 @@ export function RemovalCorrectionCell({ lock }: { lock: RecordLockView | undefin
 }
 
 /** Removal sheet: the same state as a Notice with the action. */
-export function RemovalCorrectionNotice({ lock }: { lock: RecordLockView | undefined }) {
+/** `readOnly`: the Removal cannot change here, so the notice states what happened and gives no instruction. */
+export function RemovalCorrectionNotice({ lock, readOnly = false }: { lock: RecordLockView | undefined; readOnly?: boolean }) {
   const returned = firstReturn(lock);
   if (!returned) return null;
   const href = recordLockLinkHref(returned.statement);
@@ -58,7 +60,7 @@ export function RemovalCorrectionNotice({ lock }: { lock: RecordLockView | undef
       data-removal-correction
       action={href ? <Link href={href} className={NOTICE_ACTION_LINK_CLASS}>{OPEN_GHG_STATEMENT_LABEL}</Link> : undefined}
     >
-      {correctionSentence(returned, " from the GHG Statement")}
+      {correctionSentence(returned, " from the GHG Statement", readOnly)}
     </Notice>
   );
 }

@@ -1,9 +1,9 @@
 /* noma landing tokens. Values mirror src/app/globals.css (the app's design system); the
-   landing page adds --page (light rose). Fonts are the app's own GT Flexa files. Light only, like the app. */
-@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Light.woff2") format("woff2"); font-weight: 300; font-display: swap; }
-@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
-@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Thin.woff2") format("woff2"); font-weight: 100; font-display: swap; }
-@font-face { font-family: "GT Flexa Mono"; src: url("../../../src/styles/fonts/GT-Flexa-Mono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+   landing page adds --page (light rose). Licensed GT Flexa fonts are fetched at build time. Light only, like the app. */
+@font-face { font-family: "GT Flexa"; src: url("/fonts/GT-Flexa-Standard-Light.woff2") format("woff2"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("/fonts/GT-Flexa-Standard-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("/fonts/GT-Flexa-Standard-Thin.woff2") format("woff2"); font-weight: 100; font-display: swap; }
+@font-face { font-family: "GT Flexa Mono"; src: url("/fonts/GT-Flexa-Mono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
 
 :root {
   /* app palette (globals.css) */

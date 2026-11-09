@@ -1,0 +1,22 @@
+---
+/**
+ * Phone: a plain outlined phone, square-cornered like the site, holding a simplified app screen (default
+ * slot). Decorative frame only: the caller gives the screen its own text or a role="img" label.
+ * Props:
+ *   tone?: "light" | "dark"   screen colour: the app's light look, or the dark /journey look. Default light.
+ *   label?: string            small line in the phone's top bar, e.g. the screen's title
+ *   class?: string
+ */
+const { tone = "light", label, class: className } = Astro.props;
+---
+<div class:list={["ph", `ph--${tone}`, className]}>
+  <div class="ph-bar"><span class="ph-dot" aria-hidden="true"></span>{label && <span class="ph-label">{label}</span>}</div>
+  <div class="ph-screen"><slot /></div>
+</div>
+<style>
+  .ph { --ph-w: 17.5rem; display: grid; grid-template-rows: auto 1fr; width: min(100%, var(--ph-w)); min-height: 30rem; padding: var(--space-2); background: var(--paper); border: 1.5px solid var(--ink); }
+  .ph-bar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); font-size: var(--fs-caption); color: var(--ink-2); }
+  .ph-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rule-strong); }
+  .ph-screen { display: grid; align-content: start; gap: var(--space-3); padding: var(--space-4) var(--space-3); background: var(--bg-app); border: var(--hairline) solid var(--rule); min-width: 0; }
+  .ph--dark .ph-screen { background: var(--stage); color: var(--stage-ink); border-color: var(--stage); }
+</style>

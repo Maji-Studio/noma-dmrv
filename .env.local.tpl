@@ -51,6 +51,7 @@ MULTI_BIN_RUNS_ENABLED="op://Environment Variables/noma-dmrv env local/MULTI_BIN
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env local/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env local/RESEND_FROM_EMAIL"
 RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env local/RESEND_REPLY_TO"
+WALKTHROUGH_TO="op://Environment Variables/noma-dmrv env local/WALKTHROUGH_TO"
 
 # -----------------------------------------------------------------------------
 # Isometric (sandbox)
@@ -68,11 +69,18 @@ ISOMETRIC_UPLOAD_HOST_ALLOWLIST="op://Environment Variables/noma-dmrv env local/
 STORAGE_SIGNING_SECRET="op://Environment Variables/noma-dmrv env local/STORAGE_SIGNING_SECRET"
 
 # -----------------------------------------------------------------------------
+# Licensed fonts (build only): read-only Spaces key for scripts/fetch-fonts.mjs.
+# Optional: without it builds use the fallback system fonts.
+# -----------------------------------------------------------------------------
+FONTS_S3_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env local/FONTS_S3_ACCESS_KEY_ID"
+FONTS_S3_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env local/FONTS_S3_SECRET_ACCESS_KEY"
+
+# -----------------------------------------------------------------------------
 # Geo / Maps (map integration — ADR 0009)
 # GEO_PROVIDER=stub serves deterministic fixtures (no keys, no network);
-# set it to ors in the 1Password item once the two keys below hold real
-# values. Both keys may be empty strings until then — they're optional.
+# set it to ors in the 1Password item once the key below holds a real
+# value. It may be an empty string until then — it is optional. The basemap
+# (OpenFreeMap) needs no key.
 # -----------------------------------------------------------------------------
 GEO_PROVIDER="op://Environment Variables/noma-dmrv env local/GEO_PROVIDER"
 OPENROUTESERVICE_API_KEY="op://Environment Variables/noma-dmrv env local/OPENROUTESERVICE_API_KEY"
-NEXT_PUBLIC_MAPTILER_KEY="op://Environment Variables/noma-dmrv env local/NEXT_PUBLIC_MAPTILER_KEY"

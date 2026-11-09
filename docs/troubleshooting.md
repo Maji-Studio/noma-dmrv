@@ -21,8 +21,8 @@ check, migration, schema verification, then `next dev -p 3100` (see
   To start the app while the gate still fails (for example straight after a
   branch switch), run `pnpm dev:manual`, which skips the whole Docker and
   migration chain.
-- `pnpm db:assert-local` refuses to continue when `DATABASE_URL` is not
-  localhost, so the dev script never migrates staging or production. Set
+- `pnpm db:assert-local` refuses targets that fail the
+  [local database target rule](./database.md#local-database-targets). Set
   `DB_MIGRATE_ALLOW_REMOTE=true` only for a deliberate remote migration.
 
 ### Port 3100 Already in Use
@@ -178,7 +178,10 @@ Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL
 
 ### Can't Create Admin User
 
-`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set — there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set; there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
+
+For staging/prod, run admin bootstrap through the `migrate.yml` workflow;
+`pnpm env:run` does not provide `ADMIN_EMAIL` there (see `docs/security.md`).
 
 ## Build & Deployment Issues
 

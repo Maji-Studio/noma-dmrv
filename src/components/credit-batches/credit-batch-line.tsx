@@ -4,10 +4,11 @@
  * section 2), rendered from a `CreditBatchLineCopy`. Each form decides its own
  * copy; this renders it the same way everywhere: batch codes as links that
  * open the batch in a new tab (the unsaved form stays), the ⓘ explanation,
- * and Retry when a check failed.
+ * and Try again when a check failed.
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { recordHref } from "@/lib/record-links";
 import Link from "next/link";
 import { CertificateIcon } from "@phosphor-icons/react/dist/ssr";
@@ -90,7 +91,7 @@ export function CreditBatchLine({ copy, facilityId, onRetry, retrying = false }:
       info={copy.info ? { label: copy.infoLabel ?? CREDIT_BATCH_INFO_LABEL, content: copy.info } : null}
       action={copy.retry && onRetry ? (
         <Button type="button" variant="default" size="small" busy={retrying} onClick={onRetry}>
-          Retry
+          {TRY_AGAIN_LABEL}
         </Button>
       ) : undefined}
     >

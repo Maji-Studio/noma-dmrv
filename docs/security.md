@@ -95,6 +95,30 @@ checks validate their credential pair and environment in `src/lib/isometric/clie
 `.env.local.tpl` (local 1Password item) and `.env.tpl` (staging item → Vercel
 sync). The app refuses to boot on an invalid or missing required var.
 
+**One-off commands against an environment.** Use `pnpm env:run` to run a command
+with the selected 1Password item's environment. It uses the same template
+filtering as the sync commands and stops on missing required fields. Missing
+optional fields warn and stay unset. Names declared in the template, including
+skipped fields, are removed from the inherited shell environment. Commands that
+load `.env.local` themselves can still fill unset names. Staging and prod runs
+list those names before running; their values are never printed.
+1Password asks for approval on the Mac. Use `--1p-env=local`, `staging`, or
+`prod`; production also requires `--allow-production` because commands can
+change live data. Staging one-off runs use `NODE_ENV=development` like local
+because staging holds test data, including the one-off
+`feedstock:recalculate --include-sent` rebuild. Prod runs force
+`NODE_ENV=production` so production guards apply. Local runs default to
+`NODE_ENV=development` when the shell sets none.
+
+```bash
+pnpm env:run --1p-env=staging -- pnpm -s feedstock:recalculate --dry-run
+```
+
+`env:run` passes only names in `.env.tpl`, so for staging/prod it does not
+provide `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` or `ISOMETRIC_CLIENT_SECRET`.
+Admin bootstrap and Isometric credential setup for staging/prod run through the
+`migrate.yml` workflow, which loads them from the matching item.
+
 Non-obvious semantics only:
 
 - **`MCP_ENABLED`**: `true` or `false`, default `false`. When off, MCP and
@@ -138,10 +162,12 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
-- **`RESEND_REPLY_TO`** — optional email address in the schema, applied to every
+- **`RESEND_REPLY_TO`** — optional email address in the schema, the default for every
   transactional email. Real production boot requires `RESEND_API_KEY`,
   `RESEND_FROM_EMAIL` and `RESEND_REPLY_TO`; one error names missing variables.
   Development/test and hermetic CI may omit them; see [mail setup](./mail-setup.md).
+- **`WALKTHROUGH_TO`**: optional validated inbox for public walkthrough requests;
+  blank is unset, and the endpoint returns 503 when mail is unconfigured.
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
@@ -199,6 +225,14 @@ The application hook owns reuse and revocation; the patch is its backstop.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `FONTS_S3_ACCESS_KEY_ID` and `FONTS_S3_SECRET_ACCESS_KEY`: build-only credentials
+  for fetching licensed fonts. Optional `FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`,
+  `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX` override the private object location.
+  These are read by `scripts/fetch-fonts.mjs`; missing credentials use system
+  fallback fonts. The key is in the three 1Password items like other secrets,
+  but the noma-site Vercel project needs it set by hand (`pnpm env:vercel` syncs
+  only noma-dmrv). See [Fonts](./design-system.md#fonts).
+
 - `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
   `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
   `NODE_ENV=production`. Hides the sidebar account text and the dev indicator for PR screenshots
@@ -225,9 +259,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
   `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
   it.
-- `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
-  literal string `"true"` permits a remote reset; the manually confirmed staging
-  and production reset jobs load it from their matching 1Password item.
+- `DB_RESET_ALLOW_REMOTE`: consumed only by the database-reset CLI. Only the
+  literal string `"true"` overrides the [local database target rule](./database.md#local-database-targets);
+  the manually confirmed staging and production reset jobs load it from their
+  matching 1Password item.
 - `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
   to register the pool with Fluid Compute lifecycle hooks and to tag pool
   telemetry with the compute region. `VERCEL` also controls whether
@@ -300,6 +335,10 @@ Notes:
 - Vercel Production/Preview secrets sync as sensitive; `NEXT_PUBLIC_*` as
   non-sensitive. Local `vercel build --target=preview` cannot reconstruct
   sensitive values — use local env injection for local builds.
+- `ADMIN_EMAIL`, `ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` live
+  in the 1Password items for workflows only, outside `.env.tpl`, so they are not
+  synced to Vercel. Sync never deletes, so older Vercel copies stay until removed
+  by hand.
 - **Optional vars may be missing from an item.** Both sync scripts skip template
   refs with no matching field (per-var warning) and abort only on a missing
   **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
@@ -387,6 +426,11 @@ their own mapping:
 1. Settings, Registry says Connected.
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
 3. `/removals` opens without redirecting to Settings, Registry.
+
+## Account changes
+
+- Changing the email in Profile needs the current password (Better Auth `verifyPassword`), a session under 24 hours old and the per-user rate limit. The HTTP `/change-email` endpoint refuses browser calls, so the Profile action is the only way in.
+- A successful password change or reset disconnects the person's connected apps in every organization: each OAuth grant is revoked like any other application revocation (see `docs/auth.md`). A Profile change sweeps again after other sessions are signed out. API keys keep working; the password-changed email lists the active ones (names and dates) with the Settings, Developers address.
 
 ## Operational Defaults
 

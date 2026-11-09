@@ -3,9 +3,8 @@
  *
  * Requires GEO_PROVIDER=stub — the geo server actions then serve deterministic
  * fixtures (no OpenRouteService key, no network), so geocode hits and CALC
- * distances can be asserted exactly. External basemap hosts are route-aborted
- * so the suite stays hermetic whether or not a MapTiler key is configured in
- * the dev server's env.
+ * distances can be asserted exactly. The basemap host is stubbed with a
+ * blank style (and the satellite host aborted) so the suite stays hermetic.
  *
  * GEO_PROVIDER is an APP-SERVER var (read by src/config/env.ts in the Next
  * process), not a Playwright-side one — same class as DISABLE_RATE_LIMIT. It
@@ -33,6 +32,7 @@ import type { Page } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import * as crypto from "node:crypto";
 import { test, expect } from "./fixtures";
+import { stubBasemap } from "./helpers/basemap-route";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 import { MISSING_VALUE } from "../../src/lib/copy-utils";
@@ -52,9 +52,9 @@ const STUB_PROVIDER_HINT =
 const OUT_OF_RANGE_LATITUDE = "91";
 const OUT_OF_RANGE_LONGITUDE = "181";
 
-/** Keep the suite offline: basemap/style/tile hosts are never real deps. */
+/** Keep the suite offline: basemap and satellite hosts are never real deps. */
 async function blockExternalMapHosts(page: Page) {
-  await page.route("**://api.maptiler.com/**", (route) => route.abort());
+  await stubBasemap(page);
   await page.route("**://server.arcgisonline.com/**", (route) => route.abort());
 }
 
@@ -168,13 +168,12 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       seededData.facility.id
     );
 
-    // The MapLibre container (key configured; tiles aborted is fine), the
-    // explicit no-key fallback, or the WebGL-unavailable fallback (headless
-    // browsers) must render — never a blank hole and never a crash.
+    // The MapLibre container (blank stub style is fine) or the
+    // WebGL-unavailable / style-failed fallback (headless browsers) must
+    // render: never a blank hole and never a crash.
     const map = dialog.getByTestId("position-picker-map");
-    const noKey = dialog.getByTestId("position-picker-no-map");
     const noWebgl = dialog.getByTestId("position-picker-map-failed");
-    await expect(map.or(noKey).or(noWebgl).first()).toBeVisible();
+    await expect(map.or(noWebgl).first()).toBeVisible();
   });
 
   test("CALC fills the stub road distance and tracks provenance", async ({

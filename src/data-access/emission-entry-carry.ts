@@ -48,7 +48,7 @@ export async function loadFacilityEmissionEntryCarry(
   ]);
   const reservations = await loadEmissionEntryReservations(ctx, stored.flatMap(entry => entry.sendReservedBySubmissionId ? [entry.sendReservedBySubmissionId] : []), executor);
   const removalIds = [...new Set([...draftMembers.map(row => row.removal.id), ...slices.flatMap(row => row.removalId ? [row.removalId] : []),
-    ...stored.flatMap(entry => entry.sentByRemovalId ? [entry.sentByRemovalId] : []), ...reservations.map(row => row.removalId)])];
+    ...stored.flatMap(entry => [entry.sentByRemovalId, entry.heldForRemovalId].filter((id): id is string => !!id)), ...reservations.map(row => row.removalId)])];
   const [removals, memberships, attempts, observations] = await Promise.all([
     removalIds.length ? executor.select().from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId), inArray(certifierRemovals.id, removalIds))) : [],
     removalIds.length ? executor.select({ removalId: creditBatchApplications.removalId, batch: creditBatches }).from(creditBatchApplications)
@@ -105,13 +105,13 @@ export async function loadFacilityEmissionEntryCarry(
     const carry = removalEntryCarryOwner({ entry: resolved, organizationId: ctx.organizationId, facilityId,
       fullyApplied: candidates.some(row => row.entry.id === entry.id) && !!batch.endDate && batch.endDate < facilityToday(timezone) && isCreditBatchFullyApplied(mass.notAppliedDryKg),
       ownContenders, contenders, observation });
-    const holdingId = entry.sentByRemovalId ?? (retained ? reservation.removalId : null);
+    const holdingId = entry.sentByRemovalId ?? entry.heldForRemovalId ?? (retained ? reservation.removalId : null);
     const holding = removals.find(removal => removal.id === holdingId);
     const heldMembers = [...new Map(memberships.filter(member => member.removalId === holdingId).map(member => [member.batch.id, member.batch])).values()]
       .sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
     const destination = holding ? { removalId: holding.id, removalCode: holding.code, creditBatchCodes: heldMembers.map(member => member.code), creditBatchIds: heldMembers.map(member => member.id),
       anotherCreditBatch: !heldMembers.some(member => member.id === entry.creditBatchId) } : null;
-    if (retained && destination?.anotherCreditBatch) carry.receiver = destination;
+    if ((retained || entry.heldForRemovalId) && destination?.anotherCreditBatch) carry.receiver = destination;
     const earlier = attempts.filter(attempt => attempt.submittedAt && attempt.submittedAt <= entry.createdAt && slices.some(slice => slice.creditBatchId === entry.creditBatchId && slice.removalId === attempt.localEntityId))
       .sort((a, b) => b.submittedAt!.getTime() - a.submittedAt!.getTime() || a.id.localeCompare(b.id))[0];
     // Display only: an uncertain conservative owner must not announce a returned revision.

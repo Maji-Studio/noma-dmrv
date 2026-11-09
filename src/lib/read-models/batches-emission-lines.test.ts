@@ -1,6 +1,6 @@
 import { loadBatchEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 vi.mock("@/data-access/emission-entry-carry", () => ({ loadBatchEmissionEntryCarry: vi.fn() }));
-import { assert, beforeEach, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
 
@@ -12,7 +12,7 @@ import { listEmissionEntriesForBatches } from "@/data-access/emission-entries";
 import { listEmissionLineCommentsForBatches } from "@/data-access/emission-line-comments";
 import { getLatestTemplateObservations, getTemplateObservationsByIds } from "@/data-access/removal-template-observations";
 import { loadBatchesEmissionAutomaticFacts } from "@/data-access/batch-emission-automatic-figures";
-import { loadBatchesEmissionLines } from "./batches-emission-lines";
+import { buildBatchEmissionLines, loadBatchesEmissionLines } from "./batches-emission-lines";
 
 const ctx = makeTestOrgContext();
 const observation: EntryObservation & { id: string } = {
@@ -136,4 +136,36 @@ it("exposes carry destinations, revisions, waiting reasons and actual senders on
     assert(result.status === "ready");
     expect(result.lines[0].entries[0]).toMatchObject(state);
   }
+});
+
+describe("time-based lines", () => {
+  const timeObservation = (rate: { unit: string; fixedValue?: string | number | null } | { status: "unknown" } | undefined): EntryObservation => ({
+    externalTemplateId: "template",
+    definition: { groups: [{ id: "group", key: "direct", displayName: "Direct", description: "", components: [{
+      id: "time", displayName: "Pyrolyzer CH4 time emissions", description: null, blueprintKey: "time_based_emissions",
+      inputs: [
+        { key: "emissions_per_unit_time", type: "fixed", quantityKind: "time_emission_factor", fixedDatapointId: "dtp" },
+        { key: "time", type: "monitored", quantityKind: "time" },
+      ],
+    }] }] },
+    enrichment: { time: { ...(rate ? { emissions_per_unit_time: rate } : {}), time: { unit: "hour" } } },
+    lineSources: { time: { scope: "operating", entryPolicy: "additive", origin: "reviewed" } },
+  });
+  const lineOf = (observation: EntryObservation) =>
+    buildBatchEmissionLines(observation, [], new Map(), { automaticFigures: {}, automaticRecordCounts: {}, feedstockTransportCountedOn: [] })[0];
+
+  it("carries the fixed rate in kgCO2e per hour", () => {
+    expect(lineOf(timeObservation({ unit: "kgCO2e / hour", fixedValue: "0.41264" })).timeEmission).toEqual({ ratePerHour: 0.41264 });
+    expect(lineOf(timeObservation({ unit: "kgCO2e / day", fixedValue: 24 })).timeEmission).toEqual({ ratePerHour: 1 });
+  });
+
+  it("flags the line as time-based with no rate when it is missing or its unit unknown", () => {
+    expect(lineOf(timeObservation(undefined)).timeEmission).toEqual({ ratePerHour: null });
+    expect(lineOf(timeObservation({ status: "unknown" })).timeEmission).toEqual({ ratePerHour: null });
+    expect(lineOf(timeObservation({ unit: "kgCO2e / furlong", fixedValue: 1 })).timeEmission).toEqual({ ratePerHour: null });
+  });
+
+  it("leaves other lines unflagged", () => {
+    expect(lineOf(observation).timeEmission).toBeNull();
+  });
 });

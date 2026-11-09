@@ -1,0 +1,160 @@
+---
+/**
+ * HomeArt: small abstract line drawings for Home's text cells, in the site's style: 1.5px ink strokes on the
+ * hatch, one purple accent per drawing, mono labels. Decorative (aria-hidden); the cell's text carries the
+ * meaning. Every drawing shares one 240x150 box so a row of cells lines up.
+ * Props: kind: "sites" | "team" | "entry" | "connect" | "code" | "adapter" | "selfhost" | "hosted"
+ *   sites     three sites growing from one reactor to three, joined to one account
+ *   team      an admin card and a member card
+ *   entry     a phone form with one field refused
+ *   connect   noma in the middle, API and MCP to your tools
+ *   code      the first lines of deriveMassDryKg (why/math-excerpts.json)
+ *   adapter   records, an adapter and the registry socket
+ *   selfhost  a server on your premises
+ *   hosted    the same server inside MAJI's hosting, with the update loop
+ *   kiln      the production-run contour drawing (ContourArt), for Mafinga while its photo is not public
+ */
+import { TRACE_ICONS } from "./trace-icons.js";
+import ContourArt from "../contours/ContourArt.astro";
+interface Props { kind: "sites" | "team" | "entry" | "connect" | "code" | "adapter" | "selfhost" | "hosted" | "kiln" }
+const { kind } = Astro.props;
+const kiln = TRACE_ICONS["production-run"];
+// Sites: x, width and reactor count. One account sits above them.
+const SITES = [{ x: 8, w: 52, n: 1 }, { x: 70, w: 72, n: 2 }, { x: 152, w: 80, n: 3 }];
+const CODE = ["export function deriveMassDryKg(", "  deliveredWetMassKg: number,", "  moisturePercent: number", "): number {"];
+---
+<div class="ha" aria-hidden="true">
+  {kind === "kiln" ? <ContourArt station="production-run" scope="home-art" class="ha-kiln" /> :
+  <svg viewBox="0 0 240 150" focusable="false">
+    {kind === "sites" && <>
+      <rect class="ha-acc" x="80" y="8" width="80" height="22" />
+      <text class="ha-t" x="120" y="23" text-anchor="middle">One account</text>
+      <path class="ha-dash" d={`M120 30V42${SITES.map((s) => `M${s.x + s.w / 2} 42V64`).join("")}M${SITES[0].x + SITES[0].w / 2} 42H${SITES[2].x + SITES[2].w / 2}`} />
+      {SITES.map((s, i) => (
+        <g>
+          <rect class="ha-site" x={s.x} y="64" width={s.w} height="58" />
+          {Array.from({ length: s.n }, (_, k) => (
+            <g transform={`translate(${s.x + 4 + k * 25} 78) scale(0.75)`} set:html={kiln} class="ha-icon" />
+          ))}
+          <text class="ha-t ha-dim" x={s.x + s.w / 2} y="138" text-anchor="middle">Site {["A", "B", "C"][i]}</text>
+        </g>
+      ))}
+      <path class="ha-line" d="M0 122H240" />
+    </>}
+
+    {kind === "team" && <>
+      <rect class="ha-card" x="14" y="18" width="112" height="92" />
+      <circle class="ha-line" cx="34" cy="38" r="9" />
+      <text class="ha-t" x="50" y="42">Admin</text>
+      <path class="ha-bar" d="M26 62H96M26 76H90M26 90H94" />
+      <rect class="ha-card ha-front" x="114" y="40" width="112" height="92" />
+      <circle class="ha-acc-line" cx="134" cy="60" r="9" />
+      <text class="ha-t" x="150" y="64">Member</text>
+      <path class="ha-bar" d="M126 84H210M126 98H194M126 112H204" />
+    </>}
+
+    {kind === "entry" && <>
+      <rect class="ha-card" x="84" y="6" width="72" height="138" />
+      <path class="ha-line" d="M110 14H130" />
+      <path class="ha-bar" d="M94 30H126" />
+      <rect class="ha-field" x="94" y="36" width="52" height="12" />
+      <path class="ha-bar" d="M94 58H120" />
+      <rect class="ha-field" x="94" y="64" width="52" height="12" />
+      <path class="ha-bar" d="M94 86H122" />
+      <rect class="ha-field ha-warn" x="94" y="92" width="52" height="12" />
+      <path class="ha-warn-line" d="M94 110H140" />
+      <rect class="ha-fill" x="94" y="122" width="34" height="12" />
+      <g transform="translate(20 104) scale(1.1)" set:html={kiln} class="ha-icon" />
+      <path class="ha-dash" d="M58 118H84" />
+    </>}
+
+    {kind === "connect" && <>
+      <rect class="ha-acc" x="92" y="56" width="56" height="38" />
+      <text class="ha-t" x="120" y="79" text-anchor="middle">noma</text>
+      <rect class="ha-card" x="8" y="14" width="56" height="28" />
+      <text class="ha-t" x="36" y="32" text-anchor="middle">API</text>
+      <rect class="ha-card" x="8" y="108" width="56" height="28" />
+      <text class="ha-t" x="36" y="126" text-anchor="middle">MCP</text>
+      <path class="ha-dash" d="M64 28C80 28 80 66 92 66M64 122C80 122 80 84 92 84M148 75H176" />
+      <rect class="ha-card" x="176" y="44" width="56" height="18" />
+      <rect class="ha-card" x="176" y="66" width="56" height="18" />
+      <rect class="ha-card" x="176" y="88" width="56" height="18" />
+      <text class="ha-t ha-dim" x="204" y="124" text-anchor="middle">Your tools</text>
+    </>}
+
+    {kind === "code" && <>
+      <rect class="ha-card" x="6" y="10" width="228" height="130" />
+      <path class="ha-line" d="M6 28H234" />
+      <circle class="ha-line" cx="17" cy="19" r="3" /><circle class="ha-line" cx="27" cy="19" r="3" /><circle class="ha-line" cx="37" cy="19" r="3" />
+      <text class="ha-t ha-dim" x="226" y="22" text-anchor="end">mass-dry.ts</text>
+      {CODE.map((line, i) => (
+        <text class:list={["ha-code", i === 0 && "ha-code-acc"]} x="16" y={46 + i * 14} xml:space="preserve">{line}</text>
+      ))}
+      <path class="ha-bar" d="M28 108H170M28 122H120" />
+    </>}
+
+    {kind === "adapter" && <>
+      <rect class="ha-card" x="10" y="38" width="22" height="22" />
+      <rect class="ha-card" x="10" y="64" width="22" height="22" />
+      <rect class="ha-card" x="10" y="90" width="22" height="22" />
+      <text class="ha-t ha-dim" x="21" y="132" text-anchor="middle">Records</text>
+      <path class="ha-line" d="M32 49C48 49 48 75 62 75M32 75H62M32 101C48 101 48 75 62 75" />
+      <rect class="ha-acc" x="62" y="58" width="62" height="34" />
+      <text class="ha-t" x="93" y="79" text-anchor="middle">noma</text>
+      <path class="ha-line" d="M124 68H140M124 82H140" />
+      <circle class="ha-socket" cx="188" cy="75" r="40" />
+      <circle class="ha-line" cx="174" cy="75" r="4" /><circle class="ha-line" cx="202" cy="75" r="4" />
+      <text class="ha-t ha-dim" x="188" y="132" text-anchor="middle">Registry</text>
+    </>}
+
+    {kind === "selfhost" && <>
+      <rect class="ha-card" x="68" y="22" width="104" height="96" />
+      {[0, 1, 2].map((i) => <>
+        <rect class="ha-line" x="78" y={32 + i * 28} width="84" height="20" />
+        <circle class={i === 0 ? "ha-acc-dot" : "ha-dot"} cx="152" cy={42 + i * 28} r="2.5" />
+        <path class="ha-bar" d={`M86 ${42 + i * 28}H${i === 0 ? 118 : 128}`} />
+      </>)}
+      <path class="ha-line" d="M20 118H220" />
+      <text class="ha-t ha-dim" x="120" y="138" text-anchor="middle">Your servers</text>
+    </>}
+
+    {kind === "hosted" && <>
+      <rect class="ha-dash-box" x="40" y="10" width="160" height="116" />
+      <text class="ha-t ha-acc-t" x="48" y="24">Run by MAJI</text>
+      <rect class="ha-card" x="78" y="34" width="84" height="78" />
+      {[0, 1, 2].map((i) => <>
+        <rect class="ha-line" x="86" y={42 + i * 22} width="68" height="16" />
+        <circle class={i === 0 ? "ha-acc-dot" : "ha-dot"} cx="146" cy={50 + i * 22} r="2.5" />
+      </>)}
+      <path class="ha-acc-line" d="M192 60a12 12 0 1 1-3.5-8.5M188.5 43v8.5h8.5" />
+      <text class="ha-t ha-dim" x="120" y="142" text-anchor="middle">Hosted and updated by us</text>
+    </>}
+  </svg>}
+</div>
+<style>
+  .ha { box-sizing: border-box; width: 100%; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; aspect-ratio: 8 / 5; max-width: 100%; padding: var(--space-4); background: var(--hatch); }
+  .ha :global(.ha-kiln) { height: 100%; width: auto; max-width: 100%; aspect-ratio: 480 / 403; color: var(--ink); }
+  .ha > svg { width: 100%; max-width: 320px; height: 100%; min-height: 0; overflow: visible; }
+  .ha :global(*) { vector-effect: non-scaling-stroke; }
+  .ha-line, .ha-site, .ha-card, .ha-socket, .ha-field { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  path.ha-line { fill: none; }
+  .ha-site { fill: none; stroke: var(--rule-strong); stroke-dasharray: 3 3; }
+  .ha-front { fill: var(--paper); }
+  .ha-socket { fill: var(--paper); }
+  .ha-acc { fill: var(--clr-purple-5); stroke: var(--accent); stroke-width: 1.5; }
+  .ha-acc-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .ha-dash { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 4 4; }
+  .ha-dash-box { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 5 4; }
+  .ha-bar { fill: none; stroke: var(--rule-strong); stroke-width: 4; stroke-linecap: butt; }
+  .ha-field { stroke-width: 1; stroke: var(--rule-strong); }
+  .ha-warn { stroke: var(--warn); stroke-width: 1.5; }
+  .ha-warn-line { fill: none; stroke: var(--warn); stroke-width: 2; }
+  .ha-fill { fill: var(--accent); stroke: none; }
+  .ha-dot { fill: var(--rule-strong); } .ha-acc-dot { fill: var(--accent); }
+  .ha-icon { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .ha-icon :global(.ts-icon-mask) { fill: var(--paper); }
+  .ha-t { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.02em; fill: var(--ink); stroke: none; }
+  .ha-dim { fill: var(--ink-2); } .ha-acc-t { fill: var(--accent); }
+  .ha-code { font-family: var(--f-mono); font-size: 9.5px; fill: var(--ink-2); stroke: none; }
+  .ha-code-acc { fill: var(--accent); }
+</style>

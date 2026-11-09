@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { buildPartyLocationDetailFields, type PartyLocationDetail } from "./party-location-detail-fields";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
@@ -81,13 +82,13 @@ export function PartyLocationsReadState({
             busy={isRetrying}
             onClick={handleRetry}
           >
-            Retry
+            {TRY_AGAIN_LABEL}
           </Button>
         }
       >
         {hasCachedData
           ? `Could not refresh ${partyLabel.toLowerCase()} locations. Showing the last saved values.`
-          : `${partyLabel} locations unavailable. Retry to load saved locations.`}
+          : `${partyLabel} locations could not be loaded.`}
       </Notice>
     );
   }

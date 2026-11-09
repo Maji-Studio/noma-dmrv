@@ -215,7 +215,7 @@ function CreditBatchRunsContent({
           </Button>
         }
       >
-        Production runs unavailable. Try again to load the linked runs.
+        The linked production runs could not be loaded.
       </Notice>
     );
   }

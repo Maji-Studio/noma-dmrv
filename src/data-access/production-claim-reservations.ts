@@ -23,7 +23,7 @@ import {
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
-import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { canTransferProductionReservation, hasPossibleExternalMutation } from "@/lib/certification/production-reservation-policy";
 import { rejectDraftSubmission } from "./submission-rejection";
 import { requireOrgScope } from "./utils";
 
@@ -40,33 +40,6 @@ type SubmissionRow = Pick<
   | "metadata"
 >;
 
-function hasPossibleExternalMutation(row: SubmissionRow): boolean {
-  const mutation = getMetadataValue(
-    row.metadata,
-    SUBMISSION_METADATA_KEYS.externalMutation,
-  );
-  return mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible ||
-    mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed;
-}
-
-function canTransferReservation(
-  row: SubmissionRow | undefined,
-  nowMs: number,
-): boolean {
-  if (!row) return false;
-  if (
-    row.provider !== "isometric" ||
-    row.submissionType !== "removal" ||
-    row.localEntityType !== "removal"
-  ) {
-    return false;
-  }
-  if (hasPossibleExternalMutation(row)) return false;
-  if (row.status === "rejected" || row.status === "superseded") return true;
-  if (row.status !== "draft") return false;
-  const lockedAtMs = row.lockedAt?.getTime() ?? 0;
-  return nowMs - lockedAtMs >= LOCK_TTL_MS;
-}
 
 /**
  * Atomically reserves every unclaimed batch before the first registry write.
@@ -200,7 +173,7 @@ export async function reserveProductionEmissionsClaims(
         eligibleCarry: carryContext?.entries.some(fact => fact.id === entry.id &&
           isCarriedToRemoval(fact, args.removalId)) ?? false,
         removalId: args.removalId, submissionId: args.submissionId,
-        priorReservationTransferable: canTransferReservation(owner, nowMs) || isReviewedEvidencePredecessor(owner),
+        priorReservationTransferable: canTransferProductionReservation(owner, nowMs) || isReviewedEvidencePredecessor(owner),
       })) throw entryChanged();
     }
     const blocked = batches.filter((batch) => {
@@ -214,7 +187,7 @@ export async function reserveProductionEmissionsClaims(
       const ownerId = batch.productionEmissionsClaimReservedBySubmissionId;
       return ownerId != null &&
         ownerId !== args.submissionId &&
-        !canTransferReservation(ownerById.get(ownerId), nowMs) &&
+        !canTransferProductionReservation(ownerById.get(ownerId), nowMs) &&
         !isReviewedEvidencePredecessor(ownerById.get(ownerId));
     });
     if (blocked.length > 0) {

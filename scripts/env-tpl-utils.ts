@@ -1,8 +1,8 @@
 /**
  * Shared helpers for reconciling env templates against the 1Password items
  * they reference. Used by env-local-inject.ts (tolerant `pnpm env:local`),
- * sync-env-to-vercel.ts (tolerant Vercel sync + untracked-var warnings), and
- * check-env-drift.ts (standalone drift report).
+ * sync-env-to-vercel.ts (tolerant Vercel sync + untracked-var warnings),
+ * check-env-drift.ts (standalone drift report), and env-run.ts (one-off commands).
  *
  * Never returns or logs secret values — field NAMES only.
  */
@@ -13,6 +13,32 @@ import { join } from "path";
 
 export const VAULT = "Environment Variables";
 export const ITEM_PREFIX = "noma-dmrv env";
+
+/** CLI shorthand maps to the deployed item's full name. */
+export function itemEnvironment(env: string): string {
+  return env === "prod" ? "production" : env;
+}
+
+export function itemNameForEnvironment(env: string): string {
+  return `${ITEM_PREFIX} ${itemEnvironment(env)}`;
+}
+
+/** Retarget the deployed template without changing its variable declarations. */
+export function templateForEnvironment(template: string, env: string): string {
+  return template.replace(
+    new RegExp(`${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`, "g"),
+    itemNameForEnvironment(env)
+  );
+}
+
+/** Keep the same per-variable warning for syncs and one-off commands. */
+export function warnSkippedOptionalVars(skipped: string[], itemName: string): void {
+  if (skipped.length === 0) return;
+  console.warn(
+    `  ⚠️  Skipping ${skipped.length} optional variable(s) with no field in "${itemName}":`
+  );
+  for (const name of skipped) console.warn(`        ${name}`);
+}
 
 /**
  * Vars `src/config/env.ts` cannot boot without in dev — a missing 1Password
@@ -135,7 +161,7 @@ export function templateOpFieldNames(templateFile = ".env.tpl"): Set<string> {
  * Reads labels only; secret values are never touched.
  */
 export function fetchItemFieldNames(env: string): Set<string> {
-  const itemName = `${ITEM_PREFIX} ${env}`;
+  const itemName = itemNameForEnvironment(env);
   const result = spawnSync(
     "op",
     ["item", "get", itemName, "--vault", VAULT, "--format", "json"],

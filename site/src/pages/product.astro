@@ -1,31 +1,52 @@
 ---
-// Product: Trace · Bins and stock · Emissions · Evidence and reporting · What's next.
-// Section ids come from PRODUCT_SECTIONS in src/config.js (Home links to them).
+// Product: three chapters in the order an owner gets value (Run the plant, Get credits issued, Sell with
+// proof), then Across your sites. Chapter ids come from PRODUCT_SECTIONS in src/config.js (Home links to
+// them); sections inside keep their own ids (#record, #inventory, #trace, #emissions, #evidence, #journey).
 import SiteShell from "../components/site/SiteShell.astro";
 import SectionIndex from "../components/site/SectionIndex.astro";
 import GetStartedBand from "../components/site/GetStartedBand.astro";
 import ProductIntro from "../components/site/product/ProductIntro.astro";
+import ChapterHead from "../components/site/product/ChapterHead.astro";
+import RecordSection from "../components/site/product/RecordSection.astro";
 import TraceSection from "../components/site/product/TraceSection.astro";
 import BinsSection from "../components/site/product/BinsSection.astro";
 import EmissionsSection from "../components/site/product/EmissionsSection.astro";
 import EvidenceStage from "../components/site/product/EvidenceStage.astro";
-import NextShowcase from "../components/site/product/NextShowcase.astro";
+import JourneySection from "../components/site/product/JourneySection.astro";
+import ScaleSection from "../components/site/product/ScaleSection.astro";
 import { PRODUCT_SECTIONS } from "../config.js";
 import "../components/site/product/product.css";
+
+const [RUN, CREDITS, PROOF] = PRODUCT_SECTIONS;
 ---
 <SiteShell
   current="product"
   title="Product | noma"
-  description="Follow biochar through the plant, keep the evidence with the work, and prepare reporting from the same records."
+  description="Run the plant, get credits issued and sell with proof, from one set of records across all your sites."
 >
   <div class="pd">
     <ProductIntro />
     <SectionIndex items={PRODUCT_SECTIONS} />
-    <TraceSection />
+
+    <ChapterHead id={RUN.id} title={`${RUN.label}.`}
+      lead="Record the work where it happens, keep every bin's stock straight, and follow any kilogram through the plant."
+      photo="phone" photoY="40%" caption="noma on a phone at the plant, Mafinga, Tanzania" />
+    <RecordSection />
     <BinsSection />
+    <TraceSection />
+
+    <ChapterHead id={CREDITS.id} title={`${CREDITS.label}.`}
+      lead="Net removal adds up from the records, and each removal shows the evidence it still needs before you prepare the submission."
+      photo="team" photoY="35%" caption="Going through the records with Dark Earth Carbon, Mafinga, Tanzania" />
     <EmissionsSection />
     <EvidenceStage />
-    <NextShowcase />
-    <GetStartedBand />
+
+    <ChapterHead id={PROOF.id} title={`${PROOF.label}.`}
+      lead="Buyers pay for removals they can believe. Show them where their biochar went."
+      photo="biochar" photoY="45%" caption="Biochar from a production run, Mafinga, Tanzania" />
+    <JourneySection />
+
+    <ScaleSection />
+    <GetStartedBand title="See it with your own operation." text="We’ll walk through noma with an example shaped like your plant: your sites, your bins, your registry." />
   </div>
 </SiteShell>

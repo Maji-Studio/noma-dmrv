@@ -1,4 +1,3 @@
-export const CARRIED_EMISSION_ENTRY_CANNOT_REPLACE = "This entry was carried into a later Removal, so it cannot be entered again.";
 export const RETURNED_BY_ISOMETRIC_LABEL = "Returned by Isometric";
 export const EMISSION_ENTRY_OUTSIDE_CORRECTION_WINDOW = "Keep the entry date within this Removal's period.";
 export const ENTRY_HAS_NO_REMOVAL = "No Removal can carry this entry yet. Change its date to fit the Removal period, or wait for a later Removal.";
@@ -16,3 +15,5 @@ export function formatEmissionEntryMessageLabel(parts: {
 
 export const EMISSION_ENTRY_FILE_UNAVAILABLE = (label: string) => `A file on ${label} is unavailable. Refresh the Removal and submit again.`;
 export const EMISSION_ENTRY_FILE_DUPLICATE = (label: string) => `A file on ${label} is attached to more than one entry. Remove the duplicate file and submit again.`;
+export const sentEntryOutsideRemovalPeriod = (label: string) =>
+  `This Removal sent ${label}, which is now outside the Removal period. Change the entry date to fit the period, or change the application date back.`;

@@ -9,6 +9,9 @@ import { isRemovalCorrectionWindowOpen, type RecordLockRemoval } from "@/lib/rec
 import { CertificationLineageChangedError, getCertifiedLineage, getLockedCertifiedLineageForBatches } from "./certification-lineage-guards";
 import { requireOrgScope, type Executor } from "./utils";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
+import { listCarryRemovalMembers } from "./emission-entry-carry-queries";
+import { getLatestTemplateObservation } from "./removal-template-observations";
+import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 
 type CorrectionWindow = { window: RemovalEntryWindow; carried: boolean };
 type CorrectionScope = { batchIds: string[]; receiverIds: Set<string>; artifactIds: Set<string>; windows: Map<string, CorrectionWindow> };
@@ -59,6 +62,21 @@ export function emissionCorrectionWindow(ctx: OrgContext, tx: DbTransaction, bat
 export function isCarriedEmissionCorrection(ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string) {
   requireOrgScope(ctx);
   return scopes.get(tx)?.get(scopeKey(ctx, batchId))?.windows.get(removalId)?.carried === true;
+}
+
+/** Read the receiver's member-batch pin only within its locked correction scope. */
+export async function loadEmissionCorrectionReceiverObservation(
+  ctx: OrgContext, tx: DbTransaction, batchId: string, removalId: string, facilityId: string,
+) {
+  requireOrgScope(ctx);
+  const scope = scopes.get(tx)?.get(scopeKey(ctx, batchId));
+  if (!scope?.windows.get(removalId)?.carried) return null;
+  const members = await listCarryRemovalMembers(ctx, facilityId, tx, scope.batchIds);
+  const batches = members.filter(row => row.removal.id === removalId).map(row => row.batch);
+  if (batches.some(batch => batch.facilityId !== facilityId)) return null;
+  const pin = resolveBatchPin(batches);
+  if ("code" in pin) return null;
+  return getLatestTemplateObservation(ctx, "isometric", pin.pin, tx);
 }
 
 export function assertSentEntryInCorrectionWindow(

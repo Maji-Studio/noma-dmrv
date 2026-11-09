@@ -13,19 +13,18 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, createTestSupplier, deleteTestSupplier, waitForSideSheet } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { clickRowMenuItem } from "./fixtures/page-helpers";
+import { clickRowMenuItem, waitForFacilityHydration } from "./fixtures/page-helpers";
 
 const SEARCH_TIMEOUT_MS = 15_000;
 
-async function openList(page: Page, path: "suppliers" | "customers", facilityId: string, code: string) {
-  await page.goto(`/${path}?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
+async function openList(page: Page, path: "suppliers" | "customers", facility: { id: string; name: string }, code: string) {
+  await page.goto(`/${path}?facility=${facility.id}`);
+  await waitForFacilityHydration(page, facility.name);
   await page.getByRole("textbox", { name: path === "suppliers" ? "Search suppliers" : "Search customers" }).fill(code);
   const rows = page.locator("table tbody tr");
   await expect(rows.filter({ hasText: code }).first()).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
   // The debounced search query re-renders the list; wait until it has settled on the match.
   await expect(rows.filter({ hasNotText: code })).toHaveCount(0, { timeout: SEARCH_TIMEOUT_MS });
-  await page.waitForLoadState("networkidle");
 }
 
 async function rowAction(page: Page, code: string, item: string) {
@@ -68,7 +67,7 @@ test.describe("Supplier archive and restore", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const supplier = await createTestSupplier({ code: `E2E-SUP-LC-${tag}`, name: `E2E Lifecycle Supplier ${tag}` });
     try {
-      await openList(page, "suppliers", seededData.facility.id, supplier.code);
+      await openList(page, "suppliers", seededData.facility, supplier.code);
       await expect(page.getByText("Active suppliers", { exact: true })).toBeVisible();
 
       await rowAction(page, supplier.code, "Archive");
@@ -101,7 +100,7 @@ test.describe("Supplier archive and restore", () => {
 
   test("deleting a supplier with intakes offers Archive instead", async ({ adminPage: page, seededData }) => {
     const { supplier, facility } = seededData;
-    await openList(page, "suppliers", facility.id, supplier.code);
+    await openList(page, "suppliers", facility, supplier.code);
     await rowAction(page, supplier.code, "Delete");
     await page.getByRole("dialog").getByRole("button", { name: /^Delete/ }).last().click();
 
@@ -152,7 +151,7 @@ test.describe("Customer archive and restore", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const customer = await seedCustomer(tag);
     try {
-      await openList(page, "customers", seededData.facility.id, customer.code);
+      await openList(page, "customers", seededData.facility, customer.code);
       await expect(page.getByText("Active customers", { exact: true })).toBeVisible();
 
       await rowAction(page, customer.code, "Archive");
@@ -193,7 +192,7 @@ test.describe("Customer archive and restore", () => {
     } finally {
       await pool.end();
     }
-    await openList(page, "customers", facility.id, customer.code);
+    await openList(page, "customers", facility, customer.code);
     await rowAction(page, customer.code, "Delete");
 
     // The dry run refuses while the dialog opens, so the operator never sees a Delete button that cannot work.
@@ -213,7 +212,7 @@ test.describe("Customer archive and restore", () => {
         orderDate: new Date(), customerId: customer.id, customerLocationId: customerLocation.id,
         formulationId: formulation.id, quantityKg: 100, packaging: "loose",
       });
-      await openList(page, "customers", facility.id, customer.code);
+      await openList(page, "customers", facility, customer.code);
       await rowAction(page, customer.code, "Delete");
 
       const dialog = page.getByRole("dialog");
@@ -240,7 +239,7 @@ test.describe("Customer archive and restore", () => {
     });
     try {
       await db.insert(schema.orders).values(orderValues(firstCode));
-      await openList(page, "customers", facility.id, customer.code);
+      await openList(page, "customers", facility, customer.code);
       await rowAction(page, customer.code, "Delete");
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByText(firstCode)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });

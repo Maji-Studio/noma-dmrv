@@ -61,6 +61,15 @@ describe("template enrichment reuse", () => {
     expect(loadTemplateEnrichment).toHaveBeenCalledWith(input.client, template, []);
     expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment: refreshed, enrichmentReused: false }));
   });
+  it("re-reads a cached time input stored in seconds before operators entered hours", async () => {
+    const timed = structuredClone(template);
+    const component = timed.groups[0].components[0];
+    component.inputs = [{ input_key: "time", type: "monitored", quantity_kind: "time", datapoint_id: null, display_name: "Time duration" }];
+    const cached = { [component.id]: { time: { unit: "second", deprecated: null } } };
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0, { definition: normalizeTemplateDefinition(timed), enrichment: cached }));
+    await observeRemovalTemplate(ctx, { ...input, template: timed });
+    expect(loadTemplateEnrichment).toHaveBeenCalledOnce();
+  });
   it.each([
     ["expired", () => previous(TEMPLATE_ENRICHMENT_TTL_MS + 1)],
     ["incomplete", () => previous(0, { enrichment: {} })],

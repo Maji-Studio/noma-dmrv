@@ -119,6 +119,8 @@ export function getRemovalPreflightRefetchInterval(
 
 export const certificationKeys = {
   removalCarriedEntries: (removalId: string) => ["certification", "removal-carried-entries", removalId] as const,
+  removalRecords: (removalId: string) => ["certification", "removal-records", removalId] as const,
+  removalSheetFacts: (removalId: string) => ["certification", "removal-sheet-facts", removalId] as const,
   removalEmptyLines: (removalId: string) => ["certification", "removal-empty-lines", removalId] as const,
   removalTemplateSetup: (facilityId: string) => ["certification", "removal-template-setup", facilityId] as const,
   all: ["certification"] as const,
@@ -231,12 +233,15 @@ export function invalidateCertificationReadiness(
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionAllocationPrefix() }),
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.details() }),
     // Removal codes and the not-in-a-Removal mass on the timeline's hover cards.
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.timelineFactsPrefix() }),
     // Readiness-affecting mutations also change the batch activity history.
     queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    // The dashboard's Needs attention counts draft Removals ("N to fix") from the same readiness.
+    queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
   ];
   if (options?.creditBatchPreviews) {
     invalidations.push(
@@ -457,6 +462,7 @@ export function useSaveFacilityCertifierMapping() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
       queryClient.invalidateQueries({ queryKey: activityKeys.all });
       invalidateOnboardingProgress(queryClient, variables.facilityId);
@@ -474,6 +480,7 @@ export function useSaveFacilityEmissionConfig() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
     },
   });
 }

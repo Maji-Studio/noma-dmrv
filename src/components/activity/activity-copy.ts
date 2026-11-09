@@ -27,7 +27,7 @@ export const ACTIVITY_FILTERED_EMPTY_TITLE = "No matching activity";
 export const ACTIVITY_FILTERED_EMPTY_DESCRIPTION = "Change or clear the filters to see more activity.";
 export const ACTIVITY_CLEAR_FILTERS_LABEL = "Clear filters";
 
-export const ACTIVITY_LOAD_ERROR = "Activity could not be loaded. Try again to load it.";
+export const ACTIVITY_LOAD_ERROR = "Activity could not be loaded.";
 export const ACTIVITY_LOADING = "Loading activity…";
 export const ACTIVITY_SHOW_MORE_LABEL = "Show older activity";
 export const ACTIVITY_DELETED_RECORD_LABEL = "Deleted record";

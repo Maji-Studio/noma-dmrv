@@ -4,7 +4,7 @@
  * "View map" for one transport leg: opens the road route between its two ends
  * in a dialog, in the direction the goods travelled. Hovering or focusing a
  * marker shows that end's card (the Carbon Viewer card); a click pins it.
- * Renders nothing without a MapTiler key or unless both ends have coordinates.
+ * Renders nothing unless both ends have coordinates.
  */
 import { useState } from "react";
 import dynamic from "next/dynamic";
@@ -19,9 +19,6 @@ import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import type { JourneyLeg } from "./transport-journey-model";
 import { resolveRouteLine, type RouteLineState, type RoutePoint } from "./route-line";
 import { MAP_ACCENT_TOKEN, type MapAccent } from "@/components/map";
-
-// Inlined at build time: public, domain-locked key (browser-safe).
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const ICON_PX = 16;
 const MAP_HEIGHT_CLASS = "h-[420px]";
@@ -176,7 +173,7 @@ export function TransportRouteMapButton({
   entityType: TransportEntityTypeValue;
 }) {
   const [open, setOpen] = useState(false);
-  if (!MAPTILER_KEY || !leg.originPoint || !leg.destinationPoint) return null;
+  if (!leg.originPoint || !leg.destinationPoint) return null;
   const origin = leg.originPoint;
   const destination = leg.destinationPoint;
   const from = leg.originName ?? MISSING_VALUE.notRecorded;

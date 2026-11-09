@@ -4,7 +4,7 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer } from "@/lib/settings/panes";
 import { SettingsConsole } from "./settings-console";
 
 const state = vi.hoisted(() => ({
@@ -32,7 +32,7 @@ vi.mock("@/hooks/use-certifier-credentials", () => ({
 }));
 vi.mock("@/components/certification/env-banner", () => ({ EnvBanner: () => <div>Environment banner</div> }));
 
-const base: SettingsViewer = {
+const base: OrganizationSettingsViewer = {
   organizationId: "org-1",
   organizationName: "Dark Earth Carbon",
   isPlatformAdmin: false,
@@ -42,7 +42,7 @@ const base: SettingsViewer = {
   isProduction: false,
 };
 
-const render = (pane: Parameters<typeof SettingsConsole>[0]["pane"], viewer: Partial<SettingsViewer> = {}) =>
+const render = (pane: Parameters<typeof SettingsConsole>[0]["pane"], viewer: Partial<OrganizationSettingsViewer> = {}) =>
   renderToStaticMarkup(
     <SettingsConsole pane={pane} viewer={{ ...base, ...viewer }}>
       <div>Pane body</div>
@@ -58,6 +58,24 @@ beforeEach(() => {
 });
 
 describe("SettingsConsole", () => {
+  it("renders only Profile in the rail and phone select without an organization", () => {
+    state.facilityId = null;
+    const html = renderToStaticMarkup(
+      <SettingsConsole pane="profile" viewer={{ organizationId: null, organizationName: null, isPlatformAdmin: true, canManage: false, canManageApiKeys: false, registryKeysSaved: false, isProduction: false }}>
+        <div>Profile form</div>
+      </SettingsConsole>,
+    );
+    expect(html).toContain('href="/settings/profile"');
+    expect(html).toContain('<option value="/settings/profile" selected="">Profile</option>');
+    expect(html).not.toContain('href="/settings/general"');
+    expect(html).not.toContain('href="/settings/connected-apps"');
+    expect(html).not.toContain('href="/settings/registry"');
+    expect(html).toContain("Profile form");
+    expect(html).toContain("Your name, email and password.");
+    expect(html).not.toContain("every organization you belong to");
+    expect(html).toContain("Other settings appear once you are in an organization.");
+  });
+
   it("lists the groups in order with the organization name on its group", () => {
     const html = render("general", { isPlatformAdmin: true });
     const order = ["You", "Organization", "Dark Earth Carbon", "Certification"].map((label) =>

@@ -288,9 +288,9 @@ runs separately from refused runs. Certification refusals identify the blocking
 run and Removal codes when the guard supplies them, or the blocked feedstock for
 a transport ownership refusal.
 
-`--include-sent` requires a local database target, checked from `DATABASE_URL`
-regardless of `NODE_ENV`; a `host` or `hostaddr` query parameter makes it non-local. Remote targets require the explicit
-`--allow-remote-include-sent` override, including for dry runs.
+`--include-sent` checks `DATABASE_URL` using the [local database target rule](#local-database-targets),
+regardless of `NODE_ENV`. Remote targets require `--allow-remote-include-sent`,
+including for dry runs.
 
 For the one-off pre-production staging rebuild, confirm `DATABASE_URL` targets
 staging, then run
@@ -354,6 +354,21 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 Deliveries inherit their destination from `orders.customer_location_id`. Drawn
 products resolve through `output_stock_allocations`; deliveries have no destination
 override or direct product column. The nullable driver and vehicle references remain.
+
+## Local database targets
+
+`isLocalDatabaseTarget` in `src/lib/pg-pool-config.ts` treats a database URL as
+local only when its hostname is `localhost`, `127.0.0.1` or `::1` (including
+`[::1]` in URLs), and every `host` and `hostaddr` query parameter value is one
+of those loopback names or a Unix socket directory starting with `/`. Every
+entry in repeated parameters and comma-separated lists must qualify.
+
+These scripts share the rule, with explicit overrides for remote targets:
+
+- `pnpm db:reset` (`reset-db.ts`): `DB_RESET_ALLOW_REMOTE=true`.
+- `pnpm db:assert-local` (`assert-local-db.ts`): `DB_MIGRATE_ALLOW_REMOTE=true`.
+- `pnpm feedstock:recalculate --include-sent`: `--allow-remote-include-sent`.
+- `pnpm db:ensure-admin` development bootstrap: `ALLOW_DEV_BOOTSTRAP=1`.
 
 ## Local Setup & Commands
 
@@ -654,9 +669,15 @@ fresh returned-statement facts under the shared
 certification lineage locks. Unknown or stale statuses and in-flight lineage
 submissions keep the correction window closed. The window also controls date
 edits and sent-zero replacement; dates must stay within the Removal's entry window.
+If an application-date correction moves a sent value entry outside the
+Removal's period (after its end, for a carried entry), resubmission is blocked with `sentEntryOutsideWindow`.
+The operator changes the entry date to fit the period or the application date back;
+the entry keeps its sent claim and is not silently moved or included outside the window.
 An entry carried into a later Removal is corrected under that receiving Removal's
 window, which applies only its end date, as carry election does.
-"Enter again" is refused for a carried entry (#1580).
+"Enter again" replaces a stopped carried entry while its receiving Removal is open
+for correction. The replacement stays held for that receiving Removal and replaces
+the tombstoned original in its contributions; other Removals cannot claim it.
 Correction state compares the last submitted contribution manifest with the
 current contribution and is never stored. A new attempt reserves the current set
 and supersedes the prior attempt without transferring its entry claims.

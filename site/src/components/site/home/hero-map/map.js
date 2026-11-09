@@ -1,13 +1,13 @@
 // Home hero map: a small port of the app's Carbon Viewer map
 // (src/components/chain-of-custody/map/trace-map-canvas.tsx, src/components/map/map-theme.ts).
-// MapTiler "dataviz" basemap recoloured into a diagram (labels hidden, hairline boundaries), square
+// OpenFreeMap Positron basemap (no key) recoloured into a diagram (labels hidden, hairline boundaries), square
 // site markers, bowed legs with marching ants, distance chips and record cards.
-// Without PUBLIC_MAPTILER_KEY the map runs on a blank style over the dotted field (hero-map.css).
+// Without WebGL the container keeps the dotted field (hero-map.css, .hm-map--blank).
+import { BASEMAP_STYLE_URL } from "../../../../config.js";
+import { loadBasemapOrBlank } from "../../../../lib/basemap.js";
 import { SITES, LEGS, RECORDS, legKm } from "./data.js";
 import { recordCard as sharedCard } from "../../record-card.js";
 
-const KEY = import.meta.env.PUBLIC_MAPTILER_KEY;
-const STYLE_URL = KEY ? `https://api.maptiler.com/maps/dataviz/style.json?key=${encodeURIComponent(KEY)}` : null;
 const START = { center: [35.29, -8.32], zoom: 9.4 };
 
 const ARC_SEGMENTS = 32;
@@ -113,7 +113,7 @@ export async function createHeroMap(container, opts = {}) {
   try {
     map = new maplibregl.Map({
       container,
-      style: STYLE_URL ?? { version: 8, sources: {}, layers: [] },
+      style: BASEMAP_STYLE_URL,
       ...START,
       attributionControl: { compact: true },
       dragRotate: false,
@@ -129,9 +129,8 @@ export async function createHeroMap(container, opts = {}) {
     return null;
   }
   map.getCanvas().tabIndex = -1;
-  if (!KEY) container.classList.add("hm-map--blank");
-  await new Promise((resolve) => map.once("load", resolve));
-  if (KEY) recolor(map, p);
+  await loadBasemapOrBlank(map, () => container.classList.add("hm-map--blank"));
+  if (map.getStyle()?.layers?.length) recolor(map, p);
 
   const legFeatures = LEGS.map((leg, i) => {
     const a = byId[leg.from]; const b = byId[leg.to];

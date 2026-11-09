@@ -1,5 +1,6 @@
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { creditBatchLabel } from "@/lib/credit-batch-label";
 import { recordHref, CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/record-links";
 import { useLinkedRecordFacility } from "@/hooks/use-linked-record-facility";
@@ -784,7 +785,7 @@ export function CreditBatchList({
                 busy={healthFetching}
                 onClick={() => void refetchHealth()}
               >
-                Retry
+                {TRY_AGAIN_LABEL}
               </Button>
             }
           >
@@ -802,7 +803,7 @@ export function CreditBatchList({
                 busy={factsQuery.isFetching}
                 onClick={() => void factsQuery.refetch()}
               >
-                Retry
+                {TRY_AGAIN_LABEL}
               </Button>
             }
           >

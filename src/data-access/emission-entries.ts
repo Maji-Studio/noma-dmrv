@@ -1,7 +1,7 @@
-import { CARRIED_EMISSION_ENTRY_CANNOT_REPLACE } from "@/lib/certification/emission-entry-messages";
 import { loadEmissionEntryHolds } from "./emission-entry-holds";
+import { isCarryCompatibleLine } from "@/lib/certification/emission-entry-carry";
 import { entryHoldingRemovalId, inWindow } from "@/lib/certification/removal-emission-contributions";
-import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection } from "./emission-entry-corrections";
+import { assertSentEntryInCorrectionWindow, emissionCorrectionWindow, isCarriedEmissionCorrection, loadEmissionCorrectionReceiverObservation } from "./emission-entry-corrections";
 import { entryLine, resolveEmissionEntryDate } from "@/lib/certification/emission-entry-rules";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -185,7 +185,7 @@ async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, value
 export async function tombstoneEmissionZeros(
   ctx: OrgContext,
   tx: DbTransaction,
-  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string; holdingRemovalId?: string | null },
+  entry: { creditBatchId: string; removalTemplateId: string; componentId: string; occurredOn: string; holdingRemovalId: string | null },
 ) {
   requireOrgScope(ctx);
   const before = await tx.select().from(emissionEntries).where(and(
@@ -299,7 +299,7 @@ async function writeEmissionEntryUnderLocks(
     })
     .returning();
   const values = await writeValues(ctx, tx, entry.id, data.values);
-  await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: replacementHold?.removalId });
+  await tombstoneEmissionZeros(ctx, tx, { ...entry, holdingRemovalId: replacementHold?.removalId ?? null });
   await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
   return getEmissionEntry(ctx, entry.id, tx);
 }
@@ -310,19 +310,27 @@ export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissi
   const data = replaceEmissionEntrySchema.parse(input);
   return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
     if (entry.kind !== "value") throw new SafeError("Only value entries can be entered again.");
-    const holdingRemovalId = entryHoldingRemovalId(entry);
-    if (holdingRemovalId && isCarriedEmissionCorrection(ctx, tx, entry.creditBatchId, holdingRemovalId))
-      throw new SafeError(CARRIED_EMISSION_ENTRY_CANNOT_REPLACE);
     const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
     if (!previous) throw new SafeError("The entry's template observation was not found.");
     if (emissionEntryCounts(previous, context.observation, entry.componentId).counts)
       throw new SafeError("This entry still counts. Edit that entry instead.");
+    const holdingRemovalId = entryHoldingRemovalId(entry);
+    if (holdingRemovalId && isCarriedEmissionCorrection(ctx, tx, entry.creditBatchId, holdingRemovalId)) {
+      const receiverObservation = await loadEmissionCorrectionReceiverObservation(
+        ctx, tx, entry.creditBatchId, holdingRemovalId, context.batch.facilityId,
+      );
+      if (!receiverObservation || !isCarryCompatibleLine(entryLine(receiverObservation, entry.componentId)) ||
+        !emissionEntryCounts(context.observation, receiverObservation, entry.componentId).counts)
+        throw new SafeError("The receiving Removal's template cannot count this carried entry. Review the component in Removal templates before entering it again. Nothing changed.");
+    }
     const [deleted] = await tx.update(emissionEntries).set({
       deletedAt: new Date(), updatedAt: new Date(),
       version: nextVersion(emissionEntries.version),
       contentRevision: nextVersion(emissionEntries.contentRevision),
     }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
     await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...deleted, values: entry.values });
+    // The sent original names the receiving Removal, including for carried entries.
+    // Replacing an unsent replacement preserves that same original and hold.
     const replacement = await writeEmissionEntryUnderLocks(ctx, tx, {
       creditBatchId: entry.creditBatchId, componentId: entry.componentId,
       occurredOn: data.occurredOn, note: data.note, values: data.values,

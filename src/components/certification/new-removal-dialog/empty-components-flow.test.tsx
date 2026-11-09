@@ -45,10 +45,10 @@ vi.mock("./empty-components-step", () => ({
 vi.mock("@/components/ui/notice", () => ({
   Notice: ({ children, action }: { children: ReactNode; action?: ReactNode }) => <div role="alert">{children}{action}</div>,
 }));
-// The real footer Back is a Button that only phones show; here the wiring is what matters.
+// The real step offers this button whenever it is given the callback (also while blocked); here the wiring is what matters.
 vi.mock("./submit-step", () => ({
   SubmitStep: ({ onBackToEmpty }: { onBackToEmpty?: () => void }) => (
-    <div>submit step{onBackToEmpty && <button type="button" onClick={onBackToEmpty}>Back</button>}</div>
+    <div>submit step{onBackToEmpty && <button type="button" onClick={onBackToEmpty}>Back to Empty components</button>}</div>
   ),
 }));
 
@@ -70,7 +70,7 @@ const LAND_SUBMIT = { step: "submit" };
 
 function renderDialog(resumeRemovalId: string | null) {
   return render(
-    <NewRemovalDialog facilityId="f" facilityName="Facility" isOpen onClose={vi.fn()} resumeRemovalId={resumeRemovalId} />,
+    <NewRemovalDialog facilityId="f" isOpen onClose={vi.fn()} resumeRemovalId={resumeRemovalId} />,
   );
 }
 
@@ -93,19 +93,21 @@ describe("New Removal wizard with empty components", () => {
     expect(screen.getByText("Empty components")).toBeTruthy();
   });
 
-  it("lands a reopened draft with every component confirmed on submit, and keeps the step in the rail for Undo", () => {
+  it("lands a reopened draft with every component confirmed on Review & submit: its own header, no step rail, no step count", () => {
     mocks.landing.data = LAND_SUBMIT;
     mocks.query.data = CONFIRMED;
     renderDialog("removal-1");
     expect(screen.getByText("submit step")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Empty components/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Review & submit" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Empty components/ })).toBeNull();
+    expect(screen.queryByText(/^Step \d of \d$/)).toBeNull();
   });
 
-  it("keeps the way back to Empty components from the submit step, for phones where the rail shows one step", () => {
+  it("keeps the way back to Empty components from the submit step", () => {
     mocks.landing.data = LAND_SUBMIT;
     mocks.query.data = CONFIRMED;
     renderDialog("removal-1");
-    const back = screen.getByRole("button", { name: "Back" });
+    const back = screen.getByRole("button", { name: "Back to Empty components" });
     fireEvent.click(back);
     expect(screen.getByText("empty components step")).toBeTruthy();
   });
@@ -114,7 +116,7 @@ describe("New Removal wizard with empty components", () => {
     mocks.landing.data = LAND_SUBMIT;
     mocks.query.data = { removalVersion: 1, editable: true, batches: [{ creditBatchId: BATCH, code: "CB-26-001", lines: [], zeros: [] }] };
     renderDialog("removal-1");
-    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Back to Empty components" })).toBeNull();
   });
 
   it("skips the step entirely when no selected batch has empty components", () => {
@@ -133,7 +135,7 @@ describe("New Removal wizard with empty components", () => {
 
     // Recording the last zeros: the read now says everything is confirmed.
     mocks.query.data = CONFIRMED;
-    view.rerender(<NewRemovalDialog facilityId="f" facilityName="Facility" isOpen onClose={vi.fn()} resumeRemovalId="removal-1" />);
+    view.rerender(<NewRemovalDialog facilityId="f" isOpen onClose={vi.fn()} resumeRemovalId="removal-1" />);
     expect(screen.getByText("empty components step")).toBeTruthy();
     expect(screen.queryByText("submit step")).toBeNull();
   });
@@ -222,7 +224,7 @@ describe("New Removal wizard with empty components", () => {
     mocks.query.data = CONFIRMED;
     mocks.submit = { isPending: false, isSuccess: true };
     renderDialog("removal-1");
-    expect(screen.queryByRole("button", { name: /Empty components/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Empty components/ })).toBeNull();
 
     cleanup();
     mocks.submit = { isPending: false, isSuccess: false };

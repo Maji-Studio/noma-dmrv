@@ -6,7 +6,7 @@
  */
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { waitForSideSheet } from "./fixtures/page-helpers";
+import { waitForAppHydration, waitForSideSheet } from "./fixtures/page-helpers";
 
 const TALL_DESKTOP = { width: 1440, height: 1200 };
 const PHONE = { width: 390, height: 844 };
@@ -31,13 +31,14 @@ async function expectFooterOnSheetBottom(page: Page) {
 
 async function openList(page: Page, path: string, facilityId: string) {
   await page.goto(`/${path}?facility=${facilityId}`);
-  await page.waitForLoadState("networkidle");
+  await waitForAppHydration(page);
 }
 
 test.describe("Side sheet footer pinning", () => {
   test("a short direct-child form (supplier edit) keeps its actions at the bottom", async ({ adminPage: page, seededData }) => {
     await page.setViewportSize(TALL_DESKTOP);
     await openList(page, "suppliers", seededData.facility.id);
+    await expect(page.locator("table tbody tr", { hasText: seededData.supplier.code }).first()).toBeVisible();
     await page.locator("table tbody tr", { hasText: seededData.supplier.code }).first().click();
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit supplier" }).click();

@@ -14,7 +14,6 @@
   --jr-map-land: var(--stage); --jr-map-forest: #1d0e2d; --jr-map-wood: #190a28; --jr-map-urban: #2b1740; --jr-map-water: #321a4d;
   --jr-map-boundary: rgba(255, 249, 247, 0.2);
   --jr-map-road-major: rgba(255, 249, 247, 0.32); --jr-map-road-mid: rgba(255, 249, 247, 0.2); --jr-map-road-minor: rgba(255, 249, 247, 0.1);
-  --jr-map-hill-shadow: #06000c; --jr-map-hill-light: #5b3380; --jr-map-hill-accent: #1a0a2a;
   --jr-leg: rgba(255, 178, 210, 0.42); --jr-leg-rel: rgba(255, 178, 210, 0.62); --jr-leg-trail: rgba(255, 178, 210, 0.78);
   --gl: max(16px, env(safe-area-inset-left, 0px)); --gr: max(16px, env(safe-area-inset-right, 0px));
   --spring: cubic-bezier(0.2, 0.9, 0.25, 1);

@@ -13,6 +13,7 @@ import {
   selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
@@ -35,7 +36,7 @@ async function seedFormCompleteApplication(
 
   // Order
   await page.goto(`/orders?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New order")');
   await waitForSideSheet(page);
   await page.fill('input[name="orderDate"]', today);
@@ -52,7 +53,7 @@ async function seedFormCompleteApplication(
 
   // Delivery (must be "delivered" before an application can reference it — #284)
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New delivery")');
   await waitForSideSheet(page);
   await selectFirstEntity(page, "Order");
@@ -65,7 +66,7 @@ async function seedFormCompleteApplication(
   // Application — every field the application field check requires, with no
   // evidence: mass (wet + dry), plus the advisory soil temperature.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
-  await page.waitForLoadState("networkidle");
+  await waitForFacilityHydration(page, seededData.facility.name);
   await page.click('button:has-text("New application")');
   await waitForSideSheet(page);
   await page.fill('input[name="applicationDate"]', today);
@@ -135,7 +136,6 @@ test.describe("Application evidence does not gate certification", () => {
 
     const applicationsUrl = `/applications?facility=${seededData.facility.id}`;
     await page.goto(applicationsUrl);
-    await page.waitForLoadState("networkidle");
 
     const row = page.locator("table tbody tr", { hasText: applicationCode });
     await expect(row).toBeVisible({ timeout: 10000 });
@@ -169,7 +169,6 @@ test.describe("Application evidence does not gate certification", () => {
 
     // Reload after evidence health changes. Certification remains independent.
     await page.goto(applicationsUrl);
-    await page.waitForLoadState("networkidle");
     const reloadedRow = page.locator("table tbody tr", {
       hasText: applicationCode,
     });

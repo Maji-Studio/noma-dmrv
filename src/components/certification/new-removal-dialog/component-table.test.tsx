@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 
 vi.mock("next/link", () => ({
@@ -11,7 +11,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 vi.mock("@/hooks/use-documents", () => ({ useDocumentsForEntity: () => ({ data: [] }) }));
 
-import { ComponentTable, jumpToComponentRow } from "./component-table";
+import { ComponentTable } from "./component-table";
 import {
   buildComponentTable,
   componentRows,
@@ -19,7 +19,6 @@ import {
   SENT_SOURCE,
   type ComponentTableInput,
 } from "./component-table-model";
-import { BlockedComponentsNotice } from "./blocked-components-notice";
 
 const BATCH_A = { id: "batch-a", code: "CB-26-001", startDate: "2026-07-01", endDate: "2026-07-31", appliedDryWeightTons: 12.4 } as MemberCreditBatch;
 const BATCH_B = { id: "batch-b", code: "CB-26-002", startDate: "2026-08-01", endDate: "2026-08-31", appliedDryWeightTons: 9.8 } as MemberCreditBatch;
@@ -293,6 +292,14 @@ describe("ComponentTable", () => {
     expect(screen.queryByText("Included")).toBeNull();
   });
 
+  it("tells the step a repair link was used, so the review is read again on return", () => {
+    const onFix = vi.fn();
+    render(<ComponentTable table={blockedTable()} facilityId="facility-1" onFix={onFix} />);
+    const row = screen.getByText("Lab electricity").closest("li")!;
+    fireEvent.click(within(row).getByRole("link", { name: /Review emissions on CB-26-002/ }));
+    expect(onFix).toHaveBeenCalledTimes(1);
+  });
+
   it("reads a component left out for an earlier production claim as Sent earlier, with no link, never as not applicable", () => {
     render(<ComponentTable table={rows([EARLIER, EARLIER])} facilityId="facility-1" />);
     const row = screen.getByText("Kiln construction").closest("li")!;
@@ -338,77 +345,5 @@ describe("ComponentTable", () => {
   it("offers the file names behind a toggletip", () => {
     render(<ComponentTable table={buildComponentTable(input([LINES], { review: REVIEW }))} facilityId="facility-1" />);
     expect(screen.getByRole("button", { name: "File names for Staff travel" })).toBeTruthy();
-  });
-});
-
-describe("BlockedComponentsNotice", () => {
-  beforeEach(() => {
-    Element.prototype.scrollIntoView = vi.fn();
-    window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as never;
-  });
-
-  function setup() {
-    const lines = [[line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
-      blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })]];
-    const table = buildComponentTable(input(lines, { review: EMPTY_REVIEW }));
-    const blockers = [
-      { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } },
-      { code: "legacy", message: "Delivery DL-1 has no proof of delivery.", fixTarget: null },
-    ] as never;
-    render(
-      <>
-        <BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={["batch-a"]} />
-        <ComponentTable table={table} facilityId="facility-1" />
-      </>,
-    );
-  }
-
-  it("names the blocked component with its credit batch and keeps blockers the table cannot show", () => {
-    setup();
-    const notice = screen.getByRole("alert");
-    expect(within(notice).getByRole("link", { name: "Lab electricity" })).toBeTruthy();
-    expect(notice.textContent).toContain("on CB-26-001");
-    expect(notice.textContent).toContain("Delivery DL-1 has no proof of delivery.");
-    // What to do is said once, in the row.
-    expect(notice.textContent).not.toContain(BLOCK_MESSAGE);
-  });
-
-  it("scrolls the table to the row and moves focus to it", () => {
-    setup();
-    fireEvent.click(screen.getByRole("link", { name: "Lab electricity" }));
-    const row = screen.getByText(BLOCK_MESSAGE).closest("li")!;
-    expect(document.activeElement).toBe(row);
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
-  });
-
-  it("keeps the compile blocker when the row shows a different message", () => {
-    const lines = [[line({ componentId: "lab", displayName: "Lab electricity", state: "missingEvidence",
-      blocker: { code: "entryMissingEvidence", message: BLOCK_MESSAGE, fixTarget: "emissions", lineRef: { componentId: "lab", displayName: "Lab electricity" } } })]];
-    const table = buildComponentTable(input(lines, { review: EMPTY_REVIEW }));
-    const blockers = [{ code: "lineNeedsReview", message: "Enter the values again for the current component.", fixTarget: null, lineRef: { componentId: "lab", displayName: "Lab electricity" } }] as never;
-    render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={["batch-a"]} />);
-    expect(screen.getByRole("alert").textContent).toContain("Enter the values again for the current component.");
-  });
-
-  it("drops the compiler's unbindable sentence only when every component it names is a blocked row", () => {
-    const table = buildComponentTable(input([[line({ componentId: "u", displayName: "Unbindable", state: "filled" })]], {
-      review: EMPTY_REVIEW, unbindableComponentIds: new Set(["u"]),
-    }));
-    const sentence = "These inputs cannot be submitted:\nUnbindable";
-    const blockers = [{ code: "legacy", message: sentence, fixTarget: null }] as never;
-    const { unmount } = render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={[]} unbindableText={sentence} unbindableComponentIds={["u"]} />);
-    expect(screen.getByRole("alert").textContent).not.toContain("These inputs cannot be submitted");
-    unmount();
-    render(<BlockedComponentsNotice blockers={blockers} blockedRows={table.rows} facilityId="facility-1" memberBatchIds={[]} unbindableText={sentence} unbindableComponentIds={["u", "other"]} />);
-    expect(screen.getByRole("alert").textContent).toContain("These inputs cannot be submitted");
-  });
-
-  it("links to the row as an anchor", () => {
-    setup();
-    expect(screen.getByRole("link", { name: "Lab electricity" }).getAttribute("href")).toBe("#submit-component-lab");
-  });
-
-  it("does nothing for a row that is not there", () => {
-    expect(() => jumpToComponentRow("missing")).not.toThrow();
   });
 });

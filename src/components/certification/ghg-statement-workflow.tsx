@@ -14,6 +14,7 @@
  */
 "use client";
 
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -42,6 +43,8 @@ interface GhgStatementWorkflowProps {
    */
   onSubmit?: () => void;
   submitLabel?: string;
+  /** Read only: each step states where it stands and none says what to do. */
+  readOnly?: boolean;
 }
 
 export function findApprovedGhgStatementReport(
@@ -77,6 +80,7 @@ export function GhgStatementWorkflow({
   verifierStep,
   onSubmit,
   submitLabel = "Submit",
+  readOnly = false,
 }: GhgStatementWorkflowProps) {
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
@@ -98,10 +102,12 @@ export function GhgStatementWorkflow({
     : reportsUnavailable
       ? {
           status: "warning",
-          detail: "Reports could not be loaded. Refresh the page and try again.",
+          detail: "Reports could not be loaded.",
         }
       : generated
       ? { status: "met", detail: `Version ${latest?.version} generated from Isometric data.` }
+      : readOnly
+        ? { status: "skipped", detail: "No report generated." }
       : canGenerate
         ? {
             status: "active",
@@ -117,19 +123,22 @@ export function GhgStatementWorkflow({
   const approvedStep: WorkflowStepModel = reportsUnavailable
     ? {
         status: "skipped",
-        detail: "Load the reports before reviewing or approving one.",
+        // Read only: the notice below already says the reports could not be loaded.
+        detail: readOnly ? undefined : "Load the reports before reviewing or approving one.",
       }
     : !generated
     ? {
         status: "skipped",
-        detail: created
+        detail: created && !readOnly
           ? "The report is approved automatically when you submit."
           : undefined,
       }
     : latestPrepared
       ? {
           status: "active",
-          detail: `Version ${latest?.version} will be approved automatically when you submit.`,
+          detail: readOnly
+            ? `Version ${latest?.version} prepared, not approved.`
+            : `Version ${latest?.version} will be approved automatically when you submit.`,
         }
       : approvedReport
         ? { status: "met", detail: `Version ${approvedReport.version} approved.` }
@@ -145,7 +154,9 @@ export function GhgStatementWorkflow({
           detail={
             created
               ? registryRecord
-              : "Not in Isometric yet. Sync from registry to reconcile it."
+              : readOnly
+                ? "Not in Isometric yet."
+                : "Not in Isometric yet. Sync from registry to reconcile it."
           }
         />
         <CheckRow
@@ -195,16 +206,17 @@ export function GhgStatementWorkflow({
       {reportsQuery.error && (
         <Notice
           tone="warning"
-          action={
+          // Try again only reads the reports again, so a read-only or member sheet keeps it.
+          action={(
             <Button
               size="small"
               variant="default"
               busy={reportsQuery.isFetching}
               onClick={() => void reportsQuery.refetch()}
             >
-              Retry
+              {TRY_AGAIN_LABEL}
             </Button>
-          }
+          )}
         >
           {reportsRefreshFailed
             ? "Reports could not be refreshed. Showing the last loaded versions."

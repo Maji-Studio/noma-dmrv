@@ -1,18 +1,32 @@
 ---
-// Home: a short tour. Each block links deeper into /product and /why (anchor ids in src/config.js).
+// Home: the business case for an owner. Hero (who it's for), the problem (spreadsheets vs noma, the page's
+// one dark stage), three outcomes linking to the Product chapters, then the big pictures: scale, what runs
+// today, how you run it.
 import SiteShell from "../components/site/SiteShell.astro";
 import HomeHero from "../components/site/home/HomeHero.astro";
-import TraceStage from "../components/site/home/TraceStage.astro";
-import AskSection from "../components/site/home/AskSection.astro";
-import ProofBlock from "../components/site/home/ProofBlock.astro";
-import NextAndOpen from "../components/site/home/NextAndOpen.astro";
+import CompareStage from "../components/site/why/CompareStage.astro";
+import PhotoBand from "../components/site/home/PhotoBand.astro";
+import OutcomesSection from "../components/site/home/OutcomesSection.astro";
+import ScaleBlock from "../components/site/home/ScaleBlock.astro";
+import TodaySection from "../components/site/home/TodaySection.astro";
+import RunItSection from "../components/site/home/RunItSection.astro";
 import GetStartedBand from "../components/site/GetStartedBand.astro";
 ---
-<SiteShell current="home" title="noma, trace your biochar from feedstock to application">
+<SiteShell
+  current="home"
+  title="noma, open MRV for carbon removal"
+  description="Open MRV for carbon removal: run the plant, get credits issued and show buyers the proof, on records you own."
+>
   <HomeHero />
-  <TraceStage />
-  <AskSection />
-  <ProofBlock />
-  <NextAndOpen />
-  <GetStartedBand />
+  <CompareStage
+    id="problem"
+    title="Spreadsheets do not grow with your plant."
+    lead="At one reactor, a sheet works. With more runs, bins and sites, following a tonne back to its feedstock becomes work done by hand, for every verifier question. In noma the records are connected as they are made."
+  />
+  <PhotoBand />
+  <OutcomesSection />
+  <ScaleBlock />
+  <TodaySection />
+  <RunItSection />
+  <GetStartedBand title="See it with your own operation." text="We’ll walk through noma with an example shaped like your plant: your sites, your bins, your registry." />
 </SiteShell>

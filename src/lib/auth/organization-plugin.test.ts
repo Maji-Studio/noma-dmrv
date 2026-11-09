@@ -3,7 +3,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { beforeEach, expect, it, vi } from "vitest";
 import { INVITATION_EXPIRES_IN_SECONDS } from "@/config/auth";
 import { SafeError } from "@/lib/errors";
-import { revokeDeletedMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
+import { revokeUserOAuthGrants, revokeDeletedMemberOAuthGrants } from "@/data-access/oauth-grant-lifecycle";
 import { LAST_ADMIN_MESSAGE } from "./organization-role-policy";
 import { replacePendingInvitation } from "@/data-access/organizations";
 const cookieStore = vi.hoisted(() => ({ getAll: () => [{ name: "better-auth.session_data" }, { name: "better-auth.session_token" }], delete: vi.fn() }));
@@ -11,11 +11,12 @@ const databaseFailure = vi.hoisted(() => ({ enabled: false }));
 const memory = vi.hoisted(() => Object.fromEntries(
   ["user", "organization", "member", "session", "invitation", "verification", "account"].map(key => [key, [] as Record<string, unknown>[]]),
 ));
+vi.mock("@/data-access/account-api-keys", () => ({ listActiveAccountApiKeys: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/db/org-defaults", () => ({ seedOrgDefaults: vi.fn() }));
 vi.mock("@/data-access/api-credential-auth", () => ({ disableOwnerApiKeys: vi.fn() }));
 vi.mock("@/data-access/oauth-grant-lifecycle", () => ({
-  revokeMemberOAuthGrants: vi.fn(), revokeDeletedMemberOAuthGrants: vi.fn(),
+  revokeUserOAuthGrants: vi.fn(), revokeMemberOAuthGrants: vi.fn(), revokeDeletedMemberOAuthGrants: vi.fn(),
 }));
 vi.mock("better-auth/adapters/drizzle", async () => {
   const { memoryAdapter } = await import("better-auth/adapters/memory");
@@ -76,6 +77,8 @@ import { sendEmail } from "@/lib/email/send";
 import { changePasswordFn } from "@/fn/profile";
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ userId: "actor", organizationId: "org", orgRole: memory.member.find(row => row.userId === "actor")?.role ?? null, isPlatformAdmin: false }),
+  // Profile actions authenticate without an organization (withAuthAction).
+  getUser: async () => ({ id: "actor" }),
   requireOrgRole: (ctx: { orgRole: string | null }) => {
     if (ctx.orgRole !== "admin") throw new SafeError("Admin access is required.");
   },
@@ -86,6 +89,7 @@ const SESSION_LIFETIME_MS = 60_000;
 const MILLISECONDS_PER_SECOND = 1_000;
 beforeEach(() => {
   vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
+  vi.mocked(revokeUserOAuthGrants).mockReset().mockResolvedValue(1);
   databaseFailure.enabled = false;
   vi.mocked(replacePendingInvitation).mockClear();
   vi.mocked(revokeDeletedMemberOAuthGrants).mockClear();
@@ -435,4 +439,17 @@ it("does not send a removal notice when an Admin removes their own membership", 
   addNoticeMember("admin");
   expect(await removeMemberAction({ memberIdOrEmail: "actor-member" })).toMatchObject({ success: true });
   expect(sendEmail).not.toHaveBeenCalled();
+});
+
+it.each(["change-password", "reset-password"])("%s succeeds when OAuth revocation fails", async path => {
+  await addNoticeCredential();
+  vi.mocked(revokeUserOAuthGrants).mockRejectedValue(new Error("private@example.test"));
+  memory.verification.push({ id: "reset-revoke", identifier: "reset-password:revoke-token", value: "actor",
+    expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
+  const body = path === "change-password"
+    ? { currentPassword: NOTICE_OLD_PASSWORD, newPassword: NOTICE_NEW_PASSWORD }
+    : { token: "revoke-token", newPassword: NOTICE_NEW_PASSWORD };
+  expect((await postAuth(path, body)).status).toBe(200);
+  expect(revokeUserOAuthGrants).toHaveBeenCalledExactlyOnceWith("actor");
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Connected apps could not be disconnected") }));
 });

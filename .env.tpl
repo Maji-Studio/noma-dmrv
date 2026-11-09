@@ -5,10 +5,12 @@
 # staging item -> preview, production item -> production). For machine-local
 # values use .env.local.tpl + pnpm env:local instead.
 #
-# OPTIONAL variables (everything outside REQUIRED_DEPLOYED_VARS in
-# scripts/env-tpl-utils.ts — i.e. not the DB/auth/app-url trio or the
-# s3-compatible storage set) may be absent from a 1Password item: the sync
+# REQUIRED_DEPLOYED_VARS in scripts/env-tpl-utils.ts defines the required set.
+# Variables outside that set may be absent from a 1Password item: the sync
 # skips them with a warning instead of failing.
+# NODE_ENV is never synced to Vercel. Staging one-off runs use
+# NODE_ENV=development like local; prod runs force NODE_ENV=production so
+# production guards apply.
 
 # -----------------------------------------------------------------------------
 # Database (PostgreSQL via Drizzle ORM)
@@ -38,18 +40,12 @@ CRON_SECRET="op://Environment Variables/noma-dmrv env staging/CRON_SECRET"
 RESEND_API_KEY="op://Environment Variables/noma-dmrv env staging/RESEND_API_KEY"
 RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env staging/RESEND_FROM_EMAIL"
 RESEND_REPLY_TO="op://Environment Variables/noma-dmrv env staging/RESEND_REPLY_TO"
-
-# -----------------------------------------------------------------------------
-# Admin Configuration
-# -----------------------------------------------------------------------------
-ADMIN_EMAIL="op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL"
+WALKTHROUGH_TO="op://Environment Variables/noma-dmrv env staging/WALKTHROUGH_TO"
 
 # -----------------------------------------------------------------------------
 # Isometric (Carbon Registry API)
 # -----------------------------------------------------------------------------
 CREDENTIALS_ENCRYPTION_KEY="op://Environment Variables/noma-dmrv env staging/CREDENTIALS_ENCRYPTION_KEY"
-ISOMETRIC_CLIENT_SECRET="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET"
-ISOMETRIC_ACCESS_TOKEN="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN"
 # sandbox in the staging 1Password item, production in the production item — the
 # sync rewrites the item, not the field, so one line serves both environments.
 ISOMETRIC_ENVIRONMENT="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ENVIRONMENT"
@@ -66,15 +62,20 @@ STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 
 # -----------------------------------------------------------------------------
+# Licensed fonts (build only): read-only Spaces key for scripts/fetch-fonts.mjs.
+# Optional: without it builds use the fallback system fonts.
+# -----------------------------------------------------------------------------
+FONTS_S3_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/FONTS_S3_ACCESS_KEY_ID"
+FONTS_S3_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/FONTS_S3_SECRET_ACCESS_KEY"
+
+# -----------------------------------------------------------------------------
 # Geo / Maps (map integration — ADR 0009)
-# Both keys are OPTIONAL: without them the app still runs; CALC/address search
-# and the map preview degrade gracefully. OPENROUTESERVICE_API_KEY is
-# server-only (geocoding + routing); NEXT_PUBLIC_MAPTILER_KEY is a public,
-# domain-locked basemap key. GEO_PROVIDER is not templated — it defaults to
+# The key is OPTIONAL: without it the app still runs; CALC and address search
+# degrade gracefully. OPENROUTESERVICE_API_KEY is server-only (geocoding +
+# routing). The basemap (OpenFreeMap) needs no key. GEO_PROVIDER is not templated — it defaults to
 # "ors"; "stub" is for hermetic tests only (.env.test) and is rejected in prod.
 # -----------------------------------------------------------------------------
 OPENROUTESERVICE_API_KEY="op://Environment Variables/noma-dmrv env staging/OPENROUTESERVICE_API_KEY"
-NEXT_PUBLIC_MAPTILER_KEY="op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_MAPTILER_KEY"
 
 # -----------------------------------------------------------------------------
 # App Configuration

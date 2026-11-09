@@ -1,6 +1,6 @@
 ---
 /**
- * BinsSection (#bins): one bin, told in four steps the visitor clicks through (step tabs, Back, Next) on a
+ * BinsSection (#inventory): one bin, told in four steps the visitor clicks through (step tabs, Back, Next) on a
  * dark stage: one big figure per step beside one picture made of 10 kg squares. The same squares carry the
  * story: biochar with its water mixed in (dashed) drops into bin A in layers, the oldest draw slides onto
  * the truck with its water while the rest settle, the weighbridge weighs both and the water lights up, then
@@ -18,6 +18,7 @@
 import GridFrame from "../GridFrame.astro";
 import { BIN_LAYERS } from "../../../data/data.js";
 import "./bins-steps.css";
+import DrawMethods from "./DrawMethods.astro";
 
 const [l1, l2, l3] = BIN_LAYERS;
 const KG_PER_SQ = 10;
@@ -116,11 +117,11 @@ const STEPS = [
 ];
 const LAST = STEPS.length;
 ---
-<GridFrame id="bins" pad="none" flush aria-labelledby="bins-title">
+<GridFrame id="inventory" pad="none" flush aria-labelledby="bins-title">
   <div class="bs">
     <div class="pd-head">
-      <h2 id="bins-title" class="t-h2">Know what’s in the bin.</h2>
-      <p class="t-lead">noma records each production run that goes into a bin and each draw that leaves it. Step through one bin, from filling to the field.</p>
+      <h2 id="bins-title" class="t-h2">Manage inventory, bin by bin.</h2>
+      <p class="t-lead">Every production run lands in its bin with its dry mass and moisture, and every draw comes off the stock. Step through one bin, from filling to the field.</p>
     </div>
 
     <div class="bs-stage" data-bs data-step={LAST}>
@@ -192,4 +193,5 @@ const LAST = STEPS.length;
     </div>
   </div>
 </GridFrame>
+<DrawMethods />
 <script>import "./bins-steps.js";</script>

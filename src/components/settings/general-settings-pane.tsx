@@ -9,11 +9,11 @@
 "use client";
 
 import { DetailSection } from "@/components/ui/detail-panel";
-import type { SettingsViewer } from "@/lib/settings/panes";
+import type { OrganizationSettingsViewer } from "@/lib/settings/panes";
 import { OrganizationDefaultsForm } from "./organization-defaults-form";
 import { OrganizationNameForm } from "./organization-name-form";
 
-export function GeneralSettingsPane({ viewer }: { viewer: SettingsViewer }) {
+export function GeneralSettingsPane({ viewer }: { viewer: OrganizationSettingsViewer }) {
   return (
     <div className="flex flex-col gap-32">
       <DetailSection title="Organization" divider={false} className="content-measure-preview">

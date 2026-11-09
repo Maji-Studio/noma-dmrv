@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isCarriedToRemoval, removalEntryCarryOwner, type CarryContender } from "./emission-entry-carry";
-import { deriveRemovalEntryContributions, entriesWithoutRemoval, type RemovalEntryFact } from "./removal-emission-contributions";
+import { deriveRemovalEntryContributions, entriesWithoutRemoval, removalEntryOwner, entryHoldingRemovalId, type RemovalEntryFact } from "./removal-emission-contributions";
 import type { EntryObservation } from "./emission-entry-rules";
 import { creditBatchApplicationMass, isCreditBatchFullyApplied, MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 
@@ -136,16 +136,35 @@ it("skips a known incompatible draft then waits for the first unread draft", () 
   });
 });
 
-it("recognizes elected, reserved and sent carry destinations", () => {
+it("recognizes elected, reserved, sent and held carry destinations", () => {
   const receiver = decide().receiver!;
   for (const fact of [
     { ...entry, carry: { receiver, waitingReason: null } },
     { ...entry, reservedByRemovalId: receiver.removalId },
     { ...entry, sentByRemovalId: receiver.removalId },
+    { ...entry, heldForRemovalId: receiver.removalId },
   ]) {
     expect(isCarriedToRemoval(fact, receiver.removalId)).toBe(true);
     expect(isCarriedToRemoval(fact, "other-removal")).toBe(false);
   }
   expect(isCarriedToRemoval(entry, receiver.removalId)).toBe(false);
   expect(isCarriedToRemoval({ ...entry, carry: { receiver: null, waitingReason: null } }, receiver.removalId)).toBe(false);
+});
+
+it("keeps a carried replacement with its receiver ahead of own-batch contenders", () => {
+  const replacement = { ...entry, id: "replacement", heldForRemovalId: draft.removalId };
+  const original = { ...entry, deletedAt: new Date(), sentByRemovalId: draft.removalId };
+  const own = { ...draft, removalId: "own-draft", creditBatchIds: [entry.creditBatchId],
+    window: { start: "2026-09-01", end: "2026-10-03" } };
+  expect(entryHoldingRemovalId(replacement)).toBe(draft.removalId);
+  expect(removalEntryOwner(replacement, [own])).toBe(draft.removalId);
+  expect(removalEntryOwner(original, [own])).toBeNull();
+  for (const contender of [draft, own, { ...draft, removalId: "unrelated" }]) {
+    const result = deriveRemovalEntryContributions({ removalId: contender.removalId,
+      memberBatchIds: contender.creditBatchIds, window: contender.window, contenders: [own],
+      entries: [original, replacement], lineSources: observation.lineSources,
+      monitoredInputs: [{ componentId: "line", inputKey: "electricity_use", unit: "kWh" }] });
+    expect(result.manifest.flatMap(input => input.entries.map(value => value.entryId)))
+      .toEqual(contender.removalId === draft.removalId ? [replacement.id] : []);
+  }
 });

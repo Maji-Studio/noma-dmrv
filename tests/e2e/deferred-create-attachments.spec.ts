@@ -16,6 +16,7 @@ import {
   selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
+  waitForFacilityHydration,
 } from "./fixtures/page-helpers";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import type { Page } from "@playwright/test";
@@ -98,11 +99,18 @@ test.describe("Deferred create attachments", () => {
   }) => {
     void cleanupTestData;
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
     await expect(page.getByRole("table", { name: "Feedstocks" })).toHaveAttribute(
       "aria-busy",
       "false",
     );
+    // The snapshot reads the row Actions buttons, which render after the rows.
+    // Wait for the seeded feedstock's button, or it counts as newly created.
+    await expect(
+      page.getByRole("button", {
+        name: `${ACTION_LABEL_PREFIX}${seededData.feedstock.code}`,
+      }),
+    ).toBeVisible();
     const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
     await page.click('button:has-text("New feedstock")');
@@ -124,7 +132,6 @@ test.describe("Deferred create attachments", () => {
 
     // Reopen the feedstock created by this test. Delivery-date sorting can put
     // a newer seeded row ahead of it, so row position is not an identity.
-    await page.waitForLoadState("networkidle");
     const createdFeedstockCode = await getCreatedFeedstockCode(
       page,
       existingFeedstockCodes,
@@ -162,7 +169,7 @@ test.describe("Deferred create attachments", () => {
     await seedCreditBatch(seededData.facility.id, tag, seededData.feedstockType.id);
 
     await page.goto(`/lab-samples?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New Sample")');
     await waitForSideSheet(page);
@@ -196,7 +203,11 @@ test.describe("Deferred create attachments", () => {
     await waitForSideSheetClose(page);
 
     // Reopen: view mode shows the documents, read-only.
-    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("table", { name: "Samples" })).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    await expect(page.locator("table tbody tr").first()).toBeVisible();
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
     const sampleDialog = page.getByRole("dialog");
@@ -224,7 +235,7 @@ test.describe("Deferred create attachments", () => {
   }) => {
     void cleanupTestData;
     await page.goto(`/feedstock-intake?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await waitForFacilityHydration(page, seededData.facility.name);
 
     await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
@@ -261,9 +272,9 @@ test.describe("Deferred create attachments", () => {
 
     // Network recovers → retry succeeds and the failed list disappears.
     await page.unroute("**/*");
-    await dialog.locator('button:has-text("Retry uploads")').click();
+    await dialog.getByRole("button", { name: "Try all again" }).click();
     await expect(
-      dialog.getByRole("button", { name: "Retry uploads" }),
+      dialog.getByRole("button", { name: "Try all again" }),
     ).toHaveCount(0, { timeout: 20000 });
 
     // The document is now live on the entity in the edit panel.

@@ -46,7 +46,7 @@ describe("ensureEvidenceLedgersFromContext", () => {
     ).rejects.toBe(failure);
     expect(failure).toBeInstanceOf(SafeError);
     expect(failure.message).toBe(
-      "Old certification evidence could not be replaced. Retry the submission.",
+      "Old certification evidence could not be replaced. Submit the Removal again.",
     );
     expect(log.warn).toHaveBeenCalledOnce();
   });
@@ -60,7 +60,7 @@ describe("ensureEvidenceLedgersFromContext", () => {
     await expect(
       ensureEvidenceLedgersFromContext(orgCtx, "removal-1", ctx, log as never),
     ).rejects.toThrow(
-      "Unable to prepare the transport evidence ledger. Retry the Removal submission.",
+      "Unable to prepare the transport evidence ledger. Submit the Removal again.",
     );
     expect(log.warn).toHaveBeenCalledOnce();
     expect(

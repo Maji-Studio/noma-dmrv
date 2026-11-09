@@ -127,7 +127,10 @@ jobs:
   quality-tests:
     name: quality-tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Shard 1 takes 9 to 15 minutes depending on the runner; a passing shard was
+    # cancelled at 15 minutes (#1570). Keep 2 shards because the staging ruleset's
+    # required checks are named per shard.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
