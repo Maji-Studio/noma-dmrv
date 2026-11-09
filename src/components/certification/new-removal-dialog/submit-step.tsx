@@ -1,5 +1,5 @@
 /**
- * SubmitStep — the final "Confirm & submit" step of the New-Removal wizard. It
+ * SubmitStep — the final "Review & submit" step of the New-Removal wizard. It
  * folds in what used to be a separate "Requirements" step: the facility/registry-
  * level checks (project mapping, default template, cross-batch transport
  * uniformity) reach the operator through `SubmissionSummary` — a verdict line
@@ -83,6 +83,8 @@ interface SubmitStepProps {
   submitMutation: ReturnType<typeof useSubmitRemoval>;
   /** Back to the Empty components step, to undo a recorded zero. Offered even while the review is blocked. */
   onBackToEmpty?: () => void;
+  /** Told when the details view opens or closes, so the dialog can keep its width for the table. */
+  onDetailsChange?: (open: boolean) => void;
 }
 
 export function SubmitStep({
@@ -92,6 +94,7 @@ export function SubmitStep({
   onDone,
   submitMutation,
   onBackToEmpty,
+  onDetailsChange,
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
@@ -206,6 +209,7 @@ export function SubmitStep({
       : ctx.isProduction ? "Submit to production" : "Submit Removal";
   const showDetails = (open: boolean) => {
     setDetailsOpen(open);
+    onDetailsChange?.(open);
     // The details replace the screen: start at its top, with focus on the heading both views share.
     document.querySelector("[data-overlay-layer=dialog]")?.scrollTo({ top: 0 });
     window.requestAnimationFrame(() =>

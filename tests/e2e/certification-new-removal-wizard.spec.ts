@@ -220,7 +220,7 @@ test.describe("Certification — New-Removal wizard", () => {
       );
 
       // ...and the wizard opens on that removal in resume mode — it skips the
-      // select step and lands on "Confirm & submit" (the step that absorbed the
+      // select step and lands on "Review & submit" (the step that absorbed the
       // old Requirements step — see new-removal-dialog/submit-step.tsx). Assert
       // via the step rail's active item (rendered immediately) rather than the
       // step body, which is gated on the removal context query (that query hits

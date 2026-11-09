@@ -61,7 +61,7 @@ import {
 } from "./removal-list-state";
 
 export function RemovalsList({ initialCreate = false, canManage = false }: { initialCreate?: boolean; canManage?: boolean } = {}) {
-  const { facilityId, selectedFacility } = useFacilityContext();
+  const { facilityId } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
   // `?create=true` opens the wizard (the credit batch page's Start Removal).
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
@@ -125,11 +125,6 @@ export function RemovalsList({ initialCreate = false, canManage = false }: { ini
       {facilityId && (
         <NewRemovalDialog
           facilityId={facilityId}
-          facilityName={
-            selectedFacility?.name?.trim() ||
-            selectedFacility?.code ||
-            "Selected facility"
-          }
           isOpen={wizardOpen}
           onClose={closeWizard}
           resumeRemovalId={resume}

@@ -10,7 +10,7 @@
  *      the fix). "Continue" is the DEFERRED-CREATE moment: it calls
  *      `createRemovalWithBatchesAction` (server re-validates health) and only
  *      then does the removal exist.
- *   2. Confirm & submit  — the registry requirements (facility mapping, template,
+ *   2. Review & submit   — the registry requirements (facility mapping, template,
  *      transport uniformity) shown inline as a confirmation, then the same submit
  *      + production gate as the Review flow. No separate "resolve later" hop:
  *      closing the dialog leaves the created removal as a draft, recoverable from
@@ -67,13 +67,12 @@ import { shouldBlockRemovalResume } from "./resume-state";
 
 const SELECT_STEP: StepFlowStep = { key: "select", label: "Select batches" };
 const EMPTY_STEP: StepFlowStep = { key: "empty", label: "Empty components" };
-const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Confirm & submit" };
+const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Review & submit" };
 type StepKey = "select" | "empty" | "submit";
 
 
 interface NewRemovalDialogProps {
   facilityId: string;
-  facilityName: string;
   isOpen: boolean;
   onClose: () => void;
   /** Reopen an existing draft removal straight at the confirm-&-submit step. */
@@ -91,6 +90,8 @@ export function NewRemovalDialog({
   const submitMutation = useSubmitRemoval();
   // Review & submit is its own narrower dialog (D1a): the wizard body reports when it is on it.
   const [reviewing, setReviewing] = useState(false);
+  // The details view ("See what this Removal sends") holds the component table, so it keeps the wide dialog.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const submissionPending = submitMutation.isPending;
   const closeIfIdle = () => {
     if (!submissionPending) onClose();
@@ -103,7 +104,7 @@ export function NewRemovalDialog({
       onOpen={() => {
         if (!submitMutation.isPending) submitMutation.reset();
       }}
-      width={reviewing ? "lg" : "xl"}
+      width={reviewing && !detailsOpen ? "lg" : "xl"}
       contentClassName={reviewing ? "" : "p-20"}
       ariaLabelledBy={REVIEW_TITLE_ID}
       // A Removal that opens on Review & submit starts on the heading, not on the first fix link under it.
@@ -118,7 +119,11 @@ export function NewRemovalDialog({
         onClose={closeIfIdle}
         resumeRemovalId={resumeRemovalId}
         submitMutation={submitMutation}
-        onReviewingChange={setReviewing}
+        onReviewingChange={(next) => {
+          setReviewing(next);
+          if (!next) setDetailsOpen(false);
+        }}
+        onDetailsChange={setDetailsOpen}
       />
     </Modal>
   );
@@ -130,12 +135,14 @@ function WizardBody({
   resumeRemovalId,
   submitMutation,
   onReviewingChange,
+  onDetailsChange,
 }: {
   facilityId: string;
   onClose: () => void;
   resumeRemovalId: string | null;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
   onReviewingChange: (reviewing: boolean) => void;
+  onDetailsChange: (open: boolean) => void;
 }) {
   // A new or reopened Removal has no chosen step yet: it lands where the
   // server's answer sends it, resolved once (the empty components while any is
@@ -324,6 +331,7 @@ function WizardBody({
               facilityId={facilityId}
               onDone={onClose}
               submitMutation={submitMutation}
+              onDetailsChange={onDetailsChange}
               onBackToEmpty={
                 showEmptyStep
                   ? () => {

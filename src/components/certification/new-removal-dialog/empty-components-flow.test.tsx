@@ -70,7 +70,7 @@ const LAND_SUBMIT = { step: "submit" };
 
 function renderDialog(resumeRemovalId: string | null) {
   return render(
-    <NewRemovalDialog facilityId="f" facilityName="Facility" isOpen onClose={vi.fn()} resumeRemovalId={resumeRemovalId} />,
+    <NewRemovalDialog facilityId="f" isOpen onClose={vi.fn()} resumeRemovalId={resumeRemovalId} />,
   );
 }
 
@@ -135,7 +135,7 @@ describe("New Removal wizard with empty components", () => {
 
     // Recording the last zeros: the read now says everything is confirmed.
     mocks.query.data = CONFIRMED;
-    view.rerender(<NewRemovalDialog facilityId="f" facilityName="Facility" isOpen onClose={vi.fn()} resumeRemovalId="removal-1" />);
+    view.rerender(<NewRemovalDialog facilityId="f" isOpen onClose={vi.fn()} resumeRemovalId="removal-1" />);
     expect(screen.getByText("empty components step")).toBeTruthy();
     expect(screen.queryByText("submit step")).toBeNull();
   });
