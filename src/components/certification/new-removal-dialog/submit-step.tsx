@@ -183,6 +183,8 @@ export function SubmitStep({
         : null,
       unbindableComponentIds: unbindableInputs.map((input) => input.componentId),
     }),
+    // A build being read again after a fix may still hold the old refusal: it must not add a row.
+    compilationQuery.isFetching,
   );
   const refreshReview = useRefreshRemovalReview();
   // Back from a fix, read the readiness and the build again: a refusal the fix cleared must not stay open.

@@ -15,10 +15,15 @@ export interface FixEntry {
   fixed: boolean;
 }
 
-/** Open items plus the ones fixed since the step opened, in the order first seen. */
-export function useFixProgress(items: readonly ReviewItem[]): FixEntry[] {
+/**
+ * Open items plus the ones fixed since the step opened, in the order first seen.
+ * `holdNew` is true while part of the review is being read again (the build after a fix): what is shown
+ * may then be older than the readiness beside it, so it must not introduce an item. A stale refusal
+ * would otherwise show as a new row, and be counted as fixed once the fresh read drops it.
+ */
+export function useFixProgress(items: readonly ReviewItem[], holdNew = false): FixEntry[] {
   const [seen, setSeen] = useState<readonly ReviewItem[]>(items);
-  const unseen = items.filter((item) => !seen.some((known) => known.id === item.id));
+  const unseen = holdNew ? [] : items.filter((item) => !seen.some((known) => known.id === item.id));
   // Derived state: the list can only grow here, so this settles in one more render.
   if (unseen.length > 0) setSeen([...seen, ...unseen]);
   const open = new Map(items.map((item) => [item.id, item]));
