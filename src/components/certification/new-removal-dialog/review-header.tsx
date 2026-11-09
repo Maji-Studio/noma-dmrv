@@ -44,7 +44,7 @@ export function ReviewHeader({
       <h2
         id={REVIEW_TITLE_ID}
         tabIndex={-1}
-        className="body-large font-medium text-[var(--color-text-primary)] focus:outline-none"
+        className="title-heading-3 text-[var(--color-text-primary)] focus:outline-none"
       >
         Review &amp; submit
       </h2>

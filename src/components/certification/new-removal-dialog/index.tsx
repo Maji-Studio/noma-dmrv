@@ -62,6 +62,7 @@ import {
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
 import { ReviewHeader } from "./review-header";
+import { REVIEW_TITLE_ID } from "./review-parts";
 import { shouldBlockRemovalResume } from "./resume-state";
 
 const SELECT_STEP: StepFlowStep = { key: "select", label: "Select batches" };
@@ -104,9 +105,9 @@ export function NewRemovalDialog({
       }}
       width={reviewing ? "lg" : "xl"}
       contentClassName={reviewing ? "" : "p-20"}
-      ariaLabelledBy="new-removal-title"
+      ariaLabelledBy={REVIEW_TITLE_ID}
       // A Removal that opens on Review & submit starts on the heading, not on the first fix link under it.
-      initialFocus={resumeRemovalId ? () => document.getElementById("new-removal-title") ?? true : undefined}
+      initialFocus={resumeRemovalId ? () => document.getElementById(REVIEW_TITLE_ID) ?? true : undefined}
       // Multi-step wizard: a stray backdrop click must not discard a
       // half-built removal. Close button + ESC still dismiss.
       dismissOnClickOutside={false}
@@ -221,8 +222,16 @@ function WizardBody({
   const reviewing = step === "submit";
   useEffect(() => {
     onReviewingChange(reviewing);
+    // A resume lands here after its transient heading was focused and then replaced:
+    // focus fell to the page, so move it to the Review & submit heading now it renders.
+    if (reviewing && resumeRemovalId) {
+      const active = document.activeElement;
+      if (!active || active === document.body || active.matches("[data-overlay-layer=dialog]")) {
+        document.getElementById(REVIEW_TITLE_ID)?.focus({ preventScroll: true });
+      }
+    }
     return () => onReviewingChange(false);
-  }, [reviewing, onReviewingChange]);
+  }, [reviewing, resumeRemovalId, onReviewingChange]);
 
   // No step is current while the landing is unresolved (the rail shows none).
   const currentIndex = step ? steps.findIndex((item) => item.key === step) : -1;
@@ -276,7 +285,7 @@ function WizardBody({
   ) {
     return (
       <div className="flex flex-col gap-24">
-        <h2 id="new-removal-title" tabIndex={-1} className="title-heading-2 focus:outline-none">
+        <h2 id={REVIEW_TITLE_ID} tabIndex={-1} className="title-heading-2 focus:outline-none">
           Removal
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
@@ -333,7 +342,7 @@ function WizardBody({
   return (
     <div className="flex flex-col gap-16">
       <div className="flex items-center justify-between gap-12">
-        <h2 id="new-removal-title" tabIndex={-1} className="title-heading-2 focus:outline-none">
+        <h2 id={REVIEW_TITLE_ID} tabIndex={-1} className="title-heading-2 focus:outline-none">
           New Removal
         </h2>
       </div>
