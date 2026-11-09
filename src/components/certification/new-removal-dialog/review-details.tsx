@@ -39,7 +39,8 @@ export function FactsLine({ facts }: { facts: Pick<SubmissionFacts, "durabilityT
     <p className="flex flex-col gap-2 body-small text-[var(--color-text-secondary)] sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-6">
       <span>
         {text}
-        {hint && <ExplanationInfo title={text} hint={hint} />}
+        {/* The trigger is a 24px box; pull its trailing space in so the separator sits close to the glyph. */}
+        {hint && <ExplanationInfo title={text} hint={hint} className="sm:-mr-6" />}
       </span>
       <span aria-hidden className="max-sm:hidden">
         ·
