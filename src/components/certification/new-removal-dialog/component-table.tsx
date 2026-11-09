@@ -36,18 +36,9 @@ export const STATE_WORD = {
   elsewhere: "In another Removal",
 } as const;
 
-/** The row's id, so the blocker Notice can scroll to it and move focus there. */
+/** The row's id. */
 export function componentRowDomId(componentId: string): string {
   return `submit-component-${componentId}`;
-}
-
-/** Scroll the table to a component's row and move focus to it. */
-export function jumpToComponentRow(componentId: string): void {
-  const row = document.getElementById(componentRowDomId(componentId));
-  if (!row) return;
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  row.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
-  row.focus({ preventScroll: true });
 }
 
 // Phone: name and figure, then source and files, then the state. Desktop: four columns.

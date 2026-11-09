@@ -28,6 +28,7 @@ import {
   useRemovalsForFacility,
   useSaveFacilityCertifierMapping,
   useSubmitGhgStatementToVerifier,
+  useCreateRemovalWithBatches,
   useDeleteRemoval,
   useSubmitRemoval,
 } from "./use-certification";
@@ -107,6 +108,20 @@ describe("useSubmitRemoval", () => {
   });
 });
 
+describe("useCreateRemovalWithBatches", () => {
+  it("refreshes the dashboard once a draft Removal is created, so Needs attention lists it", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useCreateRemovalWithBatches();
+
+    const [{ onSuccess }] = reactQueryMocks.useMutation.mock.calls[0] as [{ onSuccess: () => unknown }];
+    await onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
+  });
+});
+
 describe("useDeleteRemoval", () => {
   it("refreshes the dashboard once a Removal is deleted", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
@@ -137,7 +152,8 @@ describe("useSubmitGhgStatementToVerifier", () => {
       onError: (error: Error) => void;
     }];
     await onError(error);
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
@@ -278,7 +294,8 @@ describe("invalidateCertificationReadiness", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.details() });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dashboardOverviewKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
@@ -296,7 +313,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(6);
+    expect(invalidateQueries).toHaveBeenCalledTimes(7);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: creditBatchKeys.emissionAllocationPrefix() });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,

@@ -57,7 +57,7 @@ describe("SubmissionOutcomeNotice", () => {
     expect(noAnswer).toContain("Anything already sent stays in Isometric. Review and submit again to send the rest.");
     const interrupted = render({ kind: "interrupted" });
     expect(interrupted).toContain("Submission interrupted");
-    expect(interrupted).toContain("Part of it may already be in Isometric. Review and submit again to finish it. What is there is reused.");
+    expect(interrupted).toContain("Part of it may already be in Isometric. Review and submit again to finish it. Anything already sent is kept.");
     expect(render({ kind: "failed", message: "Removal needs a template." })).toContain("Removal needs a template. Review and submit again.");
   });
 

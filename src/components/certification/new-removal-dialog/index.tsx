@@ -10,7 +10,7 @@
  *      the fix). "Continue" is the DEFERRED-CREATE moment: it calls
  *      `createRemovalWithBatchesAction` (server re-validates health) and only
  *      then does the removal exist.
- *   2. Confirm & submit  — the registry requirements (facility mapping, template,
+ *   2. Review & submit   — the registry requirements (facility mapping, template,
  *      transport uniformity) shown inline as a confirmation, then the same submit
  *      + production gate as the Review flow. No separate "resolve later" hop:
  *      closing the dialog leaves the created removal as a draft, recoverable from
@@ -27,7 +27,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -61,17 +61,18 @@ import {
 } from "@/lib/certification/empty-components-state";
 import { SelectBatchesStep } from "./select-batches-step";
 import { SubmitStep } from "./submit-step";
+import { ReviewHeader } from "./review-header";
+import { REVIEW_TITLE_ID } from "./review-parts";
 import { shouldBlockRemovalResume } from "./resume-state";
 
 const SELECT_STEP: StepFlowStep = { key: "select", label: "Select batches" };
 const EMPTY_STEP: StepFlowStep = { key: "empty", label: "Empty components" };
-const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Confirm & submit" };
+const SUBMIT_STEP: StepFlowStep = { key: "submit", label: "Review & submit" };
 type StepKey = "select" | "empty" | "submit";
 
 
 interface NewRemovalDialogProps {
   facilityId: string;
-  facilityName: string;
   isOpen: boolean;
   onClose: () => void;
   /** Reopen an existing draft removal straight at the confirm-&-submit step. */
@@ -80,7 +81,6 @@ interface NewRemovalDialogProps {
 
 export function NewRemovalDialog({
   facilityId,
-  facilityName,
   isOpen,
   onClose,
   resumeRemovalId = null,
@@ -88,6 +88,10 @@ export function NewRemovalDialog({
   // Own the mutation above WizardBody so a live-lock query refresh cannot
   // unmount the observer that controls dialog dismissal.
   const submitMutation = useSubmitRemoval();
+  // Review & submit is its own narrower dialog (D1a): the wizard body reports when it is on it.
+  const [reviewing, setReviewing] = useState(false);
+  // The details view ("See what this Removal sends") holds the component table, so it keeps the wide dialog.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const submissionPending = submitMutation.isPending;
   const closeIfIdle = () => {
     if (!submissionPending) onClose();
@@ -100,9 +104,11 @@ export function NewRemovalDialog({
       onOpen={() => {
         if (!submitMutation.isPending) submitMutation.reset();
       }}
-      width="xl"
-      contentClassName="p-20"
-      ariaLabelledBy="new-removal-title"
+      width={reviewing && !detailsOpen ? "lg" : "xl"}
+      contentClassName={reviewing ? "" : "p-20"}
+      ariaLabelledBy={REVIEW_TITLE_ID}
+      // A Removal that opens on Review & submit starts on the heading, not on the first fix link under it.
+      initialFocus={resumeRemovalId ? () => document.getElementById(REVIEW_TITLE_ID) ?? true : undefined}
       // Multi-step wizard: a stray backdrop click must not discard a
       // half-built removal. Close button + ESC still dismiss.
       dismissOnClickOutside={false}
@@ -110,10 +116,14 @@ export function NewRemovalDialog({
     >
       <WizardBody
         facilityId={facilityId}
-        facilityName={facilityName}
         onClose={closeIfIdle}
         resumeRemovalId={resumeRemovalId}
         submitMutation={submitMutation}
+        onReviewingChange={(next) => {
+          setReviewing(next);
+          if (!next) setDetailsOpen(false);
+        }}
+        onDetailsChange={setDetailsOpen}
       />
     </Modal>
   );
@@ -121,16 +131,18 @@ export function NewRemovalDialog({
 
 function WizardBody({
   facilityId,
-  facilityName,
   onClose,
   resumeRemovalId,
   submitMutation,
+  onReviewingChange,
+  onDetailsChange,
 }: {
   facilityId: string;
-  facilityName: string;
   onClose: () => void;
   resumeRemovalId: string | null;
   submitMutation: ReturnType<typeof useSubmitRemoval>;
+  onReviewingChange: (reviewing: boolean) => void;
+  onDetailsChange: (open: boolean) => void;
 }) {
   // A new or reopened Removal has no chosen step yet: it lands where the
   // server's answer sends it, resolved once (the empty components while any is
@@ -214,6 +226,20 @@ function WizardBody({
     );
   };
 
+  const reviewing = step === "submit";
+  useEffect(() => {
+    onReviewingChange(reviewing);
+    // A resume lands here after its transient heading was focused and then replaced:
+    // focus fell to the page, so move it to the Review & submit heading now it renders.
+    if (reviewing && resumeRemovalId) {
+      const active = document.activeElement;
+      if (!active || active === document.body || active.matches("[data-overlay-layer=dialog]")) {
+        document.getElementById(REVIEW_TITLE_ID)?.focus({ preventScroll: true });
+      }
+    }
+    return () => onReviewingChange(false);
+  }, [reviewing, resumeRemovalId, onReviewingChange]);
+
   // No step is current while the landing is unresolved (the rail shows none).
   const currentIndex = step ? steps.findIndex((item) => item.key === step) : -1;
 
@@ -266,7 +292,7 @@ function WizardBody({
   ) {
     return (
       <div className="flex flex-col gap-24">
-        <h2 id="new-removal-title" className="title-heading-2">
+        <h2 id={REVIEW_TITLE_ID} tabIndex={-1} className="title-heading-2 focus:outline-none">
           Removal
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
@@ -283,10 +309,48 @@ function WizardBody({
     );
   }
 
+  if (reviewing && removalId) {
+    return (
+      <div className="flex flex-col">
+        <ReviewHeader
+          ctx={ctxQuery.data ?? null}
+          // "Step 2 of 2" only when the operator came through Select batches.
+          stepCount={resumeRemovalId ? null : { current: steps.length, total: steps.length }}
+        />
+        <div className="flex flex-col gap-16 px-20 pt-16 pb-20">
+          {ctxQuery.isLoading ? (
+            <p className="body-small text-[var(--color-text-tertiary)]">Loading…</p>
+          ) : ctxQuery.error || !ctxQuery.data ? (
+            <p className="body-small text-[var(--clr-red)]" role="alert">
+              This Removal could not be loaded. Refresh the page.
+            </p>
+          ) : (
+            <SubmitStep
+              removalId={removalId}
+              ctx={ctxQuery.data}
+              facilityId={facilityId}
+              onDone={onClose}
+              submitMutation={submitMutation}
+              onDetailsChange={onDetailsChange}
+              onBackToEmpty={
+                showEmptyStep
+                  ? () => {
+                      setPressed(null);
+                      setChosenStep("empty");
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-16">
       <div className="flex items-center justify-between gap-12">
-        <h2 id="new-removal-title" className="title-heading-2">
+        <h2 id={REVIEW_TITLE_ID} tabIndex={-1} className="title-heading-2 focus:outline-none">
           New Removal
         </h2>
       </div>
@@ -360,34 +424,6 @@ function WizardBody({
             )}
           />
         )}
-        {step === "submit" &&
-          removalId &&
-          (ctxQuery.isLoading ? (
-            <p className="body-small text-[var(--color-text-tertiary)]">
-              Loading…
-            </p>
-          ) : ctxQuery.error || !ctxQuery.data ? (
-            <p className="body-small text-[var(--clr-red)]" role="alert">
-              This Removal could not be loaded. Refresh the page.
-            </p>
-          ) : (
-            <SubmitStep
-              removalId={removalId}
-              ctx={ctxQuery.data}
-              facilityId={facilityId}
-              facilityName={facilityName}
-              onDone={onClose}
-              submitMutation={submitMutation}
-              onBackToEmpty={
-                showEmptyStep
-                  ? () => {
-                      setPressed(null);
-                      setChosenStep("empty");
-                    }
-                  : undefined
-              }
-            />
-          ))}
       </StepFlow>
 
       <Footer

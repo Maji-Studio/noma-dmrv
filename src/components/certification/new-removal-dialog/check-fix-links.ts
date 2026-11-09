@@ -1,44 +1,22 @@
 /**
- * SubmissionChecks — the readiness checks that still need attention, in a
- * disclosure that is open by default.
- *
- * The caller decides whether this renders at all: when every check passes the
- * verdict line in `submission-summary.tsx` carries the count and this list is
- * not shown. Warning-status checks describe automatic submit-time work, not
- * operator work, so they never appear here (see `actionableSubmissionChecks`).
+ * Where each unmet readiness check is repaired: the links Review & submit puts
+ * under a fix. Pure data, no rendering; `review-items.ts` turns a check and
+ * these links into one fix item.
  */
 import { recordHref } from "@/lib/record-links";
-import Link from "next/link";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
-import { InfoHint } from "@/components/ui/tooltip";
 import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
-import { certCheckLabel } from "@/lib/certification/requirement-labels";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { facilityCertificationSettingsHref } from "@/lib/certification/links";
 import type { RemovalBlockerCode } from "@/lib/certification/removal-blockers";
 import { templateFixTarget, type TemplateFixTarget } from "@/lib/certification/template-fix-targets";
 import { isTemplateRoutedCode } from "@/lib/certification/removal-template-blockers";
-import {
-  FEEDSTOCK_TYPE_EDIT_LABEL,
-} from "@/lib/entity-deep-link";
-import { actionableSubmissionChecks } from "./submission-facts";
-
-const CHECK_ICON_SIZE = 14;
-/** Readiness details pack several records into one string. */
-const DETAIL_SEPARATOR = " · ";
+import { FEEDSTOCK_TYPE_EDIT_LABEL } from "@/lib/entity-deep-link";
 
 /** A member credit batch, for links that land on its Removal template. */
-interface CheckCreditBatch {
+export interface CheckCreditBatch {
   id: string;
   code: string;
-}
-
-interface SubmissionChecksProps {
-  checks: RemovalRequirementCheck[];
-  facilityId: string;
-  /** The Removal's credit batches. Emissions blockers link to each one. */
-  creditBatches?: readonly CheckCreditBatch[];
 }
 
 function perBatchLinks(
@@ -72,7 +50,7 @@ function templateFixLinks(
   }).filter((link, index, links) => links.findIndex((item) => item.href === link.href) === index);
 }
 
-function fixLinksFor(
+export function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
     "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes" | "templateFixTargets"
@@ -159,7 +137,7 @@ function fixLinksFor(
   }
 }
 
-function dateGuidance(dateCount: number): string {
+export function dateGuidance(dateCount: number): string {
   if (dateCount === 1) {
     return "Correct this date, or wait until it has passed.";
   }
@@ -167,101 +145,4 @@ function dateGuidance(dateCount: number): string {
     return "Correct these dates, or wait until both dates have passed.";
   }
   return `Correct these dates, or wait until all ${dateCount} dates have passed.`;
-}
-
-/** One unmet check per row: what is wrong, on which record, and where to fix it. */
-function CheckRow({
-  check,
-  facilityId,
-  creditBatches,
-}: {
-  check: RemovalRequirementCheck;
-  facilityId: string;
-  creditBatches?: readonly CheckCreditBatch[];
-}) {
-  const fixes = fixLinksFor(check, facilityId, creditBatches);
-  const detailLines = check.detail?.split(DETAIL_SEPARATOR) ?? [];
-
-  return (
-    <li className="flex items-start gap-8">
-      <span className="mt-2">
-        <WarningIcon
-          size={CHECK_ICON_SIZE}
-          weight="fill"
-          aria-hidden
-          className="shrink-0 text-[var(--st-bad)]"
-        />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="inline-flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-          {certCheckLabel(check)}
-          {check.whyDetail && (
-            <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
-          )}
-        </span>
-        {detailLines.length === 1 && (
-          <span className="body-caption text-[var(--color-text-primary)]">
-            {detailLines[0]}
-          </span>
-        )}
-        {detailLines.length > 1 && (
-          <ul className="list-disc pl-16 body-caption text-[var(--color-text-primary)]">
-            {detailLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        )}
-        {check.key === "measurementDates" && detailLines.length > 0 && (
-          <span className="body-caption font-medium text-[var(--color-text-primary)]">
-            {dateGuidance(detailLines.length)}
-          </span>
-        )}
-        {fixes.length > 0 && (
-          <span className="flex flex-wrap gap-x-12 gap-y-4">
-            {fixes.map((fix) => (
-              <Link
-                key={fix.href}
-                href={fix.href}
-                className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-              >
-                {fix.label}
-              </Link>
-            ))}
-          </span>
-        )}
-      </div>
-    </li>
-  );
-}
-
-export function SubmissionChecks({
-  checks,
-  facilityId,
-  creditBatches,
-}: SubmissionChecksProps) {
-  const actionChecks = actionableSubmissionChecks(checks);
-  const passedCount = actionChecks.filter(
-    (check) => check.status === "met",
-  ).length;
-  const attentionChecks = actionChecks.filter(
-    (check) => check.status === "unmet",
-  );
-
-  return (
-    <section className="flex flex-col gap-12" aria-label="What to fix">
-      <div className="flex items-baseline justify-between gap-12">
-        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
-          What to fix
-        </h3>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {passedCount} {passedCount === 1 ? "check" : "checks"} passed
-        </span>
-      </div>
-      <ul className="flex flex-col gap-12">
-        {attentionChecks.map((check) => (
-          <CheckRow key={`${check.key}-${check.transportCategory ?? ""}`} check={check} facilityId={facilityId} creditBatches={creditBatches} />
-        ))}
-      </ul>
-    </section>
-  );
 }

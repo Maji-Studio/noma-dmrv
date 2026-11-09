@@ -8,6 +8,7 @@ import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
   refresh: vi.fn(),
+  compileRefetch: vi.fn(),
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
@@ -98,7 +99,7 @@ vi.mock("@/hooks/use-certification", () => ({
     },
     isLoading: false,
     error: null,
-    refetch: vi.fn(),
+    refetch: state.compileRefetch,
   }),
 }));
 
@@ -119,9 +120,26 @@ vi.mock("@/lib/certification/readiness-facts", () => ({
   toRemovalReadinessFacts: () => ({}),
 }));
 
+const factsState = vi.hoisted(() => ({ state: "ready" as "ready" | "blocked" | "loading", recheck: null as null | (() => void) }));
+
 vi.mock("./submission-facts", () => ({
   isRemovalCompilationReady: () => true,
+  actionableSubmissionChecks: (checks: unknown[]) => checks,
+  buildSubmissionFacts: () => ({
+    state: factsState.state, headline: "", detail: "", batches: [], blockers: [], advisories: [], warnings: [],
+  }),
 }));
+
+// The focus listener needs a browser; the fix list itself is real.
+vi.mock("./use-fix-progress", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./use-fix-progress")>(),
+  useRecheckOnReturn: (refresh: () => void) => {
+    factsState.recheck = refresh;
+    return () => undefined;
+  },
+}));
+vi.mock("./review-details", () => ({ ReviewDetails: () => <div>Review details</div> }));
+vi.mock("@/hooks/use-removal-empty-components", () => ({ useRefreshRemovalReview: () => vi.fn() }));
 
 vi.mock("./submission-summary", () => ({
   SubmissionSummary: () => <div>Submission summary</div>,
@@ -176,6 +194,7 @@ beforeEach(() => {
   state.discardMutate.mockReset();
   state.discardReset.mockReset();
   state.attempts = [];
+  factsState.state = "ready";
   state.deleteAccess = {
     viewerCanDeleteRegistryRemovals: true,
     hasRegisteredProductionBatches: false,
@@ -201,7 +220,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={ctx}
           onDone={vi.fn()}
           submitMutation={mutation as never}
@@ -259,7 +277,7 @@ describe("SubmitStep", () => {
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
           onDone={vi.fn()} submitMutation={mutation as never} />,
       );
     });
@@ -279,7 +297,7 @@ describe("SubmitStep", () => {
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
-        <SubmitStep removalId="removal-1" facilityId="facility-1" facilityName="Tanzania facility" ctx={CONTEXT}
+        <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CONTEXT}
           onDone={vi.fn()} submitMutation={mutation as never} />,
       );
     });
@@ -287,6 +305,49 @@ describe("SubmitStep", () => {
     expect(text).toContain("Registry check failed");
     expect(text).not.toContain("Outcome notice");
     await act(async () => renderer?.unmount());
+  });
+
+  describe("footer", () => {
+    const idle = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: false, data: undefined, error: null, reset: vi.fn() };
+
+    async function renderStep(ctx: RemovalCertifyContext, onBackToEmpty?: () => void) {
+      let renderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        renderer = create(
+          <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={idle as never} onBackToEmpty={onBackToEmpty} />,
+        );
+      });
+      return renderer!;
+    }
+
+    it("keeps only the way back to Empty components while blocked, for a draft with confirmed zeros", async () => {
+      factsState.state = "blocked";
+      const onBackToEmpty = vi.fn();
+      const renderer = await renderStep(CONTEXT, onBackToEmpty);
+      const buttons = renderer.root.findAllByType("button");
+      expect(buttons).toHaveLength(1);
+      await act(async () => findButton(renderer, "Back to Empty components")?.props.onClick());
+      expect(onBackToEmpty).toHaveBeenCalledTimes(1);
+    });
+
+    it("has no footer at all while something blocks and no way back is offered: no Submit, no Discard, no Close", async () => {
+      factsState.state = "blocked";
+      const renderer = await renderStep(CONTEXT);
+      expect(renderer.root.findAllByType("button")).toHaveLength(0);
+    });
+
+    it("reads the build again, not only readiness, when the tab regains focus after a fix", async () => {
+      state.compileRefetch.mockClear();
+      await renderStep(CONTEXT);
+      (factsState.recheck as (() => void) | null)?.();
+      expect(state.compileRefetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("names the destination on the button once ready", async () => {
+      expect(findButton(await renderStep(CONTEXT), "Submit Removal")).toBeDefined();
+      const production = await renderStep({ ...CONTEXT, isProduction: true } as RemovalCertifyContext);
+      expect(findButton(production, "Submit to production")).toBeDefined();
+    });
   });
 
   it("discards a local draft only after confirmation", async () => {
@@ -298,7 +359,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={
@@ -348,7 +408,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={
             {
               ...CONTEXT,
@@ -423,7 +482,6 @@ describe("SubmitStep", () => {
           <SubmitStep
             removalId="removal-1"
             facilityId="facility-1"
-            facilityName="Tanzania facility"
             ctx={ctx}
             onDone={vi.fn()}
             submitMutation={IDLE_MUTATION}
@@ -479,7 +537,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={
             {
               ...CONTEXT,
@@ -514,7 +571,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={vi.fn()}
           submitMutation={
@@ -547,7 +603,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={
@@ -595,7 +650,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={
@@ -633,7 +687,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={ctx}
           onDone={vi.fn()}
           submitMutation={
@@ -710,7 +763,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={vi.fn()}
           submitMutation={
@@ -759,7 +811,6 @@ describe("SubmitStep", () => {
           <SubmitStep
             removalId="removal-1"
             facilityId="facility-1"
-            facilityName="Tanzania facility"
             ctx={CONTEXT}
             onDone={vi.fn()}
             submitMutation={mutation as never}
@@ -815,7 +866,6 @@ describe("SubmitStep", () => {
       <SubmitStep
         removalId="removal-1"
         facilityId="facility-1"
-        facilityName="Tanzania facility"
         ctx={ctx}
         onDone={vi.fn()}
         submitMutation={mutation as never}
@@ -872,7 +922,6 @@ describe("SubmitStep", () => {
         <SubmitStep
           removalId="removal-1"
           facilityId="facility-1"
-          facilityName="Tanzania facility"
           ctx={CONTEXT}
           onDone={onDone}
           submitMutation={

@@ -253,9 +253,9 @@ Size tokens live in `src/app/globals.css`; the classes live in
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Every other link button keeps mono uppercase.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
-- **20px:** `.body-lead`
-- **24px:** `.title-heading-3` (subsection titles)
-- **32px:** `.title-heading-2` (section titles)
+- **20px:** `.body-lead`; with `font-medium` it is the title of every read sheet and form section (`SectionLabel`, shared by `DetailSection` and `FormSection`; #1554)
+- **24px:** `.title-heading-3` (subsection titles, and the `SlideOverPanel` sheet title so it still leads the 20px section titles)
+- **32px:** `.title-heading-2` (page-level headings)
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
@@ -277,18 +277,19 @@ use at most four text styles:
 | Style | Classes | Used for |
 |---|---|---|
 | Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, `FormField` cues, calculation rows' labels |
-| Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
+| Label | `body-small font-medium` | field labels (secondary ink) |
+| Section title | `body-lead font-medium` | `FormSection` / `DetailSection` titles (primary ink); the sheet title above them is `title-heading-3` (24px) |
 | Value | `body-small` | figures in a derived block's rows (`StockRows`) |
 | Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
 
 Control text (inputs, selects, the entity select trigger) is the primitives'
 own 16px `--text-s`, and read-sheet `DetailField` values are `body-medium`, the
 same 16px, so a field reads at one size in its form and its read view. Neither
-is restyled inside a form. Hierarchy runs section title, field label, value,
+is restyled inside a form. Hierarchy runs sheet title (24px), section title (20px), field label, value,
 caption.
 
 - **No eyebrows.** `SectionLabel` (the `FormSection` title) is a sentence case
-  `body-small font-medium` title in primary ink on a `min-h-24` row, not an
+  `body-lead font-medium` (20px) title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
   forms, sheets, dialogs or read views either (accordion triggers, side
@@ -585,6 +586,11 @@ Always use `Button`; never a raw `<button>` with manual styling.
   The Allocation flow chart (`allocation-flow-chart.tsx`) is the same case: one
   transparent raw `<button>` per drawn node sits over the SVG, with the focus
   ring and at least a 44px tall hit area, because the node's size is the data.
+- **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
+  full-width disclosure row (date range, dry mass, caret, 44px tall) and "Show all N" is an
+  underlined text action under a record list. `Button` has no variant with the text-link look
+  or a row layout (fixed heights, `whitespace-nowrap`, `label-button` type), so both stay raw
+  `<button>`s with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`).
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
@@ -764,7 +770,10 @@ The one outcome screen for auth pages (check your email, email verified, verific
 ### Other primitives — intent only, props at source
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
-  filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
+  filtered-empty state uses it; **never a bare `<p>`**. Padding tiers: `lg` and `md` keep a
+  `title-heading-3` title; `sm` (nested empties inside a section or card) renders its title as
+  `body-lead font-medium` (20px, the section title style) so it never outranks the section
+  title above it. Icon sizing is
   caller-owned. The "No X yet" state of a record the illustration set draws
   carries its drawing at `ILLUSTRATION_SIZE.empty` (see Illustrations); every
   other branch keeps a Phosphor icon. Two copy rules, both load-bearing:

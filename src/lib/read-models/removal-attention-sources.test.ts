@@ -1,0 +1,88 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { OrgContext } from "@/lib/auth/server";
+
+const mocks = vi.hoisted(() => ({
+  rows: [] as Array<{ id: string; code: string; createdAt: Date; startedOn: null; completedOn: null }>,
+  submissions: new Map<string, { status: string; lockedAt: null; metadata: null }>(),
+  built: [] as string[],
+  returnedIds: new Set<string>(),
+}));
+
+vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: async () => mocks.rows }));
+vi.mock("@/data-access/certification", () => ({ getLatestSubmissionsForEntities: async () => mocks.submissions }));
+vi.mock("@/data-access/dashboard-returned-removals", () => ({ loadReturnedRemovalIds: async () => mocks.returnedIds }));
+vi.mock("@/lib/certification/removal-entry-correction", () => ({
+  correctionForRemoval: (id: string) => (id === "returned-open" ? { resubmitNeeded: true } : undefined),
+}));
+vi.mock("@/data-access/utils", () => ({ requireOrgScope: () => undefined }));
+vi.mock("@/lib/isometric/utils/lock", () => ({ isLockedInFlight: () => false }));
+vi.mock("@/lib/certification/from-submission", () => ({ isRemovalSubmissionInterruptedFromSubmission: () => false }));
+vi.mock("@/fn/certification/certify-context-core", () => ({
+  loadFacilityCertifierFacts: async () => ({}),
+  resolveScopeForRemoval: async (_ctx: unknown, id: string) => ({ id }),
+  buildRemovalContext: async (_ctx: unknown, scope: { id: string }) => {
+    if (scope.id === "broken") throw new Error("build failed");
+    mocks.built.push(scope.id);
+    return { id: scope.id };
+  },
+}));
+vi.mock("@/lib/certification/readiness-facts", () => ({ toRemovalReadinessFacts: (ctx: { id: string }) => ctx }));
+vi.mock("@/lib/certification/readiness", () => ({
+  deriveRemovalReadiness: (facts: { id: string }) =>
+    facts.id === "blocked" ? { state: "blocked", reasons: ["One.", "Two."] } : { state: "ready", reasons: [] },
+}));
+
+import { loadRemovalAttentionSources } from "./removal-attention-sources";
+
+const createdAt = new Date("2026-11-01T00:00:00Z");
+const row = (id: string) => ({ id, code: `RM-${id}`, createdAt, startedOn: null, completedOn: null });
+
+describe("loadRemovalAttentionSources", () => {
+  beforeEach(() => {
+    mocks.rows = [row("blocked"), row("ready"), row("sent")];
+    mocks.submissions = new Map([["sent", { status: "submitted", lockedAt: null, metadata: null }]]);
+    mocks.built = [];
+    mocks.returnedIds = new Set();
+  });
+
+  it("returns the readiness of each draft and leaves a submitted Removal out", async () => {
+    const drafts = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(drafts.drafts.map((draft) => [draft.removalId, draft.readiness.state])).toEqual([
+      ["blocked", "blocked"],
+      ["ready", "ready"],
+    ]);
+    expect(mocks.built).not.toContain("sent");
+  });
+
+  it("builds nothing when no Removal is a draft or returned", async () => {
+    mocks.rows = [row("sent")];
+    expect(await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual({ drafts: [], rejected: [], returned: [] });
+    expect(mocks.built).toEqual([]);
+  });
+
+  it("leaves out a draft whose build rejects and keeps the others", async () => {
+    mocks.rows = [row("broken"), row("ready")];
+    const { drafts } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(drafts.map((draft) => draft.removalId)).toEqual(["ready"]);
+  });
+
+  it("adds a Removal whose last submission was rejected, without building it", async () => {
+    mocks.rows = [row("bounced")];
+    mocks.submissions = new Map([["bounced", { status: "rejected", lockedAt: null, metadata: null }]]);
+    const { rejected } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(rejected.map((removal) => removal.removalId)).toEqual(["bounced"]);
+    expect(mocks.built).toEqual([]);
+  });
+
+  it("adds each submitted Removal the verifier returned, with its correction state", async () => {
+    mocks.rows = [row("returned-open"), row("returned-closed"), row("quiet")];
+    mocks.submissions = new Map(["returned-open", "returned-closed", "quiet"].map((id) => [id, { status: "submitted", lockedAt: null, metadata: null }]));
+    mocks.returnedIds = new Set(["returned-open", "returned-closed"]);
+    const { returned } = await loadRemovalAttentionSources({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(returned.map((removal) => [removal.removalId, removal.correction?.resubmitNeeded])).toEqual([
+      ["returned-open", true],
+      ["returned-closed", undefined],
+    ]);
+    expect(mocks.built).not.toContain("quiet");
+  });
+});

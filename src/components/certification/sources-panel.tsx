@@ -42,7 +42,7 @@ export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
     <Section>
       <div className="flex flex-col gap-12">
         <header className="flex items-center justify-between gap-12">
-          <h3 className="title-chapter-title">Registry value sources</h3>
+          <h3 className="body-small font-medium">Registry value sources</h3>
           <PanelCounter removalId={removalId} isEditable={isEditable} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">

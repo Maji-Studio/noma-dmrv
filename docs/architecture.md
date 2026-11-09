@@ -822,6 +822,12 @@ Facility-scoped operations dashboard at `/dashboard`
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS
   gaps and credit batch rows on their flow station (batches on Production).
+  Draft, rejected and returned Removals need the operator too: the read core
+  `src/lib/read-models/dashboard-overview.ts` loads them best effort
+  (`removal-attention-sources.ts`, worded by `removal-attention.ts`) and hands
+  them to the aggregate, which orders them (after interrupted submissions),
+  caps and counts them like any other check; one row per returned Removal
+  replaces that Removal's per-credit-batch returned rows.
 - The Attention panel lists each check's records while there are at most two,
   else one grouped "N affected" row (linking to the list filtered by `ids`
   where the list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row

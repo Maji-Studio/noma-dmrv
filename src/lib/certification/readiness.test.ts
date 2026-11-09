@@ -126,6 +126,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     expect(r).toEqual({
       state: "blocked",
       reasons: ["Organization Isometric credentials are not configured"],
+      fixCount: 1,
       advisories: [],
       transportVehicleAdvisories: [],
     });
@@ -203,6 +204,14 @@ describe("deriveRemovalReadiness — blocked: transport coverage", () => {
     );
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain("Incomplete biochar transport legs");
+  });
+
+  it("counts the fixes the review lists: one per unmet check, not per reason", () => {
+    const r = deriveRemovalReadiness(
+      ready({ entityReadinessGaps: ["Delivery D-1 proof", "Delivery D-2 proof", "Delivery D-3 proof"] }),
+    );
+    expect(r.reasons.length).toBeGreaterThanOrEqual(1);
+    expect(r.fixCount).toBe(1);
   });
 
   it("lists missing and incomplete separately across categories", () => {
