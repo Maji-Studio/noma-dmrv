@@ -469,6 +469,7 @@ describe("dashboard batch scope read client", () => {
     { ...data, stationTotals: { ...data.stationTotals, production: "1" } },
     { ...data, kpis: { ...data.kpis, appliedToSoilDryTonnes: "0" } },
     { ...data, recordIds: [null] },
+    { ...data, downstreamComplete: undefined },
   ])("refuses malformed successful scope data %#", async (invalid) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: invalid })));
     await expect(getDashboardBatchScopeRead(input)).resolves.toEqual({
