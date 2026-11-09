@@ -129,6 +129,8 @@ describe("Removal readiness and the before-confirmation gate agree", () => {
   });
 });
 
+// Tracked in docs/open-questions.md (certification/readiness-gate-drift), #1639.
+// When a row is fixed, move it to the agreement table.
 const knownDrift: Array<[string, Fixture, "ready" | "blocked", string[]]> = [
   // Preparation checks empty groups; readiness only sees template presence and supplied blockers.
   ["empty template", () => resolveTemplateFacts(makeContext(undefined, { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } })), "ready", ["legacy"]],

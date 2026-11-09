@@ -31,6 +31,25 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
   the semantic hash (for example equal transport totals with unchanged evidence
   sources). Artifact serialization alone does not prove this snapshot is fresh.
 
+## Review step and submit gate disagree (`certification/readiness-gate-drift`, #1639)
+
+- Two states say ready in the review step but the submit gate refuses them
+  (#1639). A pinned template has no groups: preparation rejects it, but the
+  pinned template verdict does not. Durability measurement samples are switched
+  off while the template has durability components: preparation checks the
+  flag, but the context builder's durability fields do not.
+- Six states block the review step while the before-confirmation prefix returns
+  nothing: missing transport, incomplete transport, production gap, future dated
+  measurements, delivery evidence and durability eligibility. The build refuses
+  them later in the submit by design. No change planned.
+- Pinned in the known drift table at
+  `src/fn/certification/removal-readiness-gate-parity.test.ts:knownDrift`.
+  When a state is fixed, move its row to the agreement table.
+- The larger "one blocker list" refactor was withdrawn in #1635. Facts are
+  computed once in
+  `src/lib/certification/removal-context-build.ts:buildRemovalContext`
+  and only projected.
+
 ## Open design picks (`ui/design-picks`)
 
 A pick moves into [design-decisions.md](./design-decisions.md) and the owning doc ([design-system.md](./design-system.md), [forms.md](./forms.md)), then its bullet is removed.
