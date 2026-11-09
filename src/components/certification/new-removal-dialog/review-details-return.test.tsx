@@ -4,7 +4,7 @@
  * batch link or a record link, then returning to the tab, reads the review
  * again (the same wiring SubmitStep builds with markFixUsed).
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -30,7 +30,6 @@ vi.mock("@/hooks/use-removal-records", () => ({
   }),
 }));
 vi.mock("@/hooks/use-documents", () => ({ useDocumentsForEntity: () => ({ data: [] }) }));
-vi.mock("../carried-entries", () => ({ CarriedEntriesPanel: () => null }));
 vi.mock("./debug-drawer", () => ({ DebugDrawer: () => null }));
 
 import { ReviewDetails } from "./review-details";
@@ -81,7 +80,7 @@ describe("details view re-check", () => {
     render(<Host />);
     returnToTab();
     expect(refresh).not.toHaveBeenCalled();
-    fireEvent.click(screen.getAllByRole("link", { name: /CB-26-001/ })[0]);
+    fireEvent.click(within(screen.getByRole("region", { name: "Components" })).getByRole("link", { name: /CB-26-001/ }));
     returnToTab();
     expect(refresh).toHaveBeenCalledTimes(1);
   });
