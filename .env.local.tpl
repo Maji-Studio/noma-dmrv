@@ -68,6 +68,13 @@ ISOMETRIC_UPLOAD_HOST_ALLOWLIST="op://Environment Variables/noma-dmrv env local/
 STORAGE_SIGNING_SECRET="op://Environment Variables/noma-dmrv env local/STORAGE_SIGNING_SECRET"
 
 # -----------------------------------------------------------------------------
+# Licensed fonts (build only): read-only Spaces key for scripts/fetch-fonts.mjs.
+# Optional: without it builds use the fallback system fonts.
+# -----------------------------------------------------------------------------
+FONTS_S3_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env local/FONTS_S3_ACCESS_KEY_ID"
+FONTS_S3_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env local/FONTS_S3_SECRET_ACCESS_KEY"
+
+# -----------------------------------------------------------------------------
 # Geo / Maps (map integration — ADR 0009)
 # GEO_PROVIDER=stub serves deterministic fixtures (no keys, no network);
 # set it to ors in the 1Password item once the key below holds a real

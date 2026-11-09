@@ -150,6 +150,12 @@ cmd_new() {
   # By name only: `cp .env*` would overwrite the tracked .env.example.
   cp "$MAIN/.env.local" "$path/.env.local"
   cp "$MAIN/.env.test" "$path/.env.test"
+  for fonts in public/fonts site/public/fonts; do
+    if [ -d "$MAIN/$fonts" ]; then
+      mkdir -p "$path/$fonts"
+      cp -R "$MAIN/$fonts/." "$path/$fonts/"
+    fi
+  done
   set_env "$path/.env.local" DATABASE_URL "$dev_url"
   set_env "$path/.env.local" NEXT_PUBLIC_APP_URL "http://localhost:$port"
   set_env "$path/.env.test" DATABASE_URL "$dev_url"

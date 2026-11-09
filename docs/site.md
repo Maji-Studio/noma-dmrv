@@ -25,8 +25,10 @@ site/
     └── styles/tokens.css
 ```
 
-Fonts are read from the app's `src/styles/fonts/` one directory up, so the site
-needs the whole repository checked out, not only `site/`.
+Licensed GT Flexa fonts are fetched from private object storage at build time
+into gitignored `site/public/fonts/`. Without credentials, builds use system
+fallback fonts. The dependency-free fetch script lives at `scripts/fetch-fonts.mjs`,
+so the site needs the whole repository checked out. See [Fonts](./design-system.md#fonts).
 
 The Mafinga photo (`site/public/images/mafinga-field-trial.jpg`) is gitignored
 because the repo is public and Dark Earth Carbon has not approved publishing it.
@@ -57,10 +59,10 @@ call the site's own scripts (`pnpm --dir site dev|build`). Install once with
 `pnpm install` inside `site/`. In a worktree, run a fresh install there; never
 symlink `node_modules` to the main checkout.
 
-`.github/workflows/site.yml` runs on changes to `site/`, `src/styles/fonts/` or
+`.github/workflows/site.yml` runs on changes to `site/`, `scripts/fetch-fonts.mjs` or
 itself: frozen install, `pnpm check:assets` (every root-relative file referenced
-from `site/src` exists in `site/public`; the private photo below is the one
-exception), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
+from `site/src` exists in `site/public`; the private photo and licensed fonts are explicit
+exceptions), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
 three from `site/` before pushing.
 
 For screenshots, use the opt-in capture spec `tests/visual/site-capture.spec.ts`
@@ -83,6 +85,7 @@ the site project's Vercel env vars when deployed.
 | Variable | Effect |
 | --- | --- |
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
+| `FONTS_S3_ACCESS_KEY_ID`, `FONTS_S3_SECRET_ACCESS_KEY` | Build only: read-only key for the licensed GT Flexa files. Unset builds with fallback fonts. Set by hand on this project; see [Fonts](./design-system.md#fonts). |
 
 ## Vercel Projects and Domains
 
@@ -91,7 +94,7 @@ Two Vercel projects build from this one repository:
 | Project | Root directory | Skips a build when |
 | --- | --- | --- |
 | `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment |
-| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/`, `src/styles/fonts/` or the root `vercel.json` changed since the last successful deployment |
+| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/`, `scripts/fetch-fonts.mjs` or the root `vercel.json` changed since the last successful deployment |
 
 Both projects read the root `vercel.json`, whose `ignoreCommand` runs
 `scripts/vercel-ignore-build.sh` and overrides any Ignored Build Step set in the
