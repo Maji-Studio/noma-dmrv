@@ -31,7 +31,8 @@ vi.mock("@/fn/action-errors", () => ({
   logActionError: mocks.logActionError,
 }));
 
-import { POST } from "./route";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { maxDuration, POST } from "./route";
 
 const ORG_CONTEXT = {
   userId: "user-1",
@@ -345,4 +346,9 @@ it.each(["removal", "ghg_statement"] as const)("keeps %s work registered after s
   await registered;
   expect(completed).toBe(true);
   expect(mocks.logActionError).not.toHaveBeenCalled();
+});
+
+it("stops the detached core before the submission lock can be reclaimed", () => {
+  // A core outliving its claim lock could keep POSTing while another attempt re-locks the row.
+  expect(maxDuration * 1000).toBeLessThanOrEqual(LOCK_TTL_MS);
 });

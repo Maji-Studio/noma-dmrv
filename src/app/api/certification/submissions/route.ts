@@ -108,9 +108,9 @@ export async function POST(request: Request): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         } catch {
-          // Do not deliberately cancel the core when the response disconnects.
-          // The route is not a detached job, so a later retry must reconcile
-          // any registry work whose local completion was not persisted.
+          // The client disconnected: stop progress delivery only. waitUntil
+          // keeps the core running up to maxDuration; a crash past that is
+          // reconciled on retry from the persisted attempt marker.
           streamOpen = false;
           stopPings();
         }
