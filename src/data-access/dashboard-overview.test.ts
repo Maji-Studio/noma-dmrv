@@ -213,7 +213,7 @@ describe("needs attention rows", () => {
       {
         entityCode: "Credit batches",
         count: ATTENTION_PER_CHECK + 1,
-        title: "Period ended · not submitted yet",
+        title: "Period ended, not submitted yet",
         href: `/credit-batches?facility=${FACILITY_ID}`,
       },
     ]);

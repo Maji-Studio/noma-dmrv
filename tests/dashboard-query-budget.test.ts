@@ -201,7 +201,7 @@ describe("dashboard query budget", () => {
     // once. It holds no Removal, so it is not awaiting verification (#1528).
     expect(result.attention.map((item) => item.title)).toEqual([
       "Feedstock record missing data",
-      "Period ended · not submitted yet",
+      "Period ended, not submitted yet",
     ]);
     expect(result.attention[1]?.date).toBe("2026-07-31");
     // Timestamp-backed dates stay UTC instants (a zone-less string would
@@ -252,7 +252,7 @@ describe("dashboard query budget", () => {
         getDashboardOverview(makeTestOrgContext(), lineage.facilityId, "all"),
       );
       // Submitted and not returned: it waits on the verifier, so no row.
-      expect(result.attention.map((item) => item.title)).not.toContain("Period ended · not submitted yet");
+      expect(result.attention.map((item) => item.title)).not.toContain("Period ended, not submitted yet");
       expect(result.attention.map((item) => item.title)).not.toContain("Returned by Isometric");
       expect(queries).toBeLessThanOrEqual(OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET);
     } finally {
