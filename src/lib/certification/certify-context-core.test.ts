@@ -103,13 +103,13 @@ vi.mock("@/data-access/certification", () => ({ listRecentSyncEvents: vi.fn(asyn
 vi.mock("@/data-access/certifier-removals", () => ({ listRemovalsForFacility: vi.fn(), listUngroupedCreditBatches: vi.fn(async () => []), getCertifierRemovalById: vi.fn() }));
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntriesForBatches: vi.fn(async () => []) }));
 vi.mock("@/data-access/emission-zeros", () => ({ isRemovalZeroEditable: vi.fn(async () => true) }));
-vi.mock("./biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
-vi.mock("../with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
+vi.mock("../../fn/certification/biochar-application-source-readback", () => ({ refreshRemovalEvidenceLinks: vi.fn(async () => []) }));
+vi.mock("../../fn/with-action", () => ({ withAction: async (fn: (org: typeof ctx) => unknown) => ({ success: true, data: await fn(ctx) }) }));
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { listRemovalsForFacility, getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { loadBatchEmissionContext } from "./batch-emission-context";
-import { loadCertificationOverview } from "./overview";
+import { loadCertificationOverview } from "../../fn/certification/overview";
 import { loadRemovalEmptyLines } from "./removal-empty-lines-core";
 
 it.each([new Date(0), new Date()])("loads context, Empty lines and overview after an unreserved draft entry changes (lock %s)", async (lockedAt) => {

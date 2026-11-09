@@ -1,3 +1,4 @@
+import type { RemovalLedgerInput, RemovalLedgerClaim, RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { type RemovalRunSummary } from "@/lib/certification/mass-accounting";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
@@ -13,16 +14,6 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 
-export interface RemovalLedgerInput {
-  id: string;
-  component: string;
-  input: string;
-  magnitude: number | null;
-  unit: string;
-  /** Why a required input has no magnitude. Null whenever `magnitude` is set. */
-  missingReason: string | null;
-}
-
 /** A required transport category with no legs recorded. */
 export const NO_LEGS_RECORDED = "No legs recorded";
 /** Legs exist but the category gives no single sum (a leg without a load mass or distance, or mixed factors). */
@@ -32,28 +23,6 @@ export const LEGS_CANNOT_BE_SUMMED = "Recorded legs cannot be summed";
 function transportGap(magnitude: number | null, legCount: number): string | null {
   if (magnitude != null) return null;
   return legCount === 0 ? NO_LEGS_RECORDED : LEGS_CANNOT_BE_SUMMED;
-}
-
-export interface RemovalLedgerClaim {
-  creditBatchId: string;
-  creditBatchCode: string;
-  claimingRemovalId: string | null;
-  claimingRemovalCode: string | null;
-  contribution: "production-and-delivery" | "delivery-only";
-}
-
-export interface RemovalLedgerPreview {
-  inputs: RemovalLedgerInput[];
-  inputsUnavailable: boolean;
-  claims: RemovalLedgerClaim[];
-  creditBatches: Array<{ id: string; code: string }>;
-  productionRuns: Array<{ id: string; code: string | null }>;
-  applications: Array<{
-    id: string;
-    code: string;
-    deliveryCode: string;
-    creditBatchIds: string[];
-  }>;
 }
 
 interface MemberBatchClaim {

@@ -19,7 +19,7 @@ import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   submitRateLimit,
-} from "./shared";
+} from "../../lib/certification/shared";
 import {
   ensureStorageLocation,
   missingStorageLocationFacts,

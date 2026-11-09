@@ -5,7 +5,7 @@ import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
-} from "./shared";
+} from "../../lib/certification/shared";
 import type { SyncEventStage } from "./sync-event-stage";
 
 interface SourceSyncEventArgs {

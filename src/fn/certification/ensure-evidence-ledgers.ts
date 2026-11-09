@@ -14,7 +14,7 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import type { Logger } from "@/lib/log";
-import type { RemovalSubmissionContext } from "./certify-context-core";
+import type { RemovalSubmissionContext } from "../../lib/certification/certify-context-core";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "./durability-evidence-ledger";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "./evidence-ledger";
 

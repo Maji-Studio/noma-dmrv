@@ -21,7 +21,7 @@ import type { TransportLegsByCategory } from "./shared";
 import type { EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 import type { MemberCreditBatch } from "./member-credit-batch";
-import type { RemovalLedgerPreview } from "./removal-ledger-preview";
+import type { RemovalLedgerPreview } from "@/fn/certification/removal-ledger-preview";
 import type { TransportCategory, TransportCoverage } from "./certify-transport-coverage";
 import type { FixedInputValue } from "./resolve-removal-template";
 

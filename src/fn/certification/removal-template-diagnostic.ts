@@ -9,7 +9,7 @@ import {
 } from "@/lib/certification/removal-template-diagnostic";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadFacilityCertifierFacts } from "./certify-context-core";
+import { loadFacilityCertifierFacts } from "../../lib/certification/certify-context-core";
 import { z } from "zod";
 
 const facilityIdSchema = z.uuid("Choose a valid facility.");

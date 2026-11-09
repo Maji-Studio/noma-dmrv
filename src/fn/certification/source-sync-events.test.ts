@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("./shared", () => ({
+vi.mock("../../lib/certification/shared", () => ({
   appendSyncEventBestEffort: vi.fn().mockResolvedValue(undefined),
   ISOMETRIC_PROVIDER: "isometric",
   REMOVAL_ENTITY_TYPE: "removal",
 }));
 
-import { appendSyncEventBestEffort } from "./shared";
+import { appendSyncEventBestEffort } from "../../lib/certification/shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 
 describe("withSourceSyncEventOnFailure", () => {

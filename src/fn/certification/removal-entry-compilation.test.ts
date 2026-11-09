@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { deriveRemovalEntryContributions, type RemovalEntryFact } from "@/lib/certification/removal-emission-contributions";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
-import type { RemovalSubmissionContext } from "./certify-context-core";
-import { compileRemovalSubmission } from "./removal-submission-build";
-import { prepareRemovalSubmission } from "./removal-submission-prepare";
+import type { RemovalSubmissionContext } from "../../lib/certification/certify-context-core";
+import { compileRemovalSubmission } from "../../lib/certification/removal-submission-build";
+import { prepareRemovalSubmission } from "../../lib/certification/removal-submission-prepare";
 
 // Keep compilation and entry selection real; isolate document and application I/O.
-vi.mock("./biochar-application-intents", () => ({ compileBiocharApplicationIntents: vi.fn(async () => []) }));
-vi.mock("./removal-evidence-plan", () => ({
+vi.mock("../../lib/certification/biochar-application-intents", () => ({ compileBiocharApplicationIntents: vi.fn(async () => []) }));
+vi.mock("../../lib/certification/removal-evidence-plan", () => ({
   planRemovalEvidence: vi.fn(async () => ({
     candidateSourceDocuments: [], candidateDocumentIds: [], readySourceDocumentCount: 0,
     sourceIds: [], datapointSourceIds: [], biocharApplicationIntents: [],

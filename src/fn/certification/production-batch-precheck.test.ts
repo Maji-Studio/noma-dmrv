@@ -8,7 +8,7 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
 import { buildProductionBatchSubmission } from "./production-batches";
 import { assertRegisteredProductionBatchesMatch } from "./production-batch-precheck";
-import { performRegistryCreate } from "./registry-create";
+import { performRegistryCreate } from "../../lib/certification/registry-create";
 
 const mocks = vi.hoisted(() => ({
   getProductionBatchRegistryInputs: vi.fn(),
@@ -36,12 +36,12 @@ vi.mock("@/data-access/removal-production-batch-deletion", () => ({
   isProductionBatchSharedWithOtherRemovals: mocks.isProductionBatchSharedWithOtherRemovals,
 }));
 vi.mock("@/data-access/certification");
-vi.mock("./shared", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./shared")>(),
+vi.mock("../../lib/certification/shared", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/certification/shared")>(),
   appendSyncEventBestEffort: mocks.appendSyncEventBestEffort,
 }));
-vi.mock("./registry-create", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./registry-create")>(),
+vi.mock("../../lib/certification/registry-create", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/certification/registry-create")>(),
   performRegistryCreate: vi.fn(),
 }));
 

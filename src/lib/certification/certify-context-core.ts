@@ -1,26 +1,16 @@
 import {
-  getCertifierRemovalById,
-} from "@/data-access/certifier-removals";
-import {
   loadCreditBatchRollups,
   type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
 import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
-import { requireOrgFacility } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import type { ActionResult } from "@/types/actions";
-import { withAction } from "../with-action";
 import { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
 import type { BuildRemovalContextOptions } from "./removal-context-build";
 import { buildRemovalContext as buildContext } from "./removal-context-build";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import { buildRemovalLedgerPreview } from "./removal-ledger-preview";
 import { resolveScopeForCreditBatch, resolveScopeForRemoval, resolveSingleBatchScope, type RemovalScope } from "./removal-scope";
-import {
-  buildSelectableBatchesData,
-  type SelectableBatchesData,
-} from "./selectable-batches";
 export type { RemovalCertifyContext, RemovalSubmissionContext } from "./certify-context-types";
 export type {
   TransportCategory,
@@ -57,7 +47,7 @@ export async function loadRemovalSubmissionContext(
   return buildRemovalContext(orgCtx, scope, facilityFacts, { claimedSubmissionId: options.claimedSubmissionId, submissionRead: true });
 }
 
-function projectUiContext(
+export function projectUiContext(
   ctx: RemovalSubmissionContext,
 ): RemovalCertifyContext {
   return {
@@ -107,25 +97,6 @@ function projectUiContext(
   };
 }
 
-// Guided Review UI context keyed by removal id; its pre-flight runs the shared
-// `deriveRemovalReadiness` classifier against it). Mirrors
-// `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
-export async function loadRemovalCertifyContext(
-  facilityId: string,
-  removalId: string,
-): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (orgCtx) => {
-    await requireOrgFacility(orgCtx, facilityId);
-    const removal = await getCertifierRemovalById(orgCtx, removalId);
-    if (!removal || removal.facilityId !== facilityId) {
-      throw new SafeError("Removal does not belong to requested facility");
-    }
-    return projectUiContext(
-      await loadRemovalSubmissionContext(orgCtx, removalId),
-    );
-  });
-}
-
 export async function loadCertifyContextForCreditBatchForUser(
   orgCtx: OrgContext,
   creditBatchId: string,
@@ -137,13 +108,6 @@ export async function loadCertifyContextForCreditBatchForUser(
   );
   return projectUiContext(
     await buildRemovalContext(orgCtx, scope, facilityFacts),
-  );
-}
-export async function loadCertifyContextForCreditBatch(
-  creditBatchId: string,
-): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (orgCtx) =>
-    loadCertifyContextForCreditBatchForUser(orgCtx, creditBatchId),
   );
 }
 export interface CreditBatchContextSet {
@@ -198,23 +162,6 @@ export async function buildCreditBatchContexts(
     accountingByBatch,
     contextsByBatch: Object.fromEntries(contextEntries),
   };
-}
-
-// New-Removal selection payload. Each ungrouped batch carries the same health
-// verdict used by credit-batch detail.
-export async function loadSelectableBatchesForFacility(
-  facilityId: string,
-): Promise<ActionResult<SelectableBatchesData>> {
-  return withAction(async (orgCtx) => {
-    await requireOrgFacility(orgCtx, facilityId);
-    const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
-    return buildSelectableBatchesData(
-      orgCtx,
-      facilityId,
-      facilityFacts,
-      buildCreditBatchContexts,
-    );
-  });
 }
 
 /** Compose display reads with advisory corrections; the comparison uses the independent builder. */

@@ -25,7 +25,7 @@ import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/lo
 import type { IsometricClient } from "@/lib/isometric/client";
 import * as batchSamples from "@/data-access/credit-batch-samples";
 import * as batchEmissionLines from "@/lib/read-models/batches-emission-lines";
-import * as facilityFacts from "@/fn/certification/facility-certifier-facts";
+import * as facilityFacts from "@/lib/certification/facility-certifier-facts";
 import * as missingProductionRuns from "@/data-access/credit-batch-missing-production-runs";
 import templateFixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
 import enrichmentFixture from "./fixtures/isometric/sandbox-enrichment-2026-10-15.json";

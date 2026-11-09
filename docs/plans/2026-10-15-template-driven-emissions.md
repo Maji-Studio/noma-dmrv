@@ -53,9 +53,9 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Template**
 - The template is a facility default, `certifier_projects.default_removal_template_id` (`src/db/schema/certification.ts`). It is validated in `src/fn/certification/facility-mapping.ts`.
-- It is fetched live and uncached through `listGhgEntryTemplates` (`src/lib/isometric/projects.ts`) inside `loadFacilityCertifierFacts` (`src/fn/certification/certify-context-core.ts`).
-- No definition is stored. The submission snapshot keeps the template id and a normalized sequestration slice only (`materializeRemovalSubmissionSnapshot`, `src/fn/certification/removal-submission-build.ts`).
-- Isometric input type `fixed | monitored` comes from `GhgEntryTemplateComponentInput` (`src/lib/isometric/generated/certify.d.ts`). Fixed inputs carry a prebound datapoint and are never posted (`resolveTemplateInputs`, `src/fn/certification/removal-template-inputs.ts`).
+- It is fetched live and uncached through `listGhgEntryTemplates` (`src/lib/isometric/projects.ts`) inside `loadFacilityCertifierFacts` (`src/lib/certification/certify-context-core.ts`).
+- No definition is stored. The submission snapshot keeps the template id and a normalized sequestration slice only (`materializeRemovalSubmissionSnapshot`, `src/lib/certification/removal-submission-build.ts`).
+- Isometric input type `fixed | monitored` comes from `GhgEntryTemplateComponentInput` (`src/lib/isometric/generated/certify.d.ts`). Fixed inputs carry a prebound datapoint and are never posted (`resolveTemplateInputs`, `src/lib/certification/removal-template-inputs.ts`).
 
 **Binding**
 - The catalog is keyed blueprint → input → roles by group (`SEMANTIC_BINDING_CATALOG`, `SemanticInputBinding`, `src/lib/isometric/semantic-binding-catalog.ts`). Role strategies are `aggregated-datapoint`, `measurement-sample` and `project-scope-forbidden`.
@@ -68,7 +68,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - `aggregateProductionRuns` and `enrichWithTransportLegs` (`src/lib/isometric/utils/aggregation.ts`) build the aggregate. `SOURCE_BUCKETS` classifies every source as production, delivery or stored.
 - `omitProductionComponents` drops production components from follow-up Removals (ADR 0020).
 - The production claim is two columns on `credit_batches`, reserved in `src/data-access/production-claim-reservations.ts` and stamped in `markSubmissionSubmitted` (`src/data-access/certification.ts`).
-- A Removal includes production inputs when the batch is unclaimed **or claimed by that same Removal** (`productionClaimContribution`, `src/fn/certification/production-claim-policy.ts`). Retries and supersedes therefore keep their own production inputs.
+- A Removal includes production inputs when the batch is unclaimed **or claimed by that same Removal** (`productionClaimContribution`, `src/lib/certification/production-claim-policy.ts`). Retries and supersedes therefore keep their own production inputs.
 - Mutation-free failures release the reservation; failures that may have reached the registry keep it (`rejectSubmissionAndReleaseProductionClaims`). Removal deletion clears claims only after registry cleanup (`finalizeRemovalDeletion`, `src/data-access/certifier-removal-deletion.ts`).
 
 **Hashes and evidence**
@@ -82,7 +82,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Isometric's REST `Removal` has no status. Status exists only on GHG statements (`DRAFT | AWAITING_VERIFICATION | VERIFIED | CREDITS_ISSUED | FAILED_VERIFICATION`). noma pulls it on demand through `refreshGhgStatementStatus` (`src/fn/certification/ghg-statements.ts`) and `refreshRegistryGhgStatement` (`src/fn/certification/ghg-statement-reconciliation.ts`). There is no webhook and no schedule yet.
 
 **Readiness**
-- Removal readiness reasons are strings (`deriveRemovalReadiness`, `buildRemovalRequirementsChecklist`, `src/lib/certification/readiness.ts`). Only preparation blockers are typed (`REMOVAL_PREPARATION_BLOCKERS`, `src/fn/certification/removal-submission-prepare.ts`).
+- Removal readiness reasons are strings (`deriveRemovalReadiness`, `buildRemovalRequirementsChecklist`, `src/lib/certification/readiness.ts`). Only preparation blockers are typed (`REMOVAL_PREPARATION_BLOCKERS`, `src/lib/certification/removal-submission-prepare.ts`).
 - Batch health has exhaustive fix-target switches (`resolutionDestination` in `src/lib/certification/batch-health.ts`, `batch-health-links.ts`).
 
 **UI**
@@ -91,7 +91,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - The Energy page (since retired; `/energy` was removed in the 2026-10-28 navigation overhaul) used `src/components/energy/*` and `src/lib/energy/*`. Its batch filter is client state, not in the URL.
 - The nearest reference for a small versioned, org-scoped child table with documents is production incidents (`src/db/schema/production.ts` `incidentReports`, `src/data-access/production-incidents.ts`).
 - The activity log exists: `recordActivity(ctx, tx, event)` in `src/data-access/activity-events.ts` (migration 0142).
-- Files near the 1000-line limit that this plan extends: `src/fn/certification/certify-context-core.ts` (974) and `src/data-access/certification.ts` (952). Split them before adding to them.
+- Files near the 1000-line limit that this plan extends: `src/lib/certification/certify-context-core.ts` (974) and `src/data-access/certification.ts` (952). Split them before adding to them.
 
 ## 4. Design
 
@@ -279,7 +279,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Which entries a Removal sends**
 - Only a Removal that can still take contributions is a contender: a draft that has not been submitted, or a Removal whose correction window is open (Corrections, below). A submitted Removal's manifest is frozen otherwise.
 - A Removal in an open correction window takes edits to the entries it sent, and new entries dated in its window. While the window is open it ranks before drafts for those entries, because the correction is why it reopened.
-- The entry window of a Removal is date-granular: from the earliest batch start date among its member batches to its latest application date. Application dates are calendar dates as entered (stored at UTC midnight, `resolveRemovalReportingWindow` in `src/fn/certification/removal-reporting-window.ts`) and are compared as dates, never shifted by a time zone. `occurredOn` is the facility-local date. The reporting window sent to Isometric is unchanged.
+- The entry window of a Removal is date-granular: from the earliest batch start date among its member batches to its latest application date. Application dates are calendar dates as entered (stored at UTC midnight, `resolveRemovalReportingWindow` in `src/lib/certification/removal-reporting-window.ts`) and are compared as dates, never shifted by a time zone. `occurredOn` is the facility-local date. The reporting window sent to Isometric is unchanged.
 - An entry is eligible for a Removal when all of these hold:
   - it belongs to a member batch;
   - it is not deleted;

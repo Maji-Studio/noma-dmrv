@@ -10,7 +10,7 @@ import {
 import { logActionError } from "@/fn/action-errors";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
-import { submitRateLimit } from "@/fn/certification/shared";
+import { submitRateLimit } from "@/lib/certification/shared";
 import type { OrgContext } from "@/lib/auth/server";
 import type {
   SubmissionProgressStreamEvent,

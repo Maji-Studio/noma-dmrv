@@ -17,12 +17,12 @@ import { removalMayHaveExternalMutation } from "@/lib/certification/removal-exte
 import { submittedOnState, type SubmittedOnState } from "@/lib/certification/submitted-on";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import type { MemberCreditBatch } from "./member-credit-batch";
+import type { MemberCreditBatch } from "../../lib/certification/member-credit-batch";
 import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
-} from "./shared";
+} from "../../lib/certification/shared";
 
 // Bounded fan-out for the per-Removal reads below; mirrors the context core.
 const FANOUT_CONCURRENCY = 8;

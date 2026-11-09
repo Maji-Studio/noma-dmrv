@@ -5,7 +5,7 @@ import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getTemplateObservationById, getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { loadRemovalEntryCorrection } from "./removal-correction-core";
 import { compileRemovalCorrectionContent } from "./removal-correction-compile-core";
-import { assertStatementRemovalsCurrent } from "./statement-removal-correction-core";
+import { assertStatementRemovalsCurrent } from "../../fn/certification/statement-removal-correction-core";
 import { compareRemovalCurrentContent } from "./removal-content-comparison-core";
 import { z } from "zod";
 import { logger } from "@/lib/log";

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeContext, setDurabilityMeasurementSamplesEnabled } from "../../../tests/fixtures/submit-removal-orchestrator";
 import { make1000YearSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
 import { collectContextRemovalBlockers } from "./removal-blockers-gate";
-import { REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
+import { REMOVAL_PREPARATION_BLOCKERS } from "../../lib/certification/removal-submission-prepare";
 
 function tierMismatchContext() {
   const ctx = makeContext(undefined, { removalTemplate: make1000YearSequestrationTemplate() });

@@ -1,7 +1,7 @@
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
-import { readRemovalEntrySnapshot } from "./removal-snapshot-readers";
+import { readRemovalEntrySnapshot } from "../../lib/certification/removal-snapshot-readers";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
@@ -30,24 +30,24 @@ import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-ent
 import {
   bindSequestrationDatapointsToTemplate,
 } from "@/lib/isometric/transformers/sequestration-binding";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "../../lib/certification/certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
-} from "./durability-measurement-samples";
+} from "../../lib/certification/durability-measurement-samples";
 import {
   bindProductionBatchesToMeasurementSamples,
   ensureProductionBatchesForCreditBatches,
 } from "./production-batches";
 import { assertRegisteredProductionBatchesMatch } from "./production-batch-precheck";
-import { readRemovalDurabilityMeasurementSamples } from "./durability-measurement-sample-snapshot";
+import { readRemovalDurabilityMeasurementSamples } from "../../lib/certification/durability-measurement-sample-snapshot";
 import {
   assertProductionClaimGateFresh,
   assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
-import { includesProductionInputs } from "./production-claim-policy";
+import { includesProductionInputs } from "../../lib/certification/production-claim-policy";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   readRemovalBiocharApplicationIntents,
@@ -57,13 +57,13 @@ import {
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
-} from "./removal-snapshot-readers";
-import type { BiocharApplicationIntent } from "./biochar-application-intents";
-import { readRemovalReportingWindow } from "./removal-reporting-window";
+} from "../../lib/certification/removal-snapshot-readers";
+import type { BiocharApplicationIntent } from "../../lib/certification/biochar-application-intents";
+import { readRemovalReportingWindow } from "../../lib/certification/removal-reporting-window";
 import {
   assertRemovalRegistryConnection,
   requirePreparedRemovalSubmission,
-} from "./removal-submission-prepare";
+} from "../../lib/certification/removal-submission-prepare";
 import {
   finalizeRemovalSubmission,
   pinnedRemovalTemplateId,
@@ -75,13 +75,13 @@ import {
 import {
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
-} from "./removal-submission-build";
+} from "../../lib/certification/removal-submission-build";
 import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import {
   performRegistryCreate,
   supplierRefLookup,
-} from "./registry-create";
+} from "../../lib/certification/registry-create";
 import {
   recordClaimedRemovalSubmissionFailureBestEffort,
   recordRemovalExternalMutation,
@@ -89,7 +89,7 @@ import {
   safeRemovalSubmissionError,
   type RemovalExternalMutation,
 } from "./removal-submission-failure";
-import { resolveSourceBindingCandidates } from "./source-candidates";
+import { resolveSourceBindingCandidates } from "../../lib/certification/source-candidates";
 import { mirrorCandidateSourcesForSubmission } from "./sources-mirror-core";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { collectContextRemovalBlockers, evaluateRemovalBlockers } from "./removal-blockers-gate";
@@ -100,7 +100,7 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
-} from "./shared";
+} from "../../lib/certification/shared";
 
 // Domain wording for the claim module's blocked outcomes (the module owns
 // only the mapping-guard wording; claim decisions are translated here).

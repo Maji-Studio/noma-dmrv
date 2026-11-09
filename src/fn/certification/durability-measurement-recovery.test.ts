@@ -9,7 +9,7 @@ import type {
   CreateMeasurementSampleRequest,
   IsometricMeasurementSample,
 } from "@/lib/isometric/measurement-samples";
-import type { PerformRegistryCreateArgs } from "./registry-create";
+import type { PerformRegistryCreateArgs } from "../../lib/certification/registry-create";
 
 const mocks = vi.hoisted(() => ({
   appendSubmissionJournal: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("@/data-access/certification", () => ({
   appendSubmissionJournal: mocks.appendSubmissionJournal,
 }));
 
-vi.mock("./registry-create", () => ({
+vi.mock("../../lib/certification/registry-create", () => ({
   supplierRefLookup: (
     result: { found: true; externalId: string } | { found: false },
   ) =>
@@ -52,7 +52,7 @@ vi.mock("./registry-create", () => ({
   }),
 }));
 
-import { submitDurabilityMeasurementSamples } from "./durability-measurement-samples";
+import { submitDurabilityMeasurementSamples } from "../../lib/certification/durability-measurement-samples";
 
 const SUPPLIER_REF = "nm-mts-removal-pb-batch-v1";
 const SAMPLE_ID = "mts-sampled-1000";

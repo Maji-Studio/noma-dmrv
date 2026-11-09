@@ -1,5 +1,5 @@
 import { loadRemovalCarriedEntries } from "@/data-access/removal-carried-entries";
-import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
+import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "@/lib/credit-batches/application-mass";
 /** Real database contracts. Run only in the configured throwaway test database. */
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
@@ -8,9 +8,9 @@ import { integer, pgSchema, text } from "drizzle-orm/pg-core";
 import type { PoolClient } from "pg";
 import { recordEmissionZeros } from "@/data-access/emission-zeros";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
-import { loadRemovalEntryContext, frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
-import { resolveScopeForRemoval } from "@/fn/certification/removal-scope";
-import { loadBatchEmissionContext } from "@/fn/certification/batch-emission-context";
+import { loadRemovalEntryContext, frozenEntriesForAttempt } from "@/lib/certification/removal-entry-context";
+import { resolveScopeForRemoval } from "@/lib/certification/removal-scope";
+import { loadBatchEmissionContext } from "@/lib/certification/batch-emission-context";
 import { applications, creditBatchApplications, facilities } from "@/db/schema";
 import { facilityToday } from "@/lib/date-utils";
 import { db } from "@/db";

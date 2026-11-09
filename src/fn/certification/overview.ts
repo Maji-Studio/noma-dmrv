@@ -60,7 +60,7 @@ import {
   buildRemovalContext,
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
-} from "./certify-context-core";
+} from "../../lib/certification/certify-context-core";
 
 import { heldMissingRuns } from "@/lib/credit-batches/open-items";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";

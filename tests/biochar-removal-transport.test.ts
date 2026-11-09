@@ -7,8 +7,8 @@ import { db } from "@/db";
 import { applicationOutputAllocations, applications, biocharProducts, creditBatchApplications, deliveries, orders, productionRuns, transportLegs } from "@/db/schema";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
-import { resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
-import { loadTransportLegsByCategory } from "@/fn/certification/shared";
+import { resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
+import { loadTransportLegsByCategory } from "@/lib/certification/shared";
 import { updateTransportLeg } from "@/data-access/transport-legs";
 
 import { previewOutputStock } from "@/data-access/output-stock-operations";

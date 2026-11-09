@@ -29,7 +29,7 @@ Status terms:
 |---|---|---|
 | `GET /projects` | Project picker, mapping validation, submission context | `src/lib/isometric/projects.ts` → `listProjects`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
 | `GET /projects/{project_id}/ghg_entry_templates` | Template picker and live submission compilation | `src/lib/isometric/projects.ts` → `listGhgEntryTemplates`; consumers in `src/fn/certification/facility-mapping.ts` and `certify-context-core.ts` |
-| `GET /component_blueprints` | Validate live template inputs and units | `src/lib/isometric/projects.ts` → `listComponentBlueprints`; consumer in `src/fn/certification/certify-context-core.ts` |
+| `GET /component_blueprints` | Validate live template inputs and units | `src/lib/isometric/projects.ts` → `listComponentBlueprints`; consumer in `src/lib/certification/certify-context-core.ts` |
 | `GET /feedstock_types` | Read-only registry catalog in the local feedstock-type workflow | `src/lib/isometric/feedstock-types.ts`; consumer in `src/fn/certification/feedstock-types.ts` |
 
 ## Removal/GHG Entry and Datapoint operations
@@ -39,7 +39,7 @@ Status terms:
 | `GET /datapoints` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findDatapointBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /datapoints` | Create ordinary and direct durability Datapoints | `src/lib/isometric/submissions.ts` → `createDatapoint`; consumer in `src/fn/certification/submit-removal.ts` |
 | `GET /datapoints/{id}` | Verify an exact Source-to-input binding | `src/lib/isometric/submissions.ts` → `getDatapoint`; consumer in `src/lib/isometric/source-binding-verification.ts` |
-| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs (read first; skip when present; send the union; retried as idempotent) | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
+| `PATCH /datapoints/{id}` | Attach recovered durability Source IDs (read first; skip when present; send the union; retried as idempotent) | `src/lib/isometric/submissions.ts` → `patchDatapoint`; consumer in `src/lib/certification/durability-measurement-samples.ts` |
 | `GET /components/{id}` | Resolve attributed component inputs for Source verification | `src/lib/isometric/submissions.ts` → `getComponent`; consumer in `src/lib/isometric/source-binding-verification.ts` |
 | `GET /ghg_entries` | Supplier-reference reconciliation | `src/lib/isometric/submissions.ts` → `findGhgEntryBySupplierRef`; consumer in `src/lib/isometric/utils/reconciliation.ts` |
 | `POST /ghg_entries` | Create the compiled Removal/GHG Entry | `src/lib/isometric/submissions.ts` → `createGhgEntry`; consumer in `src/fn/certification/submit-removal.ts` |
@@ -78,9 +78,9 @@ keep resolving their Source IDs.
 
 | Method and path | Status | Use | Current call site |
 |---|---|---|---|
-| `GET /measurement_samples` | wired | Client-side supplier-reference reconciliation and exact journal identity lookup during deletion; Certify has no reference filter or single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`, `getMeasurementSample`; consumers in `src/fn/certification/durability-measurement-samples.ts` and `src/fn/certification/delete-removal.ts` |
+| `GET /measurement_samples` | wired | Client-side supplier-reference reconciliation and exact journal identity lookup during deletion; Certify has no reference filter or single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`, `getMeasurementSample`; consumers in `src/lib/certification/durability-measurement-samples.ts` and `src/fn/certification/delete-removal.ts` |
 | `DELETE /measurement_samples/{id}` | wired | Delete only exact version-owned measurements during Removal deletion | `src/lib/isometric/measurement-samples.ts` → `deleteMeasurementSample`; consumer in `src/fn/certification/delete-removal.ts` |
-| `POST /measurement_samples` | sandbox | Create sampled 1,000-year durability values and returned Datapoints | `src/lib/isometric/measurement-samples.ts` → `createMeasurementSample`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
+| `POST /measurement_samples` | sandbox | Create sampled 1,000-year durability values and returned Datapoints | `src/lib/isometric/measurement-samples.ts` → `createMeasurementSample`; consumer in `src/lib/certification/durability-measurement-samples.ts` |
 
 Creation and submission reconciliation are used by the sampled 1,000-year
 sandbox path. Lookup and deletion also support Removal cleanup. Their presence

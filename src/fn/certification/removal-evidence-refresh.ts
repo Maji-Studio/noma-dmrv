@@ -9,8 +9,8 @@ import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durabi
 import { reconcileRemoval } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { withAction } from "../with-action";
-import { loadCandidateDocumentsForRemovalForUser } from "./source-candidates";
-import { readRemovalCandidateSources, readRemovalTransport } from "./removal-snapshot-readers";
+import { loadCandidateDocumentsForRemovalForUser } from "../../lib/certification/source-candidates";
+import { readRemovalCandidateSources, readRemovalTransport } from "../../lib/certification/removal-snapshot-readers";
 
 const refreshSchema = z.object({ removalId: z.uuid(), submissionId: z.uuid() });
 

@@ -1,11 +1,11 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
-import { loadRemovalEntryCorrection } from "@/fn/certification/removal-correction-core";
-import { compareRemovalCurrentContent } from "@/fn/certification/removal-content-comparison-core";
+import { loadRemovalEntryCorrection } from "@/lib/certification/removal-correction-core";
+import { compareRemovalCurrentContent } from "@/lib/certification/removal-content-comparison-core";
 import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
 import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { listEmissionEntryDraftContenders } from "@/data-access/emission-entry-contenders";
-vi.mock("@/fn/certification/removal-content-comparison-core", () => ({ compareRemovalCurrentContent: vi.fn() }));
+vi.mock("@/lib/certification/removal-content-comparison-core", () => ({ compareRemovalCurrentContent: vi.fn() }));
 vi.mock("@/data-access/certifier-removals", () => ({ getCreditBatchesByRemovalId: vi.fn() }));
 vi.mock("@/data-access/emission-entry-contenders", () => ({ listEmissionEntryDraftContenders: vi.fn() }));
 const mocks = vi.hoisted(() => ({ select: vi.fn() }));

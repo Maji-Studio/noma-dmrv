@@ -36,7 +36,7 @@ import {
 } from "@/lib/isometric/utils/constants";
 import { logger, sanitizeErrorMessage, type Logger } from "@/lib/log";
 import type { DeleteRemovalInput } from "@/schemas/certification";
-import { appendSyncEventBestEffort } from "./shared";
+import { appendSyncEventBestEffort } from "../../lib/certification/shared";
 
 /**
  * Deletes a Removal that never finalized, cleaning up the registry first.

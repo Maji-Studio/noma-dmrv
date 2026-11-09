@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   findSharing: vi.fn(),
   names: vi.fn(),
 }));
-vi.mock("./shared", () => ({
+vi.mock("../../lib/certification/shared", () => ({
   ...mocks,
   ISOMETRIC_PROVIDER: "isometric",
   REMOVAL_ENTITY_TYPE: "removal",

@@ -19,7 +19,7 @@ vi.mock("@/data-access/removal-template-setup", async () => {
   return { applySetupInTransaction: mocks.apply, listSetupCreditBatches: mocks.batches, staleSetupTemplate: () => new DomainError("stale_version", "The template changed in Isometric. Review it again.") };
 });
 vi.mock("@/lib/isometric", async (original) => ({ ...await original<typeof import("@/lib/isometric")>(), listGhgEntryTemplates: mocks.templates, listComponentBlueprints: vi.fn(async () => []), listProjects: vi.fn(async () => [{ id: fixture.project_id, name: "Project" }]) }));
-vi.mock("./removal-template-facts", () => ({ loadRemovalTemplateFacts: mocks.facts }));
+vi.mock("../../lib/certification/removal-template-facts", () => ({ loadRemovalTemplateFacts: mocks.facts }));
 vi.mock("./removal-template-preview-core", () => ({ readOnlyEntry: mocks.preview }));
 vi.mock("@/lib/auth/providers/better-auth-server", () => ({}));
 import { applyRemovalTemplateSetupCore, loadRemovalTemplateSetupCore } from "./removal-template-setup-core";

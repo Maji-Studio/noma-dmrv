@@ -12,11 +12,11 @@ import { loadTemplateEnrichment } from "@/lib/isometric/template-observations/lo
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/storage-blueprints";
 import { deriveRemovalSemanticCorrection } from "@/lib/certification/removal-semantic-correction";
-import { storedRemovalTemplateFacts } from "./stored-removal-template";
-import { buildRemovalSubmissionBuild } from "./removal-submission-build";
+import { storedRemovalTemplateFacts } from "../../lib/certification/stored-removal-template";
+import { buildRemovalSubmissionBuild } from "../../lib/certification/removal-submission-build";
 
-vi.mock("./biochar-application-intents", async original => ({
-  ...await original<typeof import("./biochar-application-intents")>(), compileBiocharApplicationIntents: vi.fn(async () => []),
+vi.mock("../../lib/certification/biochar-application-intents", async original => ({
+  ...await original<typeof import("../../lib/certification/biochar-application-intents")>(), compileBiocharApplicationIntents: vi.fn(async () => []),
 }));
 
 it("compiles identical sent content from live fixture facts and their stored observation", async () => {

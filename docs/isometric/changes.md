@@ -389,7 +389,7 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
   message as before.
 - Each catalog role names the noma evidence roles whose Sources support it.
   The Source binding rules, the durability ledger targets and the persisted
-  Source target schema (`src/fn/certification/removal-snapshot-readers.ts`)
+  Source target schema (`src/lib/certification/removal-snapshot-readers.ts`)
   are projections of them. Projections live in
   `src/lib/isometric/semantic-binding-projections.ts`.
 - No binding or submitted value changed (#638 slice A, part of #291).
@@ -419,11 +419,11 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
   input now list it even where the old literals left it out (moisture, the
   Safety margin, the transport-derived distances and masses).
 - `deriveRequiredTransportCategories`
-  (`src/fn/certification/certify-transport-coverage.ts`) reads the catalog's
+  (`src/lib/certification/certify-transport-coverage.ts`) reads the catalog's
   `projectTransportCategories`; the hand-kept `TRANSPORT_SOURCE_TO_CATEGORY`
   and its sync comment are gone. `TRANSPORT_SOURCE_FACTS` names the fact each
   transport category submits, and readiness routes transport legs through
-  `transportRepairDestination` (`src/fn/certification/certify-readiness-gaps.ts`)
+  `transportRepairDestination` (`src/lib/certification/certify-readiness-gaps.ts`)
   instead of its own category-to-fix-target map.
 - No binding or submitted value changed (#637, part of #291).
   `tests/binding-catalog-projections.test.ts` pins the pre-#637 sources,

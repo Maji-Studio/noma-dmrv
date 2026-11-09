@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Keep the statement guard real; content comparison has its own agreement tests.
-vi.mock("@/fn/certification/removal-content-comparison-core", () => ({
+vi.mock("@/lib/certification/removal-content-comparison-core", () => ({
   compareRemovalCurrentContent: vi.fn(async () => ({ kind: "unchanged", components: [],
     state: { windowOpen: true, correctionNeeded: false, changedComponentIds: [], message: null },
   })),

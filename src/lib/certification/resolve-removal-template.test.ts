@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import templateFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import { resolveRemovalTemplate } from "./resolve-removal-template";
-import { pinnedRemovalTemplateId } from "./removal-submission-finalization";
+import { pinnedRemovalTemplateId } from "../../fn/certification/removal-submission-finalization";
 import { enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
@@ -97,7 +97,7 @@ describe("Removal template pins", () => {
       ...resolved, mapping: {}, memberBatches: [{ id: "batch-1", code: "CB-1" }],
       hasSubmittableRuns: true, submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       entityReadinessGaps: [], requiredTransportCategories: [],
-    } as unknown as import("./certify-context").RemovalCertifyContext, "batch-1"));
+    } as unknown as import("../../fn/certification/certify-context").RemovalCertifyContext, "batch-1"));
     const batchCheck = health.checks.find((check) => check.key === "templateSet")!;
     expect(batchCheck).toMatchObject({ status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
     expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
@@ -145,7 +145,7 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
     ...resolved, mapping: {}, memberBatches: [{ id: "batch-1", code: "CB-1" }],
     hasSubmittableRuns: true, submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
     entityReadinessGaps: [], requiredTransportCategories: [],
-  } as unknown as import("./certify-context").RemovalCertifyContext, "batch-1"));
+  } as unknown as import("../../fn/certification/certify-context").RemovalCertifyContext, "batch-1"));
   const batchCheck = health.checks.find((check) => check.key === "templateLines" && check.fixTarget === "templateLineReview")!;
   expect(batchCheck.status).toBe("unmet");
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({

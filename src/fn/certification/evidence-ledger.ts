@@ -13,7 +13,7 @@
  * document on a member credit batch, and mirrors it to an Isometric Source so it
  * rides into the removal's `source_ids`.
  */
-import { transportLedgerModel } from "./evidence-ledger-models";
+import { transportLedgerModel } from "../../lib/certification/evidence-ledger-models";
 import { getFacilityById } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
@@ -24,7 +24,7 @@ import {
 import { logger } from "@/lib/log";
 import {
   type RemovalSubmissionContext,
-} from "./certify-context-core";
+} from "../../lib/certification/certify-context-core";
 import {
   ensureLedgerSource,
   stableLedgerContentHash,
