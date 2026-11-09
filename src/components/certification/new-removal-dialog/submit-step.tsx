@@ -185,7 +185,11 @@ export function SubmitStep({
     }),
   );
   const refreshReview = useRefreshRemovalReview();
-  const markFixUsed = useRecheckOnReturn(refreshReview);
+  // Back from a fix, read the readiness and the build again: a refusal the fix cleared must not stay open.
+  const markFixUsed = useRecheckOnReturn(() => {
+    refreshReview();
+    void compilationQuery.refetch();
+  });
   const correction = correctionForRemoval(
     removalId,
     Object.values(ctx.entryCorrectionsByBatchId ?? {}).flat(),

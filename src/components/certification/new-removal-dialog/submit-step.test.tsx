@@ -8,6 +8,7 @@ import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
   refresh: vi.fn(),
+  compileRefetch: vi.fn(),
   toastSuccess: vi.fn(),
   discardMutate: vi.fn(),
   discardReset: vi.fn(),
@@ -98,7 +99,7 @@ vi.mock("@/hooks/use-certification", () => ({
     },
     isLoading: false,
     error: null,
-    refetch: vi.fn(),
+    refetch: state.compileRefetch,
   }),
 }));
 
@@ -119,7 +120,7 @@ vi.mock("@/lib/certification/readiness-facts", () => ({
   toRemovalReadinessFacts: () => ({}),
 }));
 
-const factsState = vi.hoisted(() => ({ state: "ready" as "ready" | "blocked" | "loading" }));
+const factsState = vi.hoisted(() => ({ state: "ready" as "ready" | "blocked" | "loading", recheck: null as null | (() => void) }));
 
 vi.mock("./submission-facts", () => ({
   isRemovalCompilationReady: () => true,
@@ -132,7 +133,10 @@ vi.mock("./submission-facts", () => ({
 // The focus listener needs a browser; the fix list itself is real.
 vi.mock("./use-fix-progress", async (importOriginal) => ({
   ...await importOriginal<typeof import("./use-fix-progress")>(),
-  useRecheckOnReturn: () => () => undefined,
+  useRecheckOnReturn: (refresh: () => void) => {
+    factsState.recheck = refresh;
+    return () => undefined;
+  },
 }));
 vi.mock("./review-details", () => ({ ReviewDetails: () => <div>Review details</div> }));
 vi.mock("@/hooks/use-removal-empty-components", () => ({ useRefreshRemovalReview: () => vi.fn() }));
@@ -330,6 +334,13 @@ describe("SubmitStep", () => {
       factsState.state = "blocked";
       const renderer = await renderStep(CONTEXT);
       expect(renderer.root.findAllByType("button")).toHaveLength(0);
+    });
+
+    it("reads the build again, not only readiness, when the tab regains focus after a fix", async () => {
+      state.compileRefetch.mockClear();
+      await renderStep(CONTEXT);
+      (factsState.recheck as (() => void) | null)?.();
+      expect(state.compileRefetch).toHaveBeenCalledTimes(1);
     });
 
     it("names the destination on the button once ready", async () => {
