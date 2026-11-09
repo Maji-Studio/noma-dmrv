@@ -105,7 +105,7 @@ export function deriveEmissionEntryDisposition({
       !retained && resolved.reservationKnownInactive && ownerSentBefore && ownerLineage && readsAsCorrectionWindowOpenFromPersisted(owner.removalId, ownerLineage)
       ? removals.find(removal => removal.id === owner.removalId) : null;
     const revisionOf = revisionRemoval ? { removalId: revisionRemoval.id, removalCode: revisionRemoval.code } : null;
-    return [{ ...resolved, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,
+    return [{ ...resolved, ownerRemovalId: ownerId, revisionOf, carry, reportedIn: entry.sentByRemovalId ? destination : null,
       earlierRemovalCode: removals.find(removal => removal.id === earlier?.localEntityId)?.code,
       earlierRemovalId: removals.find(removal => removal.id === earlier?.localEntityId)?.id,
       creditBatchCode: batch.code, entryObservation: observation }];
@@ -114,6 +114,7 @@ export function deriveEmissionEntryDisposition({
 }
 
 export type CarryEntry = ReturnType<typeof deriveEmissionEntryFacts>[number] & {
+  ownerRemovalId: string | null;
   reservedByRemovalId: string | null; reservationKnownInactive: boolean;
   carry: ReturnType<typeof removalEntryCarryOwner>; reportedIn: EntryCarryDestination | null;
   revisionOf: EntryRevisionDestination | null;

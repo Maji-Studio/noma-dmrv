@@ -74,6 +74,16 @@ function correction(input: Input) {
 }
 type Case = { name: string; change: (input: Input) => void; accepted: boolean };
 
+it.each<{ name: string; change: (input: Input) => void; ownerRemovalId: string | null }>([
+  { name: "draft contender", change: i => { i.draftMembers[0].batch = i.selected[0].batch; }, ownerRemovalId: "receiver" },
+  { name: "correction contender", change: correction, ownerRemovalId: "owner" },
+  { name: "sent entry", change: i => { i.stored[0].sentByRemovalId = "receiver"; }, ownerRemovalId: "receiver" },
+  { name: "no owner", change: () => {}, ownerRemovalId: null },
+])("entry owner: $name", ({ change, ownerRemovalId }) => {
+  const input = fixture(); change(input);
+  expect(deriveEmissionEntryDisposition(input).entries[0].ownerRemovalId).toBe(ownerRemovalId);
+});
+
 describe("draft contenders from loaded rows", () => {
   it.each<Case>([
     { name: "accepted", change: () => {}, accepted: true },
