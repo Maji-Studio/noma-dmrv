@@ -180,7 +180,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "Open See what this Removal sends, then Technical details, to retry. It shows why the build failed.",
+        "Select See what this Removal sends below, then open Technical details to retry. It shows why the build failed.",
     };
 
     expect(facts({ compilation: null })).toMatchObject(expected);
@@ -210,7 +210,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission is incomplete. Open See what this Removal sends, then Technical details, to see what is missing.",
+        "The submission is incomplete. Select See what this Removal sends below, then open Technical details to see what is missing.",
     });
   });
 

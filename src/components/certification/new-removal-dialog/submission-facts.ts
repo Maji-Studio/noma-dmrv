@@ -58,6 +58,8 @@ export interface SubmissionFacts {
   environmentLabel: string;
   isProduction: boolean;
   durabilityLabel: string;
+  /** Each distinct tier once, so the details can tell a single durability from a mix. */
+  durabilityTiers: string[];
   samplingLabel: string;
   pendingDocuments: number;
   checksPassed: number;
@@ -237,14 +239,14 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
-      "Open See what this Removal sends, then Technical details, to retry. It shows why the build failed.";
+      "Select See what this Removal sends below, then open Technical details to retry. It shows why the build failed.";
   } else if (!compilationReady) {
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
       blockers.length > 0
         ? "Clear the blockers below."
-        : "The submission is incomplete. Open See what this Removal sends, then Technical details, to see what is missing.";
+        : "The submission is incomplete. Select See what this Removal sends below, then open Technical details to see what is missing.";
   } else if (!allowsRemovalSubmission(readiness.state)) {
     // The gate still refuses for a reason no checklist row carried. Show the
     // readiness reasons rather than claim the removal is ready.
@@ -273,6 +275,9 @@ export function buildSubmissionFacts({
     durabilityLabel: uniqueLabels(
       batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption]),
     ),
+    durabilityTiers: [
+      ...new Set(batches.map((batch) => DURABILITY_LABELS[batch.durabilityOption])),
+    ],
     samplingLabel: samplingPhrase(batches),
     pendingDocuments: pendingDocumentCount(ctx, compilation),
     checksPassed,

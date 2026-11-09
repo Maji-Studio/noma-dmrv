@@ -25,21 +25,21 @@ import { PassedChecks } from "./review-parts";
 import { SourceRecords } from "./source-records";
 import type { SubmissionFacts } from "./submission-facts";
 
-/** "1000-year (R₀ reflectance)" becomes the tier and the method in its brackets, if any. */
-function durabilityParts(label: string): { tier: string; method: string | null } {
-  const match = /^(.*?)\s*\((.+)\)$/.exec(label);
-  return match ? { tier: match[1], method: match[2] } : { tier: label, method: null };
+/** What the durability reads as: one tier with its method behind the (i), or "Mixed durability" with every tier behind it. */
+export function durabilityParts(tiers: readonly string[]): { text: string; hint: string } {
+  if (tiers.length !== 1) return { text: "Mixed durability", hint: tiers.join(", ") };
+  const match = /^(.*?)\s*\((.+)\)$/.exec(tiers[0]);
+  return match ? { text: `${match[1]} durability`, hint: `Measured by ${match[2]}.` } : { text: `${tiers[0]} durability`, hint: "" };
 }
 
-/** "1000-year durability · Sampled credit batches"; the method sits behind the (i). */
-function FactsLine({ facts }: { facts: Pick<SubmissionFacts, "durabilityLabel" | "samplingLabel"> }) {
-  const { tier, method } = durabilityParts(facts.durabilityLabel);
-  const durability = `${tier} durability`;
+/** "1000-year durability · Sampled credit batches"; the method (or each tier of a mix) sits behind the (i). */
+export function FactsLine({ facts }: { facts: Pick<SubmissionFacts, "durabilityTiers" | "samplingLabel"> }) {
+  const { text, hint } = durabilityParts(facts.durabilityTiers);
   return (
     <p className="flex flex-col gap-2 body-small text-[var(--color-text-secondary)] sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-6">
       <span>
-        {durability}
-        {method && <ExplanationInfo title={durability} hint={`Measured by ${method}.`} />}
+        {text}
+        {hint && <ExplanationInfo title={text} hint={hint} />}
       </span>
       <span aria-hidden className="max-sm:hidden">
         ·
