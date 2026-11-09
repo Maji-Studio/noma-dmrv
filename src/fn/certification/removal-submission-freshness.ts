@@ -1,5 +1,7 @@
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
+import { InterruptedRemovalChangedError } from "@/lib/certification/interrupted-removal-copy";
+import { readRemovalSubmissionExternalMutation } from "./removal-submission-failure";
 import { SafeError } from "@/lib/errors";
 import { payloadHash } from "@/lib/isometric";
 import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
@@ -16,6 +18,25 @@ const RECHECK_FAILURE_BLOCKERS: ReadonlySet<string> = new Set([
   "noCredentials",
   "noProject",
 ]);
+
+/** A failed read cannot prove drift, even when other blockers accompany it. */
+export function hasRemovalRecheckFailure(blockers: readonly { code: string }[]): boolean {
+  return blockers.some((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
+}
+
+/** Refuse before claiming anything; a possibly sent draft must stay intact for deletion. */
+export function assertRemovalPreflightBlockers(
+  latest: Pick<CertificationSubmissionRow, "status" | "externalId" | "metadata"> | null | undefined,
+  blockers: readonly { code: string; message: string }[],
+): void {
+  if (!blockers.length) return;
+  const possiblySentDraft = latest?.status === "draft" &&
+    (latest.externalId || readRemovalSubmissionExternalMutation(latest.metadata) !== "none");
+  if (possiblySentDraft && !hasRemovalRecheckFailure(blockers)) {
+    throw new InterruptedRemovalChangedError();
+  }
+  throw new SafeError(blockers[0].message);
+}
 
 export async function assertClaimedRemovalPayloadFresh(args: {
   orgCtx: OrgContext;
@@ -47,7 +68,7 @@ export async function assertClaimedRemovalPayloadFresh(args: {
         "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
       );
     }
-    const recheckIncomplete = blockers.length === 0 || blockers.some((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
+    const recheckIncomplete = blockers.length === 0 || hasRemovalRecheckFailure(blockers);
     await retireForDrift("semantic payload rebuild failed after draft claim", !recheckIncomplete);
     throw new SafeError(
       "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
