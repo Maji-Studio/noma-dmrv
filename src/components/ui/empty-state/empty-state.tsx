@@ -22,12 +22,19 @@ const PADDING_CLASSES = {
   lg: "py-56",
 } as const;
 
+/** The title follows the tier: a nested empty sits below the 20px section titles (#1554 Q18). */
+const TITLE_CLASSES = {
+  sm: "body-lead font-medium",
+  md: "title-heading-3",
+  lg: "title-heading-3",
+} as const;
+
 export type EmptyStatePadding = keyof typeof PADDING_CLASSES;
 
 export interface EmptyStateProps {
   /** Phosphor icon or illustration; caller sizes it. Icons: 48px for lg, 40px for md, 32px for sm. Drawings: ILLUSTRATION_SIZE.empty. */
   icon: ReactNode;
-  /** Heading text — rendered as `title-heading-3`. */
+  /** Heading text — `title-heading-3`, or `body-lead font-medium` at `padding="sm"`. */
   title: string;
   /** Optional secondary line — rendered as `body-small`. */
   description?: string;
@@ -50,7 +57,7 @@ export function EmptyState({
     >
       <span className="text-[var(--color-text-tertiary)]">{icon}</span>
       <div className="flex flex-col gap-8 text-center max-w-[520px]">
-        <h3 className="title-heading-3">{title}</h3>
+        <h3 className={TITLE_CLASSES[padding]}>{title}</h3>
         {description && (
           <p className="body-small text-[var(--color-text-secondary)]">
             {description}

@@ -770,7 +770,10 @@ The one outcome screen for auth pages (check your email, email verified, verific
 ### Other primitives — intent only, props at source
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
-  filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
+  filtered-empty state uses it; **never a bare `<p>`**. Padding tiers: `lg` and `md` keep a
+  `title-heading-3` title; `sm` (nested empties inside a section or card) renders its title as
+  `body-lead font-medium` (20px, the section title style) so it never outranks the section
+  title above it. Icon sizing is
   caller-owned. The "No X yet" state of a record the illustration set draws
   carries its drawing at `ILLUSTRATION_SIZE.empty` (see Illustrations); every
   other branch keeps a Phosphor icon. Two copy rules, both load-bearing:
