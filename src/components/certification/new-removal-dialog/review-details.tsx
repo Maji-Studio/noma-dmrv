@@ -60,6 +60,7 @@ export function ReviewDetails({
   compilationError,
   passedChecks,
   onBack,
+  onFix,
   onRetryCompilation,
 }: {
   ctx: RemovalCertifyContext;
@@ -72,6 +73,8 @@ export function ReviewDetails({
   /** Labels of the checks that passed, behind "N checks passed". */
   passedChecks: readonly string[];
   onBack: () => void;
+  /** A repair link was used: the review is read again when the operator returns. */
+  onFix?: () => void;
   onRetryCompilation: () => void;
 }) {
   const externalProjectId = ctx.mapping?.externalProjectId ?? null;
@@ -85,7 +88,7 @@ export function ReviewDetails({
       </div>
       <FactsLine facts={facts} />
       <PassedChecks checks={passedChecks} />
-      <ComponentTable table={table} facilityId={facilityId} />
+      <ComponentTable table={table} facilityId={facilityId} onFix={onFix} />
       <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
       <SourceRecords
         ledger={ctx.emissionsLedger}

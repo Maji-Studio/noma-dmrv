@@ -76,7 +76,7 @@ function FilesText({ row }: { row: ComponentRow }) {
 }
 
 /** The state of one row: what to do (blocked), a plain fact (left out), or a quiet Included. */
-function StateCell({ row }: { row: ComponentRow }) {
+function StateCell({ row, onFix }: { row: ComponentRow; onFix?: () => void }) {
   if (row.state === "blocked" && row.blocked) {
     return (
       <span className="flex flex-col gap-8">
@@ -97,6 +97,7 @@ function StateCell({ row }: { row: ComponentRow }) {
                 key={`${fix.href}:${fix.batchCode ?? ""}`}
                 href={fix.href}
                 tall
+                onClick={onFix}
                 className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2"
               >
                 {fix.batchCode ? `${fix.label} on ${fix.batchCode}` : fix.label}
@@ -114,7 +115,7 @@ function StateCell({ row }: { row: ComponentRow }) {
   return <span className="body-small text-[var(--color-text-tertiary)]">{STATE_WORD.included}</span>;
 }
 
-function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
+function Row({ row, loading, onFix }: { row: ComponentRow; loading: boolean; onFix?: () => void }) {
   return (
     <li
       id={componentRowDomId(row.componentId)}
@@ -153,7 +154,7 @@ function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
           row.state === "included" && "hidden md:block",
         )}
       >
-        <StateCell row={row} />
+        <StateCell row={row} onFix={onFix} />
       </span>
     </li>
   );
@@ -162,9 +163,11 @@ function Row({ row, loading }: { row: ComponentRow; loading: boolean }) {
 interface ComponentTableProps {
   table: ComponentTableModel;
   facilityId: string;
+  /** A repair link was used: the review is read again when the operator returns. */
+  onFix?: () => void;
 }
 
-export function ComponentTable({ table, facilityId }: ComponentTableProps) {
+export function ComponentTable({ table, facilityId, onFix }: ComponentTableProps) {
   const { batches, groups, rows } = table;
   if (batches.length === 0) return null;
   return (
@@ -235,7 +238,7 @@ export function ComponentTable({ table, facilityId }: ComponentTableProps) {
                     {group.label}
                   </li>
                   {group.rows.map((row) => (
-                    <Row key={row.componentId} row={row} loading={table.loading} />
+                    <Row key={row.componentId} row={row} loading={table.loading} onFix={onFix} />
                   ))}
                 </Fragment>
               ))}

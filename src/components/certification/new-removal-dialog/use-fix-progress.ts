@@ -31,29 +31,44 @@ export function useFixProgress(items: readonly ReviewItem[], holdNew = false): F
 }
 
 /**
- * Calls `refresh` when the tab regains focus after a fix link was used. Returns
- * the handler that marks a fix link as used.
+ * Calls `refresh` every time the tab regains focus once a fix link was used,
+ * not only the first time: a repair can take several trips, and a repaired item
+ * must not stay open inside the stale window. Returns the handler that marks a
+ * fix link as used. A trip counts from the click or from the tab losing focus,
+ * so the focus and visibility events of one return refresh once.
  */
 export function useRecheckOnReturn(refresh: () => void): () => void {
   const used = useRef(false);
+  const away = useRef(false);
   const latest = useRef(refresh);
   useEffect(() => {
     latest.current = refresh;
   });
   useEffect(() => {
+    const leave = () => {
+      if (document.visibilityState === "hidden") away.current = true;
+    };
     const recheck = () => {
-      if (document.visibilityState !== "visible" || !used.current) return;
-      used.current = false;
+      if (document.visibilityState !== "visible" || !used.current || !away.current) return;
+      away.current = false;
       latest.current();
     };
+    const blur = () => {
+      away.current = true;
+    };
+    window.addEventListener("blur", blur);
     window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", leave);
     document.addEventListener("visibilitychange", recheck);
     return () => {
+      window.removeEventListener("blur", blur);
       window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", leave);
       document.removeEventListener("visibilitychange", recheck);
     };
   }, []);
   return () => {
     used.current = true;
+    away.current = true;
   };
 }

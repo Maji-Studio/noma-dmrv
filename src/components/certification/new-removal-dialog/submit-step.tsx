@@ -507,6 +507,7 @@ export function SubmitStep({
             .filter((check) => check.status === "met")
             .map((check) => check.label)}
           onBack={() => showDetails(false)}
+          onFix={markFixUsed}
           onRetryCompilation={() => {
             void compilationQuery.refetch();
           }}
