@@ -811,12 +811,18 @@ Facility-scoped operations dashboard at `/dashboard`
 - Fresh organizations first see the computed setup guide (or the member
   setup-in-progress state); it collapses to a strip and disappears as setup
   records are created. Setup steps are derived, not saved checklist state.
-- The current Flow Hero body is a four-stat KPI band, the traceability hero
-  (`Overview` · `Flow` · `Needs attention`), then Attention, Recent activity,
-  and Certification panels. Week/month/all only changes the range-scoped KPI
-  and mass-flow values. Each KPI counts by its own record date (runs by start
-  day, applications by application date, the CO₂e estimate by the batch's
-  period end), and its (i) says which.
+- The body is a four-stat KPI band, the stage band (landscape scene, six stage
+  cells with counts, open-items bubbles and record actions), then To do, Bins
+  and Recent activity. The header's credit batch filter (`?batch=`) scopes the
+  KPIs, stage counts and activity to records traceable to one batch, or to any
+  unarchived batch ("All credit batches"); To do and Bins stay facility-wide.
+  The figures come from one org-scoped read, `getDashboardBatchScope`
+  (`src/data-access/dashboard-batch-scope.ts`, projected by
+  `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
+  set-based `loadCreditBatchAccounting` call, so its round trips do not grow
+  with the batch count. An application split across batches counts once and
+  adds each batch's slice to the applied mass; CO₂e shows only when every
+  chosen batch has an estimate. The page reads the overview with range `all`.
 - One `getDashboardOverview` action supplies the page. Its aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
