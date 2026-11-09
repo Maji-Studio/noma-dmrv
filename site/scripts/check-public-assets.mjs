@@ -3,6 +3,7 @@
 // broken image. Run from site/: `pnpm check:assets`.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { FONT_FILES } from "../../scripts/fetch-fonts.mjs";
 import { MAFINGA_PHOTO } from "../src/lib/assets.js";
 
 const SRC = "src";
@@ -11,8 +12,8 @@ const SOURCE_EXTENSIONS = /\.(astro|js|mjs|ts|css|md)$/;
 const ASSET_EXTENSIONS = "svg|png|jpe?g|webp|avif|gif|ico|mp4|webm|woff2?|ttf|json|geojson|pdf|txt|xml";
 // A quoted string or url(...) holding a root-relative path that ends in an asset extension.
 const ASSET_REF = new RegExp(`["'\`(](/[A-Za-z0-9_./-]+\\.(?:${ASSET_EXTENSIONS}))(?=["'\`)?#])`, "g");
-// Gitignored on purpose (docs/site.md): components check HAS_MAFINGA_PHOTO and draw a placeholder.
-const PRIVATE_ASSETS = new Set([MAFINGA_PHOTO]);
+// Gitignored on purpose (docs/site.md): the photo has a placeholder; fonts have system fallbacks.
+const PRIVATE_ASSETS = new Set([MAFINGA_PHOTO, ...FONT_FILES.map((file) => `/fonts/${file}`)]);
 
 function* sourceFiles(dir) {
   for (const name of readdirSync(dir)) {

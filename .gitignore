@@ -84,3 +84,8 @@ docs/archive/qa/artifacts/**/screenshots/
 
 # python
 __pycache__/
+
+# Commercially licensed fonts fetched at build time
+/public/fonts/
+/site/public/fonts/
+GT-Flexa*
