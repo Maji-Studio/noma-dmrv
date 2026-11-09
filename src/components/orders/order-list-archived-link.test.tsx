@@ -15,6 +15,7 @@ const harness = vi.hoisted(() => ({
   sheet: null as null | { open: boolean; mode: string; title: string; readOnly?: { tone: string; message: string }; canEdit?: boolean },
 }));
 
+vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/hooks/use-facilities", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-facilities")>()),
   useFacility: (id: string, enabled: boolean) => ({ data: enabled && id === ARCHIVED_FACILITY.id ? ARCHIVED_FACILITY : undefined, isError: false }),
