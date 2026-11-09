@@ -158,8 +158,7 @@ export function sheetStatusFor(status: RemovalWorkflowStatus): { value: StatusVa
 /** The one next step for states no notice speaks for, or null. */
 export function nextStepLine(status: RemovalWorkflowStatus): string | null {
   switch (status.kind) {
-    case "checking":
-      return "Checking whether this Removal is ready.";
+    // "checking": the header badge already says so.
     case "unavailable":
       return "The checks could not load.";
     case "submitting":
@@ -171,8 +170,9 @@ export function nextStepLine(status: RemovalWorkflowStatus): string | null {
   }
 }
 
-/** The footer line next to Review & submit: how many things block sending. */
+/** The footer line next to Review & submit: how many things block sending, or that nothing does. */
 export function thingsToFixLine(status: RemovalWorkflowStatus): string | null {
+  if (status.kind === "ready") return "Ready to submit";
   if (status.kind !== "blocked" || status.reasons.length === 0) return null;
   const count = status.reasons.length;
   return `${count} ${pluralize(count, "thing", "things")} to fix before submitting`;
@@ -405,7 +405,7 @@ export function RemovalDetailSheet({
                   valuePresent={Boolean(hasReportingWindow)}
                 />
                 <DetailField
-                  label={`Credit batches (${summary.memberBatchCodes.length})`}
+                  label={summary.memberBatchCodes.length === 1 ? "Credit batch" : `Credit batches (${summary.memberBatchCodes.length})`}
                   hint={ALLOCATION_HINT}
                   value={
                     summary.memberBatchCodes.length > 0 ? (

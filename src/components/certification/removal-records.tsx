@@ -17,14 +17,14 @@ import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatDateRange, formatDayString, formatTonnes } from "@/lib/format-utils";
-import { pluralize, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { recordHref, type RecordKind } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 
 /** An open credit batch shows this many records per group before "Show all N". */
 export const RECORDS_SHOWN_FIRST = 3;
-const KG_PER_TONNE = 1000;
 const MASS_DIGITS = 1;
 
 const RECORD_KIND_LINK: Record<RemovalRecord["kind"], RecordKind> = {
@@ -41,10 +41,20 @@ const TEXT_LINK = cn(
 );
 const ROW_DIVIDER = "[border-top:var(--row-divider)] first:[border-top:none]";
 
-/** "3.2 t dry" or "3.2 t wet", with no-break spaces so a phone never splits the mass. */
+/** Biochar records say "dry biochar"; deliveries and feedstock say "wet" or "dry". */
+function massWord(record: RemovalRecord): string {
+  return record.basis === "dry" && (record.kind === "productionRun" || record.kind === "application") ? "dry biochar" : record.basis;
+}
+
+/** The record's day without the year the sheet header already gives: "Feb 1". */
+function shortDay(date: string): string {
+  return formatDayString(date).replace(/, \d{4}$/, "");
+}
+
+/** "3.2 t dry biochar", "3.2 t wet", with no-break spaces so a phone never splits the mass. */
 export function recordMassText(record: RemovalRecord): string | null {
   if (record.massKg == null) return null;
-  return `${formatTonnes(record.massKg / KG_PER_TONNE, { digits: MASS_DIGITS })} ${record.basis}`.replace(/ /g, " ");
+  return `${formatTonnes(record.massKg / KG_PER_TONNE, { digits: MASS_DIGITS })} ${massWord(record)}`.replace(/ /g, "\u00a0");
 }
 
 function RecordLine({ record, facilityId }: { record: RemovalRecord; facilityId: string }) {
@@ -53,11 +63,11 @@ function RecordLine({ record, facilityId }: { record: RemovalRecord; facilityId:
   return (
     <li className="flex flex-wrap items-baseline justify-between gap-x-12 py-4 body-small" data-removal-record>
       <span>
-        <span className="tabular-nums">{formatDayString(record.date)}</span>
+        <span className="tabular-nums">{shortDay(record.date)}</span>
         {record.place && <> · {record.place}</>}
         {mass && <> · <span className="tabular-nums">{mass}</span></>}
       </span>
-      <Link href={href} target="_blank" className={cn(RECORD_CODE_LINK, "body-caption")}>
+      <Link href={href} className={cn(RECORD_CODE_LINK, "body-caption")}>
         {record.code}
       </Link>
     </li>
@@ -94,9 +104,15 @@ export function RecordGroup({ title, records, facilityId }: { title: string; rec
   );
 }
 
+/** The batch's applied dry biochar; null when it has no application or one has no dry mass. */
+function batchDryKg(batch: RemovalBatchRecords): number | null {
+  const masses = batch.applications.map((record) => record.massKg);
+  return masses.length > 0 && masses.every((kg): kg is number => kg != null) ? masses.reduce((sum, kg) => sum + kg, 0) : null;
+}
+
 function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityId: string }) {
   const [open, setOpen] = useState(false);
-  const runs = batch.productionRuns.length;
+  const dryKg = batchDryKg(batch);
   return (
     <li className={cn("flex flex-col", ROW_DIVIDER)}>
       <div className="flex items-center gap-12">
@@ -112,7 +128,7 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
           <span className="sr-only">Records of {batch.code}, </span>
           <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-16 text-[var(--color-text-secondary)]">
             <span className="whitespace-nowrap">{formatDateRange(batch.startDate, batch.endDate)}</span>
-            <span className="whitespace-nowrap">{runs} {pluralize(runs, "production run", "production runs")}</span>
+            {dryKg != null && <span className="whitespace-nowrap tabular-nums">{formatTonnes(dryKg / KG_PER_TONNE, { digits: MASS_DIGITS })} dry</span>}
           </span>
           <CaretDownIcon size={16} aria-hidden className={cn("shrink-0 text-[var(--color-text-tertiary)] transition-transform", !open && "-rotate-90")} />
         </button>

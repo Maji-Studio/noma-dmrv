@@ -586,6 +586,11 @@ Always use `Button`; never a raw `<button>` with manual styling.
   The Allocation flow chart (`allocation-flow-chart.tsx`) is the same case: one
   transparent raw `<button>` per drawn node sits over the SVG, with the focus
   ring and at least a 44px tall hit area, because the node's size is the data.
+- **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
+  full-width disclosure row (date range, dry mass, caret, 44px tall) and "Show all N" is an
+  underlined text action under a record list. `Button` has no variant with the text-link look
+  or a row layout (fixed heights, `whitespace-nowrap`, `label-button` type), so both stay raw
+  `<button>`s with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`).
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop

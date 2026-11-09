@@ -137,6 +137,12 @@ describe("RemovalDetailSheet structure", () => {
     expect(document.querySelector(".peer\\/status")?.childElementCount).toBe(0);
   });
 
+  it("tells a ready draft in the footer that it is ready to submit", () => {
+    renderSheet({ ...SUMMARY, readiness: { state: "ready", reasons: [] } } as unknown as RemovalListRow);
+    expect(screen.getByText("Ready to submit")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Review & submit" })).toBeTruthy();
+  });
+
   it("counts the things to fix in the footer next to Review & submit", () => {
     renderSheet();
     expect(screen.getByText("2 things to fix before submitting")).toBeTruthy();
@@ -179,6 +185,7 @@ describe("sheet status helpers", () => {
   it("counts and pluralizes things to fix", () => {
     expect(thingsToFixLine(BLOCKED)).toBe("3 things to fix before submitting");
     expect(thingsToFixLine({ ...BLOCKED, reasons: ["a"] })).toBe("1 thing to fix before submitting");
-    expect(thingsToFixLine({ ...BLOCKED, kind: "ready", reasons: [] } as RemovalWorkflowStatus)).toBeNull();
+    expect(thingsToFixLine({ ...BLOCKED, kind: "ready", reasons: [] } as RemovalWorkflowStatus)).toBe("Ready to submit");
+    expect(thingsToFixLine({ ...BLOCKED, kind: "submitted", reasons: [] } as RemovalWorkflowStatus)).toBeNull();
   });
 });

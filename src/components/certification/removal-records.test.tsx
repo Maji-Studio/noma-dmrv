@@ -72,7 +72,16 @@ describe("RemovalRecordsList", () => {
     render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" />);
     open();
     const line = screen.getByRole("link", { name: "PR-1" }).closest("li")!;
-    expect(line.textContent).toMatch(/Feb 1, 2026 · Reactor 1 · 3\.2.t.dry.*PR-1$/);
+    expect(line.textContent).toMatch(/^Feb 1 · Reactor 1 · 3\.2.t.dry.biochar.*PR-1$/);
+  });
+});
+
+describe("batch row and links", () => {
+  it("summarises the batch's dry biochar and opens record codes in the same tab", () => {
+    render(<RemovalRecordsList batches={[batch(1, 2)]} facilityId="f1" />);
+    expect(screen.getByRole("button", { name: /Records of CB-26-001/ }).textContent).toMatch(/6\.4.t.dry/);
+    open();
+    expect(screen.getByRole("link", { name: "PR-1" }).getAttribute("target")).toBeNull();
   });
 });
 
