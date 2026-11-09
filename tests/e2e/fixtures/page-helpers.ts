@@ -39,7 +39,10 @@ export async function waitForAppHydration(page: Page) {
   await expect(
     sidebar
       .locator('[data-testid="facility-selector"]')
-      .or(sidebar.getByRole("link", { name: "Add first facility" })),
+      .or(
+        // The aside is hidden below md, and getByRole skips hidden elements.
+        sidebar.getByRole("link", { name: "Add first facility", includeHidden: true }),
+      ),
   ).toBeAttached({ timeout: FACILITY_HYDRATION_TIMEOUT_MS });
 }
 
