@@ -111,10 +111,13 @@ export function RecordGroup({ title, records, facilityId, mode }: { title: strin
         ))}
       </ul>
       {!showAll && hidden > 0 && (
-        <Button variant="noOutline" size="small" className={cn("-ml-12 self-start", PHONE_TOUCH_TARGET)} onClick={revealRest}>
-          Show all {records.length}
-          <span className="sr-only"> {title.toLowerCase()}</span>
-        </Button>
+        /* The wrapper takes the negative margin: `.label-button` resets `margin` on the button itself. */
+        <div className="-ml-12 self-start">
+          <Button variant="noOutline" size="small" className={PHONE_TOUCH_TARGET} onClick={revealRest}>
+            Show all {records.length}
+            <span className="sr-only"> {title.toLowerCase()}</span>
+          </Button>
+        </div>
       )}
     </div>
   );

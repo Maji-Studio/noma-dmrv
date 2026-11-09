@@ -243,9 +243,12 @@ export function EnergyRecordList({
           </div>
         )}
         {ranked.length > TOP_ROWS && (
-          <Button variant="noOutline" size="small" className={cn("-ml-12 self-start", PHONE_TOUCH_TARGET)} onClick={() => setShowAll(!showAll)}>
-            {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
-          </Button>
+          // The wrapper takes the negative margin: `.label-button` resets `margin` on the button itself.
+          <div className="-ml-12 self-start">
+            <Button variant="noOutline" size="small" className={PHONE_TOUCH_TARGET} onClick={() => setShowAll(!showAll)}>
+              {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
+            </Button>
+          </div>
         )}
       </div>
     </section>
