@@ -12,8 +12,7 @@ import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { RemovalReadiness } from "@/lib/certification/readiness";
 import { REMOVAL_SUBMISSION_FAILED } from "@/lib/certification/status";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
-import { correctionStatus } from "@/lib/removal-correction-copy";
+import { returnedRemovalAttentionLabel } from "@/lib/certification/removal-shown-status";
 import { recordHref } from "@/lib/record-links";
 
 export const REMOVAL_READINESS_UNAVAILABLE_TITLE = "Couldn't check. Open it to see what is left.";
@@ -83,7 +82,7 @@ export function removalAttentionRows(sources: RemovalAttentionSources, facilityI
     returned: sources.returned.map((removal) => ({
       removalId: removal.removalId,
       item: {
-        ...rowFor(removal, removal.correction ? correctionStatus(removal.correction).label : RETURNED_BY_ISOMETRIC_LABEL, facilityId),
+        ...rowFor(removal, returnedRemovalAttentionLabel(removal.correction), facilityId),
         id: `removal-returned-${removal.removalId}`,
       },
     })),
