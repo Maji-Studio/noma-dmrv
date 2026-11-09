@@ -79,6 +79,7 @@ interface ResolvedBatchScope {
 async function resolveBatchScope(
   ctx: OrgContext,
   creditBatchId: string,
+  options: { removalId?: string } = {},
 ): Promise<ResolvedBatchScope> {
   requireOrgScope(ctx);
   const [batch] = await db
@@ -105,6 +106,7 @@ async function resolveBatchScope(
   const accounting = (
     await loadCreditBatchRollups(ctx, [creditBatchId], {
       includeRunForwards: true,
+      removalId: options.removalId,
     })
   )[creditBatchId];
   if (!accounting) {
@@ -136,15 +138,18 @@ function mergeLineageWarnings(lineages: CreditBatchChainLineage[]): string[] {
   return Array.from(new Set(merged));
 }
 
+/** `removalId` narrows the applications (and their deliveries) to that Removal's slice of the batch. */
 export async function getCreditBatchChainData(
   ctx: OrgContext,
   creditBatchId: string,
+  options: { removalId?: string } = {},
 ): Promise<CreditBatchChainData> {
   requireOrgScope(ctx);
 
   const { batch, lineages, rollForwards } = await resolveBatchScope(
     ctx,
     creditBatchId,
+    options,
   );
 
   const warnings = mergeLineageWarnings(lineages);
