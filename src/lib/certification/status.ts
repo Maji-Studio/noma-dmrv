@@ -170,6 +170,8 @@ export interface RemovalWorkflowStatus {
   label: string;
   /** Blocking reasons only; non-blocking notes live in their owning section. */
   reasons: string[];
+  /** Fixes Review & submit lists for a blocked draft; the list reads "N to fix" from it. */
+  fixCount?: number;
   isActionable: boolean;
   canRetry: boolean;
 }
@@ -426,6 +428,7 @@ export function deriveRemovalWorkflowStatus({
         value: "pending",
         label: "Needs attention",
         reasons: readiness.reasons,
+        fixCount: readiness.fixCount,
         isActionable: true,
         canRetry: false,
       };

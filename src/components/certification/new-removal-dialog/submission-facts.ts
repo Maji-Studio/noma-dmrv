@@ -11,9 +11,10 @@ import type {
   MemberCreditBatch,
   RemovalCertifyContext,
 } from "@/fn/certification/certify-context";
-import type {
-  RemovalReadiness,
-  RemovalRequirementCheck,
+import {
+  actionableSubmissionChecks,
+  type RemovalReadiness,
+  type RemovalRequirementCheck,
 } from "@/lib/certification/readiness";
 import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
@@ -108,15 +109,11 @@ export function countLabel(
 }
 
 /**
- * Submit-time advisories describe automatic work, not operator work. Keep those
- * facts in the sending panel instead of counting them as checks the operator
- * must fix.
+ * Submit-time advisories describe automatic work, not operator work: the
+ * filter keeps them out of the checks the operator must fix. It lives in
+ * `readiness.ts`, so the list and the dashboard count the same checks.
  */
-export function actionableSubmissionChecks(
-  checks: RemovalRequirementCheck[],
-): RemovalRequirementCheck[] {
-  return checks.filter((check) => check.status !== "warning");
-}
+export { actionableSubmissionChecks };
 
 function sum(
   batches: MemberCreditBatch[],

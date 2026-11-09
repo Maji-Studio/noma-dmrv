@@ -13,10 +13,24 @@ describe("draftRemovalAttentionItems", () => {
       "fac-1",
     );
     expect(items.map((item) => [item.entityCode, item.title])).toEqual([
-      ["RM-1", "3 to fix."],
-      ["RM-2", "Ready to submit."],
+      ["RM-1", "3 to fix"],
+      ["RM-2", "Ready to submit"],
     ]);
     expect(items[0].href).toContain("r1");
+  });
+
+  it("counts the fixes the review lists, not the reasons", () => {
+    const [item] = draftRemovalAttentionItems(
+      [{ removalId: "r4", code: "RM-4", createdAt, readiness: { state: "blocked", reasons: ["A.", "B.", "C.", "D.", "E."], fixCount: 1 } }],
+      "fac-1",
+    );
+    expect(item.title).toBe("1 to fix");
+  });
+
+  it("gives a rejected Removal its own row", () => {
+    const [item] = draftRemovalAttentionItems([{ removalId: "r5", code: "RM-5", createdAt }], "fac-1");
+    expect(item.title).toBe("Not submitted");
+    expect(item.href).toContain("r5");
   });
 
   it("gives a Removal with a submission running no row", () => {

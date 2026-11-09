@@ -1,6 +1,7 @@
 /**
- * Readiness of the facility's draft Removals, for the dashboard's attention
- * list. It reuses the Removals list's read path (`buildRemovalContext`, then
+ * Readiness of the facility's draft Removals, plus the Removals whose last
+ * submission was rejected (they need the operator and carry no readiness
+ * here), for the dashboard's attention list. It reuses the Removals list's read path (`buildRemovalContext`, then
  * `toRemovalReadinessFacts` + `deriveRemovalReadiness`), so the dashboard and
  * the list can never disagree about "N to fix".
  *
@@ -17,7 +18,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certification/from-submission";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import type { DraftRemovalReadiness } from "@/lib/certification/removal-attention";
+import type { DraftRemovalReadiness, RejectedRemoval } from "@/lib/certification/removal-attention";
 import { deriveRemovalStatus, type LocalSubmissionStatus } from "@/lib/certification/status";
 import {
   ISOMETRIC_PROVIDER,
@@ -31,7 +32,7 @@ import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval
 /** Same bound the Removals list uses for its per-Removal builds. */
 const READINESS_CONCURRENCY = 8;
 
-export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: string): Promise<DraftRemovalReadiness[]> {
+export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: string): Promise<(DraftRemovalReadiness | RejectedRemoval)[]> {
   requireOrgScope(orgCtx);
   const removalRows = await listRemovalsForFacility(orgCtx, facilityId);
   if (removalRows.length === 0) return [];
@@ -46,20 +47,22 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
     facilityId,
   );
   // A draft is a Removal never sent, or whose attempt left nothing running or interrupted.
-  const drafts = removalRows.filter((removal) => {
+  const kindOf = (removal: (typeof removalRows)[number]) => {
     const latest = submissions.get(removal.id) ?? null;
-    return (
-      deriveRemovalStatus({
-        local: (latest?.status ?? null) as LocalSubmissionStatus | null,
-        lockInFlight: latest ? isLockedInFlight(latest) : false,
-        submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(latest, {
-          startedOn: removal.startedOn ?? null,
-          completedOn: removal.completedOn ?? null,
-        }),
-      }).kind === "not-submitted"
-    );
-  });
-  if (drafts.length === 0) return [];
+    return deriveRemovalStatus({
+      local: (latest?.status ?? null) as LocalSubmissionStatus | null,
+      lockInFlight: latest ? isLockedInFlight(latest) : false,
+      submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(latest, {
+        startedOn: removal.startedOn ?? null,
+        completedOn: removal.completedOn ?? null,
+      }),
+    }).kind;
+  };
+  const drafts = removalRows.filter((removal) => kindOf(removal) === "not-submitted");
+  const rejected: RejectedRemoval[] = removalRows
+    .filter((removal) => kindOf(removal) === "rejected")
+    .map((removal) => ({ removalId: removal.id, code: removal.code, createdAt: removal.createdAt }));
+  if (drafts.length === 0) return rejected;
 
   // Best effort: a failing facts load or draft build drops those rows, never the dashboard.
   let facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>;
@@ -67,10 +70,10 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
     facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
   } catch {
     logger.warn({ facilityId }, "Draft Removal readiness skipped: facility facts failed to load");
-    return [];
+    return rejected;
   }
   const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
-  const result: DraftRemovalReadiness[] = [];
+  const result: (DraftRemovalReadiness | RejectedRemoval)[] = [];
   for (let i = 0; i < drafts.length; i += READINESS_CONCURRENCY) {
     const chunk = drafts.slice(i, i + READINESS_CONCURRENCY);
     const settled = await Promise.allSettled(
@@ -90,5 +93,5 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
       else logger.warn({ removalId: chunk[index]?.id }, "Draft Removal readiness skipped: build failed");
     });
   }
-  return result;
+  return [...result, ...rejected];
 }

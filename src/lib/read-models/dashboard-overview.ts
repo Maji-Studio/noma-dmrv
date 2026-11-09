@@ -7,6 +7,9 @@ import type { OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 import { facilityIdSchema } from "./facility-id";
 
+/** Row ids of interrupted submissions, single or grouped (`data-access/dashboard-overview.ts`). */
+const INTERRUPTED_ROW_PREFIX = "removal-interrupted";
+
 const dashboardOverviewInputSchema = z.object({
   facilityId: facilityIdSchema,
   range: z.enum(["week", "month", "all"]).default("month"),
@@ -37,7 +40,13 @@ export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   const drafts = draftRemovalAttentionItems(draftReadiness, facilityId);
   return {
     ...overview,
-    attention: [...drafts, ...overview.attention],
+    attention: withDraftRows(overview.attention, drafts),
     attentionTotal: overview.attentionTotal + drafts.length,
   };
+}
+
+/** Interrupted submissions lead the queue, so the draft rows go right after them. */
+function withDraftRows<T extends { id: string }>(attention: readonly T[], drafts: readonly T[]): T[] {
+  const lastInterrupted = attention.findLastIndex((item) => item.id.startsWith(INTERRUPTED_ROW_PREFIX));
+  return [...attention.slice(0, lastInterrupted + 1), ...drafts, ...attention.slice(lastInterrupted + 1)];
 }

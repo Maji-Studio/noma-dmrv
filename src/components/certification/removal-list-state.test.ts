@@ -278,6 +278,10 @@ describe("listStatusLabel", () => {
     expect(listStatusLabel({ kind: "blocked", label: "Needs attention", reasons: ["A."] })).toBe("1 to fix");
   });
 
+  it("reads the fix count the review lists when it differs from the reasons", () => {
+    expect(listStatusLabel({ kind: "blocked", label: "Needs attention", reasons: ["A.", "B.", "C.", "D.", "E."], fixCount: 1 })).toBe("1 to fix");
+  });
+
   it("keeps every other state's own label", () => {
     expect(listStatusLabel({ kind: "ready", label: "Ready to submit", reasons: [] })).toBe("Ready to submit");
     expect(listStatusLabel({ kind: "interrupted", label: "Submission interrupted", reasons: ["Retry."] })).toBe("Submission interrupted");

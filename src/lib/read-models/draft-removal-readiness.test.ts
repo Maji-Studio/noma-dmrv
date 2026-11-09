@@ -41,7 +41,7 @@ describe("loadDraftRemovalReadiness", () => {
 
   it("returns the readiness of each draft and leaves a submitted Removal out", async () => {
     const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
-    expect(drafts.map((draft) => [draft.removalId, draft.readiness.state])).toEqual([
+    expect(drafts.map((draft) => [draft.removalId, draft.readiness?.state])).toEqual([
       ["blocked", "blocked"],
       ["ready", "ready"],
     ]);
@@ -58,5 +58,13 @@ describe("loadDraftRemovalReadiness", () => {
     mocks.rows = [row("broken"), row("ready")];
     const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
     expect(drafts.map((draft) => draft.removalId)).toEqual(["ready"]);
+  });
+
+  it("adds a Removal whose last submission was rejected, without building it", async () => {
+    mocks.rows = [row("bounced")];
+    mocks.submissions = new Map([["bounced", { status: "rejected", lockedAt: null, metadata: null }]]);
+    const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(drafts.map((draft) => draft.removalId)).toEqual(["bounced"]);
+    expect(mocks.built).toEqual([]);
   });
 });

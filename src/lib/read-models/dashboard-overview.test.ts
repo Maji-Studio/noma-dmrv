@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/data-access/dashboard-overview", () => ({
-  getDashboardOverview: async () => ({ attention: [{ id: "a1" }], attentionTotal: 1 }),
+  getDashboardOverview: async () => ({ attention: [{ id: "removal-interrupted-x" }, { id: "a1" }], attentionTotal: 2 }),
 }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: async () => undefined }));
 vi.mock("./draft-removal-readiness", () => ({ loadDraftRemovalReadiness: () => mocks.loadDrafts() }));
@@ -27,7 +27,9 @@ describe("readDashboardOverview", () => {
       { removalId: "r1", code: "RM-1", createdAt: new Date("2026-11-01T00:00:00Z"), readiness: { state: "ready", reasons: [] } },
     ];
     const result = await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
-    expect(result.attentionTotal).toBe(2);
+    expect(result.attentionTotal).toBe(3);
+    // The interrupted row keeps its place at the head.
+    expect(result.attention.map((item) => item.id)).toEqual(["removal-interrupted-x", "removal-draft-r1", "a1"]);
   });
 
   it("still returns the overview when the draft readiness load rejects", async () => {
@@ -35,7 +37,7 @@ describe("readDashboardOverview", () => {
       throw new Error("isometric down");
     };
     const result = await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
-    expect(result.attention).toEqual([{ id: "a1" }]);
-    expect(result.attentionTotal).toBe(1);
+    expect(result.attention.map((item) => item.id)).toEqual(["removal-interrupted-x", "a1"]);
+    expect(result.attentionTotal).toBe(2);
   });
 });

@@ -6,11 +6,12 @@ import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certificatio
 
 /**
  * What a list cell calls a Removal's status. A draft that is blocked reads
- * "N to fix", the count of its blocking reasons; the reasons themselves live
+ * "N to fix", the fixes Review & submit lists for its unmet checks (not the reason count); the reasons themselves live
  * on the sheet and in Review & submit. Every other state keeps its own label.
  */
-export function listStatusLabel(status: { kind: string; label: string; reasons: readonly string[] }): string {
-  return status.kind === "blocked" && status.reasons.length > 0 ? `${status.reasons.length} to fix` : status.label;
+export function listStatusLabel(status: { kind: string; label: string; reasons: readonly string[]; fixCount?: number }): string {
+  const count = status.fixCount ?? status.reasons.length;
+  return status.kind === "blocked" && count > 0 ? `${count} to fix` : status.label;
 }
 
 export type RemovalEnrichmentStatus =
