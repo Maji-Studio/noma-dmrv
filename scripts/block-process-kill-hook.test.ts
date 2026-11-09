@@ -58,10 +58,10 @@ describe("block-process-kill hook", () => {
 
   const literalCommands = [
     `A=/tmp/x/codex; mkdir -p "$A" && cat > "$A/prompt.md" <<'EOF'\n${PREAMBLE}\nEOF\n"$CODEX" exec -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" -o "$A/report.md" - < "$A/prompt.md"`,
-    `PROMPT="$(mktemp -d)/prompt.md"\ncat <<'EOF' > "$PROMPT"\n${PREAMBLE}\nEOF`,
+    `PROMPT="$(mktemp -d)"\ncat <<'EOF' > "$PROMPT/prompt.md"\n${PREAMBLE}\nEOF`,
     `cat > \${TMPDIR}/prompt.md <<'PROMPT_EOF'\n${PREAMBLE}\ncat <<'INNER'\nINNER\nPROMPT_EOF`,
-    ...["&&", ";", "||"].map((separator) => `echo before ${separator} cat > f <<'EOF'\n${PREAMBLE}\nEOF`),
-    ...["$PROMPT", "'\${TMPDIR}/prompt file.md'", '"\${TMPDIR}/prompt file.md"'].map(
+    ...["&&", ";", "||"].map((separator) => `echo before ${separator} cat > f.md <<'EOF'\n${PREAMBLE}\nEOF`),
+    ...["$PROMPT.md", "'\${TMPDIR}/prompt file.md'", '"\${TMPDIR}/prompt file.md"'].map(
       (target) => `cat > ${target} <<'EOF'\n${PREAMBLE}\nEOF`
     ),
     // Inner heredoc examples are literal body text and cannot execute.
@@ -71,6 +71,10 @@ describe("block-process-kill hook", () => {
     `cat <<FIRST <<'SECOND'\nordinary\nFIRST\nordinary\nSECOND\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`,
     `cat > first.md <<'EOF'\nAn operator's ordinary note.\nEOF\ncat > second.md <<'END'\n${PREAMBLE}\nEND`,
     `echo "an escaped quote: \\""\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`,
+    ...['echo "# ordinary"', "echo '# ordinary'", "echo \\#", "echo word#ordinary"].map(
+      (prefix) => `${prefix}; cat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`
+    ),
+    `cat <<'EOF' > prompt.txt\n${PREAMBLE}\nEOF`,
   ];
   it.each(literalCommands)("allows literal file-writing bodies: %s", (command) => {
     const result = runCommand(command);
@@ -81,6 +85,22 @@ describe("block-process-kill hook", () => {
 
   const deniedCommands = KILL_COMMANDS.flatMap((command) => [
     command,
+    ...[
+      "# Previous command", "echo before # comment", "echo before;# comment", "echo before &# comment",
+      "echo before |# comment", "(# comment", "\t# comment",
+    ].map(
+      (prefix) => `${prefix}; cat > prompt.md <<'EOF'\n${command}\nEOF`
+    ),
+    // A commented delimiter must not consume the next real heredoc header.
+    `# cat <<'EOF'\ncat <<OUTER\ncat > prompt.md <<'EOF'\n$(${command})\nEOF\nOUTER`,
+    `# cat <<'COMMENT'\ncat <<OUTER\nCOMMENT\ncat > prompt.md <<'EOF'\n$(${command})\nEOF\nOUTER`,
+    ...["&&", ";", "||"].map((separator) => `echo before ${separator} cat > f <<'EOF'\n${command}\nEOF`),
+    ...["f", "$PROMPT", '"$PROMPT"', "prompt.MD", "prompt.md.sh"].map(
+      (target) => `cat > ${target} <<'EOF'\n${command}\nEOF`
+    ),
+    `PROMPT="$(mktemp -d)/prompt.md"\ncat <<'EOF' > "$PROMPT"\n${command}\nEOF`,
+    `cat > /tmp/restart.sh <<'EOF'\n${command}\nEOF\nbash /tmp/restart.sh`,
+    `cat > f.sh <<'EOF'\n${command}\nEOF\nchmod +x f.sh && ./f.sh`,
     ...["bash", "sh", "zsh", "python"].map((shell) => `${shell} <<'EOF'\n${command}\nEOF`),
     `cat <<'EOF' | bash\n${command}\nEOF`,
     `cat > prompt.md <<EOF\n$(${command})\nEOF`,

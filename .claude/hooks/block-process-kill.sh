@@ -3,7 +3,8 @@
 # Threat model: stop careless pattern kills, not deliberate shell disguises.
 # Other sessions share this machine; `pkill -f` and `killall` hit their dev servers.
 # Kill by PID from `lsof -nP -iTCP:<port> -sTCP:LISTEN` instead.
-# Only literal file-writing cat heredocs outside outer heredocs and quotes are exempt.
+# Only literal cat heredocs writing .md/.txt files outside outer heredocs and quotes
+# are exempt, with no shell comment before the header.
 # Other text, including grep/echo mentions, is denied.
 # Telling a quoted pattern from an invocation needs a shell parser. A false deny
 # costs one retry; a false allow can stop other sessions servers. Split the literal
@@ -18,6 +19,7 @@ command="$(jq -sr 'if length != 1 or (.[0] | type) != "object"
 # heredoc open. Other heredoc bodies stay checked, including nested literal cats.
 command="$(printf '%s\n' "$command" | awk -v sq="'" '
   BEGIN {
+    doc_extensions = "\\.(md|txt)$"
     current = 1
     word = "[A-Za-z0-9_.-]+"
     quoted = "[A-Za-z0-9_. -]+"
@@ -52,10 +54,24 @@ command="$(printf '%s\n' "$command" | awk -v sq="'" '
       character = substr($0, j, 1)
       if (character == "\\" && quote != sq) { j++; continue }
       if (quote == "") {
+        # Comments open no heredoc. Keep all later text visible when one is found.
+        if (character == "#" && (j == 1 || substr($0, j - 1, 1) ~ /[[:space:];&|(]/)) {
+          blocked = 1
+          break
+        }
         if (character == sq || character == "\"") quote = character
       } else if (character == quote) quote = ""
     }
-    hide_body = (!blocked && lines[NR - 1] !~ /\\$/ && count == 1 && is_header)
+    if (blocked) next
+    if (is_header) {
+      header_text = substr($0, header_start)
+      match(header_text, redirect)
+      redirect_target = substr(header_text, RSTART, RLENGTH)
+      sub(/^>>?[ \t]*/, "", redirect_target)
+      gsub(/"/, "", redirect_target)
+      gsub(sq, "", redirect_target)
+    }
+    hide_body = (lines[NR - 1] !~ /\\$/ && count == 1 && is_header && redirect_target ~ doc_extensions)
     suffix = $0
     current = 1
     pending = 0

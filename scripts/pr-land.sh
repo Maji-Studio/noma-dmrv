@@ -56,7 +56,7 @@ The queue watch and CI wait each time out after 60 minutes.
 
 Exit codes:
   0  MERGED, or a completed dry-run/help request
-  1  Closed input, merged input without teardown, failed CI, conflict, or command failure
+  1  Closed input, merged input without teardown, failed CI, conflict, queue removal, or command failure
   2  Invalid arguments, configuration, or missing dependency
   3  Head changed while waiting or preparing to enqueue
   4  Merge state, head sync, checks, missing-check grace, or queue watch timed out
