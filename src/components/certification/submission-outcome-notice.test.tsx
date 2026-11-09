@@ -63,8 +63,9 @@ describe("SubmissionOutcomeNotice", () => {
     it("asks an Admin only when the viewer is below the role floor", () => {
       expect(renderChanged(false, "ask-admin")).toContain("Ask an Admin to delete it. Then create the Removal again.");
       const unavailable = renderChanged(false, "unavailable");
-      expect(unavailable).toContain("Delete Removal is not available right now. Reload the page to try again.");
+      expect(unavailable).toContain("Part of it may already be in Isometric.");
       expect(unavailable).not.toContain("Ask an Admin");
+      expect(unavailable).not.toContain("Reload");
     });
 
     it("says a finalized Removal cannot be deleted, like the drift stop", () => {

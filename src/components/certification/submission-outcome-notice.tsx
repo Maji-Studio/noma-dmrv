@@ -80,7 +80,8 @@ const CHANGED_FACT = "Part of it may already be in Isometric.";
 /**
  * Whether this viewer can take Delete Removal: "can" shows the button, "deleting" means a deletion
  * already runs, "ask-admin" means the viewer is known to be below the role floor (#746), and
- * "unavailable" covers access still loading. A finalized Removal is worded by `finalized` first.
+ * "unavailable" covers access still loading. A finalized Removal (also any Removal in a GHG
+ * Statement, which only a submitted one can be) is worded by `finalized` first.
  */
 export type DeleteAccess = "can" | "deleting" | "ask-admin" | "unavailable";
 
@@ -99,7 +100,8 @@ function changedFixLine(finalized: boolean, deleteAccess: DeleteAccess): string 
   if (finalized) return `${CHANGED_FACT} ${FINALIZED_NO_DELETE}`;
   if (deleteAccess === "deleting") return `${CHANGED_FACT} This Removal is being deleted. Reload the page to see the result.`;
   if (deleteAccess === "ask-admin") return `${CHANGED_FACT} Ask an Admin to delete it. Then create the Removal again.`;
-  if (deleteAccess === "unavailable") return `${CHANGED_FACT} Delete Removal is not available right now. Reload the page to try again.`;
+  // Access still loading: state the fact and let the line settle once access resolves.
+  if (deleteAccess === "unavailable") return CHANGED_FACT;
   return `${CHANGED_FACT} Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.`;
 }
 

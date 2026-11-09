@@ -96,7 +96,11 @@ describe("assertClaimedRemovalPayloadFresh", () => {
   it("does not call a template that could not be read a change (#1114)", async () => {
     vi.mocked(prepareRemovalSubmission).mockReturnValue({
       prepared: null,
-      blockers: [{ code: "templateNotFullyRead", message: "not fully read" }],
+      // An unread template also yields derived blockers; together they prove nothing.
+      blockers: [
+        { code: "templateNotFullyRead", message: "not fully read" },
+        { code: "templateLinesNeedReview", message: "lines to decide" },
+      ],
     });
 
     await expect(assertFresh()).rejects.toThrow();

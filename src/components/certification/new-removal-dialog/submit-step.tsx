@@ -578,7 +578,8 @@ export function SubmitStep({
 
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
-          {!blocked && submitButton}
+          {/* Under the changed-since-review stop Submit again only refuses again (#1114). */}
+          {!blocked && submitError !== INTERRUPTED_REMOVAL_CHANGED_MESSAGE && submitButton}
           {backToEmpty}
           {!blocked && canDeleteRemoval ? (
             <Button

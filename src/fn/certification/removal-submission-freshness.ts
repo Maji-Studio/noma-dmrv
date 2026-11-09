@@ -8,8 +8,9 @@ import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submiss
 import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 
 // Blockers that mean the recheck could not read what it needs, not that the
-// Removal's data or settings changed. A possibly sent draft stays retryable
-// on these; every other blocker is a proven change (#1114).
+// Removal's data or settings changed. With any of them present the other
+// blockers (lines to decide, missing fixed datapoints) may only reflect the
+// unread template, so a possibly sent draft stays retryable (#1114).
 const RECHECK_FAILURE_BLOCKERS: ReadonlySet<string> = new Set([
   "templateNotFullyRead",
   "noCredentials",
@@ -46,8 +47,8 @@ export async function assertClaimedRemovalPayloadFresh(args: {
         "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
       );
     }
-    const recheckFailedOnly = blockers.every((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
-    await retireForDrift("semantic payload rebuild failed after draft claim", !recheckFailedOnly);
+    const recheckIncomplete = blockers.length === 0 || blockers.some((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
+    await retireForDrift("semantic payload rebuild failed after draft claim", !recheckIncomplete);
     throw new SafeError(
       "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
     );
