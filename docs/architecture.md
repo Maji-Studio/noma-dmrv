@@ -474,6 +474,8 @@ answer with the same `ActionResult` envelope, `conflict` included. Route
 handlers stay thin: they name the read, its log context, and its fallback
 message. A migrated read has no Server Action wrapper left; adding one back
 means wrapping the same core in `withAction`, never a second copy of the query.
+Dashboard overview and batch scope use `/api/reads/dashboard/overview` and
+`/api/reads/dashboard/batch-scope`, with facility guards in their read cores.
 
 Status mapping belongs to the adapter alone: a denied org context answers 401
 when there is no session and 403 when the caller has no usable organization
@@ -822,11 +824,12 @@ Facility-scoped operations dashboard at `/dashboard`
   (`src/data-access/dashboard-batch-scope.ts`, projected by
   `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
   set-based `loadCreditBatchAccounting` call, so its round trips do not grow
-  with the batch count. An application split across batches counts once and
-  adds each batch's slice to the applied mass; CO₂e shows only when every
-  chosen batch has an estimate.
-- The overview read (`getDashboardOverview`) supplies the rows, read with range
-  `all`, and the batch read above narrows them. The overview's aggregate lives in
+  with the batch count. Activity filters record ids before each entity's top
+  eight and the final newest-first merge. All-batches reads skip batches deleted
+  mid-read; a missing selected batch fails. A split application counts once and
+  adds both batches' slices; CO₂e needs an estimate for every chosen batch.
+- The overview read (`getDashboardOverview`) supplies To do rows with range
+  `all`; batch scope supplies activity directly. The overview's aggregate lives in
   `src/data-access/dashboard-overview.ts`, with shared predicates/loaders in
   `dashboard-attention.ts`, `dashboard-stations.ts`, and
   `dashboard-structural-gaps.ts`; `dashboard-station-attention.ts` puts GPS

@@ -3,7 +3,18 @@
  * one facility list link, so station totals, reasons, grouped attention rows
  * and GPS gaps word and link the same way.
  */
+import type { DashboardStationKey } from "@/data-access/dashboard-overview";
 import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
+
+/** Shared nouns for station totals in facility and credit batch scopes. */
+export const STATION_COUNT_WORDS: Record<DashboardStationKey, [string, string]> = {
+  suppliers: ["supplier", "suppliers"],
+  feedstock: ["feedstock", "feedstocks"],
+  production: ["run", "runs"],
+  products: ["product", "products"],
+  deliveries: ["delivery", "deliveries"],
+  applications: ["application", "applications"],
+};
 
 /** "1 run", "3 runs"; pass the plural for irregular words ("deliveries"). */
 export function plural(n: number, singular: string, pluralWord?: string): string {

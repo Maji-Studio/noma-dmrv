@@ -46,6 +46,7 @@ const overview = {
 } as unknown as DashboardOverview;
 
 const scope: DashboardBatchScopeView = {
+  activity: [{ id: "older-scoped", code: "PR-1", title: "Run saved", dateIso: "2026-01-01T10:00:00Z", href: "/production-runs?id=run-1" }],
   batchIds: ["batch-1"],
   stationTotals: { suppliers: 1, feedstock: 2, production: 3, products: 0, deliveries: 1, applications: 1 },
   kpis: { feedstockProcessedDryTonnes: 2.4, biocharProducedDryTonnes: null, appliedToSoilDryTonnes: 0, co2eStoredTonnes: 4.5 },
@@ -61,13 +62,16 @@ describe("applyBatchScope", () => {
     expect(byKey("production").totalLabel).toBe("3 runs");
     expect(byKey("products").totalLabel).toBe("0 products");
     expect(byKey("suppliers").totalLabel).toBe("1 supplier");
+    expect(byKey("feedstock").totalLabel).toBe("2 feedstocks");
+    expect(byKey("deliveries").totalLabel).toBe("1 delivery");
+    expect(byKey("applications").totalLabel).toBe("1 application");
   });
 
   it("keeps only in-scope To do and activity rows and drops grouped rows and gaps", () => {
     expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a3", "a5"]);
     expect(scoped.structuralGaps).toEqual([]);
     expect(scoped.attentionTotal).toBe(3);
-    expect(scoped.activity.map((item) => item.id)).toEqual(["x1"]);
+    expect(scoped.activity.map((item) => item.id)).toEqual(["older-scoped"]);
   });
 
   it("counts in-scope credit batch and Removal rows on the Production bubble with the stage's own rows", () => {

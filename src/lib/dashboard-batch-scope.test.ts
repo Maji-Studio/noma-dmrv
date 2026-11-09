@@ -19,15 +19,15 @@ const run = (id = "run-1"): BatchLineageRunFact => ({
   reactor: { id: "reactor-1", code: "R", identifier: "R", reactorType: null },
   feedstocks: [feedstock("feedstock-1")],
 });
-const application = (id = "application-1", dryTons: number | null = 0.2): BatchLineageApplicationFact => ({
+const application = (id = "application-1", dryTons: number | null = 0.2, runId = "run-1"): BatchLineageApplicationFact => ({
   id, code: id, status: null, applicationDate: new Date("2026-01-01"),
   fieldIdentifier: null, evidenceMethod: "location", gisBoundary: null,
   biocharAppliedTons: 0.3, biocharAppliedDryTons: dryTons,
-  sourceAllocation: null, soilTemperatureC: null,
+  sourceAllocation: { productionRunId: runId, allocatedWetMassKg: 300, allocatedDryMassKg: 200 }, soilTemperatureC: null,
   facility: { id: "facility-1", code: "F", name: "Facility" },
   delivery: { id: "delivery-1", code: "D", status: null, deliveryDate: new Date("2026-01-01"), massDryKg: null, proofOfDeliveryCount: 0 },
   order: { id: "order-1", code: "O", orderDate: new Date("2026-01-01"), quantityKg: null },
-  biocharProduct: { id: "product-1", code: "P", status: null, productionDate: "2026-01-01", massKg: null, moistureContentPercent: null, formulationName: null, linkedProductionRunId: "run-1" },
+  biocharProduct: { id: "product-1", code: "P", status: null, productionDate: "2026-01-01", massKg: null, moistureContentPercent: null, formulationName: null, linkedProductionRunId: runId },
 });
 const product = (): BatchRunForwardProductFact => ({
   id: "stocked-product", code: "P", status: null, productionDate: "2026-01-01",
@@ -38,15 +38,17 @@ const product = (): BatchRunForwardProductFact => ({
 const facts = (batchId = "batch-1", runs = [run()], applications = [application()]): CreditBatchLineageFacts => ({
   batchId, runs, applications, productionRunIds: runs.map(({ id }) => id),
   applicationIds: applications.map(({ id }) => id), appliedWeightTons: 0,
-  runForwards: { "run-1": [product()] },
+  runForwards: Object.fromEntries(runs.map(({ id }) => [id, [product()]])),
 });
 const scoped = (lineageFacts = facts(), co2eStoredTonnes: number | null = 1) => ({ lineageFacts, co2eStoredTonnes });
 
 describe("projectDashboardBatchScope", () => {
-  it("unions two batches sharing a run, application, feedstock, product and delivery", () => {
+  it("unions distinct batch runs sharing an application, feedstock, product and delivery", () => {
     const first = facts();
-    const second = facts("batch-2", [run(), run("run-2")]);
+    const second = facts("batch-2", [run("run-2")], [application("application-1", 0.2, "run-2")]);
     const result = projectDashboardBatchScope([scoped(first), scoped(second, 2)]);
+    expect(first.applications[0]?.sourceAllocation?.productionRunId).toBe("run-1");
+    expect(second.applications[0]?.sourceAllocation?.productionRunId).toBe("run-2");
     expect(result.batchIds).toEqual(["batch-1", "batch-2"]);
     expect(result.stationTotals).toEqual({ suppliers: 1, feedstock: 1, production: 2, products: 2, deliveries: 2, applications: 1 });
     // The shared application is split across both batches: one application, two 0.2 t slices.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardBatchScopeFn } from "@/fn/dashboard-batch-scope";
+import { getDashboardBatchScopeRead } from "@/lib/read-api/client";
 import { unwrap } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
@@ -13,9 +13,9 @@ export function useDashboardBatchScope(
 ) {
   return useQuery({
     queryKey: dashboardOverviewKeys.batchScope(facilityId, creditBatchId),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!facilityId) throw new Error("No facility selected");
-      return unwrap(await getDashboardBatchScopeFn({ facilityId, creditBatchId }));
+      return unwrap(await getDashboardBatchScopeRead({ facilityId, creditBatchId }, { signal }));
     },
     enabled: !!facilityId,
     staleTime: DASHBOARD_BATCH_SCOPE_STALE_TIME_MS,

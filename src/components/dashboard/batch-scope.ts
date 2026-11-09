@@ -4,31 +4,20 @@
  * record count, the four KPI figures and the ids of every record in the
  * batches' roll-ups (and the Removals holding them). `applyBatchScope`
  * narrows the facility overview to it: the stage counts and labels, the KPIs
- * with hints that name the scope, only the To do and activity rows that link
- * to one of its records, and each stage's open-items bubble. Grouped rows and
+ * with hints that name the scope, only the To do rows that link to its records,
+ * its scoped activity, and each stage's open-items bubble. Grouped rows and
  * structural gaps count records across the facility, so the filter leaves
  * them out (Kenji, Q13: To do follows the filter).
  */
 import type {
   DashboardKpi,
   DashboardOverview,
-  DashboardStationKey,
 } from "@/data-access/dashboard-overview";
 import type { DashboardBatchScope } from "@/data-access/dashboard-batch-scope";
-import { plural } from "@/lib/dashboard-links";
+import { plural, STATION_COUNT_WORDS } from "@/lib/dashboard-links";
 
 /** The server read's shape (`getDashboardBatchScope`). */
 export type DashboardBatchScopeView = DashboardBatchScope;
-
-/** The count words the station read uses, so a batch count reads the same. */
-const STAGE_COUNT_WORDS: Record<DashboardStationKey, [string, string]> = {
-  suppliers: ["supplier", "suppliers"],
-  feedstock: ["feedstock", "feedstocks"],
-  production: ["run", "runs"],
-  products: ["product", "products"],
-  deliveries: ["delivery", "deliveries"],
-  applications: ["application", "applications"],
-};
 
 /** Removals and credit batches: their reasons belong to no stage, so they count on Production. */
 const BATCH_REASON_PATHS = ["/credit-batches", "/removals"];
@@ -73,7 +62,7 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
     );
     const reasons = own.map((item) => ({ state: "warning" as const, text: `${item.entityCode}: ${item.title}`, href: item.href }));
     const total = scope.stationTotals[station.key];
-    const [one, many] = STAGE_COUNT_WORDS[station.key];
+    const [one, many] = STATION_COUNT_WORDS[station.key];
     return { ...station, total, totalLabel: plural(total, one, many), attention: reasons.length, reasons };
   });
   return {
@@ -83,6 +72,6 @@ export function applyBatchScope(overview: DashboardOverview, scope: DashboardBat
     attention,
     structuralGaps: [],
     attentionTotal: attention.length,
-    activity: overview.activity.filter((item) => inScope(item.href)),
+    activity: scope.activity,
   };
 }

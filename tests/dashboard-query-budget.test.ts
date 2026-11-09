@@ -49,8 +49,9 @@ const OVERVIEW_QUERY_BUDGET = 19;
 const OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET = 24;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
-/** Selection + accounting/forwards/chemistry/provenance + BEGIN/COMMIT. */
-const BATCH_SCOPE_QUERY_BUDGET = 17;
+/** Selection + accounting/forwards/chemistry/provenance + Removal ids + transaction
+ * control + one scoped activity UNION. Every query is set-based regardless of batch count. */
+const BATCH_SCOPE_QUERY_BUDGET = 18;
 const BATCH_COUNT = 3;
 
 interface Fixture {

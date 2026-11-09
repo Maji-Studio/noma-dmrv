@@ -20,7 +20,7 @@ export interface DashboardBatchScopeFacts {
  */
 export function projectDashboardBatchScope(
   batches: readonly DashboardBatchScopeFacts[],
-): DashboardBatchScope {
+): Omit<DashboardBatchScope, "activity"> {
   const batchIds = new Set<string>();
   const recordIds = new Set<string>();
   const suppliers = new Set<string>();

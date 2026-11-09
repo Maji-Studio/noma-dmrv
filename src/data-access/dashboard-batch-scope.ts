@@ -5,12 +5,14 @@ import type { OrgContext } from "@/lib/auth/server";
 import { projectDashboardBatchScope } from "@/lib/dashboard-batch-scope";
 import { SafeError } from "@/lib/errors";
 import { loadCreditBatchAccounting } from "./credit-batch-accounting";
-import type { DashboardStationKey } from "./dashboard-overview";
+import type { DashboardActivityItem, DashboardStationKey } from "./dashboard-overview";
+import { getDashboardScopedActivity } from "./dashboard-stations";
 import { requireOrgScope } from "./utils";
 
 export interface DashboardBatchScope {
   /** Batch ids in scope (one, or every unarchived batch of the facility). */
   batchIds: string[];
+  activity: DashboardActivityItem[];
   stationTotals: Record<DashboardStationKey, number>;
   kpis: {
     feedstockProcessedDryTonnes: number | null;
@@ -42,26 +44,28 @@ export async function getDashboardBatchScope(
     ))
     .orderBy(asc(creditBatches.id));
   if (creditBatchId !== null && batches.length === 0) {
-    throw new SafeError("Credit batch not found");
+    throw new SafeError("Credit batch was not found.");
   }
   const accounting = await loadCreditBatchAccounting(
     ctx,
     batches.map(({ id }) => id),
     { includeRunForwards: true },
   );
-  const projected = projectDashboardBatchScope(batches.map(({ id }) => {
+  const survivingBatches = batches.filter(({ id }) => {
     const rollup = accounting[id];
-    // A concurrent deletion must not silently turn a selected batch into zero.
-    if (!rollup || rollup.batch.facilityId !== facilityId) {
-      throw new SafeError("Credit batch not found");
-    }
-    return {
-      lineageFacts: rollup.lineageFacts,
-      co2eStoredTonnes: rollup.co2ePreview.co2eStoredTonnes,
-    };
-  }));
-  const removalIds = await loadScopeRemovalIds(ctx, batches);
-  return { ...projected, recordIds: [...new Set([...projected.recordIds, ...removalIds])].sort() };
+    if (rollup && rollup.batch.facilityId === facilityId) return true;
+    // Only a selected batch must survive a concurrent deletion or facility move.
+    if (creditBatchId !== null) throw new SafeError("Credit batch was not found.");
+    return false;
+  });
+  const projected = projectDashboardBatchScope(survivingBatches.map(({ id }) => ({
+    lineageFacts: accounting[id].lineageFacts,
+    co2eStoredTonnes: accounting[id].co2ePreview.co2eStoredTonnes,
+  })));
+  const removalIds = await loadScopeRemovalIds(ctx, survivingBatches);
+  const recordIds = [...new Set([...projected.recordIds, ...removalIds])].sort();
+  const activity = await getDashboardScopedActivity(ctx, facilityId, recordIds);
+  return { ...projected, recordIds, activity };
 }
 
 /**
