@@ -46,7 +46,7 @@ import {
   rebuildGhgStatementReportModel,
 } from "./ghg-statement-report-core";
 import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
-import { ISOMETRIC_PROVIDER } from "../../lib/certification/shared";
+import { ISOMETRIC_PROVIDER } from "@/lib/certification/shared";
 
 
 /** Shown when the renderer emits a PDF this build cannot make byte stable. */

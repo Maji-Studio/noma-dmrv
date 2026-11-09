@@ -78,7 +78,7 @@ import {
   ghgStatementLookup,
   performRegistryCreate,
   type RegistryExternalMutation,
-} from "../../lib/certification/registry-create";
+} from "@/lib/certification/registry-create";
 import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
@@ -98,8 +98,8 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
   submitRateLimit,
-} from "../../lib/certification/shared";
-import { readRemovalReportingWindow } from "../../lib/certification/removal-reporting-window";
+} from "@/lib/certification/shared";
+import { readRemovalReportingWindow } from "@/lib/certification/removal-reporting-window";
 import {
   GHG_STATEMENT_SYNC_OPERATION,
   getGhgStatementLastSyncedAt,

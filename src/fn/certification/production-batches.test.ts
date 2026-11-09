@@ -21,8 +21,8 @@ import type { IsometricProductionBatch } from "@/lib/isometric/production-batche
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import { SafeError } from "@/lib/errors";
 import { IsometricApiError } from "@/lib/isometric/client";
-import type { PerformRegistryCreateArgs } from "../../lib/certification/registry-create";
-import type { DurabilityMeasurementSampleSubmission } from "../../lib/certification/durability-measurement-samples";
+import type { PerformRegistryCreateArgs } from "@/lib/certification/registry-create";
+import type { DurabilityMeasurementSampleSubmission } from "@/lib/certification/durability-measurement-samples";
 
 const mocks = vi.hoisted(() => ({
   getProductionBatchRegistryInputs: vi.fn(),
@@ -50,12 +50,12 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
   resolveRegistryDisplayNames: async () => ({ facilities: new Map(), feedstockTypes: new Map() }),
 }));
 
-vi.mock("../../lib/certification/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../lib/certification/shared")>();
+vi.mock("@/lib/certification/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/certification/shared")>();
   return { ...actual, appendSyncEventBestEffort: mocks.appendSyncEventBestEffort };
 });
 
-vi.mock("../../lib/certification/registry-create", () => ({
+vi.mock("@/lib/certification/registry-create", () => ({
   markSubmissionRejectedBestEffort: mocks.markSubmissionRejectedBestEffort,
   supplierRefLookup: (
     result: { found: true; externalId: string } | { found: false },
@@ -82,7 +82,7 @@ vi.mock("../../lib/certification/registry-create", () => ({
 }));
 
 import { bindProductionBatchesToMeasurementSamples, ensureProductionBatchesForCreditBatches } from "./production-batches";
-import { performRegistryCreate } from "../../lib/certification/registry-create";
+import { performRegistryCreate } from "@/lib/certification/registry-create";
 
 const CREDIT_BATCH_ID = "11111111-1111-4111-8111-111111111111";
 const PRODUCTION_BATCH_ID = "ptb_1GAFJ4C051S06E0Z";

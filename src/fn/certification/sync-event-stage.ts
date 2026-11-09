@@ -1,7 +1,7 @@
 import type { AppendSyncEventInput } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 
-import { appendSyncEventBestEffort } from "../../lib/certification/shared";
+import { appendSyncEventBestEffort } from "@/lib/certification/shared";
 
 /**
  * Audit writes that must not run while a business transaction is open.

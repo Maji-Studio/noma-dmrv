@@ -12,7 +12,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { ISOMETRIC_PROVIDER } from "../../lib/certification/shared";
+import { ISOMETRIC_PROVIDER } from "@/lib/certification/shared";
 
 export interface RegistrySourceVisibilitySettings {
   sourceVisibility: RegistrySourceVisibility;

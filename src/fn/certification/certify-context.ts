@@ -10,7 +10,7 @@ import type { ActionResult } from "@/types/actions";
 import type {
   RemovalCertifyContext,
   SelectableBatchesData,
-} from "../../lib/certification/certify-context-core";
+} from "@/lib/certification/certify-context-core";
 import type { RemovalsHubData } from "./removals-hub";
 
 export type {
@@ -24,7 +24,7 @@ export type {
   TransportCategory,
   TransportCoverage,
   TransportCoverageBucket,
-} from "../../lib/certification/certify-context-core";
+} from "@/lib/certification/certify-context-core";
 export type { RemovalHubEntry, RemovalsHubData } from "./removals-hub";
 
 export async function loadCertifyContextForCreditBatch(

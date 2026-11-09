@@ -55,7 +55,7 @@ vi.mock("./storage-locations", () => ({
   STORAGE_LOCATION_OPERATION_PREFIX: "storage-location:",
   STORAGE_LOCATION_SYNC_OPERATION: "storage-location:sync",
 }));
-vi.mock("../../lib/certification/shared", () => ({
+vi.mock("@/lib/certification/shared", () => ({
   appendSyncEventBestEffort: mocks.appendEvent,
   ISOMETRIC_PROVIDER: "isometric",
   submitRateLimit: (key: string) => ({ key, max: 5, windowMs: 60_000 }),

@@ -3,7 +3,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { Logger } from "@/lib/log";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../lib/certification/shared", () => ({
+vi.mock("@/lib/certification/shared", () => ({
   appendSyncEventBestEffort: vi.fn(),
   ISOMETRIC_PROVIDER: "isometric",
   REMOVAL_ENTITY_TYPE: "removal",
@@ -13,7 +13,7 @@ import {
   checkProtocolVersionAtSubmit,
   PINNED_BIOCHAR_PROTOCOL_VERSION,
 } from "./protocol-version-preflight";
-import { appendSyncEventBestEffort } from "../../lib/certification/shared";
+import { appendSyncEventBestEffort } from "@/lib/certification/shared";
 
 const ORG_CTX = {
   userId: "user-test-1",

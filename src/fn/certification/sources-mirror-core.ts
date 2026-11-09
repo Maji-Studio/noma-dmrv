@@ -58,11 +58,15 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
-} from "../../lib/certification/shared";
+} from "@/lib/certification/shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 import { withStagedSyncEvents } from "./sync-event-stage";
-import type { CandidateDocument } from "@/lib/certification/source-candidates";
-import { loadCandidateDocumentsForRemovalForUser, type CandidateDocumentsForRemoval, type CandidateSourceDocument } from "../../lib/certification/source-candidates";
+import {
+  loadCandidateDocumentsForRemovalForUser,
+  type CandidateDocument,
+  type CandidateDocumentsForRemoval,
+  type CandidateSourceDocument,
+} from "@/lib/certification/source-candidates";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
 const DOCUMENT_NOT_AVAILABLE_MESSAGE =

@@ -19,19 +19,19 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
-} from "../../lib/certification/shared";
+} from "@/lib/certification/shared";
 import {
   loadCandidateDocumentsForRemovalForUser,
   type CandidateDocumentsForRemoval,
-} from "../../lib/certification/source-candidates";
+} from "@/lib/certification/source-candidates";
 import {
   mirrorDocumentToSourceForUser,
   type MirrorResult,
 } from "./sources-mirror-core";
-import { filterCandidateSourcesForSubmissionLifecycle } from "../../lib/certification/removal-source-freeze";
+import { filterCandidateSourcesForSubmissionLifecycle } from "@/lib/certification/removal-source-freeze";
 
 // Session-authenticated Source actions. Every export here is a public Server
-// Action; trusted-context helpers live in `./source-candidates` and
+// Action; trusted-context helpers live in `@/lib/certification/source-candidates` and
 // `./sources-mirror-core`, which have no directive.
 
 export async function loadCandidateDocumentsForRemoval(
@@ -85,12 +85,13 @@ export async function mirrorDocumentToSource(
 }
 
 export type { MirrorResult } from "./sources-mirror-core";
-export type { CandidateDocument, CandidateLineageEntity } from "@/lib/certification/source-candidates";
 export type {
+  CandidateDocument,
+  CandidateLineageEntity,
   CandidateDocumentsForRemoval,
   CandidateSourceDocument,
   ResolvedSourceBindingCandidate,
-} from "../../lib/certification/source-candidates";
+} from "@/lib/certification/source-candidates";
 
 // Re-export the input types for caller convenience.
 export type {

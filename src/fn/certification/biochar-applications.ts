@@ -29,15 +29,15 @@ import type { Logger } from "@/lib/log";
 import {
   buildBiocharApplicationRequestFromIntent,
   type BiocharApplicationIntent,
-} from "../../lib/certification/biochar-application-intents";
+} from "@/lib/certification/biochar-application-intents";
 import { ensureProductionBatchesForCreditBatches } from "./production-batches";
 import {
   performRegistryCreate,
   supplierRefLookup,
   type RegistryExternalMutationReporter,
-} from "../../lib/certification/registry-create";
+} from "@/lib/certification/registry-create";
 import { ensureStorageLocation } from "./storage-locations";
-import { ISOMETRIC_PROVIDER } from "../../lib/certification/shared";
+import { ISOMETRIC_PROVIDER } from "@/lib/certification/shared";
 
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;

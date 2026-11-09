@@ -18,12 +18,12 @@ import {
   type LegacyProductionBatchWindow,
 } from "./production-batch-comparison";
 import type { ProductionBatchSubmission } from "./production-batches";
-import { markSubmissionRejectedBestEffort } from "../../lib/certification/registry-create";
+import { markSubmissionRejectedBestEffort } from "@/lib/certification/registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
-} from "../../lib/certification/shared";
+} from "@/lib/certification/shared";
 
 const DRIFT_TIMESTAMP_FORMATS = ["MMM d, yyyy, HH:mm", "MMM d, yyyy, HH:mm:ss"] as const;
 const DRIFT_MILLISECOND_DIGITS = 3;

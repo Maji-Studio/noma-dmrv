@@ -6,8 +6,8 @@ import type { IsometricClient } from "@/lib/isometric/client";
 import type { IsometricBiocharApplication } from "@/lib/isometric/biochar-applications";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
-import type { PerformRegistryCreateArgs } from "../../lib/certification/registry-create";
-import type { BiocharApplicationIntent } from "../../lib/certification/biochar-application-intents";
+import type { PerformRegistryCreateArgs } from "@/lib/certification/registry-create";
+import type { BiocharApplicationIntent } from "@/lib/certification/biochar-application-intents";
 
 const mocks = vi.hoisted(() => ({
   registration: null as CertifierBiocharApplication | null,
@@ -78,11 +78,11 @@ vi.mock("@/data-access/certifier-removals", () => ({ updateRemovalDates: mocks.u
 vi.mock("./removal-source-binding-verification", () => ({
   verifyAndPersistRemovalSourceBindings: mocks.verifyBindings,
 }));
-vi.mock("../../lib/certification/shared", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../../lib/certification/shared")>(),
+vi.mock("@/lib/certification/shared", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/certification/shared")>(),
   appendSyncEventBestEffort: mocks.appendSyncEvent,
 }));
-vi.mock("../../lib/certification/registry-create", () => ({
+vi.mock("@/lib/certification/registry-create", () => ({
   markSubmissionRejectedBestEffort: mocks.rejectSubmission,
   supplierRefLookup: (
     result: { found: true; externalId: string } | { found: false },

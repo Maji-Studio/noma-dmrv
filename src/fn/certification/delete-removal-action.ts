@@ -7,7 +7,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { deleteRemoval, type RemovalDeletionResult } from "./delete-removal";
-import { submitRateLimit } from "../../lib/certification/shared";
+import { submitRateLimit } from "@/lib/certification/shared";
 import { withAction } from "../with-action";
 
 export async function deleteRemovalAction(

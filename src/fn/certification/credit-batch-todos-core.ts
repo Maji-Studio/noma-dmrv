@@ -9,7 +9,7 @@ import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-ba
 import { buildCreditBatchOpenItems, type CreditBatchOpenItem } from "@/lib/credit-batches/open-items";
 import { SafeError } from "@/lib/errors";
 import { loadBatchesEmissionLines } from "@/lib/read-models/batches-emission-lines";
-import { buildCreditBatchContexts, loadFacilityCertifierFacts } from "../../lib/certification/certify-context-core";
+import { buildCreditBatchContexts, loadFacilityCertifierFacts } from "@/lib/certification/certify-context-core";
 
 export interface CreditBatchTodos {
   state: BatchHealthState;

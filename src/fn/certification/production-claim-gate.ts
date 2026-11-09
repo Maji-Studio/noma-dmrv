@@ -22,7 +22,7 @@ import {
 import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
-import { resolveScopeForRemoval } from "../../lib/certification/certify-context-core";
+import { resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
 
 export interface MemberBatchClaim {
   creditBatchId: string;

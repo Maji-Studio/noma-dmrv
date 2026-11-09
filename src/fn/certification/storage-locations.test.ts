@@ -50,18 +50,18 @@ vi.mock("@/db", () => ({
 vi.mock("@/lib/auth/server", () => ({
   requireOrgRole: mocks.requireOrgRole,
 }));
-vi.mock("../../lib/certification/shared", () => ({
+vi.mock("@/lib/certification/shared", () => ({
   appendSyncEventBestEffort: mocks.appendEvent,
   ISOMETRIC_PROVIDER: "isometric",
 }));
 vi.mock("@/data-access/certification", () => ({ markSubmissionRejected: vi.fn() }));
-vi.mock("../../lib/certification/registry-create", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../lib/certification/registry-create")>();
+vi.mock("@/lib/certification/registry-create", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/certification/registry-create")>();
   return { ...actual, performRegistryCreate: vi.fn(actual.performRegistryCreate) };
 });
 
 import { ensureStorageLocation } from "./storage-locations";
-import { performRegistryCreate } from "../../lib/certification/registry-create";
+import { performRegistryCreate } from "@/lib/certification/registry-create";
 
 const CUSTOMER_LOCATION_ID = "11111111-1111-4111-8111-111111111111";
 const orgCtx: OrgContext = {

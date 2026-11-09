@@ -2,10 +2,10 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { payloadHash } from "@/lib/isometric";
-import { loadRemovalSubmissionContext } from "../../lib/certification/certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
-import { buildRemovalSubmissionBuild } from "../../lib/certification/removal-submission-build";
-import { prepareRemovalSubmission } from "../../lib/certification/removal-submission-prepare";
+import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
+import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 
 export async function assertClaimedRemovalPayloadFresh(args: {
   orgCtx: OrgContext;

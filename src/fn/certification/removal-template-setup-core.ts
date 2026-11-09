@@ -16,7 +16,7 @@ import { reviewLineSources } from "@/lib/certification/removal-template-review-s
 import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";
 import { REMOVAL_TEMPLATE_BLOCKERS, SETUP_NOT_LINKED_MESSAGE } from "@/lib/certification/removal-template-blockers";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
-import { loadRemovalTemplateFacts } from "../../lib/certification/removal-template-facts";
+import { loadRemovalTemplateFacts } from "@/lib/certification/removal-template-facts";
 import { readOnlyEntry } from "./removal-template-preview-core";
 
 async function setupContext(ctx: OrgContext, facilityId: string) {

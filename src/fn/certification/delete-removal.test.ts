@@ -62,7 +62,7 @@ vi.mock("@/lib/isometric", () => ({
     state.findBiocharApplicationBySupplierReference,
   reconcileRemoval: state.reconcileRemoval,
 }));
-vi.mock("../../lib/certification/shared", () => ({
+vi.mock("@/lib/certification/shared", () => ({
   appendSyncEventBestEffort: state.appendSyncEvent,
 }));
 

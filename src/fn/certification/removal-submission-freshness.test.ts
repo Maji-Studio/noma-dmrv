@@ -2,30 +2,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 
-vi.mock("../../lib/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
 vi.mock("./production-claim-gate", () => ({
   retireClaimedRemovalDraftForDrift: vi.fn(),
 }));
-vi.mock("../../lib/certification/removal-submission-build", () => ({
+vi.mock("@/lib/certification/removal-submission-build", () => ({
   buildRemovalSubmissionBuild: vi.fn(),
 }));
-vi.mock("../../lib/certification/removal-submission-prepare", () => ({
+vi.mock("@/lib/certification/removal-submission-prepare", () => ({
   prepareRemovalSubmission: vi.fn(),
 }));
 vi.mock("@/lib/isometric", () => ({
   payloadHash: (payload: { hash: string }) => payload.hash,
 }));
 
-import { loadRemovalSubmissionContext } from "../../lib/certification/certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
-import { buildRemovalSubmissionBuild } from "../../lib/certification/removal-submission-build";
+import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
 import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
 import {
   prepareRemovalSubmission,
   type PreparedRemovalSubmission,
-} from "../../lib/certification/removal-submission-prepare";
+} from "@/lib/certification/removal-submission-prepare";
 
 const ORG_CTX = {
   userId: "user-1",

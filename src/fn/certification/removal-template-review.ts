@@ -15,8 +15,8 @@ import {
   type RemovalTemplateReviewPreviewInput,
 } from "@/schemas/removal-template-review";
 import { withAction } from "../with-action";
-import { loadRemovalTemplateFacts } from "../../lib/certification/removal-template-facts";
-import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "../../lib/certification/shared";
+import { loadRemovalTemplateFacts } from "@/lib/certification/removal-template-facts";
+import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "@/lib/certification/shared";
 
 import { findListedRemovalTemplate } from "@/lib/certification/listed-removal-template";
 import { removalTemplateReviewEntry } from "@/lib/certification/removal-template-review-entry";

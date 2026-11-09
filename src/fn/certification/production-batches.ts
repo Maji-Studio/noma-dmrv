@@ -62,17 +62,17 @@ import {
   applyProductionBatchIds,
   creditBatchIdsForMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
-} from "../../lib/certification/durability-measurement-samples";
+} from "@/lib/certification/durability-measurement-samples";
 import {
   performRegistryCreate,
   supplierRefLookup,
   type RegistryExternalMutationReporter,
-} from "../../lib/certification/registry-create";
+} from "@/lib/certification/registry-create";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
-} from "../../lib/certification/shared";
+} from "@/lib/certification/shared";
 
 import {
   LEGACY_DAY_START_SUFFIX,

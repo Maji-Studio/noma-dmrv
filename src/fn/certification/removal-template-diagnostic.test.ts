@@ -14,7 +14,7 @@ vi.mock("@/data-access/utils", () => ({
   requireOrgFacility: mocks.requireOrgFacility,
 }));
 
-vi.mock("../../lib/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadFacilityCertifierFacts: mocks.loadFacilityCertifierFacts,
 }));
 

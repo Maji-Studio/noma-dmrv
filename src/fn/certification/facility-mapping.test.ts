@@ -25,7 +25,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric")>(),
   listProjects: vi.fn(),
 }));
-vi.mock("../../lib/certification/shared", () => ({ ISOMETRIC_PROVIDER: "isometric", safeListIfConfigured: vi.fn() }));
+vi.mock("@/lib/certification/shared", () => ({ ISOMETRIC_PROVIDER: "isometric", safeListIfConfigured: vi.fn() }));
 
 const ctx = makeTestOrgContext();
 const facilityId = "00000000-0000-4000-8000-000000000001";
