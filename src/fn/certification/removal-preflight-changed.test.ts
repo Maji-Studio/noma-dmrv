@@ -74,7 +74,10 @@ describe("possibly sent Removal preflight", () => {
       latestSubmission: draft("rmv-1", null),
       submissionLineageBlockers: [{ detail: "Delivery proof changed.", fixTarget: "deliveryEvidence" } as never],
     });
-    await expect(submit(ctx)).rejects.toBeInstanceOf(InterruptedRemovalChangedError);
+    await expect(submit(ctx)).rejects.toThrow("Removal submission blocked:\nDelivery proof changed.");
+    expect(appendSyncEvent).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      responsePayload: expect.objectContaining({ failure_kind: CHANGED_SINCE_REVIEW_FAILURE_KIND }),
+    }));
     expectNoClaimOrSend();
   });
 

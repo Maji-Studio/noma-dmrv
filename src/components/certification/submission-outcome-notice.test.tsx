@@ -70,7 +70,7 @@ describe("SubmissionOutcomeNotice", () => {
 
     it("says a finalized Removal cannot be deleted, like the drift stop", () => {
       const html = renderChanged(true, "unavailable");
-      expect(html).toContain("This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.");
+      expect(html).toContain("This Removal is finalized, so it cannot be deleted. Contact an Admin.");
       expect(html).not.toContain("Select Delete Removal");
     });
 
@@ -83,8 +83,8 @@ describe("SubmissionOutcomeNotice", () => {
     });
   });
 
-  it("sends a finalized Removal to an admin or Isometric", () => {
-    expect(render(differs(), true)).toContain("Check the production runs in this credit batch for later edits. This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.");
+  it("sends a finalized Removal to an Admin", () => {
+    expect(render(differs(), true)).toContain("Check the production runs in this credit batch for later edits. This Removal is finalized, so it cannot be deleted. Contact an Admin.");
   });
 
   it("keeps retry states at warning tone and points at Review and submit", () => {

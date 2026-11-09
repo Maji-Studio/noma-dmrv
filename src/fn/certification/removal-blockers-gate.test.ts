@@ -153,7 +153,7 @@ describe("Removal preflight", () => {
     const detail = "Delivery DL-1 has no proof of delivery.";
     const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "", fact: detail, detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
-      { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
+      { code: "buildRefused", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
     ]);
   });
 
@@ -164,7 +164,7 @@ describe("Removal preflight", () => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {
       const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.", fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
-      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
+      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "buildRefused", message, fixTarget: null }]);
     } finally { spy.mockRestore(); }
   });
 

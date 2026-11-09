@@ -1,4 +1,5 @@
 import { listRemovalAttemptEvents } from "@/data-access/certifier-sync-events";
+import { getDeletionLeasedRemovalIds } from "@/data-access/removal-deletion-lease";
 import { deriveSubmissionAttempts } from "@/lib/certification/submission-attempts";
 import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
@@ -55,6 +56,8 @@ export async function loadCreditBatchTodos(
     const events = await listRemovalAttemptEvents(ctx, { removalId });
     return [removalId, deriveSubmissionAttempts(events)[0]?.outcome.kind === "changed"] as const;
   })));
+  const deletionLeasedIds = await getDeletionLeasedRemovalIds(ctx,
+    [...changedByRemoval].filter(([, changed]) => changed).map(([removalId]) => removalId));
   const canManage = ctx.isPlatformAdmin || ctx.orgRole === "admin";
   return new Map(ids.map((id) => {
     const health = healthByBatch.get(id)!;
@@ -65,6 +68,7 @@ export async function loadCreditBatchTodos(
       removals: removals?.map((removal) => ({
         ...removal,
         ...(changedByRemoval.get(removal.id) ? { changedSinceReview: true as const } : {}),
+        ...(deletionLeasedIds.has(removal.id) ? { deletionInProgress: true as const } : {}),
       })),
       durability: durabilityByBatch.get(id),
       emissionLines: emissionDisplay?.status === "ready" ? emissionDisplay.lines : undefined,

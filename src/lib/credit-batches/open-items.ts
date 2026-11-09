@@ -1,4 +1,4 @@
-import { CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE } from "@/lib/certification/interrupted-removal-copy";
+import { ASK_ADMIN_TO_DELETE, CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE, REMOVAL_BEING_DELETED } from "@/lib/certification/interrupted-removal-copy";
 import { recordHref } from "@/lib/record-links";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
@@ -82,6 +82,7 @@ export interface CreditBatchOpenItemsInput {
   removals?: readonly (Pick<CreditBatchPageModel["removals"][number], "id" | "code" | "status"> & {
     phase?: "draft" | "submitted";
     changedSinceReview?: true;
+    deletionInProgress?: true;
   })[];
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
@@ -424,9 +425,10 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
         id: `interrupted:${removal.id}`,
         title: `${removal.code}: ${CHANGED_SINCE_REVIEW_LABEL}`,
         detail: CHANGED_FACT,
-        instruction: removal.phase === "submitted" ? FINALIZED_NO_DELETE : canManage
-          ? "Open the Removal and select Delete Removal. Then create the Removal again."
-          : "Ask an Admin to delete it. Then create the Removal again.",
+        instruction: removal.phase === "submitted" ? FINALIZED_NO_DELETE
+          : removal.deletionInProgress ? REMOVAL_BEING_DELETED
+          : canManage ? "Open the Removal and select Delete Removal. Then create the Removal again."
+          : ASK_ADMIN_TO_DELETE,
         target: { href: recordHref("removal", removal.id, { facilityId: input.facilityId }) },
       });
       continue;

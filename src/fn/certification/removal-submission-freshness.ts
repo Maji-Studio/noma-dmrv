@@ -9,17 +9,17 @@ import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
 import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
 import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 
-// Blockers that mean the recheck could not read what it needs, not that the
-// Removal's data or settings changed. With any of them present the other
-// blockers (lines to decide, missing fixed datapoints) may only reflect the
-// unread template, so a possibly sent draft stays retryable (#1114).
+// These blockers do not prove the Removal's data or settings changed. Read
+// failures can make other blockers reflect an unread template, and build
+// refusals stay retryable just as they do after the claim (#1114).
 const RECHECK_FAILURE_BLOCKERS: ReadonlySet<string> = new Set([
   "templateNotFullyRead",
   "noCredentials",
   "noProject",
+  "buildRefused",
 ]);
 
-/** A failed read cannot prove drift, even when other blockers accompany it. */
+/** An incomplete recheck cannot prove drift, even when other blockers accompany it. */
 export function hasRemovalRecheckFailure(blockers: readonly { code: string }[]): boolean {
   return blockers.some((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
 }

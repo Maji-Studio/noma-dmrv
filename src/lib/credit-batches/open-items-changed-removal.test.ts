@@ -15,8 +15,8 @@ describe("changed Removal open item", () => {
   it.each([
     { canManage: true, phase: "draft" as const, instruction: "Open the Removal and select Delete Removal. Then create the Removal again." },
     { canManage: false, phase: "draft" as const, instruction: "Ask an Admin to delete it. Then create the Removal again." },
-    { canManage: true, phase: "submitted" as const, instruction: "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric." },
-    { canManage: false, phase: "submitted" as const, instruction: "This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric." },
+    { canManage: true, phase: "submitted" as const, instruction: "This Removal is finalized, so it cannot be deleted. Contact an Admin." },
+    { canManage: false, phase: "submitted" as const, instruction: "This Removal is finalized, so it cannot be deleted. Contact an Admin." },
   ])("shows the deletion guidance for $phase, canManage=$canManage", ({ canManage, phase, instruction }) => {
     expect(items(canManage, phase)).toEqual({ blocking: [], check: [{
       id: "interrupted:removal-1",
@@ -25,6 +25,16 @@ describe("changed Removal open item", () => {
       instruction,
       target: { href: "/removals?facility=facility&removal=removal-1" },
     }] });
+  });
+
+  it.each([true, false])("shows deletion in progress to canManage=%s unless finalized", (canManage) => {
+    const removal = { ...REMOVAL, deletionInProgress: true as const };
+    expect(buildCreditBatchOpenItems({ ...BASE, canManage, removals: [removal] }).check[0]).toMatchObject({
+      instruction: "This Removal is being deleted. Reload the page to see the result.",
+    });
+    expect(buildCreditBatchOpenItems({ ...BASE, canManage, removals: [{ ...removal, phase: "submitted" }] }).check[0]).toMatchObject({
+      instruction: "This Removal is finalized, so it cannot be deleted. Contact an Admin.",
+    });
   });
 
   it("keeps other interrupted Removals on Review & submit", () => {

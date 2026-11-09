@@ -204,7 +204,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
       success: true,
       data: {
         blockers: [message],
-        removalBlockers: [{ code: "legacy", message, fixTarget: null }],
+        removalBlockers: [{ code: "buildRefused", message, fixTarget: null }],
         snapshot: null,
         compilationHash: null,
       },

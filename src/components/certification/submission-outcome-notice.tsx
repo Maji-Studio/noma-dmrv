@@ -13,7 +13,7 @@ import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { recordHref } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 import type { AttemptOutcome } from "@/lib/certification/submission-attempts";
-import { CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE } from "@/lib/certification/interrupted-removal-copy";
+import { ASK_ADMIN_TO_DELETE, CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE, REMOVAL_BEING_DELETED } from "@/lib/certification/interrupted-removal-copy";
 import { FigurePairs } from "./submission-outcome-figures";
 
 export type NoticeOutcome = AttemptOutcome | { kind: "interrupted" };
@@ -96,8 +96,8 @@ export function deleteAccessFor(
 /** The way out of a changed-since-review refusal is Delete Removal; say who can take it, or why nobody can now. */
 function changedFixLine(finalized: boolean, deleteAccess: DeleteAccess): string {
   if (finalized) return `${CHANGED_FACT} ${FINALIZED_NO_DELETE}`;
-  if (deleteAccess === "deleting") return `${CHANGED_FACT} This Removal is being deleted. Reload the page to see the result.`;
-  if (deleteAccess === "ask-admin") return `${CHANGED_FACT} Ask an Admin to delete it. Then create the Removal again.`;
+  if (deleteAccess === "deleting") return `${CHANGED_FACT} ${REMOVAL_BEING_DELETED}`;
+  if (deleteAccess === "ask-admin") return `${CHANGED_FACT} ${ASK_ADMIN_TO_DELETE}`;
   // Access still loading: state the fact and let the line settle once access resolves.
   if (deleteAccess === "unavailable") return CHANGED_FACT;
   return `${CHANGED_FACT} Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.`;
