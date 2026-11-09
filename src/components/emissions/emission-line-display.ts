@@ -13,7 +13,7 @@ import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observ
 import { timeEmissionKg } from "@/lib/isometric/template-observations/time-emission";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import { formatCo2e } from "@/lib/format-utils";
+import { formatCo2ePreview } from "@/lib/format-utils";
 import { recordHref } from "@/lib/record-links";
 import { entryFieldName, isDecimal } from "@/schemas/emission-entry-form";
 
@@ -67,11 +67,11 @@ export function displayUnit(unit: string | null | undefined): string {
     .replace(/ \/ /g, "/");
 }
 
-/** "12.5 h · 5 kg CO₂e" on a time-based line with a readable rate (a preview, Isometric calculates the official figure); the figure alone otherwise. */
+/** "12.5 h · 5.2 kg CO₂e" on a time-based line with a readable rate (a preview, Isometric calculates the official figure); the figure alone otherwise. */
 export function withTimeEmission(line: Pick<EmissionLine, "timeEmission">, figure: EmissionFigure): string {
   const hours = formatFigure(figure);
   const kg = line.timeEmission ? timeEmissionKg(figure, line.timeEmission.ratePerHour) : null;
-  return kg === null ? hours : `${hours} · ${formatCo2e(kg)}`;
+  return kg === null ? hours : `${hours} · ${formatCo2ePreview(kg)}`;
 }
 
 export function formatFigure(figure: EmissionFigure | null | undefined): string {

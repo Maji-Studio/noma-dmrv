@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { TIME_BASED_BLUEPRINT_KEY, timeEmissionKg, timeEmissionRatePerHour } from "./time-emission";
+import { HOURS_PER_UNIT, KG_PER_CARBON_UNIT, TIME_BASED_BLUEPRINT_KEY, timeEmissionKg, timeEmissionRatePerHour } from "./time-emission";
+import { canonicalAtoms } from "./units";
 
 describe("timeEmissionRatePerHour", () => {
   it("keeps a per hour rate as it is", () => {
@@ -47,4 +48,9 @@ describe("timeEmissionKg", () => {
 
 it("names the blueprint", () => {
   expect(TIME_BASED_BLUEPRINT_KEY).toBe("time_based_emissions");
+});
+
+it("converts every canonical time and carbon unit, so a new atom in units.ts cannot slip through", () => {
+  expect(Object.keys(HOURS_PER_UNIT).sort()).toEqual(canonicalAtoms("time").sort());
+  expect(Object.keys(KG_PER_CARBON_UNIT).sort()).toEqual(canonicalAtoms("carbon").sort());
 });

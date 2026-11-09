@@ -16,6 +16,11 @@ atoms("energy", { kWh: ["kilowatt_hour"], Wh: ["watt_hour"], MWh: ["megawatt_hou
 atoms("time", { s: ["second"], h: ["hour"], day: ["d"], min: ["minute"] });
 atoms("", { "%": ["percent"], dimensionless: ["1"], ppm: [] });
 
+/** The canonical atom names of one dimension ("time", "carbon", ...), for tests that pin conversion tables to them. */
+export function canonicalAtoms(dimension: string): string[] {
+  return [...new Set(Object.values(ATOMS).filter((atom) => atom.dimension === dimension).map((atom) => atom.canonical))];
+}
+
 const KIND_DIMENSIONS: Partial<Record<QuantityKind, Dimensions>> = {
   mass: { mass: 1 }, distance: { distance: 1 }, energy: { energy: 1 }, volume: { volume: 1 },
   time: { time: 1 }, time_emission_factor: { carbon: 1, time: -1 },

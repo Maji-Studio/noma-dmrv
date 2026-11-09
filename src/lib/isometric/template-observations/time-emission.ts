@@ -1,3 +1,4 @@
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { canonicalDecimal, canonicalUnit } from "./units";
 
 /** The Isometric blueprint of a fixed kgCO2e rate per unit of time times monitored time. */
@@ -9,17 +10,16 @@ const HOURS_PER_DAY = 24;
 const MINUTES_PER_HOUR = 60;
 const SECONDS_PER_HOUR = 3600;
 const KG_PER_GRAM = 0.001;
-const KG_PER_TONNE = 1000;
 
 /** Canonical time atoms (see ATOMS in units.ts) in hours. */
-const HOURS_PER_UNIT: Record<string, number> = {
+export const HOURS_PER_UNIT: Record<string, number> = {
   h: 1,
   day: HOURS_PER_DAY,
   min: 1 / MINUTES_PER_HOUR,
   s: 1 / SECONDS_PER_HOUR,
 };
 /** Canonical carbon atoms in kilograms CO2e. */
-const KG_PER_CARBON_UNIT: Record<string, number> = { kgCO2e: 1, gCO2e: KG_PER_GRAM, tCO2e: KG_PER_TONNE };
+export const KG_PER_CARBON_UNIT: Record<string, number> = { kgCO2e: 1, gCO2e: KG_PER_GRAM, tCO2e: KG_PER_TONNE };
 
 /**
  * A template's fixed rate in kgCO2e per hour, or null when it is missing or its

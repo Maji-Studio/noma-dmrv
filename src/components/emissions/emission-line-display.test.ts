@@ -270,7 +270,12 @@ describe("time-based lines", () => {
   });
 
   it("shows the hours with their CO₂e", () => {
-    expect(lineTotalText(timeLine(0.41264))).toBe("12.5 h · 5 kg CO₂e");
+    expect(lineTotalText(timeLine(0.41264))).toBe("12.5 h · 5.2 kg CO₂e");
+    const at = (hours: string, rate = 0.41264) => lineTotalText(timeLine(rate, { total: { magnitude: hours, unit: "h" } } as never));
+    expect(at("1")).toBe("1 h · 0.4 kg CO₂e");
+    expect(at("0.1")).toBe("0.1 h · <0.1 kg CO₂e");
+    expect(at("0")).toBe("0 h · 0 kg CO₂e");
+    expect(at("5000")).toBe("5,000 h · 2.063 t CO₂e");
   });
 
   it("shows the hours alone when the rate is unknown", () => {

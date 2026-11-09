@@ -21,8 +21,8 @@ const SHOT_DIR = path.join(process.cwd(), "artifacts", "time-based-emission-entr
 const WIDTHS = { desktop: { width: 1440, height: 1000 }, phone: { width: 390, height: 844 } } as const;
 type Size = keyof typeof WIDTHS;
 const HOURS = "12.5";
-// 12.5 h at the template's 0.41264 kgCO2e per hour, rounded to whole kg by formatCo2e.
-const TOTAL_TEXT = "12.5 h · 5 kg CO₂e";
+// 12.5 h at the template's 0.41264 kgCO2e per hour, to one decimal.
+const TOTAL_TEXT = "12.5 h · 5.2 kg CO₂e";
 
 async function shoot(page: Page, name: string, size: Size) {
   if (!PHASE) return;
