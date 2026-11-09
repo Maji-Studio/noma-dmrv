@@ -11,10 +11,10 @@
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { RemovalReadiness } from "@/lib/certification/readiness";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { removalAttentionTitle, REMOVAL_READINESS_UNAVAILABLE_TITLE, REMOVAL_REJECTED_ATTENTION_TITLE } from "@/lib/certification/removal-shown-status";
+import { removalAttentionTitle, REMOVAL_REJECTED_ATTENTION_TITLE } from "@/lib/certification/removal-shown-status";
 import { recordHref } from "@/lib/record-links";
 
-export { REMOVAL_READINESS_UNAVAILABLE_TITLE, REMOVAL_REJECTED_ATTENTION_TITLE };
+export { REMOVAL_REJECTED_ATTENTION_TITLE };
 
 export const REMOVAL_INTERRUPTED_ATTENTION_TITLE = "Submission interrupted";
 
