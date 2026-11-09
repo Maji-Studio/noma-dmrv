@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
@@ -62,7 +63,7 @@ export function InvitationBootstrapForm({
   const busy = isSubmitting;
 
   if (sent) {
-    return <CheckEmail invitationId={invitationId} email={email} />;
+    return <CheckEmail invitationId={invitationId} email={email} sendOnMount={account === "pending"} />;
   }
 
   return (
@@ -90,26 +91,43 @@ export function InvitationBootstrapForm({
         message={serverError}
       />
       <Button type="submit" variant="primary" width="full" busy={busy}>
-        Send set-password link
+        Email me a link
       </Button>
     </form>
   );
 }
 
-function CheckEmail({ invitationId, email }: { invitationId: string; email: string }) {
+function CheckEmail({
+  invitationId,
+  email,
+  sendOnMount,
+}: {
+  invitationId: string;
+  email: string;
+  /** Reopening a pending invitation asks for a fresh link (the server paces repeats). */
+  sendOnMount: boolean;
+}) {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState("");
+  const mounted = useRef(false);
 
-  async function resend() {
+  async function resend(isRetry: boolean) {
     setResending(true);
     setError("");
     setResent(false);
     const result = await resendInvitationSetPasswordAction({ invitationId });
     setResending(false);
-    if (result.success) setResent(true);
-    else setError(result.error);
+    if (!result.success) setError(result.error);
+    else if (isRetry) setResent(true);
   }
+
+  useEffect(() => {
+    if (!sendOnMount || mounted.current) return;
+    mounted.current = true;
+    void resend(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthResult
@@ -123,14 +141,28 @@ function CheckEmail({ invitationId, email }: { invitationId: string; email: stri
               Link requested. If it is not there in a few minutes, check your spam folder.
             </Notice>
           )}
-          {error && <Notice tone="error">{error}</Notice>}
-          <Button type="button" variant="default" width="full" busy={resending} onClick={resend}>
+          {error && (
+            <Notice
+              tone="error"
+              action={
+                <Link
+                  href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
+                  className="underline"
+                >
+                  Sign in
+                </Link>
+              }
+            >
+              {error}
+            </Notice>
+          )}
+          <Button type="button" variant="default" width="full" busy={resending} onClick={() => resend(true)}>
             Send again
           </Button>
         </>
       }
     >
-      We sent a link to {email}. Open it to set your password and join.
+      Open the link we sent to {email} to set your password and join. It can take a few minutes to arrive.
     </AuthResult>
   );
 }

@@ -46,7 +46,7 @@ describe("SetPasswordForm with an invitation", () => {
     render(<SetPasswordForm invitation={invitation} />);
     expect(document.body.textContent).toContain("new@example.com");
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set password and continue" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/accept-invitation/inv-1"));
     expect(mocks.resetPassword).toHaveBeenCalledWith("tok", PASSWORD);
     expect(mocks.signIn).toHaveBeenCalledWith("new@example.com", PASSWORD);
@@ -58,7 +58,7 @@ describe("SetPasswordForm with an invitation", () => {
     mocks.signIn.mockResolvedValue({ success: false, error: "no" });
     render(<SetPasswordForm invitation={invitation} />);
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set password and continue" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(`/login?from=${encodeURIComponent("/accept-invitation/inv-1")}`));
   });
 
@@ -67,7 +67,7 @@ describe("SetPasswordForm with an invitation", () => {
     mocks.resetPassword.mockResolvedValue({ success: false, error: "Link expired." });
     render(<SetPasswordForm invitation={invitation} />);
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Set password and join" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set password and continue" }));
     expect(await screen.findByText("Link expired.")).toBeTruthy();
     expect(mocks.signIn).not.toHaveBeenCalled();
     expect(mocks.push).not.toHaveBeenCalled();
@@ -76,12 +76,28 @@ describe("SetPasswordForm with an invitation", () => {
   it("points an expired link back to the invitation", () => {
     mocks.params = new URLSearchParams("invitation=inv-1&error=INVALID_TOKEN");
     render(<SetPasswordForm invitation={invitation} />);
-    expect(screen.getByText("This link has expired")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Link no longer works" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open invitation" }).getAttribute("href")).toBe("/accept-invitation/inv-1");
   });
 });
 
 describe("SetPasswordForm without an invitation", () => {
+  it("sends the person to login after the password is set", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    mocks.params = new URLSearchParams("token=tok");
+    mocks.resetPassword.mockResolvedValue({ success: true });
+    render(<SetPasswordForm />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+    expect(await screen.findByText("Password set")).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(mocks.push).toHaveBeenCalledWith("/login");
+    expect(setItem).not.toHaveBeenCalled();
+    vi.useRealTimers();
+    setItem.mockRestore();
+  });
+
   it("keeps the plain flow and button label", () => {
     mocks.params = new URLSearchParams("token=tok");
     render(<SetPasswordForm />);

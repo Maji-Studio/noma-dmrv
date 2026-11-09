@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/server", () => ({ getUser: mocks.getUser }));
 vi.mock("@/fn/invitation-bootstrap", () => ({ getInvitationBootstrapState: mocks.getState }));
 vi.mock("next/navigation", () => ({ redirect: (url: string) => { throw new Error(`redirect:${url}`); } }));
 vi.mock("@/components/organizations/accept-invitation", () => ({ AcceptInvitation: () => <button>Accept invitation</button> }));
-vi.mock("@/components/organizations/invitation-bootstrap-form", () => ({ InvitationBootstrapForm: ({ invitationId, account }: { invitationId: string; account: string }) => <form data-invitation-id={invitationId} data-account={account}>Send set-password link</form> }));
+vi.mock("@/components/organizations/invitation-bootstrap-form", () => ({ InvitationBootstrapForm: ({ invitationId, account }: { invitationId: string; account: string }) => <form data-invitation-id={invitationId} data-account={account}>Email me a link</form> }));
 
 import proxy from "@/proxy";
 import AcceptInvitationPage from "./page";
@@ -34,7 +34,7 @@ beforeEach(() => {
 describe("invitation proxy and landing page", () => {
   it("admits a signed-out new invitee to account setup", async () => {
     const html = renderToStaticMarkup(await visitInvitation());
-    expect(html).toContain("Send set-password link");
+    expect(html).toContain("Email me a link");
     expect(html).toContain(`data-invitation-id="${INVITATION_ID}"`);
     expect(mocks.getState).toHaveBeenCalledWith({ invitationId: INVITATION_ID });
   });
@@ -51,7 +51,7 @@ describe("invitation proxy and landing page", () => {
     mocks.getState.mockResolvedValue({ success: false, error: "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation." });
     const html = renderToStaticMarkup(await visitInvitation());
     expect(html).toContain("expired");
-    expect(html).not.toContain("Send set-password link");
+    expect(html).not.toContain("Email me a link");
     expect(html).not.toContain("Accept invitation</button>");
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
@@ -62,7 +62,7 @@ describe("invitation proxy and landing page", () => {
     mocks.getState.mockResolvedValue({ success: true, data: { ...state, account: "confirmed" } });
     const html = renderToStaticMarkup(await visitInvitation());
     expect(html).toContain("Sign out, then sign in with the invited email address.");
-    expect(html).not.toContain("Send set-password link");
+    expect(html).not.toContain("Email me a link");
     expect(html).not.toContain("Accept invitation</button>");
   });
   it("allows the matching signed-in user to accept", async () => {

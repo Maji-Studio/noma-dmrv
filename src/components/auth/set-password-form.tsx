@@ -15,7 +15,7 @@ import {
   ServerError,
 } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
-import { AuthPrimaryLink } from "./auth-result";
+import { AuthPrimaryLink, AuthResult } from "./auth-result";
 
 export interface SetPasswordInvitation {
   id: string;
@@ -30,7 +30,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
 
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { resetPassword, getCurrentUserEmail, signIn } = useAuth();
+  const { resetPassword, signIn } = useAuth();
 
   const token = searchParams.get("token");
   const linkFailed = Boolean(searchParams.get("error"));
@@ -79,15 +79,9 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
     if (result.success) {
       setSuccess(true);
 
-      // Get user email and store it for the verify-email page
-      const email = await getCurrentUserEmail();
-      if (email) {
-        sessionStorage.setItem("pendingVerificationEmail", email);
-      }
-
-      // Redirect to verify-email page after 2 seconds
+      // The token confirmed the email, so sign-in is the next step.
       setTimeout(() => {
-        router.push("/verify-email");
+        router.push("/login");
       }, 2000);
     } else {
       setServerError(
@@ -98,13 +92,14 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
 
   if (invitation && acceptPath && (!token || linkFailed)) {
     return (
-      <div className="space-y-24">
-        <Notice tone="error" title="This link has expired">
-          Open your invitation to send a new link to {invitation.email}.
-        </Notice>
-
-        <AuthPrimaryLink href={acceptPath}>Open invitation</AuthPrimaryLink>
-      </div>
+      <AuthResult
+        framed={false}
+        tone="error"
+        title="Link no longer works"
+        actions={<AuthPrimaryLink href={acceptPath}>Open invitation</AuthPrimaryLink>}
+      >
+        Open your invitation to send a new link to {invitation.email}.
+      </AuthResult>
     );
   }
 
@@ -134,7 +129,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
       {success ? (
         <div className="space-y-24">
           <Notice tone="success" title="Password set">
-            Your password is set. Verify your email address to complete your account setup. You are being redirected.
+            Your password is set. You are being taken to login.
           </Notice>
         </div>
       ) : (
@@ -144,9 +139,12 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
               Set your password
             </h2>
             {invitation && (
-              <p className="body-medium text-[var(--color-text-secondary)] mt-6">
-                Set a password for {invitation.email} to join your organization.
-              </p>
+              <div className="mt-16">
+                <p className="body-small text-[var(--color-text-secondary)] mb-6">
+                  Email
+                </p>
+                <p className="body-medium text-[var(--color-text-primary)]">{invitation.email}</p>
+              </div>
             )}
           </div>
 
@@ -191,7 +189,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
             width="full"
             busy={isSubmitting || joining}
           >
-            {invitation ? "Set password and join" : "Set password"}
+            {invitation ? "Set password and continue" : "Set password"}
           </Button>
         </>
       )}

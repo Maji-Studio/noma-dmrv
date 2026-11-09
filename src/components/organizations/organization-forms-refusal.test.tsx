@@ -7,6 +7,7 @@ import { InvitationBootstrapForm } from "./invitation-bootstrap-form";
 import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
 
 const mocks = vi.hoisted(() => ({ bootstrap: vi.fn(), resend: vi.fn(), set: vi.fn() }));
+vi.mock("next/link", () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock("@/fn/invitation-bootstrap", () => ({ bootstrapInvitationAccountAction: mocks.bootstrap, resendInvitationSetPasswordAction: mocks.resend }));
 vi.mock("@/hooks/use-busy-until-unload", () => ({ useBusyUntilUnload: () => ({ held: false, hold: vi.fn() }) }));
 vi.mock("@/lib/pending-warning", () => ({ stashPendingWarning: vi.fn() }));
@@ -34,7 +35,7 @@ describe("InvitationBootstrapForm", () => {
     const name = screen.getByLabelText(/Name/);
     expect(screen.queryByLabelText(/Password/)).toBeNull();
     fireEvent.change(name, { target: { value: "Ada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send set-password link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
 
     await waitFor(() => expect(document.getElementById("invite-name-error")?.textContent).toContain("Name is too long."));
     await waitFor(() => expect(document.activeElement).toBe(name));
@@ -44,7 +45,7 @@ describe("InvitationBootstrapForm", () => {
     mocks.bootstrap.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead." });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" />);
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send set-password link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
     await waitFor(() => expect(document.body.textContent).toContain("An account already exists for this invitation. Sign in instead."));
   });
 
@@ -52,23 +53,35 @@ describe("InvitationBootstrapForm", () => {
     mocks.bootstrap.mockResolvedValue({ success: true, data: { emailSent: true } });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" />);
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send set-password link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
     expect(await screen.findByText("Check your email")).toBeTruthy();
-    expect(document.body.textContent).toContain("We sent a link to a@example.com.");
+    expect(document.body.textContent).toContain("Open the link we sent to a@example.com");
+    expect(document.body.textContent).not.toContain("We sent");
     expect(mocks.resend).not.toHaveBeenCalled();
   });
 
-  it("shows the check-your-email state for a pending account without sending mail", () => {
+  it("asks for a fresh link once when a pending invitation is reopened", async () => {
+    mocks.resend.mockResolvedValue({ success: true, data: { emailSent: true } });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     expect(screen.getByText("Check your email")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send again" })).toBeTruthy();
+    await waitFor(() => expect(mocks.resend).toHaveBeenCalledTimes(1));
+    expect(mocks.resend).toHaveBeenCalledWith({ invitationId: INVITATION_ID });
     expect(mocks.bootstrap).not.toHaveBeenCalled();
-    expect(mocks.resend).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Link requested/)).toBeNull();
+  });
+
+  it("shows a refused on-mount resend with a way to sign in", async () => {
+    mocks.resend.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead." });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    expect(await screen.findByText("An account already exists for this invitation. Sign in instead.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(`/login?from=${encodeURIComponent(`/accept-invitation/${INVITATION_ID}`)}`);
   });
 
   it("sends the link again and confirms it", async () => {
     mocks.resend.mockResolvedValue({ success: true, data: { emailSent: true } });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    await waitFor(() => expect(mocks.resend).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     await waitFor(() => expect(mocks.resend).toHaveBeenCalledWith({ invitationId: INVITATION_ID }));
     expect(await screen.findByText(/Link requested/)).toBeTruthy();
@@ -79,6 +92,7 @@ describe("InvitationBootstrapForm", () => {
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     expect(await screen.findByText("An account already exists for this invitation. Sign in instead.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeTruthy();
   });
 });
 
