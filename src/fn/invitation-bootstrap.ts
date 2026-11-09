@@ -1,13 +1,9 @@
 "use server";
 
 import { cookies, headers } from "next/headers";
-import { z } from "zod";
 import {
-  formatZodActionError,
   logActionError,
-  nulCharacterFailure,
-  toWarnableSuccess,
-  type ResultWithWarning,
+  toActionFailure,
 } from "@/fn/action-errors";
 import {
   createInvitedAccount,
@@ -25,38 +21,20 @@ import {
 import type { ActionResult } from "@/types/actions";
 
 const INVITATION_LOAD_FALLBACK = "Failed to load invitation.";
-const INVITATION_BOOTSTRAP_FALLBACK = "Failed to create invited account.";
+const INVITATION_BOOTSTRAP_FALLBACK = "Your account could not be set up. Try again.";
+const INVITATION_RESEND_FALLBACK = "The link was not sent. Try again.";
 
 async function toResult<T>(
   work: () => Promise<T>,
   fallback: string
 ): Promise<ActionResult<T>> {
-  return toWarnableResult(async () => ({ data: await work() }), fallback);
-}
-
-/**
- * As `toResult`, for bodies whose work has a committed part and a non-fatal
- * follow-up. A returned `warning` keeps the result a success (issue #769).
- */
-async function toWarnableResult<T>(
-  work: () => Promise<ResultWithWarning<T>>,
-  fallback: string
-): Promise<ActionResult<T>> {
   try {
-    return toWarnableSuccess(await work());
+    return { success: true, data: await work() };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    const nulFailure = nulCharacterFailure(error);
-    if (nulFailure) return nulFailure;
-    if (!(error instanceof SafeError)) {
-      logActionError(error, { message: "invitation bootstrap action failed" });
-    }
-    return { success: false, error: toActionError(error, fallback) };
+    return toActionFailure(error, {
+      fallbackMessage: fallback,
+      log: { message: "invitation bootstrap action failed" },
+    });
   }
 }
 
@@ -114,7 +92,7 @@ export async function resendInvitationSetPasswordAction(
       throw new SafeError("Enter your name to start account setup.");
     }
     return sendInvitationSetPassword(state);
-  }, INVITATION_BOOTSTRAP_FALLBACK);
+  }, INVITATION_RESEND_FALLBACK);
 }
 
 async function requireSignedOut(): Promise<void> {
@@ -127,16 +105,21 @@ async function requireSignedOut(): Promise<void> {
 
 function refuseConfirmedAccount(state: InvitationBootstrapState): void {
   if (state.account === "confirmed") {
-    throw new SafeError("An account already exists for this invitation. Sign in instead.");
+    throw new InvitationAccountExistsError();
   }
 }
 
 async function sendInvitationSetPassword(state: InvitationBootstrapState): Promise<{ emailSent: true }> {
-  if (await consumeInvitationSetPasswordRateLimit(state.invitationId)) {
-    await auth.api.requestPasswordReset({ body: {
-      email: state.email,
-      redirectTo: `/set-password?invitation=${encodeURIComponent(state.invitationId)}`,
-    } });
+  try {
+    if (await consumeInvitationSetPasswordRateLimit(state.invitationId)) {
+      await auth.api.requestPasswordReset({ body: {
+        email: state.email,
+        redirectTo: `/set-password?invitation=${encodeURIComponent(state.invitationId)}`,
+      } });
+    }
+  } catch (error) {
+    logActionError(error, { message: "invitation password setup email failed" });
+    throw new SafeError(toActionError(error, INVITATION_RESEND_FALLBACK));
   }
   // A cooldown or provider failure has the same public acknowledgement.
   return { emailSent: true };

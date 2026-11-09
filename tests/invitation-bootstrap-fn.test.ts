@@ -10,14 +10,9 @@ vi.mock("@/lib/log", () => ({
 
 const mockReadState = vi.fn();
 const mockCreateAccount = vi.fn();
-const mockHashPassword = vi.fn();
 const mockConsumeSetPasswordRateLimit = vi.fn();
 const mockRequestPasswordReset = vi.fn();
 const mockGetSession = vi.fn();
-const mockSignInEmail = vi.fn();
-const mockAcceptInvitation = vi.fn();
-const mockSetActiveOrganization = vi.fn();
-const mockPersistLastActiveOrganization = vi.fn();
 
 vi.mock("@/data-access/invitation-bootstrap", () => ({
   getInvitationBootstrapState: (...args: unknown[]) => mockReadState(...args),
@@ -25,25 +20,11 @@ vi.mock("@/data-access/invitation-bootstrap", () => ({
   consumeInvitationSetPasswordRateLimit: (...args: unknown[]) => mockConsumeSetPasswordRateLimit(...args),
 }));
 
-vi.mock("@/data-access/organizations", () => ({
-  persistLastActiveOrganization: (...args: unknown[]) =>
-    mockPersistLastActiveOrganization(...args),
-}));
-
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
-    $context: Promise.resolve({
-      password: {
-        hash: (...args: unknown[]) => mockHashPassword(...args),
-      },
-    }),
     api: {
       requestPasswordReset: (...args: unknown[]) => mockRequestPasswordReset(...args),
       getSession: (...args: unknown[]) => mockGetSession(...args),
-      signInEmail: (...args: unknown[]) => mockSignInEmail(...args),
-      acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
-      setActiveOrganization: (...args: unknown[]) =>
-        mockSetActiveOrganization(...args),
     },
   },
 }));
@@ -76,14 +57,10 @@ describe("bootstrapInvitationAccountAction", () => {
       email: EMAIL,
       account: "none",
     });
-    mockHashPassword.mockResolvedValue("password-hash");
     mockCreateAccount.mockResolvedValue({
       userId: "user-123",
       organizationId: ORGANIZATION_ID,
       email: EMAIL,
-    });
-    mockAcceptInvitation.mockResolvedValue({
-      invitation: { organizationId: ORGANIZATION_ID },
     });
   });
 
@@ -113,7 +90,6 @@ describe("bootstrapInvitationAccountAction", () => {
       error: "This value contains a NUL character (U+0000), which noma cannot store. Remove it and retry.",
       code: "validation_failed",
     });
-    expect(mockSignInEmail).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
 
@@ -157,10 +133,8 @@ describe("bootstrapInvitationAccountAction", () => {
 
     const result = await bootstrapInvitationAccountAction(VALID_INPUT);
 
-    expect(result.success).toBe(false);
-    expect(mockHashPassword).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, code: "account_exists", error: "An account already exists for this invitation. Sign in instead." });
     expect(mockCreateAccount).not.toHaveBeenCalled();
-    expect(mockSignInEmail).not.toHaveBeenCalled();
   });
 
   it("creates from name only and emails the invited mailbox without starting a session", async () => {
@@ -169,11 +143,6 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(mockRequestPasswordReset).toHaveBeenCalledExactlyOnceWith({
       body: { email: EMAIL, redirectTo: `/set-password?invitation=${INVITATION_ID}` },
     });
-    expect(mockHashPassword).not.toHaveBeenCalled();
-    expect(mockSignInEmail).not.toHaveBeenCalled();
-    expect(mockAcceptInvitation).not.toHaveBeenCalled();
-    expect(mockSetActiveOrganization).not.toHaveBeenCalled();
-    expect(mockPersistLastActiveOrganization).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true, data: { emailSent: true } });
   });
 
@@ -187,7 +156,7 @@ describe("bootstrapInvitationAccountAction", () => {
 
     expect(await bootstrapInvitationAccountAction(VALID_INPUT)).toEqual(account === "pending"
       ? { success: true, data: { emailSent: true } }
-      : { success: false, error: "An account already exists for this invitation. Sign in instead." });
+      : { success: false, code: "account_exists", error: "An account already exists for this invitation. Sign in instead." });
     expect(mockReadState).toHaveBeenCalledTimes(2);
     expect(mockReadState).toHaveBeenNthCalledWith(2, INVITATION_ID);
     expect(mockCreateAccount).toHaveBeenCalledExactlyOnceWith(VALID_INPUT);
@@ -223,7 +192,9 @@ describe("bootstrapInvitationAccountAction", () => {
   });
   it.each(["none", "confirmed"])("refuses resend for a %s account", async account => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account });
-    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID })).toMatchObject({ success: false });
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID })).toEqual(account === "confirmed"
+      ? { success: false, code: "account_exists", error: "An account already exists for this invitation. Sign in instead." }
+      : { success: false, error: "Enter your name to start account setup." });
     expect(mockRequestPasswordReset).not.toHaveBeenCalled();
   });
   it("refuses resend with an active session", async () => {
@@ -232,4 +203,23 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(mockReadState).not.toHaveBeenCalled();
     expect(mockRequestPasswordReset).not.toHaveBeenCalled();
   });
+  it("uses account setup wording when creating the invited user fails", async () => {
+    mockCreateAccount.mockRejectedValueOnce(new Error("write failed"));
+    expect(await bootstrapInvitationAccountAction(VALID_INPUT)).toEqual({
+      success: false, error: "Your account could not be set up. Try again.",
+    });
+  });
+
+  it.each([bootstrapInvitationAccountAction, resendInvitationSetPasswordAction])("uses link wording when the email step fails", async action => {
+    mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
+    mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
+    expect(await action(VALID_INPUT)).toEqual({ success: false, error: "The link was not sent. Try again." });
+  });
+
+  it("uses link wording when resend cannot read the invitation", async () => {
+    mockReadState.mockRejectedValueOnce(new Error("read failed"));
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
+      .toEqual({ success: false, error: "The link was not sent. Try again." });
+  });
+
 });

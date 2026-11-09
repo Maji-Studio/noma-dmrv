@@ -1,9 +1,9 @@
-import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 
 /** Distinguish concurrent account creation from other bootstrap refusals. */
-export class InvitationAccountExistsError extends SafeError {
+export class InvitationAccountExistsError extends DomainError {
   constructor() {
-    super("An account already exists for this invitation. Sign in instead.");
+    super("account_exists", "An account already exists for this invitation. Sign in instead.");
     this.name = "InvitationAccountExistsError";
   }
 }

@@ -26,6 +26,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
   const [success, setSuccess] = useState(false);
   // Stays busy through the sign-in and the navigation to the accept page.
   const [joining, setJoining] = useState(false);
+  const [linkRefused, setLinkRefused] = useState(false);
   const [serverError, setServerError] = useState("");
 
   const searchParams = useSearchParams();
@@ -76,6 +77,12 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
       return;
     }
 
+    if (!result.success && invitation) {
+      // A refused token on the invitation path has one way forward: a new link.
+      setLinkRefused(true);
+      return;
+    }
+
     if (result.success) {
       setSuccess(true);
 
@@ -90,7 +97,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
     }
   }
 
-  if (invitation && acceptPath && (!token || linkFailed)) {
+  if (invitation && acceptPath && (!token || linkFailed || linkRefused)) {
     return (
       <AuthResult
         framed={false}

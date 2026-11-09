@@ -110,16 +110,21 @@ function CheckEmail({
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState("");
+  // Only a confirmed account is cleared by signing in.
+  const [accountExists, setAccountExists] = useState(false);
   const mounted = useRef(false);
 
   async function resend(isRetry: boolean) {
     setResending(true);
     setError("");
+    setAccountExists(false);
     setResent(false);
     const result = await resendInvitationSetPasswordAction({ invitationId });
     setResending(false);
-    if (!result.success) setError(result.error);
-    else if (isRetry) setResent(true);
+    if (!result.success) {
+      setError(result.error);
+      setAccountExists(result.code === "account_exists");
+    } else if (isRetry) setResent(true);
   }
 
   useEffect(() => {
@@ -138,20 +143,20 @@ function CheckEmail({
         <>
           {resent && (
             <Notice tone="success">
-              Link requested. If it is not there in a few minutes, check your spam folder.
+              Link requested. Check your spam folder too.
             </Notice>
           )}
           {error && (
             <Notice
               tone="error"
-              action={
+              action={accountExists ? (
                 <Link
                   href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
                   className="underline"
                 >
                   Sign in
                 </Link>
-              }
+              ) : undefined}
             >
               {error}
             </Notice>
@@ -162,7 +167,7 @@ function CheckEmail({
         </>
       }
     >
-      Open the link we sent to {email} to set your password and join. It can take a few minutes to arrive.
+      Check {email} for a link to set your password and join. It can take a few minutes to arrive.
     </AuthResult>
   );
 }

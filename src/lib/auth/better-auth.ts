@@ -248,12 +248,19 @@ export const auth = betterAuth({
     account: {
       create: {
         // Better Auth 1.7 looks up credentials by both userId and accountId.
-        // Password setup creates the credential after mailbox confirmation.
-        before: async (account) => ({
-          data: account.providerId === "credential"
-            ? { ...account, accountId: account.userId }
-            : account,
-        }),
+        // Reset-token consumption, email confirmation and first credential
+        // creation share Better Auth's transaction. Other creation paths do
+        // not prove mailbox ownership. internalAdapter resolves the current tx.
+        before: async (account, ctx) => {
+          if (account.providerId === "credential" && ctx?.path === "/reset-password") {
+            await ctx.context.internalAdapter.updateUser(account.userId, { emailVerified: true });
+          }
+          return {
+            data: account.providerId === "credential"
+              ? { ...account, accountId: account.userId }
+              : account,
+          };
+        },
       },
     },
     session: {

@@ -20,10 +20,15 @@ export async function sendPasswordSetupOrReset({ user, url }: { user: User; url:
   });
 }
 
-/** Consuming the mailbox's reset token also confirms its email address. */
+/** Existing credentials use updatePassword; first credentials confirm in create.before. */
 export async function confirmPasswordResetEmail({ user }: { user: User }): Promise<void> {
   if (!user.emailVerified) {
     const { internalAdapter } = await auth.$context;
-    await internalAdapter.updateUser(user.id, { emailVerified: true });
+    // The endpoint passes its pre-reset snapshot. Avoid a second write after
+    // first-credential confirmation has already committed.
+    const currentUser = await internalAdapter.findUserById(user.id);
+    if (currentUser && !currentUser.emailVerified) {
+      await internalAdapter.updateUser(user.id, { emailVerified: true });
+    }
   }
 }

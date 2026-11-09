@@ -441,6 +441,24 @@ it("does not treat a first password established through a reset token as a chang
   expect(sendEmail).not.toHaveBeenCalled();
 });
 
+it("credential creation outside reset-password does not confirm a mailbox", async () => {
+  memory.user[0].emailVerified = false;
+  await addNoticeCredential();
+  expect(memory.account).toHaveLength(1);
+  expect(memory.user[0].emailVerified).toBe(false);
+});
+
+it("resetting an existing credential still confirms an unverified mailbox", async () => {
+  await addNoticeCredential();
+  memory.user[0].emailVerified = false;
+  memory.verification.push({ id: "existing-unverified", identifier: "reset-password:existing-token", value: "actor",
+    expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
+  await expect(auth.api.resetPassword({ body: { token: "existing-token", newPassword: NOTICE_NEW_PASSWORD } }))
+    .resolves.toEqual({ status: true });
+  expect(memory.user[0].emailVerified).toBe(true);
+  expect(memory.account).toHaveLength(1);
+});
+
 
 it("does not send a removal notice when an Admin removes their own membership", async () => {
   addNoticeMember("admin");

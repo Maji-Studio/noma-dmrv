@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "account_user_credential_unique" ON "account" USING btree ("user_id") WHERE "account"."provider_id" = 'credential';

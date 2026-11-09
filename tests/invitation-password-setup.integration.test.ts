@@ -3,6 +3,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
+import { isPgUniqueViolation } from "@/db/errors";
 import { accounts, apiRateLimitBuckets, invitations, members, organizations, sessions, users, verifications } from "@/db/schema";
 import { INVITATION_SET_PASSWORD_RESEND_COOLDOWN_SECONDS } from "@/config/auth";
 import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
@@ -23,6 +24,7 @@ const ORIGIN = "http://localhost:3100";
 const PASSWORD = "invitation-mailbox-password";
 const LIFETIME_MS = 60 * 60 * MILLISECONDS_PER_SECOND;
 const CONCURRENT_RESEND_COUNT = 5;
+const CREDENTIAL_RACE_BARRIER_TIMEOUT_MS = 2_000;
 let inviterId: string;
 let organizationId: string;
 let invitationId: string;
@@ -123,7 +125,8 @@ it("a confirmed invitee keeps their existing credential and accepts after sign-i
   const user = await context.internalAdapter.createUser({ email, name: "Existing invitee", emailVerified: true }, { method: "test" });
   createdUserIds.push(user.id);
   await context.internalAdapter.createAccount({ userId: user.id, accountId: user.id, providerId: "credential", password: await context.password.hash(PASSWORD) });
-  expect(await bootstrapInvitationAccountAction({ invitationId, name: "Ignored name" })).toEqual({ success: false, error: "An account already exists for this invitation. Sign in instead." });
+  expect(await bootstrapInvitationAccountAction({ invitationId, name: "Ignored name" })).toEqual({ success: false, code: "account_exists", error: "An account already exists for this invitation. Sign in instead." });
+  expect(await resendInvitationSetPasswordAction({ invitationId })).toEqual({ success: false, code: "account_exists", error: "An account already exists for this invitation. Sign in instead." });
   expect(sendEmail).not.toHaveBeenCalled();
   const signedIn = await auth.api.signInEmail({ body: { email, password: PASSWORD }, returnHeaders: true });
   const accepted = await auth.api.acceptInvitation({ body: { invitationId }, headers: new Headers({ cookie: signedIn.headers.get("set-cookie")! }) });
@@ -154,4 +157,97 @@ it("a different pending user's bucket is not blocked by the first user's cooldow
     .toEqual({ success: true, data: { emailSent: true } });
   expect(sendEmail).toHaveBeenCalledTimes(2);
   expect(vi.mocked(sendEmail).mock.calls[1]![0]).toMatchObject({ type: "set-password", userId: user.id });
+});
+
+async function createResetToken(userId: string): Promise<string> {
+  const token = randomUUID();
+  const context = await auth.$context;
+  await context.internalAdapter.createVerificationValue({
+    identifier: `reset-password:${token}`, value: userId,
+    expiresAt: new Date(Date.now() + LIFETIME_MS),
+  });
+  return token;
+}
+
+it("rolls back email confirmation and token consumption when the confirmation write fails", async () => {
+  const user = await bootstrap();
+  const token = await createResetToken(user.id);
+  const context = await auth.$context;
+  const updateUser = context.internalAdapter.updateUser.bind(context.internalAdapter);
+  const failure = new Error("Injected email confirmation failure");
+  const confirmation = vi.spyOn(context.internalAdapter, "updateUser").mockImplementationOnce(async (...args) => {
+    // Fail after the write to prove even the confirmation itself rolls back.
+    await updateUser(...args);
+    throw failure;
+  });
+  try {
+    await expect(auth.api.resetPassword({ body: { token, newPassword: PASSWORD } })).rejects.toThrow(failure);
+    expect(confirmation).toHaveBeenCalledExactlyOnceWith(user.id, { emailVerified: true });
+    expect(await db.select().from(accounts).where(eq(accounts.userId, user.id))).toEqual([]);
+    expect(await context.internalAdapter.findUserById(user.id)).toMatchObject({ emailVerified: false });
+    expect(await context.internalAdapter.findVerificationValue(`reset-password:${token}`)).toMatchObject({ value: user.id });
+    confirmation.mockClear();
+    await expect(auth.api.resetPassword({ body: { token, newPassword: PASSWORD } })).resolves.toEqual({ status: true });
+    // No post-commit confirmation write, despite the endpoint's stale user snapshot.
+    expect(confirmation).toHaveBeenCalledExactlyOnceWith(user.id, { emailVerified: true });
+    expect(await context.internalAdapter.findUserById(user.id)).toMatchObject({ emailVerified: true });
+    expect(await db.select().from(accounts).where(eq(accounts.userId, user.id))).toMatchObject([
+      { providerId: "credential", accountId: user.id, password: expect.any(String) },
+    ]);
+    expect(await context.internalAdapter.findVerificationValue(`reset-password:${token}`)).toBeNull();
+  } finally {
+    confirmation.mockRestore();
+  }
+});
+
+it("concurrent first-password resets keep one credential and roll back the losing token", async () => {
+  const user = await bootstrap();
+  const tokens = await Promise.all([createResetToken(user.id), createResetToken(user.id)]);
+  expect(tokens[0]).not.toBe(tokens[1]);
+  const context = await auth.$context;
+  const hook = context.options.databaseHooks!.account!.create!;
+  const before = hook.before!;
+  let arrivals = 0;
+  let release!: () => void;
+  let barrierTimer: ReturnType<typeof setTimeout>;
+  const bothArrived = new Promise<void>((resolve, reject) => {
+    release = resolve;
+    barrierTimer = setTimeout(() => reject(new Error("Both reset transactions did not reach credential creation")), CREDENTIAL_RACE_BARRIER_TIMEOUT_MS);
+  });
+  const create = vi.spyOn(hook, "before").mockImplementation(async (account, ctx) => {
+    if (account.providerId === "credential" && ctx?.path === "/reset-password") {
+      // Both transactions must have observed no credential before either inserts.
+      if (++arrivals === tokens.length) release();
+      await bothArrived;
+    }
+    return before(account, ctx);
+  });
+  let results: PromiseSettledResult<{ status: boolean }>[];
+  try {
+    results = await Promise.allSettled(tokens.map(token =>
+      auth.api.resetPassword({ body: { token, newPassword: PASSWORD } })));
+  } finally {
+    release();
+    clearTimeout(barrierTimer!);
+    create.mockRestore();
+  }
+  expect(arrivals).toBe(tokens.length);
+  expect(results.filter(result => result.status === "fulfilled")).toEqual([
+    { status: "fulfilled", value: { status: true } },
+  ]);
+  const loserIndex = results.findIndex(result => result.status === "rejected");
+  const loser = results[loserIndex];
+  expect(loser?.status).toBe("rejected");
+  if (loser?.status !== "rejected") throw new Error("Expected one reset to lose the credential race");
+  expect(isPgUniqueViolation(loser.reason, "account_user_credential_unique")).toBe(true);
+  const credentials = await db.select().from(accounts).where(eq(accounts.userId, user.id));
+  expect(credentials).toMatchObject([{ providerId: "credential", accountId: user.id }]);
+  expect(await context.internalAdapter.findUserById(user.id)).toMatchObject({ emailVerified: true });
+  const loserToken = tokens[loserIndex];
+  expect(await context.internalAdapter.findVerificationValue(`reset-password:${loserToken}`)).toMatchObject({ value: user.id });
+  const winnerToken = tokens[loserIndex === 0 ? 1 : 0];
+  expect(await context.internalAdapter.findVerificationValue(`reset-password:${winnerToken}`)).toBeNull();
+  await expect(auth.api.resetPassword({ body: { token: loserToken, newPassword: PASSWORD } })).resolves.toEqual({ status: true });
+  expect(await db.select().from(accounts).where(eq(accounts.userId, user.id))).toMatchObject([{ id: credentials[0].id }]);
+  expect(await context.internalAdapter.findVerificationValue(`reset-password:${loserToken}`)).toBeNull();
 });

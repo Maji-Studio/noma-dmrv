@@ -13,7 +13,7 @@ import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
   session_expired: 401,
-  validation_failed: 422, not_found: 404, stale_version: 412,
+  account_exists: 409, validation_failed: 422, not_found: 404, stale_version: 412,
   concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409, cascade_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
   registry_not_configured: 409, registry_read_refused: 422, registry_unavailable: 503,

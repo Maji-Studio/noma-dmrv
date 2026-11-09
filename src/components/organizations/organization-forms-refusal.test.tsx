@@ -55,7 +55,7 @@ describe("InvitationBootstrapForm", () => {
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
     fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
     expect(await screen.findByText("Check your email")).toBeTruthy();
-    expect(document.body.textContent).toContain("Open the link we sent to a@example.com");
+    expect(document.body.textContent).toContain("Check a@example.com for a link");
     expect(document.body.textContent).not.toContain("We sent");
     expect(mocks.resend).not.toHaveBeenCalled();
   });
@@ -72,7 +72,7 @@ describe("InvitationBootstrapForm", () => {
   });
 
   it("shows a refused on-mount resend with a way to sign in", async () => {
-    mocks.resend.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead." });
+    mocks.resend.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead.", code: "account_exists" });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     expect(await screen.findByText("An account already exists for this invitation. Sign in instead.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(`/login?from=${encodeURIComponent(`/accept-invitation/${INVITATION_ID}`)}`);
@@ -87,12 +87,12 @@ describe("InvitationBootstrapForm", () => {
     expect(await screen.findByText(/Link requested/)).toBeTruthy();
   });
 
-  it("shows a refused resend", async () => {
-    mocks.resend.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead." });
+  it("shows a refused resend without a sign-in action when signing in does not help", async () => {
+    mocks.resend.mockResolvedValue({ success: false, error: "The link was not sent. Try again." });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
-    expect(await screen.findByText("An account already exists for this invitation. Sign in instead.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Sign in" })).toBeTruthy();
+    expect(await screen.findByText("The link was not sent. Try again.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
 });
 

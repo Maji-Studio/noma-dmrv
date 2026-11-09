@@ -1219,6 +1219,13 @@
       "when": 1793710715426,
       "tag": "0173_mysterious_gorgon",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1794265909188,
+      "tag": "0174_mysterious_excalibur",
+      "breakpoints": true
     }
   ]
 }

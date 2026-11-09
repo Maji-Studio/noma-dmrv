@@ -68,7 +68,8 @@ describe("SetPasswordForm with an invitation", () => {
     render(<SetPasswordForm invitation={invitation} />);
     fill();
     fireEvent.click(screen.getByRole("button", { name: "Set password and continue" }));
-    expect(await screen.findByText("Link expired.")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Link no longer works" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open invitation" }).getAttribute("href")).toBe("/accept-invitation/inv-1");
     expect(mocks.signIn).not.toHaveBeenCalled();
     expect(mocks.push).not.toHaveBeenCalled();
   });
