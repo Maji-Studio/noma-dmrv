@@ -100,6 +100,8 @@ test.describe("Mobile responsiveness (390×844)", () => {
       await expect(
         main.locator('[aria-busy="true"], .animate-skeleton'),
       ).toHaveCount(0);
+      // Traceability shows its loading states as text ("Loading lineage...").
+      await expect(main.getByText(/^Loading\b/)).toHaveCount(0);
 
       await expectNoHorizontalOverflow(page, route);
     });
