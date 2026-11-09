@@ -49,3 +49,32 @@ describe("projectBatchRecords", () => {
     expect(records.feedstock[0]).toMatchObject({ massKg: 500, basis: "wet", place: "Sao Hill sawmill" });
   });
 });
+
+describe("projectBatchRecords with split shares", () => {
+  it("sums one application's allocations across runs (600 + 400 kg)", () => {
+    const chain = { ...CHAIN, rollForwards: [], lineages: [lineage("1", "2026-03-01", 0.6), lineage("1", "2026-03-01", 0.4)] } as unknown as CreditBatchChainData;
+    const { applications, deliveries } = projectBatchRecords(chain);
+    expect(applications).toHaveLength(1);
+    expect(applications[0].massKg).toBeCloseTo(1000);
+    expect(deliveries).toHaveLength(1);
+  });
+
+  it("leaves the application mass unknown when one slice has none", () => {
+    const chain = { ...CHAIN, rollForwards: [], lineages: [lineage("1", "2026-03-01", 0.6), lineage("1", "2026-03-01", null)] } as unknown as CreditBatchChainData;
+    expect(projectBatchRecords(chain).applications[0].massKg).toBeNull();
+  });
+
+  it("sums the draws of two runs on one feedstock intake (600 + 400 kg), counting a repeated run once", () => {
+    const draw = (runId: string, wet: number) => ({
+      source: {
+        productionRun: { id: runId, code: `PR-${runId}`, date: new Date("2026-02-10T08:00:00Z"), biocharDryMassKg: 100, biocharStorageName: null },
+        reactor: null,
+        feedstocks: [{ id: "fs-1", code: "FS-1", deliveryDate: "2026-02-01", supplierName: "Mill", wetMassUsedKg: wet, massDryKg: 2000 }],
+      },
+    });
+    const chain = { ...CHAIN, lineages: [], rollForwards: [draw("a", 600), draw("b", 400), draw("b", 400)] } as unknown as CreditBatchChainData;
+    const { feedstock } = projectBatchRecords(chain);
+    expect(feedstock).toHaveLength(1);
+    expect(feedstock[0]).toMatchObject({ massKg: 1000, basis: "wet" });
+  });
+});

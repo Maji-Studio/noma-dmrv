@@ -5,8 +5,7 @@
  * the sheet and its tests share one reading of "what is in this batch".
  */
 import type { CreditBatchChainData } from "@/data-access/chain-of-custody-batch";
-
-const KG_PER_TONNE = 1000;
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 
 export type RemovalRecordKind = "productionRun" | "application" | "delivery" | "feedstock";
 
@@ -50,8 +49,13 @@ function unique(records: RemovalRecord[]): RemovalRecord[] {
 export function projectBatchRecords(chain: CreditBatchChainData): RemovalBatchRecords {
   const productionRuns: RemovalRecord[] = [];
   const feedstock: RemovalRecord[] = [];
+  // One intake can feed several runs: its mass is the sum of the distinct runs' draws.
+  const draws = new Map<string, (number | null)[]>();
+  const seenRuns = new Set<string>();
   for (const { source } of chain.rollForwards) {
     const run = source.productionRun;
+    const firstSight = !seenRuns.has(run.id);
+    seenRuns.add(run.id);
     productionRuns.push({
       id: run.id,
       code: run.code,
@@ -62,29 +66,39 @@ export function projectBatchRecords(chain: CreditBatchChainData): RemovalBatchRe
       basis: "dry",
     });
     for (const intake of source.feedstocks) {
-      const wet = intake.wetMassUsedKg;
+      if (firstSight) draws.set(intake.id, [...(draws.get(intake.id) ?? []), intake.wetMassUsedKg]);
+      const shares = draws.get(intake.id) ?? [];
+      const allWet = shares.every((share) => share != null);
+      const noneWet = shares.every((share) => share == null);
       feedstock.push({
         id: intake.id,
         code: intake.code,
         kind: "feedstock",
         date: day(intake.deliveryDate),
         place: intake.supplierName,
-        massKg: wet ?? intake.massDryKg,
-        basis: wet != null ? "wet" : "dry",
+        massKg: allWet ? shares.reduce<number>((sum, share) => sum + (share ?? 0), 0) : noneWet ? intake.massDryKg : null,
+        basis: noneWet ? "dry" : "wet",
       });
     }
   }
   const applications: RemovalRecord[] = [];
   const deliveries: RemovalRecord[] = [];
+  // An application split across runs arrives as one slice each: its mass is their sum, unknown if any slice is.
+  const sliceTons = new Map<string, (number | null)[]>();
+  for (const { chain: lineage } of chain.lineages) {
+    const { id, biocharAppliedDryTons } = lineage.application;
+    sliceTons.set(id, [...(sliceTons.get(id) ?? []), biocharAppliedDryTons]);
+  }
   for (const { chain: lineage } of chain.lineages) {
     const { application, delivery } = lineage;
+    const slices = sliceTons.get(application.id) ?? [];
     applications.push({
       id: application.id,
       code: application.code,
       kind: "application",
       date: day(application.applicationDate),
       place: application.fieldIdentifier,
-      massKg: application.biocharAppliedDryTons == null ? null : application.biocharAppliedDryTons * KG_PER_TONNE,
+      massKg: slices.some((tons) => tons == null) ? null : slices.reduce<number>((sum, tons) => sum + (tons ?? 0), 0) * KG_PER_TONNE,
       basis: "dry",
     });
     deliveries.push({
