@@ -70,12 +70,12 @@ export function removalAttentionRows(sources: RemovalAttentionSources, facilityI
   });
   return {
     drafts: drafts.map(({ draft, title }) => rowFor(draft, title, facilityId)),
-    rejected: sources.rejected.map((removal) => rowFor(removal, removalAttentionTitle({ kind: "rejected" }) ?? "", facilityId)),
+    rejected: sources.rejected.map((removal) => rowFor(removal, removalAttentionTitle({ kind: "rejected" }), facilityId)),
     covered: new Set([...drafts.map(({ draft }) => draft), ...sources.rejected].map((removal) => removal.removalId)),
     returned: sources.returned.map((removal) => ({
       removalId: removal.removalId,
       item: {
-        ...rowFor(removal, removalAttentionTitle({ kind: "returned", correction: removal.correction }) ?? "", facilityId),
+        ...rowFor(removal, removalAttentionTitle({ kind: "returned", correction: removal.correction }), facilityId),
         id: `removal-returned-${removal.removalId}`,
       },
     })),

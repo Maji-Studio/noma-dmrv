@@ -121,6 +121,8 @@ export type RemovalAttentionSource =
   | { kind: "rejected" }
   | { kind: "returned"; correction: RemovalCorrection | undefined };
 
+export function removalAttentionTitle(source: Extract<RemovalAttentionSource, { kind: "draft" }>): string | null;
+export function removalAttentionTitle(source: Exclude<RemovalAttentionSource, { kind: "draft" }>): string;
 export function removalAttentionTitle(source: RemovalAttentionSource): string | null {
   switch (source.kind) {
     case "rejected":
