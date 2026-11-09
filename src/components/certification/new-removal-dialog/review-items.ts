@@ -161,11 +161,15 @@ export function blockerItems(
 /**
  * Stable while one fault is partly fixed, distinct for distinct faults. The key is the code, the line and
  * the repair; blockers sharing it (two entries on different batches, two compiler messages) are told apart by
- * their message with the numbers left out (so "3 entries" turning into "2 entries" keeps its id), and a
- * blocker repeating even that gets its occurrence number.
+ * their message with only standalone counts left out (so "3 entries" turning into "2 entries" keeps its id, while
+ * the dates and batch codes that identify a fault stay in the key), and a blocker repeating even that gets its
+ * occurrence number (identical messages, so a shift between them shows nothing different).
  */
+/** A count on its own: not part of a date, a code or a word. */
+const STANDALONE_COUNT = /(?<![\w-])\d+(?![\w-])/g;
+
 function blockerId(blocker: RemovalBlocker, occurrences: Map<string, number>): string {
-  const base = `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.fixTarget ?? ""}:${blocker.message.replace(/\d+/g, "#")}`;
+  const base = `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.fixTarget ?? ""}:${blocker.message.replace(STANDALONE_COUNT, "#")}`;
   const nth = occurrences.get(base) ?? 0;
   occurrences.set(base, nth + 1);
   return nth === 0 ? base : `${base}:${nth}`;

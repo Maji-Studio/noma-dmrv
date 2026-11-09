@@ -95,6 +95,16 @@ describe("review items", () => {
     expect(items.slice(2).map((item) => item.title)).toEqual(["First compiler message.", "Second compiler message.", "Second compiler message."]);
   });
 
+  it("keeps the second of two same-component blockers open in its own place after the first is repaired", () => {
+    const base = { code: "sentEntryOutsideWindow", fixTarget: "emissions", lineRef: { componentId: "diesel_use", displayName: "Diesel" } } as const;
+    const first = { ...base, message: "The entry on 2026-03-01 is outside the period of CB-1." } as RemovalBlocker;
+    const second = { ...base, message: "The entry on 2026-04-09 is outside the period of CB-2." } as RemovalBlocker;
+    const [firstItem, secondItem] = blockerItems([first, second], FACILITY, []);
+    const [remaining] = blockerItems([second], FACILITY, []);
+    expect(remaining.id).toBe(secondItem.id);
+    expect(remaining.id).not.toBe(firstItem.id);
+  });
+
   describe("blockersOutsideRows", () => {
     const sentence = "Template input is not bound.";
     const sameAsRow = { code: "legacy", message: "Add a file for each entry.", lineRef: { componentId: "lab", displayName: "Lab electricity" } } as RemovalBlocker;
