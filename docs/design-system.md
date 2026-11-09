@@ -95,7 +95,7 @@ the noma-dmrv project. Optional overrides are `FONTS_S3_ENDPOINT`,
 `FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
 The script reads the process environment; `pnpm fonts:fetch` also loads `.env.local`.
 
-App builds fetch into gitignored `public/fonts/`. The marketing site commits
+App builds fetch into a gitignored `fonts/` directory inside `public/`. The marketing site commits
 its own font copy in its separate private repo. Without credentials, app builds
 succeed using the existing system font fallbacks. Download failures with credentials fail the build.
 Run `pnpm fonts:fetch` to populate the app directory for local development;
