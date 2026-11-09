@@ -146,7 +146,8 @@ export function blockerItems(
     const message = removalLineBlockerMessage(blocker);
     const fix = removalFindingFixLink(blocker, facilityId, memberBatchIds);
     return {
-      id: `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.message}`,
+      // The message can change as one fault is partly fixed; the fault itself keeps its key.
+      id: `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.fixTarget ?? ""}`,
       title,
       // A title that is the message already says everything.
       explanation: title === blocker.message ? null : message,

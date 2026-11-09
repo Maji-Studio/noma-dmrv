@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import type { RemovalBlocker } from "@/lib/certification/removal-blockers";
 import type { ComponentRow } from "./component-table-model";
-import { blockerItems, buildReviewItems, componentItems } from "./review-items";
+import { blockerItems, blockersOutsideRows, buildReviewItems, componentItems } from "./review-items";
 
 const FACILITY = "facility-1";
 const BATCHES = [{ id: "batch-a", code: "CB-26-001" }];
@@ -67,5 +67,28 @@ describe("review items", () => {
       unbindableText: null, unbindableComponentIds: [],
     });
     expect(items.map((item) => item.title)).toEqual(["Lab electricity", "Delivery DL-1 has no proof of delivery."]);
+  });
+
+  it("keeps a blocker item's id when its message changes, so a partly fixed fault does not read as fixed", () => {
+    const base = { code: "legacy", fixTarget: "emissions", lineRef: { componentId: "diesel_use", displayName: "Diesel" } } as const;
+    const [before] = blockerItems([{ ...base, message: "3 entries need a file." } as RemovalBlocker], FACILITY, []);
+    const [after] = blockerItems([{ ...base, message: "2 entries need a file." } as RemovalBlocker], FACILITY, []);
+    expect(after.id).toBe(before.id);
+  });
+
+  describe("blockersOutsideRows", () => {
+    const sentence = "Template input is not bound.";
+    const sameAsRow = { code: "legacy", message: "Add a file for each entry.", lineRef: { componentId: "lab", displayName: "Lab electricity" } } as RemovalBlocker;
+    const unbindable = { code: "legacy", message: sentence } as RemovalBlocker;
+
+    it("drops a blocker its component row already says, and keeps one the row does not", () => {
+      const other = { ...sameAsRow, message: "Something else." } as RemovalBlocker;
+      expect(blockersOutsideRows([sameAsRow, other], [blockedRow()], { text: null, componentIds: [] })).toEqual([other]);
+    });
+
+    it("drops the unbindable sentence when every named id is a blocked row, and keeps it otherwise", () => {
+      expect(blockersOutsideRows([unbindable], [blockedRow()], { text: sentence, componentIds: ["lab"] })).toEqual([]);
+      expect(blockersOutsideRows([unbindable], [blockedRow()], { text: sentence, componentIds: ["lab", "other"] })).toEqual([unbindable]);
+    });
   });
 });
