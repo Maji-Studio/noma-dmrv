@@ -199,12 +199,13 @@ function SheetStatusBlock({
 }) {
   const outcome = submissionOutcomeFor(summary, status);
   // The outcome notice replaces the two generic "review the history" reasons.
-  // A draft's blockers belong to Review & submit, so the sheet never lists them.
+  // Readiness blockers belong to Review & submit, whatever the state, so the sheet never lists them.
+  const blockers = summary.readiness?.state === "blocked" ? summary.readiness.reasons : [];
   const reasons = status.kind === "blocked"
     ? []
-    : outcome
-      ? status.reasons.filter((reason) => reason !== REMOVAL_FAILED_REVIEW_REASON && reason !== REMOVAL_INTERRUPTED_RECONCILE_REASON)
-      : status.reasons;
+    : status.reasons.filter((reason) =>
+        !blockers.includes(reason)
+        && !(outcome && (reason === REMOVAL_FAILED_REVIEW_REASON || reason === REMOVAL_INTERRUPTED_RECONCILE_REASON)));
   const line = nextStepLine(status);
   return (
     <>

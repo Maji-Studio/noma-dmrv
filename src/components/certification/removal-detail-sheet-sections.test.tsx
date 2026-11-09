@@ -50,8 +50,8 @@ const SUMMARY = {
   readiness: { state: "blocked", reasons: ["Add a lab report.", "Link a delivery proof."] },
 } as unknown as RemovalListRow;
 
-function renderSheet() {
-  render(<RemovalDetailSheet summary={SUMMARY} isProduction={false} facilityId="f1" open onClose={vi.fn()} />);
+function renderSheet(summary: RemovalListRow = SUMMARY) {
+  render(<RemovalDetailSheet summary={summary} isProduction={false} facilityId="f1" open onClose={vi.fn()} />);
 }
 
 describe("RemovalDetailSheet structure", () => {
@@ -126,6 +126,18 @@ describe("RemovalDetailSheet structure", () => {
     renderSheet();
     expect(screen.queryByText("Allocation")).toBeNull();
     expect(screen.getByRole("button", { name: /More about Credit batches/ })).toBeTruthy();
+  });
+});
+
+describe("RemovalDetailSheet readiness blockers", () => {
+  it.each([
+    ["interrupted", { local: "draft", submissionInterrupted: true }],
+    ["failed", { local: "rejected", submissionAttempts: [{ outcome: { kind: "failed", message: "Isometric refused it." } }] }],
+  ])("lists no readiness blocker when the Removal is %s, and keeps the outcome notice", (_state, over) => {
+    renderSheet({ ...SUMMARY, ...over } as unknown as RemovalListRow);
+    expect(document.body.textContent).not.toContain("Add a lab report.");
+    expect(document.body.textContent).not.toContain("Link a delivery proof.");
+    expect(document.querySelector(".peer\\/status")?.childElementCount).toBeGreaterThan(0);
   });
 });
 
