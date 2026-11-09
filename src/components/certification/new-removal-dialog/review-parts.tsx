@@ -113,14 +113,16 @@ export function ReviewRow({
         ) : (
           <TitleWithInfo item={item} className={cn(textClass, "text-[var(--color-text-primary)]")} />
         )}
-        {!fixed &&
-          item.fixes.map((fix) => (
-            <span key={fix.href} className="flex max-sm:-my-6">
-              <FixLink href={fix.href} onClick={onFix}>
+        {/* One group pulls in by the tap area's padding, so stacked links keep their full 44px apart. */}
+        {!fixed && item.fixes.length > 0 && (
+          <span className="flex flex-col items-start max-sm:-my-6">
+            {item.fixes.map((fix) => (
+              <FixLink key={fix.href} href={fix.href} onClick={onFix}>
                 {fix.label}
               </FixLink>
-            </span>
-          ))}
+            ))}
+          </span>
+        )}
       </div>
     </li>
   );

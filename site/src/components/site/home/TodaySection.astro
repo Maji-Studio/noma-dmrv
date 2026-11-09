@@ -1,0 +1,41 @@
+---
+/**
+ * TodaySection: "What we have today", the proof row (the deck's closing slide). Three drawings in a row,
+ * each with one line and a link: live in Mafinga with Dark Earth Carbon (the local-only photo, or the kiln
+ * contour drawing without it), open source (HomeArt code) and built on Isometric's data model (HomeArt
+ * adapter). No figures: Mafinga numbers stay off the site. No props.
+ */
+import { GITHUB_URL } from "../../../config.js";
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
+import HomeArt from "./HomeArt.astro";
+import "./big.css";
+---
+<GridFrame class="hb" aria-labelledby="td-title">
+  <div class="hb-head"><h2 id="td-title" class="t-h2">What we have today.</h2></div>
+  <div class="hb-row">
+    <div class="hb-item">
+      {HAS_MAFINGA_PHOTO
+      ? <figure class="td-figure"><img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" /></figure>
+      : <HomeArt kind="kiln" />}
+      <h3 class="hb-t">Live in Mafinga.</h3>
+      <TextLink href="/why#mafinga">Read about the work in Mafinga</TextLink>
+    </div>
+    <div class="hb-item">
+      <HomeArt kind="code" />
+      <h3 class="hb-t">Open source.</h3>
+      <TextLink href={GITHUB_URL} external>View on GitHub</TextLink>
+    </div>
+    <div class="hb-item">
+      <HomeArt kind="adapter" />
+      <h3 class="hb-t">Built on Isometric’s data model.</h3>
+      <TextLink href="/product#evidence">See evidence and reporting</TextLink>
+    </div>
+  </div>
+</GridFrame>
+<style>
+  .hb-t { margin: 0; font-weight: 300; }
+  .td-figure { width: 100%; margin: 0; aspect-ratio: 8 / 5; overflow: hidden; }
+  .td-figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style>

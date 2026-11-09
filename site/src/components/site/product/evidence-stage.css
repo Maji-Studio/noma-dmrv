@@ -6,7 +6,7 @@
   --ev-link: clamp(64px, 11vw, 176px);
   --ev-adapter: 10px;
   display: grid; grid-template-columns: minmax(0, 1fr) var(--ev-link) minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto; row-gap: var(--space-3);
+  grid-template-rows: auto auto auto; row-gap: var(--space-3);
 }
 .ev-art { display: block; width: 100%; height: auto; overflow: visible; fill: none; stroke: var(--stage-line); stroke-width: var(--stage-stroke); stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .ev-art * { vector-effect: non-scaling-stroke; }
@@ -50,9 +50,6 @@
 .ev-arrive .stg-row-icon > *, .ev-arrive .stg-row-meta > * { grid-area: 1 / 1; }
 .ev-arrive .stg-row-meta { justify-items: end; }
 .ev .ev-arrive .ev-from { opacity: 0; }
-.ev-note { grid-row: 4; margin-top: var(--space-2); font-size: var(--fs-caption); line-height: 1.5; color: var(--stage-ink-3); }
-.ev-note--record { grid-column: 1; }
-.ev-note--registry { grid-column: 3; max-width: var(--measure); }
 
 /* Motion (the Stage's data-reveal states from motion.js). Start: the lab result is missing, the certifier
    fields are empty and dim, the seal is open. Each step runs at its own delay; rest = the approved end state. */
@@ -91,7 +88,5 @@
   .ev-rows--registry { order: 5; }
   .ev-cap--registry { order: 6; margin-block: var(--space-4); }
   .ev-art--registry { order: 7; max-width: 420px; }
-  .ev-note--registry { order: 8; margin-top: var(--space-4); }
-  .ev-note--record { order: 9; }
   .ev .ev-bridge, .ev .ev-links, .ev .ev-cap--map { display: none; }
 }

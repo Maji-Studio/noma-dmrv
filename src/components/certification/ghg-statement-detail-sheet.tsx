@@ -92,10 +92,6 @@ export function GhgStatementDetailSheet({
   return (
     <SlideOverPanel.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose>
-          <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
-        </SlideOverPanel.Header>
-
         <DetailState
           item={item}
           isProduction={isProduction}
@@ -106,6 +102,31 @@ export function GhgStatementDetailSheet({
         />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
+  );
+}
+
+/** The title with the status badge after it, as on the Removal sheet; the badge wraps under the title on a phone. */
+function SheetHeader({
+  statementId,
+  status,
+}: {
+  statementId: string;
+  status?: { value: ReturnType<typeof deriveSubmissionStatus>["value"]; label: string };
+}) {
+  return (
+    <SlideOverPanel.Header showClose>
+      <div className="flex flex-wrap items-center gap-x-12">
+        <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
+        {status && (
+          <CertificationStatusBadge
+            entityType="ghg_statement"
+            entityId={statementId}
+            status={status.value}
+            label={status.label}
+          />
+        )}
+      </div>
+    </SlideOverPanel.Header>
   );
 }
 
@@ -139,6 +160,7 @@ function DetailState({
   if (query.isLoading) {
     return (
       <>
+        <SheetHeader statementId={statement.id} />
         <SlideOverPanel.Body>
           <p
             aria-busy="true"
@@ -155,6 +177,7 @@ function DetailState({
   if (!hasGhgStatementDetailData(query)) {
     return (
       <>
+        <SheetHeader statementId={statement.id} />
         <SlideOverPanel.Body className="flex flex-col gap-24">
           {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
           <p className="body-small text-[var(--clr-red)]" role="alert">
@@ -229,6 +252,7 @@ function DetailState({
 
   return (
     <>
+      <SheetHeader statementId={statement.id} status={derived} />
       <SlideOverPanel.Body className="flex flex-col gap-24">
         {readOnly && <ReadOnlyNotice readOnly={readOnly} />}
         <EnvBanner isProduction={isProduction} variant="inline" />
@@ -237,7 +261,8 @@ function DetailState({
           <Notice tone="warning">{factsOnly ? STALE_DETAIL_READ_ONLY : STALE_DETAIL_WARNING}</Notice>
         )}
 
-        <DetailSection title="Statement status" divider={false}>
+        {/* No title: the badge in the header says the state; this holds the period. */}
+        <DetailSection divider={false}>
           {item.remotePeriodMissing ? (
             <DetailField
               label="Reporting period"
@@ -250,21 +275,6 @@ function DetailState({
               end={item.effectiveReportingPeriodEndOn}
             />
           )}
-          <DetailField
-            label="Status"
-            // The label paints above the badge's 44px hit area, which reaches 6px
-            // into it, so a press on the label text stays on the label.
-            className="[&>span:first-child]:relative [&>span:first-child]:z-10"
-            value={
-              <CertificationStatusBadge
-                entityType="ghg_statement"
-                entityId={statement.id}
-                status={derived.value}
-                label={derived.label}
-              />
-            }
-            valuePresent
-          />
         </DetailSection>
 
         {remote && remote.ghg_entry_ids.length > 0 && (

@@ -4,7 +4,7 @@
   --hm-mark: 12px; --hm-mark-facility: 20px; --hm-punch: 5px; --hm-ring: 28px; --hm-ring-facility: 36px;
   --hm-label-gap: 16px; --hm-label-size: 11px; --hm-chip-size: 10px; --hm-card-w: 264px; --hm-card-accent: 3px;
   --hero-card-w: 460px; --hero-panel-w: 620px; --hero-step: 90svh; --hero-stop: 24px; --hero-stop-dot: 8px;
-  --hero-play: 40px; --hero-art-h: clamp(140px, 22svh, 200px);
+  --hero-art-h: clamp(140px, 22svh, 200px);
 }
 
 /* ── map surface ─────────────────────────────────────────────────────────── */
@@ -74,16 +74,10 @@
 .home-hero-panel { width: min(var(--hero-panel-w), 100%); display: grid; gap: var(--space-5); padding: var(--space-7) var(--space-7) var(--space-6); background: color-mix(in srgb, var(--page) 94%, transparent); border: var(--hairline) solid var(--rule); backdrop-filter: blur(6px); }
 .home-hero-panel h1 { font-size: var(--fs-hero); line-height: var(--lh-display); letter-spacing: var(--track-display); }
 
-/* the secondary action beside "Book a walkthrough": a play square and a link-coloured label */
-.home-hero-tour { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--btn-h); padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-ui); text-align: left; cursor: pointer; }
-.home-hero-tour > span:last-child { text-decoration: underline; text-decoration-color: var(--link-rule); text-underline-offset: 0.3em; }
-.home-hero-tour:hover > span:last-child { text-decoration-color: currentColor; }
 .home-hero-exit { position: absolute; top: var(--space-5); right: calc(var(--gutter) + var(--space-5)); z-index: 3; min-height: var(--tap); padding: 0 var(--space-4); border: var(--hairline) solid var(--rule-strong); background: var(--paper); font-size: var(--fs-small); color: var(--link); cursor: pointer; }
 .home-hero-exit:hover { background: var(--band-purple); }
 .home-hero-card h2:focus { outline: none; }
 .home-hero-card button.tl { border: 0; background: none; padding: 0; cursor: pointer; }
-.home-hero-play { display: grid; place-items: center; width: var(--hero-play); height: var(--hero-play); background: var(--cta); }
-.home-hero-play::after { content: ""; margin-left: 3px; border-block: 7px solid transparent; border-left: 11px solid var(--cta-ink); }
 
 .home-hero-card { width: min(var(--hero-card-w), 100%); display: grid; gap: var(--space-4); padding: var(--space-5) var(--space-6) var(--space-6); background: var(--paper); border: var(--hairline) solid var(--rule-strong); border-top: var(--hm-card-accent) solid var(--accent); transition: opacity var(--dur-base); }
 .home-hero.has-map .home-hero-step:not(.is-active) .home-hero-card { opacity: 0.35; }

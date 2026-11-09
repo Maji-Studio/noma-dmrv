@@ -34,7 +34,6 @@
 .evp-checks .stg-mark-cut { stroke: var(--paper); }
 .evp-checks .is-missing, .evp-checks .is-missing .stg-mark { color: var(--warn); }
 .evp-missing { margin-left: auto; padding: 0 var(--space-2); font-size: var(--fs-caption); border: var(--hairline) solid currentColor; }
-.evp-note { margin: var(--space-6) 0 0; max-width: var(--measure); }
 .evp-foot { padding: var(--space-3) var(--space-5); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--warn); }
 
 /* 3. MathExcerpt: the quoted function. */

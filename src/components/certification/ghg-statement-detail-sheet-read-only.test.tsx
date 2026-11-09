@@ -51,7 +51,7 @@ vi.mock("./ghg-statement-carbon-breakdown", () => ({ GhgStatementCarbonBreakdown
 vi.mock("./ghg-statement-technical-details", () => ({ GhgStatementTechnicalDetails: () => <p>Technical body</p> }));
 vi.mock("./removal-batches-accordion", () => ({ RemovalBatchesAccordion: () => null }));
 vi.mock("./submission-status-badge", () => ({ SubmissionStatusBadge: () => null }));
-vi.mock("./certification-status-badge", () => ({ CertificationStatusBadge: () => null }));
+vi.mock("./certification-status-badge", () => ({ CertificationStatusBadge: ({ label }: { label: string }) => <span data-testid="status-badge">{label}</span> }));
 vi.mock("./registry-record-link", () => ({ RegistryRecordLink: () => null }));
 
 const READ_ONLY: SheetReadOnly = {
@@ -101,6 +101,15 @@ describe("GhgStatementDetailSheet", () => {
     expect(screen.getByRole("button", { name: "Resubmit" })).toBeTruthy();
     expect(mocks.submitProps).toMatchObject({ canSubmit: true });
     expect(document.body.textContent).toContain("then resubmit");
+  });
+
+  it("shows the status badge once, next to the title in the header, and no status section in the body", () => {
+    renderSheet();
+    const badges = screen.getAllByTestId("status-badge");
+    expect(badges).toHaveLength(1);
+    const title = screen.getByText("GHG Statement", { selector: "h2, h1, [data-slot=title], *" });
+    expect(title.parentElement?.contains(badges[0])).toBe(true);
+    expect(screen.queryByText("Statement status")).toBeNull();
   });
 
   it("offers no write action and says the reason once when read only", () => {

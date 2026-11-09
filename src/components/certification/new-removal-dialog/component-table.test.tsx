@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 
@@ -290,6 +290,14 @@ describe("ComponentTable", () => {
     const other = screen.getByText("Metered electricity").closest("li")!;
     expect(within(other).getByText("Automatic datapoints")).toBeTruthy();
     expect(screen.queryByText("Included")).toBeNull();
+  });
+
+  it("tells the step a repair link was used, so the review is read again on return", () => {
+    const onFix = vi.fn();
+    render(<ComponentTable table={blockedTable()} facilityId="facility-1" onFix={onFix} />);
+    const row = screen.getByText("Lab electricity").closest("li")!;
+    fireEvent.click(within(row).getByRole("link", { name: /Review emissions on CB-26-002/ }));
+    expect(onFix).toHaveBeenCalledTimes(1);
   });
 
   it("reads a component left out for an earlier production claim as Sent earlier, with no link, never as not applicable", () => {

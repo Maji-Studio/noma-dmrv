@@ -1,4 +1,4 @@
-// Row icons for TraceStage: one side-view line drawing per step, on a 32x24 grid, stroked in
+// Step icons (JourneyPhone): one side-view line drawing per step, on a 32x24 grid, stroked in
 // currentColor. Drawn by hand to read at label size; the full contour drawings in ./contours are too
 // fine for that. `.ts-icon-mask` parts (wheels) fill with the stage colour so lines behind them stop.
 export const ICON_VIEWBOX = "0 0 32 24";

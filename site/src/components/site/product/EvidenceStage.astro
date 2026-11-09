@@ -29,7 +29,7 @@ const PAIRS = [
 const fill = (p: { draw: number }) => p.draw + T.wireDur;
 const FIELD_Y = [44, 76, 108];
 const ms = (n: number) => `${n}ms`;
-const ALT = "Animated diagram with illustrative records. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, a lab result that starts out missing and then arrives, and a weighbridge ticket for 2,400 kg. On the right, the certifier's review window with a certification seal. Each record maps across to the certifier's own field: moisture reading to moisture content, 12%; lab result to carbon content, 48%; weighbridge ticket to feedstock mass, 2,400 kg. Once all three are filled, the seal closes and the submission is approved.";
+const ALT = "Animated diagram. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, a lab result that starts out missing and then arrives, and a weighbridge ticket for 2,400 kg. On the right, the certifier's review window with a certification seal. Each record maps across to the certifier's own field: moisture reading to moisture content, 12%; lab result to carbon content, 48%; weighbridge ticket to feedstock mass, 2,400 kg. Once all three are filled, the seal closes and the submission is approved.";
 ---
 <Stage
   id="evidence"
@@ -118,7 +118,5 @@ const ALT = "Animated diagram with illustrative records. On the left, feedstock 
     <ul class="ev-rows ev-rows--registry">
       {PAIRS.map((p) => <StageCheckRow as="li" label={p.registry.label} meta={p.registry.meta} dashed state="lit" delay={ms(fill(p))} />)}
     </ul>
-    <p class="ev-note ev-note--record">Illustrative records</p>
-    <p class="ev-note ev-note--registry">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
   </div>
 </Stage>

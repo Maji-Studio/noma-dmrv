@@ -31,15 +31,17 @@ interface NewTabLinkProps {
   ariaLabel?: string;
   /** 44px tall on a phone. */
   tall?: boolean;
+  onClick?: () => void;
 }
 
-export function NewTabLink({ href, children, className, mono, ariaLabel, tall }: NewTabLinkProps) {
+export function NewTabLink({ href, children, className, mono, ariaLabel, tall, onClick }: NewTabLinkProps) {
   return (
     <Link
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={ariaLabel}
+      onClick={onClick}
       className={cn(
         "text-[var(--color-text-primary)] underline-offset-4 hover:text-[var(--color-interaction)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
         tall && "inline-flex min-h-44 items-center md:min-h-0",

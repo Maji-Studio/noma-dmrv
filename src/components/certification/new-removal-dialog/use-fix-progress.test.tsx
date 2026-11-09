@@ -1,7 +1,7 @@
 import { act, create } from "react-test-renderer";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ReviewItem } from "./review-items";
-import { useFixProgress, type FixEntry } from "./use-fix-progress";
+import { useFixProgress, useRecheckOnReturn, type FixEntry } from "./use-fix-progress";
 
 const item = (id: string): ReviewItem => ({ id, title: id, explanation: null, lines: [], batchCode: null, fixes: [] });
 
@@ -56,5 +56,69 @@ describe("useFixProgress", () => {
     expect(out.entries.map((e) => e.item.id)).toEqual(["a"]);
     await act(async () => renderer.update(<Probe items={[item("a"), item("b")]} onEntries={collect} />));
     expect(out.entries.map((e) => e.item.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("useRecheckOnReturn", () => {
+  const win = new EventTarget();
+  const view = { state: "visible" };
+  const doc = Object.defineProperty(new EventTarget(), "visibilityState", { get: () => view.state });
+  const fire = (target: EventTarget, type: string) => target.dispatchEvent(new Event(type));
+  const goAway = () => {
+    view.state = "hidden";
+    fire(win, "blur");
+    fire(doc, "visibilitychange");
+  };
+  const comeBack = () => {
+    view.state = "visible";
+    fire(doc, "visibilitychange");
+    fire(win, "focus");
+  };
+
+  beforeAll(() => {
+    vi.stubGlobal("window", win);
+    vi.stubGlobal("document", doc);
+  });
+  afterEach(() => {
+    view.state = "visible";
+  });
+
+  function Hook({ refresh, onMark }: { refresh: () => void; onMark: (mark: () => void) => void }) {
+    onMark(useRecheckOnReturn(refresh));
+    return null;
+  }
+  function mount(refresh: () => void) {
+    const out = { markUsed: () => undefined as void };
+    const onMark = (mark: () => void) => {
+      out.markUsed = mark;
+    };
+    return { out, render: () => act(async () => { create(<Hook refresh={refresh} onMark={onMark} />); }) };
+  }
+
+  it("reads the review again on every return from a repair, not only the first", async () => {
+    const refresh = vi.fn();
+    const { out, render } = mount(refresh);
+    await render();
+    out.markUsed();
+    goAway();
+    comeBack();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // A second trip without a new click (the repair tab is used again) still refreshes once.
+    goAway();
+    comeBack();
+    expect(refresh).toHaveBeenCalledTimes(2);
+    // A click from the details view starts a trip as well.
+    out.markUsed();
+    comeBack();
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it("does nothing before any repair link was used", async () => {
+    const refresh = vi.fn();
+    const { render } = mount(refresh);
+    await render();
+    goAway();
+    comeBack();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

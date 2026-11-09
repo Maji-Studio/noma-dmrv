@@ -498,6 +498,7 @@ export function SubmitStep({
         <ReviewDetails
           ctx={ctx}
           facilityId={facilityId}
+          removalId={removalId}
           facts={submissionFacts}
           table={componentTable}
           compilation={compilationQuery.data ?? null}
@@ -507,6 +508,7 @@ export function SubmitStep({
             .filter((check) => check.status === "met")
             .map((check) => check.label)}
           onBack={() => showDetails(false)}
+          onFix={markFixUsed}
           onRetryCompilation={() => {
             void compilationQuery.refetch();
           }}

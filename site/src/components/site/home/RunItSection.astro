@@ -1,0 +1,38 @@
+---
+/**
+ * RunItSection: the two ways to run noma, a drawing each with "or" between them: host it yourself (MIT,
+ * free) or let MAJI run it (no prices on the site). Each ends in its action. No props.
+ */
+import { GITHUB_URL } from "../../../config.js";
+import GridFrame from "../GridFrame.astro";
+import Button from "../Button.astro";
+import HomeArt from "./HomeArt.astro";
+import "./big.css";
+
+const WAYS = [
+  { art: "selfhost", text: "Free under the MIT licence, on your own servers.", href: GITHUB_URL, cta: "View on GitHub", variant: "secondary", external: true },
+  { art: "hosted", text: "We host and update noma, and help move your spreadsheets into records.", href: "/get-started", cta: "Book a walkthrough", variant: "primary", external: false },
+] as const;
+---
+<GridFrame class="hb" aria-labelledby="ri-title">
+  <div class="hb-head">
+    <h2 id="ri-title" class="t-h2">Run it yourself, or let us.</h2>
+    <p class="t-lead">The same open-source code either way. Your records stay yours.</p>
+  </div>
+  <div class="ri-or">
+    {WAYS.map((w, i) => <>
+      {i === 1 && <span class="ri-or-word" aria-hidden="true">or</span>}
+      <div class="hb-item">
+        <HomeArt kind={w.art} />
+        <p class="t-body t-muted ri-text">{w.text}</p>
+        <Button href={w.href} variant={w.variant} external={w.external}>{w.cta}</Button>
+      </div>
+    </>)}
+  </div>
+</GridFrame>
+<style>
+  .ri-or { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-6); width: 100%; }
+  .ri-or-word { font-size: var(--fs-h2); letter-spacing: var(--track-h2); color: var(--accent); }
+  .ri-text { margin: 0; max-width: 36ch; }
+  @media (max-width: 860px) { .ri-or { grid-template-columns: minmax(0, 1fr); } }
+</style>
