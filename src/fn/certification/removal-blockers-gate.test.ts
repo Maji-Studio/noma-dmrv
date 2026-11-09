@@ -158,8 +158,27 @@ describe("Removal preflight", () => {
   });
 
   it.each([
+    ["shared targets", ["deliveryEvidence", "deliveryEvidence"], "deliveryEvidence"],
+    ["mixed targets", ["deliveryEvidence", "deliveryDistances"], null],
+  ] as const)("uses only the refused lineage blockers for %s", async (_label, targets, fixTarget) => {
+    const ctx = makeContext(undefined, { submissionLineageBlockers: targets.map((target, index) => ({
+      kind: "deliveryProof", instruction: "Attach evidence.", fact: "Missing evidence.",
+      detail: `Delivery DL-${index} needs attention.`, fixTarget: target,
+      record: { id: `delivery-${index}`, code: `DL-${index}` },
+    })) });
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(SafeError);
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(build.SubmissionLineageError);
+    expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{
+      code: "legacy", fixTarget,
+      message: `Removal submission blocked:\n${ctx.submissionLineageBlockers.map(blocker => blocker.detail).join("\n")}`,
+    }]);
+  });
+
+  it.each([
     ["mass", "Removal submission blocked:\nProduction run PR-1 has no dry mass."],
     ["window", "The Removal reporting window is inverted."],
+    ["coincidentally equal lineage detail", "Delivery DL-1 has no proof of delivery."],
+    ["coincidentally equal aggregate", "Removal submission blocked:\nDelivery DL-1 has no proof of delivery."],
   ])("does not attribute a %s build error to an unrelated lineage blocker", async (_label, message) => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {

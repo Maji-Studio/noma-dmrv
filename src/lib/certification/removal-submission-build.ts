@@ -629,12 +629,21 @@ export function assertEntityReadinessGapsResolved(
   );
 }
 
+export class SubmissionLineageError extends SafeError {
+  readonly blockers: readonly SubmissionLineageBlocker[];
+
+  constructor(blockers: readonly SubmissionLineageBlocker[]) {
+    super(`Removal submission blocked:\n${blockers.map((blocker) => blocker.detail).join("\n")}`);
+    this.blockers = blockers.map((blocker) => ({ ...blocker, record: { ...blocker.record } }));
+  }
+}
+
 export function assertSubmissionLineageResolved(blockers: SubmissionLineageBlocker[] | undefined): void {
   if (!blockers) {
     throw new SafeError("The Removal review did not finish. Refresh the review before submitting.");
   }
   if (blockers.length > 0) {
-    throw new SafeError(`Removal submission blocked:\n${blockers.map((blocker) => blocker.detail).join("\n")}`);
+    throw new SubmissionLineageError(blockers);
   }
 }
 
