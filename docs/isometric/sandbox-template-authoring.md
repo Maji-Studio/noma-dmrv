@@ -1,220 +1,111 @@
-# Sandbox GHG Entry Template Guide
+# Sandbox GHG Entry template guide
 
-> **Current compatibility guide.** The former `noma-mvp` walkthrough and fixed
-> DEFRA/IPCC bootstrap values were for legacy templates and are no longer the
-> active contract. Do not promote those example values or component counts.
-> Current compatibility is owned by the live template, committed mappings, and
-> the coverage check.
+Read this before selecting or changing a Removal template. The live template,
+reviewed component contracts and committed mappings determine compatibility.
+This guide describes code checked on 2026-10-30; it does not approve factors or
+claim complete submission verification. Direct sandbox read probes are in
+[registry behavior](./registry-behavior.md).
 
-This guide applies to the sandbox project recorded in
-[`versions.json`](./versions.json). Template mutation remains an operator action
-in the Isometric UI; Certify exposes read operations, not a template-authoring
-API.
+## Inspect before authoring
 
-## Sources of truth
+The sandbox project is pinned in [versions.json](./versions.json). Use sandbox
+credentials; the historical MCP account view is not evidence of sandbox access.
+Template editing is an operator action in Certify, outside the app's API writes.
+Inspect without mutating:
 
-Before editing a template, inspect:
+```bash
+pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
+```
 
-- `src/lib/isometric/semantic-binding-catalog.ts` for ordinary monitored
-  inputs, the named component disambiguation rules (diesel split, Safety
-  margin), PROJECT-scope tuples (enforced in
-  `src/lib/isometric/transformers/datapoint.ts`), explicit durability
-  component inputs, and the evidence targets of each input;
-- `src/lib/isometric/storage-blueprints.ts` for which durability component
-  each tier accepts;
-- `src/lib/certification/removal-source-bindings.ts` for how documents are
-  classified onto those evidence targets;
-- the facility's durability tier and default template mapping;
-- the live template output from:
+Read these owners rather than copying their tables into docs:
 
-  ```bash
-  pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
-  ```
-
-Do not treat a value in this document as a registry-approved emission factor.
-Fixed factors and their justification Sources are registry-owned configuration.
-
-## Required template shape
-
-A usable template must:
-
-1. be a `REMOVAL` credit template for the mapped project;
-2. contain exactly one supported storage component;
-3. use a storage component compatible with the facility durability tier;
-4. declare only monitored inputs covered by an ordinary or explicit durability
-   mapping;
-5. pre-bind every fixed input to a justified registry Datapoint;
-6. keep PROJECT-scope emissions out of the Removal template;
-7. use the exact display names required for component-instance
-   discrimination.
-
-Compilation verifies quantity kind, unit, input shape, component name, and
-durability tier before any registry write.
-
-## Storage component
-
-### 1,000-year sandbox facility
-
-Use `biochar_sequestration_1000_year_f_durable_max` under `co2-stored` with
-exactly:
-
-| Input | Shape | Quantity kind | noma source |
-|---|---|---|---|
-| `total_carbon_contents` | list | `mass_fraction_dry_basis` | Measurement-sample total-carbon replicates |
-| `inorganic_carbon_contents` | list | `mass_fraction_dry_basis` | Directly measured inorganic-carbon replicates; registry pairing key unconfirmed |
-| `product_mass` | scalar | `mass` | Standalone credit-batch product-mass Datapoint |
-| `s_fraction` | list | `dimensionless_ratio` | Measurement-sample reflectance-fraction replicates |
-
-The local submission gate requires at least three complete paired replicates per
-member credit batch.
-Verify the registry `MeasurementSample` record grain and pairing key before
-migrating the template.
-The registry calculates organic carbon per replicate as total minus inorganic,
-then applies the binomial lower durability estimate and 0.95 cap. noma's local
-calculation is explanatory; the registry result is authoritative. Application
-support is sandbox-only. Migrate the external sandbox template to this contract,
-then verify one complete submission and supersession. Production submission
-remains fail-closed while the registry-confirmation work in
-[`open-questions-isometric.md`](../open-questions-isometric.md) remains open.
-
-`biochar_sequestration_1000_year` is a deprecated historical component with
-total-carbon and uncapped durability semantics. Do not select it for a new
-facility mapping; noma rejects it and directs the operator to the current key.
-
-### 200-year facility
-
-The recognized template keys are
-`biochar_sequestration_200_year_c_org` and
-`biochar_sequestration_200_year_unsampled`, but the complete binding contract
-is not confirmed. Authoring one of these keys makes the tier check pass, not the
-submission path. 200-year submission still fails closed.
-
-### Legacy storage component
-
-`carbon_rich_substance_sequestration` remains recognized only for legacy
-compatibility. Do not use it when authoring a new tier-specific template.
-
-## Ordinary monitored components
-
-The current transformer supports these monitored inputs when the template
-declares them:
-
-| Group | Blueprint | Input | noma source |
-|---|---|---|---|
-| `biomass-feedstock-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Feedstock transport tonne-km |
-| `biochar-transport` | `mass_distance_based_ci_emissions` | `mass_distance` | Biochar delivery transport tonne-km |
-| `pyrolysis` | `grid_electricity_use` | `electricity_use` | Production electricity kWh |
-| `pyrolysis` | `fuel_usage_by_volume` | `volume_of_fuel` | Component-specific diesel litres |
-| `miscellaneous` | `mass_based_ci_emissions` | `mass` | Safety-margin dry biochar mass only |
-
-The transformer also contains compatibility mappings for
-`specific_volume_based_emissions / feedstock_mass` under the feedstock and
-biochar transport groups. Do not add them merely because they are recognized;
-the live project/template determines applicability.
-
-## Exact component names
-
-Certify does not expose a stable component-instance key for two components that
-share the same group/blueprint/input tuple. The current mapping therefore
-requires these display names, matched case/whitespace-insensitively:
-
-| Display name | Submitted value |
+| Contract | Owner |
 |---|---|
-| `Generator diesel usage` | Generator diesel plus preprocessing fuel |
-| `Startup diesel usage` | Reactor-startup/plant diesel |
-| `Safety margin` | Removal dry biochar mass |
+| Input meaning, transforms and Source targets | `src/lib/isometric/semantic-binding-catalog.ts` |
+| Tier support and storage shapes | `src/lib/isometric/storage-blueprints.ts` |
+| Reviewed component-ID contracts | `src/lib/isometric/template-observations/line-sources.ts` |
+| Contract-aware automatic-source selection | `src/lib/isometric/datapoint-mapping.ts` |
+| Document classification onto exact targets | `src/lib/certification/removal-source-bindings.ts` |
 
-A rename fails closed. If the registry template changes, update the mapping and
-its tests in the same application-code change; do not work around the guard
-with a zero.
+## Template invariants
 
-## PROJECT-scope components
+A usable Removal template belongs to the mapped project and has exactly one
+supported storage component compatible with the facility's durability tier.
+Every monitored input needs a supported automatic source, durability binding or
+emissions-entry shape. Every fixed input needs a justified registry Datapoint.
+Compilation checks units, quantity kinds, shapes, reviewed contracts and scope
+before writing to the registry.
 
-Establishment and end-of-life components belong in Isometric at project scope
-and remain forbidden on Removals. Operating components, including staff travel,
-direct gases, storage fuel, lab electricity and sampling consumables, need a
-reviewed operating contract and a supported source under
+Contracts are keyed by **component ID**. Proposed assignments grant no authority
+until reviewed; surviving IDs carry their contracts forward. Display names,
+including diesel and Safety margin labels, do not select sources. Ambiguous
+owners and missing/invalid contracts require review. See
 [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
-Period inputs are never stubbed. Missing operating
-inputs require records, emissions entries or explicit zero confirmation on
-Empty components. The E2E template selector supplies no entries or confirmed
-zeros, so it rejects entry-only components using the normal submission coverage
-check. noma keeps no project-emissions journal.
+Establishment/end-of-life inputs remain project-owned. Operating inputs need
+records, emissions entries or a Removal-confirmed zero. No period-input stubs
+are allowed. A coverage warning for an entry-only line is not permission to
+submit that line empty.
 
-## Fixed inputs
+## Storage support
 
-Every `type=fixed` input must already reference a registry Datapoint. noma
-submits monitored operational quantities only.
+The sampled 1,000-year code path uses
+`biochar_sequestration_1000_year_f_durable_max` under `co2-stored`:
 
-For each fixed input:
+| Input | Shape | Quantity kind | noma value |
+|---|---|---|---|
+| `total_carbon_contents` | list | `mass_fraction_dry_basis` | Same-Sample total-carbon replicates |
+| `inorganic_carbon_contents` | list | `mass_fraction_dry_basis` | Directly measured inorganic-carbon replicates |
+| `product_mass` | scalar | `mass` | Standalone product-mass Datapoint |
+| `s_fraction` | list | `dimensionless_ratio` | Same-Sample reflectance fractions |
 
-1. choose a source appropriate to the project, geography, activity, and pinned
-   module;
-2. create or select the Datapoint in Isometric;
-3. bind it in the template;
-4. attach its justification Source in Isometric;
-5. have the project/verifier process review the choice.
+Each sampled batch needs at least three complete paired replicates. The Isometric
+module's per-Sample reflectance-count guidance is in the
+[shortlist](./requirements-shortlist.md#agricultural-soil-storage-and-application).
+`src/lib/certification/sample-entry-warnings.ts:sampleEntryWarnings` warns on
+missing or fewer than 500 readings without blocking submission. Lab reports and
+optional reflectance histograms remain Sample evidence; this advisory does not
+change the three-replicate gate. Create one
+remote measurement-sample submission per physical Sample, retaining its stable
+identity and sampling instant. Never replace these with one mean/standard
+deviation request or repeat batch mass on each Sample. A current four-input component was observed on the sandbox project, but the
+registry pairing key, corrected remote grain, component applicability and mapped
+facility template still need confirmation. Production stays blocked. Track the exact outstanding
+checks in [open questions](../open-questions-isometric.md).
 
-No fixed constant is stored in noma. Do not reintroduce a `fixed_constants`
-table or copy the retired template's placeholder values.
+The deprecated `biochar_sequestration_1000_year` is historical read/reconciliation
+support only; do not select it for a new mapping. The 200-year sampled/unsampled
+keys are recognized but gated pending confirmed units and bindings. Unsampled
+1,000-year is unsupported. Recognizing a key does not enable submission.
+`carbon_rich_substance_sequestration` remains legacy compatibility only.
 
-## Evidence binding contract
+## Fixed inputs and evidence
 
-Template inputs must remain compatible with the current per-input Source plan:
+Create/select factors and bind their justification Sources in Isometric.
+Noma submits operating quantities and never stores a competing fixed-factor
+inventory. Retired DEFRA/IPCC example values are not project-approved defaults.
+Do not restore a `fixed_constants` table.
 
-- application inventory/logbook evidence supports storage `product_mass` and,
-  when present, safety-margin `mass`;
-- feedstock and delivery bills of lading support their corresponding transport
-  `mass_distance`;
-- the generated transport ledger supports each transport input present;
-- the generated durability ledger supports the tier-specific durability
-  inputs.
+Source plans are exact-input and snapshot/hash-covered. Delivery proof,
+Application evidence health, Datapoint attribution and Application Source links
+are distinct checks. See [integration contract](./integration-plan.md#immutable-versions-and-evidence).
 
-The plan is snapshot- and hash-covered. After submission, noma verifies the
-actual Source attachment through GHG-entry component attributions and
-Datapoints.
+## Validate a change
 
-## Validate before selection
-
-After saving the template:
-
-1. inspect it:
-
-   ```bash
-   pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
-   ```
-
-2. update the matching facility fixture in
-   `tests/fixtures/isometric-coverage.json` if the checked-in sandbox contract
-   changed;
-3. run:
+1. Inspect the saved template with the command above.
+2. Update `tests/fixtures/isometric-coverage.json` if its selected contract changes.
+3. Run the live compatibility check:
 
    ```bash
    pnpm isometric:coverage-check -- --source=fixture
    ```
 
-4. when an interactive configured database is available, run:
+4. For configured facilities, also run with `--source=db`.
+5. Review/select the template in the facility mapping, then compile a Removal
+   and inspect its inputs and Source plan before submission.
 
-   ```bash
-   pnpm isometric:coverage-check -- --source=db
-   ```
-
-5. select the template in the facility's Isometric mapping;
-6. compile a New Removal and review the exact monitored/fixed bindings and
-   Source plan before submitting.
-
-## Failure meanings
-
-- **Missing mapping:** the template declares an unsupported monitored input.
-- **Unbound fixed input:** bind a registry Datapoint; noma will not invent one.
-- **Unsupported durability component:** tier, blueprint, or input table does not
-  match the implemented path.
-- **Unsettled line contract:** review missing, proposed, unassigned or ambiguous
-  contracts. Coverage uses the same line decisions as readiness and submission
-  (ADR 0032), keyed by component ID.
-- **Forbidden line:** move the component out of the Removal template.
-- **Entry-only operating line:** coverage warns without failing; supply its values
-  from emissions entries.
-- **Missing intended Source:** fix the evidence/lineage or template target; do
-  not attach every Source to every input.
+Fixture mode still fetches live templates. Coverage success establishes mapping
+compatibility only; it does not prove batch readiness or protocol compliance.
+Unmapped inputs, unbound fixed values, forbidden scope, unsupported storage and
+unsettled contracts fail. Entry-only lines can warn during coverage and still
+require entries during submission.
