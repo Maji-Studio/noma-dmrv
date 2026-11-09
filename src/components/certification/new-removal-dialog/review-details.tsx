@@ -90,7 +90,7 @@ export function ReviewDetails({
       <FactsLine facts={facts} />
       <PassedChecks checks={passedChecks} />
       <ComponentTable table={table} facilityId={facilityId} onFix={onFix} />
-      <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
+      <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} onFix={onFix} />
       <SourceRecords
         removalId={removalId}
         onFix={onFix}

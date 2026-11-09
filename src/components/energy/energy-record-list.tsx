@@ -15,7 +15,7 @@ import {
   ListBulletsIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, TextAction } from "@/components/ui";
 import {
   rankRecords,
   recordHasMissingReadings,
@@ -242,13 +242,9 @@ export function EnergyRecordList({
           </div>
         )}
         {ranked.length > TOP_ROWS && (
-          <button
-            type="button"
-            onClick={() => setShowAll(!showAll)}
-            className="self-start body-small font-medium text-[var(--color-interaction)] underline-offset-4 hover:underline"
-          >
+          <TextAction onClick={() => setShowAll(!showAll)}>
             {showAll ? `Show the top ${TOP_ROWS}` : `Show all ${ranked.length}`}
-          </button>
+          </TextAction>
         )}
       </div>
     </section>
