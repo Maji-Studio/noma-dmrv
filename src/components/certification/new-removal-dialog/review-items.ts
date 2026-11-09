@@ -141,13 +141,13 @@ export function blockerItems(
   facilityId: string,
   memberBatchIds: readonly string[],
 ): ReviewItem[] {
+  const occurrences = new Map<string, number>();
   return blockers.map((blocker) => {
     const title = blockerTitle(blocker);
     const message = removalLineBlockerMessage(blocker);
     const fix = removalFindingFixLink(blocker, facilityId, memberBatchIds);
     return {
-      // The message can change as one fault is partly fixed; the fault itself keeps its key.
-      id: `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.fixTarget ?? ""}`,
+      id: blockerId(blocker, occurrences),
       title,
       // A title that is the message already says everything.
       explanation: title === blocker.message ? null : message,
@@ -156,6 +156,19 @@ export function blockerItems(
       fixes: fix ? [fix] : [],
     };
   });
+}
+
+/**
+ * Stable while one fault is partly fixed, distinct for distinct faults. The key is the code, the line and
+ * the repair; blockers sharing it (two entries on different batches, two compiler messages) are told apart by
+ * their message with the numbers left out (so "3 entries" turning into "2 entries" keeps its id), and a
+ * blocker repeating even that gets its occurrence number.
+ */
+function blockerId(blocker: RemovalBlocker, occurrences: Map<string, number>): string {
+  const base = `blocker:${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.fixTarget ?? ""}:${blocker.message.replace(/\d+/g, "#")}`;
+  const nth = occurrences.get(base) ?? 0;
+  occurrences.set(base, nth + 1);
+  return nth === 0 ? base : `${base}:${nth}`;
 }
 
 export interface ReviewItemsInput {

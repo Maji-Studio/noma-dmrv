@@ -69,11 +69,30 @@ describe("review items", () => {
     expect(items.map((item) => item.title)).toEqual(["Lab electricity", "Delivery DL-1 has no proof of delivery."]);
   });
 
-  it("keeps a blocker item's id when its message changes, so a partly fixed fault does not read as fixed", () => {
+  it("keeps a blocker item's id when only a number in its message changes", () => {
     const base = { code: "legacy", fixTarget: "emissions", lineRef: { componentId: "diesel_use", displayName: "Diesel" } } as const;
     const [before] = blockerItems([{ ...base, message: "3 entries need a file." } as RemovalBlocker], FACILITY, []);
     const [after] = blockerItems([{ ...base, message: "2 entries need a file." } as RemovalBlocker], FACILITY, []);
     expect(after.id).toBe(before.id);
+  });
+
+  it("gives blockers that share a code, line and repair their own rows, messages and ids", () => {
+    const base = { code: "sentEntryOutsideWindow", fixTarget: "emissions", lineRef: { componentId: "diesel_use", displayName: "Diesel" } } as const;
+    const items = blockerItems(
+      [
+        { ...base, message: "The entry on 2026-03-01 is outside the period of CB-1." },
+        { ...base, message: "The entry on 2026-04-09 is outside the period of CB-2." },
+        { code: "legacy", fixTarget: null, message: "First compiler message." },
+        { code: "legacy", fixTarget: null, message: "Second compiler message." },
+        { code: "legacy", fixTarget: null, message: "Second compiler message." },
+      ] as RemovalBlocker[],
+      FACILITY,
+      ["batch-a"],
+    );
+    expect(new Set(items.map((item) => item.id)).size).toBe(5);
+    expect(items[0].explanation).toContain("2026-03-01");
+    expect(items[1].explanation).toContain("2026-04-09");
+    expect(items.slice(2).map((item) => item.title)).toEqual(["First compiler message.", "Second compiler message.", "Second compiler message."]);
   });
 
   describe("blockersOutsideRows", () => {
