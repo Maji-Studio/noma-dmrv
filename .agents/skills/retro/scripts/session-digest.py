@@ -92,8 +92,8 @@ def digest(path, events, outside, out):
         message = event.get("message") or {}
         content = message.get("content")
         stamp = when.isoformat()
-        if event.get("type") == "summary" or event.get("isCompactSummary"):
-            compact_id = message.get("id") or event.get("uuid") or ("line", index)
+        if event.get("isCompactSummary"):
+            compact_id = event.get("uuid") or ("line", index)
             if compact_id not in seen_compactions:
                 seen_compactions.add(compact_id)
                 compactions += 1
@@ -118,7 +118,7 @@ def digest(path, events, outside, out):
                 agents.append(f"{stamp} {name} model={inputs.get('model')} "
                               f"type={inputs.get('subagent_type')} {description[:LAUNCH_DESCRIPTION_LIMIT]}")
     for index, (when, event) in enumerate(events):
-        if event.get("type") != "user":
+        if event.get("type") != "user" or event.get("isCompactSummary"):
             continue
         message = event.get("message") or {}
         content = message.get("content")
@@ -195,16 +195,22 @@ def self_test():
         assistant = {"type": "assistant", "timestamp": within, "message": {
             "id": "stream", "usage": {"output_tokens": 3}, "content": [
                 {"type": "tool_use", "id": "tool", "name": "Bash", "input": {}}]}}
+        compact_summary = {"type": "user", "timestamp": within, "uuid": "compact-user",
+                           "isCompactSummary": True, "message": {"content": "compacted session text"}}
         events = [
             {"type": "user", "message": {"content": "untimed prefix"}},
-            {"type": "summary", "timestamp": before},
+            {"type": "system", "subtype": "compact_boundary", "timestamp": before},
             {**assistant, "timestamp": before, "message": {
                 "id": "outside", "usage": {"output_tokens": 100}, "content": [
                     {"type": "tool_use", "id": "outside-tool", "name": "Agent", "input": {}}]}},
             assistant,
             {**assistant, "message": {**assistant["message"], "usage": {"output_tokens": 7}}},
             {"type": "user", "message": {"content": "inherited timestamp"}},
-            {"type": "summary", "timestamp": after},
+            {"type": "system", "subtype": "compact_boundary", "timestamp": within,
+             "uuid": "compact-boundary"},
+            compact_summary,
+            dict(compact_summary),
+            {"type": "system", "timestamp": after},
             {"type": "user", "message": {"content": "outside inherited timestamp"}},
             {**assistant, "isSidechain": True},
         ]
@@ -214,11 +220,12 @@ def self_test():
         assert skipped == 1 and len(rows) == 1, (rows, skipped)
         row = rows[0]
         assert row.users == 1 and row.errs == 0 and row.big == 0, row
-        assert row.compacts == 0 and row.toolcalls == 1 and row.outputTokens == 7, row
+        assert row.compacts == 1 and row.toolcalls == 1 and row.outputTokens == 7, row
         body = (root / "out" / "included.md").read_text(encoding="utf-8")
         assert "also holds events outside the window: yes; count 4" in body, body
         assert "outside inherited timestamp" not in body and "untimed prefix" not in body
         assert "tools: Bash=1" in body
+        assert "## user messages (1)" in body and "compacted session text" not in body, body
         boundary_logs = root / "boundaries"
         boundary_logs.mkdir()
         start, end = "2026-01-02", "2026-01-04"

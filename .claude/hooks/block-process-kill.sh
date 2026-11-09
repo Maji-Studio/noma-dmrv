@@ -3,7 +3,7 @@
 # Threat model: stop careless pattern kills, not deliberate shell disguises.
 # Other sessions share this machine; `pkill -f` and `killall` hit their dev servers.
 # Kill by PID from `lsof -nP -iTCP:<port> -sTCP:LISTEN` instead.
-# Only literal file-writing cat heredocs with no outer heredoc are exempt.
+# Only literal file-writing cat heredocs outside outer heredocs and quotes are exempt.
 # Other text, including grep/echo mentions, is denied.
 # Telling a quoted pattern from an invocation needs a shell parser. A false deny
 # costs one retry; a false allow can stop other sessions servers. Split the literal
@@ -43,7 +43,19 @@ command="$(printf '%s\n' "$command" | awk -v sq="'" '
     if (blocked) next
     operators = $0
     count = gsub(/<</, "", operators)
-    hide_body = (lines[NR - 1] !~ /\\$/ && count == 1 && match($0, header))
+    is_header = match($0, header)
+    header_start = RSTART
+    # An outer quote makes even a literal-looking heredoc unsafe to hide.
+    if (count && quote != "") blocked = 1
+    for (j = 1; j <= length($0); j++) {
+      if (is_header && j == header_start && quote != "") blocked = 1
+      character = substr($0, j, 1)
+      if (character == "\\" && quote != sq) { j++; continue }
+      if (quote == "") {
+        if (character == sq || character == "\"") quote = character
+      } else if (character == quote) quote = ""
+    }
+    hide_body = (!blocked && lines[NR - 1] !~ /\\$/ && count == 1 && is_header)
     suffix = $0
     current = 1
     pending = 0
