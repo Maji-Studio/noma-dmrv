@@ -7,15 +7,16 @@
 import { GITHUB_URL } from "../../../config.js";
 import GridFrame from "../GridFrame.astro";
 import Button from "../Button.astro";
+import HomeArt from "./HomeArt.astro";
 
-const WAYS = [
+const WAYS: { art: "selfhost" | "hosted"; k: string; title: string; cost: string; points: string[]; cta: { href: string; label: string; variant: string; external: boolean } }[] = [
   {
-    k: "Self-host", title: "Run it yourself.", cost: "Free, MIT licence",
+    art: "selfhost", k: "Self-host", title: "Run it yourself.", cost: "Free, MIT licence",
     points: ["Your servers, your database", "Every line of code to inspect and change", "Setup instructions in the repository"],
     cta: { href: GITHUB_URL, label: "View on GitHub", variant: "secondary", external: true },
   },
   {
-    k: "Run by MAJI", title: "Let us run it.", cost: "Priced per operation",
+    art: "hosted", k: "Run by MAJI", title: "Let us run it.", cost: "Priced per operation",
     points: ["We host and update noma for you", "We help move your spreadsheets into records", "The same open code, so you can leave with your data"],
     cta: { href: "/get-started", label: "Book a walkthrough", variant: "primary", external: false },
   },
@@ -29,6 +30,7 @@ const WAYS = [
   <div class="gf-cells ri-cells" style="--cols:2">
     {WAYS.map((w) => (
       <article class="stack">
+        <HomeArt kind={w.art} />
         <p class="t-category">{w.k}</p>
         <h3 class="t-h3">{w.title}</h3>
         <p class="ri-cost">{w.cost}</p>

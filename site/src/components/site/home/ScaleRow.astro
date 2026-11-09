@@ -1,17 +1,18 @@
 ---
 /**
- * ScaleRow: Home's short scale block. One line and four facts, linking to the full picture on
- * /product#scale (ScaleSection). No visual here on purpose: the drawing lives on Product. No props.
+ * ScaleRow: Home's short scale block. One line and four facts, each over a small HomeArt drawing, linking
+ * to the full picture on /product#scale (ScaleSection). No props.
  */
 import GridFrame from "../GridFrame.astro";
 import TextLink from "../TextLink.astro";
 import "./ask-section.css";
+import HomeArt from "./HomeArt.astro";
 
-const FACTS = [
-  { k: "Sites", v: "Several sites and reactors in one account" },
-  { k: "Team", v: "Admins and members, each with their own access" },
-  { k: "Entry", v: "Forms that work on a phone at the reactor" },
-  { k: "Connect", v: "An open API and MCP for your other tools" },
+const FACTS: { art: "sites" | "team" | "entry" | "connect"; k: string; v: string }[] = [
+  { art: "sites", k: "Sites", v: "Several sites and reactors in one account" },
+  { art: "team", k: "Team", v: "Admins and members, each with their own access" },
+  { art: "entry", k: "Entry", v: "Forms that work on a phone at the reactor" },
+  { art: "connect", k: "Connect", v: "An open API and MCP for your other tools" },
 ];
 ---
 <GridFrame class="sr" pad="none" flush aria-labelledby="sr-title">
@@ -23,12 +24,12 @@ const FACTS = [
     </div>
   </div>
   <dl class="gf-cells sr-cells" style="--cols:4">
-    {FACTS.map((f) => <div><dt class="t-category">{f.k}</dt><dd class="sr-v">{f.v}</dd></div>)}
+    {FACTS.map((f) => <div><HomeArt kind={f.art} /><dt class="t-category">{f.k}</dt><dd class="sr-v">{f.v}</dd></div>)}
   </dl>
 </GridFrame>
 <style>
   .sr-cells { margin: 0; border-top: var(--hairline) solid var(--rule); }
-  .sr-cells > div { display: grid; gap: var(--space-3); align-content: start; padding-block: var(--space-7); }
+  .sr-cells > div { display: grid; gap: var(--space-4); align-content: start; padding-block: var(--space-7); }
   .sr-cells dt { margin: 0; }
   .sr-v { margin: 0; font-size: var(--fs-h4); letter-spacing: var(--track-h3); line-height: 1.25; }
   @media (max-width: 1100px) { .gf-cells.sr-cells { --cols: 2 !important; } }

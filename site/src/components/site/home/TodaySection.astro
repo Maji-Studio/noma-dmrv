@@ -1,14 +1,15 @@
 ---
 /**
  * TodaySection: "What we have today", the proof row (the deck's closing slide). Three cells: live in
- * Mafinga with Dark Earth Carbon (the local-only photo, hatched placeholder without it), open source, and
- * built on Isometric's data model. No figures: Mafinga numbers stay off the site (illustrative only).
+ * Mafinga with Dark Earth Carbon (the local-only photo, or the kiln contour drawing without it), open
+ * source (HomeArt code) and built on Isometric's data model (HomeArt adapter). No figures: Mafinga numbers stay off the site (illustrative only).
  * No props.
  */
 import { GITHUB_URL } from "../../../config.js";
 import GridFrame from "../GridFrame.astro";
 import TextLink from "../TextLink.astro";
 import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
+import HomeArt from "./HomeArt.astro";
 ---
 <GridFrame class="td" pad="none" flush aria-labelledby="td-title">
   <div class="ask-head td-head">
@@ -17,23 +18,21 @@ import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
   </div>
   <div class="gf-cells td-cells" style="--cols:3">
     <article class="stack">
-      <figure class="td-figure">
-        {HAS_MAFINGA_PHOTO
-        ? <img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
-        : <div class="photo-missing" role="img" aria-label="Field trial plots in Mafinga, Tanzania" />}
-      </figure>
+      {HAS_MAFINGA_PHOTO
+      ? <figure class="td-figure"><img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" /></figure>
+      : <HomeArt kind="kiln" />}
       <h3 class="t-h3">Live in Mafinga.</h3>
       <p class="t-body t-muted">Dark Earth Carbon records its production in noma in Mafinga, Tanzania, from feedstock deliveries to the fields.</p>
       <TextLink href="/why#mafinga">Read about the work in Mafinga</TextLink>
     </article>
     <article class="stack">
-      <p class="td-big" aria-hidden="true">MIT</p>
+      <HomeArt kind="code" />
       <h3 class="t-h3">Open source.</h3>
       <p class="t-body t-muted">Every calculation is code you, your team or your verifier can read, run and test.</p>
       <TextLink href={GITHUB_URL} external>View on GitHub</TextLink>
     </article>
     <article class="stack">
-      <p class="td-big" aria-hidden="true">Isometric</p>
+      <HomeArt kind="adapter" />
       <h3 class="t-h3">Built on Isometric’s data model.</h3>
       <p class="t-body t-muted">Records map to what Isometric asks for. The submission workflow is in development.</p>
       <TextLink href="/product#evidence">See evidence and reporting</TextLink>
@@ -45,8 +44,7 @@ import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
   .td-cells > article { align-content: start; }
   .td-cells .t-h3 { margin: 0; }
   .td-cells .t-body { font-size: var(--fs-ui); }
-  .td-figure { margin: 0; aspect-ratio: 3 / 2; max-width: 100%; overflow: hidden; }
-  .td-figure img, .td-figure .photo-missing { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .td-big { display: flex; align-items: end; aspect-ratio: 3 / 2; max-width: 100%; margin: 0; padding: var(--space-5); background: var(--hatch); font-size: var(--fs-h2); letter-spacing: var(--track-h2); line-height: 1; color: var(--accent); }
-  @media (max-width: 900px) { .gf-cells.td-cells { --cols: 1 !important; } .td-figure, .td-big { aspect-ratio: 16 / 7; } }
+  .td-figure { width: 100%; margin: 0; aspect-ratio: 8 / 5; max-width: 100%; overflow: hidden; }
+  .td-figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  @media (max-width: 900px) { .gf-cells.td-cells { --cols: 1 !important; } .td-figure { aspect-ratio: 8 / 5; } }
 </style>
