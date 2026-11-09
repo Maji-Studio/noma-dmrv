@@ -7,6 +7,16 @@ import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
 import { buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
 import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 
+// Blockers that mean the recheck could not read what it needs, not that the
+// Removal's data or settings changed. With any of them present the other
+// blockers (lines to decide, missing fixed datapoints) may only reflect the
+// unread template, so a possibly sent draft stays retryable (#1114).
+const RECHECK_FAILURE_BLOCKERS: ReadonlySet<string> = new Set([
+  "templateNotFullyRead",
+  "noCredentials",
+  "noProject",
+]);
+
 export async function assertClaimedRemovalPayloadFresh(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -14,12 +24,13 @@ export async function assertClaimedRemovalPayloadFresh(args: {
   preserveForReconciliation: boolean;
 }): Promise<void> {
   const { orgCtx, removalId, row } = args;
-  const retireForDrift = (reason: string) =>
+  const retireForDrift = (reason: string, changed: boolean) =>
     retireClaimedRemovalDraftForDrift({
       orgCtx,
       submissionId: row.id,
       reason,
       preserveForReconciliation: args.preserveForReconciliation,
+      changed,
     });
   const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true, claimedSubmissionId: row.id });
   const { prepared, blockers } = prepareRemovalSubmission(freshCtx);
@@ -30,12 +41,14 @@ export async function assertClaimedRemovalPayloadFresh(args: {
     if (durabilityOnly) {
       await retireForDrift(
         "durability measurement-sample gate changed after draft claim",
+        true,
       );
       throw new SafeError(
         "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
       );
     }
-    await retireForDrift("semantic payload rebuild failed after draft claim");
+    const recheckIncomplete = blockers.length === 0 || blockers.some((blocker) => RECHECK_FAILURE_BLOCKERS.has(blocker.code));
+    await retireForDrift("semantic payload rebuild failed after draft claim", !recheckIncomplete);
     throw new SafeError(
       "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
     );
@@ -50,7 +63,7 @@ export async function assertClaimedRemovalPayloadFresh(args: {
       prepared,
     });
   } catch (error) {
-    await retireForDrift("semantic payload rebuild failed after draft claim");
+    await retireForDrift("semantic payload rebuild failed after draft claim", false);
     throw error;
   }
   const freshHash = payloadHash(freshBuild.semanticPayload);
@@ -58,6 +71,7 @@ export async function assertClaimedRemovalPayloadFresh(args: {
 
   await retireForDrift(
     `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,
+    true,
   );
   throw new SafeError(
     "Removal source data changed while preparing this submission. The stale draft was retired; reload and submit again.",

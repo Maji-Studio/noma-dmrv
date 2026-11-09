@@ -52,7 +52,7 @@ import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SubmissionHistory } from "./submission-history";
 import { RemovalRecords } from "./removal-records";
-import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
+import { deleteAccessFor, SubmissionOutcomeNotice, type DeleteAccess, type NoticeOutcome } from "./submission-outcome-notice";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
@@ -143,7 +143,7 @@ export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWor
   const latest = summary.submissionAttempts[0]?.outcome;
   // A retry of an interrupted draft can stop on drift before it claims anything, so the status stays
   // "interrupted": the red stop still leads.
-  if (latest?.kind === "differs") return latest;
+  if (latest?.kind === "differs" || latest?.kind === "changed") return latest;
   if (status.kind === "interrupted") return { kind: "interrupted" };
   return latest && latest.kind !== "submitted" ? latest : null;
 }
@@ -193,8 +193,11 @@ function SheetStatusBlock({
   timeZone,
   returned = false,
   readOnly = false,
+  deleteAccess = "can",
 }: {
   summary: RemovalListRow;
+  /** Whether this viewer can take Delete Removal, so a refusal that leads there names who can take it. */
+  deleteAccess?: DeleteAccess;
   /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
   returned?: boolean;
   status: RemovalWorkflowStatus;
@@ -225,6 +228,7 @@ function SheetStatusBlock({
           facilityId={facilityId}
           timeZone={timeZone}
           finalized={summary.hasFinalizedSubmission}
+          deleteAccess={deleteAccess}
           readOnly={readOnly}
         />
       )}
@@ -309,6 +313,7 @@ export function RemovalDetailSheet({
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
+  const changedSinceReview = submissionOutcomeFor(summary, shownStatus)?.kind === "changed";
 
   // Deletion mirrors the server rule: never-finalized only, and once the
   // Removal touched the registry only viewers at the role floor (issue #746).
@@ -373,7 +378,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals, summary.deletionInProgress)} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (
@@ -540,8 +545,9 @@ export function RemovalDetailSheet({
             preview={!readOnly && thingsToFix ? <p className="body-small text-[var(--color-text-secondary)]">{thingsToFix}</p> : undefined}
           >
             {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
+            {/* Under a changed-since-review stop, Submit again only refuses again: Delete Removal is the way out (#1114). */}
             <RemovalReviewAction
-              isActionable={isActionable && !readOnly}
+              isActionable={isActionable && !readOnly && !changedSinceReview}
               reviewHref={reviewHref}
             />
             {canDelete && (

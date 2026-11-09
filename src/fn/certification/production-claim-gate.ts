@@ -21,6 +21,10 @@ import {
 } from "@/data-access/certification";
 import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
+import {
+  INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE,
+  InterruptedRemovalChangedError,
+} from "@/lib/certification/interrupted-removal-copy";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
 
@@ -40,17 +44,18 @@ export interface MemberBatchLineage {
   claimedByRemovalId: string | null;
 }
 
-const INTERRUPTED_REMOVAL_DRIFT_MESSAGE =
-  "This interrupted Removal may already exist in the registry, but its source data or calculation settings changed. Ask support to reconcile it before retrying.";
-
 export async function retireClaimedRemovalDraftForDrift(args: {
   orgCtx: OrgContext;
   submissionId: string;
   reason: string;
   preserveForReconciliation: boolean;
+  /** The recheck proved a change (hash, mapping revision, durability gate), not merely failed to run. */
+  changed: boolean;
 }): Promise<void> {
   if (args.preserveForReconciliation) {
-    throw new SafeError(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
+    // Only a proven change leads to Delete Removal; a recheck that could not run stays retryable (#1114).
+    if (args.changed) throw new InterruptedRemovalChangedError();
+    throw new SafeError(INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE);
   }
   await retireStaleSubmissionDraft(args.orgCtx, args.submissionId, {
     reason: args.reason,
@@ -140,22 +145,30 @@ export function assertMemberBatchLineageUnchanged(
 // claim off them. Retire the draft (terminal `superseded`, non-blocking — see
 // retireStaleSubmissionDraft for why not `rejected`) and fail closed; the next
 // attempt mints a fresh version from live data under the current revision. An
-// interrupted draft with possible registry state is preserved for support
-// reconciliation instead. Missing `__mappingRevision` (pre-ADR-0005 snapshot)
-// counts as stale.
+// interrupted draft with possible registry state is preserved instead, and the
+// operator deletes it (INTERRUPTED_REMOVAL_CHANGED_MESSAGE). Missing
+// `__mappingRevision` (pre-ADR-0005 snapshot) counts as stale. Recovery of an
+// already submitted Removal (`submittedRecovery`) has no draft to delete: it
+// keeps the support route its sibling configuration check uses.
+export const SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE =
+  "The calculation settings changed after this Removal was submitted. Ask support to reconcile it before retrying.";
+
 export async function assertResumedSnapshotRevisionCurrent(
   orgCtx: OrgContext,
   row: CertificationSubmissionRow,
   preserveForReconciliation = false,
+  submittedRecovery = false,
 ): Promise<void> {
   const revision = (row.payloadSnapshot as { __mappingRevision?: unknown } | null)
     ?.__mappingRevision;
   if (revision === MAPPING_REVISION) return;
+  if (submittedRecovery) throw new SafeError(SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE);
   await retireClaimedRemovalDraftForDrift({
     orgCtx,
     submissionId: row.id,
     reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
     preserveForReconciliation,
+    changed: true,
   });
   throw new SafeError(
     "This Removal draft uses older calculation settings. Submit again to rebuild it with current data.",
