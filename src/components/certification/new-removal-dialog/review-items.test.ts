@@ -105,6 +105,23 @@ describe("review items", () => {
     expect(remaining.id).not.toBe(firstItem.id);
   });
 
+  describe("a build refusal that restates an unmet check", () => {
+    const durability = check({ key: "durability", unmetLabel: "Not enough eligible Samples", detail: "Run PR-1 has no sample · Run PR-2 has no sample" });
+    const refusal = (...lines: string[]) =>
+      ({ code: "legacy", fixTarget: null, message: ["Resolve these Sample and eligibility issues before submitting:", ...lines].join("\n") }) as RemovalBlocker;
+    const build = (blocker: RemovalBlocker) =>
+      buildReviewItems({ checks: [durability], blockers: [blocker], blockedRows: [], creditBatches: BATCHES, facilityId: FACILITY, unbindableText: null, unbindableComponentIds: [] });
+
+    it("is one item, the check, not the check plus the refusal", () => {
+      const items = build(refusal("Run PR-1 has no sample", "Run PR-2 has no sample"));
+      expect(items.map((item) => item.title)).toEqual(["Not enough eligible Samples"]);
+    });
+
+    it("stays when it names a fault no unmet check lists", () => {
+      expect(build(refusal("Run PR-1 has no sample", "Run PR-9 is out of spec"))).toHaveLength(2);
+    });
+  });
+
   describe("blockersOutsideRows", () => {
     const sentence = "Template input is not bound.";
     const sameAsRow = { code: "legacy", message: "Add a file for each entry.", lineRef: { componentId: "lab", displayName: "Lab electricity" } } as RemovalBlocker;

@@ -185,10 +185,30 @@ export interface ReviewItemsInput {
   unbindableComponentIds: readonly string[];
 }
 
+/**
+ * Compile blockers that only repeat unmet readiness checks. The build refuses with the same gate lines the
+ * check's (i) lists (a heading line, then one line per fault), so when every one of a refusal's lines is already
+ * a detail line of an unmet check, the check says it and the refusal is dropped. Nothing is switched on a code.
+ */
+export function blockersNotRestatingChecks(
+  blockers: readonly RemovalBlocker[],
+  checks: readonly RemovalRequirementCheck[],
+): RemovalBlocker[] {
+  const covered = new Set(
+    checks.filter((check) => check.status === "unmet").flatMap((check) => check.detail?.split(DETAIL_SEPARATOR) ?? []),
+  );
+  return blockers.filter((blocker) => {
+    const lines = blocker.message.split("\n").map((line) => line.trim()).filter(Boolean);
+    // The first line is the refusal's heading ("Resolve these ... before submitting:"), not a fault.
+    const faults = lines.length > 1 && lines[0].endsWith(":") ? lines.slice(1) : [];
+    return faults.length === 0 || !faults.every((line) => covered.has(line));
+  });
+}
+
 /** Everything the operator has to fix, in the order they would work through it. */
 export function buildReviewItems(input: ReviewItemsInput): ReviewItem[] {
   const memberBatchIds = input.creditBatches.map((batch) => batch.id);
-  const others = blockersOutsideRows(input.blockers, input.blockedRows, {
+  const others = blockersOutsideRows(blockersNotRestatingChecks(input.blockers, input.checks), input.blockedRows, {
     text: input.unbindableText,
     componentIds: input.unbindableComponentIds,
   });
