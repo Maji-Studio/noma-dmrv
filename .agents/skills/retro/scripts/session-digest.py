@@ -176,6 +176,8 @@ def summarize(logs, out, start, end):
         raise ValueError("--from must be before --to")
     if not logs.is_dir():
         raise ValueError(f"logs path is not an existing directory: {logs}")
+    if out.is_dir() and any(out.iterdir()):
+        raise ValueError(f"output directory is not empty: {out}")
     out.mkdir(parents=True, exist_ok=True)
     rows, skipped = [], 0
     for path in sorted(logs.glob("*.jsonl")):
@@ -226,6 +228,13 @@ def self_test():
         assert "outside inherited timestamp" not in body and "untimed prefix" not in body
         assert "tools: Bash=1" in body
         assert "## user messages (1)" in body and "compacted session text" not in body, body
+        try:
+            summarize(root, root / "out", "2026-01-02", "2026-01-04")
+        except ValueError as error:
+            assert str(root / "out") in str(error), error
+        else:
+            raise AssertionError("accepted non-empty output directory")
+        assert (root / "out" / "included.md").read_text(encoding="utf-8") == body
         boundary_logs = root / "boundaries"
         boundary_logs.mkdir()
         start, end = "2026-01-02", "2026-01-04"
@@ -244,6 +253,10 @@ def self_test():
         empty_logs = root / "empty"
         empty_logs.mkdir()
         assert summarize(empty_logs, root / "empty-out", start, end) == ([], 0)
+        empty_out = root / "existing-empty-out"
+        empty_out.mkdir()
+        existing_rows, existing_skipped = summarize(boundary_logs, empty_out, start, end)
+        assert existing_rows == boundary_rows and existing_skipped == boundary_skipped
         for invalid_logs in (root / "missing", root / "included-session.jsonl"):
             try:
                 summarize(invalid_logs, root / "invalid-out", start, end)

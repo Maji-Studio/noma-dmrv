@@ -4,7 +4,7 @@
 # Other sessions share this machine; `pkill -f` and `killall` hit their dev servers.
 # Kill by PID from `lsof -nP -iTCP:<port> -sTCP:LISTEN` instead.
 # Only literal cat heredocs writing .md/.txt files outside outer heredocs and quotes
-# are exempt, with no shell comment before the header.
+# are exempt. Shell comments end parsing of their line but stay checked.
 # Other text, including grep/echo mentions, is denied.
 # Telling a quoted pattern from an invocation needs a shell parser. A false deny
 # costs one retry; a false allow can stop other sessions servers. Split the literal
@@ -43,25 +43,27 @@ command="$(printf '%s\n' "$command" | awk -v sq="'" '
       next
     }
     if (blocked) next
-    operators = $0
-    count = gsub(/<</, "", operators)
-    is_header = match($0, header)
-    header_start = RSTART
-    # An outer quote makes even a literal-looking heredoc unsafe to hide.
-    if (count && quote != "") blocked = 1
+    line_quote = quote
     for (j = 1; j <= length($0); j++) {
-      if (is_header && j == header_start && quote != "") blocked = 1
+      # Retain quote context for the header match after comment truncation.
+      quote_before[j] = quote
       character = substr($0, j, 1)
-      if (character == "\\" && quote != sq) { j++; continue }
+      if (character == "\\" && quote != sq) { quote_before[j + 1] = quote; j++; continue }
       if (quote == "") {
-        # Comments open no heredoc. Keep all later text visible when one is found.
+        # Parse only the code prefix; lines[NR] keeps the comment visible.
         if (character == "#" && (j == 1 || substr($0, j - 1, 1) ~ /[[:space:];&|(]/)) {
-          blocked = 1
+          $0 = substr($0, 1, j - 1)
           break
         }
         if (character == sq || character == "\"") quote = character
       } else if (character == quote) quote = ""
     }
+    operators = $0
+    count = gsub(/<</, "", operators)
+    is_header = match($0, header)
+    header_start = RSTART
+    # An outer quote makes even a literal-looking heredoc unsafe to hide.
+    if ((count && line_quote != "") || (is_header && quote_before[header_start] != "")) blocked = 1
     if (blocked) next
     if (is_header) {
       header_text = substr($0, header_start)

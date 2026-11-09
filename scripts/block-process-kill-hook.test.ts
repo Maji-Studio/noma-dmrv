@@ -74,6 +74,11 @@ describe("block-process-kill hook", () => {
     ...['echo "# ordinary"', "echo '# ordinary'", "echo \\#", "echo word#ordinary"].map(
       (prefix) => `${prefix}; cat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`
     ),
+    ...[
+      "# Write prompt", "echo hi # note", "# An operator's note", 'echo hi # unmatched "',
+      "# cat <<'COMMENT'", "echo hi # cat <<OUTER",
+    ].map((prefix) => `${prefix}\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`),
+    `cat > prompt.md <<'EOF' # note with an unmatched ' and <<IGNORED\n${PREAMBLE}\nEOF`,
     `cat <<'EOF' > prompt.txt\n${PREAMBLE}\nEOF`,
   ];
   it.each(literalCommands)("allows literal file-writing bodies: %s", (command) => {
@@ -85,6 +90,9 @@ describe("block-process-kill hook", () => {
 
   const deniedCommands = KILL_COMMANDS.flatMap((command) => [
     command,
+    `# ${command}\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`,
+    `cat > prompt.md <<'EOF' # ${command}\nordinary\nEOF`,
+    `bash -c "; cat > prompt.md <<'EOF' # note\n${command}\nEOF\n"`,
     ...[
       "# Previous command", "echo before # comment", "echo before;# comment", "echo before &# comment",
       "echo before |# comment", "(# comment", "\t# comment",

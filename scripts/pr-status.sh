@@ -21,7 +21,7 @@ Read state, head SHA, required-check buckets, merge state, queue position/state,
 local worktree basename, and (when MERGED) merge SHA. Makes no writes.
 Format: #<pr> <state> <head> checks=<bucket=count,...|none>
         merge-state=<state> queue=<position/state|no> worktree=<basename|none>
-        [merge=<sha>] (all on one line)
+        [merge=<sha|unavailable>] (all on one line)
   --help  Show this help.
 
 Exit codes:
@@ -67,7 +67,8 @@ read_status() {
     (.headRefName | type == "string" and length > 0 and (test("[[:cntrl:]]") | not)) and
     (.headRefOid | test("^[0-9a-fA-F]+$")) and
     (.mergeStateStatus | test("^[A-Z_]+$")) and
-    (if .state == "MERGED" then (.mergeCommit.oid | test("^[0-9a-fA-F]+$")) else true end)' >/dev/null 2>&1 ||
+    (if .state == "MERGED" and .mergeCommit != null
+     then (.mergeCommit.oid | test("^[0-9a-fA-F]+$")) else true end)' >/dev/null 2>&1 ||
     read_error 'invalid PR response'
   # gh api has no --repo flag. Scope GraphQL explicitly from REPO instead.
   queue_json="$(GH_REPO="$REPO" gh api graphql -f query="$QUEUE_QUERY" \
@@ -89,8 +90,9 @@ read_status() {
   head="$(printf '%s\n' "$pr_json" | jq -r '.headRefOid')"
   merge_state="$(printf '%s\n' "$pr_json" | jq -r '.mergeStateStatus')"
   if [ "$state" = MERGED ]; then
-    merge="$(printf '%s\n' "$pr_json" | jq -r '.mergeCommit.oid')"
-    merge=" merge=${merge:0:SHORT_SHA_LENGTH}"
+    merge="$(printf '%s\n' "$pr_json" | jq -r '.mergeCommit.oid // empty')"
+    if [ -n "$merge" ]; then merge=" merge=${merge:0:SHORT_SHA_LENGTH}"
+    else merge=' merge=unavailable'; fi
   fi
   printf '#%s %s %s checks=%s merge-state=%s queue=%s worktree=%s%s' \
     "$PR" "$state" "${head:0:SHORT_SHA_LENGTH}" "$(checks_summary)" "$merge_state" "$queue" "$worktree" "$merge"

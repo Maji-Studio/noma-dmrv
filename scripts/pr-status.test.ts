@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const number = args[0] === "pr" ? args[2] : args.find(value => value.startsWith("number="))?.slice("number=".length);
 if (number === "4") process.exit(1);
 if (args[0] === "pr" && args[1] === "view") {
-  console.log(JSON.stringify({state: number === "3" ? "MERGED" : number === "6" ? "CLOSED" : "OPEN",
+  console.log(JSON.stringify({state: ["3", "13"].includes(number) ? "MERGED" : number === "6" ? "CLOSED" : "OPEN",
     headRefName: "feature/" + number, headRefOid: "${HEAD}", mergeStateStatus: "BLOCKED",
     mergeCommit: number === "3" ? {oid: "${MERGE}"} : null}));
 } else if (args[0] === "pr" && args[1] === "checks" && args.includes("--required")) {
@@ -44,6 +44,7 @@ const GIT_STUB = `#!${process.execPath}
 const args = process.argv.slice(2);
 if (args.join(" ") !== "worktree list --porcelain -z") process.exit(2);
 process.stdout.write("worktree /synthetic/remaining-worktree\\0HEAD ${HEAD}\\0branch refs/heads/feature/3\\0\\0");
+process.stdout.write("worktree /synthetic/pending-worktree\\0HEAD ${HEAD}\\0branch refs/heads/feature/13\\0\\0");
 `;
 
 function run(args: string[]) {
@@ -76,6 +77,13 @@ describe("pr-status", () => {
     const result = run(["3"]);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe("#3 MERGED abcdef1 checks=pass=1 merge-state=BLOCKED queue=no worktree=remaining-worktree merge=1234567\n");
+  });
+
+  it("shows merged PRs with an unavailable merge commit and a listed worktree", () => {
+    const result = run(["13"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("#13 MERGED abcdef1 checks=pass=1 merge-state=BLOCKED queue=no worktree=pending-worktree merge=unavailable\n");
+    expect(result.stderr).toBe("");
   });
 
   it("continues after an unreadable PR and preserves argument order", () => {
