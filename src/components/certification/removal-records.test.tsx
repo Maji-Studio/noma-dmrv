@@ -2,8 +2,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
-import { RECORDS_SHOWN_FIRST, RemovalRecordsList } from "./removal-records";
+import { RECORDS_SHOWN_FIRST, RemovalRecords, RemovalRecordsList } from "./removal-records";
 
+const mocks = vi.hoisted(() => ({ query: {} as Record<string, unknown>, refetch: vi.fn() }));
+vi.mock("@/hooks/use-removal-records", () => ({ useRemovalRecords: () => mocks.query }));
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 afterEach(cleanup);
 
@@ -71,5 +73,28 @@ describe("RemovalRecordsList", () => {
     open();
     const line = screen.getByRole("link", { name: "PR-1" }).closest("li")!;
     expect(line.textContent).toMatch(/Feb 1, 2026 · Reactor 1 · 3\.2.t.dry.*PR-1$/);
+  });
+});
+
+describe("RemovalRecords states", () => {
+  it("shows a loading skeleton, not text", () => {
+    mocks.query = { isLoading: true };
+    render(<RemovalRecords removalId="r" facilityId="f1" enabled />);
+    expect(screen.getByLabelText("Loading records").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("offers Try again on a failed read, which refetches", () => {
+    mocks.query = { isLoading: false, isError: true, isFetching: false, refetch: mocks.refetch };
+    render(<RemovalRecords removalId="r" facilityId="f1" enabled />);
+    expect(screen.getByRole("alert").textContent).toContain("could not be loaded");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses one EmptyState when there are no credit batches", () => {
+    mocks.query = { isLoading: false, isError: false, data: [] };
+    render(<RemovalRecords removalId="r" facilityId="f1" enabled />);
+    expect(screen.getAllByRole("heading", { name: "No credit batches yet" })).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/none/i);
   });
 });

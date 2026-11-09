@@ -9,13 +9,16 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button, EmptyState } from "@/components/ui";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
 import { formatDateRange, formatDayString, formatTonnes } from "@/lib/format-utils";
-import { pluralize } from "@/lib/copy-utils";
+import { pluralize, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
 import { recordHref, type RecordKind } from "@/lib/record-links";
 import { cn } from "@/lib/utils";
 
@@ -128,7 +131,7 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
 
 export function RemovalRecordsList({ batches, facilityId }: { batches: RemovalBatchRecords[]; facilityId: string }) {
   if (batches.length === 0) {
-    return <p className="body-small text-[var(--color-text-tertiary)]">No credit batches in this Removal yet.</p>;
+    return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds a credit batch." />;
   }
   return (
     <ul className="flex flex-col">
@@ -141,7 +144,16 @@ export function RemovalRecordsList({ batches, facilityId }: { batches: RemovalBa
 
 export function RemovalRecords({ removalId, facilityId, enabled }: { removalId: string; facilityId: string; enabled: boolean }) {
   const query = useRemovalRecords(removalId, { enabled });
-  if (query.isLoading) return <p className="body-small text-[var(--color-text-tertiary)]">Loading records.</p>;
-  if (query.isError || !query.data) return <p className="body-small text-[var(--color-text-tertiary)]">The records could not load.</p>;
+  if (query.isLoading) return <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className="h-96 w-full" /></div>;
+  if (query.isError || !query.data) {
+    return (
+      <Notice
+        tone="error"
+        action={<Button variant="weak" size="small" busy={query.isFetching} onClick={() => void query.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+      >
+        These records could not be loaded.
+      </Notice>
+    );
+  }
   return <RemovalRecordsList batches={query.data} facilityId={facilityId} />;
 }
