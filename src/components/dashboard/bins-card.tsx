@@ -7,7 +7,8 @@
  */
 "use client";
 
-import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
+import { PackageIcon, WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BIN_TYPE_META, binCurrentMassKg, binMaterialName } from "@/components/storage-locations/bin-display";
@@ -28,7 +29,7 @@ const WET = "wet";
 export function BinsCard({ facilityId }: { facilityId: string }) {
   // Most recently touched first: the board's own `lastActivityAt` sort (latest
   // intake, draw, loss, count or product movement; bins never touched last).
-  const { data, isLoading, error } = useStorageLocations(
+  const { data, isLoading, error, refetch } = useStorageLocations(
     { facilityId, archived: false, page: 1, pageSize: BIN_ROWS, sortBy: "lastActivityAt", sortOrder: "desc" },
     { enabled: !!facilityId },
   );
@@ -48,9 +49,18 @@ export function BinsCard({ facilityId }: { facilityId: string }) {
       {isLoading ? (
         <RowsSkeleton />
       ) : error ? (
-        <p className="flex min-h-48 items-center px-20 body-small text-[var(--color-text-secondary)]">
-          The bins could not be loaded. Reload the page to try again.
-        </p>
+        <div className="p-16">
+          <EmptyState
+            padding="sm"
+            icon={<WarningOctagonIcon size={32} weight="bold" />}
+            title="The bins could not be loaded."
+            action={
+              <Button variant="default" size="small" onClick={() => void refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        </div>
       ) : bins.length === 0 ? (
         <div className="p-16">
           <EmptyState
