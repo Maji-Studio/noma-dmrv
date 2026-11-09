@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
+import { INTERRUPTED_REMOVAL_DRIFT_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -449,6 +450,45 @@ describe("SubmitStep", () => {
     expect(state.toastSuccess).toHaveBeenCalledWith(
       "Removal deleted. Credit batches are available again.",
     );
+    await act(async () => renderer?.unmount());
+  });
+
+  it("shows the drift refusal next to Delete Removal for a possibly sent draft (#1114)", async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          ctx={
+            {
+              ...CONTEXT,
+              latestSubmission: {
+                status: "draft",
+                lockedAt: null,
+                metadata: { lastAttemptOutcome: "interrupted", externalMutation: "possible" },
+              },
+            } as RemovalCertifyContext
+          }
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: false,
+              isSuccess: false,
+              isError: true,
+              data: undefined,
+              error: new Error(INTERRUPTED_REMOVAL_DRIFT_MESSAGE),
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(JSON.stringify(renderer!.toJSON())).toContain(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
+    expect(findButton(renderer!, "Delete Removal")).toBeDefined();
+    expect(findButton(renderer!, "Discard draft")).toBeUndefined();
     await act(async () => renderer?.unmount());
   });
 

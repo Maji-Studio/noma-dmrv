@@ -21,6 +21,7 @@ import {
 } from "@/data-access/certification";
 import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
+import { INTERRUPTED_REMOVAL_DRIFT_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "./certify-context-core";
 
@@ -39,9 +40,6 @@ export interface MemberBatchLineage {
   applicationIds: string[];
   claimedByRemovalId: string | null;
 }
-
-const INTERRUPTED_REMOVAL_DRIFT_MESSAGE =
-  "This interrupted Removal may already exist in the registry, but its source data or calculation settings changed. Ask support to reconcile it before retrying.";
 
 export async function retireClaimedRemovalDraftForDrift(args: {
   orgCtx: OrgContext;
@@ -140,9 +138,9 @@ export function assertMemberBatchLineageUnchanged(
 // claim off them. Retire the draft (terminal `superseded`, non-blocking — see
 // retireStaleSubmissionDraft for why not `rejected`) and fail closed; the next
 // attempt mints a fresh version from live data under the current revision. An
-// interrupted draft with possible registry state is preserved for support
-// reconciliation instead. Missing `__mappingRevision` (pre-ADR-0005 snapshot)
-// counts as stale.
+// interrupted draft with possible registry state is preserved instead, and the
+// operator deletes it (INTERRUPTED_REMOVAL_DRIFT_MESSAGE). Missing
+// `__mappingRevision` (pre-ADR-0005 snapshot) counts as stale.
 export async function assertResumedSnapshotRevisionCurrent(
   orgCtx: OrgContext,
   row: CertificationSubmissionRow,

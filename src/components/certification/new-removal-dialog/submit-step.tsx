@@ -452,6 +452,16 @@ export function SubmitStep({
                   >
                     Review submission
                   </Button>
+                  {/* A refusal can name Delete Removal as the way out (#1114), so it sits here too. */}
+                  {canDeleteRemoval ? (
+                    <Button
+                      variant="weak"
+                      className={PHONE_TOUCH_TARGET}
+                      onClick={() => setDeleteConfirmOpen(true)}
+                    >
+                      {deleteCopy.actionLabel}
+                    </Button>
+                  ) : null}
                 </>
               )}
             </div>
@@ -467,6 +477,7 @@ export function SubmitStep({
           )}
         </div>
         {confirmDialog}
+        {deleteDialog}
       </div>
     );
   }

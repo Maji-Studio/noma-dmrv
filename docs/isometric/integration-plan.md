@@ -483,3 +483,11 @@ failure clears the marker on rejection and releases production claims; successfu
 finalization clears attempt metadata. Possible or confirmed failures retain their
 marker and reservations. Source mirroring before the submission draft exists
 continues to use its separate durable mirror ledger.
+
+A preserved draft retries only as it was reviewed. Its member records are
+Sent-locked (`submissionHasRemoteEffect`), so only settings outside them (the
+Removal template, the mapping revision, the durability gate) can change. When
+they do, the retry refuses with `INTERRUPTED_REMOVAL_DRIFT_MESSAGE` and points
+the operator to Delete Removal, which removes what reached Isometric, including
+unconfirmed sends, before the Removal is created again from current data. noma
+does not build a new version on top of a possibly sent attempt.
