@@ -86,8 +86,8 @@ function ActionLink({ action }: { action: QuickAction }) {
     <Link
       href={action.href}
       className={cn(
-        // 44px tall at every width: a tap that misses it would hit the stage link underneath.
-        "inline-flex min-h-44 max-w-full items-center px-6 py-6 text-left body-small font-medium text-[var(--color-text-primary)] transition-colors",
+        // 44px tall at every width (a tap that misses it would hit the stage link underneath); top aligned, so one- and two-line labels start level.
+        "inline-flex min-h-44 max-w-full items-start px-6 py-10 text-left body-small font-medium text-[var(--color-text-primary)] transition-colors",
         "hover:bg-[var(--color-surface-medium)]",
         FOCUS_RING,
       )}
