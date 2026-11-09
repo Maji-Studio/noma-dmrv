@@ -31,12 +31,17 @@ export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   const removalAttention = loadRemovalAttentionSources(ctx, facilityId)
     .then((sources) => removalAttentionRows(sources, facilityId))
     .catch((error: unknown) => {
-      const code = error instanceof Error && "code" in error ? error.code : undefined;
+      const cause = error instanceof Error && typeof error.cause === "object" && error.cause !== null
+        ? error.cause : undefined;
+      const code = (error instanceof Error && "code" in error ? error.code : undefined)
+        ?? (cause && "code" in cause ? cause.code : undefined);
       logger.warn({
         facilityId,
         errorType: error instanceof Error ? sanitizeErrorMessage(error.name) : typeof error,
         errorCode: typeof code === "string" || typeof code === "number" ? sanitizeErrorMessage(String(code)) : undefined,
         errorMessage: sanitizeErrorMessage(error),
+        errorCauseMessage: cause && "message" in cause && typeof cause.message === "string"
+          ? sanitizeErrorMessage(cause.message) : undefined,
       }, "Removal attention rows skipped: readiness failed to load");
       return NO_REMOVAL_ATTENTION;
     });

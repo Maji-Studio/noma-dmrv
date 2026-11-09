@@ -68,6 +68,31 @@ describe("readDashboardOverview", () => {
       errorType: "TypeError",
       errorCode: "42P01",
       errorMessage: "Failed query: select $1\nparams: [REDACTED]",
+      errorCauseMessage: undefined,
+    }, "Removal attention rows skipped: readiness failed to load");
+  });
+
+  it("logs the sanitized driver code and cause for a wrapped query error", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    mocks.loadSources = async () => {
+      throw new Error("Failed query: select $1\nparams: Private Person, private@example.com", {
+        cause: Object.assign(new Error('relation "certifier_removals" does not exist for private@example.com\nparams: Private Person'), {
+          code: "42P01",
+          detail: "Private Person",
+          params: ["private@example.com"],
+        }),
+      });
+    };
+
+    const result = await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
+    expect(await mocks.passed).toEqual({ drafts: [], rejected: [], returned: [], covered: new Set() });
+    expect(result.attentionTotal).toBe(0);
+    expect(warn).toHaveBeenCalledExactlyOnceWith({
+      facilityId: FACILITY_ID,
+      errorType: "Error",
+      errorCode: "42P01",
+      errorMessage: "Failed query: select $1\nparams: [REDACTED]",
+      errorCauseMessage: 'relation "certifier_removals" does not exist for [REDACTED]\nparams: [REDACTED]',
     }, "Removal attention rows skipped: readiness failed to load");
   });
 
@@ -82,6 +107,7 @@ describe("readDashboardOverview", () => {
       errorType: "string",
       errorCode: undefined,
       errorMessage: "Registry unavailable for [REDACTED]",
+      errorCauseMessage: undefined,
     }, "Removal attention rows skipped: readiness failed to load");
   });
 });
