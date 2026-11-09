@@ -67,11 +67,35 @@ describe("applyBatchScope", () => {
     expect(byKey("applications").totalLabel).toBe("1 application");
   });
 
-  it("keeps only in-scope To do and activity rows and drops grouped rows and gaps", () => {
+  it("keeps only in-scope To do and activity rows and drops unscoped grouped rows and gaps", () => {
     expect(scoped.attention.map((item) => item.id)).toEqual(["a1", "a3", "a5"]);
     expect(scoped.structuralGaps).toEqual([]);
     expect(scoped.attentionTotal).toBe(3);
     expect(scoped.activity.map((item) => item.id)).toEqual(["older-scoped"]);
+  });
+
+  it("keeps grouped rows with their scoped count and keeps the overview href", () => {
+    const group = { ...overview.attention[3], recordIds: ["run-1", "run-2", "run-9"] };
+    const result = applyBatchScope({ ...overview, attention: [group] }, { ...scope, recordIds: ["run-1", "run-2"] });
+    expect(result.attention).toEqual([{ ...group, recordIds: ["run-1", "run-2"], count: 2 }]);
+    expect(result.attentionTotal).toBe(1);
+    expect(result.stations.find((station) => station.key === "production")?.attention).toBe(1);
+  });
+
+  it("drops a grouped row with no in-scope ids even when its href contains a scoped id", () => {
+    const group = { ...overview.attention[3], recordIds: ["run-9"], href: "/production-runs?ids=run-1,run-9" };
+    expect(applyBatchScope({ ...overview, attention: [group] }, scope).attention).toEqual([]);
+  });
+
+  it("shows the record's own row, linking to that record, for one scoped id", () => {
+    const single = { ...overview.attention[0], recordIds: ["run-1"] };
+    const group = { ...overview.attention[3], recordIds: ["run-1", "run-9"], recordItems: [single] };
+    expect(applyBatchScope({ ...overview, attention: [group] }, scope).attention).toEqual([single]);
+  });
+
+  it("keeps one scoped record grouped when its single row is unavailable", () => {
+    const group = { ...overview.attention[3], recordIds: ["run-1", "run-9"] };
+    expect(applyBatchScope({ ...overview, attention: [group] }, scope).attention).toEqual([{ ...group, count: 1, recordIds: ["run-1"] }]);
   });
 
   it("counts in-scope credit batch and Removal rows on the Production bubble with the stage's own rows", () => {

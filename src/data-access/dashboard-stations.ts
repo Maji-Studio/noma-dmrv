@@ -316,11 +316,6 @@ interface ActivityRow {
 }
 
 /**
- * Newest events per entity, fetched as one `union all` so the merge sort in
- * JS sees each entity's own top-N. The batch rows double as the
- * certification block's recent-batch list (same filter, same order).
- */
-/**
  * `id = any($1::uuid[])`: one array parameter however many records the scope
  * holds, so "All credit batches" never hits the bind-parameter limit.
  */
@@ -328,6 +323,11 @@ function idInScope(column: AnyPgColumn, recordIds: readonly string[]): SQL {
   return sql`${column} = any(${sql.param([...recordIds])}::uuid[])`;
 }
 
+/**
+ * Newest events per entity, fetched as one `union all` so the merge sort in
+ * JS sees each entity's own top-N. Optional `recordIds` scope each branch
+ * before its cap, so older in-scope events remain eligible.
+ */
 async function loadActivityRows(
   ctx: OrgContext,
   facilityId: string,

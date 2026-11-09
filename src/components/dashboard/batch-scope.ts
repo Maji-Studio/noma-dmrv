@@ -4,12 +4,13 @@
  * record count, the four KPI figures and the ids of every record in the
  * batches' roll-ups (and the Removals holding them). `applyBatchScope`
  * narrows the facility overview to it: the stage counts and labels, the KPIs
- * with hints that name the scope, only the To do rows that link to its records,
- * its scoped activity, and each stage's open-items bubble. Grouped rows and
- * structural gaps count records across the facility, so the filter leaves
- * them out (Kenji, Q13: To do follows the filter).
+ * with hints that name the scope, only the To do rows that represent its records,
+ * its scoped activity, and each stage's open-items bubble. Grouped rows keep
+ * their in-scope records; structural gaps are facility setup and stay out
+ * (Kenji, Q13: To do follows the filter).
  */
 import type {
+  DashboardAttentionItem,
   DashboardKpi,
   DashboardOverview,
 } from "@/data-access/dashboard-overview";
@@ -52,7 +53,16 @@ function scopedKpis(base: DashboardKpi[], scope: DashboardBatchScopeView): Dashb
 export function applyBatchScope(overview: DashboardOverview, scope: DashboardBatchScopeView): DashboardOverview {
   const recordIds = scope.recordIds;
   const inScope = (href: string) => recordIds.some((id) => href.includes(id));
-  const attention = overview.attention.filter((item) => item.count == null && inScope(item.href));
+  const scopedIds = new Set(recordIds);
+  const attention = overview.attention.flatMap((item): DashboardAttentionItem[] => {
+    if (item.count == null) return inScope(item.href) ? [item] : [];
+    const ids = item.recordIds?.filter((id) => scopedIds.has(id)) ?? [];
+    if (ids.length === 0) return [];
+    const recordItems = item.recordItems?.filter((record) => record.recordIds?.some((id) => scopedIds.has(id)));
+    const single = ids.length === 1 ? recordItems?.find((record) => record.recordIds?.includes(ids[0])) : undefined;
+    if (single) return [single];
+    return [{ ...item, recordIds: ids, ...(recordItems ? { recordItems } : {}), count: ids.length }];
+  });
   const stations = overview.stations.map((station) => {
     const listPath = pathOf(station.href);
     const own = attention.filter(

@@ -821,8 +821,11 @@ Facility-scoped operations dashboard at `/dashboard`
   and Recent activity. The header's credit batch filter (`?batch=`) scopes the
   KPIs, stage counts, To do and activity to records traceable to one batch, or
   to any unarchived batch ("All credit batches"); a Removal row stays when the
-  Removal holds one of those batches. Grouped rows and structural gaps count
-  across the facility, so the filter leaves them out. Bins stay facility-wide.
+  Removal holds one of those batches. Grouped rows carry every represented
+  record id and stay when any is in scope, with their count narrowed to those
+  ids. One scoped record uses its single-row details when available, keeping
+  the overview's href; otherwise it stays grouped. Structural gaps are facility
+  setup and stay out. Stage bubbles count scoped rows. Bins stay facility-wide.
   The figures come from one org-scoped read, `getDashboardBatchScope`
   (`src/data-access/dashboard-batch-scope.ts`, projected by
   `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one
@@ -839,14 +842,19 @@ Facility-scoped operations dashboard at `/dashboard`
   gaps and credit batch rows on their flow station (batches on Production).
   Draft, rejected and returned Removals need the operator too: the read core
   `src/lib/read-models/dashboard-overview.ts` loads them best effort
-  (`removal-attention-sources.ts`, worded by `removal-attention.ts`) and hands
-  them to the aggregate, which orders them (after interrupted submissions),
+  (`removal-attention-sources.ts`, worded by `removal-attention.ts`). The Removal
+  list and latest submissions load first; if either fails, there are no Removal
+  rows. A draft whose readiness cannot load stays as "Couldn't check. Open it
+  to see what is left." Shared facility-facts failure marks every draft;
+  context-build or readiness-derivation failure marks only that draft. Rejected
+  and returned rows remain best effort. The core hands the rows to the
+  aggregate, which orders them (after interrupted submissions),
   caps and counts them like any other check; one row per returned Removal
   replaces that Removal's per-credit-batch returned rows.
 - The overview lists each check's records while there are at most two, else one
   grouped "N affected" row (linking to the list filtered by `ids` where the
   list takes it and the ids fit `EXACT_ID_FILTER_MAX`), and one row per GPS
-  gap. The dashboard's To do shows the single-record rows the batch filter
+  gap. The dashboard's To do shows the single and grouped rows the batch filter
   keeps. A batch whose Removal is submitted waits on the verifier and is left
   out entirely.
 - **Attention items** are computed from existing MRV records only. They have no
