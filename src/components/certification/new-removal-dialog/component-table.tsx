@@ -180,6 +180,7 @@ export function ComponentTable({ table, facilityId, onFix }: ComponentTableProps
                 href={recordHref("creditBatch", batch.id, { facilityId })}
                 mono
                 tall
+                onClick={onFix}
                 className="font-medium"
               >
                 {batch.code}
@@ -205,6 +206,7 @@ export function ComponentTable({ table, facilityId, onFix }: ComponentTableProps
                       href={recordHref("removal", batch.claim.removalId, { facilityId })}
                       mono
                       tall
+                      onClick={onFix}
                       className="text-[var(--color-text-tertiary)]"
                     >
                       {batch.claim.removalCode ?? "an earlier Removal"}
