@@ -238,6 +238,8 @@ export function invalidateCertificationReadiness(
     // Readiness-affecting mutations also change the batch activity history.
     queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    // The dashboard's Needs attention counts draft Removals ("N to fix") from the same readiness.
+    queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all }),
   ];
   if (options?.creditBatchPreviews) {
     invalidations.push(
@@ -458,6 +460,7 @@ export function useSaveFacilityCertifierMapping() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
       queryClient.invalidateQueries({ queryKey: activityKeys.all });
       invalidateOnboardingProgress(queryClient, variables.facilityId);
@@ -475,6 +478,7 @@ export function useSaveFacilityEmissionConfig() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
     },
   });
 }
