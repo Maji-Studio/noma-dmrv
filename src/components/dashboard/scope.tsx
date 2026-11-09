@@ -7,12 +7,16 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "@/components/ui/data-table";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 
 const BATCH_PARAM = "batch";
 const ALL_BATCHES = "All credit batches";
 const SELECTED_BATCH = "Selected credit batch";
+const BATCHES_LOAD_FAILED = "Could not load credit batches";
+/** A value no batch id can take, for the disabled load-failed option. */
+const LOAD_FAILED_OPTION = "load-failed";
 
 /**
  * The chosen batch: the URL's `?batch=` when the facility lists that batch,
@@ -43,7 +47,7 @@ export function BatchFilter({ facilityId }: { facilityId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { data: batches = [], isLoading } = useCreditBatches(facilityId);
+  const { data: batches = [], isLoading, isError } = useCreditBatches(facilityId);
   const selectedId = useSelectedBatchId(facilityId) ?? null;
 
   const choose = (batchId: string) => {
@@ -57,6 +61,7 @@ export function BatchFilter({ facilityId }: { facilityId: string }) {
   return (
     <DataTable.FilterSelect
       aria-label="Filter by credit batch"
+      className={PHONE_TOUCH_TARGET}
       value={selectedId ?? ""}
       disabled={isLoading}
       onChange={(event) => choose(event.target.value)}
@@ -65,6 +70,11 @@ export function BatchFilter({ facilityId }: { facilityId: string }) {
       {/* The list failed to load but the URL names a batch: say it is selected, so the figures never sit under "All". */}
       {selectedId && !batches.some((batch) => batch.id === selectedId) && (
         <option value={selectedId}>{SELECTED_BATCH}</option>
+      )}
+      {isError && (
+        <option value={LOAD_FAILED_OPTION} disabled>
+          {BATCHES_LOAD_FAILED}
+        </option>
       )}
       {batches.map((batch) => (
         <option key={batch.id} value={batch.id}>

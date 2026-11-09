@@ -44,6 +44,7 @@ describe("getDashboardBatchScope concurrent changes", () => {
     const scope = await getDashboardBatchScope(ctx, FACILITY_ID, null);
     expect(scope.batchIds).toEqual([BATCH_A]);
     expect(scope.recordIds).toEqual([BATCH_A]);
+    expect(scope.downstreamComplete).toBe(true);
     expect(scope.activity).toEqual(ACTIVITY);
     expect(mocks.accounting).toHaveBeenCalledExactlyOnceWith(ctx, [BATCH_A, BATCH_B], { includeRunForwards: true });
     expect(mocks.activity).toHaveBeenCalledExactlyOnceWith(ctx, FACILITY_ID, [BATCH_A]);
@@ -84,6 +85,7 @@ describe("getDashboardBatchScope run forwards", () => {
       .mockResolvedValueOnce({ [BATCH_A]: rollup(BATCH_A), [BATCH_B]: rollup(BATCH_B) });
     const scope = await getDashboardBatchScope(ctx, FACILITY_ID, null);
     expect(scope.batchIds).toEqual([BATCH_A, BATCH_B]);
+    expect(scope.downstreamComplete).toBe(false);
     expect(mocks.accounting).toHaveBeenNthCalledWith(1, ctx, [BATCH_A, BATCH_B], { includeRunForwards: true });
     expect(mocks.accounting).toHaveBeenNthCalledWith(2, ctx, [BATCH_A, BATCH_B]);
   });

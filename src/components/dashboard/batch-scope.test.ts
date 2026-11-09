@@ -48,6 +48,7 @@ const overview = {
 const scope: DashboardBatchScopeView = {
   activity: [{ id: "older-scoped", code: "PR-1", title: "Run saved", dateIso: "2026-01-01T10:00:00Z", href: "/production-runs?id=run-1" }],
   batchIds: ["batch-1"],
+  downstreamComplete: true,
   stationTotals: { suppliers: 1, feedstock: 2, production: 3, products: 0, deliveries: 1, applications: 1 },
   kpis: { feedstockProcessedDryTonnes: 2.4, biocharProducedDryTonnes: null, appliedToSoilDryTonnes: 0, co2eStoredTonnes: 4.5 },
   recordIds: ["batch-1", "removal-1", "run-1"],

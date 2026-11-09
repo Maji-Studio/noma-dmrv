@@ -15,6 +15,12 @@ export interface DashboardBatchScope {
   /** Batch ids in scope (one, or every unarchived batch of the facility). */
   batchIds: string[];
   activity: DashboardActivityItem[];
+  /**
+   * False when the downstream walk failed for all credit batches and the read
+   * fell back to applications only: unapplied biochar products and deliveries
+   * are missing from the counts, record ids and activity.
+   */
+  downstreamComplete: boolean;
   stationTotals: Record<DashboardStationKey, number>;
   kpis: {
     feedstockProcessedDryTonnes: number | null;
@@ -48,7 +54,9 @@ export async function getDashboardBatchScope(
   if (creditBatchId !== null && batches.length === 0) {
     throw new SafeError("Credit batch was not found.");
   }
-  const accounting = await loadScopeAccounting(ctx, batches.map(({ id }) => id), creditBatchId === null, facilityId);
+  const { accounting, downstreamComplete } = await loadScopeAccounting(
+    ctx, batches.map(({ id }) => id), creditBatchId === null, facilityId,
+  );
   const survivingBatches = batches.filter(({ id }) => {
     const rollup = accounting[id];
     if (rollup && rollup.batch.facilityId === facilityId) return true;
@@ -63,7 +71,7 @@ export async function getDashboardBatchScope(
   const removalIds = await loadScopeRemovalIds(ctx, survivingBatches);
   const recordIds = [...new Set([...projected.recordIds, ...removalIds])].sort();
   const activity = await getDashboardScopedActivity(ctx, facilityId, recordIds);
-  return { ...projected, recordIds, activity };
+  return { ...projected, recordIds, activity, downstreamComplete };
 }
 
 /**
@@ -71,8 +79,9 @@ export async function getDashboardBatchScope(
  * credit batches the downstream walk is best effort: one batch's inconsistent
  * saved allocations fail that walk closed, and the default dashboard must not
  * go dark for it, so the read falls back to the walk without run forwards
- * (products and deliveries then come from applications only). One batch keeps
- * failing closed, so its page says what is wrong.
+ * (products and deliveries then come from applications only) and says so with
+ * `downstreamComplete: false`, which the page shows. One batch keeps failing
+ * closed, so its page says what is wrong.
  */
 async function loadScopeAccounting(
   ctx: OrgContext,
@@ -80,15 +89,17 @@ async function loadScopeAccounting(
   allBatches: boolean,
   facilityId: string,
 ) {
-  if (!allBatches) return loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true });
+  if (!allBatches) {
+    return { accounting: await loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true }), downstreamComplete: true };
+  }
   try {
-    return await loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true });
+    return { accounting: await loadCreditBatchAccounting(ctx, batchIds, { includeRunForwards: true }), downstreamComplete: true };
   } catch (error: unknown) {
     logger.warn(
       { facilityId, errorType: error instanceof Error ? sanitizeErrorMessage(error.name) : typeof error, errorCode: pgErrorCode(error), errorMessage: sanitizeErrorMessage(error) },
       "Dashboard batch scope: run forwards failed, reading all credit batches without them",
     );
-    return loadCreditBatchAccounting(ctx, batchIds);
+    return { accounting: await loadCreditBatchAccounting(ctx, batchIds), downstreamComplete: false };
   }
 }
 

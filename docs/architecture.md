@@ -827,8 +827,9 @@ Facility-scoped operations dashboard at `/dashboard`
   own link) when available; otherwise it stays grouped. Structural gaps are
   facility setup and stay out. Stage bubbles count scoped records (a grouped
   row adds its count). For all credit batches the downstream run-forward walk
-  is best effort: if it fails closed, the read retries without it. Bins stay
-  facility-wide.
+  is best effort: if it fails closed, the read retries without it and returns
+  `downstreamComplete: false`, and the page says Biochar and Delivery may be
+  low. Bins stay facility-wide.
   The figures come from one org-scoped read, `getDashboardBatchScope`
   (`src/data-access/dashboard-batch-scope.ts`, projected by
   `src/lib/dashboard-batch-scope.ts`), which walks every chosen batch in one

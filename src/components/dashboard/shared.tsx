@@ -25,7 +25,8 @@ import type {
   DashboardStationKey,
 } from "@/data-access/dashboard-overview";
 import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -233,6 +234,15 @@ export function DashSection({
   );
 }
 
+/** An empty or error state's recovery action: a system button-styled link (mono caps), as it is what the state is for. */
+export function RecoveryLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className={cn(buttonVariants({ variant: "default", size: "small" }), PHONE_TOUCH_TARGET)}>
+      {children}
+    </Link>
+  );
+}
+
 /** A section's title-row link, styled like the stage actions: quiet sentence case with a trailing arrow. */
 export function SectionLink({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -265,7 +275,7 @@ export function TodoEmpty({ clearFilterHref }: { clearFilterHref: string | null 
         padding="sm"
         icon={<CheckCircleIcon size={32} weight="bold" />}
         title={clearFilterHref ? "Nothing to fix in this credit batch" : "Nothing to fix in credit batches"}
-        action={clearFilterHref ? <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink> : undefined}
+        action={clearFilterHref ? <RecoveryLink href={clearFilterHref}>Show all credit batches</RecoveryLink> : undefined}
       />
     </div>
   );
@@ -283,9 +293,23 @@ export function ActivityEmpty({ clearFilterHref }: { clearFilterHref: string | n
         padding="sm"
         icon={<LeafIcon size={32} weight="bold" />}
         title={clearFilterHref ? "No recent activity for this credit batch" : "No credit batch activity yet"}
-        action={clearFilterHref ? <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink> : undefined}
+        action={clearFilterHref ? <RecoveryLink href={clearFilterHref}>Show all credit batches</RecoveryLink> : undefined}
       />
     </div>
+  );
+}
+
+/**
+ * All credit batches fell back to applications only: unapplied biochar
+ * products and deliveries are missing, so Biochar and Delivery can read low.
+ * One batch at a time fails closed and shows which one is wrong.
+ */
+export function PartialFiguresNotice() {
+  return (
+    <Notice tone="warning" title="Biochar and Delivery may be low.">
+      Biochar products and deliveries not applied yet could not be traced for every credit batch. Pick one credit batch to
+      see which one needs fixing.
+    </Notice>
   );
 }
 
@@ -306,10 +330,10 @@ export function LoadError({
       title="The dashboard could not be loaded."
       action={
         <span className="flex flex-wrap items-center gap-12">
-          <Button variant="default" size="small" onClick={onRetry}>
+          <Button variant="default" size="small" className={PHONE_TOUCH_TARGET} onClick={onRetry}>
             Try again
           </Button>
-          {clearFilterHref && <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink>}
+          {clearFilterHref && <RecoveryLink href={clearFilterHref}>Show all credit batches</RecoveryLink>}
         </span>
       }
     >

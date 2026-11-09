@@ -80,14 +80,15 @@ export function stageActions(actions: QuickAction[], stage: DashboardStationKey)
   return actions.filter((action) => action.stage === stage);
 }
 
-/** A cell's action: a plain quiet link, label then arrow; at least 44px tall on a phone. */
+/** A cell's action: a plain quiet link, label then arrow; at least 44px tall. */
 function ActionLink({ action }: { action: QuickAction }) {
   return (
     <Link
       href={action.href}
       className={cn(
-        "inline-flex min-h-36 max-w-full items-start px-6 py-6 text-left body-small font-medium text-[var(--color-text-primary)] transition-colors",
-        "hover:bg-[var(--color-surface-medium)] max-sm:min-h-44",
+        // 44px tall at every width: a tap that misses it would hit the stage link underneath.
+        "inline-flex min-h-44 max-w-full items-center px-6 py-6 text-left body-small font-medium text-[var(--color-text-primary)] transition-colors",
+        "hover:bg-[var(--color-surface-medium)]",
         FOCUS_RING,
       )}
     >
@@ -104,7 +105,7 @@ function ActionLink({ action }: { action: QuickAction }) {
 export function StageActionStack({ actions, className }: { actions: QuickAction[]; className?: string }) {
   if (actions.length === 0) return null;
   return (
-    <div className={cn("flex flex-col items-start gap-2", className)}>
+    <div className={cn("flex flex-col items-start", className)}>
       {actions.map((action) => (
         <ActionLink key={action.key} action={action} />
       ))}

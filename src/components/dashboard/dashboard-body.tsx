@@ -21,6 +21,7 @@ import {
   DashRowList,
   DashSection,
   LoadError,
+  PartialFiguresNotice,
   RowsSkeleton,
   TodoEmpty,
   activityRows,
@@ -71,6 +72,8 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
   return (
     <>
       <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
+
+      {scope.data && !scope.data.downstreamComplete && <PartialFiguresNotice />}
 
       <DashSection label="Traceability stages" headingId="dashboard-stages">
         {pending ? (

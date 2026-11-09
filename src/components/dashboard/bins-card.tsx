@@ -9,6 +9,7 @@
 
 import { PackageIcon, WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BIN_TYPE_META, binCurrentMassKg, binMaterialName } from "@/components/storage-locations/bin-display";
@@ -20,7 +21,7 @@ import { useFacilityClock } from "@/hooks/use-facility-context";
 import { formatMassKg } from "@/lib/format-utils";
 import { EMPTY_STOCK_LABEL, isMassEmpty, isOutputStockEmpty } from "@/lib/stock-display";
 import { recordHref } from "@/lib/record-links";
-import { DashRow, DashSection, RowsSkeleton, SectionLink, shortDay } from "./shared";
+import { DashRow, DashSection, RecoveryLink, RowsSkeleton, SectionLink, shortDay } from "./shared";
 
 const BIN_ROWS = 5;
 /** The KPI band's short basis ("2.4 t dry"), so a row reads "200 kg wet". */
@@ -55,7 +56,7 @@ export function BinsCard({ facilityId }: { facilityId: string }) {
             icon={<WarningOctagonIcon size={32} weight="bold" />}
             title="The bins could not be loaded."
             action={
-              <Button variant="default" size="small" onClick={() => void refetch()}>
+              <Button variant="default" size="small" className={PHONE_TOUCH_TARGET} onClick={() => void refetch()}>
                 Try again
               </Button>
             }
@@ -67,7 +68,7 @@ export function BinsCard({ facilityId }: { facilityId: string }) {
             padding="sm"
             icon={<PackageIcon size={32} weight="bold" />}
             title="No storage bins yet"
-            action={<SectionLink href={listHref}>Open storage bins</SectionLink>}
+            action={<RecoveryLink href={listHref}>Open storage bins</RecoveryLink>}
           />
         </div>
       ) : (

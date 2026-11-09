@@ -447,6 +447,7 @@ describe("dashboard batch scope read client", () => {
     stationTotals: { suppliers: 0, feedstock: 0, production: 1, products: 0, deliveries: 0, applications: 0 },
     kpis: { feedstockProcessedDryTonnes: null, biocharProducedDryTonnes: 0, appliedToSoilDryTonnes: 0, co2eStoredTonnes: null },
     activity: [{ id: "event", code: "PR-1", title: "Production run completed", dateIso: "2026-01-01T10:00:00.000Z", href: `/production-runs?id=${RUN_ID}`, calendarDay: false }],
+    downstreamComplete: true,
   };
   afterEach(() => vi.unstubAllGlobals());
 
