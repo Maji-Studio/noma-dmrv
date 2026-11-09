@@ -2,8 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-// Only key constants are needed; keep unrelated server actions out of these unit tests.
-vi.mock("./use-certification", () => ({ certificationKeys: { all: ["certification"] } }));
+// Keep readiness invalidation observable without importing unrelated server actions.
+vi.mock("./use-certification", () => ({
+  certificationKeys: { all: ["certification"] },
+  invalidateCertificationReadiness: (queryClient: QueryClient) =>
+    queryClient.invalidateQueries({ queryKey: ["certification"] }),
+}));
 
 vi.mock("./use-output-stock", () => ({ outputStockKeys: { all: ["outputStock"] } }));
 
