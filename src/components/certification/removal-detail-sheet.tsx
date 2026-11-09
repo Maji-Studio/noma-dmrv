@@ -37,6 +37,8 @@ import {
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
 import { pluralize, TRY_AGAIN_LABEL } from "@/lib/copy-utils";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
@@ -125,7 +127,7 @@ function CreditBatchLinks({ facts, codes, facilityId }: { facts: RemovalSheetFac
       {facts.batches.map((batch, index) => (
         <span key={batch.id}>
           {index > 0 && ", "}
-          <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={RECORD_CODE_LINK}>
+          <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={cn(RECORD_CODE_LINK, INLINE_HIT_AREA)}>
             {batch.code}
           </Link>
         </span>
@@ -237,7 +239,7 @@ function SheetStatusBlock({
       )}
 
       {status.canRetry && !readOnly && (
-        <Button variant="default" size="small" className="self-start" onClick={() => void summary.retry?.()}>
+        <Button variant="default" size="small" className={cn("self-start", INLINE_HIT_AREA)} onClick={() => void summary.retry?.()}>
           {TRY_AGAIN_LABEL}
         </Button>
       )}
@@ -384,7 +386,7 @@ export function RemovalDetailSheet({
               {factsFailed && (
                 <Notice
                   tone="error"
-                  action={<Button variant="weak" size="small" busy={sheetFacts.isFetching} onClick={() => void sheetFacts.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+                  action={<Button variant="weak" size="small" className={INLINE_HIT_AREA} busy={sheetFacts.isFetching} onClick={() => void sheetFacts.refetch()}>{TRY_AGAIN_LABEL}</Button>}
                 >
                   The figures for this Removal could not be loaded.
                 </Notice>

@@ -14,7 +14,7 @@ import { Button, EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { Notice } from "@/components/ui/notice";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
-import { INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
+import { INLINE_HIT_AREA, INLINE_HIT_AREA_FROM_SM } from "@/components/ui/touch-target";
 import { useRemovalRecords } from "@/hooks/use-removal-records";
 import type { RemovalBatchRecords, RemovalRecord } from "@/lib/certification/removal-records";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -172,7 +172,7 @@ export function RemovalRecords({ removalId, facilityId, enabled }: { removalId: 
     return (
       <Notice
         tone="error"
-        action={<Button variant="weak" size="small" busy={query.isFetching} onClick={() => void query.refetch()}>{TRY_AGAIN_LABEL}</Button>}
+        action={<Button variant="weak" size="small" className={INLINE_HIT_AREA} busy={query.isFetching} onClick={() => void query.refetch()}>{TRY_AGAIN_LABEL}</Button>}
       >
         These records could not be loaded.
       </Notice>
