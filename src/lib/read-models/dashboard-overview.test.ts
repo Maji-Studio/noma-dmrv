@@ -40,7 +40,19 @@ describe("readDashboardOverview", () => {
     expect(rows.drafts.map((row) => row.title)).toEqual(["Ready to submit"]);
   });
 
-  it("still returns the overview, with no Removal rows, when the readiness load rejects", async () => {
+  it("hands unavailable draft rows to the aggregate with the same Removal link", async () => {
+    mocks.loadSources = async () => ({
+      drafts: [{ removalId: "r1", code: "RM-1", createdAt: new Date("2026-11-01T00:00:00Z"), readiness: null }],
+      rejected: [], returned: [],
+    });
+    await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
+    const rows = (await mocks.passed) as RemovalAttentionRows;
+    expect(rows.drafts[0].title).toBe("Couldn't check. Open it to see what is left.");
+    expect(rows.drafts[0].href).toContain("removal=r1");
+    expect(rows.covered.has("r1")).toBe(true);
+  });
+
+  it("still returns the overview, with no Removal rows, when the Removal list load rejects", async () => {
     mocks.loadSources = async () => {
       throw new Error("isometric down");
     };
@@ -69,19 +81,19 @@ describe("readDashboardOverview", () => {
       errorCode: "42P01",
       errorMessage: "Failed query: select $1\nparams: [REDACTED]",
       errorCauseMessage: undefined,
-    }, "Removal attention rows skipped: readiness failed to load");
+    }, "Removal attention rows skipped: list failed to load");
   });
 
   it("logs the sanitized driver code and cause for a wrapped query error", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     mocks.loadSources = async () => {
-      throw new Error("Failed query: select $1\nparams: Private Person, private@example.com", {
+      throw Object.assign(new Error("Failed query: select $1\nparams: Private Person, private@example.com", {
         cause: Object.assign(new Error('relation "certifier_removals" does not exist for private@example.com\nparams: Private Person'), {
           code: "42P01",
           detail: "Private Person",
           params: ["private@example.com"],
         }),
-      });
+      }), { code: "DRIZZLE_QUERY_ERROR" });
     };
 
     const result = await readDashboardOverview(ctx, { facilityId: FACILITY_ID });
@@ -93,7 +105,7 @@ describe("readDashboardOverview", () => {
       errorCode: "42P01",
       errorMessage: "Failed query: select $1\nparams: [REDACTED]",
       errorCauseMessage: 'relation "certifier_removals" does not exist for [REDACTED]\nparams: [REDACTED]',
-    }, "Removal attention rows skipped: readiness failed to load");
+    }, "Removal attention rows skipped: list failed to load");
   });
 
   it("sanitizes non-Error rejections without logging the thrown object", async () => {
@@ -108,6 +120,6 @@ describe("readDashboardOverview", () => {
       errorCode: undefined,
       errorMessage: "Registry unavailable for [REDACTED]",
       errorCauseMessage: undefined,
-    }, "Removal attention rows skipped: readiness failed to load");
+    }, "Removal attention rows skipped: list failed to load");
   });
 });

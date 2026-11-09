@@ -213,11 +213,39 @@ describe("needs attention rows", () => {
       {
         entityCode: "Credit batches",
         count: ATTENTION_PER_CHECK + 1,
-        title: "Period ended · not submitted yet",
+        title: "Period ended, not submitted yet",
         href: `/credit-batches?facility=${FACILITY_ID}`,
       },
     ]);
+    expect(items.find((item) => item.id === "run-mass-group")?.recordIds).toEqual(runIds);
+    expect(items.find((item) => item.id === "run-mass-group")?.recordItems?.map((item) => item.recordIds?.[0])).toEqual(runIds.slice(0, ATTENTION_PER_CHECK));
+    expect(items.find((item) => item.id === "batch-not-submitted-group")?.recordIds).toEqual(batchRows(ATTENTION_PER_CHECK + 1).map((row) => row.id));
     expect(batches).toEqual({ interrupted: 0, notSubmitted: ATTENTION_PER_CHECK + 1, returned: 0 });
+  });
+
+  it.each(["run-mass", "feedstock-missing", "application-evidence"])("carries every %s id even beyond the SQL row cap", async (kind) => {
+    const ids = idsOf(ATTENTION_PER_CHECK + 2);
+    mocks.union.mockResolvedValue(runRows(ids).map((row) => ({ ...row, kind })));
+    const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(items).toHaveLength(1);
+    expect(items[0].recordIds).toEqual(ids);
+    expect(items[0].count).toBe(ids.length);
+  });
+
+  it("carries ids for grouped interrupted Removals and returned credit batches", async () => {
+    const records = batchRows(ATTENTION_PER_CHECK + 1);
+    const interrupted = records.map((row, index) => ({
+      ...row, id: `interrupted-${index}`,
+      removals: [{ id: `rm-${index}`, code: `RM-${index}`, ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
+    }));
+    const returned = records.map((row, index) => ({
+      ...row, removals: [{ id: `back-${index}`, code: `RM-BACK-${index}`, ghgStatementId: "gs", status: { kind: "submitted" }, phase: "submitted" }],
+    }));
+    mocks.union.mockResolvedValue([...interrupted, ...returned]);
+    mocks.returned.mockResolvedValue(new Set(returned.map((row) => row.removals[0].id)));
+    const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(items.find((item) => item.id === "removal-interrupted-group")?.recordIds).toEqual(interrupted.map((row) => row.removals[0].id));
+    expect(items.find((item) => item.id === "batch-returned-group")?.recordIds).toEqual(returned.map((row) => row.id));
   });
 
   it("keeps a batch whose submitted Removal came back, and leaves out one awaiting verification", async () => {
@@ -244,7 +272,7 @@ describe("needs attention rows", () => {
   it("opens the plain list when the group has more records than the id filter takes", async () => {
     mocks.union.mockResolvedValue(runRows(idsOf(EXACT_ID_FILTER_MAX + 1)));
     const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
-    expect(items).toEqual([expect.objectContaining({ count: EXACT_ID_FILTER_MAX + 1, href: `/production-runs?facility=${FACILITY_ID}` })]);
+    expect(items).toEqual([expect.objectContaining({ recordIds: idsOf(EXACT_ID_FILTER_MAX + 1), count: EXACT_ID_FILTER_MAX + 1, href: `/production-runs?facility=${FACILITY_ID}` })]);
   });
 
   it("counts records as N open: single rows, grouped counts and GPS gaps", async () => {
@@ -256,7 +284,7 @@ describe("needs attention rows", () => {
   });
 
   describe("Removal rows from the read model", () => {
-    const row = (removalId: string, title: string) => ({ id: `removal-draft-${removalId}`, entityCode: `RM-${removalId}`, date: null, title, href: `/removals?removal=${removalId}` });
+    const row = (removalId: string, title: string) => ({ id: `removal-draft-${removalId}`, recordIds: [removalId], entityCode: `RM-${removalId}`, date: null, title, href: `/removals?removal=${removalId}` });
     const rows = (over: Partial<RemovalAttentionRows>): Promise<RemovalAttentionRows> =>
       Promise.resolve({ drafts: [], rejected: [], returned: [], covered: new Set<string>(), ...over });
     const interruptedBatch = {
@@ -269,8 +297,16 @@ describe("needs attention rows", () => {
       const drafts = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`d${index}`, "Ready to submit"));
       const overview = await getDashboardOverview(CTX, FACILITY_ID, "month", rows({ drafts }));
       expect(overview.attention.map((item) => item.id)).toEqual(["removal-interrupted-rm-i", "removal-draft-group", "run-mass-run-0"]);
-      expect(overview.attention[1]).toMatchObject({ count: ATTENTION_PER_CHECK + 1, title: "Draft Removals" });
+      expect(overview.attention[1]).toMatchObject({ count: ATTENTION_PER_CHECK + 1, title: "Draft Removals", recordIds: drafts.flatMap((row) => row.recordIds) });
       expect(overview.attentionTotal).toBe(1 + ATTENTION_PER_CHECK + 1 + 1);
+    });
+
+    it("carries every id for grouped rejected and returned Removal rows", async () => {
+      const rejected = Array.from({ length: ATTENTION_PER_CHECK + 1 }, (_, index) => row(`x${index}`, "Submission failed"));
+      const returned = rejected.map((item, index) => ({ removalId: `back${index}`, item: { ...item, recordIds: [`back${index}`] } }));
+      const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY, rows({ rejected, returned }));
+      expect(items.find((item) => item.id === "removal-rejected-group")?.recordIds).toEqual(rejected.flatMap((item) => item.recordIds));
+      expect(items.find((item) => item.id === "removal-returned-group")?.recordIds).toEqual(returned.map((item) => item.removalId));
     });
 
     it("lists a few draft and rejected Removals one row each", async () => {

@@ -165,6 +165,10 @@ export interface DashboardAttentionItem {
   entityCode: string;
   /** Records a grouped row stands for; absent on a single record's row. */
   count?: number;
+  /** Every record represented, including records beyond a grouped check's SQL cap. */
+  recordIds?: string[];
+  /** Available single rows, so a one-record scope can name that record without another read. */
+  recordItems?: DashboardAttentionItem[];
   /** Canonical record date shown beside the entity code. */
   date: string | Date | null;
   title: string;
@@ -614,8 +618,12 @@ const FLAG_GROUPS: Record<FlagKind, { title: string; list: string; href: (facili
   },
 };
 
-function groupedRow(kind: string, list: string, title: string, count: number, href: string): DashboardAttentionItem {
-  return { id: `${kind}-group`, entityCode: list, count, date: null, title, href };
+function groupedRow(
+  kind: string, list: string, title: string, count: number, href: string,
+  recordItems: DashboardAttentionItem[],
+  recordIds = recordItems.flatMap((item) => item.recordIds ?? []),
+): DashboardAttentionItem {
+  return { id: `${kind}-group`, entityCode: list, count, recordIds, recordItems, date: null, title, href };
 }
 
 /** Pending batches take their title from `creditBatchAttention`. */
@@ -778,6 +786,7 @@ export async function getDashboardAttentionItems(
       const existing = interrupted.get(removal.id);
       interrupted.set(removal.id, {
         id: `removal-interrupted-${removal.id}`,
+        recordIds: [removal.id],
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
         title: REMOVAL_INTERRUPTED_ATTENTION_TITLE,
@@ -793,6 +802,7 @@ export async function getDashboardAttentionItems(
     if (attention.period === "notSubmitted" || attention.period === "returned") {
       (attention.period === "returned" ? returned : notSubmitted).push({
         id: `batch-pending-${row.id}`,
+        recordIds: [row.id],
         entityCode: row.code,
         date: row.dateDay,
         title: attention.period === "returned" ? RETURNED_BY_ISOMETRIC_LABEL : PERIOD_ENDED_NOT_SUBMITTED_TITLE,
@@ -808,34 +818,36 @@ export async function getDashboardAttentionItems(
     const first = kindRows[0];
     if (!first) return [];
     const group = FLAG_GROUPS[kind];
+    const recordItems = kindRows.map((row): DashboardAttentionItem => ({
+      id: `${kind}-${row.id}`,
+      recordIds: [row.id],
+      entityCode: row.code,
+      date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
+      title: ATTENTION_TITLES[kind],
+      href: attentionHref(kind, row.id, facilityId),
+    }));
     return capOrGroup(
-      kindRows.map((row): DashboardAttentionItem => ({
-        id: `${kind}-${row.id}`,
-        entityCode: row.code,
-        date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
-        title: ATTENTION_TITLES[kind],
-        href: attentionHref(kind, row.id, facilityId),
-      })),
+      recordItems,
       first.total,
-      () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds)),
+      () => groupedRow(kind, group.list, group.title, first.total, group.href(facilityId, first.allIds), recordItems, first.allIds),
     );
   });
   return {
     // An interrupted submission leads: it blocks the Removal until resumed.
     items: [
       ...capOrGroup(interruptedRows, interruptedRows.length, () =>
-        groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList)),
+        groupedRow("removal-interrupted", "Removals", "Submissions interrupted", interruptedRows.length, removalsList, interruptedRows)),
       ...capOrGroup(removalRows.drafts, removalRows.drafts.length, () =>
-        groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList)),
+        groupedRow("removal-draft", "Removals", "Draft Removals", removalRows.drafts.length, removalsList, removalRows.drafts)),
       ...capOrGroup(removalRows.rejected, removalRows.rejected.length, () =>
-        groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList)),
+        groupedRow("removal-rejected", "Removals", REMOVAL_REJECTED_ATTENTION_TITLE, removalRows.rejected.length, removalsList, removalRows.rejected)),
       ...flags,
       ...capOrGroup(removalRows.returned.map((row) => row.item), removalRows.returned.length, () =>
-        groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList)),
+        groupedRow("removal-returned", "Removals", RETURNED_BY_ISOMETRIC_LABEL, removalRows.returned.length, removalsList, removalRows.returned.map((row) => row.item))),
       ...capOrGroup(returned, returned.length, () =>
-        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList)),
+        groupedRow("batch-returned", "Credit batches", RETURNED_BY_ISOMETRIC_LABEL, returned.length, batchList, returned)),
       ...capOrGroup(notSubmitted, notSubmitted.length, () =>
-        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList)),
+        groupedRow("batch-not-submitted", "Credit batches", PERIOD_ENDED_NOT_SUBMITTED_TITLE, notSubmitted.length, batchList, notSubmitted)),
     ],
     batches: { interrupted: interrupted.size, notSubmitted: notSubmittedBatchCount, returned: returnedBatchCount },
   };

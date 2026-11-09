@@ -9,9 +9,11 @@
  *
  * Not a server action (no "use server"): the dashboard read model calls it
  * with the request's OrgContext. Cost per dashboard load: one Removal list
- * query and one latest-submission query; then, only when a draft exists, the
- * facility facts once and one Removal context build per draft or returned Removal, in chunks.
+ * query and one latest-submission query; then, only when a draft or returned
+ * Removal exists, the facility facts once and one context build per Removal,
+ * in chunks. Failed readiness keeps drafts with an unavailable marker.
  */
+import { pgErrorCode } from "@/db/errors";
 import type { loadFacilityEmissionEntryCarry } from "@/data-access/emission-entry-carry";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import { listRemovalsForFacility } from "@/data-access/certifier-removals";
@@ -22,7 +24,7 @@ import { isRemovalSubmissionInterruptedFromSubmission } from "@/lib/certificatio
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { correctionForRemoval } from "@/lib/certification/removal-entry-correction";
-import type { RemovalAttentionSources } from "@/lib/certification/removal-attention";
+import type { DraftRemovalReadiness, RemovalAttentionSources } from "@/lib/certification/removal-attention";
 import { deriveRemovalStatus, type LocalSubmissionStatus } from "@/lib/certification/status";
 import {
   ISOMETRIC_PROVIDER,
@@ -30,13 +32,26 @@ import {
   REMOVAL_SUBMISSION_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
 
 /** Same bound the Removals list uses for its per-Removal builds. */
 const READINESS_CONCURRENCY = 8;
 
 const NO_SOURCES: RemovalAttentionSources = { drafts: [], rejected: [], returned: [] };
+
+/** Only safe error fields cross the log boundary; driver details and parameters stay out. */
+function errorFields(error: unknown) {
+  const cause = error instanceof Error && typeof error.cause === "object" && error.cause !== null
+    ? error.cause : undefined;
+  return {
+    errorType: error instanceof Error ? sanitizeErrorMessage(error.name) : typeof error,
+    errorCode: pgErrorCode(error),
+    errorMessage: sanitizeErrorMessage(error),
+    errorCauseMessage: cause && "message" in cause && typeof cause.message === "string"
+      ? sanitizeErrorMessage(cause.message) : undefined,
+  };
+}
 
 export async function loadRemovalAttentionSources(orgCtx: OrgContext, facilityId: string): Promise<RemovalAttentionSources> {
   requireOrgScope(orgCtx);
@@ -70,29 +85,39 @@ export async function loadRemovalAttentionSources(orgCtx: OrgContext, facilityId
     .filter((removal) => kindOf(removal) === "rejected")
     .map((removal) => ({ removalId: removal.id, code: removal.code, createdAt: removal.createdAt }));
   const submitted = removalRows.filter((removal) => kindOf(removal) === "submitted");
-  // Best effort: a failing lineage read, facts load or Removal build drops those rows, never the dashboard.
+  // Returned rows stay best effort: a failed lineage, facts or context read leaves them out.
   const returnedIds = submitted.length
     ? await loadReturnedRemovalIds(
         orgCtx,
         submitted.map((removal) => ({ removalId: removal.id, ghgStatementId: removal.ghgStatementId ?? null })),
-      ).catch(() => {
-        logger.warn({ facilityId }, "Returned Removal rows skipped: lineage failed to load");
+      ).catch((error: unknown) => {
+        logger.warn({ facilityId, ...errorFields(error) }, "Returned Removal rows skipped: lineage failed to load");
         return new Set<string>();
       })
     : new Set<string>();
   const returned = submitted.filter((removal) => returnedIds.has(removal.id));
   if (drafts.length === 0 && returned.length === 0) return { ...NO_SOURCES, rejected };
 
+  const unavailableDraft = (removal: Row): DraftRemovalReadiness => ({
+    removalId: removal.id,
+    code: removal.code,
+    createdAt: removal.createdAt,
+    readiness: null,
+  });
   let facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>;
   try {
     facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
-  } catch {
-    logger.warn({ facilityId }, "Draft Removal readiness skipped: facility facts failed to load");
-    return { ...NO_SOURCES, rejected };
+  } catch (error: unknown) {
+    logger.warn({ facilityId, ...errorFields(error) }, "Removal readiness unavailable: facility facts failed to load");
+    return { drafts: drafts.map(unavailableDraft), rejected, returned: [] };
   }
   const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
-  /** One Removal context per Removal, in bounded chunks; a failed build is logged by id and left out. */
-  async function project<T>(removals: readonly Row[], pick: (removal: Row, ctx: Awaited<ReturnType<typeof buildRemovalContext>>) => T): Promise<T[]> {
+  /** Bounded context builds; drafts keep a fallback row when a build or projection fails. */
+  async function project<T>(
+    removals: readonly Row[],
+    pick: (removal: Row, ctx: Awaited<ReturnType<typeof buildRemovalContext>>) => T,
+    fallback?: (removal: Row) => T,
+  ): Promise<T[]> {
     const result: T[] = [];
     for (let i = 0; i < removals.length; i += READINESS_CONCURRENCY) {
       const chunk = removals.slice(i, i + READINESS_CONCURRENCY);
@@ -104,18 +129,22 @@ export async function loadRemovalAttentionSources(orgCtx: OrgContext, facilityId
       );
       settled.forEach((outcome, index) => {
         if (outcome.status === "fulfilled") result.push(outcome.value);
-        else logger.warn({ removalId: chunk[index]?.id }, "Removal attention skipped: build failed");
+        else {
+          const removal = chunk[index];
+          logger.warn({ facilityId, removalId: removal.id, ...errorFields(outcome.reason) }, "Removal attention build failed");
+          if (fallback) result.push(fallback(removal));
+        }
       });
     }
     return result;
   }
   const [draftRows, returnedRows] = await Promise.all([
-    project(drafts, (removal, ctx) => ({
+    project<DraftRemovalReadiness>(drafts, (removal, ctx) => ({
       removalId: removal.id,
       code: removal.code,
       createdAt: removal.createdAt,
       readiness: deriveRemovalReadiness(toRemovalReadinessFacts(ctx)),
-    })),
+    }), unavailableDraft),
     project(returned, (removal, ctx) => ({
       removalId: removal.id,
       code: removal.code,

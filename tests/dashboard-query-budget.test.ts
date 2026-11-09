@@ -25,6 +25,7 @@ import {
   storageLocations,
 } from "@/db/schema";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
+import { getDashboardBatchScope } from "@/data-access/dashboard-batch-scope";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { TEST_SITE_POSITION,
@@ -48,6 +49,9 @@ const OVERVIEW_QUERY_BUDGET = 19;
 const OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET = 24;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
+/** Selection + accounting/forwards/chemistry/provenance + Removal ids + transaction
+ * control + one scoped activity UNION. Every query is set-based regardless of batch count. */
+const BATCH_SCOPE_QUERY_BUDGET = 18;
 const BATCH_COUNT = 3;
 
 interface Fixture {
@@ -169,6 +173,30 @@ afterAll(async () => {
 });
 
 describe("dashboard query budget", () => {
+  it("reads batch scope with the same round trips for one, many and one more batch", async () => {
+    if (!dbReachable || !fixture) return;
+    const ctx = makeTestOrgContext();
+    const { facilityId, batchIds } = fixture;
+    const single = await countQueries(() => getDashboardBatchScope(ctx, facilityId, batchIds[0]));
+    const all = await countQueries(() => getDashboardBatchScope(ctx, facilityId, null));
+    expect(single.result.stationTotals.production).toBe(1);
+    expect(all.result.stationTotals.production).toBe(BATCH_COUNT);
+    expect(all.queries).toBe(single.queries);
+    expect(all.queries).toBeLessThanOrEqual(BATCH_SCOPE_QUERY_BUDGET);
+    const [extra] = await db.insert(creditBatches).values({
+      organizationId: TEST_ORG_ID, facilityId,
+      feedstockTypeId: fixture.feedstockTypeId, productionProcessId: fixture.processId,
+      code: `QB-SCOPE-${facilityId.slice(0, 8)}`, startDate: "2026-08-01", endDate: "2026-08-31",
+    }).returning({ id: creditBatches.id });
+    try {
+      const again = await countQueries(() => getDashboardBatchScope(ctx, facilityId, null));
+      expect(again.result.batchIds).toHaveLength(BATCH_COUNT + 1);
+      expect(again.queries).toBe(all.queries);
+    } finally {
+      await db.delete(creditBatches).where(eq(creditBatches.id, extra.id));
+    }
+  });
+
   it("reads the overview within budget and independent of batch count", async () => {
     if (!dbReachable || !fixture) return;
     const ctx = makeTestOrgContext();
@@ -201,7 +229,7 @@ describe("dashboard query budget", () => {
     // once. It holds no Removal, so it is not awaiting verification (#1528).
     expect(result.attention.map((item) => item.title)).toEqual([
       "Feedstock record missing data",
-      "Period ended · not submitted yet",
+      "Period ended, not submitted yet",
     ]);
     expect(result.attention[1]?.date).toBe("2026-07-31");
     // Timestamp-backed dates stay UTC instants (a zone-less string would
@@ -252,7 +280,7 @@ describe("dashboard query budget", () => {
         getDashboardOverview(makeTestOrgContext(), lineage.facilityId, "all"),
       );
       // Submitted and not returned: it waits on the verifier, so no row.
-      expect(result.attention.map((item) => item.title)).not.toContain("Period ended · not submitted yet");
+      expect(result.attention.map((item) => item.title)).not.toContain("Period ended, not submitted yet");
       expect(result.attention.map((item) => item.title)).not.toContain("Returned by Isometric");
       expect(queries).toBeLessThanOrEqual(OVERVIEW_RETURNED_BRANCH_QUERY_BUDGET);
     } finally {

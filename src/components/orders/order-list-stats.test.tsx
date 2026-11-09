@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STAT_CARD_ERROR_VALUE } from "@/components/ui/stat-card";
 import { OrderList } from "./order-list";
 
 const state = vi.hoisted(() => ({
   stats: { data: undefined as unknown, isLoading: false, isError: true },
+  openCreate: null as null | (() => void),
+  sheet: null as null | { open: boolean; mode: string },
+}));
+vi.mock("@/hooks/use-open-create-intent", () => ({
+  useOpenCreateIntent: (open: () => void) => {
+    state.openCreate = open;
+  },
 }));
 
 vi.mock("@/hooks/use-facilities", async (importOriginal) => (await import("../../../tests/helpers/facility-lookup-mocks")).activeFacilityLookupModule(await importOriginal()));
@@ -49,7 +56,12 @@ vi.mock("@/components/forms", () => ({ EntitySelect: () => null, ServerError: ()
 vi.mock("./order-form", () => ({ OrderForm: () => null }));
 vi.mock("./order-read-sections", () => ({ orderSheetSections: () => [] }));
 vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 0 }, OrderArt: () => null }));
-vi.mock("@/components/ui/entity-side-sheet", () => ({ EntitySideSheet: () => null }));
+vi.mock("@/components/ui/entity-side-sheet", () => ({
+  EntitySideSheet: (props: { open: boolean; mode: string }) => {
+    state.sheet = { open: props.open, mode: props.mode };
+    return null;
+  },
+}));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: () => null }));
 vi.mock("@/components/ui/data-table", () => {
   const Slot = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -79,5 +91,15 @@ describe("OrderList summary cards", () => {
     expect(screen.getByText("25")).toBeTruthy();
     expect(screen.getByText("7")).toBeTruthy();
     expect(screen.getByText("9,000 kg")).toBeTruthy();
+  });
+});
+
+describe("OrderList create link", () => {
+  it("opens the create sheet when the page is opened with ?create=true", () => {
+    state.stats = { data: undefined, isLoading: false, isError: false };
+    render(<OrderList />);
+    expect(state.sheet?.open).toBe(false);
+    act(() => state.openCreate?.());
+    expect(state.sheet).toEqual({ open: true, mode: "create" });
   });
 });
