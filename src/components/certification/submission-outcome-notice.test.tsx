@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SubmissionAttempt } from "@/lib/certification/submission-attempts";
 import { SubmissionHistory } from "./submission-history";
-import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
+import { deleteAccessFor, SubmissionOutcomeNotice, type DeleteAccess, type NoticeOutcome } from "./submission-outcome-notice";
 
 const TIME_ZONE = "Africa/Dar_es_Salaam";
 const FACILITY = "fac-1";
@@ -47,27 +47,37 @@ describe("SubmissionOutcomeNotice", () => {
 
   describe("changed since review (#1114)", () => {
     const changed: NoticeOutcome = { kind: "changed" };
-    const renderChanged = (finalized: boolean, canDelete: boolean) =>
+    const renderChanged = (finalized: boolean, deleteAccess: DeleteAccess) =>
       renderToStaticMarkup(
-        <SubmissionOutcomeNotice outcome={changed} facilityId={FACILITY} timeZone={TIME_ZONE} finalized={finalized} canDelete={canDelete} />,
+        <SubmissionOutcomeNotice outcome={changed} facilityId={FACILITY} timeZone={TIME_ZONE} finalized={finalized} deleteAccess={deleteAccess} />,
       );
 
     it("titles the stop without claiming nothing was sent and points to Delete Removal", () => {
-      const html = renderChanged(false, true);
+      const html = renderChanged(false, "can");
       expect(html).toContain("Changed since review");
       expect(html).not.toContain("Not submitted");
-      expect(html).toContain("Part of it may already be in Isometric, and its data or settings changed since you reviewed it. Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.");
+      expect(html).toContain("Part of it may already be in Isometric. Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.");
       expect(html).not.toContain("Review and submit again");
     });
 
-    it("asks an Admin to delete it when this viewer cannot", () => {
-      expect(renderChanged(false, false)).toContain("Ask an Admin to delete it. Then create the Removal again.");
+    it("asks an Admin only when the viewer is below the role floor", () => {
+      expect(renderChanged(false, "ask-admin")).toContain("Ask an Admin to delete it. Then create the Removal again.");
+      const unavailable = renderChanged(false, "unavailable");
+      expect(unavailable).toContain("Delete Removal is not available right now. Reload the page to try again.");
+      expect(unavailable).not.toContain("Ask an Admin");
     });
 
-    it("says a Removal with a submitted earlier version cannot be deleted", () => {
-      const html = renderChanged(true, false);
-      expect(html).toContain("An earlier version was submitted, so this Removal cannot be deleted. Contact support.");
+    it("says a finalized Removal cannot be deleted, like the drift stop", () => {
+      const html = renderChanged(true, "unavailable");
+      expect(html).toContain("This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.");
       expect(html).not.toContain("Select Delete Removal");
+    });
+
+    it("maps the viewer's delete facts", () => {
+      expect(deleteAccessFor(true, true)).toBe("can");
+      expect(deleteAccessFor(false, false)).toBe("ask-admin");
+      expect(deleteAccessFor(false, null)).toBe("unavailable");
+      expect(deleteAccessFor(false, true)).toBe("unavailable");
     });
   });
 

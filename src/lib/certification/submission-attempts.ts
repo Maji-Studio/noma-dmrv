@@ -16,12 +16,11 @@ export const DRIFT_OPERATION_PREFIX = "production-batch:drift:";
 const WINDOW_SLACK_MS = 1000;
 
 export type AttemptOutcome =
+  | { kind: "submitted" }
+  | ({ kind: "differs" } & DriftDetails)
   | { kind: "no-answer" }
   /** A retry of a possibly sent Removal refused: its data or settings changed since the review (#1114). */
   | { kind: "changed" }
-| { kind: "submitted" }
-  | ({ kind: "differs" } & DriftDetails)
-  | { kind: "no-answer" }
   | { kind: "failed"; message: string | null };
 
 export interface SubmissionAttempt {

@@ -52,7 +52,7 @@ import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SubmissionHistory } from "./submission-history";
 import { RemovalRecords } from "./removal-records";
-import { SubmissionOutcomeNotice, type NoticeOutcome } from "./submission-outcome-notice";
+import { deleteAccessFor, SubmissionOutcomeNotice, type DeleteAccess, type NoticeOutcome } from "./submission-outcome-notice";
 import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
@@ -193,11 +193,11 @@ function SheetStatusBlock({
   timeZone,
   returned = false,
   readOnly = false,
-  canDelete = true,
+  deleteAccess = "can",
 }: {
   summary: RemovalListRow;
-  /** Whether this viewer sees Delete Removal, so a refusal that leads there names who can take it. */
-  canDelete?: boolean;
+  /** Whether this viewer can take Delete Removal, so a refusal that leads there names who can take it. */
+  deleteAccess?: DeleteAccess;
   /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
   returned?: boolean;
   status: RemovalWorkflowStatus;
@@ -228,7 +228,7 @@ function SheetStatusBlock({
           facilityId={facilityId}
           timeZone={timeZone}
           finalized={summary.hasFinalizedSubmission}
-          canDelete={canDelete}
+          deleteAccess={deleteAccess}
           readOnly={readOnly}
         />
       )}
@@ -313,6 +313,7 @@ export function RemovalDetailSheet({
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
+  const changedSinceReview = submissionOutcomeFor(summary, shownStatus)?.kind === "changed";
 
   // Deletion mirrors the server rule: never-finalized only, and once the
   // Removal touched the registry only viewers at the role floor (issue #746).
@@ -377,7 +378,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} canDelete={canDelete} />
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals)} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (
@@ -544,8 +545,9 @@ export function RemovalDetailSheet({
             preview={!readOnly && thingsToFix ? <p className="body-small text-[var(--color-text-secondary)]">{thingsToFix}</p> : undefined}
           >
             {!readOnly && <ResubmitRemovalAction correction={correction} facilityId={facilityId} />}
+            {/* Under a changed-since-review stop, Submit again only refuses again: Delete Removal is the way out (#1114). */}
             <RemovalReviewAction
-              isActionable={isActionable && !readOnly}
+              isActionable={isActionable && !readOnly && !changedSinceReview}
               reviewHref={reviewHref}
             />
             {canDelete && (

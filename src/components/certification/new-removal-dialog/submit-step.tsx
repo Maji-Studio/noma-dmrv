@@ -51,7 +51,7 @@ import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { SubmissionProgress } from "../submission-progress";
-import { SubmissionOutcomeNotice } from "../submission-outcome-notice";
+import { deleteAccessFor, SubmissionOutcomeNotice } from "../submission-outcome-notice";
 import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
 import { isSubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
@@ -254,6 +254,7 @@ export function SubmitStep({
     !submitMutation.isPending &&
     canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
+  const noticeDeleteAccess = deleteAccessFor(canDeleteRemoval, deleteAccess.viewerCanDeleteRegistryRemovals);
 
   const deleteDialog = (
     <DeleteConfirmDialog
@@ -428,7 +429,7 @@ export function SubmitStep({
             facilityId={facilityId}
             timeZone={timeZone}
             finalized={ctx.hasFinalizedSubmission}
-            canDelete={canDeleteRemoval}
+            deleteAccess={noticeDeleteAccess}
           />
         ) : (
           terminalError && <ServerError message={terminalError} />
@@ -436,23 +437,21 @@ export function SubmitStep({
         <div className="flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] pt-16">
           {!submitMutation.isPending && (
             <div className="flex flex-wrap items-center gap-12">
-              {submissionStalled || stopped ? (
+              {submissionStalled || stopped || (changedSinceReview && !canDeleteRemoval) ? (
                 <Button variant="primary" className={PHONE_TOUCH_TARGET} onClick={onDone}>
                   Close
                 </Button>
               ) : changedSinceReview ? (
                 <>
-                  {canDeleteRemoval ? (
-                    <Button
-                      variant="primary"
-                      className={PHONE_TOUCH_TARGET}
-                      onClick={() => setDeleteConfirmOpen(true)}
-                    >
-                      {deleteCopy.actionLabel}
-                    </Button>
-                  ) : null}
                   <Button
-                    variant={canDeleteRemoval ? "weak" : "primary"}
+                    variant="destructive"
+                    className={PHONE_TOUCH_TARGET}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                  >
+                    {deleteCopy.actionLabel}
+                  </Button>
+                  <Button
+                    variant="weak"
                     className={PHONE_TOUCH_TARGET}
                     onClick={() => {
                       setProgressUpdates([]);
@@ -567,7 +566,17 @@ export function SubmitStep({
 
       {/* The persisted rejected state belongs to the summary above; this
           alert is only for what the last submit attempt returned. */}
-      {submitError && <ServerError message={submitError} />}
+      {submitError === INTERRUPTED_REMOVAL_CHANGED_MESSAGE ? (
+        <SubmissionOutcomeNotice
+          outcome={{ kind: "changed" }}
+          facilityId={facilityId}
+          timeZone={timeZone}
+          finalized={ctx.hasFinalizedSubmission}
+          deleteAccess={noticeDeleteAccess}
+        />
+      ) : (
+        submitError && <ServerError message={submitError} />
+      )}
 
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">

@@ -140,15 +140,22 @@ export function assertMemberBatchLineageUnchanged(
 // attempt mints a fresh version from live data under the current revision. An
 // interrupted draft with possible registry state is preserved instead, and the
 // operator deletes it (INTERRUPTED_REMOVAL_CHANGED_MESSAGE). Missing
-// `__mappingRevision` (pre-ADR-0005 snapshot) counts as stale.
+// `__mappingRevision` (pre-ADR-0005 snapshot) counts as stale. Recovery of an
+// already submitted Removal (`submittedRecovery`) has no draft to delete: it
+// keeps the support route its sibling configuration check uses.
+export const SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE =
+  "The calculation settings changed after this Removal was submitted. Ask support to reconcile it before retrying.";
+
 export async function assertResumedSnapshotRevisionCurrent(
   orgCtx: OrgContext,
   row: CertificationSubmissionRow,
   preserveForReconciliation = false,
+  submittedRecovery = false,
 ): Promise<void> {
   const revision = (row.payloadSnapshot as { __mappingRevision?: unknown } | null)
     ?.__mappingRevision;
   if (revision === MAPPING_REVISION) return;
+  if (submittedRecovery) throw new SafeError(SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE);
   await retireClaimedRemovalDraftForDrift({
     orgCtx,
     submissionId: row.id,

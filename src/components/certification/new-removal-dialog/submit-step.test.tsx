@@ -80,8 +80,11 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityClock: () => ({ timeZone: "Africa/Dar_es_Salaam", hint: "" }),
 }));
 
-vi.mock("../submission-outcome-notice", () => ({
-  SubmissionOutcomeNotice: ({ outcome }: { outcome: { kind: string } }) => <div>{`Outcome notice: ${outcome.kind}`}</div>,
+vi.mock("../submission-outcome-notice", async (importOriginal) => ({
+  deleteAccessFor: (await importOriginal<typeof import("../submission-outcome-notice")>()).deleteAccessFor,
+  SubmissionOutcomeNotice: ({ outcome, deleteAccess }: { outcome: { kind: string }; deleteAccess?: string }) => (
+    <div>{`Outcome notice: ${outcome.kind}${deleteAccess ? ` (${deleteAccess})` : ""}`}</div>
+  ),
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
@@ -470,16 +473,17 @@ describe("SubmitStep", () => {
     it.each([false, true])("leads with Delete Removal and drops Try again (summary loaded: %s)", async (loaded) => {
       if (loaded) state.attempts = [{ errorMessage: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, outcome: { kind: "changed" } }];
       const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
-      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed");
+      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (can)");
       expect(JSON.stringify(renderer.toJSON())).not.toContain("safe retry");
       expect(labels(renderer)).toEqual(["Delete Removal", "Review submission"]);
       await act(async () => renderer.unmount());
     });
 
-    it("offers no Delete Removal to a viewer below the role floor", async () => {
+    it("asks a viewer below the role floor to get an Admin and offers only Close", async () => {
       state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
       const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
-      expect(labels(renderer)).toEqual(["Review submission"]);
+      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (ask-admin)");
+      expect(labels(renderer)).toEqual(["Close"]);
       await act(async () => renderer.unmount());
     });
 

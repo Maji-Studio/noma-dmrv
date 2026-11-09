@@ -12,7 +12,12 @@ vi.mock("./certify-context-core", () => ({
 }));
 
 import { retireStaleSubmissionDraft } from "@/data-access/certification";
-import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
+import {
+  assertResumedSnapshotRevisionCurrent,
+  retireClaimedRemovalDraftForDrift,
+  SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE,
+} from "./production-claim-gate";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 
 const ORG_CTX = {
@@ -48,5 +53,12 @@ describe("retireClaimedRemovalDraftForDrift", () => {
     expect(retireStaleSubmissionDraft).toHaveBeenCalledWith(ORG_CTX, "sub-1", {
       reason: "semantic payload drift",
     });
+  });
+
+  it("keeps the support route when an already submitted Removal's settings changed", async () => {
+    const row = { id: "sub-1", payloadSnapshot: { __mappingRevision: "old" } } as unknown as CertificationSubmissionRow;
+    await expect(assertResumedSnapshotRevisionCurrent(ORG_CTX, row, true, true))
+      .rejects.toThrow(SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE);
+    expect(retireStaleSubmissionDraft).not.toHaveBeenCalled();
   });
 });

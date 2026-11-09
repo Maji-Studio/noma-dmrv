@@ -141,7 +141,7 @@ export async function recoverSubmittedRemoval(args: {
             localEntityType: REMOVAL_ENTITY_TYPE,
             localEntityId: args.removalId,
           }]);
-          await assertResumedSnapshotRevisionCurrent(args.orgCtx, args.row, true);
+          await assertResumedSnapshotRevisionCurrent(args.orgCtx, args.row, true, true);
           assertRemovalSnapshotConfigurationCurrent(args.row, {
             externalProjectId: args.externalProjectId,
             templateId: args.templateId,
