@@ -1,6 +1,5 @@
 export const WALKTHROUGH_ORIGINS: readonly string[] = [
   "https://noma.maji.studio",
-  "https://staging.noma.maji.studio",
 ];
 export const WALKTHROUGH_PREVIEW_ORIGIN = /^https:\/\/noma-site-[a-z0-9-]+-maji-studio\.vercel\.app$/;
 export const WALKTHROUGH_LOCAL_ORIGINS: readonly string[] = [

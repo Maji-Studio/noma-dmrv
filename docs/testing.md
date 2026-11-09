@@ -58,8 +58,7 @@ enforces the list and rejects stale entries.
   row that sign-out deletes, and writes no entity rows. The other
   `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
   facility) and the output are documented at the top of
-  `tests/visual/form-capture.spec.ts`. `tests/visual/site-capture.spec.ts`
-  (`SITE_CAPTURE=1`) does the same for the marketing site's pages, with no sign-in.
+  `tests/visual/form-capture.spec.ts`.
 
 ## Static check caches
 
