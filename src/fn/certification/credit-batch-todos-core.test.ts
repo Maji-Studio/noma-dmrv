@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalDisplay } from "@/data-access/credit-batch-removal-display";
-import type { CertifierSyncEventRow } from "@/data-access/certification";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-removal-display", () => ({ loadCreditBatchRemovalDisplays: vi.fn() }));
-vi.mock("@/data-access/certifier-sync-events", () => ({ listRemovalAttemptEvents: vi.fn() }));
+vi.mock("@/data-access/removal-latest-attempt", () => ({ getRemovalIdsWithChangedLatestAttempt: vi.fn() }));
 vi.mock("@/data-access/certification-submissions", () => ({ hasFinalizedSubmission: vi.fn() }));
 vi.mock("@/data-access/removal-deletion-lease", () => ({ getDeletionLeasedRemovalIds: vi.fn() }));
 vi.mock("@/data-access/credit-batch-samples", () => ({ getCreditBatchesWithSamples: vi.fn(async () => []) }));
@@ -23,10 +22,9 @@ vi.mock("@/lib/certification/batch-health", () => ({
 }));
 
 import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-removal-display";
-import { listRemovalAttemptEvents } from "@/data-access/certifier-sync-events";
+import { getRemovalIdsWithChangedLatestAttempt } from "@/data-access/removal-latest-attempt";
 import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import { getDeletionLeasedRemovalIds } from "@/data-access/removal-deletion-lease";
-import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { ASK_ADMIN_TO_DELETE, FINALIZED_NO_DELETE, OPEN_REMOVAL_TO_DELETE } from "@/lib/certification/interrupted-removal-copy";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE, REMOVAL_SUBMISSION_TYPE } from "@/lib/certification/shared";
 import { loadCreditBatchTodos } from "./credit-batch-todos-core";
@@ -38,20 +36,11 @@ const INTERRUPTED: RemovalDisplay = {
   status: { kind: "interrupted", label: "Submission interrupted", value: "failed", isActionable: true, isTerminal: false },
 };
 
-function summary(id: string, at: string, failureKind: string): CertifierSyncEventRow {
-  return {
-    id, operation: ATTEMPT_SUMMARY_OPERATION, status: "failed", attemptedAt: new Date(at), createdAt: new Date(at),
-    errorMessage: null, responsePayload: { failure_kind: failureKind },
-  } as CertifierSyncEventRow;
-}
-const CHANGED = summary("changed", "2026-11-01T12:00:00Z", "changed_since_review");
-const LATER_FAILURE = summary("later", "2026-11-02T12:00:00Z", "other");
-
 describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(loadCreditBatchRemovalDisplays).mockResolvedValue(new Map(BATCHES.map(({ id }) => [id, [INTERRUPTED]])));
-    vi.mocked(listRemovalAttemptEvents).mockResolvedValue([CHANGED]);
+    vi.mocked(getRemovalIdsWithChangedLatestAttempt).mockImplementation(async (_ctx, removalIds) => new Set(removalIds.filter((removalId) => removalId === INTERRUPTED.id)));
     vi.mocked(hasFinalizedSubmission).mockResolvedValue(false);
     vi.mocked(getDeletionLeasedRemovalIds).mockResolvedValue(new Set());
   });
@@ -77,7 +66,7 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
 
   it("reads each interrupted Removal once across batches and uses its newest outcome", async () => {
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
-    expect(listRemovalAttemptEvents).toHaveBeenCalledExactlyOnceWith(ORG_CTX, { removalId: INTERRUPTED.id });
+    expect(getRemovalIdsWithChangedLatestAttempt).toHaveBeenCalledExactlyOnceWith(ORG_CTX, [INTERRUPTED.id]);
     expect(getDeletionLeasedRemovalIds).toHaveBeenCalledExactlyOnceWith(ORG_CTX, [INTERRUPTED.id]);
     for (const todos of result.values()) {
       expect(todos.removalInterrupted).toBe(true);
@@ -86,6 +75,18 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
         target: { href: "/removals?facility=facility&removal=removal-1" },
       });
     }
+  });
+
+  it("batches distinct interrupted Removals and applies each returned outcome to its own batch", async () => {
+    const retry = { ...INTERRUPTED, id: "removal-2", code: "RM-26-004" };
+    vi.mocked(loadCreditBatchRemovalDisplays).mockResolvedValue(new Map([
+      ["batch-1", [INTERRUPTED]], ["batch-2", [retry]],
+    ]));
+    const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
+    expect(getRemovalIdsWithChangedLatestAttempt).toHaveBeenCalledExactlyOnceWith(ORG_CTX, [INTERRUPTED.id, retry.id]);
+    expect(result.get("batch-1")?.check[0]?.title).toBe("RM-26-003: Changed since review");
+    expect(result.get("batch-2")?.check[0]?.title).toBe("RM-26-004: Submission interrupted");
+    expect(getDeletionLeasedRemovalIds).toHaveBeenCalledExactlyOnceWith(ORG_CTX, [INTERRUPTED.id]);
   });
 
   it.each(["admin", "member"] as const)("shows a fresh deletion lease to a %s across batches", async (orgRole) => {
@@ -101,8 +102,8 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     }
   });
 
-  it.each([{ events: [CHANGED, LATER_FAILURE] }, { events: [] }])("keeps the retry item without a latest changed outcome: %j", async ({ events }) => {
-    vi.mocked(listRemovalAttemptEvents).mockResolvedValue(events);
+  it.each(["later failure superseding changed", "no attempt summary"])("keeps the retry item with %s", async () => {
+    vi.mocked(getRemovalIdsWithChangedLatestAttempt).mockResolvedValue(new Set());
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
     expect(getDeletionLeasedRemovalIds).toHaveBeenCalledExactlyOnceWith(ORG_CTX, []);
     expect(hasFinalizedSubmission).not.toHaveBeenCalled();
@@ -112,12 +113,12 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     });
   });
 
-  it("does not fetch attempts for other Removal states", async () => {
+  it("passes no ids to the attempt lookup for other Removal states", async () => {
     vi.mocked(loadCreditBatchRemovalDisplays).mockResolvedValue(new Map([["batch-1", [
       { ...INTERRUPTED, status: { ...INTERRUPTED.status, kind: "submitted" } },
     ]]]));
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
-    expect(listRemovalAttemptEvents).not.toHaveBeenCalled();
+    expect(getRemovalIdsWithChangedLatestAttempt).toHaveBeenCalledExactlyOnceWith(ORG_CTX, []);
     expect(hasFinalizedSubmission).not.toHaveBeenCalled();
     expect(result.get("batch-1")?.check).toEqual([]);
   });

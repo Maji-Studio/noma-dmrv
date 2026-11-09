@@ -1,4 +1,4 @@
-import { isLatestRemovalAttemptChanged } from "@/data-access/removal-latest-attempt";
+import { getRemovalIdsWithChangedLatestAttempt } from "@/data-access/removal-latest-attempt";
 import { hasFinalizedSubmission } from "@/data-access/certification-submissions";
 import { getDeletionLeasedRemovalIds } from "@/data-access/removal-deletion-lease";
 import { REMOVAL_REGISTRY_DELETION_MIN_ROLE } from "@/lib/certification/removal-deletion-role";
@@ -54,10 +54,8 @@ export async function loadCreditBatchTodos(
   const interruptedIds = new Set([...removalsByBatch.values()].flatMap((removals) =>
     removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id),
   ));
-  const changedByRemoval = new Map(await Promise.all([...interruptedIds].map(async (removalId) => {
-    return [removalId, await isLatestRemovalAttemptChanged(ctx, removalId)] as const;
-  })));
-  const changedIds = [...changedByRemoval].filter(([, changed]) => changed).map(([removalId]) => removalId);
+  const changedRemovalIds = await getRemovalIdsWithChangedLatestAttempt(ctx, [...interruptedIds]);
+  const changedIds = [...changedRemovalIds];
   const [deletionLeasedIds, finalizedEntries] = await Promise.all([
     getDeletionLeasedRemovalIds(ctx, changedIds),
     Promise.all(changedIds.map(async (localEntityId) => [localEntityId, await hasFinalizedSubmission(ctx, {
@@ -76,7 +74,7 @@ export async function loadCreditBatchTodos(
       facilityId, creditBatchId: id, canManage, canDeleteRegistryRemovals, health,
       removals: removals?.map((removal) => ({
         ...removal,
-        ...(changedByRemoval.get(removal.id) ? { changedSinceReview: true as const } : {}),
+        ...(changedRemovalIds.has(removal.id) ? { changedSinceReview: true as const } : {}),
         ...(finalizedByRemoval.get(removal.id) ? { finalized: true as const } : {}),
         ...(deletionLeasedIds.has(removal.id) ? { deletionInProgress: true as const } : {}),
       })),

@@ -86,7 +86,7 @@ import {
 } from "./dashboard-structural-gaps";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
-import { isLatestRemovalAttemptChanged } from "./removal-latest-attempt";
+import { getRemovalIdsWithChangedLatestAttempt } from "./removal-latest-attempt";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
@@ -779,8 +779,7 @@ export async function getDashboardAttentionItems(
   const interrupted = new Map<string, DashboardAttentionItem>();
   const interruptedIds = new Set(batchRows.flatMap(({ removals }) =>
     removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id)));
-  const changedByRemoval = new Map(await Promise.all([...interruptedIds].map(async (removalId) =>
-    [removalId, await isLatestRemovalAttemptChanged(ctx, removalId)] as const)));
+  const changedRemovalIds = await getRemovalIdsWithChangedLatestAttempt(ctx, [...interruptedIds]);
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
   const returned: DashboardAttentionItem[] = [];
@@ -795,8 +794,8 @@ export async function getDashboardAttentionItems(
         recordIds: [removal.id],
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
-        title: changedByRemoval.get(removal.id) ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
-        href: changedByRemoval.get(removal.id) ? recordHref("removal", removal.id, { facilityId }) : removalResubmitHref(removal.id, facilityId),
+        title: changedRemovalIds.has(removal.id) ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: changedRemovalIds.has(removal.id) ? recordHref("removal", removal.id, { facilityId }) : removalResubmitHref(removal.id, facilityId),
       });
     }
     const returnedHere = removals.filter((removal) => returnedRemovalIds.has(removal.id));
