@@ -34,7 +34,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
-vi.mock("@/components/ui", () => ({
+vi.mock("@/components/ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui")>()),
   Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
@@ -45,7 +46,10 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: (
 vi.mock("@/components/ui/tooltip", () => ({ Tooltip: ({ children }: { children: ReactNode }) => children, InfoHint: () => null }));
 vi.mock("@/components/forms", () => ({ ServerError: ({ message }: { message: string }) => <div>{message}</div> }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
-vi.mock("../submission-outcome-notice", () => ({ SubmissionOutcomeNotice: () => null }));
+vi.mock("../submission-outcome-notice", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../submission-outcome-notice")>()),
+  SubmissionOutcomeNotice: () => null,
+}));
 vi.mock("./component-table", () => ({ ComponentTable: () => null }));
 vi.mock("./source-records", () => ({ SourceRecords: () => null }));
 vi.mock("./debug-drawer", () => ({ DebugDrawer: () => null }));
@@ -56,7 +60,8 @@ vi.mock("@/hooks/use-removal-empty-components", () => ({ useRefreshRemovalReview
 vi.mock("@/hooks/use-removal-delete-access", () => ({
   useRemovalDeleteAccess: () => ({ viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: false }),
 }));
-vi.mock("@/hooks/use-certification", () => ({
+vi.mock("@/hooks/use-certification", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-certification")>()),
   useRemovalSubmissionAttempts: () => ({ data: [] }),
   useDeleteRemoval: () => ({ mutate: vi.fn(), isPending: false, error: null, reset: vi.fn() }),
   useRemovalCompilation: () => ({ ...build.query, refetch: vi.fn() }),
