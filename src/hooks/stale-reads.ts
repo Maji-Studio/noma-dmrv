@@ -7,8 +7,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { activityKeys } from "./activity-query-keys";
 import { certificationKeys } from "./certification-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
-import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { energyKeys } from "./use-energy";
+import { dashboardOverviewKeys } from "./dashboard-overview-query-keys";
+import { energyKeys } from "./energy-query-keys";
 
 /** Refresh cached readiness and activity and, when relevant, derived CO₂e previews. */
 export function invalidateCertificationReadiness(

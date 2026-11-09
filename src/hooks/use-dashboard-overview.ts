@@ -4,16 +4,14 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getDashboardOverviewRead } from "@/lib/read-api/client";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
 import { unwrap } from "./types";
+import { dashboardOverviewKeys } from "./dashboard-overview-query-keys";
+
+export { dashboardOverviewKeys };
 
 // Dashboard aggregates are "current data" — 30s keeps the strip fresh without
 // refetching on every mount (project React Query convention).
 const DASHBOARD_OVERVIEW_STALE_TIME_MS = 30_000;
 
-export const dashboardOverviewKeys = {
-  all: ["dashboard-overview"] as const,
-  overview: (facilityId: string | null, range: DashboardRange) =>
-    [...dashboardOverviewKeys.all, facilityId, range] as const,
-};
 
 /**
  * Facility dashboard overview (KPI band, traceability stations, mass flow,
