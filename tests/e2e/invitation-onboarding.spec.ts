@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { accounts, apiRateLimitBuckets, invitations, organizations, sessions, users, verifications } from "../../src/db/schema";
+import { AUTH_PASSWORD_MIN_LENGTH } from "../../src/config/auth";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
 const VALIDITY_MS = 60_000;
@@ -80,6 +81,9 @@ for (const role of ["admin", "member"] as const) {
       expect(row.identifier.startsWith("reset-password:")).toBe(true);
       const token = row.identifier.slice("reset-password:".length);
       await page.goto(`/set-password?invitation=${invitationId}&token=${token}`);
+      // Wait for client-side validation before entering the passwords.
+      await page.getByRole("button", { name: "Set password and continue" }).click();
+      await expect(page.getByText(`Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters.`, { exact: true }).first()).toBeVisible();
       await page.getByLabel("Password", { exact: true }).fill("TestPassword123!");
       await page.getByLabel("Confirm password", { exact: true }).fill("TestPassword123!");
       await page.getByRole("button", { name: "Set password and continue" }).click();

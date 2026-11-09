@@ -19,16 +19,3 @@ export async function sendPasswordSetupOrReset({ user, url }: { user: User; url:
     ...template({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
   });
 }
-
-/** Existing credentials use updatePassword; first credentials confirm in create.before. */
-export async function confirmPasswordResetEmail({ user }: { user: User }): Promise<void> {
-  if (!user.emailVerified) {
-    const { internalAdapter } = await auth.$context;
-    // The endpoint passes its pre-reset snapshot. Avoid a second write after
-    // first-credential confirmation has already committed.
-    const currentUser = await internalAdapter.findUserById(user.id);
-    if (currentUser && !currentUser.emailVerified) {
-      await internalAdapter.updateUser(user.id, { emailVerified: true });
-    }
-  }
-}

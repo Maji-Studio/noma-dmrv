@@ -29,7 +29,7 @@ import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { CHANGE_EMAIL_MAX_ATTEMPTS, CHANGE_EMAIL_WINDOW_SECONDS, AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
-import { confirmPasswordResetEmail, sendPasswordSetupOrReset } from "./password-setup-hooks";
+import { sendPasswordSetupOrReset } from "./password-setup-hooks";
 import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
 import { emailChangeConfirmEmail } from "@/lib/email/templates/email-change-confirm-email";
 import { getEmailAppUrl } from "@/lib/email/app-url";
@@ -185,7 +185,6 @@ export const auth = betterAuth({
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: sendPasswordSetupOrReset,
-    onPasswordReset: confirmPasswordResetEmail,
   },
   emailVerification: {
     sendOnSignUp: true,

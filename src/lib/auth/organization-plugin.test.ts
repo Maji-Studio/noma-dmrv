@@ -448,14 +448,14 @@ it("credential creation outside reset-password does not confirm a mailbox", asyn
   expect(memory.user[0].emailVerified).toBe(false);
 });
 
-it("resetting an existing credential still confirms an unverified mailbox", async () => {
+it.each([false, true])("resetting an existing credential preserves emailVerified=%s", async emailVerified => {
   await addNoticeCredential();
-  memory.user[0].emailVerified = false;
+  memory.user[0].emailVerified = emailVerified;
   memory.verification.push({ id: "existing-unverified", identifier: "reset-password:existing-token", value: "actor",
     expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
   await expect(auth.api.resetPassword({ body: { token: "existing-token", newPassword: NOTICE_NEW_PASSWORD } }))
     .resolves.toEqual({ status: true });
-  expect(memory.user[0].emailVerified).toBe(true);
+  expect(memory.user[0].emailVerified).toBe(emailVerified);
   expect(memory.account).toHaveLength(1);
 });
 

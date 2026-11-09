@@ -433,8 +433,10 @@ their own mapping:
 The invited mailbox sets the first password through an emailed reset token.
 Invitation bootstrap creates an unverified user without a credential or session.
 See [Invitations in auth.md](./auth.md#invitations) for pending retries and mail cooldown policy.
-The token confirms the email when the password is set; sign-in and invitation
-acceptance require verified email. Existing confirmed invitees sign in normally.
+Only setting the first password through the emailed link confirms the email,
+in the same transaction as credential creation. Resetting an existing credential
+leaves email verification unchanged. Sign-in and invitation acceptance require
+verified email. Existing confirmed invitees sign in normally.
 
 Invitation lists are Admin only in the application's data-access layer. The
 organization plugin's invitation-list and full-organization endpoints are

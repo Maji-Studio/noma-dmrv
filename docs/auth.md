@@ -143,9 +143,11 @@ cooldown still succeed. The action's `emailSent: true` acknowledges the request;
 not promise provider delivery or that a new message was sent during the cooldown.
 
 The invited mailbox opens Better Auth's reset link, which redirects to
-`/set-password?invitation=<id>&token=<token>`. Consuming the token establishes the
-credential and confirms the email. Invitation acceptance requires verified email;
-the signed-in invitee then accepts in the invited role. Confirmed users keep their
+`/set-password?invitation=<id>&token=<token>`. Setting the first password through
+the emailed link creates the credential and confirms the email in the same
+transaction. Resetting an existing credential leaves email verification unchanged.
+Invitation acceptance requires verified email; the signed-in invitee then accepts
+in the invited role. Confirmed users keep their
 existing sign-in path. First-time setup omits the password-changed notice.
 
 Invitation lists in Settings are Admin only. HTTP calls to
