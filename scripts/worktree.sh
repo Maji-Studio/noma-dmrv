@@ -21,7 +21,7 @@ PG_USER="postgres"
 BASE_REF="origin/staging"
 PORT_FIRST=3101
 PORT_LAST=3199
-RESERVED_PORTS=" 3120 " # marketing site dev server
+RESERVED_PORTS=" 3120 " # local site dev (noma-site repo), allowed in WALKTHROUGH_LOCAL_ORIGINS
 NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
 # A test/e2e segment would put the dev DB inside Vitest's throwaway rule (tests/helpers/throwaway-database.ts).
 RESERVED_NAME_SEGMENT='(^|-)(test|e2e|dev)(-|$)'
@@ -150,7 +150,7 @@ cmd_new() {
   # By name only: `cp .env*` would overwrite the tracked .env.example.
   cp "$MAIN/.env.local" "$path/.env.local"
   cp "$MAIN/.env.test" "$path/.env.test"
-  for fonts in public/fonts site/public/fonts; do
+  for fonts in public/fonts; do
     if [ -d "$MAIN/$fonts" ]; then
       mkdir -p "$path/$fonts"
       cp -R "$MAIN/$fonts/." "$path/$fonts/"

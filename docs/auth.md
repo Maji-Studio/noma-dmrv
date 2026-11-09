@@ -30,7 +30,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys or OAuth access tokens with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and filters key tool discovery by scopes. OAuth discovers grantable writes for step-up. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./api.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
 - Exact `/api/walkthrough` bypasses session lookup for public POST and OPTIONS.
   Its handler enforces site origins, IP rate limits, input limits and a honeypot;
-  neighboring paths remain protected. See [Walkthrough form](./site.md#walkthrough-form).
+  neighboring paths remain protected. See [Contracts with the marketing site](./architecture.md#contracts-with-the-marketing-site).
 
 ### Public verifier report capability
 

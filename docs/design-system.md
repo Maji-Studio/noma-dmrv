@@ -85,24 +85,23 @@ Read these first. Each one fails quietly rather than loudly.
 
 ## Fonts
 
-GT Flexa is commercially licensed for our websites. Never commit its font files.
+GT Flexa is commercially licensed. Never commit its font files in this public app repo.
 `scripts/fetch-fonts.mjs` downloads them from private DigitalOcean Spaces objects
 at `https://fra1.digitaloceanspaces.com`, region `fra1`, bucket `maji`, prefix
 `noma-dmrv-assets/fonts`, with a read-only key in `FONTS_S3_ACCESS_KEY_ID` and
 `FONTS_S3_SECRET_ACCESS_KEY`. Like every secret, the key lives in the three
 1Password items (`.env.tpl`, `.env.local.tpl`); `pnpm env:vercel` carries it to
-the noma-dmrv project. The noma-site project is not synced by that script, so set
-the same two variables there by hand after a rotation. Optional overrides are
-`FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
+the noma-dmrv project. Optional overrides are `FONTS_S3_ENDPOINT`,
+`FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
 The script reads the process environment; `pnpm fonts:fetch` also loads `.env.local`.
 
-App and site builds fetch into a gitignored `fonts/` directory inside
-`public/` and `site/public/`. Without credentials, builds succeed using the existing
-system font fallbacks. Download failures with credentials fail the build.
-Run `pnpm fonts:fetch` to populate both directories for local development;
+App builds fetch into a gitignored `fonts/` directory inside `public/`. The marketing site commits
+its own font copy in its separate private repo. Without credentials, app builds
+succeed using the existing system font fallbacks. Download failures with credentials fail the build.
+Run `pnpm fonts:fetch` to populate the app directory for local development;
 complete, nonempty copies are reused unless the script receives `--force`.
 The files keep fixed names under `/fonts/`, so the root `vercel.json` gives them a
-one week `Cache-Control` for both Vercel projects.
+one week `Cache-Control` for the app.
 
 ## Color System
 
@@ -587,10 +586,12 @@ Always use `Button`; never a raw `<button>` with manual styling.
   transparent raw `<button>` per drawn node sits over the SVG, with the focus
   ring and at least a 44px tall hit area, because the node's size is the data.
 - **Exception: Removal sheet Records.** The credit batch row in `removal-records.tsx` is a
-  full-width disclosure row (date range, dry mass, caret, 44px tall) and "Show all N" is an
-  underlined text action under a record list. `Button` has no variant with the text-link look
-  or a row layout (fixed heights, `whitespace-nowrap`, `label-button` type), so both stay raw
-  `<button>`s with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`).
+  full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
+  layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw
+  `<button>` with the focus ring and a 44px row (`min-h-44`). "Show all N"
+  is not an exception: it is `TextAction` (`ui/text-action.tsx`), a `noOutline` Button with
+  a 44px hit area and its label flush with the text above, mono uppercase like every text
+  button ("Show the top N" in the energy record list too).
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop

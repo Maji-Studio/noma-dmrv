@@ -57,7 +57,7 @@ import { authRateLimitEnabled } from "./rate-limit-policy";
  *     would become a trusted origin against auth.
  *
  * The canonical custom domain comes from NEXT_PUBLIC_APP_URL (per-environment:
- * noma.maji.studio in prod, staging.noma.maji.studio in preview). The raw
+ * app.noma.maji.studio in prod, staging.app.noma.maji.studio in preview). The raw
  * deployment URLs come from Vercel's own project-bound env vars.
  */
 function buildTrustedOrigins(): string[] {

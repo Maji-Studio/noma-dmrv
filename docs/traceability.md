@@ -163,9 +163,7 @@ inside batch context, with a "Batch roll-up" button back.
 renders them on a React Flow canvas for pan, pinch, wheel zoom and the + / − /
 fit controls. Geometry, columns and the group threshold live in
 `chain-constants.ts`; token and contrast rules are owned by
-[docs/design-system.md](design-system.md). Modelled on the buyer journey graph
-on the site (`site/src/components/site/journey/graph.js`), in the app's light
-theme.
+[docs/design-system.md](design-system.md). The graph uses the app's light theme.
 
 - **Columns by kind, in chain order** (`FLOW_COLUMNS`): feedstock, reactor,
   production run, biochar product, order, delivery, application. Empty kinds
