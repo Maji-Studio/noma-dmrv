@@ -7,7 +7,7 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/certifier-removals", () => ({
   listProductionClaimDraftContenders: vi.fn(),
 }));
-vi.mock("./certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   resolveScopeForRemoval: vi.fn(),
 }));
 
