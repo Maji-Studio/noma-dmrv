@@ -487,7 +487,11 @@ continues to use its separate durable mirror ledger.
 A preserved draft retries only as it was reviewed. Its member records are
 Sent-locked (`submissionHasRemoteEffect`), so only settings outside them (the
 Removal template, the mapping revision, the durability gate) can change. When
-they do, the retry refuses with `INTERRUPTED_REMOVAL_DRIFT_MESSAGE` and points
-the operator to Delete Removal, which removes what reached Isometric, including
-unconfirmed sends, before the Removal is created again from current data. noma
-does not build a new version on top of a possibly sent attempt.
+they do, the retry throws `InterruptedRemovalChangedError`, the attempt summary
+records `failure_kind: "changed_since_review"`, and the submit dialog and the
+Removal sheet show a "Changed since review" stop. Delete Removal leads, since it
+removes what reached Isometric, including unconfirmed sends, before the Removal
+is created again from current data. A viewer below the deletion role floor is
+told to ask an Admin. A Removal with a finalized earlier version cannot be
+deleted, so it goes to support. noma does not build a new version on top of a
+possibly sent attempt.

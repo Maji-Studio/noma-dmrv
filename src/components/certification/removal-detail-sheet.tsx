@@ -143,7 +143,7 @@ export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWor
   const latest = summary.submissionAttempts[0]?.outcome;
   // A retry of an interrupted draft can stop on drift before it claims anything, so the status stays
   // "interrupted": the red stop still leads.
-  if (latest?.kind === "differs") return latest;
+  if (latest?.kind === "differs" || latest?.kind === "changed") return latest;
   if (status.kind === "interrupted") return { kind: "interrupted" };
   return latest && latest.kind !== "submitted" ? latest : null;
 }
@@ -193,8 +193,11 @@ function SheetStatusBlock({
   timeZone,
   returned = false,
   readOnly = false,
+  canDelete = true,
 }: {
   summary: RemovalListRow;
+  /** Whether this viewer sees Delete Removal, so a refusal that leads there names who can take it. */
+  canDelete?: boolean;
   /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
   returned?: boolean;
   status: RemovalWorkflowStatus;
@@ -225,6 +228,7 @@ function SheetStatusBlock({
           facilityId={facilityId}
           timeZone={timeZone}
           finalized={summary.hasFinalizedSubmission}
+          canDelete={canDelete}
           readOnly={readOnly}
         />
       )}
@@ -373,7 +377,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} />
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} canDelete={canDelete} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (

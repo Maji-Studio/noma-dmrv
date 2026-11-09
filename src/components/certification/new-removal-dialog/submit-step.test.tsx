@@ -453,43 +453,41 @@ describe("SubmitStep", () => {
     await act(async () => renderer?.unmount());
   });
 
-  it("shows the drift refusal next to Delete Removal for a possibly sent draft (#1114)", async () => {
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <SubmitStep
-          removalId="removal-1"
-          facilityId="facility-1"
-          ctx={
-            {
-              ...CONTEXT,
-              latestSubmission: {
-                status: "draft",
-                lockedAt: null,
-                metadata: { lastAttemptOutcome: "interrupted", externalMutation: "possible" },
-              },
-            } as RemovalCertifyContext
-          }
-          onDone={vi.fn()}
-          submitMutation={
-            {
-              mutate: vi.fn(),
-              isPending: false,
-              isSuccess: false,
-              isError: true,
-              data: undefined,
-              error: new Error(INTERRUPTED_REMOVAL_CHANGED_MESSAGE),
-              reset: vi.fn(),
-            } as never
-          }
-        />,
-      );
+  describe("changed since review (#1114)", () => {
+    // The notice is mocked here; its wording per viewer is covered in submission-outcome-notice.test.tsx.
+    const ctx = { ...CONTEXT, latestSubmission: { status: "draft", lockedAt: null,
+      metadata: { lastAttemptOutcome: "interrupted", externalMutation: "possible" } } } as RemovalCertifyContext;
+    const labels = (r: ReactTestRenderer) => r.root.findAllByType("button").map((button) => button.children.join(""));
+    async function renderFailed(message: string) {
+      let renderer: ReactTestRenderer | undefined;
+      const mutation = { mutate: vi.fn(), isPending: false, isSuccess: false, isError: true, data: undefined, error: new Error(message), reset: vi.fn() };
+      await act(async () => {
+        renderer = create(<SubmitStep removalId="removal-1" facilityId="facility-1" ctx={ctx} onDone={vi.fn()} submitMutation={mutation as never} />);
+      });
+      return renderer!;
+    }
+
+    it.each([false, true])("leads with Delete Removal and drops Try again (summary loaded: %s)", async (loaded) => {
+      if (loaded) state.attempts = [{ errorMessage: INTERRUPTED_REMOVAL_CHANGED_MESSAGE, outcome: { kind: "changed" } }];
+      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
+      expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed");
+      expect(JSON.stringify(renderer.toJSON())).not.toContain("safe retry");
+      expect(labels(renderer)).toEqual(["Delete Removal", "Review submission"]);
+      await act(async () => renderer.unmount());
     });
 
-    expect(JSON.stringify(renderer!.toJSON())).toContain(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
-    expect(findButton(renderer!, "Delete Removal")).toBeDefined();
-    expect(findButton(renderer!, "Discard draft")).toBeUndefined();
-    await act(async () => renderer?.unmount());
+    it("offers no Delete Removal to a viewer below the role floor", async () => {
+      state.deleteAccess = { viewerCanDeleteRegistryRemovals: false, hasRegisteredProductionBatches: false };
+      const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
+      expect(labels(renderer)).toEqual(["Review submission"]);
+      await act(async () => renderer.unmount());
+    });
+
+    it("keeps Try again and offers no deletion after an ordinary failure", async () => {
+      const renderer = await renderFailed("Registry check failed");
+      expect(labels(renderer)).toEqual(["Try again", "Review submission"]);
+      await act(async () => renderer.unmount());
+    });
   });
 
   describe("role floor (issue #746)", () => {

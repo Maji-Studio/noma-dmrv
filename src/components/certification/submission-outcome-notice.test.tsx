@@ -45,6 +45,32 @@ describe("SubmissionOutcomeNotice", () => {
     expect(html).not.toContain("delete this Removal and submit again");
   });
 
+  describe("changed since review (#1114)", () => {
+    const changed: NoticeOutcome = { kind: "changed" };
+    const renderChanged = (finalized: boolean, canDelete: boolean) =>
+      renderToStaticMarkup(
+        <SubmissionOutcomeNotice outcome={changed} facilityId={FACILITY} timeZone={TIME_ZONE} finalized={finalized} canDelete={canDelete} />,
+      );
+
+    it("titles the stop without claiming nothing was sent and points to Delete Removal", () => {
+      const html = renderChanged(false, true);
+      expect(html).toContain("Changed since review");
+      expect(html).not.toContain("Not submitted");
+      expect(html).toContain("Part of it may already be in Isometric, and its data or settings changed since you reviewed it. Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.");
+      expect(html).not.toContain("Review and submit again");
+    });
+
+    it("asks an Admin to delete it when this viewer cannot", () => {
+      expect(renderChanged(false, false)).toContain("Ask an Admin to delete it. Then create the Removal again.");
+    });
+
+    it("says a Removal with a submitted earlier version cannot be deleted", () => {
+      const html = renderChanged(true, false);
+      expect(html).toContain("An earlier version was submitted, so this Removal cannot be deleted. Contact support.");
+      expect(html).not.toContain("Select Delete Removal");
+    });
+  });
+
   it("sends a finalized Removal to an admin or Isometric", () => {
     expect(render(differs(), true)).toContain("Check the production runs in this credit batch for later edits. This Removal is finalized, so it cannot be deleted. Contact an admin or Isometric.");
   });
