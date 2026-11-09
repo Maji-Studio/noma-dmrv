@@ -1,6 +1,9 @@
-import { isCarriedToRemoval } from "@/lib/certification/emission-entry-carry";
+import {
+  isCarriedToRemoval,
+  type EntryCarryDisposition,
+  type EntryCarryDestination,
+} from "@/lib/certification/emission-entry-carry";
 import type { CarriedEntryNote } from "./emission-entry-carry-copy";
-import type { EntryCarryDisposition, EntryCarryDestination } from "./emission-entry-carry";
 import { z } from "zod";
 import { ENTRY_HAS_NO_REMOVAL, formatEmissionEntryMessageLabel, sentEntryOutsideRemovalPeriod } from "@/lib/certification/emission-entry-messages";
 import { formatUtcDate } from "@/lib/date-utils";

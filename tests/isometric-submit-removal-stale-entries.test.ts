@@ -1,11 +1,11 @@
 import { expect, it, vi } from "vitest";
 import { REMOVAL_ID, USER_ID, CREDIT_BATCH_ID, makeContext, storedRows, fakeExternalIds } from "./fixtures/submit-removal-orchestrator";
 import { makeTestOrgContext } from "./helpers/test-org";
-import { loadRemovalSubmissionContext } from "@/fn/certification/certify-context-core";
-import { frozenEntriesForAttempt, loadRemovalEntryContext } from "@/fn/certification/removal-entry-context";
-import type { BatchEmissionContext } from "@/fn/certification/batch-emission-context";
-import type { RemovalScope } from "@/fn/certification/removal-scope";
-import type { FacilityCertifierFacts } from "@/fn/certification/facility-certifier-facts";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
+import { frozenEntriesForAttempt, loadRemovalEntryContext } from "@/lib/certification/removal-entry-context";
+import type { BatchEmissionContext } from "@/lib/certification/batch-emission-context";
+import type { RemovalScope } from "@/lib/certification/removal-scope";
+import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 vi.mock("@/data-access/emission-entry-contenders", () => ({ loadEmissionEntryReservations: vi.fn(async () => []) }));

@@ -28,11 +28,11 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
 vi.mock("@/data-access/certifier-removals", () => ({
   getCertifierRemovalById: vi.fn(),
 }));
-vi.mock("./certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
-vi.mock("./removal-submission-build", async (importOriginal) => ({
-  ...await importOriginal<typeof import("./removal-submission-build")>(),
+vi.mock("@/lib/certification/removal-submission-build", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/certification/removal-submission-build")>(),
   compileRemovalSubmission: vi.fn(),
   buildRemovalSubmissionBuild: vi.fn(),
 }));
@@ -41,10 +41,10 @@ vi.mock("@/data-access/credit-batch-accounting", () => ({
 }));
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
-import { compileRemovalSubmission, buildRemovalSubmissionBuild, REMOVAL_COMPILATION_FAILED_MESSAGE } from "./removal-submission-build";
-import { REMOVAL_PREPARATION_BLOCKERS } from "./removal-submission-prepare";
+import { compileRemovalSubmission, buildRemovalSubmissionBuild, REMOVAL_COMPILATION_FAILED_MESSAGE } from "@/lib/certification/removal-submission-build";
+import { REMOVAL_PREPARATION_BLOCKERS } from "@/lib/certification/removal-submission-prepare";
 import { requireOrgFacility } from "@/data-access/utils";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import { loadRemovalCompilation } from "./removal-compilation";

@@ -7,6 +7,18 @@ a `fn/` action, a `data-access/` query, or a new route group. Form detail lives
 in [forms.md](./forms.md); naming and React rules in
 [code-style.md](./code-style.md); "why" decisions in [ADRs](./adr/).
 
+## Contracts with the marketing site
+
+The marketing site lives in the private `Maji-Studio/noma-site` repo (Vercel
+project `noma-site`). Its Log in link uses `PUBLIC_APP_URL`: Production
+`https://app.noma.maji.studio`, Preview `https://staging.app.noma.maji.studio`.
+
+Its walkthrough form POSTs to the app's `/api/walkthrough`. Allowed origins
+live in `src/config/walkthrough.ts`: `https://noma.maji.studio`, the preview-host
+regex, and local `http://localhost:3120` for site dev against a local app.
+Local origins are allowed only outside production. Changing either contract
+means updating both repos.
+
 ## Layers
 
 ```text
@@ -97,6 +109,9 @@ components (UI)
   are not exported from a `"use server"` file; the caller authenticates first.
   Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
   same read wraps the core in `withAction` rather than duplicating it.
+- Shared certification context composition lives in directive-free
+  `src/lib/certification/` modules, below both read models and actions.
+  Read models import those helpers directly; `withAction` wrappers stay in `fn/`.
 - `data-access/` owns query composition **and** org-scope enforcement. A
   partial update reads `undefined` as omitted, `null` as an explicit clear,
   and `0` as zero; values the server owns (derived masses) and cross-field

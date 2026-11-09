@@ -18,7 +18,7 @@ import { withAction } from "../with-action";
 import {
   buildCreditBatchContexts,
   loadFacilityCertifierFacts,
-} from "./certify-context-core";
+} from "@/lib/certification/certify-context-core";
 
 // Deferred-create: the New-Removal wizard holds off creating the removal until
 // the operator confirms a batch selection. This action IS that confirm — and it

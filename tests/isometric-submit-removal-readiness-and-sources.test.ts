@@ -1,4 +1,4 @@
-import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { buildSubmissionLineageBlockers } from "@/lib/certification/certify-lineage-blockers";
 import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 /**
@@ -23,15 +23,15 @@ import {
 } from "./fixtures/submit-removal-orchestrator";
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
-import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as certifyContext from "@/lib/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
-import * as sources from "@/fn/certification/source-candidates";
+import * as sources from "@/lib/certification/source-candidates";
 import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
-import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
-import { prepareRemovalSubmission } from "@/fn/certification/removal-submission-prepare";
+import { compileRemovalSubmission } from "@/lib/certification/removal-submission-build";
+import { prepareRemovalSubmission } from "@/lib/certification/removal-submission-prepare";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";

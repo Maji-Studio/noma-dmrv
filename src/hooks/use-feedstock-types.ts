@@ -23,7 +23,7 @@ import type {
   ImportIsometricFeedstockTypeData,
   UpdateFeedstockTypeData,
 } from "@/schemas/feedstock-types";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { recordLockKeys } from "./record-lock-query-keys";
 
 export const feedstockTypeKeys = {
@@ -63,7 +63,7 @@ function useInvalidateFeedstockTypes() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
     void queryClient.invalidateQueries({ queryKey: recordLockKeys.feedstockTypeLinks() });
-    void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    void invalidateCertificationReadiness(queryClient);
     invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
 }

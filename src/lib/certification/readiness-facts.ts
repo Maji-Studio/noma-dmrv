@@ -10,7 +10,7 @@
  * client-safe `isLockedInFlight`.
  */
 
-import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import type { RemovalCertifyContext } from "@/lib/certification/certify-context-types";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { canReclaimInterruptedSubmission } from "./submission-metadata";
 import type { RemovalReadinessFacts } from "./readiness";

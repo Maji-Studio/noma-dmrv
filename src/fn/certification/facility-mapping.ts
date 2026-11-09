@@ -30,7 +30,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "@/lib/certification/shared";
 
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;

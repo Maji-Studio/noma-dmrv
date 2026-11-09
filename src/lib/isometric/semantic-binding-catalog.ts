@@ -23,7 +23,7 @@ import { sourceFactAvailable } from "./template-observations/source-fact-availab
  * transport categories, and the Source binding rules and persisted Source
  * target schema (certification/removal-source-bindings.ts). The one literal
  * mirror left is the diesel template walk in
- * fn/certification/submission-warnings.ts (#639); storage-blueprints.ts names
+ * lib/certification/submission-warnings.ts (#639); storage-blueprints.ts names
  * storage inputs beside blueprint keys without binding them.
  * tests/binding-tuple-literal-guard.test.ts fails on a new pair in any file.
  */

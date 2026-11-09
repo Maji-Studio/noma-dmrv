@@ -15,13 +15,13 @@ import { SafeError } from "@/lib/errors";
 import type { IsometricClient } from "@/lib/isometric";
 import type { Logger } from "@/lib/log";
 import { ensureRemovalBiocharApplications } from "./biochar-applications";
-import { readRemovalReportingWindow } from "./removal-reporting-window";
+import { readRemovalReportingWindow } from "@/lib/certification/removal-reporting-window";
 import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
-import type { BiocharApplicationIntent } from "./biochar-application-intents";
-import type { RegistryExternalMutationReporter } from "./registry-create";
+import type { BiocharApplicationIntent } from "@/lib/certification/biochar-application-intents";
+import type { RegistryExternalMutationReporter } from "@/lib/certification/registry-create";
 import { assertResumedSnapshotRevisionCurrent } from "./production-claim-gate";
-import { assertRemovalSnapshotConfigurationCurrent } from "./removal-snapshot-readers";
-import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "./shared";
+import { assertRemovalSnapshotConfigurationCurrent } from "@/lib/certification/removal-snapshot-readers";
+import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "@/lib/certification/shared";
 
 /** The Removal compiles against its member batches' pin, so recovery checks the snapshot against that pin. */
 export function pinnedRemovalTemplateId(

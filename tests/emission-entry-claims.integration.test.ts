@@ -12,9 +12,9 @@ import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction,
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import { documents } from "@/db/schema";
 import { insertDocument, listDocumentsForEntity, listEmissionEntryDocumentsByIds } from "@/data-access/documents";
-import { collectCandidateSourceDocumentsForRemoval } from "@/fn/certification/source-candidates";
-import { planRemovalEvidence } from "@/fn/certification/removal-evidence-plan";
-import { frozenEntriesForAttempt } from "@/fn/certification/removal-entry-context";
+import { collectCandidateSourceDocumentsForRemoval } from "@/lib/certification/source-candidates";
+import { planRemovalEvidence } from "@/lib/certification/removal-evidence-plan";
+import { frozenEntriesForAttempt } from "@/lib/certification/removal-entry-context";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import { deleteCreditBatchApplicationSlices } from "@/data-access/credit-batch-delete-slices";
 /** Real PostgreSQL coverage. Deliberately not run by the offline implementation verification. */

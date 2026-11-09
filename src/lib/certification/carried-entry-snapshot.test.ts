@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { carriedEntrySnapshotSchema } from "./carried-entry-snapshot";
-import { normalizeCarriedEntriesForHash } from "@/fn/certification/removal-entry-hash";
+import { normalizeCarriedEntriesForHash } from "@/lib/certification/removal-entry-hash";
 
 it("reads the writer's frozen carry facts with the same schema", () => {
   const [snapshot] = normalizeCarriedEntriesForHash([{

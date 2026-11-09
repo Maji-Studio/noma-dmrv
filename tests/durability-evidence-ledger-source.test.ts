@@ -1,6 +1,6 @@
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RemovalSubmissionContext } from "@/fn/certification/certify-context-core";
+import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 
 const USER = "user-1";
 const REMOVAL = "removal-1";
@@ -23,7 +23,7 @@ vi.mock("@/db", () => ({
 vi.mock("@/lib/certification/submission-lock", () => ({
   acquireCertificationArtifactLocksSorted: vi.fn(async () => {}),
 }));
-vi.mock("@/fn/certification/certify-context-core", () => ({
+vi.mock("@/lib/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
 vi.mock("@/lib/certification/evidence-ledger/durability-pdf", () => ({

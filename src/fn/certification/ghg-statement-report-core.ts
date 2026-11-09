@@ -42,7 +42,7 @@ import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
-} from "./shared";
+} from "@/lib/certification/shared";
 
 // Repo interpretation pins (docs/isometric/versions.json), not operator input:
 // the report must always state which methodology its totals were computed under.

@@ -9,7 +9,7 @@ import { getProductionBatchRegistryInputs } from "@/data-access/certifier-produc
 import { SafeError } from "@/lib/errors";
 import * as claims from "@/data-access/certification-submissions";
 import * as reservations from "@/data-access/production-claim-reservations";
-import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import * as freshness from "./removal-submission-freshness";
 import { submitRemoval } from "./submit-removal";
 import { createDatapoint, createGhgEntry, IsometricApiError } from "@/lib/isometric";

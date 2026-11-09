@@ -22,7 +22,7 @@ import {
   seedCertifierMapping,
   SANDBOX_PROJECT_ID,
 } from "./fixtures/certification-helpers";
-import { CERTIFIER_VERIFICATION_MESSAGES } from "../../src/lib/certification/certifier-credentials-verification";
+import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
 import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 import { createDbConnection } from "./fixtures/db";
 

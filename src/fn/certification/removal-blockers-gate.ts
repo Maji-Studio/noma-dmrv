@@ -8,9 +8,9 @@ import { legacyBlocker, type RemovalBlocker } from "@/lib/certification/removal-
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlockerDestination, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
 import { durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
-import type { RemovalSubmissionContext } from "./certify-context-types";
-import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS, type RemovalPreparationBlocker } from "./removal-submission-prepare";
-import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild } from "./removal-submission-build";
+import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-types";
+import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS, type RemovalPreparationBlocker } from "@/lib/certification/removal-submission-prepare";
+import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
 
 function preparationBlocker(blocker: RemovalPreparationBlocker): RemovalBlocker {
   if (blocker.code === "noTemplate") {

@@ -22,14 +22,14 @@ vi.mock("@/data-access/certification", () => ({
   appendSubmissionJournal: vi.fn(),
 }));
 
-vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
+vi.mock("@/lib/certification/registry-create", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("@/fn/certification/registry-create")>();
+    await importOriginal<typeof import("@/lib/certification/registry-create")>();
   return {
     ...actual,
     performRegistryCreate: vi.fn(
       async (
-        args: import("@/fn/certification/registry-create").PerformRegistryCreateArgs,
+        args: import("@/lib/certification/registry-create").PerformRegistryCreateArgs,
       ) => {
         if (args.resumed) {
           const lookup = await args.reconcile();
@@ -49,7 +49,7 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
   };
 });
 
-import { submitDurabilityMeasurementSamples } from "@/fn/certification/durability-measurement-samples";
+import { submitDurabilityMeasurementSamples } from "@/lib/certification/durability-measurement-samples";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";

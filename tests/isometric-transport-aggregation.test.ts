@@ -1,4 +1,4 @@
-import { buildTransportCoverage } from "@/fn/certification/certify-transport-coverage";
+import { buildTransportCoverage } from "@/lib/certification/certify-transport-coverage";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";

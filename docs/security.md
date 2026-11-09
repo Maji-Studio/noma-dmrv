@@ -143,8 +143,8 @@ Non-obvious semantics only:
   1Password items (local, staging, production); `pnpm env:vercel` syncs the
   staging and production values to Vercel Preview and Production.
   [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
-  so neither runs on staging (Preview). The site Production deployment answers
-  404 to both routes. Staging's idempotency claim path
+  so neither runs on staging (Preview). Only the app project reads this repo's
+  cron configuration. Staging's idempotency claim path
   deletes expired records lazily when their keys are reused; idle rate-limit
   buckets have no scheduled staging cleanup.
 - **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
@@ -229,9 +229,10 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   for fetching licensed fonts. Optional `FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`,
   `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX` override the private object location.
   These are read by `scripts/fetch-fonts.mjs`; missing credentials use system
-  fallback fonts. The key is in the three 1Password items like other secrets,
-  but the noma-site Vercel project needs it set by hand (`pnpm env:vercel` syncs
-  only noma-dmrv). See [Fonts](./design-system.md#fonts).
+  fallback fonts. The key is in the three 1Password items like other secrets;
+  `pnpm env:vercel` syncs only the app project. The marketing site's environment
+  lives in its separate Vercel project. Its private repo commits the fonts,
+  so that project needs no `FONTS_S3_*` credentials. See [Fonts](./design-system.md#fonts).
 
 - `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
   `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when
@@ -447,15 +448,15 @@ their own mapping:
   cooldown; never lower the global setting.
 - **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
   only packages permitted to run install scripts.
-- **One pnpm version** — `packageManager` in `package.json` and `site/package.json`
-  pins pnpm for local installs, every `pnpm/action-setup` step and both Vercel
-  projects (their build logs show "Detected … from package.json#packageManager").
-  Bump both files together, and to a release pnpm will install: Vercel's
+- **One pnpm version**: `packageManager` in `package.json` pins pnpm for local
+  installs, every `pnpm/action-setup` step and the app Vercel project
+  (its build logs show "Detected … from package.json#packageManager").
+  Use a release pnpm will install: Vercel's
   install refused 11.13.0 as "a broken release". Overrides belong in
   `pnpm-workspace.yaml`, the only place pnpm 11 reads them.
 - **Dependabot (security-only)** — `.github/dependabot.yml` sets
-  `open-pull-requests-limit: 0` for the app (`/`) and the marketing site
-  (`/site`), disabling routine version bumps; only security-fix PRs open.
+  `open-pull-requests-limit: 0` for the app (`/`), disabling routine version
+  bumps; only security-fix PRs open.
   Severity filtering lives in repo Settings → Advanced Security auto-triage
   rules. The one per-package rule in `dependabot.yml` ignores `maplibre-gl`
   major versions, which break the map worker under Turbopack; see
