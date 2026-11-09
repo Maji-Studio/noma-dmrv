@@ -137,9 +137,9 @@ invitation or choose an active organization. Account state is `none`, `pending`
 (unverified user) or `confirmed` (verified user).
 
 A pending user can request another email without changing their name or other
-user fields. Bootstrap and resend share a 60-second cooldown, based on recent
-`reset-password:*` verification rows for that user. Requests during the cooldown
-still succeed. The action's `emailSent: true` acknowledges the request; it does
+user fields. Bootstrap and resend share a 60-second cooldown, enforced atomically
+by a one-token bucket keyed by user ID across invitations. Requests during the
+cooldown still succeed. The action's `emailSent: true` acknowledges the request; it does
 not promise provider delivery or that a new message was sent during the cooldown.
 
 The invited mailbox opens Better Auth's reset link, which redirects to

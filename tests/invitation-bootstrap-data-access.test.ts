@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 
 const mockSelect = vi.fn();
 const mockCreateUser = vi.fn();
+const mockConsumeRateLimit = vi.fn();
+
+vi.mock("@/data-access/api-rate-limits", () => ({
+  consumeRateLimit: (...args: unknown[]) => mockConsumeRateLimit(...args),
+}));
 
 vi.mock("@/db", () => ({
   db: {
@@ -20,7 +26,7 @@ vi.mock("@/lib/auth/better-auth", () => ({
   },
 }));
 
-import { createInvitedAccount, getInvitationBootstrapState, hasRecentInvitationPasswordReset } from "@/data-access/invitation-bootstrap";
+import { createInvitedAccount, getInvitationBootstrapState, consumeInvitationSetPasswordRateLimit } from "@/data-access/invitation-bootstrap";
 
 const INVITATION_ID = "invitation-123";
 const ORGANIZATION_ID = "organization-123";
@@ -70,6 +76,7 @@ describe("createInvitedAccount", () => {
         name: "Invitee",
         emailVerified: false,
       },
+      { method: "invitation" },
     );
     expect(result).toEqual({
       userId: USER_ID,
@@ -142,12 +149,19 @@ describe("invitation account state", () => {
     queueSelectResults([validInvitation()], [...rows]);
     expect(await getInvitationBootstrapState(INVITATION_ID)).toMatchObject({ account });
   });
-  it("checks reset cooldown against the invited user", async () => {
-    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }], [{ id: "recent-reset" }]);
-    expect(await hasRecentInvitationPasswordReset(INVITATION_ID)).toBe(true);
+  it("consumes the password setup bucket for the invited user", async () => {
+    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
+    mockConsumeRateLimit.mockResolvedValue({ allowed: true });
+    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(true);
+    expect(mockConsumeRateLimit).toHaveBeenCalledExactlyOnceWith({
+      key: `invitation-set-password:${USER_ID}`,
+      ...INVITATION_SET_PASSWORD_RATE_LIMIT,
+    });
   });
-  it("has no cooldown for an invited address without a user", async () => {
+  it("does not allow sending for an invited address without a user", async () => {
     queueSelectResults([validInvitation()], []);
-    expect(await hasRecentInvitationPasswordReset(INVITATION_ID)).toBe(false);
+    mockConsumeRateLimit.mockClear();
+    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(false);
+    expect(mockConsumeRateLimit).not.toHaveBeenCalled();
   });
 });

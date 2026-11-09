@@ -495,7 +495,7 @@ it.each(["admin", "member"])("the emailed token confirms the mailbox and allows 
   memory.user[0].emailVerified = false;
   const context = await auth.$context;
   // Session selection reads application data; keep this harness focused on auth.
-  const selectOrganization = vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockResolvedValue(undefined);
+  const selectOrganization = vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockImplementation(async (session) => ({ data: session }));
   await expect(auth.api.signInEmail({ body: { email: "actor@example.test", password: NOTICE_NEW_PASSWORD } })).rejects.toThrow();
   await auth.api.requestPasswordReset({ body: { email: "actor@example.test", redirectTo: "/set-password?invitation=mailbox-invite" } });
   expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: "set-password", subject: "Set your noma password" }));
@@ -525,7 +525,7 @@ it("a confirmed invited user signs in and accepts with their existing password",
   addMailboxInvitation();
   await addNoticeCredential();
   const context = await auth.$context;
-  vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockResolvedValue(undefined);
+  vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockImplementation(async (session) => ({ data: session }));
   const signedIn = await auth.api.signInEmail({ body: { email: "actor@example.test", password: NOTICE_OLD_PASSWORD }, returnHeaders: true });
   const accepted = await auth.api.acceptInvitation({ body: { invitationId: "mailbox-invite" }, headers: new Headers({ cookie: signedIn.headers.get("set-cookie")! }) });
   expect(accepted.member).toMatchObject({ userId: "actor", role: "member" });

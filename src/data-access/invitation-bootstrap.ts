@@ -1,8 +1,9 @@
-import { and, eq, gte, like, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
-import { INVITATION_SET_PASSWORD_RESEND_COOLDOWN_SECONDS, MILLISECONDS_PER_SECOND } from "@/config/auth";
-import { invitations, users, verifications } from "@/db/schema";
+import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
+import { invitations, users } from "@/db/schema";
+import { consumeRateLimit } from "@/data-access/api-rate-limits";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError } from "@/lib/errors";
 
@@ -96,7 +97,7 @@ export async function createInvitedAccount(input: {
       email,
       name: input.name,
       emailVerified: false,
-    });
+    }, { method: "invitation" });
   } catch (error) {
     // Normalized email plus the database uniqueness constraint is the race
     // backstop when two bootstrap requests pass the anonymous pre-check.
@@ -113,22 +114,17 @@ export async function createInvitedAccount(input: {
   };
 }
 
-/** Recent reset requests share a cooldown across invitations for the mailbox. */
+/** Atomically reserve a password setup email across invitations for the mailbox. */
 // org-scope-ok: pre-sign-in cooldown derives the user from a pending, unexpired invitation id.
-export async function hasRecentInvitationPasswordReset(invitationId: string): Promise<boolean> {
+export async function consumeInvitationSetPasswordRateLimit(invitationId: string): Promise<boolean> {
   const invitation = await readValidInvitation(invitationId);
   const user = await findUserByEmail(db, invitation.email);
   if (!user) return false;
-  const cutoff = new Date(Date.now() - INVITATION_SET_PASSWORD_RESEND_COOLDOWN_SECONDS * MILLISECONDS_PER_SECOND);
-  const [recent] = await db.select({ id: verifications.id })
-    .from(verifications)
-    .where(and(
-      eq(verifications.value, user.id),
-      like(verifications.identifier, "reset-password:%"),
-      gte(verifications.createdAt, cutoff),
-    ))
-    .limit(1);
-  return Boolean(recent);
+  const result = await consumeRateLimit({
+    key: `invitation-set-password:${user.id}`,
+    ...INVITATION_SET_PASSWORD_RATE_LIMIT,
+  });
+  return result.allowed;
 }
 
 // org-scope-ok: pre-sign-in lookup validates the invitation id, status and expiry.

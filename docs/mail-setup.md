@@ -66,6 +66,7 @@ id through Better Auth's callback. With mail unconfigured, the local console
 prints `[auth:set-password]` with the user ID and link, just as it does for reset.
 No fallback links are printed in production.
 
-Invitation setup requests acknowledge success during the resend cooldown and on
-provider failure. Their `emailSent` acknowledgement is distinct from the inviter's
+Invitation setup uses an atomic one-token bucket keyed by user ID, shared across
+invitations, to enforce the 60-second resend cooldown. Requests acknowledge success
+during the cooldown and on provider failure. Their `emailSent` acknowledgement is distinct from the inviter's
 provider-delivery result described above.

@@ -11,7 +11,7 @@ import {
 } from "@/fn/action-errors";
 import {
   createInvitedAccount,
-  hasRecentInvitationPasswordReset,
+  consumeInvitationSetPasswordRateLimit,
   getInvitationBootstrapState as readInvitationBootstrapState,
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
@@ -125,7 +125,7 @@ function refuseConfirmedAccount(state: InvitationBootstrapState): void {
 }
 
 async function sendInvitationSetPassword(state: InvitationBootstrapState): Promise<{ emailSent: true }> {
-  if (!await hasRecentInvitationPasswordReset(state.invitationId)) {
+  if (await consumeInvitationSetPasswordRateLimit(state.invitationId)) {
     await auth.api.requestPasswordReset({ body: {
       email: state.email,
       redirectTo: `/set-password?invitation=${encodeURIComponent(state.invitationId)}`,

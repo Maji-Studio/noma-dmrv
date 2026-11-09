@@ -10,7 +10,7 @@ vi.mock("@/lib/log", () => ({
 const mockReadState = vi.fn();
 const mockCreateAccount = vi.fn();
 const mockHashPassword = vi.fn();
-const mockRecentReset = vi.fn();
+const mockConsumeSetPasswordRateLimit = vi.fn();
 const mockRequestPasswordReset = vi.fn();
 const mockGetSession = vi.fn();
 const mockSignInEmail = vi.fn();
@@ -21,7 +21,7 @@ const mockPersistLastActiveOrganization = vi.fn();
 vi.mock("@/data-access/invitation-bootstrap", () => ({
   getInvitationBootstrapState: (...args: unknown[]) => mockReadState(...args),
   createInvitedAccount: (...args: unknown[]) => mockCreateAccount(...args),
-  hasRecentInvitationPasswordReset: (...args: unknown[]) => mockRecentReset(...args),
+  consumeInvitationSetPasswordRateLimit: (...args: unknown[]) => mockConsumeSetPasswordRateLimit(...args),
 }));
 
 vi.mock("@/data-access/organizations", () => ({
@@ -68,7 +68,7 @@ describe("bootstrapInvitationAccountAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSession.mockResolvedValue(null);
-    mockRecentReset.mockResolvedValue(false);
+    mockConsumeSetPasswordRateLimit.mockResolvedValue(true);
     mockReadState.mockResolvedValue({
       invitationId: INVITATION_ID,
       organizationId: ORGANIZATION_ID,
@@ -176,14 +176,14 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(result).toEqual({ success: true, data: { emailSent: true } });
   });
 
-  it.each([false, true])("retries pending setup without changing the user, cooldown=%s", async recent => {
+  it.each([false, true])("retries pending setup without changing the user, sending allowed=%s", async allowed => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, organizationId: ORGANIZATION_ID, email: EMAIL, account: "pending" });
-    mockRecentReset.mockResolvedValue(recent);
+    mockConsumeSetPasswordRateLimit.mockResolvedValue(allowed);
     expect(await bootstrapInvitationAccountAction({ ...VALID_INPUT, name: "Ignored name" }))
       .toEqual({ success: true, data: { emailSent: true } });
     expect(mockCreateAccount).not.toHaveBeenCalled();
-    expect(mockRequestPasswordReset).toHaveBeenCalledTimes(recent ? 0 : 1);
-    expect(mockRecentReset).toHaveBeenCalledWith(INVITATION_ID);
+    expect(mockRequestPasswordReset).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    expect(mockConsumeSetPasswordRateLimit).toHaveBeenCalledWith(INVITATION_ID);
   });
 
   it("resends pending setup using only the invitation id", async () => {

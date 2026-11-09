@@ -71,7 +71,7 @@ describe("InvitationBootstrapForm", () => {
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     await waitFor(() => expect(mocks.resend).toHaveBeenCalledWith({ invitationId: INVITATION_ID }));
-    expect(await screen.findByText(/a new one is on its way/)).toBeTruthy();
+    expect(await screen.findByText(/Link requested/)).toBeTruthy();
   });
 
   it("shows a refused resend", async () => {
