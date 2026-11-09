@@ -1056,7 +1056,10 @@ shell but opens with a display headline ("Dashboard" as `title-heading-2`, an
 batch filter (`DataTable.FilterSelect`) top right. Its KPI strip is the 4-cell
 **HeroKpiBand** (one ink-bordered strip, not iconed StatCards), then the stage
 band (`components/dashboard/stage-band.tsx` over the landscape scene). No other
-page gets a display headline.
+page gets a display headline. Its To do, Bins and Recent activity rows are one
+line each, except that a Bins row carries a second caption line with the bin
+kind and what it holds ("Feedstock bin · Forestry waste"), dropped when it
+repeats the kind or the name.
 
 ### List-page idiom — copy `order-list.tsx:120-349`
 
