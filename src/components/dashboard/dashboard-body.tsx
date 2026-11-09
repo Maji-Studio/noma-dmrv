@@ -42,13 +42,24 @@ interface DashboardBodyProps {
 }
 
 export function DashboardBody({ data: overview, isLoading: overviewLoading, error, onRetry, facilityId, timeZone, status }: DashboardBodyProps) {
-  const scope = useDashboardBatchScope(facilityId, useSelectedBatchId());
+  const batchId = useSelectedBatchId(facilityId);
+  // Wait for the batch list before reading, so a stale `?batch=` reads all batches once.
+  const scope = useDashboardBatchScope(batchId === undefined ? null : facilityId, batchId ?? null);
   const data = overview && scope.data ? applyBatchScope(overview, scope.data) : undefined;
   const isLoading = overviewLoading || (data == null && scope.error == null);
   // What the facility can record now does not depend on the batch filter.
   const actions = useFlowActions(status, facilityId, overview);
 
-  if ((error && !overview) || scope.error) return <LoadError onRetry={onRetry} />;
+  if ((error && !overview) || scope.error) {
+    return (
+      <LoadError
+        onRetry={() => {
+          onRetry();
+          void scope.refetch();
+        }}
+      />
+    );
+  }
 
   const todos = data ? todoRows(data.attention, data.structuralGaps) : [];
   const activity = data ? activityRows(data.activity, timeZone) : [];

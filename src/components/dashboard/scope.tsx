@@ -13,9 +13,17 @@ import { creditBatchOptionLabel } from "@/lib/credit-batch-option-label";
 const BATCH_PARAM = "batch";
 const ALL_BATCHES = "All credit batches";
 
-/** The chosen batch id from the URL; null means all credit batches. */
-export function useSelectedBatchId(): string | null {
-  return useSearchParams().get(BATCH_PARAM);
+/**
+ * The chosen batch: the URL's `?batch=` when the facility lists that batch,
+ * else null (all credit batches), so a stale, archived or other facility's id
+ * falls back to all instead of failing the page. Undefined while the list loads.
+ */
+export function useSelectedBatchId(facilityId: string): string | null | undefined {
+  const requested = useSearchParams().get(BATCH_PARAM);
+  const { data: batches, isPending, isError } = useCreditBatches(facilityId);
+  if (!requested || isError) return null;
+  if (isPending || !batches) return undefined;
+  return batches.some((batch) => batch.id === requested) ? requested : null;
 }
 
 export function BatchFilter({ facilityId }: { facilityId: string }) {
@@ -23,7 +31,7 @@ export function BatchFilter({ facilityId }: { facilityId: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const { data: batches = [], isLoading } = useCreditBatches(facilityId);
-  const selectedId = batches.some((batch) => batch.id === params.get(BATCH_PARAM)) ? params.get(BATCH_PARAM) : null;
+  const selectedId = useSelectedBatchId(facilityId) ?? null;
 
   const choose = (batchId: string) => {
     const next = new URLSearchParams(params.toString());
