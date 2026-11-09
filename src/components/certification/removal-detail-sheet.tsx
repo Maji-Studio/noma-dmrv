@@ -378,7 +378,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals)} />
+              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals, summary.deletionInProgress)} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (

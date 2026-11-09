@@ -74,10 +74,11 @@ describe("SubmissionOutcomeNotice", () => {
     });
 
     it("maps the viewer's delete facts", () => {
-      expect(deleteAccessFor(true, true)).toBe("can");
-      expect(deleteAccessFor(false, false)).toBe("ask-admin");
-      expect(deleteAccessFor(false, null)).toBe("unavailable");
-      expect(deleteAccessFor(false, true)).toBe("unavailable");
+      expect(deleteAccessFor(true, true, false)).toBe("can");
+      expect(deleteAccessFor(false, false, true)).toBe("deleting");
+      expect(deleteAccessFor(false, false, false)).toBe("ask-admin");
+      expect(deleteAccessFor(false, null, false)).toBe("unavailable");
+      expect(renderChanged(false, "deleting")).toContain("This Removal is being deleted. Reload the page to see the result.");
     });
   });
 

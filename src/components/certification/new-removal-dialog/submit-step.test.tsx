@@ -475,7 +475,7 @@ describe("SubmitStep", () => {
       const renderer = await renderFailed(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
       expect(JSON.stringify(renderer.toJSON())).toContain("Outcome notice: changed (can)");
       expect(JSON.stringify(renderer.toJSON())).not.toContain("safe retry");
-      expect(labels(renderer)).toEqual(["Delete Removal", "Review submission"]);
+      expect(labels(renderer)).toEqual(["Delete Removal", "Close"]);
       await act(async () => renderer.unmount());
     });
 

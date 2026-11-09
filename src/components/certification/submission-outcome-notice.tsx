@@ -78,20 +78,26 @@ const FINALIZED_NO_DELETE = "This Removal is finalized, so it cannot be deleted.
 const CHANGED_FACT = "Part of it may already be in Isometric.";
 
 /**
- * Whether this viewer can take Delete Removal: "can" shows the button, "ask-admin" means the
- * viewer is known to be below the role floor (#746), "unavailable" covers access still loading,
- * a deletion in progress or a linked GHG Statement.
+ * Whether this viewer can take Delete Removal: "can" shows the button, "deleting" means a deletion
+ * already runs, "ask-admin" means the viewer is known to be below the role floor (#746), and
+ * "unavailable" covers access still loading. A finalized Removal is worded by `finalized` first.
  */
-export type DeleteAccess = "can" | "ask-admin" | "unavailable";
+export type DeleteAccess = "can" | "deleting" | "ask-admin" | "unavailable";
 
-export function deleteAccessFor(canDelete: boolean, viewerCanDeleteRegistryRemovals: boolean | null): DeleteAccess {
+export function deleteAccessFor(
+  canDelete: boolean,
+  viewerCanDeleteRegistryRemovals: boolean | null,
+  deletionInProgress: boolean,
+): DeleteAccess {
   if (canDelete) return "can";
+  if (deletionInProgress) return "deleting";
   return viewerCanDeleteRegistryRemovals === false ? "ask-admin" : "unavailable";
 }
 
 /** The way out of a changed-since-review refusal is Delete Removal; say who can take it, or why nobody can now. */
 function changedFixLine(finalized: boolean, deleteAccess: DeleteAccess): string {
   if (finalized) return `${CHANGED_FACT} ${FINALIZED_NO_DELETE}`;
+  if (deleteAccess === "deleting") return `${CHANGED_FACT} This Removal is being deleted. Reload the page to see the result.`;
   if (deleteAccess === "ask-admin") return `${CHANGED_FACT} Ask an Admin to delete it. Then create the Removal again.`;
   if (deleteAccess === "unavailable") return `${CHANGED_FACT} Delete Removal is not available right now. Reload the page to try again.`;
   return `${CHANGED_FACT} Select Delete Removal to remove anything that reached Isometric. Then create the Removal again.`;

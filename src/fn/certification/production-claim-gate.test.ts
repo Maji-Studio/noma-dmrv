@@ -18,7 +18,11 @@ import {
   SUBMITTED_REMOVAL_REVISION_DRIFT_MESSAGE,
 } from "./production-claim-gate";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import {
+  INTERRUPTED_REMOVAL_CHANGED_MESSAGE,
+  INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE,
+  InterruptedRemovalChangedError,
+} from "@/lib/certification/interrupted-removal-copy";
 
 const ORG_CTX = {
   userId: "user-1",
@@ -27,12 +31,13 @@ const ORG_CTX = {
   isPlatformAdmin: false,
 } as OrgContext;
 
-function retire(preserveForReconciliation: boolean) {
+function retire(preserveForReconciliation: boolean, changed = true) {
   return retireClaimedRemovalDraftForDrift({
     orgCtx: ORG_CTX,
     submissionId: "sub-1",
     reason: "semantic payload drift",
     preserveForReconciliation,
+    changed,
   });
 }
 
@@ -45,6 +50,12 @@ describe("retireClaimedRemovalDraftForDrift", () => {
     await expect(retire(true)).rejects.toThrow(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
     expect(INTERRUPTED_REMOVAL_CHANGED_MESSAGE).toContain("Select Delete Removal");
     expect(INTERRUPTED_REMOVAL_CHANGED_MESSAGE).not.toMatch(/support/i);
+    expect(retireStaleSubmissionDraft).not.toHaveBeenCalled();
+  });
+
+  it("keeps a possibly sent draft retryable when the recheck could not run", async () => {
+    await expect(retire(true, false)).rejects.toThrow(INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE);
+    await expect(retire(true, false)).rejects.not.toBeInstanceOf(InterruptedRemovalChangedError);
     expect(retireStaleSubmissionDraft).not.toHaveBeenCalled();
   });
 

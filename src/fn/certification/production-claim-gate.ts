@@ -21,7 +21,10 @@ import {
 } from "@/data-access/certification";
 import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
-import { InterruptedRemovalChangedError } from "@/lib/certification/interrupted-removal-copy";
+import {
+  INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE,
+  InterruptedRemovalChangedError,
+} from "@/lib/certification/interrupted-removal-copy";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "@/lib/certification/certify-context-core";
 
@@ -46,9 +49,13 @@ export async function retireClaimedRemovalDraftForDrift(args: {
   submissionId: string;
   reason: string;
   preserveForReconciliation: boolean;
+  /** The recheck proved a change (hash, mapping revision, durability gate), not merely failed to run. */
+  changed: boolean;
 }): Promise<void> {
   if (args.preserveForReconciliation) {
-    throw new InterruptedRemovalChangedError();
+    // Only a proven change leads to Delete Removal; a recheck that could not run stays retryable (#1114).
+    if (args.changed) throw new InterruptedRemovalChangedError();
+    throw new SafeError(INTERRUPTED_REMOVAL_RECHECK_FAILED_MESSAGE);
   }
   await retireStaleSubmissionDraft(args.orgCtx, args.submissionId, {
     reason: args.reason,
@@ -161,6 +168,7 @@ export async function assertResumedSnapshotRevisionCurrent(
     submissionId: row.id,
     reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
     preserveForReconciliation,
+    changed: true,
   });
   throw new SafeError(
     "This Removal draft uses older calculation settings. Submit again to rebuild it with current data.",

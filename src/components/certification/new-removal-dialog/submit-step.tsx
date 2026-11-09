@@ -254,7 +254,11 @@ export function SubmitStep({
     !submitMutation.isPending &&
     canDeleteRemovalRow(deleteFacts, deleteAccess);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
-  const noticeDeleteAccess = deleteAccessFor(canDeleteRemoval, deleteAccess.viewerCanDeleteRegistryRemovals);
+  const noticeDeleteAccess = deleteAccessFor(
+    canDeleteRemoval,
+    deleteAccess.viewerCanDeleteRegistryRemovals,
+    ctx.deletionInProgress,
+  );
 
   const deleteDialog = (
     <DeleteConfirmDialog
@@ -442,23 +446,17 @@ export function SubmitStep({
                   Close
                 </Button>
               ) : changedSinceReview ? (
+                // No way back to Review: its Submit again only refuses again (#1114).
                 <>
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     className={PHONE_TOUCH_TARGET}
                     onClick={() => setDeleteConfirmOpen(true)}
                   >
                     {deleteCopy.actionLabel}
                   </Button>
-                  <Button
-                    variant="weak"
-                    className={PHONE_TOUCH_TARGET}
-                    onClick={() => {
-                      setProgressUpdates([]);
-                      submitMutation.reset();
-                    }}
-                  >
-                    Review submission
+                  <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onDone}>
+                    Close
                   </Button>
                 </>
               ) : (

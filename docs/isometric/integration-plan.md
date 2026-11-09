@@ -493,5 +493,7 @@ Removal sheet show a "Changed since review" stop. Delete Removal leads, since it
 removes what reached Isometric, including unconfirmed sends, before the Removal
 is created again from current data. A viewer below the deletion role floor is
 told to ask an Admin. A Removal with a finalized earlier version cannot be
-deleted, so it goes to support. noma does not build a new version on top of a
-possibly sent attempt.
+deleted; the stop says so and names an admin or Isometric, as the drift stop
+does. A recheck that could not run (a template read, a transient error) is not
+a proven change: it stays retryable. noma does not build a new version on top
+of a possibly sent attempt.
