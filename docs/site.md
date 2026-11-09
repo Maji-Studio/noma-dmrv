@@ -33,6 +33,9 @@ so the site needs the whole repository checked out. See [Fonts](./design-system.
 The Mafinga photo (`site/public/images/mafinga-field-trial.jpg`) is gitignored
 because the repo is public and Dark Earth Carbon has not approved publishing it.
 A build without the file shows a hatched placeholder; never commit it.
+The pages use four committed film stills from Mafinga instead
+(`site/public/images/photos/`, `PHOTOS` in `site/src/lib/assets.js`, rendered by `Photo.astro`):
+WebP at 800 and 1600 px wide, made with `cwebp -q 72 -resize <w> 0 -metadata none`.
 
 ## Page Roles
 

@@ -1,3 +1,4 @@
+import { startSubmissionRegistryAttempt } from "./submission-attempt-start";
 import { ATTEMPT_SUMMARY_OPERATION } from "@/lib/certification/submission-attempts";
 import { isNoAnswerError } from "@/lib/isometric/error-utils";
 import { REMOVAL_SUBMISSION_CLAIM_POLICY } from "@/lib/isometric/utils/submission-claim";
@@ -687,6 +688,7 @@ async function runRemovalSubmission({
   if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
   }
+  await startSubmissionRegistryAttempt(orgCtx, row);
   const boundSubmissions = durabilityMeasurementSubmissions
     ? await bindProductionBatchesToMeasurementSamples({
         orgCtx,

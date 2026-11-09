@@ -79,6 +79,7 @@ export async function recordClaimedRemovalSubmissionFailureBestEffort(args: {
     if (args.externalMutation === SUBMISSION_EXTERNAL_MUTATIONS.none) {
       await rejectSubmissionAndReleaseProductionClaims(args.orgCtx, {
         submissionId: args.submissionId,
+        mutationFreeAttempt: true,
         errorMessage,
         expectedLockedAt: args.expectedLockedAt,
       });

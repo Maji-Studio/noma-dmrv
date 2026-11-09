@@ -106,6 +106,7 @@ it.each([
   vi.mocked(claims.claimSubmissionDraft).mockImplementation(realClaims.claimSubmissionDraft);
   vi.mocked(claims.getLatestSubmissionWithExecutor).mockImplementation(realClaims.getLatestSubmissionWithExecutor);
   vi.mocked(claims.recordConfirmedSubmissionIdentity).mockImplementation(realClaims.recordConfirmedSubmissionIdentity);
+  vi.mocked(claims.markSubmissionAttemptStarted).mockImplementation(realClaims.markSubmissionAttemptStarted);
   const realReservations = await vi.importActual<typeof reservations>("@/data-access/production-claim-reservations");
   vi.mocked(reservations.reserveProductionEmissionsClaims).mockImplementation(realReservations.reserveProductionEmissionsClaims);
   const transitions = await import("@/data-access/submission-ledger-transitions");

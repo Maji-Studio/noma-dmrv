@@ -5,6 +5,7 @@ import SiteShell from "../components/site/SiteShell.astro";
 import GridFrame from "../components/site/GridFrame.astro";
 import Button from "../components/site/Button.astro";
 import WalkthroughForm from "../components/site/get-started/WalkthroughForm.astro";
+import Photo from "../components/site/Photo.astro";
 const COVER = [
   ["The trace", "From a field back to its feedstock, and from a production run forward to its fields."],
   ["Bins and stock", "Wet and dry mass through split and mix bins, draw by draw."],
@@ -24,6 +25,10 @@ const SPEC = [["Licence", "MIT"], ["Built with", "Next.js and PostgreSQL"], ["Se
       <h1 id="page-title" class="t-display">Walk through noma with us.</h1>
       <p class="t-lead">We’ll walk through the trace and the records behind it, using an example like your operation.</p>
     </div>
+    <figure class="photo-wide" style="--photo-y:40%">
+      <Photo photo="field" eager />
+      <figcaption class="t-caption">Walking the fields with Dark Earth Carbon, Mafinga, Tanzania</figcaption>
+    </figure>
   </GridFrame>
 
   <GridFrame class="gsp-book" pad="none" flush aria-labelledby="book-title">

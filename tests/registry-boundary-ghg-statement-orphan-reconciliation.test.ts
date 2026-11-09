@@ -1,3 +1,15 @@
+import * as submissionLedger from "@/data-access/certification-submissions";
+import { getMetadataValue } from "@/lib/certification/submission-metadata";
+import * as registryApi from "@/lib/isometric";
+
+vi.mock("@/data-access/certification-submissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/data-access/certification-submissions")>();
+  return { ...actual, markSubmissionInterrupted: vi.fn(actual.markSubmissionInterrupted) };
+});
+vi.mock("@/lib/isometric", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/isometric")>();
+  return { ...actual, createGhgStatement: vi.fn(actual.createGhgStatement) };
+});
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -276,5 +288,46 @@ describe("createGhgStatementDraft boundary: orphan reconciliation", () => {
     expect(
       events.filter((event) => event.status === "failed"),
     ).toHaveLength(0);
+  });
+});
+
+
+describe("GHG Statement pre-write crash marker", () => {
+  it("persists before POST and survives a dropped response plus failure-recorder failure", async () => {
+    const fixture = await createFixture();
+    const actual = await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
+    vi.mocked(registryApi.createGhgStatement).mockImplementationOnce(async (client, payload) => {
+      const row = await latestLedgerRow(fixture.facilityId);
+      expect(row?.metadata).toMatchObject({ externalMutation: "possible" });
+      expect(getMetadataValue(row?.metadata, "lastAttemptOutcome")).toBeNull();
+      return actual.createGhgStatement(client, payload);
+    });
+    registry.failNext("POST /ghg_statements", "drop-after-commit");
+    registry.passNext("GET /ghg_statements");
+    registry.failNext("GET /ghg_statements", "reject-before-commit", { status: 503 });
+    vi.mocked(submissionLedger.markSubmissionInterrupted).mockRejectedValueOnce(new Error("process stopped"));
+    const input = { facilityId: fixture.facilityId, reportingPeriodEndOn: REPORTING_PERIOD_END };
+    expect(await createGhgStatementDraft(input)).toMatchObject({ success: false });
+    const row = await latestLedgerRow(fixture.facilityId);
+    expect(row).toMatchObject({ status: "draft", metadata: { externalMutation: "possible" } });
+    expect(getMetadataValue(row?.metadata, "lastAttemptOutcome")).toBeNull();
+    expect(registry.ghgStatements).toHaveLength(1);
+    await staleifyLock(row!.id);
+    expect(await createGhgStatementDraft(input)).toMatchObject({ success: true });
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
+    const completed = await latestLedgerRow(fixture.facilityId);
+    expect(completed?.status).toBe("submitted");
+    expect(getMetadataValue(completed?.metadata, "externalMutation")).toBeNull();
+  });
+
+  it("clears the pre-write marker on a definitive first-POST refusal", async () => {
+    const fixture = await createFixture();
+    registry.failNext("POST /ghg_statements", "reject-before-commit", { status: 422 });
+    expect(await createGhgStatementDraft({ facilityId: fixture.facilityId, reportingPeriodEndOn: REPORTING_PERIOD_END }))
+      .toMatchObject({ success: false });
+    const row = await latestLedgerRow(fixture.facilityId);
+    expect(row).toMatchObject({ status: "rejected", lockedAt: null });
+    expect(getMetadataValue(row?.metadata, "externalMutation")).toBeNull();
+    expect(registry.ghgStatements).toHaveLength(0);
   });
 });

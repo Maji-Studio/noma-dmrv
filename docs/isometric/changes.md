@@ -773,9 +773,13 @@ remain pending.
   `metadata.externalMutation` is `possible`/`confirmed` unless
   `--force-confirmed` is passed, because rejecting such a draft re-versions
   the supplier references and can duplicate registry entries.
-- GHG statement creates now persist the interrupted marker (`lastError`,
-  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
-  reached the registry, matching the Removal pipeline.
+- Removal and GHG Statement attempts persist `externalMutation: "possible"`
+  before registry writes, guarded by organization, draft status and exact lock.
+  Caught uncertain failures additionally record `lastError` and
+  `lastAttemptOutcome: "interrupted"`; a process crash leaves the pre-write
+  marker available for reconciliation without bypassing the live lock TTL.
+  Definitive mutation-free rejection and successful finalization clear attempt
+  metadata. See [submission execution and crash recovery](integration-plan.md#submission-execution-and-crash-recovery).
 
 ## Production batch identity readback and recovery
 
