@@ -66,7 +66,6 @@ import { buildComponentTable } from "./component-table-model";
 import { useSharedSourceFiles } from "./shared-source-file-notices";
 import { formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { Notice } from "@/components/ui/notice";
-import { CarriedEntriesPanel } from "../carried-entries";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
@@ -503,27 +502,24 @@ export function SubmitStep({
           }}
         />
       ) : (
-        <>
-          <SubmissionSummary
-            ctx={ctx}
-            facilityId={facilityId}
-            compilation={compilationQuery.data ?? null}
-            isCompilationLoading={compilationQuery.isLoading}
-            compilationError={compilationQuery.error}
-            checks={checklist}
-            sharedFiles={sharedFiles}
-            readiness={readiness}
-            rejectionMessage={rejectionMessage}
-            entries={fixEntries}
-            changes={changes}
-            onFix={markFixUsed}
-            onOpenDetails={() => showDetails(true)}
-            onRetryCompilation={() => {
-              void compilationQuery.refetch();
-            }}
-          />
-          <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
-        </>
+        <SubmissionSummary
+          ctx={ctx}
+          facilityId={facilityId}
+          compilation={compilationQuery.data ?? null}
+          isCompilationLoading={compilationQuery.isLoading}
+          compilationError={compilationQuery.error}
+          checks={checklist}
+          sharedFiles={sharedFiles}
+          readiness={readiness}
+          rejectionMessage={rejectionMessage}
+          entries={fixEntries}
+          changes={changes}
+          onFix={markFixUsed}
+          onOpenDetails={() => showDetails(true)}
+          onRetryCompilation={() => {
+            void compilationQuery.refetch();
+          }}
+        />
       )}
 
       {/* The persisted rejected state belongs to the summary above; this

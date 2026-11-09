@@ -135,7 +135,6 @@ vi.mock("./use-fix-progress", async (importOriginal) => ({
   useRecheckOnReturn: () => () => undefined,
 }));
 vi.mock("./review-details", () => ({ ReviewDetails: () => <div>Review details</div> }));
-vi.mock("../carried-entries", () => ({ CarriedEntriesPanel: () => null }));
 vi.mock("@/hooks/use-removal-empty-components", () => ({ useRefreshRemovalReview: () => vi.fn() }));
 
 vi.mock("./submission-summary", () => ({
