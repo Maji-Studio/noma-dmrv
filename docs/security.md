@@ -227,7 +227,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   for fetching licensed fonts. Optional `FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`,
   `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX` override the private object location.
   These are read by `scripts/fetch-fonts.mjs`; missing credentials use system
-  fallback fonts. See [Fonts](./design-system.md#fonts).
+  fallback fonts. The key is in the three 1Password items like other secrets,
+  but the noma-site Vercel project needs it set by hand (`pnpm env:vercel` syncs
+  only noma-dmrv). See [Fonts](./design-system.md#fonts).
 
 - `NEXT_PUBLIC_SHOT_MODE` — `next.config.ts` and
   `src/components/navigation/sidebar-content.tsx`. Only the literal `true` counts and it is ignored when

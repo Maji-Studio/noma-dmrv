@@ -61,6 +61,13 @@ STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 
 # -----------------------------------------------------------------------------
+# Licensed fonts (build only): read-only Spaces key for scripts/fetch-fonts.mjs.
+# Optional: without it builds use the fallback system fonts.
+# -----------------------------------------------------------------------------
+FONTS_S3_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/FONTS_S3_ACCESS_KEY_ID"
+FONTS_S3_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/FONTS_S3_SECRET_ACCESS_KEY"
+
+# -----------------------------------------------------------------------------
 # Geo / Maps (map integration — ADR 0009)
 # The key is OPTIONAL: without it the app still runs; CALC and address search
 # degrade gracefully. OPENROUTESERVICE_API_KEY is server-only (geocoding +

@@ -85,6 +85,7 @@ the site project's Vercel env vars when deployed.
 | Variable | Effect |
 | --- | --- |
 | `PUBLIC_APP_URL` | App origin, for example `https://staging.app.noma.maji.studio`. Unset hides the header's Log in link. |
+| `FONTS_S3_ACCESS_KEY_ID`, `FONTS_S3_SECRET_ACCESS_KEY` | Build only: read-only key for the licensed GT Flexa files. Unset builds with fallback fonts. Set by hand on this project; see [Fonts](./design-system.md#fonts). |
 
 ## Vercel Projects and Domains
 

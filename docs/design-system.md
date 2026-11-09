@@ -88,10 +88,13 @@ Read these first. Each one fails quietly rather than loudly.
 GT Flexa is commercially licensed for our websites. Never commit its font files.
 `scripts/fetch-fonts.mjs` downloads them from private DigitalOcean Spaces objects
 at `https://fra1.digitaloceanspaces.com`, region `fra1`, bucket `maji`, prefix
-`noma-dmrv-assets/fonts`. Set `FONTS_S3_ACCESS_KEY_ID` and
-`FONTS_S3_SECRET_ACCESS_KEY` in the build environment. Optional overrides are
+`noma-dmrv-assets/fonts`, with a read-only key in `FONTS_S3_ACCESS_KEY_ID` and
+`FONTS_S3_SECRET_ACCESS_KEY`. Like every secret, the key lives in the three
+1Password items (`.env.tpl`, `.env.local.tpl`); `pnpm env:vercel` carries it to
+the noma-dmrv project. The noma-site project is not synced by that script, so set
+the same two variables there by hand after a rotation. Optional overrides are
 `FONTS_S3_ENDPOINT`, `FONTS_S3_REGION`, `FONTS_S3_BUCKET` and `FONTS_S3_PREFIX`.
-The script reads the process environment, without loading env files.
+The script reads the process environment; `pnpm fonts:fetch` also loads `.env.local`.
 
 App and site builds fetch into a gitignored `fonts/` directory inside
 `public/` and `site/public/`. Without credentials, builds succeed using the existing
