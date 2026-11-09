@@ -590,9 +590,9 @@ Always use `Button`; never a raw `<button>` with manual styling.
   full-width disclosure row (date range, dry mass, caret, 44px tall). `Button` has no row
   layout (fixed heights, `whitespace-nowrap`, `label-button` type), so it stays a raw
   `<button>` with the focus ring and a 44px hit area (`INLINE_HIT_AREA_FROM_SM`). "Show all N"
-  is not an exception: it is a `Button variant="noOutline" size="small"` with
-  `PHONE_TOUCH_TARGET`, mono uppercase like every text button ("Show the top N" in the energy
-  record list too).
+  is not an exception: it is `TextAction` (`ui/text-action.tsx`), a `noOutline` Button with
+  a 44px hit area and its label flush with the text above, mono uppercase like every text
+  button ("Show the top N" in the energy record list too).
 - **A confirm dialog keeps its label.** `DeleteConfirmDialog` and
   `ConfirmActionDialog` show the spinner through `busy` and never swap the text
   ("Deleting...", "Submitting…"); Cancel is disabled and Escape, the backdrop
