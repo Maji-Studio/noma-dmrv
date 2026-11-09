@@ -9,9 +9,6 @@ import { OrganizationCertifierCredentials } from "./organization-certifier-crede
 const mocks = vi.hoisted(() => ({ bootstrap: vi.fn(), resend: vi.fn(), set: vi.fn() }));
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock("@/fn/invitation-bootstrap", () => ({ bootstrapInvitationAccountAction: mocks.bootstrap, resendInvitationSetPasswordAction: mocks.resend }));
-vi.mock("@/hooks/use-busy-until-unload", () => ({ useBusyUntilUnload: () => ({ held: false, hold: vi.fn() }) }));
-vi.mock("@/lib/pending-warning", () => ({ stashPendingWarning: vi.fn() }));
-vi.mock("@/lib/org-switch-notice", () => ({ stashOrgSwitchNotice: vi.fn() }));
 vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ isLoading: false, data: { configured: false, accessTokenLast4: null } }),
   useSetOrgCertifierCredentials: () => ({ mutateAsync: mocks.set, isPending: false }),

@@ -11,6 +11,8 @@ import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
 import { AuthResult } from "@/components/auth/auth-result";
 import {
   bootstrapInvitationAccountAction,
@@ -152,7 +154,7 @@ function CheckEmail({
               action={accountExists ? (
                 <Link
                   href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
-                  className="underline"
+                  className={cn("underline", INLINE_HIT_AREA)}
                 >
                   Sign in
                 </Link>
