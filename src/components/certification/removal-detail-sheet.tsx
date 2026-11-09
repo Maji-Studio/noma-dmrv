@@ -25,7 +25,12 @@ import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
   useFacilityCertifierSummary,
+  useRemovalBreakdown,
 } from "@/hooks/use-certification";
+import { useRemovalSheetFacts } from "@/hooks/use-removal-sheet-facts";
+import type { RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
+import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
+import { recordHref } from "@/lib/record-links";
 import {
   deriveRemovalWorkflowStatus,
   REMOVAL_FAILED_REVIEW_REASON,
@@ -33,7 +38,7 @@ import {
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
 import { pluralize } from "@/lib/copy-utils";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { CarriedEntriesSection, RevisionLateEntriesSection } from "./carried-entries";
 import { EnvBanner } from "./env-banner";
@@ -65,6 +70,10 @@ import { correctionStatus } from "@/lib/removal-correction-copy";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
+const ESTIMATE_NOTE = "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
+const KG_PER_TONNE = 1000;
+const CO2E_DIGITS = 1;
+const DRY_MASS_DIGITS = 1;
 const ALLOCATION_HINT = "Allocation is on each credit batch's Emissions tab.";
 
 interface RemovalDetailSheetProps {
@@ -107,6 +116,23 @@ export function RemovalStorageSitesField({
         />
       }
     />
+  );
+}
+
+/** Each credit batch code links to its page; codes alone until the facts load. */
+function CreditBatchLinks({ facts, codes, facilityId }: { facts: RemovalSheetFacts | undefined; codes: string[]; facilityId: string }) {
+  if (!facts) return <span className="font-mono">{codes.join(", ")}</span>;
+  return (
+    <span>
+      {facts.batches.map((batch, index) => (
+        <span key={batch.id}>
+          {index > 0 && ", "}
+          <Link href={recordHref("creditBatch", batch.id, { facilityId })} className={RECORD_CODE_LINK}>
+            {batch.code}
+          </Link>
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -298,6 +324,12 @@ export function RemovalDetailSheet({
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
 
+  const sheetFacts = useRemovalSheetFacts(summary.removalId, { enabled: open });
+  const facts = sheetFacts.data;
+  // The registry's figure when Isometric has returned one; else noma's own estimate from the credit batches.
+  const breakdown = useRemovalBreakdown(summary.removalId, open && !!summary.externalId);
+  const registryNetKg = breakdown.data?.status === "available" ? breakdown.data.value.netRemovedKg : null;
+  const co2eTonnes = registryNetKg != null ? registryNetKg / KG_PER_TONNE : (facts?.co2eEstimateTonnes ?? null);
   const headerStatus = sheetStatusFor(shownStatus);
   const thingsToFix = thingsToFixLine(workflowStatus);
   const hasReportingWindow = summary.startedOn && summary.completedOn;
@@ -347,6 +379,18 @@ export function RemovalDetailSheet({
             <DetailSection title="Removal" className="peer-empty/status:border-t-0 peer-empty/status:pt-0">
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
                 <DetailField
+                  label="Estimated CO₂e stored"
+                  hint={ESTIMATE_NOTE}
+                  value={co2eTonnes == null ? null : formatTonnes(co2eTonnes, { digits: CO2E_DIGITS, unit: "t CO₂e" })}
+                  emptySituation="notYetComputed"
+                  pending={sheetFacts.isLoading && registryNetKg == null}
+                />
+                <DetailField
+                  label="Biochar dry mass"
+                  value={facts ? formatTonnes(facts.dryTonnes, { digits: DRY_MASS_DIGITS }) : null}
+                  pending={sheetFacts.isLoading}
+                />
+                <DetailField
                   label="Reporting window"
                   value={window}
                   valuePresent={Boolean(hasReportingWindow)}
@@ -356,19 +400,43 @@ export function RemovalDetailSheet({
                   hint={ALLOCATION_HINT}
                   value={
                     summary.memberBatchCodes.length > 0 ? (
-                      <span className="font-mono">
-                        {summary.memberBatchCodes.join(", ")}
-                      </span>
+                      <CreditBatchLinks facts={facts} codes={summary.memberBatchCodes} facilityId={facilityId} />
                     ) : null
                   }
                   emptySituation="none"
                 />
+                <DetailField label="Facility" value={facts?.facilityName ?? null} pending={sheetFacts.isLoading} />
               </div>
+
+              {summary.externalId && (
+                <RemovalCarbonBreakdown
+                  removalId={summary.removalId}
+                  enabled={open}
+                />
+              )}
             </DetailSection>
 
             <DetailSection title="Isometric">
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
                 <DetailField label="Destination" value={isProduction ? "Production" : "Sandbox"} valuePresent />
+                <DetailField
+                  label="Project"
+                  value={
+                    externalProjectId ? (
+                      <IsometricLink
+                        label={externalProjectId}
+                        href={isometricRegistry.certifyProject({ environment: isProduction ? "production" : "sandbox", externalProjectId })}
+                      />
+                    ) : null
+                  }
+                  valuePresent={Boolean(externalProjectId)}
+                />
+                <DetailField
+                  className="sm:col-span-2"
+                  label="Durability and sampling"
+                  value={facts?.durabilityLabel ? `${facts.durabilityLabel}, ${facts.samplingLabel?.toLowerCase()}` : null}
+                  pending={sheetFacts.isLoading}
+                />
 
                 <RemovalStorageSitesField
                   externalProjectId={externalProjectId}
@@ -410,13 +478,6 @@ export function RemovalDetailSheet({
                   />
                 )}
               </div>
-
-              {summary.externalId && (
-                <RemovalCarbonBreakdown
-                  removalId={summary.removalId}
-                  enabled={open}
-                />
-              )}
 
               {/*
                 Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant

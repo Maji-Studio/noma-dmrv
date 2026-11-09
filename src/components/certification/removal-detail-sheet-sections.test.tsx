@@ -6,13 +6,26 @@ import type { RemovalWorkflowStatus } from "@/lib/certification/status";
 import type { RemovalListRow } from "./removal-list-state";
 import { RemovalDetailSheet, sheetStatusFor, thingsToFixLine } from "./removal-detail-sheet";
 
+const mocks = vi.hoisted(() => ({
+  facts: {
+    batches: [{ id: "cb-1", code: "CB-26-001" }, { id: "cb-2", code: "CB-26-002" }],
+    facilityName: "Mafinga plant",
+    dryTonnes: 12.34,
+    co2eEstimateTonnes: 30.04,
+    durabilityLabel: "1000-year (R₀ reflectance)",
+    samplingLabel: "Sampled",
+  } as object | undefined,
+}));
+
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "" }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn(), success: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({
   useDeleteRemoval: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn() }),
-  useFacilityCertifierSummary: () => ({ data: undefined }),
+  useRemovalBreakdown: () => ({ data: undefined }),
+  useFacilityCertifierSummary: () => ({ data: { mapping: { externalProjectId: "prj_1" } } }),
 }));
+vi.mock("@/hooks/use-removal-sheet-facts", () => ({ useRemovalSheetFacts: () => ({ data: mocks.facts, isLoading: false }) }));
 vi.mock("@/hooks/use-removal-carried-entries", () => ({ useRemovalCarriedEntries: () => ({ data: undefined }) }));
 vi.mock("@/hooks/use-removal-delete-access", () => ({
   useRemovalDeleteAccess: () => ({ viewerCanDeleteRegistryRemovals: true, hasRegisteredProductionBatches: false }),
@@ -26,10 +39,11 @@ vi.mock("./removal-records", () => ({ RemovalRecords: () => <p>records</p> }));
 vi.mock("./certification-status-badge", () => ({ CertificationStatusBadge: ({ label }: { label: string }) => <span data-testid="badge">{label}</span> }));
 afterEach(cleanup);
 
+
 const BLOCKED: RemovalWorkflowStatus = { kind: "blocked", value: "pending", label: "Needs attention", reasons: ["a", "b", "c"], isActionable: true, canRetry: false };
 
 const SUMMARY = {
-  removalId: "rem-1", code: "RM-0001", startedOn: "2026-02-02", completedOn: "2026-03-20", memberBatchCodes: ["CB-1"], externalId: null, version: null,
+  removalId: "rem-1", code: "RM-0001", startedOn: "2026-02-02", completedOn: "2026-03-20", memberBatchCodes: ["CB-26-001", "CB-26-002"], externalId: null, version: null,
   local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, deletionInProgress: false,
   submissionAttempts: [], evidenceLinks: null, submissionWarnings: [], recentSyncEvents: [], missingProductionRuns: [], enrichmentStatus: "available",
   readiness: { state: "blocked", reasons: ["Add a lab report.", "Link a delivery proof."] },
@@ -45,6 +59,39 @@ describe("RemovalDetailSheet structure", () => {
     const titles = Array.from(document.querySelectorAll("[data-detail-section] > :first-child")).map((el) => el.textContent);
     expect(titles.filter((t) => ["Removal", "Isometric", "Records"].includes(t ?? ""))).toEqual(["Removal", "Isometric", "Records"]);
     expect(screen.queryByText("Submission status")).toBeNull();
+  });
+
+  it("fills Removal in the prototype's order: CO₂e, dry mass, window, credit batches, facility", () => {
+    renderSheet();
+    const section = screen.getByText("Removal", { exact: true }).closest("[data-detail-section]")!;
+    const labels = Array.from(section.querySelectorAll("span.body-small")).map((el) => el.textContent ?? "");
+    const order = ["Estimated CO₂e stored", "Biochar dry mass", "Reporting window", "Credit batches (2)", "Facility"].map((l) => labels.findIndex((t) => t.startsWith(l)));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(section.textContent).toContain("30.0 t CO₂e");
+    expect(section.textContent).toContain("12.3 t");
+    expect(section.textContent).toContain("Mafinga plant");
+  });
+
+  it("links each credit batch code to its page", () => {
+    renderSheet();
+    expect(screen.getByRole("link", { name: "CB-26-001" }).getAttribute("href")).toContain("/credit-batches/cb-1");
+    expect(screen.getByRole("link", { name: "CB-26-002" }).getAttribute("href")).toContain("/credit-batches/cb-2");
+  });
+
+  it("holds the project and durability and sampling in Isometric", () => {
+    renderSheet();
+    const section = screen.getByText("Isometric", { exact: true }).closest("[data-detail-section]")!;
+    expect(section.textContent).toContain("Project");
+    expect(section.querySelector("a[href*='/project/prj_1']")?.textContent).toContain("prj_1");
+    expect(section.textContent).toContain("Durability and sampling");
+    expect(section.textContent).toContain("1000-year (R₀ reflectance), sampled");
+  });
+
+  it("shows Not yet computed when no estimate exists", () => {
+    mocks.facts = { ...(mocks.facts as object), co2eEstimateTonnes: null };
+    renderSheet();
+    expect(screen.getByText("Not yet computed")).toBeTruthy();
   });
 
   it("puts the status badge in the header beside the code, and the draft reads Not submitted", () => {

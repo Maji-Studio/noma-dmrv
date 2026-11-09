@@ -12,7 +12,7 @@ import type { RecordLockView } from "@/lib/record-lock-view";
 import type { RemovalListRow } from "./removal-list-state";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 
-const mocks = vi.hoisted(() => ({ clockOverride: undefined as { timeZone?: string } | undefined, sourcesEditable: null as boolean | null }));
+const mocks = vi.hoisted(() => ({ clockOverride: undefined as { timeZone?: string } | undefined, sourcesEditable: null as boolean | null, facts: undefined as undefined }));
 
 vi.mock("next/link", () => ({ default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> }));
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -24,8 +24,10 @@ vi.mock("@/hooks/use-facility-context", () => ({
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn(), success: vi.fn() }) }));
 vi.mock("@/hooks/use-certification", () => ({
   useDeleteRemoval: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn() }),
+  useRemovalBreakdown: () => ({ data: undefined }),
   useFacilityCertifierSummary: () => ({ data: { mapping: { externalProjectId: "prj_1" } } }),
 }));
+vi.mock("@/hooks/use-removal-sheet-facts", () => ({ useRemovalSheetFacts: () => ({ data: mocks.facts, isLoading: false }) }));
 vi.mock("@/hooks/use-removal-carried-entries", () => ({ useRemovalCarriedEntries: () => ({ data: undefined }) }));
 // The records read has its own tests and needs a query client.
 vi.mock("./removal-records", () => ({ RemovalRecords: () => null }));
