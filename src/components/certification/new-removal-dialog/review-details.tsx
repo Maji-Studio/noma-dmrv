@@ -93,6 +93,7 @@ export function ReviewDetails({
       <CarriedEntriesPanel entries={ctx.carriedEntries} facilityId={facilityId} />
       <SourceRecords
         removalId={removalId}
+        onFix={onFix}
         facilityId={facilityId}
         storageSitesHref={
           externalProjectId

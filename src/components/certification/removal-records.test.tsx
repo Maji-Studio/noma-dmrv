@@ -119,3 +119,27 @@ describe("RemovalRecords states", () => {
     expect(document.body.textContent).not.toMatch(/none/i);
   });
 });
+
+describe("RemovalRecordsList link modes", () => {
+  it("keeps the sheet's links in the same tab by default", () => {
+    render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" />);
+    open();
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.getAttribute("target")).toBeNull();
+    }
+  });
+
+  it("opens the batch and record links in a new tab and reports the press when asked", () => {
+    const onOpen = vi.fn();
+    render(<RemovalRecordsList batches={[batch(1, 0)]} facilityId="f1" mode={{ newTab: true, onOpen }} />);
+    open();
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+      fireEvent.click(link);
+    }
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+});

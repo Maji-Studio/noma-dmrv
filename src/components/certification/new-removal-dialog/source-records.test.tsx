@@ -22,9 +22,9 @@ afterEach(cleanup);
 describe("SourceRecords", () => {
   it("shows the Removal sheet's records per credit batch for this Removal, then the Storage sites link", () => {
     render(<SourceRecords removalId="rm-1" facilityId="facility-1" storageSitesHref={STORAGE} />);
-    expect(screen.getByRole("heading", { name: "Records by credit batch" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Records" })).toBeTruthy();
     expect(screen.getByText("Batch records")).toBeTruthy();
-    expect(records.props).toMatchObject({ removalId: "rm-1", facilityId: "facility-1", enabled: true });
+    expect(records.props).toMatchObject({ removalId: "rm-1", facilityId: "facility-1", enabled: true, mode: { newTab: true } });
     expect(screen.getByRole("link", { name: "View in Isometric" }).getAttribute("href")).toBe(STORAGE);
   });
 

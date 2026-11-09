@@ -59,7 +59,20 @@ export function recordMassText(record: RemovalRecord): string | null {
   return `${formatTonnes(record.massKg / KG_PER_TONNE, { digits: MASS_DIGITS })} ${massWord(record)}`.replace(/ /g, "\u00a0");
 }
 
-function RecordLine({ record, facilityId }: { record: RemovalRecord; facilityId: string }) {
+/** `newTab`: links open in a new tab, so a host that must stay open (the review dialog) is not left; `onOpen` runs on the press. */
+export interface RecordLinkMode {
+  newTab?: boolean;
+  onOpen?: () => void;
+}
+
+function linkAttrs(mode: RecordLinkMode | undefined) {
+  return {
+    ...(mode?.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {}),
+    onClick: mode?.onOpen,
+  };
+}
+
+function RecordLine({ record, facilityId, mode }: { record: RemovalRecord; facilityId: string; mode?: RecordLinkMode }) {
   const mass = recordMassText(record);
   const href = recordHref(RECORD_KIND_LINK[record.kind], record.id, { facilityId });
   return (
@@ -69,14 +82,14 @@ function RecordLine({ record, facilityId }: { record: RemovalRecord; facilityId:
         {record.place && <> · {record.place}</>}
         {mass && <> · <span className="tabular-nums">{mass}</span></>}
       </span>
-      <Link href={href} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "text-[length:var(--text-xs)]")}>
+      <Link href={href} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "text-[length:var(--text-xs)]")}>
         {record.code}
       </Link>
     </li>
   );
 }
 
-export function RecordGroup({ title, records, facilityId }: { title: string; records: RemovalRecord[]; facilityId: string }) {
+export function RecordGroup({ title, records, facilityId, mode }: { title: string; records: RemovalRecord[]; facilityId: string; mode?: RecordLinkMode }) {
   const [showAll, setShowAll] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
   if (records.length === 0) return null;
@@ -93,7 +106,7 @@ export function RecordGroup({ title, records, facilityId }: { title: string; rec
       <h3 className="body-small font-medium">{title}</h3>
       <ul ref={listRef} className="flex flex-col">
         {shown.map((record) => (
-          <RecordLine key={record.id} record={record} facilityId={facilityId} />
+          <RecordLine key={record.id} record={record} facilityId={facilityId} mode={mode} />
         ))}
       </ul>
       {!showAll && hidden > 0 && (
@@ -113,13 +126,13 @@ function batchDryKg(batch: RemovalBatchRecords): number | null {
 }
 
 /** `summarize`: with several batches the row tells them apart by dates and dry mass; a lone batch repeats the Removal's own figures. */
-function BatchRow({ batch, facilityId, summarize }: { batch: RemovalBatchRecords; facilityId: string; summarize: boolean }) {
+function BatchRow({ batch, facilityId, summarize, mode }: { batch: RemovalBatchRecords; facilityId: string; summarize: boolean; mode?: RecordLinkMode }) {
   const [open, setOpen] = useState(false);
   const dryKg = batchDryKg(batch);
   return (
     <li className={cn("flex flex-col", ROW_DIVIDER)}>
       <div className="flex items-center gap-12">
-        <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
+        <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} {...linkAttrs(mode)} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
           {batch.code}
         </Link>
         <button
@@ -142,30 +155,30 @@ function BatchRow({ batch, facilityId, summarize }: { batch: RemovalBatchRecords
       </div>
       {open && (
         <div className="flex flex-col gap-12 pt-4 pb-16">
-          <RecordGroup title="Production runs" records={batch.productionRuns} facilityId={facilityId} />
-          <RecordGroup title="Applications" records={batch.applications} facilityId={facilityId} />
-          <RecordGroup title="Deliveries" records={batch.deliveries} facilityId={facilityId} />
-          <RecordGroup title="Feedstock intake" records={batch.feedstock} facilityId={facilityId} />
+          <RecordGroup title="Production runs" records={batch.productionRuns} facilityId={facilityId} mode={mode} />
+          <RecordGroup title="Applications" records={batch.applications} facilityId={facilityId} mode={mode} />
+          <RecordGroup title="Deliveries" records={batch.deliveries} facilityId={facilityId} mode={mode} />
+          <RecordGroup title="Feedstock intake" records={batch.feedstock} facilityId={facilityId} mode={mode} />
         </div>
       )}
     </li>
   );
 }
 
-export function RemovalRecordsList({ batches, facilityId }: { batches: RemovalBatchRecords[]; facilityId: string }) {
+export function RemovalRecordsList({ batches, facilityId, mode }: { batches: RemovalBatchRecords[]; facilityId: string; mode?: RecordLinkMode }) {
   if (batches.length === 0) {
     return <EmptyState padding="sm" icon={<StackIcon size={32} aria-hidden />} title="No credit batches yet" description="Records appear here once this Removal holds one." />;
   }
   return (
     <ul className="flex flex-col">
       {batches.map((batch) => (
-        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={batches.length > 1} />
+        <BatchRow key={batch.creditBatchId} batch={batch} facilityId={facilityId} summarize={batches.length > 1} mode={mode} />
       ))}
     </ul>
   );
 }
 
-export function RemovalRecords({ removalId, facilityId, enabled }: { removalId: string; facilityId: string; enabled: boolean }) {
+export function RemovalRecords({ removalId, facilityId, enabled, mode }: { removalId: string; facilityId: string; enabled: boolean; mode?: RecordLinkMode }) {
   const query = useRemovalRecords(removalId, { enabled });
   if (query.isLoading) return <div role="status" aria-busy="true" aria-label="Loading records"><Skeleton className="h-96 w-full" /></div>;
   if (query.isError || !query.data) {
@@ -178,5 +191,5 @@ export function RemovalRecords({ removalId, facilityId, enabled }: { removalId: 
       </Notice>
     );
   }
-  return <RemovalRecordsList batches={query.data} facilityId={facilityId} />;
+  return <RemovalRecordsList batches={query.data} facilityId={facilityId} mode={mode} />;
 }
