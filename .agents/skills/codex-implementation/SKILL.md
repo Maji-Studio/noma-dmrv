@@ -14,7 +14,9 @@ authority**.
 Every Codex prompt this skill writes opens with the text of `codex-safety-preamble.md`, the file beside this skill's folder (in noma-dmrv: `.agents/skills/codex-safety-preamble.md`); the review target or task follows it. Write the task part to `$ARTIFACT_DIR/task.md` with the Write tool, then join the two into `$PROMPT`:
 
 ```bash
-cat "<this skill's folder>/../codex-safety-preamble.md" "$ARTIFACT_DIR/task.md" > "$PROMPT"
+PREAMBLE="<this skill's folder>/../codex-safety-preamble.md"
+[ -s "$PREAMBLE" ] || { echo "missing Codex safety preamble: $PREAMBLE" >&2; exit 1; }
+cat "$PREAMBLE" "$ARTIFACT_DIR/task.md" > "$PROMPT" || exit 1
 ```
 
 When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
@@ -44,12 +46,13 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 2. **Define scope** — the files/behavior to change, files to avoid, constraints, and the
    verification commands. Keep it bounded; split multi-part work into separate Codex runs or
    ask the user which scope to do first.
-3. **Set up the artifact directory** and write a self-contained prompt:
+3. **Set up the artifact directory:**
    ```bash
    ARTIFACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-implementation.XXXXXX")"
    REPORT="$ARTIFACT_DIR/report.md"
    PROMPT="$ARTIFACT_DIR/prompt.md"
    ```
+   Write the self-contained task part to `$ARTIFACT_DIR/task.md`, then run the join under Safety preamble to create `$PROMPT`.
 4. **Run with repo write access:**
    ```bash
    "$CODEX" exec \
@@ -93,7 +96,7 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 
 ## Example Prompt
 
-Start every prompt with the safety preamble file.
+Write this task part to `$ARTIFACT_DIR/task.md`, then run the join under Safety preamble to create `$PROMPT`.
 
 ```text
 Repository: <task worktree from scripts/worktree.sh new, never the main checkout> (branch: <current>)

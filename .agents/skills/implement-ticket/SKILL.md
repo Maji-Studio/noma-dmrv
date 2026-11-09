@@ -89,7 +89,7 @@ Done when: the PR state is MERGED, the worktree is torn down, and the issue is c
 
 ## Waiting
 
-The suite, `scripts/pr-land.sh` and Codex runs are **background** work: start each with `run_in_background` and act on its exit notification. Until it arrives, work on another step or end the turn; the run needs no checking. When a look is needed (Kenji asks, a peer reports a change), `scripts/pr-status.sh <pr>...` prints one line per PR. `pr-land.sh --help` lists its exit codes; 5 means merged with teardown still owed.
+The suite, `scripts/pr-land.sh` and Codex runs are **background** work: start each with `run_in_background` and act on its exit notification. Until it arrives, work on another step or end the turn; the run needs no checking. When a look is needed (Kenji asks, a peer reports a change), `scripts/pr-status.sh <pr>...` prints one line per PR. `pr-land.sh --help` lists its exit codes; 5 means merged with requested teardown still owed, for any cause.
 
 ## Status
 

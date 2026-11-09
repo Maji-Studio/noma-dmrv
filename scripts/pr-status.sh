@@ -7,11 +7,11 @@ OWNER="${REPO%/*}"
 NAME="${REPO#*/}"
 EXIT_FAILURE=1
 EXIT_USAGE=2
-GH_CHECKS_FAILURE_STATUS=1
-GH_CHECKS_PENDING_STATUS=8
 SHORT_SHA_LENGTH=7
 PR_NUMBER_PATTERN='^[1-9][0-9]*$'
 QUEUE_QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){mergeQueueEntry{position state}}}}'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/pr-checks.sh"
 
 usage() {
   cat <<'EOF'
@@ -35,21 +35,8 @@ die() { printf 'pr-status: %s\n' "$2" >&2; exit "$1"; }
 read_error() { printf '%s' "$*"; exit "$EXIT_FAILURE"; }
 
 read_checks() {
-  local status=0
-  CHECKS_JSON="$(gh pr checks "$PR" --repo "$REPO" --required --json name,bucket,state 2>&1)" || status=$?
-  case "$status" in
-    0|"$GH_CHECKS_FAILURE_STATUS"|"$GH_CHECKS_PENDING_STATUS") ;;
-    *) read_error 'could not read required checks' ;;
-  esac
-  # gh prints a message instead of [] before checks exist.
-  case "$CHECKS_JSON" in
-    'no checks reported on '*|'no required checks reported on '*) CHECKS_JSON='[]' ;;
-  esac
-  printf '%s\n' "$CHECKS_JSON" | jq -e '
-    type == "array" and all(.[];
-      (.bucket == "pass" or .bucket == "fail" or .bucket == "pending" or
-       .bucket == "skipping" or .bucket == "cancel"))' >/dev/null ||
-    read_error 'invalid required checks response'
+  CHECKS_JSON="$(read_required_checks "$PR" "$REPO")" ||
+    read_error 'could not read required checks'
 }
 
 checks_summary() {

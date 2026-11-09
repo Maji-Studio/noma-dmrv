@@ -418,7 +418,7 @@ Playwright failing test names with their error lines from the failed Actions log
 position and local worktrees without changing anything. Each line labels the check
 buckets (`checks=pass=4,pending=6` or `checks=none`), merge state
 (`merge-state=BLOCKED`), and queue (`queue=3/QUEUED` or `queue=no`).
-A merged PR with a worktree still listed needs teardown; `pr-land.sh` exits 5 when the PR merged but teardown failed.
+A merged PR with a worktree still listed needs teardown; `pr-land.sh` exits 5 when the PR merged but requested teardown is still owed, for any cause (including an unavailable merge commit).
 These scripts do not run tests or delete branches themselves; `--teardown` delegates to `teardown`, which deletes the branch once merged.
 
 ## Stale mocks: lint rule and pre-push hook

@@ -67,6 +67,8 @@ describe("block-process-kill hook", () => {
     // Inner heredoc examples are literal body text and cannot execute.
     ...KILL_COMMANDS.map((command) => `cat > prompt.md <<'EOF'\ncat <<'INNER'\n${command}\nINNER\nEOF`),
     `cat > first.md <<'EOF'\n${PREAMBLE}\nEOF\ncat > second.md <<'END'\nordinary text`,
+    `cat > outer.txt <<-OUTER\nordinary\n\tOUTER\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`,
+    `cat <<FIRST <<'SECOND'\nordinary\nFIRST\nordinary\nSECOND\ncat > prompt.md <<'EOF'\n${PREAMBLE}\nEOF`,
   ];
   it.each(literalCommands)("allows literal file-writing bodies: %s", (command) => {
     const result = runCommand(command);
@@ -80,6 +82,10 @@ describe("block-process-kill hook", () => {
     ...["bash", "sh", "zsh", "python"].map((shell) => `${shell} <<'EOF'\n${command}\nEOF`),
     `cat <<'EOF' | bash\n${command}\nEOF`,
     `cat > prompt.md <<EOF\n$(${command})\nEOF`,
+    `cat > outer.sh <<OUTER\ncat > inner.txt <<'INNER'\n$(${command})\nINNER\nOUTER`,
+    // Fail closed even though the inner cat body is literal in the shell.
+    `bash <<'OUTER'\ncat > inner.txt <<'INNER'\n${command}\nINNER\nOUTER`,
+    `cat > outer.sh <<-OUTER\ncat > inner.txt <<'INNER'\n$(${command})\nINNER\n\tOUTER`,
     `cat > prompt.md <<'EOF'\nsafe\nEOF\n${command}`,
     `${command}\ncat > prompt.md <<'EOF'\nsafe\nEOF`,
     `${command}; cat > f <<'EOF'\nsafe\nEOF`,

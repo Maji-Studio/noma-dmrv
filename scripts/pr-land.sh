@@ -19,8 +19,6 @@ EMPTY_CHECK_GRACE_SECONDS=120
 QUEUE_POLL_INTERVAL_SECONDS="${PR_LAND_POLL_INTERVAL_SECONDS:-30}"
 QUEUE_TIMEOUT_SECONDS=3600
 QUEUE_APPEARANCE_GRACE_POLLS=2
-GH_CHECKS_FAILURE_STATUS=1
-GH_CHECKS_PENDING_STATUS=8
 EXIT_FAILURE=1
 EXIT_USAGE=2
 EXIT_HEAD_MOVED=3
@@ -32,6 +30,7 @@ WORKTREE_NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
 QUEUE_QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){state isInMergeQueue mergeCommit{oid} timelineItems(itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT],last:1){nodes{... on RemovedFromMergeQueueEvent{reason createdAt}}}}}}'
 ENQUEUE_MUTATION='mutation($id:ID!,$sha:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha}){mergeQueueEntry{state position}}}'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/pr-checks.sh"
 MAIN_CHECKOUT="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
 
 usage() {
@@ -60,7 +59,7 @@ Exit codes:
   2  Invalid arguments, configuration, or missing dependency
   3  Head changed while waiting or preparing to enqueue
   4  Merge state, head sync, checks, missing-check grace, or queue watch timed out
-  5  MERGED, but teardown failed (merge commit printed)
+  5  MERGED, but requested teardown is still owed (any cause)
 EOF
 }
 
@@ -88,21 +87,8 @@ read_pr() {
 }
 
 read_checks() {
-  local status=0
-  CHECKS_JSON="$(gh pr checks "$PR" --repo "$REPO" --required --json name,bucket,state 2>&1)" || status=$?
-  case "$status" in
-    0|"$GH_CHECKS_FAILURE_STATUS"|"$GH_CHECKS_PENDING_STATUS") ;;
-    *) die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON" ;;
-  esac
-  # gh prints a message instead of [] before checks exist (with --required: "no required checks ...").
-  case "$CHECKS_JSON" in
-    'no checks reported on '*|'no required checks reported on '*) CHECKS_JSON='[]' ;;
-  esac
-  printf '%s\n' "$CHECKS_JSON" | jq -e '
-    type == "array" and all(.[];
-      (.bucket == "pass" or .bucket == "fail" or .bucket == "pending" or
-       .bucket == "skipping" or .bucket == "cancel"))' >/dev/null ||
-    die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON"
+  CHECKS_JSON="$(read_required_checks "$PR" "$REPO")" ||
+    die "$EXIT_FAILURE" "could not read checks for #$PR"
 }
 
 checks_summary() {
@@ -153,7 +139,12 @@ watch_queue() {
     queued="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.isInMergeQueue')"
     if [ "$state" = MERGED ]; then
       oid="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.mergeCommit.oid // empty')"
-      [ -n "$oid" ] || die "$EXIT_FAILURE" "#$PR is MERGED but its merge commit oid is unavailable; teardown skipped"
+      if [ -z "$oid" ]; then
+        if [ -n "$TEARDOWN" ]; then
+          die "$EXIT_TEARDOWN_FAILED" "#$PR merged but its merge commit oid is unavailable; teardown of $TEARDOWN is still owed"
+        fi
+        die "$EXIT_FAILURE" "#$PR is MERGED but its merge commit oid is unavailable"
+      fi
       info "#$PR MERGED: $oid"
       if [ -n "$TEARDOWN" ]; then
         # worktree.sh refuses to run from inside its target, so run it from the main checkout.

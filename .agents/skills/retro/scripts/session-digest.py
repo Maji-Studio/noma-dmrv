@@ -22,6 +22,7 @@ TOOL_DISPLAY_LIMIT = 25
 BYTES_PER_KIB = 1024
 LAUNCH_TOOLS = {"Agent", "Workflow"}
 SUMMARY_COLUMNS = "sid sizeKB users errs big compacts toolcalls outputTokens digestKB"
+SummaryRow = collections.namedtuple("SummaryRow", SUMMARY_COLUMNS.split())
 
 
 def text(content):
@@ -164,14 +165,17 @@ def digest(path, events, outside, out):
         sections.extend([f"## {title} ({len(items)})", "\n\n".join(items), ""])
     destination = out / f"{sid}.md"
     destination.write_text("\n".join(sections), encoding="utf-8")
-    return (sid, size, len(users), len(errors), len(large), compactions,
-            sum(tools.values()), output_tokens, destination.stat().st_size // BYTES_PER_KIB)
+    return SummaryRow(sid=sid, sizeKB=size, users=len(users), errs=len(errors),
+                      big=len(large), compacts=compactions, toolcalls=sum(tools.values()),
+                      outputTokens=output_tokens, digestKB=destination.stat().st_size // BYTES_PER_KIB)
 
 
 def summarize(logs, out, start, end):
     lo, hi = midnight(start), midnight(end)
     if lo >= hi:
         raise ValueError("--from must be before --to")
+    if not logs.is_dir():
+        raise ValueError(f"logs path is not an existing directory: {logs}")
     out.mkdir(parents=True, exist_ok=True)
     rows, skipped = [], 0
     for path in sorted(logs.glob("*.jsonl")):
@@ -208,7 +212,9 @@ def self_test():
         (root / "excluded-session.jsonl").write_text(json.dumps(events[1]), encoding="utf-8")
         rows, skipped = summarize(root, root / "out", "2026-01-02", "2026-01-04")
         assert skipped == 1 and len(rows) == 1, (rows, skipped)
-        assert rows[0][2:8] == (1, 0, 0, 0, 1, 7), rows
+        row = rows[0]
+        assert row.users == 1 and row.errs == 0 and row.big == 0, row
+        assert row.compacts == 0 and row.toolcalls == 1 and row.outputTokens == 7, row
         body = (root / "out" / "included.md").read_text(encoding="utf-8")
         assert "also holds events outside the window: yes; count 4" in body, body
         assert "outside inherited timestamp" not in body and "untimed prefix" not in body
@@ -225,9 +231,19 @@ def self_test():
         (boundary_logs / "boundary-session.jsonl").write_text(
             "\n".join(map(json.dumps, boundary_events)), encoding="utf-8")
         boundary_rows, boundary_skipped = summarize(boundary_logs, root / "boundary-out", start, end)
-        assert boundary_skipped == 0 and boundary_rows[0][2] == 1
+        assert boundary_skipped == 0 and boundary_rows[0].users == 1
         boundary_body = (root / "boundary-out" / "boundary.md").read_text(encoding="utf-8")
         assert "inclusive" in boundary_body and "exclusive" not in boundary_body
+        empty_logs = root / "empty"
+        empty_logs.mkdir()
+        assert summarize(empty_logs, root / "empty-out", start, end) == ([], 0)
+        for invalid_logs in (root / "missing", root / "included-session.jsonl"):
+            try:
+                summarize(invalid_logs, root / "invalid-out", start, end)
+            except ValueError as error:
+                assert str(invalid_logs) in str(error), error
+            else:
+                raise AssertionError(f"accepted invalid logs directory: {invalid_logs}")
     print("session-digest self-test passed")
 
 
@@ -252,7 +268,7 @@ def main():
     print(SUMMARY_COLUMNS)
     for row in rows:
         print(*row)
-    print("TOTAL", *(sum(row[index] for row in rows) for index in range(1, len(SUMMARY_COLUMNS.split()))))
+    print("TOTAL", *(sum(getattr(row, field) for row in rows) for field in SummaryRow._fields[1:]))
 
 
 if __name__ == "__main__":

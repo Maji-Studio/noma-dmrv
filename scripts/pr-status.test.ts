@@ -26,6 +26,8 @@ if (args[0] === "pr" && args[1] === "view") {
 } else if (args[0] === "pr" && args[1] === "checks" && args.includes("--required")) {
   if (number === "5") { console.log("no required checks reported on branch"); process.exit(1); }
   if (number === "7") { console.log("not json"); process.exit(1); }
+  if (number === "11") { console.log("[]"); process.exit(2); }
+  if (number === "12") { console.log(JSON.stringify([{bucket: "unknown"}])); process.exit(0); }
   if (number === "10") {
     console.log(JSON.stringify([...Array(${MIXED_PASS_COUNT}).fill("pass"), ...Array(${MIXED_PENDING_COUNT}).fill("pending")].map(bucket => ({name: "ci", bucket, state: "RUNNING"}))));
     process.exit(8);
@@ -104,7 +106,7 @@ describe("pr-status", () => {
     expect(result.stdout).toContain("#8 OPEN abcdef1 checks=fail=1");
   });
 
-  it.each(["7", "9"])("rejects malformed checks or GraphQL errors for #%s", (number) => {
+  it.each(["7", "9", "11", "12"])("rejects malformed responses or failed reads for #%s", (number) => {
     const result = run([number]);
     expect(result.status).toBe(EXIT_FAILURE);
     expect(result.stdout).toMatch(new RegExp(`^#${number} ERROR .*\\n$`));

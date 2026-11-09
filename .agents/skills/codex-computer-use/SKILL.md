@@ -19,7 +19,9 @@ or acting on real accounts/data).
 Every Codex prompt this skill writes opens with the text of `codex-safety-preamble.md`, the file beside this skill's folder (in noma-dmrv: `.agents/skills/codex-safety-preamble.md`); the review target or task follows it. Write the task part to `$ARTIFACT_DIR/task.md` with the Write tool, then join the two into `$PROMPT`:
 
 ```bash
-cat "<this skill's folder>/../codex-safety-preamble.md" "$ARTIFACT_DIR/task.md" > "$PROMPT"
+PREAMBLE="<this skill's folder>/../codex-safety-preamble.md"
+[ -s "$PREAMBLE" ] || { echo "missing Codex safety preamble: $PREAMBLE" >&2; exit 1; }
+cat "$PREAMBLE" "$ARTIFACT_DIR/task.md" > "$PROMPT" || exit 1
 ```
 
 When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
@@ -49,12 +51,13 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
    REPORT="$ARTIFACT_DIR/report.md"
    PROMPT="$ARTIFACT_DIR/prompt.md"
    ```
-2. **Write a self-contained prompt** into `$PROMPT`: repo path, the exact flow to drive,
+2. **Write the self-contained task part** to `$ARTIFACT_DIR/task.md`: repo path, the exact flow to drive,
    constraints, the artifact dir for screenshots, and the report format (see below).
    Explicitly tell the launched process: **You are the Codex computer-use worker launched by
    this workflow. Operate the available browser/computer surface directly. Do not invoke the
    repository's `codex-computer-use` skill, run `codex exec`, or launch any other Codex
    process; those actions recursively re-enter this workflow.**
+   Then run the join under Safety preamble to create `$PROMPT`.
 3. **Run non-interactively:**
    ```bash
    "$CODEX" exec \
@@ -90,9 +93,9 @@ When a command below runs in the background (`codex exec` or a stdin-fed `codex 
 
 ## Example prompt skeleton
 
-```text
-<text of codex-safety-preamble.md>
+Write this task part to `$ARTIFACT_DIR/task.md`, then run the join under Safety preamble to create `$PROMPT`.
 
+```text
 Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 Artifact directory: <ARTIFACT_DIR> (save screenshots here; write your report to report.md here)
 

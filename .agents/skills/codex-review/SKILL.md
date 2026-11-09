@@ -19,7 +19,9 @@ assignments in the project's CLAUDE.md take precedence over these defaults.
 Every Codex prompt this skill writes opens with the text of `codex-safety-preamble.md`, the file beside this skill's folder (in noma-dmrv: `.agents/skills/codex-safety-preamble.md`); the review target or task follows it; in Mode B the `Target:` line comes right after the preamble. Write the task part to `$ARTIFACT_DIR/task.md` with the Write tool, then join the two into `$PROMPT`:
 
 ```bash
-cat "<this skill's folder>/../codex-safety-preamble.md" "$ARTIFACT_DIR/task.md" > "$PROMPT"
+PREAMBLE="<this skill's folder>/../codex-safety-preamble.md"
+[ -s "$PREAMBLE" ] || { echo "missing Codex safety preamble: $PREAMBLE" >&2; exit 1; }
+cat "$PREAMBLE" "$ARTIFACT_DIR/task.md" > "$PROMPT" || exit 1
 ```
 
 When a command below runs in the background (`codex exec` or a stdin-fed `codex review`), pass the prompt file as stdin (`- < prompt.md`); without it the process waits on "Reading additional input from stdin" and hangs.
@@ -84,7 +86,7 @@ REPORT="$ARTIFACT_DIR/report.md"
 PROMPT="$ARTIFACT_DIR/prompt.md"
 ```
 
-Write a self-contained review prompt into `$PROMPT` (template below).
+Write the self-contained task part to `$ARTIFACT_DIR/task.md` (template below), then run the join under Safety preamble to create `$PROMPT`.
 
 ### 3. Run `codex review`
 
@@ -121,14 +123,12 @@ residual test gaps.
 
 ## Review prompt template
 
-Write this into `$PROMPT`, adding task-specific context (requirements the change must meet,
+Write this task part to `$ARTIFACT_DIR/task.md`, then run the join under Safety preamble to create `$PROMPT`. Add task-specific context (requirements the change must meet,
 risky areas, expected behavior, files Claude is unsure about) where useful. In Mode B the
 first line after the safety preamble MUST name the target, e.g. `Target: the diff of this branch against the base
 branch staging (git diff staging...HEAD).` or `Target: all uncommitted changes.`
 
 ```text
-<text of codex-safety-preamble.md>
-
 Target: <the exact diff to review>
 
 Review these changes for bugs, regressions, security issues, requirement mismatches, meaningful
