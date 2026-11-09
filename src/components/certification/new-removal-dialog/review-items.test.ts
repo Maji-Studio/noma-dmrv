@@ -105,6 +105,30 @@ describe("review items", () => {
     expect(remaining.id).not.toBe(firstItem.id);
   });
 
+  describe("a check and a blocked component row that name the same fault", () => {
+    const message = "Add a file for each entry.";
+    const emissions = check({ key: "emissions", unmetLabel: "Emissions evidence missing", detail: message });
+    const build = (checks: RemovalRequirementCheck[]) =>
+      buildReviewItems({ checks, blockers: [], blockedRows: [blockedRow()], creditBatches: BATCHES, facilityId: FACILITY, unbindableText: null, unbindableComponentIds: [] });
+
+    it("is one item for one missing file, keeping the check's repair link", () => {
+      const items = build([emissions]);
+      expect(items.map((item) => item.title)).toEqual(["Lab electricity"]);
+      expect(items[0].fixes.map((fix) => fix.href)).toContain("/e");
+      expect(items[0].fixes.length).toBeGreaterThan(1);
+    });
+
+    it("keeps the check when it also names a fault no row says", () => {
+      const items = build([{ ...emissions, detail: `${message} Another fault.` }]);
+      expect(items).toHaveLength(2);
+    });
+
+    it("turns the one item into one fixed entry once the file is added", () => {
+      expect(build([])).toHaveLength(1);
+      expect(buildReviewItems({ checks: [], blockers: [], blockedRows: [], creditBatches: BATCHES, facilityId: FACILITY, unbindableText: null, unbindableComponentIds: [] })).toEqual([]);
+    });
+  });
+
   describe("a build refusal that restates an unmet check", () => {
     const durability = check({ key: "durability", unmetLabel: "Not enough eligible Samples", detail: "Run PR-1 has no sample · Run PR-2 has no sample" });
     const refusal = (...lines: string[]) =>

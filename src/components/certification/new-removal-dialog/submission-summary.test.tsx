@@ -203,6 +203,12 @@ describe("SubmissionSummary, ready", () => {
     expect(render({ entries: [fixed[0], { ...fixed[1], fixed: false }], checks: UNMET_CHECKS })).not.toContain("All 2 fixed");
   });
 
+  it("says Fixed. Ready to submit. for one repaired problem", () => {
+    const html = render({ entries: [{ item: ITEM, fixed: true }] });
+    expect(html).toContain("Fixed. Ready to submit.");
+    expect(html).not.toContain("All 1 fixed");
+  });
+
   it("shows a spinner line while the review is prepared", () => {
     expect(render({ loading: true, compilation: null })).toContain("Preparing the submission");
   });

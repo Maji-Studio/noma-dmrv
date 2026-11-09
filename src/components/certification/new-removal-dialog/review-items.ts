@@ -205,6 +205,30 @@ export function blockersNotRestatingChecks(
   });
 }
 
+/**
+ * Readiness checks whose whole detail is already said by blocked component rows. The row carries the fault's
+ * message and its repair, so the check would list one fault twice (and read "All 2 fixed" for one repair). A check
+ * is covered when its detail is nothing but row messages (and their separators); one that also names a fault no
+ * row says stays. Nothing is switched on a check key.
+ */
+function splitCoveredChecks(
+  checks: readonly RemovalRequirementCheck[],
+  rows: readonly ComponentRow[],
+): { kept: RemovalRequirementCheck[]; covered: { check: RemovalRequirementCheck; rowId: string }[] } {
+  const owners = rows.flatMap((row) => (row.blocked?.items ?? []).map((item) => ({ message: item.message, rowId: row.componentId })));
+  const byLength = [...owners].sort((x, y) => y.message.length - x.message.length);
+  const kept: RemovalRequirementCheck[] = [];
+  const covered: { check: RemovalRequirementCheck; rowId: string }[] = [];
+  for (const check of checks) {
+    const detail = check.detail?.trim();
+    const owner = detail && check.status === "unmet" ? byLength.find((entry) => detail.includes(entry.message)) : undefined;
+    const rest = owner ? byLength.reduce((text, entry) => text.split(entry.message).join(""), detail ?? "") : "";
+    if (owner && rest.replace(/[\s·]+/g, "") === "") covered.push({ check, rowId: owner.rowId });
+    else kept.push(check);
+  }
+  return { kept, covered };
+}
+
 /** Everything the operator has to fix, in the order they would work through it. */
 export function buildReviewItems(input: ReviewItemsInput): ReviewItem[] {
   const memberBatchIds = input.creditBatches.map((batch) => batch.id);
@@ -212,9 +236,18 @@ export function buildReviewItems(input: ReviewItemsInput): ReviewItem[] {
     text: input.unbindableText,
     componentIds: input.unbindableComponentIds,
   });
+  const { kept, covered } = splitCoveredChecks(input.checks, input.blockedRows);
+  const rowItems = componentItems(input.blockedRows).map((item) => {
+    // A covered check's repair joins the row's when it points somewhere else.
+    const extra = covered
+      .filter(({ rowId }) => item.id === `component:${rowId}`)
+      .flatMap(({ check }) => fixLinksFor(check, input.facilityId, input.creditBatches));
+    const known = new Set(item.fixes.map((fix) => fix.href));
+    return { ...item, fixes: [...item.fixes, ...extra.filter((fix) => !known.has(fix.href) && known.add(fix.href))] };
+  });
   return [
-    ...checkItems(input.checks, input.facilityId, input.creditBatches),
-    ...componentItems(input.blockedRows),
+    ...checkItems(kept, input.facilityId, input.creditBatches),
+    ...rowItems,
     ...blockerItems(others, input.facilityId, memberBatchIds),
   ];
 }
