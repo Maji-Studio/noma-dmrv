@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, like } from "drizzle-orm";
+import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierSyncEvents } from "@/db/schema/certification";
 import type { OrgContext } from "@/lib/auth/server";
@@ -26,10 +26,9 @@ export async function getRemovalIdsWithChangedLatestAttempt(
     ))
     .orderBy(certifierSyncEvents.entityId, desc(certifierSyncEvents.attemptedAt));
   if (summaries.length === 0) return new Set();
-  // As in listRemovalAttemptEvents, bound drift reads by the oldest summary
-  // being evaluated. Here only the latest summary per Removal is needed.
-  const oldest = summaries.reduce((oldest, summary) =>
-    summary.attemptedAt < oldest.attemptedAt ? summary : oldest);
+  // No time bound: a drift matched by attempt id counts wherever it is stamped,
+  // and one Removal's dates must not decide which drifts another one sees.
+  // Drifts of earlier attempts fail both the id and the window match.
   const drifts = await db
     .select()
     .from(certifierSyncEvents)
@@ -39,7 +38,6 @@ export async function getRemovalIdsWithChangedLatestAttempt(
       inArray(certifierSyncEvents.entityId, summaries.map((summary) => summary.entityId)),
       like(certifierSyncEvents.operation, `${DRIFT_OPERATION_PREFIX}%`),
       eq(certifierSyncEvents.status, "failed"),
-      gte(certifierSyncEvents.attemptedAt, oldest.attemptedAt),
     ))
     .orderBy(desc(certifierSyncEvents.attemptedAt));
   // No global drift limit: one Removal must not crowd another's events out.

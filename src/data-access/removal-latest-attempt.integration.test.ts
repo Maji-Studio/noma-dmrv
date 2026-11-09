@@ -117,13 +117,21 @@ describe.skipIf(!available)("batched Removal latest attempt PostgreSQL queries",
       .rejects.toThrow();
   });
 
-  it("filters drift by organization, entity type, operation, failed status and the oldest latest summary", async () => {
+  it("counts a drift matched by attempt id even when it is stamped before the latest summary", async () => {
+    await executor.insert(certifierSyncEvents).values([drift(ids.changed, { attemptedAt: OLDER, createdAt: OLDER })]);
+    expect(await getRemovalIdsWithChangedLatestAttempt(ctx, [ids.changed])).toEqual(new Set());
+  });
+
+  it("filters drift by organization, entity type, operation, failed status and attempt", async () => {
     await executor.insert(certifierSyncEvents).values([
       drift(ids.changed, { organizationId: OTHER_ORG }),
       drift(ids.changed, { entityType: "credit-batch" }),
       drift(ids.changed, { operation: "unrelated-operation" }),
       drift(ids.changed, { status: "succeeded" }),
-      drift(ids.changed, { attemptedAt: OLDER, createdAt: OLDER }),
+      drift(ids.changed, {
+        attemptedAt: OLDER, createdAt: OLDER,
+        responsePayload: { drift: { attemptId: "earlier-attempt", creditBatchId: "batch", creditBatchCode: "CB", differences: [] } },
+      }),
       // A newer event on another entity type must not replace the Removal summary.
       summary(ids.changed, { entityType: "credit-batch", attemptedAt: ATTEMPT_END, responsePayload: {} }),
     ]);
