@@ -12,10 +12,11 @@ vi.mock("@/data-access/certification", () => ({ getLatestSubmissionsForEntities:
 vi.mock("@/data-access/utils", () => ({ requireOrgScope: () => undefined }));
 vi.mock("@/lib/isometric/utils/lock", () => ({ isLockedInFlight: () => false }));
 vi.mock("@/lib/certification/from-submission", () => ({ isRemovalSubmissionInterruptedFromSubmission: () => false }));
-vi.mock("./certify-context-core", () => ({
+vi.mock("@/fn/certification/certify-context-core", () => ({
   loadFacilityCertifierFacts: async () => ({}),
   resolveScopeForRemoval: async (_ctx: unknown, id: string) => ({ id }),
   buildRemovalContext: async (_ctx: unknown, scope: { id: string }) => {
+    if (scope.id === "broken") throw new Error("build failed");
     mocks.built.push(scope.id);
     return { id: scope.id };
   },
@@ -51,5 +52,11 @@ describe("loadDraftRemovalReadiness", () => {
     mocks.rows = [row("sent")];
     expect(await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1")).toEqual([]);
     expect(mocks.built).toEqual([]);
+  });
+
+  it("leaves out a draft whose build rejects and keeps the others", async () => {
+    mocks.rows = [row("broken"), row("ready")];
+    const drafts = await loadDraftRemovalReadiness({ organizationId: "org-1" } as OrgContext, "fac-1");
+    expect(drafts.map((draft) => draft.removalId)).toEqual(["ready"]);
   });
 });

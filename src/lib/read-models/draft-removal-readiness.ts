@@ -25,7 +25,8 @@ import {
   REMOVAL_SUBMISSION_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval } from "./certify-context-core";
+import { logger } from "@/lib/log";
+import { buildRemovalContext, loadFacilityCertifierFacts, resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
 
 /** Same bound the Removals list uses for its per-Removal builds. */
 const READINESS_CONCURRENCY = 8;
@@ -60,12 +61,20 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
   });
   if (drafts.length === 0) return [];
 
-  const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
+  // Best effort: a failing facts load or draft build drops those rows, never the dashboard.
+  let facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>;
+  try {
+    facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
+  } catch {
+    logger.warn({ facilityId }, "Draft Removal readiness skipped: facility facts failed to load");
+    return [];
+  }
   const carryReads = new Map<string, ReturnType<typeof loadFacilityEmissionEntryCarry>>();
   const result: DraftRemovalReadiness[] = [];
   for (let i = 0; i < drafts.length; i += READINESS_CONCURRENCY) {
-    const chunk = await Promise.all(
-      drafts.slice(i, i + READINESS_CONCURRENCY).map(async (removal) => {
+    const chunk = drafts.slice(i, i + READINESS_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      chunk.map(async (removal) => {
         const scope = await resolveScopeForRemoval(orgCtx, removal.id);
         const ctx = await buildRemovalContext(orgCtx, scope, facilityFacts, { carryReads });
         return {
@@ -76,7 +85,10 @@ export async function loadDraftRemovalReadiness(orgCtx: OrgContext, facilityId: 
         };
       }),
     );
-    result.push(...chunk);
+    settled.forEach((outcome, index) => {
+      if (outcome.status === "fulfilled") result.push(outcome.value);
+      else logger.warn({ removalId: chunk[index]?.id }, "Draft Removal readiness skipped: build failed");
+    });
   }
   return result;
 }

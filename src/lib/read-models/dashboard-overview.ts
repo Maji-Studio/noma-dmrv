@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { requireOrgFacility } from "@/data-access/utils";
-import { loadDraftRemovalReadiness } from "@/fn/certification/draft-removal-readiness";
+import { loadDraftRemovalReadiness } from "./draft-removal-readiness";
 import { draftRemovalAttentionItems } from "@/lib/certification/removal-attention";
 import type { OrgContext } from "@/lib/auth/server";
+import { logger } from "@/lib/log";
 import { facilityIdSchema } from "./facility-id";
 
 const dashboardOverviewInputSchema = z.object({
@@ -24,9 +25,16 @@ export type DashboardOverviewInput = z.input<typeof dashboardOverviewInputSchema
 export async function readDashboardOverview(ctx: OrgContext, input: unknown) {
   const { facilityId, range } = dashboardOverviewInputSchema.parse(input);
   await requireOrgFacility(ctx, facilityId);
-  const overview = await getDashboardOverview(ctx, facilityId, range);
   // Draft Removals need the operator too; their readiness comes from the Removals list's read path.
-  const drafts = draftRemovalAttentionItems(await loadDraftRemovalReadiness(ctx, facilityId), facilityId);
+  // They do not depend on the range and are best effort: a failure must never fail the dashboard.
+  const [overview, draftReadiness] = await Promise.all([
+    getDashboardOverview(ctx, facilityId, range),
+    loadDraftRemovalReadiness(ctx, facilityId).catch(() => {
+      logger.warn({ facilityId }, "Draft Removal rows skipped: readiness failed to load");
+      return [];
+    }),
+  ]);
+  const drafts = draftRemovalAttentionItems(draftReadiness, facilityId);
   return {
     ...overview,
     attention: [...drafts, ...overview.attention],
