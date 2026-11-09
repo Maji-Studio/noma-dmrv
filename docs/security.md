@@ -428,6 +428,18 @@ their own mapping:
 2. The Mafinga facility is mapped to the sandbox project and a Removal template.
 3. `/removals` opens without redirecting to Settings, Registry.
 
+## Invitation account setup
+
+The invited mailbox sets the first password through an emailed reset token.
+Invitation bootstrap creates an unverified user without a credential or session.
+Pending retries preserve the user's fields and share a 60-second mail cooldown.
+The token confirms the email when the password is set; sign-in and invitation
+acceptance require verified email. Existing confirmed invitees sign in normally.
+
+Invitation lists are Admin only in the application's data-access layer. The
+organization plugin's invitation-list and full-organization endpoints are
+server-only; their HTTP routes return Forbidden for Members and Admins.
+
 ## Account changes
 
 - Changing the email in Profile needs the current password (Better Auth `verifyPassword`), a session under 24 hours old and the per-user rate limit. The HTTP `/change-email` endpoint refuses browser calls, so the Profile action is the only way in.

@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { invitationEmail } from "../src/lib/email/templates/invitation-email";
+import { setPasswordEmail } from "../src/lib/email/templates/set-password-email";
 import { resetPasswordEmail } from "../src/lib/email/templates/reset-password-email";
 import { verifyEmailEmail } from "../src/lib/email/templates/verify-email-email";
 
@@ -22,6 +23,9 @@ if (!outDir) {
 const appUrl = process.argv[3] ?? pathToFileURL(resolve("public")).href;
 
 const emails = {
+  "set-password": setPasswordEmail({
+    to: TO, appUrl, url: `${APP_URL}/api/auth/reset-password/example-token?callbackURL=%2Fset-password%3Finvitation%3Dexample-invitation`,
+  }),
   invitation: invitationEmail({
     to: TO, url: `${APP_URL}/accept-invitation/Jx4nQ8wR2kLmV7pTz9cY`, appUrl,
     organizationName: "Dark Earth Carbon", roleLabel: "Admin", inviterName: "Amani Mushi",

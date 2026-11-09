@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { env } from "@/config/env";
 import { logger } from "@/lib/log";
 
-export type EmailType = "reset-password" | "verify-email" | "email-change-confirm" | "email-change-notice" | "org-invite" | "password-changed" | "role-changed" | "removed-from-organization" | "walkthrough-request";
+export type EmailType = "set-password" | "reset-password" | "verify-email" | "email-change-confirm" | "email-change-notice" | "org-invite" | "password-changed" | "role-changed" | "removed-from-organization" | "walkthrough-request";
 export type EmailResult =
   | { sent: true; id: string }
   | { sent: false; reason: "not-configured" | "provider-error" };

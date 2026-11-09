@@ -14,9 +14,10 @@ vi.mock("@/db", () => ({
 
 vi.mock("@/lib/auth/server", () => ({
   requirePlatformAdmin: mockRequirePlatformAdmin,
+  hasOrgRole: (ctx: { orgRole: string }) => ctx.orgRole === "admin",
 }));
 
-import { createOrganizationWithAdmin } from "@/data-access/organizations";
+import { createOrganizationWithAdmin, listOrgInvitations } from "@/data-access/organizations";
 
 describe("createOrganizationWithAdmin authorization", () => {
   beforeEach(() => {
@@ -39,4 +40,9 @@ describe("createOrganizationWithAdmin authorization", () => {
     expect(mockRequirePlatformAdmin).toHaveBeenCalledOnce();
     expect(mockTransaction).not.toHaveBeenCalled();
   });
+});
+
+it("invitation lists are Admin only in data access", async () => {
+  await expect(listOrgInvitations({ userId: "member", organizationId: "org", orgRole: "member", isPlatformAdmin: false }))
+    .rejects.toEqual(new SafeError("Only organization Admins can list invitations."));
 });

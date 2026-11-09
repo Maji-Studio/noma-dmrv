@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { formatDays, formatDuration } from "./format-duration";
 import { invitationEmail } from "./invitation-email";
+import { setPasswordEmail } from "./set-password-email";
 import { resetPasswordEmail } from "./reset-password-email";
 import { verifyEmailEmail } from "./verify-email-email";
 
@@ -12,6 +13,7 @@ const ACCEPT_URL = `${APP}/accept-invitation/inv-1`;
 const EN_OR_EM_DASH = /[–—]/;
 const CRAFTED = `<img src=x onerror="alert(1)"> & "Co"`;
 
+const setup = setPasswordEmail({ to: TO, url: RESET_URL, appUrl: APP });
 const reset = resetPasswordEmail({ to: TO, url: RESET_URL, appUrl: APP });
 const verify = verifyEmailEmail({ to: TO, url: VERIFY_URL, appUrl: APP });
 const invite = invitationEmail({
@@ -20,6 +22,7 @@ const invite = invitationEmail({
 });
 
 it.each([
+  ["set-password", setup, RESET_URL, "Set your noma password"],
   ["reset", reset, RESET_URL, "Reset your noma password"],
   ["verify", verify, VERIFY_URL, "Verify your email address for noma"],
   ["invitation", invite, ACCEPT_URL, "Amani Mushi invited you to Dark Earth Carbon"],
@@ -48,7 +51,7 @@ it("serves drawings and logo from the app origin with a dark twin", () => {
 });
 
 it("names the account, not an organization, in account email footers", () => {
-  for (const email of [reset, verify]) {
+  for (const email of [reset, verify, setup]) {
     expect(email.text).toContain(`Sent to ${TO} about your noma account.`);
   }
 });
@@ -98,4 +101,11 @@ it("formats lifetimes", () => {
   expect(formatDuration(60 * 60 * 5)).toBe("5 hours");
   expect(formatDays(60 * 60 * 24 * 7)).toBe("7 days");
   expect(formatDays(60 * 60 * 24)).toBe("1 day");
+});
+
+it("sets a first password with the shared token lifetime", () => {
+  expect(setup.text).toContain("Set your password");
+  expect(setup.text).toContain("This link expires in 1 hour.");
+  expect(setup.text).not.toContain("Your password stays the same");
+  expect(setPasswordEmail({ to: CRAFTED, url: RESET_URL, appUrl: APP }).html).not.toContain("<img src=x");
 });

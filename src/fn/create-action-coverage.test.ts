@@ -51,7 +51,7 @@ const EXCEPTION: Record<string, string> = {
   "certification/emission-zeros#recordEmissionZerosFn": "Reuses zero entries and checks the removal version.",
   "feedstock-types#importIsometricFeedstockTypeFn": "Refuses an already imported isometricFeedstockTypeId.",
   "organizations#createOrganizationAction": "platform create outside an org; replays through its own store keyed by parseCreateIntentKey",
-  "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap refuses an existing account.",
+  "invitation-bootstrap#bootstrapInvitationAccountAction": "Pre-sign-in bootstrap creates only a pending user; retries send a cooldown-limited setup email.",
   "certification/create-removal-with-batches#createRemovalWithBatchesAction": "Rechecks ungrouped batches under row locks.",
   "certification/ghg-statements#createGhgStatementDraft": "External POST adopts or refuses a matching remote statement under a facility lock.",
   "certification/sources#mirrorDocumentToSource": "Reconciles external uploads and uses insert-or-get locally.",
@@ -68,6 +68,7 @@ const EXCEPTION: Record<string, string> = {
 };
 
 const NOT_CREATE: Record<string, string> = {
+  "invitation-bootstrap#resendInvitationSetPasswordAction": "Sends a cooldown-limited setup email for an existing pending user.",
   "profile#changeEmailFn": "Requests confirmation to change the caller’s existing account email.",
   "organizations#renameOrganizationAction": "Renames an existing organization.",
   "organizations#leaveOrganizationAction": "Removes the caller's own existing membership.",

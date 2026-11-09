@@ -11,10 +11,10 @@ import {
 } from "@/fn/action-errors";
 import {
   createInvitedAccount,
+  hasRecentInvitationPasswordReset,
   getInvitationBootstrapState as readInvitationBootstrapState,
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
-import { saveOrgPreference } from "@/fn/org-preference";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
@@ -78,60 +78,59 @@ export async function getInvitationBootstrapState(
   }, INVITATION_LOAD_FALLBACK);
 }
 
-/**
- * Intentionally replaces the normal requireAuth guard: the invitation id must
- * be pending and unexpired, is single-use once accepted, and supplies the
- * email server-side. Account creation never trusts an email from the client;
- * Better Auth then enforces the signed-in email match before acceptance.
- */
+/** The invitation supplies the mailbox; setup never starts a session. */
 export async function bootstrapInvitationAccountAction(
   input: unknown
-): Promise<ActionResult<{ organizationId: string }>> {
-  return toWarnableResult(async () => {
-    const { invitationId, name, password } =
-      invitationBootstrapSchema.parse(input);
-    const existingSession = await auth.api.getSession({
-      headers: await currentAuthHeaders(),
-    });
-    if (existingSession) {
-      throw new SafeError(
-        "You are already signed in. Sign out before creating a new account from an invitation."
-      );
-    }
+): Promise<ActionResult<{ emailSent: true }>> {
+  return toResult(async () => {
+    const { invitationId, name } = invitationBootstrapSchema.parse(input);
+    await requireSignedOut();
     const state = await readInvitationBootstrapState(invitationId);
-    if (state.accountExists) {
-      throw new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      );
+    refuseConfirmedAccount(state);
+    if (state.account === "none") {
+      await createInvitedAccount({ invitationId, name });
     }
-
-    const passwordHash = await (await auth.$context).password.hash(password);
-    const account = await createInvitedAccount({
-      invitationId,
-      name,
-      passwordHash,
-    });
-    await auth.api.signInEmail({
-      body: { email: account.email, password },
-      headers: await headers(),
-    });
-    const accepted = await auth.api.acceptInvitation({
-      body: { invitationId },
-      headers: await currentAuthHeaders(),
-    });
-    const organizationId = accepted?.invitation?.organizationId;
-    if (!organizationId || organizationId !== account.organizationId) {
-      throw new SafeError(
-        "The invitation was not accepted. Check that it is still valid and try again.",
-      );
-    }
-    await auth.api.setActiveOrganization({
-      body: { organizationId },
-      headers: await currentAuthHeaders(),
-    });
-    // The account exists and the session is in the organization. A failed
-    // preference write is a warning, not a failed bootstrap (issue #769).
-    const warning = await saveOrgPreference(account.userId, organizationId);
-    return { data: { organizationId }, warning };
+    return sendInvitationSetPassword(state);
   }, INVITATION_BOOTSTRAP_FALLBACK);
+}
+
+/** A pending invitee can request another link without supplying a name. */
+export async function resendInvitationSetPasswordAction(
+  input: unknown
+): Promise<ActionResult<{ emailSent: true }>> {
+  return toResult(async () => {
+    const { invitationId } = invitationIdSchema.parse(input);
+    await requireSignedOut();
+    const state = await readInvitationBootstrapState(invitationId);
+    refuseConfirmedAccount(state);
+    if (state.account !== "pending") {
+      throw new SafeError("Enter your name to start account setup.");
+    }
+    return sendInvitationSetPassword(state);
+  }, INVITATION_BOOTSTRAP_FALLBACK);
+}
+
+async function requireSignedOut(): Promise<void> {
+  if (await auth.api.getSession({ headers: await currentAuthHeaders() })) {
+    throw new SafeError(
+      "You are already signed in. Sign out before creating a new account from an invitation."
+    );
+  }
+}
+
+function refuseConfirmedAccount(state: InvitationBootstrapState): void {
+  if (state.account === "confirmed") {
+    throw new SafeError("An account already exists for this invitation. Sign in instead.");
+  }
+}
+
+async function sendInvitationSetPassword(state: InvitationBootstrapState): Promise<{ emailSent: true }> {
+  if (!await hasRecentInvitationPasswordReset(state.invitationId)) {
+    await auth.api.requestPasswordReset({ body: {
+      email: state.email,
+      redirectTo: `/set-password?invitation=${encodeURIComponent(state.invitationId)}`,
+    } });
+  }
+  // A cooldown or provider failure has the same public acknowledgement.
+  return { emailSent: true };
 }

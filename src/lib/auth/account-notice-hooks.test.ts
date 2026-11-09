@@ -9,7 +9,7 @@ vi.mock("@/data-access/oauth-grant-lifecycle", () => ({ revokeUserOAuthGrants: v
 vi.mock("@/lib/email/account-notices", () => ({ sendPasswordChangedNotice: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn() } }));
 type Context = Parameters<typeof deliverPasswordNotice>[0];
-const USER = { id: "user-a", email: "private@example.test" };
+const USER = { id: "user-a", email: "private@example.test", emailVerified: false };
 function context(path: string, returned: unknown) {
   return {
     path, body: { token: "reset-token" },

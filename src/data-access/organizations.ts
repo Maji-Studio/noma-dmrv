@@ -108,6 +108,9 @@ export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
   requireOrgScope(ctx);
+  if (!hasOrgRole(ctx, "admin")) {
+    throw new SafeError("Only organization Admins can list invitations.");
+  }
   const rows = await db
     .select({
       id: invitations.id,

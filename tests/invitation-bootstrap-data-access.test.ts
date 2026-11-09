@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
 const mockSelect = vi.fn();
-const mockCreateOAuthUser = vi.fn();
+const mockCreateUser = vi.fn();
 
 vi.mock("@/db", () => ({
   db: {
@@ -14,18 +14,17 @@ vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     $context: Promise.resolve({
       internalAdapter: {
-        createOAuthUser: (...args: unknown[]) => mockCreateOAuthUser(...args),
+        createUser: (...args: unknown[]) => mockCreateUser(...args),
       },
     }),
   },
 }));
 
-import { createInvitedAccount } from "@/data-access/invitation-bootstrap";
+import { createInvitedAccount, getInvitationBootstrapState, hasRecentInvitationPasswordReset } from "@/data-access/invitation-bootstrap";
 
 const INVITATION_ID = "invitation-123";
 const ORGANIZATION_ID = "organization-123";
 const USER_ID = "user-123";
-const PASSWORD_HASH = "password-hash";
 
 function queueSelectResults(...results: unknown[][]) {
   for (const result of results) {
@@ -33,7 +32,7 @@ function queueSelectResults(...results: unknown[][]) {
       from: () => ({
         where: () => ({
           limit: vi.fn().mockResolvedValue(result),
-        }),
+      }),
       }),
     }));
   }
@@ -52,31 +51,24 @@ function validInvitation() {
 describe("createInvitedAccount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateOAuthUser.mockResolvedValue({
-      user: { id: USER_ID },
-      account: { id: "account-123" },
+    mockCreateUser.mockResolvedValue({
+      id: USER_ID,
     });
   });
 
-  it("re-checks the invitation and creates the credential through Better Auth", async () => {
+  it("creates an unverified invited user without a credential account", async () => {
     queueSelectResults([validInvitation()], []);
 
     const result = await createInvitedAccount({
       invitationId: INVITATION_ID,
       name: "Invitee",
-      passwordHash: PASSWORD_HASH,
     });
 
-    expect(mockCreateOAuthUser).toHaveBeenCalledWith(
+    expect(mockCreateUser).toHaveBeenCalledWith(
       {
         email: "invitee@example.com",
         name: "Invitee",
-        emailVerified: true,
-      },
-      {
-        accountId: "invitee@example.com",
-        providerId: "credential",
-        password: PASSWORD_HASH,
+        emailVerified: false,
       },
     );
     expect(result).toEqual({
@@ -93,14 +85,13 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
     ).rejects.toEqual(
       new SafeError(
         "An account already exists for this invitation. Sign in instead."
       )
     );
-    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it("rejects an expired invitation during the creation re-check", async () => {
@@ -112,19 +103,18 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
     ).rejects.toEqual(
       new SafeError(
         "This invitation is invalid, expired, or already used. Ask an Admin for a new invitation.",
       )
     );
-    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it("maps a concurrent normalized-email insert to existing-user behavior", async () => {
     queueSelectResults([validInvitation()], []);
-    mockCreateOAuthUser.mockRejectedValue({
+    mockCreateUser.mockRejectedValue({
       code: "23505",
       constraint: "users_email_unique",
     });
@@ -133,12 +123,31 @@ describe("createInvitedAccount", () => {
       createInvitedAccount({
         invitationId: INVITATION_ID,
         name: "Invitee",
-        passwordHash: PASSWORD_HASH,
       })
     ).rejects.toEqual(
       new SafeError(
         "An account already exists for this invitation. Sign in instead."
       )
     );
+  });
+});
+
+
+describe("invitation account state", () => {
+  it.each([
+    [[], "none"],
+    [[{ id: USER_ID, emailVerified: false }], "pending"],
+    [[{ id: USER_ID, emailVerified: true }], "confirmed"],
+  ] as const)("returns %j as %s", async (rows, account) => {
+    queueSelectResults([validInvitation()], [...rows]);
+    expect(await getInvitationBootstrapState(INVITATION_ID)).toMatchObject({ account });
+  });
+  it("checks reset cooldown against the invited user", async () => {
+    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }], [{ id: "recent-reset" }]);
+    expect(await hasRecentInvitationPasswordReset(INVITATION_ID)).toBe(true);
+  });
+  it("has no cooldown for an invited address without a user", async () => {
+    queueSelectResults([validInvitation()], []);
+    expect(await hasRecentInvitationPasswordReset(INVITATION_ID)).toBe(false);
   });
 });

@@ -87,7 +87,11 @@ import { changeMemberRoleAction, inviteMemberAction, leaveOrganizationAction, re
 const ORIGIN = "http://localhost:3100";
 const SESSION_LIFETIME_MS = 60_000;
 const MILLISECONDS_PER_SECOND = 1_000;
+let requestNumber = 0;
+let requestIp: string;
 beforeEach(() => {
+  // Each test represents an independent caller and retains the real rate limits.
+  requestIp = `192.0.2.${++requestNumber}`;
   vi.mocked(sendEmail).mockReset().mockResolvedValue({ sent: true, id: "message-123" });
   vi.mocked(revokeUserOAuthGrants).mockReset().mockResolvedValue(1);
   databaseFailure.enabled = false;
@@ -105,7 +109,7 @@ beforeEach(() => {
 async function sessionHeaders() {
   const ctx = await auth.$context;
   const signature = createHmac("sha256", ctx.secret).update("test-token").digest("base64");
-  return new Headers({ origin: ORIGIN, "content-type": "application/json", cookie: `${ctx.authCookies.sessionToken.name}=${encodeURIComponent(`test-token.${signature}`)}` });
+  return new Headers({ origin: ORIGIN, "content-type": "application/json", "x-forwarded-for": requestIp, cookie: `${ctx.authCookies.sessionToken.name}=${encodeURIComponent(`test-token.${signature}`)}` });
 }
 async function post(path: string, body: Record<string, unknown>) {
   return auth.handler(new Request(`${ORIGIN}/api/auth/organization/${path}`, {
@@ -246,11 +250,12 @@ it.each([true, false])("the real plugin and member action send exactly once and 
 });
 
 
-it("returns the same reset response for existing and unknown accounts when delivery fails", async () => {
+it.each(["set-password", "reset-password"] as const)("returns the same %s response for existing and unknown accounts when delivery fails", async type => {
+  if (type === "reset-password") await addNoticeCredential();
   vi.mocked(sendEmail).mockResolvedValue({ sent: false, reason: "provider-error" });
   const reset = (email: string) => auth.handler(new Request(`${ORIGIN}/api/auth/request-password-reset`, {
     method: "POST",
-    headers: { origin: ORIGIN, "content-type": "application/json" },
+    headers: { origin: ORIGIN, "content-type": "application/json", "x-forwarded-for": requestIp },
     body: JSON.stringify({ email }),
   }));
   const existing = await reset("actor@example.test");
@@ -259,7 +264,7 @@ it("returns the same reset response for existing and unknown accounts when deliv
   expect(unknown.status).toBe(existing.status);
   expect(await existing.json()).toEqual(await unknown.json());
   expect(sendEmail).toHaveBeenCalledOnce();
-  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ type: "reset-password", userId: "actor" }));
+  expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ type, userId: "actor" }));
 });
 
 
@@ -427,10 +432,12 @@ it("does not notify on refused password changes or resets", async () => {
   expect(sendEmail).not.toHaveBeenCalled();
 });
 it("does not treat a first password established through a reset token as a change", async () => {
+  memory.user[0].emailVerified = false;
   memory.verification.push({ id: "first-verification", identifier: "reset-password:first-token", value: "actor",
     expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS), createdAt: new Date(), updatedAt: new Date() });
   expect((await postAuth("reset-password", { token: "first-token", newPassword: NOTICE_NEW_PASSWORD })).status).toBe(200);
   expect(memory.account).toHaveLength(1);
+  expect(memory.user[0].emailVerified).toBe(true);
   expect(sendEmail).not.toHaveBeenCalled();
 });
 
@@ -452,4 +459,74 @@ it.each(["change-password", "reset-password"])("%s succeeds when OAuth revocatio
   expect((await postAuth(path, body)).status).toBe(200);
   expect(revokeUserOAuthGrants).toHaveBeenCalledExactlyOnceWith("actor");
   expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Connected apps could not be disconnected") }));
+});
+
+it.each(["admin", "member"])("keeps invitation lists server-only for %s", async role => {
+  memory.member[0].role = role;
+  for (const path of ["list-invitations", "get-full-organization"]) {
+    const response = await auth.handler(new Request(`${ORIGIN}/api/auth/organization/${path}?organizationId=org`, {
+      headers: await sessionHeaders(),
+    }));
+    expect(response.status).toBe(403);
+  }
+  expect(await auth.api.listInvitations({ headers: await sessionHeaders(), query: { organizationId: "org" } })).toEqual([]);
+  expect(await auth.api.getFullOrganization({ headers: await sessionHeaders(), query: { organizationId: "org" } }))
+    .toMatchObject({ id: "org" });
+});
+
+function addMailboxInvitation(role = "member") {
+  memory.member.splice(0);
+  memory.invitation.push({ id: "mailbox-invite", organizationId: "org", inviterId: "other", email: "actor@example.test",
+    role, status: "pending", expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS) });
+}
+
+it("requires a confirmed email before invitation acceptance", async () => {
+  addMailboxInvitation();
+  memory.user[0].emailVerified = false;
+  const response = await post("accept-invitation", { invitationId: "mailbox-invite" });
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ code: "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION" });
+  expect(memory.member).toHaveLength(0);
+  expect(memory.invitation[0].status).toBe("pending");
+});
+
+it.each(["admin", "member"])("the emailed token confirms the mailbox and allows the invited %s role", async role => {
+  addMailboxInvitation(role);
+  memory.user[0].emailVerified = false;
+  const context = await auth.$context;
+  // Session selection reads application data; keep this harness focused on auth.
+  const selectOrganization = vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockResolvedValue(undefined);
+  await expect(auth.api.signInEmail({ body: { email: "actor@example.test", password: NOTICE_NEW_PASSWORD } })).rejects.toThrow();
+  await auth.api.requestPasswordReset({ body: { email: "actor@example.test", redirectTo: "/set-password?invitation=mailbox-invite" } });
+  expect(sendEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: "set-password", subject: "Set your noma password" }));
+  const email = vi.mocked(sendEmail).mock.calls[0]![0];
+  const link = email.text.match(/http:\/\/localhost:3100\/api\/auth\/reset-password\/[^\s]+/)![0];
+  const callback = await auth.handler(new Request(link));
+  expect(callback.status).toBe(302);
+  const destination = new URL(callback.headers.get("location")!);
+  expect(destination.pathname).toBe("/set-password");
+  expect(destination.searchParams.get("invitation")).toBe("mailbox-invite");
+  const token = destination.searchParams.get("token")!;
+  vi.mocked(sendEmail).mockClear();
+  await auth.api.resetPassword({ body: { token, newPassword: NOTICE_NEW_PASSWORD } });
+  expect(memory.user[0].emailVerified).toBe(true);
+  expect(memory.account).toMatchObject([{ userId: "actor", accountId: "actor", providerId: "credential", password: expect.any(String) }]);
+  expect(sendEmail).not.toHaveBeenCalled();
+  const signedIn = await auth.api.signInEmail({ body: { email: "actor@example.test", password: NOTICE_NEW_PASSWORD }, returnHeaders: true });
+  const cookie = signedIn.headers.get("set-cookie")!;
+  expect(cookie).toContain("session_token=");
+  const accepted = await auth.api.acceptInvitation({ body: { invitationId: "mailbox-invite" }, headers: new Headers({ cookie }) });
+  expect(accepted.member).toMatchObject({ userId: "actor", role });
+  await expect(auth.api.resetPassword({ body: { token, newPassword: NOTICE_OLD_PASSWORD } })).rejects.toThrow();
+  selectOrganization.mockRestore();
+});
+
+it("a confirmed invited user signs in and accepts with their existing password", async () => {
+  addMailboxInvitation();
+  await addNoticeCredential();
+  const context = await auth.$context;
+  vi.spyOn(context.options.databaseHooks!.session!.create!, "before").mockResolvedValue(undefined);
+  const signedIn = await auth.api.signInEmail({ body: { email: "actor@example.test", password: NOTICE_OLD_PASSWORD }, returnHeaders: true });
+  const accepted = await auth.api.acceptInvitation({ body: { invitationId: "mailbox-invite" }, headers: new Headers({ cookie: signedIn.headers.get("set-cookie")! }) });
+  expect(accepted.member).toMatchObject({ userId: "actor", role: "member" });
 });

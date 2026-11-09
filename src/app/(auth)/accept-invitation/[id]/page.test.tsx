@@ -17,7 +17,7 @@ const APP_ORIGIN = "http://localhost:3100";
 const INVITATION_ID = "audit-invitation";
 const INVITATION_PATH = `/accept-invitation/${INVITATION_ID}`;
 const EMAIL = "invitee@e2e.local";
-const state = { invitationId: INVITATION_ID, organizationId: "org-audit", email: EMAIL, accountExists: false };
+const state = { invitationId: INVITATION_ID, organizationId: "org-audit", email: EMAIL, account: "none" };
 async function visitInvitation() {
   const response = await proxy(new NextRequest(`${APP_ORIGIN}${INVITATION_PATH}`));
   expect(response.status).toBe(200);
@@ -39,7 +39,7 @@ describe("invitation proxy and landing page", () => {
     expect(mocks.getState).toHaveBeenCalledWith({ invitationId: INVITATION_ID });
   });
   it("admits an existing invitee and sends them to sign-in with a return path", async () => {
-    mocks.getState.mockResolvedValue({ success: true, data: { ...state, accountExists: true } });
+    mocks.getState.mockResolvedValue({ success: true, data: { ...state, account: "confirmed" } });
     await expect(visitInvitation()).rejects.toThrow(`redirect:/login?from=${encodeURIComponent(INVITATION_PATH)}`);
   });
   it("lets the page refuse an expired invitation without rendering either form", async () => {
@@ -54,7 +54,7 @@ describe("invitation proxy and landing page", () => {
     const user = { id: "wrong-user", email: "wrong@e2e.local", emailVerified: true };
     mocks.getSession.mockResolvedValue({ user });
     mocks.getUser.mockResolvedValue(user);
-    mocks.getState.mockResolvedValue({ success: true, data: { ...state, accountExists: true } });
+    mocks.getState.mockResolvedValue({ success: true, data: { ...state, account: "confirmed" } });
     const html = renderToStaticMarkup(await visitInvitation());
     expect(html).toContain("Sign out, then sign in with the invited email address.");
     expect(html).not.toContain("Create account and join");
@@ -64,7 +64,7 @@ describe("invitation proxy and landing page", () => {
     const user = { id: "invited-user", email: EMAIL.toUpperCase(), emailVerified: true };
     mocks.getSession.mockResolvedValue({ user });
     mocks.getUser.mockResolvedValue(user);
-    mocks.getState.mockResolvedValue({ success: true, data: { ...state, accountExists: true } });
+    mocks.getState.mockResolvedValue({ success: true, data: { ...state, account: "confirmed" } });
     expect(renderToStaticMarkup(await visitInvitation())).toContain("Accept invitation</button>");
   });
   it.each(["/dashboard", "/settings/members", "/accept-invitation-other/token"])("keeps %s protected", async (path) => {

@@ -29,7 +29,7 @@ import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { CHANGE_EMAIL_MAX_ATTEMPTS, CHANGE_EMAIL_WINDOW_SECONDS, AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH, EMAIL_VERIFICATION_EXPIRES_IN_SECONDS, INVITATION_EXPIRES_IN_SECONDS, ORGANIZATION_INVITATION_LIMIT, PASSWORD_RESET_EXPIRES_IN_SECONDS, SESSION_COOKIE_CACHE_SECONDS } from "@/config/auth";
 import { env } from "@/config/env";
-import { resetPasswordEmail } from "@/lib/email/templates/reset-password-email";
+import { confirmPasswordResetEmail, sendPasswordSetupOrReset } from "./password-setup-hooks";
 import { verifyEmailEmail } from "@/lib/email/templates/verify-email-email";
 import { emailChangeConfirmEmail } from "@/lib/email/templates/email-change-confirm-email";
 import { getEmailAppUrl } from "@/lib/email/app-url";
@@ -108,6 +108,9 @@ export const auth = betterAuth({
       if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
         throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
       }
+      if (ctx.request && (ctx.path === "/organization/list-invitations" || ctx.path === "/organization/get-full-organization")) {
+        throw new APIError("FORBIDDEN", { message: "Use organization settings." });
+      }
       if (env.OAUTH_PROVIDER_ENABLED) return oauthBefore(ctx);
     }),
     after: createAuthMiddleware(async (ctx) => {
@@ -181,15 +184,8 @@ export const auth = betterAuth({
     resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN_SECONDS,
     minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
     maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
-    sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmail({
-        type: "reset-password",
-        userId: user.id,
-        to: user.email,
-        url,
-        ...resetPasswordEmail({ to: user.email, url, appUrl: env.NEXT_PUBLIC_APP_URL }),
-      });
-    },
+    sendResetPassword: sendPasswordSetupOrReset,
+    onPasswordReset: confirmPasswordResetEmail,
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -252,8 +248,7 @@ export const auth = betterAuth({
     account: {
       create: {
         // Better Auth 1.7 looks up credentials by both userId and accountId.
-        // Invitation bootstrap creates user + account atomically through
-        // createOAuthUser; this hook receives the newly generated user ID.
+        // Password setup creates the credential after mailbox confirmation.
         before: async (account) => ({
           data: account.providerId === "credential"
             ? { ...account, accountId: account.userId }
@@ -348,6 +343,7 @@ export const auth = betterAuth({
       startingCharactersConfig: { shouldStore: false },
     }),
     organization({
+      requireEmailVerificationOnInvitation: true,
       // 1.7.10 uses creatorRole in remove, demote, invite and leave checks.
       // Keep full member management, but reserve lifecycle for Platform Admins.
       disableOrganizationDeletion: true,

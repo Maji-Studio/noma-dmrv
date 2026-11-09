@@ -1,6 +1,6 @@
 # Mail Setup
 
-Transactional reset, verification and organization-invitation email uses
+Transactional password setup, reset, verification and organization-invitation email uses
 `src/lib/email/send.ts` → Resend. Read this when mail is missing or when changing
 an email handler. Auth policy lives in [auth.md](./auth.md); secrets and the
 hermetic-CI exception live in [security.md](./security.md).
@@ -26,7 +26,7 @@ to the deployed app URL, then exercise reset, verification and invitation flows.
 ## Templates and previews
 
 Every email is built in `src/lib/email/templates/`. One function per email
-(`reset-password-email.ts`, `verify-email-email.ts`, `invitation-email.ts`)
+(`set-password-email.ts`, `reset-password-email.ts`, `verify-email-email.ts`, `invitation-email.ts`)
 returns `{ subject, preheader, html, text }` through `composeEmail`. The look
 lives only in `panel-layout.ts` (colours, widths, dark-mode styles); copy lives
 in the per-email files; `plain-text.ts` builds the text twin. Every user value
@@ -46,7 +46,7 @@ The shared sender checks both Resend's returned `error` and thrown exceptions.
 Logs contain email type, stable IDs, provider status code and message ID only;
 provider error text and addresses must never be logged.
 
-- Password reset logs delivery failures but keeps the same response as an
+- Password setup and reset log delivery failures but keep the same response as an
   unknown account to avoid revealing account existence.
 - Verification logs failures and propagates a generic delivery error.
 - Invitations are saved before sending. Settings member invites (including
@@ -58,3 +58,14 @@ provider error text and addresses must never be logged.
 Better Auth's invitation hook handles direct HTTP calls only; server actions
 send after creation so they can return delivery status without double-sending.
 `emailSent` means Resend accepted the message, not confirmed inbox delivery.
+
+Invited users without a credential password receive "Set your noma password";
+users with a credential password receive the existing reset email. Both use the
+same one-hour reset-token lifetime. The set-password link preserves the invitation
+id through Better Auth's callback. With mail unconfigured, the local console
+prints `[auth:set-password]` with the user ID and link, just as it does for reset.
+No fallback links are printed in production.
+
+Invitation setup requests acknowledge success during the resend cooldown and on
+provider failure. Their `emailSent` acknowledgement is distinct from the inviter's
+provider-delivery result described above.
