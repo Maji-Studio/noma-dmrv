@@ -26,6 +26,7 @@ import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate 
 import { deriveBatchEmissionLines, withoutRegistryCalculatedLines } from "@/lib/certification/emission-lines";
 import { validateEntryDate } from "@/schemas/emission-entry-form";
 import { makeEntry, makeLine } from "./emission-line-test-fixtures";
+import type { EmissionLine } from "./emission-line-display";
 
 const RUNS = { source: "productionRuns" as const, count: 22, figure: { magnitude: "120", unit: "L" } };
 
@@ -244,5 +245,40 @@ describe("filters and groups", () => {
       ["pyrolysis", ["a", "removed"]],
       ["transport", ["b"]],
     ]);
+  });
+});
+
+describe("time-based lines", () => {
+  const timeLine = (ratePerHour: number | null, overrides: Partial<EmissionLine> = {}) =>
+    makeLine({
+      state: "filled",
+      blueprintKey: "time_based_emissions",
+      timeEmission: { ratePerHour },
+      unit: "h",
+      total: { magnitude: "12.5", unit: "h" },
+      inputShape: [{ key: "time", type: "monitored", quantityKind: "time", unit: "h" }],
+      ...overrides,
+    } as never);
+
+  it("labels the field Operating hours, and other lines keep Value", () => {
+    expect(entryFields(timeLine(0.41264)).map((field) => field.label)).toEqual(["Operating hours"]);
+    expect(entryFields(timeLine(null)).map((field) => field.label)).toEqual(["Operating hours"]);
+    const other = makeLine({ inputShape: [{ key: "x", type: "monitored", quantityKind: "dimensionless", unit: "1" }] } as never);
+    expect(entryFields(other).map((field) => field.label)).toEqual(["Value"]);
+    const plainTime = makeLine({ inputShape: [{ key: "t", type: "monitored", quantityKind: "time", unit: "h" }] } as never);
+    expect(entryFields(plainTime).map((field) => field.label)).toEqual(["Value"]);
+  });
+
+  it("shows the hours with their CO₂e", () => {
+    expect(lineTotalText(timeLine(0.41264))).toBe("12.5 h · 5.2 kg CO₂e");
+    const at = (hours: string, rate = 0.41264) => lineTotalText(timeLine(rate, { total: { magnitude: hours, unit: "h" } } as never));
+    expect(at("1")).toBe("1 h · 0.4 kg CO₂e");
+    expect(at("0.1")).toBe("0.1 h · <0.1 kg CO₂e");
+    expect(at("0")).toBe("0 h · 0 kg CO₂e");
+    expect(at("5000")).toBe("5,000 h · 2.063 t CO₂e");
+  });
+
+  it("shows the hours alone when the rate is unknown", () => {
+    expect(lineTotalText(timeLine(null))).toBe("12.5 h");
   });
 });

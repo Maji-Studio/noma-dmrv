@@ -105,3 +105,27 @@ describe("ManualEntryForm credit batch line", () => {
     expect(screen.getByRole("link", { name: /CB-1/ }).getAttribute("href")).toBe(recordHref("creditBatch", "cb", { facilityId: "fac" }));
   });
 });
+
+describe("ManualEntryForm field label", () => {
+  const renderLine = (line: ReturnType<typeof makeLine>) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ManualEntryForm line={line} batch={BATCH} scope={SCOPE} today="2026-10-10" mode={{ kind: "add" }} onCancel={vi.fn()} onSaved={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+  it("reads Operating hours on a time-based line", () => {
+    renderLine(makeLine({
+      timeEmission: { ratePerHour: 0.41264 },
+      unit: "h",
+      inputShape: [{ key: "time", type: "monitored", quantityKind: "time", unit: "h" }],
+    } as never));
+    expect(screen.getByRole("textbox", { name: /^Operating hours/ })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: /^Value/ })).toBeNull();
+  });
+
+  it("keeps Value on other lines", () => {
+    renderLine(makeLine({ inputShape: [{ key: "x", type: "monitored", quantityKind: "dimensionless", unit: "1" }] } as never));
+    expect(screen.getByRole("textbox", { name: /^Value/ })).toBeTruthy();
+  });
+});

@@ -4,6 +4,7 @@ import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { roundDisplayedMassKg } from "./mass-precision";
 import {
   formatCo2e,
+  formatCo2ePreview,
   formatCalendarDate,
   formatDayString,
   formatDistanceKm,
@@ -182,6 +183,25 @@ describe("formatCo2e", () => {
     expect(formatCo2e(1_040, { signed: true })).toBe("+1.04 t CO₂e");
     expect(formatCo2e(-15.4, { signed: true })).toBe("−15 kg CO₂e");
     expect(formatCo2e(0.4, { signed: true })).toBe("0 kg CO₂e");
+  });
+});
+
+describe("formatCo2ePreview", () => {
+  it("shows kilograms to one decimal and trims a trailing zero", () => {
+    expect(formatCo2ePreview(5.158)).toBe("5.2 kg CO₂e");
+    expect(formatCo2ePreview(0.41264)).toBe("0.4 kg CO₂e");
+    expect(formatCo2ePreview(5)).toBe("5 kg CO₂e");
+    expect(formatCo2ePreview(0)).toBe("0 kg CO₂e");
+  });
+
+  it("never turns a positive value into zero", () => {
+    expect(formatCo2ePreview(0.04)).toBe("<0.1 kg CO₂e");
+    expect(formatCo2ePreview(0.05)).toBe("0.1 kg CO₂e");
+  });
+
+  it("falls back to tonnes from one tonne, including a value that rounds up to it", () => {
+    expect(formatCo2ePreview(2_063.2)).toBe("2.063 t CO₂e");
+    expect(formatCo2ePreview(999.96)).toBe("1 t CO₂e");
   });
 });
 

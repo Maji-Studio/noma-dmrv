@@ -27,6 +27,9 @@ const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
+/** A CO₂e preview shows kg to one decimal, so a short run does not read as zero. */
+const CO2E_PREVIEW_KG_FRACTION_DIGITS = 1;
+const CO2E_PREVIEW_MIN_KG = 0.1;
 const PERCENT_DEFAULT_FRACTION_DIGITS = 1;
 
 type DateValue = string | Date | null | undefined;
@@ -257,6 +260,19 @@ export function formatCo2e(
   const suffix = unit ?? (inTonnes ? "t CO₂e" : "kg CO₂e");
   const sign = signed && roundedMagnitude !== 0 ? (kg > 0 ? "+" : "−") : "";
   return `${sign}${magnitude}${suffix ? ` ${suffix}` : ""}`;
+}
+
+/**
+ * A CO₂e preview next to recorded hours: kg with one decimal (trailing zero
+ * trimmed, "5.2 kg CO₂e"), "<0.1 kg CO₂e" for a positive value that would round
+ * to zero, and `formatCo2e` (tonnes) from 1 t. Zero stays "0 kg CO₂e".
+ */
+export function formatCo2ePreview(kg: number): string {
+  const rounded = Number(kg.toFixed(CO2E_PREVIEW_KG_FRACTION_DIGITS));
+  // A value that only rounds up to 1,000 kg reads as the tonne it is shown as.
+  if (rounded >= KG_PER_TONNE) return formatCo2e(Math.max(kg, KG_PER_TONNE));
+  if (kg > 0 && rounded < CO2E_PREVIEW_MIN_KG) return `<${CO2E_PREVIEW_MIN_KG.toLocaleString(undefined, { minimumFractionDigits: CO2E_PREVIEW_KG_FRACTION_DIGITS })} kg CO₂e`;
+  return `${rounded.toLocaleString(undefined, { maximumFractionDigits: CO2E_PREVIEW_KG_FRACTION_DIGITS })} kg CO₂e`;
 }
 
 /**
