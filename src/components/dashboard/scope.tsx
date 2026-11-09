@@ -16,12 +16,15 @@ const ALL_BATCHES = "All credit batches";
 /**
  * The chosen batch: the URL's `?batch=` when the facility lists that batch,
  * else null (all credit batches), so a stale, archived or other facility's id
- * falls back to all instead of failing the page. Undefined while the list loads.
+ * falls back to all instead of failing the page. Undefined while the list loads;
+ * if the list cannot load, the requested id stands and the read checks it.
  */
 export function useSelectedBatchId(facilityId: string): string | null | undefined {
   const requested = useSearchParams().get(BATCH_PARAM);
   const { data: batches, isPending, isError } = useCreditBatches(facilityId);
-  if (!requested || isError) return null;
+  if (!requested) return null;
+  // A failed lookup proves nothing about the batch: keep it, and the read refuses an unknown one.
+  if (isError) return requested;
   if (isPending || !batches) return undefined;
   return batches.some((batch) => batch.id === requested) ? requested : null;
 }

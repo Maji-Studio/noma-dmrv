@@ -7,7 +7,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRightIcon, HandshakeIcon, CubeIcon, FactoryIcon, LeafIcon, MapPinIcon, ShoppingCartIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardOverview, DashboardStationKey } from "@/data-access/dashboard-overview";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import { useCustomers } from "@/hooks/use-customers";
@@ -47,26 +47,26 @@ export function useFlowActions(
 
   const actions: (QuickAction | false)[] = [
     status.supplierCount > 0 && {
-      key: "feedstock", label: "New feedstock intake", href: href("/feedstock-intake"), icon: LeafIcon, stage: "feedstock",
+      key: "feedstock", label: "New feedstock intake", href: href("/feedstock-intake"), stage: "feedstock",
     },
     (facility?.reactorCount ?? 0) > 0 && (facility?.feedstockCount ?? 0) > 0 && {
-      key: "run", label: "New production run", href: href("/production-runs"), icon: FactoryIcon, stage: "production",
+      key: "run", label: "New production run", href: href("/production-runs"), stage: "production",
     },
     completeRuns > 0 && {
-      key: "product", label: "New biochar product", href: href("/biochar-products"), icon: CubeIcon, stage: "products",
+      key: "product", label: "New biochar product", href: href("/biochar-products"), stage: "products",
     },
     customers != null && customers > 0 && {
-      key: "order", label: "New order", href: href("/orders"), icon: ShoppingCartIcon, stage: "deliveries",
+      key: "order", label: "New order", href: href("/orders"), stage: "deliveries",
     },
     orders != null && orders > 0 && stationTotal("products") > 0 && {
-      key: "delivery", label: "New delivery", href: href("/deliveries"), icon: TruckIcon, stage: "deliveries",
+      key: "delivery", label: "New delivery", href: href("/deliveries"), stage: "deliveries",
     },
     stationTotal("deliveries") > 0 && {
-      key: "application", label: "New application", href: href("/applications"), icon: MapPinIcon, stage: "applications",
+      key: "application", label: "New application", href: href("/applications"), stage: "applications",
     },
     // Always: suppliers keep being added.
     {
-      key: "supplier", label: "New supplier", href: href("/suppliers"), icon: HandshakeIcon, stage: "suppliers",
+      key: "supplier", label: "New supplier", href: href("/suppliers"), stage: "suppliers",
     },
   ];
   return actions.filter((action): action is QuickAction => action !== false);
@@ -100,19 +100,11 @@ function ActionLink({ action }: { action: QuickAction }) {
   );
 }
 
-/** A cell's actions, stacked, wrapping inside a narrow cell. */
-export function StageActionStack({
-  actions,
-  align = "center",
-  className,
-}: {
-  actions: QuickAction[];
-  align?: "center" | "start";
-  className?: string;
-}) {
+/** A cell's actions, stacked and start aligned, wrapping inside a narrow cell. */
+export function StageActionStack({ actions, className }: { actions: QuickAction[]; className?: string }) {
   if (actions.length === 0) return null;
   return (
-    <div className={cn("flex flex-col gap-2", align === "center" ? "items-center" : "items-start", className)}>
+    <div className={cn("flex flex-col items-start gap-2", className)}>
       {actions.map((action) => (
         <ActionLink key={action.key} action={action} />
       ))}

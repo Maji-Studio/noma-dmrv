@@ -18,7 +18,7 @@ const station: DashboardStation = {
 
 describe("StageText", () => {
   it("shows the stage name over the counted figure and links the stage to its list", () => {
-    render(<StageText station={station} align="start" />);
+    render(<StageText station={station} />);
     expect(screen.getByRole("link", { name: "Production, 3 runs. Open Production runs" }).getAttribute("href")).toBe(
       "/production-runs?facility=f1",
     );
@@ -30,7 +30,6 @@ describe("StageText", () => {
     render(
       <StageText
         station={{ ...station, attention: 2, reasons: [{ state: "warning", text: "PR-1: Run missing data", href: "/x" }] }}
-        align="start"
       />,
     );
     const bubble = screen.getByRole("button", { name: "2 open items" });

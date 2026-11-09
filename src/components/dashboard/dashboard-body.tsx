@@ -87,7 +87,7 @@ export function DashboardBody({ data: overview, isLoading: overviewLoading, erro
           {pending ? (
             <RowsSkeleton />
           ) : todos.length === 0 ? (
-            <TodoEmpty />
+            <TodoEmpty clearFilterHref={batchId ? allBatchesHref : null} />
           ) : (
             <DashRowList rows={todos} label="To do" />
           )}

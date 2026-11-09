@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BIN_TYPE_META, binCurrentMassKg, binMaterialName } from "@/components/storage-locations/bin-display";
-import { massBasisLabel, outputStockFigure } from "@/components/storage-locations/stock-preview-shared";
+import { formatWetEstimate, massBasisLabel } from "@/components/storage-locations/stock-preview-shared";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { useStorageLocations } from "@/hooks/use-storage-locations";
 import { LOAD_FAILED, MISSING_VALUE } from "@/lib/copy-utils";
@@ -118,13 +118,15 @@ function binFigure(
   if (bin.type === "feedstock_bin") {
     const wetKg = binCurrentMassKg(bin);
     if (isMassEmpty(wetKg)) return EMPTY_STOCK_LABEL;
-    return wetKg == null ? LOAD_FAILED : `${formatMassKg(wetKg)} ${WET}`;
+    // No derived wet balance is not a failed read: like the board tile, show no figure.
+    return wetKg == null ? null : `${formatMassKg(wetKg)} ${WET}`;
   }
   // Until the stock read lands the row shows the day alone.
   if (!stock) return readFailed ? LOAD_FAILED : null;
   const wetKg = stock.beforeEstimatedWetKg;
   if (isOutputStockEmpty(wetKg, stock.beforeDryKg)) return EMPTY_STOCK_LABEL;
-  return outputStockFigure(wetKg, stock.beforeDryKg).replace(massBasisLabel("wet"), WET);
+  // The board tile's figure (outputStockFigure), with the short "wet" basis.
+  return wetKg !== null ? `${formatWetEstimate(wetKg)} kg ${WET}` : `${formatMassKg(stock.beforeDryKg)} ${massBasisLabel("dry")}`;
 }
 
 export function binTitle(bin: StorageLocationWithFacility): string {

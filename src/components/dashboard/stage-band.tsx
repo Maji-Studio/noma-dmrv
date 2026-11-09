@@ -66,10 +66,10 @@ function SceneWithCells({ data, actions }: BandProps) {
             {/* The bay: transparent over the scene; the scene answers the hover itself. */}
             <span className="block" style={{ aspectRatio: `${columnUnits(index)} / ${CROP.height}` }} aria-hidden />
             <span className={cn("border-t px-16 pb-12 pt-16", HAIRLINE, COLUMN_TINT, index > 0 && "border-l")}>
-              <StageText station={station} align="start" />
+              <StageText station={station} />
             </span>
             <div className={cn("flex-1 border-t px-12 pb-16 pt-12", HAIRLINE, COLUMN_TINT, index > 0 && "border-l")}>
-              <StageActionStack actions={stageActions(actions, station.key)} align="start" className={ABOVE_STAGE_LINK} />
+              <StageActionStack actions={stageActions(actions, station.key)} className={ABOVE_STAGE_LINK} />
             </div>
           </li>
         ))}
@@ -92,8 +92,8 @@ function PhoneCells({ data, actions }: BandProps) {
               index > 0 && cn("border-t", HAIRLINE),
             )}
           >
-            <StageText station={station} align="start" />
-            {own.length > 0 && <StageActionStack actions={own} align="start" className={ABOVE_STAGE_LINK} />}
+            <StageText station={station} />
+            {own.length > 0 && <StageActionStack actions={own} className={ABOVE_STAGE_LINK} />}
           </li>
         );
       })}

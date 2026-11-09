@@ -23,10 +23,10 @@ import { FOCUS_RING, STAGE_ICON, STAGE_LIST_LABEL } from "./shared";
 /** Lifts a sibling control above the stretched stage link. */
 export const ABOVE_STAGE_LINK = "relative z-[2]";
 
-export function StageText({ station, align }: { station: DashboardStation; align: "center" | "start" }) {
+export function StageText({ station }: { station: DashboardStation }) {
   const StageIcon = STAGE_ICON[station.key];
   return (
-    <span className={cn("flex flex-col gap-4", align === "center" ? "items-center text-center" : "items-start")}>
+    <span className="flex flex-col items-start gap-4">
       <Link
         href={station.href}
         aria-label={`${station.name}, ${station.totalLabel}. Open ${STAGE_LIST_LABEL[station.key]}`}

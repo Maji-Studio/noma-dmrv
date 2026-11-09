@@ -22,6 +22,11 @@ import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import { DashboardBody } from "./dashboard-body";
 import { BatchFilter } from "./scope";
 import { updatedLabel } from "./updated-label";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+
+/** The "Updated 16:16" line's box while the overview loads (body-small). */
+const UPDATED_LINE_HEIGHT = 20;
+const UPDATED_LINE_WIDTH = 96;
 
 export function DashboardView() {
   const { activeOrganizationId, facilityId, selectedFacility } = useFacilityContext();
@@ -48,13 +53,14 @@ export function DashboardView() {
       <header className="flex flex-wrap items-start justify-between gap-24">
         <div className="flex min-w-0 flex-col gap-6">
           <h1 className="title-heading-2">Dashboard</h1>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            {facilityId
-              ? data
-                ? updatedLabel(data.generatedAt, timeZone)
-                : "Operations across this facility"
-              : "Select a facility to monitor its carbon removal."}
-          </p>
+          {facilityId && !data ? (
+            // Holds the "Updated 16:16" line's place, so the header does not shift.
+            <Skeleton height={UPDATED_LINE_HEIGHT} width={UPDATED_LINE_WIDTH} />
+          ) : (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              {data ? updatedLabel(data.generatedAt, timeZone) : "Select a facility to monitor its carbon removal."}
+            </p>
+          )}
         </div>
         {facilityId && !isTakeover && <BatchFilter facilityId={facilityId} />}
       </header>

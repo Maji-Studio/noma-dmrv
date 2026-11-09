@@ -39,7 +39,6 @@ export interface QuickAction {
   key: string;
   label: string;
   href: string;
-  icon: Icon;
   /** The stage whose list this action records into, when it has one. */
   stage?: DashboardStationKey;
 }
@@ -254,11 +253,20 @@ export function SectionLink({ href, children }: { href: string; children: ReactN
 // States
 // ---------------------------------------------------------------------------
 
-/** Nothing to fix. No action: the stage band above already offers every record action. */
-export function TodoEmpty() {
+/**
+ * Nothing to fix in the filter's scope. The filter always applies, so the
+ * title names it and never reads as a facility-wide all clear; one batch
+ * offers the way back to all. No create action: the stage band carries them.
+ */
+export function TodoEmpty({ clearFilterHref }: { clearFilterHref: string | null }) {
   return (
     <div className="p-16">
-      <EmptyState padding="sm" icon={<CheckCircleIcon size={32} weight="bold" />} title="Nothing to fix" />
+      <EmptyState
+        padding="sm"
+        icon={<CheckCircleIcon size={32} weight="bold" />}
+        title={clearFilterHref ? "Nothing to fix in this credit batch" : "Nothing to fix in credit batches"}
+        action={clearFilterHref ? <SectionLink href={clearFilterHref}>Show all credit batches</SectionLink> : undefined}
+      />
     </div>
   );
 }
