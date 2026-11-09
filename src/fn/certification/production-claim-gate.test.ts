@@ -13,7 +13,7 @@ vi.mock("./certify-context-core", () => ({
 
 import { retireStaleSubmissionDraft } from "@/data-access/certification";
 import { retireClaimedRemovalDraftForDrift } from "./production-claim-gate";
-import { INTERRUPTED_REMOVAL_DRIFT_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 
 const ORG_CTX = {
   userId: "user-1",
@@ -37,9 +37,9 @@ describe("retireClaimedRemovalDraftForDrift", () => {
   });
 
   it("keeps a draft that may have reached Isometric and points the operator to Delete Removal", async () => {
-    await expect(retire(true)).rejects.toThrow(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
-    expect(INTERRUPTED_REMOVAL_DRIFT_MESSAGE).toContain("Select Delete Removal");
-    expect(INTERRUPTED_REMOVAL_DRIFT_MESSAGE).not.toMatch(/support/i);
+    await expect(retire(true)).rejects.toThrow(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
+    expect(INTERRUPTED_REMOVAL_CHANGED_MESSAGE).toContain("Select Delete Removal");
+    expect(INTERRUPTED_REMOVAL_CHANGED_MESSAGE).not.toMatch(/support/i);
     expect(retireStaleSubmissionDraft).not.toHaveBeenCalled();
   });
 

@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
-import { INTERRUPTED_REMOVAL_DRIFT_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import { INTERRUPTED_REMOVAL_CHANGED_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
 import { SubmitStep } from "./submit-step";
 
 const state = vi.hoisted(() => ({
@@ -478,7 +478,7 @@ describe("SubmitStep", () => {
               isSuccess: false,
               isError: true,
               data: undefined,
-              error: new Error(INTERRUPTED_REMOVAL_DRIFT_MESSAGE),
+              error: new Error(INTERRUPTED_REMOVAL_CHANGED_MESSAGE),
               reset: vi.fn(),
             } as never
           }
@@ -486,7 +486,7 @@ describe("SubmitStep", () => {
       );
     });
 
-    expect(JSON.stringify(renderer!.toJSON())).toContain(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
+    expect(JSON.stringify(renderer!.toJSON())).toContain(INTERRUPTED_REMOVAL_CHANGED_MESSAGE);
     expect(findButton(renderer!, "Delete Removal")).toBeDefined();
     expect(findButton(renderer!, "Discard draft")).toBeUndefined();
     await act(async () => renderer?.unmount());

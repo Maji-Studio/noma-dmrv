@@ -21,7 +21,7 @@ import {
 } from "@/data-access/certification";
 import { listProductionClaimDraftContenders } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
-import { INTERRUPTED_REMOVAL_DRIFT_MESSAGE } from "@/lib/certification/interrupted-removal-copy";
+import { InterruptedRemovalChangedError } from "@/lib/certification/interrupted-removal-copy";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "./certify-context-core";
 
@@ -48,7 +48,7 @@ export async function retireClaimedRemovalDraftForDrift(args: {
   preserveForReconciliation: boolean;
 }): Promise<void> {
   if (args.preserveForReconciliation) {
-    throw new SafeError(INTERRUPTED_REMOVAL_DRIFT_MESSAGE);
+    throw new InterruptedRemovalChangedError();
   }
   await retireStaleSubmissionDraft(args.orgCtx, args.submissionId, {
     reason: args.reason,
@@ -139,7 +139,7 @@ export function assertMemberBatchLineageUnchanged(
 // retireStaleSubmissionDraft for why not `rejected`) and fail closed; the next
 // attempt mints a fresh version from live data under the current revision. An
 // interrupted draft with possible registry state is preserved instead, and the
-// operator deletes it (INTERRUPTED_REMOVAL_DRIFT_MESSAGE). Missing
+// operator deletes it (INTERRUPTED_REMOVAL_CHANGED_MESSAGE). Missing
 // `__mappingRevision` (pre-ADR-0005 snapshot) counts as stale.
 export async function assertResumedSnapshotRevisionCurrent(
   orgCtx: OrgContext,
