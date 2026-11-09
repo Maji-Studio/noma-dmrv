@@ -152,7 +152,7 @@ describe("RemovalDetailSheet structure", () => {
   it("drops the Allocation section and points to the credit batch's Emissions tab behind an (i)", () => {
     renderSheet();
     expect(screen.queryByText("Allocation")).toBeNull();
-    expect(screen.getByRole("button", { name: /More about Credit batches/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "About Credit batches" })).toBeTruthy();
   });
 });
 

@@ -404,16 +404,14 @@ export function RemovalDetailSheet({
                   value={window}
                   valuePresent={Boolean(hasReportingWindow)}
                 />
-                <DetailField
-                  label={summary.memberBatchCodes.length === 1 ? "Credit batch" : `Credit batches (${summary.memberBatchCodes.length})`}
-                  hint={ALLOCATION_HINT}
-                  value={
-                    summary.memberBatchCodes.length > 0 ? (
-                      <CreditBatchLinks facts={facts} codes={summary.memberBatchCodes} facilityId={facilityId} />
-                    ) : null
-                  }
-                  emptySituation="none"
-                />
+                {summary.memberBatchCodes.length > 0 && (
+                  <DetailField
+                    label={summary.memberBatchCodes.length === 1 ? "Credit batch" : `Credit batches (${summary.memberBatchCodes.length})`}
+                    explanation={ALLOCATION_HINT}
+                    explanationTitle="Credit batches"
+                    value={<CreditBatchLinks facts={facts} codes={summary.memberBatchCodes} facilityId={facilityId} />}
+                  />
+                )}
                 {!factsFailed && <DetailField label="Facility" value={facts?.facilityName ?? null} pending={sheetFacts.isLoading} />}
               </div>
 

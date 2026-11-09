@@ -39,6 +39,8 @@ const TEXT_LINK = cn(
   INLINE_HIT_AREA_FROM_SM,
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
 );
+/** 44px tall on a phone, text height from sm; the sibling rows keep their own spacing, so targets never overlap. */
+const PHONE_TARGET = "inline-flex min-h-44 items-center sm:min-h-0";
 const ROW_DIVIDER = "[border-top:var(--row-divider)] first:[border-top:none]";
 
 /** Biochar records say "dry biochar"; deliveries and feedstock say "wet" or "dry". */
@@ -67,7 +69,7 @@ function RecordLine({ record, facilityId }: { record: RemovalRecord; facilityId:
         {record.place && <> · {record.place}</>}
         {mass && <> · <span className="tabular-nums">{mass}</span></>}
       </span>
-      <Link href={href} className={cn(RECORD_CODE_LINK, "body-caption")}>
+      <Link href={href} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "text-[length:var(--text-xs)]")}>
         {record.code}
       </Link>
     </li>
@@ -88,7 +90,7 @@ export function RecordGroup({ title, records, facilityId }: { title: string; rec
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="body-caption font-medium text-[var(--color-text-secondary)]">{title}</span>
+      <h3 className="body-small font-medium">{title}</h3>
       <ul ref={listRef} className="flex flex-col">
         {shown.map((record) => (
           <RecordLine key={record.id} record={record} facilityId={facilityId} />
@@ -116,7 +118,7 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
   return (
     <li className={cn("flex flex-col", ROW_DIVIDER)}>
       <div className="flex items-center gap-12">
-        <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} className={cn(RECORD_CODE_LINK, "shrink-0 body-small")}>
+        <Link href={recordHref("creditBatch", batch.creditBatchId, { facilityId })} className={cn(RECORD_CODE_LINK, PHONE_TARGET, "shrink-0")}>
           {batch.code}
         </Link>
         <button
@@ -138,7 +140,7 @@ function BatchRow({ batch, facilityId }: { batch: RemovalBatchRecords; facilityI
           <RecordGroup title="Production runs" records={batch.productionRuns} facilityId={facilityId} />
           <RecordGroup title="Applications" records={batch.applications} facilityId={facilityId} />
           <RecordGroup title="Deliveries" records={batch.deliveries} facilityId={facilityId} />
-          <RecordGroup title="Feedstock deliveries" records={batch.feedstock} facilityId={facilityId} />
+          <RecordGroup title="Feedstock intake" records={batch.feedstock} facilityId={facilityId} />
         </div>
       )}
     </li>

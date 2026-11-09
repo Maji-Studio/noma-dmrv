@@ -50,10 +50,10 @@ describe("RemovalRecordsList", () => {
   it("shows the first three by date and offers Show all N for a longer group only", () => {
     render(<RemovalRecordsList batches={[batch(5, RECORDS_SHOWN_FIRST)]} facilityId="f1" />);
     open();
-    const runs = screen.getByText("Production runs").parentElement!;
+    const runs = screen.getByRole("heading", { name: "Production runs" }).parentElement!;
     expect(within(runs).getAllByRole("listitem")).toHaveLength(RECORDS_SHOWN_FIRST);
     expect(within(runs).getByRole("button", { name: /Show all 5/ })).toBeTruthy();
-    const apps = screen.getByText("Applications").parentElement!;
+    const apps = screen.getByRole("heading", { name: "Applications" }).parentElement!;
     expect(within(apps).getAllByRole("listitem")).toHaveLength(RECORDS_SHOWN_FIRST);
     expect(within(apps).queryByRole("button")).toBeNull();
   });
@@ -62,7 +62,7 @@ describe("RemovalRecordsList", () => {
     render(<RemovalRecordsList batches={[batch(5, 0)]} facilityId="f1" />);
     open();
     fireEvent.click(screen.getByRole("button", { name: /Show all 5/ }));
-    const runs = screen.getByText("Production runs").parentElement!;
+    const runs = screen.getByRole("heading", { name: "Production runs" }).parentElement!;
     expect(within(runs).getAllByRole("listitem")).toHaveLength(5);
     expect(document.activeElement).toBe(within(runs).getByRole("link", { name: "PR-4" }));
     expect(within(runs).queryByRole("button")).toBeNull();
@@ -81,7 +81,12 @@ describe("batch row and links", () => {
     render(<RemovalRecordsList batches={[batch(1, 2)]} facilityId="f1" />);
     expect(screen.getByRole("button", { name: /Records of CB-26-001/ }).textContent).toMatch(/6\.4.t.dry/);
     open();
-    expect(screen.getByRole("link", { name: "PR-1" }).getAttribute("target")).toBeNull();
+    const code = screen.getByRole("link", { name: "PR-1" });
+    expect(code.getAttribute("target")).toBeNull();
+    expect(code.className).toContain("min-h-44");
+    expect(code.className).toContain("font-mono");
+    expect(screen.getByRole("link", { name: "CB-26-001" }).className).toContain("min-h-44");
+    expect(screen.getByRole("heading", { name: "Production runs" })).toBeTruthy();
   });
 });
 
