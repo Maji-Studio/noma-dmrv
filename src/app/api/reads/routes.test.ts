@@ -49,6 +49,9 @@ vi.mock("@/data-access/certification", () => ({
 vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
 vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
 vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
+vi.mock("@/lib/read-models/removal-attention-sources", () => ({
+  loadRemovalAttentionSources: async () => ({ drafts: [], rejected: [], returned: [] }),
+}));
 vi.mock("@/config/env", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/config/env")>();
   return { ...actual, env: { ISOMETRIC_ENVIRONMENT: "sandbox" } };
@@ -416,7 +419,7 @@ describe("startup read contracts", () => {
 
   it("defaults the dashboard range to month", async () => {
     await dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID }));
-    expect(mocks.getDashboardOverview).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, "month");
+    expect(mocks.getDashboardOverview).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, "month", expect.any(Promise));
   });
 
   it("rejects an unsupported dashboard range before data access", async () => {

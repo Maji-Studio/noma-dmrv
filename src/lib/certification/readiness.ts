@@ -118,6 +118,13 @@ export interface RemovalReadiness {
   state: RemovalReadinessState;
   /** Human-readable blocker reasons; empty unless state === "blocked". */
   reasons: string[];
+  /**
+   * How many fixes Review & submit lists for the unmet checks: the unmet
+   * actionable checks, which is not the number of reasons (one check can carry
+   * several). Set when blocked; compile blockers are only known after a compile,
+   * so they are not counted here.
+   */
+  fixCount?: number;
   /** Non-blocking conditions operators should see before submission. */
   advisories: string[];
   /** Vehicle review warnings, separate from automatic evidence work. */
@@ -282,15 +289,11 @@ export function deriveRemovalReadiness(
   // Not submitted yet (null / draft / rejected) → evaluate preconditions.
   if (!facts.hasMapping) {
     // Without a project link every downstream fact is empty; one clear reason.
-    return { state: "blocked", reasons: [NOT_LINKED_REASON], ...advisoryFields };
+    return blockedReadiness(facts, [NOT_LINKED_REASON], advisoryFields);
   }
 
   if (!facts.hasOrgCredentials) {
-    return {
-      state: "blocked",
-      reasons: [NO_ORG_CREDENTIALS_REASON],
-      ...advisoryFields,
-    };
+    return blockedReadiness(facts, [NO_ORG_CREDENTIALS_REASON], advisoryFields);
   }
 
   const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
@@ -343,8 +346,27 @@ export function deriveRemovalReadiness(
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
   return reasons.length > 0
-    ? { state: "blocked", reasons, ...advisoryFields }
+    ? blockedReadiness(facts, reasons, advisoryFields)
     : { state: "ready", reasons: [], ...advisoryFields };
+}
+
+/** Checks Review & submit turns into fixes; passed, skipped and advisory checks are not. */
+export function actionableSubmissionChecks(
+  checks: RemovalRequirementCheck[],
+): RemovalRequirementCheck[] {
+  return checks.filter((check) => check.status !== "warning");
+}
+
+/** A blocked verdict carrying the number of fixes the review lists (reasons when no check is unmet). */
+function blockedReadiness(
+  facts: RemovalReadinessFacts,
+  reasons: string[],
+  advisoryFields: Pick<RemovalReadiness, "advisories" | "transportVehicleAdvisories">,
+): RemovalReadiness {
+  const unmet = actionableSubmissionChecks(buildRemovalRequirementsChecklist(facts)).filter(
+    (check) => check.status === "unmet",
+  ).length;
+  return { state: "blocked", reasons, fixCount: unmet > 0 ? unmet : reasons.length, ...advisoryFields };
 }
 
 // ---------------------------------------------------------------------------

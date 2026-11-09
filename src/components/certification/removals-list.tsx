@@ -30,7 +30,6 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   PlusIcon,
   SealCheckIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
@@ -58,10 +57,11 @@ import { formatRegistryRecord, registryRecordUrl } from "./registry-record";
 import {
   buildRemovalListRows,
   type RemovalListRow,
+  listStatusLabel,
 } from "./removal-list-state";
 
 export function RemovalsList({ initialCreate = false, canManage = false }: { initialCreate?: boolean; canManage?: boolean } = {}) {
-  const { facilityId, selectedFacility } = useFacilityContext();
+  const { facilityId } = useFacilityContext();
   const [dialogOpen, setDialogOpen] = useState(false);
   // `?create=true` opens the wizard (the credit batch page's Start Removal).
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
@@ -125,11 +125,6 @@ export function RemovalsList({ initialCreate = false, canManage = false }: { ini
       {facilityId && (
         <NewRemovalDialog
           facilityId={facilityId}
-          facilityName={
-            selectedFacility?.name?.trim() ||
-            selectedFacility?.code ||
-            "Selected facility"
-          }
           isOpen={wizardOpen}
           onClose={closeWizard}
           resumeRemovalId={resume}
@@ -235,8 +230,6 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
   // A returned Removal with its correction window open names that state in
   // place of its own status, and #1134's lock-based cell steps aside.
   const shown = summary.correction ? correctionStatus(summary.correction) : status;
-  const firstReason = status.reasons[0]?.split("\n")[0];
-  const remainingReasonCount = status.reasons.length - 1;
 
   return (
     <span className="flex flex-col items-start gap-4">
@@ -244,24 +237,8 @@ export function StatusCell({ summary, lock }: { summary: RemovalListRow; lock?: 
         entityType="removal"
         entityId={summary.removalId}
         status={shown.value}
-        label={shown.label}
+        label={shown === status ? listStatusLabel(status) : shown.label}
       />
-      {firstReason && (
-        // `relative` paints the reason above the badge's expanded hit area,
-        // so pressing it opens the row like any other cell text.
-        <span className="relative inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
-          <WarningIcon
-            size={14}
-            weight="fill"
-            aria-hidden
-            className="mt-px shrink-0 text-[var(--color-signal-orange)]"
-          />
-          <span className="line-clamp-2">
-            {firstReason}
-            {remainingReasonCount > 0 ? ` +${remainingReasonCount} more` : ""}
-          </span>
-        </span>
-      )}
       <RemovalCorrectionCell lock={summary.correction ? undefined : lock} />
       {status.canRetry && (
         <Button
@@ -366,7 +343,7 @@ const createColumns = (
       });
       const correction = summary.correction;
       const returned = correction ? ` ${correctionStatus(correction).label}` : locks[summary.removalId]?.returnedBy.length ? ` ${CORRECTION_NEEDED_LABEL}` : "";
-      return `${status.label} ${status.reasons.join(" ")}${returned}`;
+      return `${listStatusLabel(status)}${returned}`;
     },
     cell: StatusColumnCell,
   },

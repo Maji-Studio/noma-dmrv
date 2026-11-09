@@ -8,20 +8,18 @@ import { RemovalCellDetails, removalSearchText, StatusCell } from "./removals-li
 vi.mock("@/lib/certification/status", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/certification/status")>(),
   deriveRemovalWorkflowStatus: ({ readiness }: RemovalListRow) => ({
-    value: "blocked", label: "Blocked", reasons: readiness?.reasons ?? [], canRetry: false,
+    kind: "blocked", value: "blocked", label: "Needs attention", reasons: readiness?.reasons ?? [], canRetry: false,
   }),
 }));
 
-describe("Removal list reason", () => {
-  it.each(["Template blocked.", "Template blocked.\nRename a component.\nReview settings."])(
-    "shows only the lead of %s and retains the additional reason count", (reason) => {
-      const summary = { readiness: { reasons: [reason, "Other blocker."] } } as RemovalListRow;
-      const html = renderToStaticMarkup(<StatusCell summary={summary} />);
-      expect(html).toContain("Template blocked. +1 more");
-      expect(html).not.toContain("Rename a component.");
-      expect(html).not.toContain("Review settings.");
-    },
-  );
+describe("Removal list status of a draft", () => {
+  it("reads the count of what to fix in one line, with no reason text", () => {
+    const summary = { readiness: { reasons: ["Template blocked.\nRename a component.", "Other blocker."] } } as RemovalListRow;
+    const html = renderToStaticMarkup(<StatusCell summary={summary} />);
+    expect(html).toContain("2 to fix");
+    expect(html).not.toContain("Template blocked.");
+    expect(html).not.toContain("more");
+  });
 });
 
 describe("Removal list status for a returned Removal", () => {

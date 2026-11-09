@@ -220,19 +220,17 @@ test.describe("Certification — New-Removal wizard", () => {
       );
 
       // ...and the wizard opens on that removal in resume mode — it skips the
-      // select step and lands on "Confirm & submit" (the step that absorbed the
+      // select step and lands on "Review & submit" (the step that absorbed the
       // old Requirements step — see new-removal-dialog/submit-step.tsx). Assert
       // via the step rail's active item (rendered immediately) rather than the
       // step body, which is gated on the removal context query (that query hits
       // the Isometric API, so its success is environment-dependent — irrelevant
       // to the resume-entry behavior under test here).
       const dialog = page.getByRole("dialog");
+      // Review & submit has no step rail: its own heading says where the wizard landed.
       await expect(
-        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
+        dialog.getByRole("heading", { name: "Review & submit", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(dialog.locator('[aria-current="step"]')).toContainText(
-        "Confirm & submit",
-      );
       // Resume jumps past step 1, so its heading must be absent.
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),

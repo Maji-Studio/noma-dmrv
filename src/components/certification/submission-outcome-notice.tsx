@@ -97,7 +97,7 @@ function fixLine(outcome: NoticeOutcome, facilityId: string, finalized: boolean)
     case "no-answer":
       return "Anything already sent stays in Isometric. Review and submit again to send the rest.";
     case "interrupted":
-      return "Part of it may already be in Isometric. Review and submit again to finish it. What is there is reused.";
+      return "Part of it may already be in Isometric. Review and submit again to finish it. Anything already sent is kept.";
     case "failed":
       return outcome.message
         ? `${outcome.message} Review and submit again.`
