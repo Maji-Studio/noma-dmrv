@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
@@ -9,11 +8,10 @@ import { ActionError } from "@/lib/action-error";
 import { FormField, FormInput } from "@/components/forms";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
-import { cn } from "@/lib/utils";
-import { AuthResult } from "@/components/auth/auth-result";
+import { AuthPrimaryLink, AuthResult } from "@/components/auth/auth-result";
 import {
   bootstrapInvitationAccountAction,
   resendInvitationSetPasswordAction,
@@ -143,12 +141,9 @@ function CheckEmail({
         tone="success"
         title="Account already set up"
         actions={
-          <Link
-            href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
-            className={cn(buttonVariants({ variant: "primary", width: "full" }), PHONE_TOUCH_TARGET)}
-          >
+          <AuthPrimaryLink href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}>
             Sign in
-          </Link>
+          </AuthPrimaryLink>
         }
       >
         {email} already has a password. Sign in to join.
@@ -168,7 +163,6 @@ function CheckEmail({
               Link requested. Check your spam folder too.
             </Notice>
           )}
-          {error && <Notice tone="error">{error}</Notice>}
           <Button
             type="button"
             variant="default"
@@ -182,7 +176,7 @@ function CheckEmail({
         </>
       }
     >
-      {error ? <>We could not email {email}.</> : <>Check {email} for a link to set your password and join. It can take a few minutes to arrive.</>}
+      {error ? error : <>Check {email} for a link to set your password and join. It can take a few minutes to arrive.</>}
     </AuthResult>
   );
 }

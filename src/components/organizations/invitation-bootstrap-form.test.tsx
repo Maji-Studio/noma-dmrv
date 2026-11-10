@@ -44,7 +44,7 @@ describe("InvitationBootstrapForm resend refusals", () => {
     });
     renderPending();
 
-    await waitFor(() => expect(screen.getByText("Wait a minute before asking again.")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Wait a minute before asking again.")).toHaveLength(1));
     expect(screen.getByText("Link not sent")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send again" })).toBeTruthy();
     expect(screen.queryByText(/for a link to set your password/)).toBeNull();
