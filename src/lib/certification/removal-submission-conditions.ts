@@ -1,6 +1,9 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { hasDurabilityMeasurementComponents } from "./submission-readiness";
 
+export const EMPTY_REMOVAL_TEMPLATE_MESSAGE =
+  "The Removal template has no fields to submit. Choose another template for this credit batch.";
+
 export const DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE =
   "Durability submission is not available in the production registry yet. Wait for support to confirm availability before submitting this Removal.";
 

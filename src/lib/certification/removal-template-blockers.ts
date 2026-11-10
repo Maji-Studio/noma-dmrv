@@ -1,10 +1,6 @@
 /** The setup read and action refuse a facility with no Isometric project link with this sentence; the summary card branches on it. */
 export const SETUP_NOT_LINKED_MESSAGE = "Link this facility to an Isometric project first.";
 
-/** Shared with preparation; kept outside the routed codes to preserve legacy refusals. */
-export const EMPTY_REMOVAL_TEMPLATE_MESSAGE =
-  "The Removal template has no fields to submit. Choose another template for this credit batch.";
-
 /** Fact and repair step of the template blockers that have both; each message below is built from them. */
 const SET_REMOVAL_TEMPLATE = "Set a Removal template in Settings, Removal templates.";
 const NOT_REMOVAL_TEMPLATE = "This template is not a Removal template.";

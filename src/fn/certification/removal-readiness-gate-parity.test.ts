@@ -140,8 +140,12 @@ describe("Removal readiness and the before-confirmation gate agree", () => {
     if (message) {
       expect(readiness).toMatchObject({ state: "blocked", reasons: [message] });
       expect(blockers.map(blocker => blocker.message)).toEqual([message]);
+      expect(blockers[0].fixTarget).toBeNull();
       expect(buildRemovalRequirementsChecklist(toRemovalReadinessFacts(ctx))).toContainEqual(
-        expect.objectContaining({ status: "unmet", detail: message }),
+        expect.objectContaining({
+          key: message === REMOVAL_PREPARATION_BLOCKERS.durabilityUnavailable ? "durability" : "templateSet",
+          status: "unmet", detail: message,
+        }),
       );
     }
   });

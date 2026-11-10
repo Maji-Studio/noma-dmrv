@@ -80,8 +80,6 @@ import {
 export const DURABILITY_MEASUREMENT_SAMPLES_ENABLED =
   env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
-export { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
-
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {
   /** Stable business identities; operation keys are audit labels only. */

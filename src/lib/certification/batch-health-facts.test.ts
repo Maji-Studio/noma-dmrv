@@ -64,8 +64,8 @@ describe("toBatchHealthFacts", () => {
   });
 
   it("keeps a ready batch on a durability template ready when measurement samples are unavailable", () => {
-    const sandbox = { ...readyContext, isProduction: false, removalTemplate: make1000YearSequestrationTemplate() };
-    const production = { ...sandbox, isProduction: true };
+    const sandbox = { ...readyContext, isProduction: false, durabilityMeasurementSamplesEnabled: true, removalTemplate: make1000YearSequestrationTemplate() };
+    const production = { ...sandbox, isProduction: true, durabilityMeasurementSamplesEnabled: false };
     const batchFacts = toBatchHealthFacts(sandbox, "batch-1");
     const health = deriveBatchHealth(batchFacts);
     expect(health.state).toBe("ready");

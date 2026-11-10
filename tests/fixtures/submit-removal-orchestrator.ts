@@ -558,6 +558,9 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    get durabilityMeasurementSamplesEnabled() {
+      return durabilityFlag.live;
+    },
     lineSources: overrides.lineSources ?? reviewedTemplateSources(overrides.removalTemplate ?? makeTemplate()),
     submissionLineageBlockers: overrides.submissionLineageBlockers ?? [],
     durabilityConfigurationBlockers: overrides.durabilityConfigurationBlockers ?? [],

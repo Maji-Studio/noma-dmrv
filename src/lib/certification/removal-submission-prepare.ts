@@ -1,6 +1,6 @@
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { removalTemplateTypeBlocker } from "@/lib/certification/listed-removal-template";
-import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal submission preparation: the template and registry-connection gates
  * that Review, submit and the claimed-draft freshness check all share.
@@ -25,10 +25,9 @@ import type {
 } from "@/lib/isometric";
 import { hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import type { RemovalSubmissionContext } from "./certify-context-core";
-import { isDurabilitySubmissionUnavailable, isEmptyRemovalTemplate } from "./removal-submission-conditions";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE, isDurabilitySubmissionUnavailable, isEmptyRemovalTemplate } from "./removal-submission-conditions";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
 } from "./durability-measurement-samples";
 
 export const REMOVAL_PREPARATION_BLOCKERS = {

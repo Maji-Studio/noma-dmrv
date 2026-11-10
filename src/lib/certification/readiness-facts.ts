@@ -34,8 +34,7 @@ export function toRemovalReadinessFacts(
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
     emptyRemovalTemplate: isEmptyRemovalTemplate(ctx.removalTemplate),
-    // The server serializes the registry environment; measurement samples are sandbox-only.
-    durabilitySubmissionUnavailable: isDurabilitySubmissionUnavailable(ctx.removalTemplate, !ctx.isProduction),
+    durabilitySubmissionUnavailable: isDurabilitySubmissionUnavailable(ctx.removalTemplate, ctx.durabilityMeasurementSamplesEnabled),
     templateBlockers: ctx.templateBlockers,
     undecidedLineIds: ctx.undecidedLineIds,
     emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),

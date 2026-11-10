@@ -5,8 +5,8 @@ import {
   type RemovalReadinessFacts,
 } from "./readiness";
 import { certCheckLabel } from "./requirement-labels";
-import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, removalTemplateBlocker } from "./removal-template-blockers";
-import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
+import { removalTemplateBlocker } from "./removal-template-blockers";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
 import type { RemovalBlocker } from "./removal-blockers";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 
@@ -104,12 +104,27 @@ describe("Removal template requirement split", () => {
     expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [EMPTY_REMOVAL_TEMPLATE_MESSAGE] });
   });
 
-  it("blocks unavailable durability submission with the preparation message and skips its lines", () => {
-    const input = facts({ durabilitySubmissionUnavailable: true });
-    const [set, lines] = templateChecks(input);
-    expect(set).toMatchObject({ key: "templateSet", status: "unmet", detail: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE });
-    expect(lines.status).toBe("skipped");
-    expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE] });
+  it("keeps template and downstream checks evaluable when durability submission is unavailable", () => {
+    const input = facts({
+      durabilitySubmissionUnavailable: true,
+      feedstockTypeMappingGaps: [{ creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" }],
+      requiredTransport: [{ category: "feedstock", count: 0, aggregationWarning: null }],
+    });
+    const withoutUnavailable = facts({ ...input, durabilitySubmissionUnavailable: false });
+    const checks = buildRemovalRequirementsChecklist(input);
+    expect(templateChecks(input).map(check => check.status)).toEqual(["met", "met"]);
+    expect(checks.filter(check => check.key !== "durability")).toEqual(
+      buildRemovalRequirementsChecklist(withoutUnavailable).filter(check => check.key !== "durability"),
+    );
+    for (const key of ["durability", "feedstockTypeMapping", "transport"]) {
+      expect(checks).toContainEqual(expect.objectContaining({ key, status: "unmet" }));
+    }
+    expect(checks.find(check => check.key === "durability")?.detail).toBe(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
+    expect(deriveRemovalReadiness(input)).toMatchObject({
+      state: "blocked",
+      reasons: [...deriveRemovalReadiness(withoutUnavailable).reasons, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE],
+    });
+    expect(deriveRemovalReadiness(input).reasons).toHaveLength(3);
   });
 
   it.each(["hasMapping", "hasOrgCredentials"] as const)("skips both checks without %s", (key) => {

@@ -107,6 +107,8 @@ export interface RemovalCertifyContext {
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
   isProduction: boolean;
+  /** Serialized submission feature switch, shared with preparation. */
+  durabilityMeasurementSamplesEnabled: boolean;
 }
 
 // Extends the UI context with the raw chain data the submit pipeline needs.
