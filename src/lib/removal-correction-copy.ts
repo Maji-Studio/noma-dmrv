@@ -27,11 +27,6 @@ export function returnedStatementPhrase(status: string | null): string {
   return status === "FAILED_VERIFICATION" ? "failed verification" : "is back in draft";
 }
 
-/** The badge a returned Removal shows in place of its own status. */
-export function correctionStatus(correction: RemovalCorrection): { value: "pending"; label: string } {
-  return { value: "pending", label: correction.resubmitNeeded ? RESUBMIT_NEEDED_LABEL : CORRECTION_NEEDED_STATUS_LABEL };
-}
-
 /** "GHG Statement Jul 1 to Sep 30, 2026", or "GHG Statement ending Sep 30, 2026" before the server knows the start. */
 export function correctionStatementLabel(statement: RemovalCorrection["statement"]): string {
   return statement.reportingPeriodStartOn

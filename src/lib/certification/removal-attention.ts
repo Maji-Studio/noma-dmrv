@@ -10,24 +10,13 @@
  */
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { RemovalReadiness } from "@/lib/certification/readiness";
-import { REMOVAL_SUBMISSION_FAILED } from "@/lib/certification/status";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
-import { correctionStatus } from "@/lib/removal-correction-copy";
+import { removalAttentionTitle, REMOVAL_REJECTED_ATTENTION_TITLE } from "@/lib/certification/removal-shown-status";
 import { recordHref } from "@/lib/record-links";
 
-export const REMOVAL_READINESS_UNAVAILABLE_TITLE = "Couldn't check. Open it to see what is left.";
+export { REMOVAL_REJECTED_ATTENTION_TITLE };
 
 export const REMOVAL_INTERRUPTED_ATTENTION_TITLE = "Submission interrupted";
-export const REMOVAL_REJECTED_ATTENTION_TITLE = REMOVAL_SUBMISSION_FAILED.label;
-
-/** A draft's title, or null when it needs nothing from the operator right now (a submission is running). */
-export function draftRemovalAttentionTitle(readiness: DraftRemovalReadiness["readiness"]): string | null {
-  if (readiness === null) return REMOVAL_READINESS_UNAVAILABLE_TITLE;
-  if (readiness.state === "ready") return "Ready to submit";
-  if (readiness.state === "blocked") return `${readiness.fixCount ?? readiness.reasons.length} to fix`;
-  return null;
-}
 
 interface RemovalAttentionBase {
   removalId: string;
@@ -75,15 +64,18 @@ function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string
 }
 
 export function removalAttentionRows(sources: RemovalAttentionSources, facilityId: string): RemovalAttentionRows {
-  const drafts = sources.drafts.filter((draft) => draftRemovalAttentionTitle(draft.readiness) !== null);
+  const drafts = sources.drafts.flatMap((draft) => {
+    const title = removalAttentionTitle({ kind: "draft", readiness: draft.readiness });
+    return title === null ? [] : [{ draft, title }];
+  });
   return {
-    drafts: drafts.map((draft) => rowFor(draft, draftRemovalAttentionTitle(draft.readiness) ?? "", facilityId)),
-    rejected: sources.rejected.map((removal) => rowFor(removal, REMOVAL_REJECTED_ATTENTION_TITLE, facilityId)),
-    covered: new Set([...drafts, ...sources.rejected].map((removal) => removal.removalId)),
+    drafts: drafts.map(({ draft, title }) => rowFor(draft, title, facilityId)),
+    rejected: sources.rejected.map((removal) => rowFor(removal, removalAttentionTitle({ kind: "rejected" }), facilityId)),
+    covered: new Set([...drafts.map(({ draft }) => draft), ...sources.rejected].map((removal) => removal.removalId)),
     returned: sources.returned.map((removal) => ({
       removalId: removal.removalId,
       item: {
-        ...rowFor(removal, removal.correction ? correctionStatus(removal.correction).label : RETURNED_BY_ISOMETRIC_LABEL, facilityId),
+        ...rowFor(removal, removalAttentionTitle({ kind: "returned", correction: removal.correction }), facilityId),
         id: `removal-returned-${removal.removalId}`,
       },
     })),

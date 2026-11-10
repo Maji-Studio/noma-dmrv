@@ -30,8 +30,8 @@ import { useRemovalSheetFacts } from "@/hooks/use-removal-sheet-facts";
 import type { RemovalSheetFacts } from "@/lib/certification/removal-sheet-facts";
 import { RECORD_CODE_LINK } from "@/components/ui/record-code-link";
 import { recordHref } from "@/lib/record-links";
+import { deriveRemovalShownStatus, type RemovalShownStatus } from "@/lib/certification/removal-shown-status";
 import {
-  deriveRemovalWorkflowStatus,
   REMOVAL_FAILED_REVIEW_REASON,
   REMOVAL_INTERRUPTED_RECONCILE_REASON,
   type RemovalWorkflowStatus,
@@ -67,7 +67,6 @@ import type { SheetReadOnly } from "@/lib/linked-record-read-only";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { firstReturn, RemovalCorrectionNotice } from "./removal-correction-needed";
 import { RemovalResubmitNotice, ResubmitRemovalAction } from "./removal-resubmit-notice";
-import { correctionStatus } from "@/lib/removal-correction-copy";
 import { RemovalMissingRunsNotice } from "./removal-missing-runs-notice";
 import { RemovalEvidenceLinksNotice } from "./removal-evidence-links-notice";
 
@@ -148,31 +147,6 @@ export function submissionOutcomeFor(summary: RemovalListRow, status: RemovalWor
   return latest && latest.kind !== "submitted" ? latest : null;
 }
 
-/**
- * What the sheet header's badge says. A draft reads "Not submitted" whether or
- * not it can be sent yet: the count of things to fix sits in the footer next
- * to Review & submit, not in the status (#1554).
- */
-export function sheetStatusFor(status: RemovalWorkflowStatus): { value: StatusValue; label: string } {
-  if (status.kind === "blocked" || status.kind === "ready") return { value: "draft", label: "Not submitted" };
-  return { value: status.value, label: status.label };
-}
-
-/** The one next step for states no notice speaks for, or null. */
-export function nextStepLine(status: RemovalWorkflowStatus): string | null {
-  switch (status.kind) {
-    // "checking": the header badge already says so.
-    case "unavailable":
-      return "The checks could not load.";
-    case "submitting":
-      return "noma is sending this Removal to Isometric. This can take a few minutes.";
-    case "submitted":
-      return "Isometric verifies it with the GHG Statement for its reporting period.";
-    default:
-      return null;
-  }
-}
-
 /** The footer line next to Review & submit: how many things block sending, or that nothing does. */
 export function thingsToFixLine(status: RemovalWorkflowStatus): string | null {
   if (status.kind === "ready") return "Ready to submit";
@@ -188,24 +162,22 @@ export function thingsToFixLine(status: RemovalWorkflowStatus): string | null {
  */
 function SheetStatusBlock({
   summary,
-  status,
+  shown,
   facilityId,
   timeZone,
-  returned = false,
   readOnly = false,
   deleteAccess = "can",
 }: {
   summary: RemovalListRow;
   /** Whether this viewer can take Delete Removal, so a refusal that leads there names who can take it. */
   deleteAccess?: DeleteAccess;
-  /** Isometric returned the Removal (a correction or a returning lock): its own notice speaks for it. */
-  returned?: boolean;
-  status: RemovalWorkflowStatus;
+  shown: RemovalShownStatus;
   facilityId: string;
   timeZone: string;
   /** Nothing here can change the Removal, so no reason, retry or fix is offered. */
   readOnly?: boolean;
 }) {
+  const status = shown.workflow;
   const outcome = submissionOutcomeFor(summary, status);
   // The outcome notice replaces the two generic "review the history" reasons.
   // Readiness blockers belong to Review & submit, whatever the state, so the sheet never lists them.
@@ -215,8 +187,7 @@ function SheetStatusBlock({
     : status.reasons.filter((reason) =>
         !blockers.includes(reason)
         && !(outcome && (reason === REMOVAL_FAILED_REVIEW_REASON || reason === REMOVAL_INTERRUPTED_RECONCILE_REASON)));
-  // A returned Removal has its own notice below; "Isometric verifies it" would contradict it.
-  const line = returned ? null : nextStepLine(status);
+  const line = shown.nextStep;
   return (
     <>
       {/* A Notice announces itself, so progress and check changes reach assistive tech. */}
@@ -288,22 +259,14 @@ export function RemovalDetailSheet({
   );
   const externalProjectId =
     certifierSummary?.mapping?.externalProjectId ?? null;
-  const workflowStatus = deriveRemovalWorkflowStatus({
-    local: summary.local,
-    lockInFlight: summary.lockInFlight,
-    submissionInterrupted: summary.submissionInterrupted,
-    enrichmentStatus: summary.enrichmentStatus,
-    readiness: summary.readiness,
-  });
+  const { correction } = summary;
+  const shown = deriveRemovalShownStatus({ workflow: summary, correction, returnedByLock: !!firstReturn(lock) });
+  const workflowStatus = shown.workflow;
   // A replaced Removal never sends anything, so it is the one state that
   // skips the carried-entries read.
   const { data: removalEntries } = useRemovalCarriedEntries(summary.removalId, { enabled: open && workflowStatus.kind !== "superseded" });
   const carriedEntries = removalEntries?.carriedEntries;
   const lateEntries = removalEntries?.lateEntries;
-  // A returned Removal with its correction window open shows the Returned or
-  // Resubmit needed status and one notice in place of #1134's lock-based one.
-  const { correction } = summary;
-  const shownStatus = correction ? { ...workflowStatus, ...correctionStatus(correction) } : workflowStatus;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
@@ -313,7 +276,7 @@ export function RemovalDetailSheet({
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
-  const changedSinceReview = submissionOutcomeFor(summary, shownStatus)?.kind === "changed";
+  const changedSinceReview = submissionOutcomeFor(summary, workflowStatus)?.kind === "changed";
 
   // Deletion mirrors the server rule: never-finalized only, and once the
   // Removal touched the registry only viewers at the role floor (issue #746).
@@ -342,7 +305,7 @@ export function RemovalDetailSheet({
   const co2eTonnes = facts?.co2eEstimateTonnes ?? null;
   // A failed facts read is a load failure, not missing data: hide the figures it feeds and offer a retry.
   const factsFailed = sheetFacts.isError;
-  const headerStatus = sheetStatusFor(shownStatus);
+  const headerStatus = shown.sheet;
   const thingsToFix = thingsToFixLine(workflowStatus);
   const hasReportingWindow = summary.startedOn && summary.completedOn;
   const window =
@@ -378,7 +341,7 @@ export function RemovalDetailSheet({
 
             {/* Status block: no title, the badge in the header says the state. Gone when nothing needs saying. */}
             <div className="peer/status flex flex-col gap-12 empty:hidden">
-              <SheetStatusBlock summary={summary} status={shownStatus} returned={!!correction || !!firstReturn(lock)} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals, summary.deletionInProgress)} />
+              <SheetStatusBlock summary={summary} shown={shown} facilityId={facilityId} timeZone={timeZone} readOnly={!!readOnly} deleteAccess={deleteAccessFor(canDelete, deleteAccess.viewerCanDeleteRegistryRemovals, summary.deletionInProgress)} />
               {correction ? (
                 <RemovalResubmitNotice correction={correction} facilityId={facilityId} readOnly={!!readOnly} />
               ) : (
