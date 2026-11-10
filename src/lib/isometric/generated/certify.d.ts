@@ -4,6 +4,146 @@
  */
 
 export interface paths {
+    "/activities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity
+         * @description Get a single activity.
+         */
+        get: operations["get_activity_activities__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Activity
+         * @description Delete an activity.
+         */
+        delete: operations["delete_activity_activities__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Activity
+         * @description Updates an activity in the Isometric system.
+         */
+        patch: operations["patch_activity_activities__id__patch"];
+        trace?: never;
+    };
+    "/activities/{id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Activity Sources
+         * @description Links sources to an activity. Sources that are already linked are skipped.
+         */
+        post: operations["post_activity_sources_activities__id__sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activities/{id}/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Activity Source
+         * @description Unlinks a source from an activity.
+         */
+        delete: operations["delete_activity_source_activities__id__sources__source_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity_to_activity_links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Activity Link
+         * @description Get an activity-to-activity link.
+         */
+        get: operations["get_activity_to_activity_link_activity_to_activity_links__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Activity To Activity Link
+         * @description Delete an activity-to-activity link.
+         */
+        delete: operations["delete_activity_to_activity_link_activity_to_activity_links__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity_to_material_links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Material Link
+         * @description Get an activity-to-material link.
+         */
+        get: operations["get_activity_to_material_link_activity_to_material_links__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Activity To Material Link
+         * @description Delete an activity-to-material link.
+         */
+        delete: operations["delete_activity_to_material_link_activity_to_material_links__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity_to_site_links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Site Link
+         * @description Get an activity-to-site link.
+         */
+        get: operations["get_activity_to_site_link_activity_to_site_links__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Activity To Site Link
+         * @description Delete an activity-to-site link.
+         */
+        delete: operations["delete_activity_to_site_link_activity_to_site_links__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/biochar_applications": {
         parameters: {
             query?: never;
@@ -571,6 +711,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/materials/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Material
+         * @description Get a single material.
+         */
+        get: operations["get_material_materials__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Material
+         * @description Delete a material.
+         */
+        delete: operations["delete_material_materials__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Material
+         * @description Updates a material in the Isometric system.
+         */
+        patch: operations["patch_material_materials__id__patch"];
+        trace?: never;
+    };
     "/measurement_locations": {
         parameters: {
             query?: never;
@@ -929,6 +1097,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activities
+         * @description Get a list of activities in a project.
+         */
+        get: operations["get_activities_projects__project_id__activities_get"];
+        put?: never;
+        /**
+         * Post Activity
+         * @description Create a new activity.
+         */
+        post: operations["post_activity_projects__project_id__activities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/activity_to_activity_links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Activity Links
+         * @description Get a list of activity-to-activity links in a project.
+         */
+        get: operations["get_activity_to_activity_links_projects__project_id__activity_to_activity_links_get"];
+        put?: never;
+        /**
+         * Post Activity To Activity Link
+         * @description Create a new activity-to-activity link.
+         */
+        post: operations["post_activity_to_activity_link_projects__project_id__activity_to_activity_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/activity_to_material_links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Material Links
+         * @description Get a list of activity-to-material links in a project.
+         */
+        get: operations["get_activity_to_material_links_projects__project_id__activity_to_material_links_get"];
+        put?: never;
+        /**
+         * Post Activity To Material Link
+         * @description Create a new activity-to-material link.
+         */
+        post: operations["post_activity_to_material_link_projects__project_id__activity_to_material_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/activity_to_site_links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity To Site Links
+         * @description Get a list of activity-to-site links in a project.
+         */
+        get: operations["get_activity_to_site_links_projects__project_id__activity_to_site_links_get"];
+        put?: never;
+        /**
+         * Post Activity To Site Link
+         * @description Create a new activity-to-site link.
+         */
+        post: operations["post_activity_to_site_link_projects__project_id__activity_to_site_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/ghg_entry_templates": {
         parameters: {
             query?: never;
@@ -963,6 +1227,30 @@ export interface paths {
         get: operations["get_ghg_entry_template_projects__project_id__ghg_entry_templates__id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/materials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Materials
+         * @description Get a list of materials in a project.
+         */
+        get: operations["get_materials_projects__project_id__materials_get"];
+        put?: never;
+        /**
+         * Post Material
+         * @description Create a new material.
+         */
+        post: operations["post_material_projects__project_id__materials_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1071,6 +1359,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/site_to_site_links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Site To Site Links
+         * @description Get a list of site-to-site links in a project.
+         */
+        get: operations["get_site_to_site_links_projects__project_id__site_to_site_links_get"];
+        put?: never;
+        /**
+         * Post Site To Site Link
+         * @description Create a new site-to-site link.
+         */
+        post: operations["post_site_to_site_link_projects__project_id__site_to_site_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sites
+         * @description Get a list of sites in a project.
+         */
+        get: operations["get_sites_projects__project_id__sites_get"];
+        put?: never;
+        /**
+         * Post Site
+         * @description Create a new site.
+         */
+        post: operations["post_site_projects__project_id__sites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/sites/geojson": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Sites From Geojson
+         * @description Create one site per feature in a GeoJSON upload.
+         */
+        post: operations["post_sites_from_geojson_projects__project_id__sites_geojson_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/storage_locations": {
         parameters: {
             query?: never;
@@ -1138,6 +1494,146 @@ export interface paths {
          *     Deprecated: use `GET /projects/{id}/monitoring_requirements?storage_location_id=...` instead.
          */
         get: operations["get_project_storage_location_monitoring_requirements_projects__project_id__storage_locations__id__monitoring_requirements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_activity_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Activity Types
+         * @description Lists the activity types that a project supports. Use `view=full` for full definitions.
+         */
+        get: operations["get_project_supported_activity_types_projects__project_id__supported_activity_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_activity_types/{activity_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Activity Type
+         * @description Gets the full definition of one activity type that a project supports.
+         */
+        get: operations["get_project_supported_activity_type_projects__project_id__supported_activity_types__activity_type__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_asset_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Asset Types
+         * @description Lists the site, activity and material types that a project supports. Use `view=full` for full definitions.
+         */
+        get: operations["get_project_supported_asset_types_projects__project_id__supported_asset_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_material_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Material Types
+         * @description Lists the material types that a project supports. Use `view=full` for full definitions.
+         */
+        get: operations["get_project_supported_material_types_projects__project_id__supported_material_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_material_types/{material_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Material Type
+         * @description Gets the full definition of one material type that a project supports.
+         */
+        get: operations["get_project_supported_material_type_projects__project_id__supported_material_types__material_type__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_site_types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Site Types
+         * @description Lists the site types that a project supports. Use `view=full` for full definitions.
+         */
+        get: operations["get_project_supported_site_types_projects__project_id__supported_site_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/supported_site_types/{site_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Supported Site Type
+         * @description Gets the full definition of one site type that a project supports.
+         */
+        get: operations["get_project_supported_site_type_projects__project_id__supported_site_types__site_type__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1269,6 +1765,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/site_to_site_links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Site To Site Link
+         * @description Get a site-to-site link.
+         */
+        get: operations["get_site_to_site_link_site_to_site_links__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Site To Site Link
+         * @description Delete a site-to-site link.
+         */
+        delete: operations["delete_site_to_site_link_site_to_site_links__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Site
+         * @description Get a single site.
+         */
+        get: operations["get_site_sites__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Site
+         * @description Delete a site.
+         */
+        delete: operations["delete_site_sites__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Site
+         * @description Updates a site in the Isometric system.
+         */
+        patch: operations["patch_site_sites__id__patch"];
         trace?: never;
     };
     "/sources": {
@@ -1411,6 +1959,386 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Activity */
+        Activity: {
+            /**
+             * Activity Type
+             * @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project.
+             * @example reforestation_field_plot_measurement
+             */
+            activity_type: string;
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type.
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            id: string;
+            /** Measurements */
+            measurements: components["schemas"]["MeasurementValue"][];
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @description The name of the activity. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+            /**
+             * Time
+             * @description When the activity happened. Its shape depends on the activity type, and it is null for activity types without a time.
+             */
+            time: (components["schemas"]["ActivityDate"] | components["schemas"]["ActivityDatetime"] | components["schemas"]["ActivityDateRange"] | components["schemas"]["ActivityDatetimeRange"]) | null;
+        };
+        /** ActivityDate */
+        ActivityDate: {
+            /**
+             * Date
+             * Format: date
+             * @description Date in ISO format (YYYY-MM-DD)
+             */
+            date: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "date";
+        };
+        /** ActivityDateRange */
+        ActivityDateRange: {
+            /**
+             * End
+             * Format: date
+             * @description The last day of the range, inclusive.
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date
+             * @description Date in ISO format (YYYY-MM-DD)
+             */
+            start: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "date_range";
+        };
+        /** ActivityDatetime */
+        ActivityDatetime: {
+            /**
+             * Datetime
+             * Format: date-time
+             */
+            datetime: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "datetime";
+        };
+        /** ActivityDatetimeRange */
+        ActivityDatetimeRange: {
+            /**
+             * End
+             * Format: date-time
+             * @description The end of the range, inclusive.
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "datetime_range";
+        };
+        /** ActivityToActivityLink */
+        ActivityToActivityLink: {
+            /**
+             * Id
+             * @example ata_1CVGAAXTW1S0GG8H
+             * @example ata_1CVGAAXTW1S0GG8H
+             * @example ata_1CWC56M02SBX42NE
+             */
+            id: string;
+            /**
+             * Link Type
+             * @description The type of the activity-to-activity link. Either `parent_of` or `follows`.
+             */
+            link_type: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-activity link. For a `parent_of` link, this is the parent activity. For a `follows` link, this is the following activity.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Activity Id
+             * @description The ID of the target activity in an activity-to-activity link. For a `parent_of` link, this is the child activity. For a `follows` link, this is the preceding activity.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            target_activity_id: string;
+        };
+        /** ActivityToMaterialLink */
+        ActivityToMaterialLink: {
+            /**
+             * Id
+             * @example atm_1DBHDB9AT1S0SQW5
+             * @example atm_1DBHDB9AT1S0SQW5
+             * @example atm_1CPBWFKHDSBX1KMB
+             */
+            id: string;
+            /**
+             * Link Type
+             * @description The type of the activity-to-material link. Either `references` or `outputs`.
+             */
+            link_type: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-material link.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Material Id
+             * @description The ID of the target material in an activity-to-material link.
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1FFT1GGERSBXRMKH
+             */
+            target_material_id: string;
+        };
+        /** ActivityToSiteLink */
+        ActivityToSiteLink: {
+            /**
+             * Id
+             * @example ase_1DCBZ3EJT1S0AKMS
+             * @example ase_1DCBZ3EJT1S0AKMS
+             * @example ase_1CP5ZW6SKSBX6KY2
+             */
+            id: string;
+            /**
+             * Link Type
+             * @description The type of the activity-to-site link. Must be `happens_at`.
+             */
+            link_type: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-site link.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Site Id
+             * @description The ID of the target site in an activity-to-site link.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            target_site_id: string;
+        };
+        /**
+         * ActivityTypeDefinition
+         * @description An activity type in the `full` view.
+         */
+        ActivityTypeDefinition: {
+            /**
+             * Activity Type
+             * @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project.
+             * @example reforestation_field_plot_measurement
+             */
+            activity_type: string;
+            /**
+             * Children
+             * @description Activity types that can belong to an activity of this type.
+             */
+            children: components["schemas"]["ActivityTypeReference"][];
+            /**
+             * Description
+             * @example A measurement of the trees in a field plot.
+             */
+            description: string;
+            /**
+             * Following Activities
+             * @description Activity types that follow an activity of this type.
+             */
+            following_activities: components["schemas"]["ActivityTypeReference"][];
+            /** @description The site type where an activity of this type happens. Null means activities of this type don't happen at a site. */
+            happens_at_site: components["schemas"]["SiteTypeReference"] | null;
+            /**
+             * Measurements
+             * @description Measurements that activities of this type can record.
+             */
+            measurements: components["schemas"]["MeasurementRequirement"][];
+            /**
+             * Metadata Schema
+             * @description JSON Schema for the `metadata` object of activities of this type.
+             * @example {
+             *       "additionalProperties": false,
+             *       "properties": {
+             *         "plot_type": {
+             *           "description": "Whether the field is a treatment plot or a control plot.",
+             *           "enum": [
+             *             "control",
+             *             "treatment"
+             *           ],
+             *           "title": "Plot type",
+             *           "type": "string"
+             *         }
+             *       },
+             *       "required": [
+             *         "plot_type"
+             *       ],
+             *       "type": "object"
+             *     }
+             */
+            metadata_schema: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @example Field plot measurement
+             */
+            name: string;
+            /**
+             * Output Materials
+             * @description Material types that an activity of this type produces.
+             */
+            output_materials: components["schemas"]["MaterialTypeReference"][];
+            /**
+             * Parents
+             * @description Activity types that an activity of this type can belong to.
+             */
+            parents: components["schemas"]["ActivityTypeReference"][];
+            /**
+             * Preceding Activities
+             * @description Activity types that an activity of this type follows.
+             */
+            preceding_activities: components["schemas"]["ActivityTypeReference"][];
+            /**
+             * Referenced Materials
+             * @description Material types that an activity of this type uses.
+             */
+            referenced_materials: components["schemas"]["MaterialTypeReference"][];
+            /** @description Types that `GET /projects/{project_id}/activities` accepts in its `related_site_type`, `related_activity_type` and `related_material_type` filters when it lists activities of this type. */
+            related_types: components["schemas"]["RelatedTypes"];
+            /**
+             * Time Schema
+             * @description JSON Schema for the `time` field of activities of this type.
+             * @example {
+             *       "additionalProperties": false,
+             *       "properties": {
+             *         "date": {
+             *           "format": "date",
+             *           "title": "Date",
+             *           "type": "string"
+             *         },
+             *         "type": {
+             *           "const": "date",
+             *           "title": "Type",
+             *           "type": "string"
+             *         }
+             *       },
+             *       "required": [
+             *         "type",
+             *         "date"
+             *       ],
+             *       "type": "object"
+             *     }
+             */
+            time_schema: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+        };
+        /** ActivityTypeReference */
+        ActivityTypeReference: {
+            /**
+             * Activity Type
+             * @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project.
+             * @example reforestation_field_plot_measurement
+             */
+            activity_type: string;
+        };
+        /**
+         * ActivityTypeSummary
+         * @description An activity type in the `basic` view.
+         */
+        ActivityTypeSummary: {
+            /**
+             * Activity Type
+             * @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project.
+             * @example reforestation_field_plot_measurement
+             */
+            activity_type: string;
+            /**
+             * Description
+             * @example A measurement of the trees in a field plot.
+             */
+            description: string;
+            /**
+             * Name
+             * @example Field plot measurement
+             */
+            name: string;
+        };
         /** AddComponentToRemoval */
         AddComponentToRemoval: {
             /**
@@ -1439,6 +2367,44 @@ export interface components {
              * @description Which group the component should be added to, based on the removal's template structure.
              */
             removal_template_group_id?: string | null;
+        };
+        /** AddSourcesToActivityRequest */
+        AddSourcesToActivityRequest: {
+            /**
+             * Source Ids
+             * @description The Isometric IDs of the sources to link to the activity.
+             */
+            source_ids: string[];
+        };
+        /** Area */
+        Area: {
+            /**
+             * Id
+             * @example ara_1G6J276GV1S0KJ7C
+             * @example ara_1G6J276GV1S0KJ7C
+             * @example ara_1GBAMZ255SBX27C0
+             */
+            id: string;
+            /**
+             * Vertices
+             * @description The full-resolution geometry of the site's area.
+             */
+            vertices: {
+                [key: string]: unknown;
+            };
+        };
+        /** AreaGeography */
+        AreaGeography: {
+            /**
+             * Allow Overlaps
+             * @description Whether the areas of sites of this type may overlap each other.
+             */
+            allow_overlaps: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "area";
         };
         /** BiocharApplication */
         BiocharApplication: {
@@ -1711,7 +2677,7 @@ export interface components {
          * ComponentScope
          * @enum {string}
          */
-        ComponentScope: "REMOVAL" | "GHG_STATEMENT" | "PROJECT" | "NET_NEGATIVITY";
+        ComponentScope: "GHG_ENTRY" | "GHG_STATEMENT" | "PROJECT" | "LCA";
         /** ComponentToAttribute */
         ComponentToAttribute: {
             /**
@@ -1744,6 +2710,117 @@ export interface components {
          * @enum {string}
          */
         ComponentType: "ACTIVITY" | "COUNTERFACTUAL" | "SEQUESTRATION" | "LOSS" | "ADJUSTMENT" | "REDUCTION" | "UNCERTAINTY_DISCOUNT";
+        /** CreateActivityRequest */
+        CreateActivityRequest: {
+            /**
+             * Activity Type
+             * @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project.
+             * @example reforestation_field_plot_measurement
+             */
+            activity_type: string;
+            /** Additional Metadata */
+            additional_metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | null;
+            /** Description */
+            description?: string | null;
+            /** Measurements */
+            measurements?: components["schemas"]["CreateMeasurementRequest"][] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            };
+            /**
+             * Name
+             * @description The name of the activity. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+            /**
+             * Time
+             * @description When the activity happened. Its shape depends on the activity type, and it is null for activity types without a time.
+             */
+            time: (components["schemas"]["ActivityDate"] | components["schemas"]["ActivityDatetime"] | components["schemas"]["ActivityDateRange"] | components["schemas"]["ActivityDatetimeRange"]) | null;
+        };
+        /** CreateActivityToActivityLinkRequest */
+        CreateActivityToActivityLinkRequest: {
+            /**
+             * Link Type
+             * @description The type of the activity-to-activity link. Either `parent_of` or `follows`.
+             */
+            link_type: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-activity link. For a `parent_of` link, this is the parent activity. For a `follows` link, this is the following activity.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Activity Id
+             * @description The ID of the target activity in an activity-to-activity link. For a `parent_of` link, this is the child activity. For a `follows` link, this is the preceding activity.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            target_activity_id: string;
+        };
+        /** CreateActivityToMaterialLinkRequest */
+        CreateActivityToMaterialLinkRequest: {
+            /**
+             * Link Type
+             * @description The type of the activity-to-material link. Either `references` or `outputs`.
+             */
+            link_type: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-material link.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Material Id
+             * @description The ID of the target material in an activity-to-material link.
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1FFT1GGERSBXRMKH
+             */
+            target_material_id: string;
+        };
+        /** CreateActivityToSiteLinkRequest */
+        CreateActivityToSiteLinkRequest: {
+            /**
+             * Link Type
+             * @description The type of the activity-to-site link. Must be `happens_at`.
+             */
+            link_type: string;
+            /**
+             * Source Activity Id
+             * @description The ID of the source activity in an activity-to-site link.
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1CEGPMJQF1S0EHG0
+             * @example atv_1EQ9F8WQ7SBXE3JC
+             */
+            source_activity_id: string;
+            /**
+             * Target Site Id
+             * @description The ID of the target site in an activity-to-site link.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            target_site_id: string;
+        };
         /** CreateBiocharApplicationRequest */
         CreateBiocharApplicationRequest: {
             /**
@@ -2111,6 +3188,47 @@ export interface components {
              */
             project_id: string;
         };
+        /** CreateMaterialMeasurementRequest */
+        CreateMaterialMeasurementRequest: {
+            /** @description The property the measurement describes, such as the volume capacity. */
+            measurement_property: components["schemas"]["MeasurementProperty"];
+            /** @description The measured value and its unit. */
+            quantity: components["schemas"]["ScalarQuantity"];
+        };
+        /** CreateMaterialRequest */
+        CreateMaterialRequest: {
+            /** Additional Metadata */
+            additional_metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+            /** Measurements */
+            measurements?: components["schemas"]["CreateMaterialMeasurementRequest"][] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            };
+            /**
+             * Name
+             * @description The name of the material. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+        };
         /** CreateMeasurementLocationRequest */
         CreateMeasurementLocationRequest: {
             /**
@@ -2139,6 +3257,13 @@ export interface components {
              * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
              */
             supplier_reference_id: string;
+        };
+        /** CreateMeasurementRequest */
+        CreateMeasurementRequest: {
+            /** @description The property the measurement describes, such as the volume capacity. */
+            measurement_property: components["schemas"]["MeasurementProperty"];
+            /** @description The measured value and its unit. */
+            quantity: components["schemas"]["ScalarQuantity"];
         };
         /** CreateMeasurementSampleRequest */
         CreateMeasurementSampleRequest: {
@@ -2388,6 +3513,94 @@ export interface components {
              */
             units: string;
         };
+        /** CreateSiteRequest */
+        CreateSiteRequest: {
+            /** Additional Metadata */
+            additional_metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | null;
+            /** Address */
+            address?: (string | null) | null;
+            /** Description */
+            description?: string | null;
+            /** @description The site's geography, if it has one. Use `GET /projects/{project_id}/supported_site_types` to discover which geography is supported for this site type. */
+            geography?: components["schemas"]["SitePointRequest"] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata?: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            };
+            /**
+             * Name
+             * @description The name of the site. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Parent Site Ids
+             * @description Optional set of site IDs to set as parents of this site.
+             */
+            parent_site_ids?: string[] | null;
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+        };
+        /** CreateSiteToSiteLinkRequest */
+        CreateSiteToSiteLinkRequest: {
+            /**
+             * Link Type
+             * @description The type of the site-to-site link. Use `GET /projects/{project_id}/supported_site_types` to discover which site types can link to each other in your project.
+             * @example parent_of
+             */
+            link_type: string;
+            /**
+             * Source Site Id
+             * @description The ID of the source site in a site-to-site link. For a `parent_of` link, this is the parent site.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            source_site_id: string;
+            /**
+             * Target Site Id
+             * @description The ID of the target site in a site-to-site link. For a `parent_of` link, this is the child site.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            target_site_id: string;
+        };
+        /** CreateSitesFromGeojsonRequest */
+        CreateSitesFromGeojsonRequest: {
+            /**
+             * Area File Upload Id
+             * @description ID of the temporary file upload corresponding to the area file.
+             * @example tfu_1DZPAW31R1S0ZESH
+             * @example tfu_1DZPAW31R1S0ZESH
+             * @example tfu_1CHF4YC38SBX9E20
+             */
+            area_file_upload_id: string;
+            /**
+             * Parent Site Ids
+             * @description Optional set of site IDs to set as parents of this site.
+             */
+            parent_site_ids?: string[] | null;
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+        };
         /** CreateSourceResponse */
         CreateSourceResponse: {
             /**
@@ -2592,6 +3805,20 @@ export interface components {
          * @enum {string}
          */
         DatapointType: "CONSTANT" | "STANDARD_PUBLISHED_VALUE" | "REPORTED" | "ASSUMPTION" | "DERIVED";
+        /** Deprecation */
+        Deprecation: {
+            /**
+             * Deprecated At
+             * Format: date-time
+             * @description When this entity was deprecated.
+             */
+            deprecated_at: string;
+            /**
+             * Reason
+             * @description Why this entity was deprecated.
+             */
+            reason: string;
+        };
         /** FeedstockBatch */
         FeedstockBatch: {
             /**
@@ -2938,6 +4165,30 @@ export interface components {
          */
         InputDataShape: "SCALAR" | "LIST";
         /**
+         * @example ata_1CVGAAXTW1S0GG8H
+         * @example ata_1CVGAAXTW1S0GG8H
+         * @example ata_1CWC56M02SBX42NE
+         */
+        IsometricIDPathParam_ActivityToActivity_: string;
+        /**
+         * @example atm_1DBHDB9AT1S0SQW5
+         * @example atm_1DBHDB9AT1S0SQW5
+         * @example atm_1CPBWFKHDSBX1KMB
+         */
+        IsometricIDPathParam_ActivityToMaterial_: string;
+        /**
+         * @example ase_1DCBZ3EJT1S0AKMS
+         * @example ase_1DCBZ3EJT1S0AKMS
+         * @example ase_1CP5ZW6SKSBX6KY2
+         */
+        IsometricIDPathParam_ActivityToSite_: string;
+        /**
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1EQ9F8WQ7SBXE3JC
+         */
+        IsometricIDPathParam_Activity_: string;
+        /**
          * @example bse_1F1FDSGPE1S0374B
          * @example bse_1F1FDSGPE1S0374B
          * @example bse_1DGG1R6DZSBXACD8
@@ -2992,6 +4243,12 @@ export interface components {
          */
         IsometricIDPathParam_GhgStatement_: string;
         /**
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1FFT1GGERSBXRMKH
+         */
+        IsometricIDPathParam_Material_: string;
+        /**
          * @example mlc_1CCZASA6Q1S0V8T4
          * @example mlc_1CCZASA6Q1S0V8T4
          * @example mlc_1GF73PG90SBXKEX1
@@ -3034,6 +4291,18 @@ export interface components {
          */
         IsometricIDPathParam_Sensor_: string;
         /**
+         * @example sts_1F2RV47XW1S0GFMP
+         * @example sts_1F2RV47XW1S0GFMP
+         * @example sts_1E0MQPFNYSBXEXW4
+         */
+        IsometricIDPathParam_SiteToSite_: string;
+        /**
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1E21KYYG3SBX13Q7
+         */
+        IsometricIDPathParam_Site_: string;
+        /**
          * @example src_1EBBF4M7X1S06G1Y
          * @example src_1EBBF4M7X1S06G1Y
          * @example src_1DW1B17VNSBX37N0
@@ -3051,6 +4320,12 @@ export interface components {
          * @example sgu_1DTBHQEBGSBXBCZV
          */
         IsometricIDPathParam_StorageUnit_: string;
+        /**
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1EQ9F8WQ7SBXE3JC
+         */
+        IsometricIDQueryParam_Activity_: string;
         /**
          * @example rvt_1EVC8RZFE1S0BAT6
          * @example rvt_1EVC8RZFE1S0BAT6
@@ -3070,6 +4345,12 @@ export interface components {
          */
         IsometricIDQueryParam_GhgStatement_: string;
         /**
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1FFT1GGERSBXRMKH
+         */
+        IsometricIDQueryParam_Material_: string;
+        /**
          * @example mts_1D7HS15KD1S03M0Z
          * @example mts_1D7HS15KD1S03M0Z
          * @example mts_1FN0MEX2ZSBX40DT
@@ -3081,6 +4362,12 @@ export interface components {
          * @example prj_1E0QTWB22SBX34D1
          */
         IsometricIDQueryParam_Project_: string;
+        /**
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1E21KYYG3SBX13Q7
+         */
+        IsometricIDQueryParam_Site_: string;
         /**
          * @example slc_1F3PMGVC91S0SBK3
          * @example slc_1F3PMGVC91S0SBK3
@@ -3094,6 +4381,12 @@ export interface components {
          */
         IsometricIDQueryParam_StorageUnit_: string;
         /**
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1CEGPMJQF1S0EHG0
+         * @example atv_1EQ9F8WQ7SBXE3JC
+         */
+        IsometricIDRequestParam_Activity_: string;
+        /**
          * @example rvt_1EVC8RZFE1S0BAT6
          * @example rvt_1EVC8RZFE1S0BAT6
          * @example rvt_1ECDZGE2DSBX88EX
@@ -3105,6 +4398,29 @@ export interface components {
          * @example rmv_1E3V4J2EWSBX5E82
          */
         IsometricIDRequestParam_GhgEntry_: string;
+        /**
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1DEK71X6W1S0PNYJ
+         * @example mtr_1FFT1GGERSBXRMKH
+         */
+        IsometricIDRequestParam_Material_: string;
+        /**
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1G5775S5R1S0MGA9
+         * @example ste_1E21KYYG3SBX13Q7
+         */
+        IsometricIDRequestParam_Site_: string;
+        "JsonValue-Input": string | number | components["schemas"]["JsonValue-Input"][] | {
+            [key: string]: components["schemas"]["JsonValue-Input"];
+        } | null;
+        "JsonValue-Output": string | number | components["schemas"]["JsonValue-Output"][] | {
+            [key: string]: components["schemas"]["JsonValue-Output"];
+        } | null;
+        /**
+         * LinkCreationType
+         * @enum {string}
+         */
+        LinkCreationType: "explicit" | "spatial_matching";
         /** LinkMonitoringSubmissionRequirementsRequest */
         LinkMonitoringSubmissionRequirementsRequest: {
             /**
@@ -3112,6 +4428,194 @@ export interface components {
              * @description The Isometric IDs of the monitoring requirements to link to the submission.
              */
             monitoring_requirement_ids: string[];
+        };
+        /** ListResource[ActivityTypeDefinition] */
+        ListResource_ActivityTypeDefinition_: {
+            /** Nodes */
+            nodes: components["schemas"]["ActivityTypeDefinition"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** ListResource[ActivityTypeSummary] */
+        ListResource_ActivityTypeSummary_: {
+            /** Nodes */
+            nodes: components["schemas"]["ActivityTypeSummary"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** ListResource[MaterialTypeDefinition] */
+        ListResource_MaterialTypeDefinition_: {
+            /** Nodes */
+            nodes: components["schemas"]["MaterialTypeDefinition"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** ListResource[MaterialTypeSummary] */
+        ListResource_MaterialTypeSummary_: {
+            /** Nodes */
+            nodes: components["schemas"]["MaterialTypeSummary"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** ListResource[SiteTypeDefinition] */
+        ListResource_SiteTypeDefinition_: {
+            /** Nodes */
+            nodes: components["schemas"]["SiteTypeDefinition"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** ListResource[SiteTypeSummary] */
+        ListResource_SiteTypeSummary_: {
+            /** Nodes */
+            nodes: components["schemas"]["SiteTypeSummary"][];
+            /** Total Count */
+            total_count: number;
+        };
+        /** Material */
+        Material: {
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type.
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1DEK71X6W1S0PNYJ
+             * @example mtr_1FFT1GGERSBXRMKH
+             */
+            id: string;
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+            /** Measurements */
+            measurements: components["schemas"]["MeasurementValue"][];
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @description The name of the material. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+        };
+        /**
+         * MaterialTypeDefinition
+         * @description A material type in the `full` view.
+         */
+        MaterialTypeDefinition: {
+            /**
+             * Description
+             * @example A container that holds HFC/ODS gases.
+             */
+            description: string;
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+            /**
+             * Measurements
+             * @description Measurements that materials of this type can record.
+             */
+            measurements: components["schemas"]["MeasurementRequirement"][];
+            /**
+             * Metadata Schema
+             * @description JSON Schema for the `metadata` object of materials of this type.
+             * @example {
+             *       "additionalProperties": false,
+             *       "properties": {
+             *         "plot_type": {
+             *           "description": "Whether the field is a treatment plot or a control plot.",
+             *           "enum": [
+             *             "control",
+             *             "treatment"
+             *           ],
+             *           "title": "Plot type",
+             *           "type": "string"
+             *         }
+             *       },
+             *       "required": [
+             *         "plot_type"
+             *       ],
+             *       "type": "object"
+             *     }
+             */
+            metadata_schema: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @example Container
+             */
+            name: string;
+            /**
+             * Outputting Activities
+             * @description Activity types that produce materials of this type.
+             */
+            outputting_activities: components["schemas"]["ActivityTypeReference"][];
+            /**
+             * Referencing Activities
+             * @description Activity types that use materials of this type.
+             */
+            referencing_activities: components["schemas"]["ActivityTypeReference"][];
+            /** @description Types that `GET /projects/{project_id}/materials` accepts in its `related_site_type`, `related_activity_type` and `related_material_type` filters when it lists materials of this type. */
+            related_types: components["schemas"]["RelatedTypes"];
+        };
+        /** MaterialTypeReference */
+        MaterialTypeReference: {
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+        };
+        /**
+         * MaterialTypeSummary
+         * @description A material type in the `basic` view.
+         */
+        MaterialTypeSummary: {
+            /**
+             * Description
+             * @example A container that holds HFC/ODS gases.
+             */
+            description: string;
+            /**
+             * Material Type
+             * @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project.
+             * @example hfc_ods_container
+             */
+            material_type: string;
+            /**
+             * Name
+             * @example Container
+             */
+            name: string;
         };
         /** MeasurementLocation */
         MeasurementLocation: {
@@ -3143,6 +4647,23 @@ export interface components {
         MeasurementProperty: {
             qualifier: components["schemas"]["QuantityKindQualifierType"] | null;
             quantity_kind: components["schemas"]["QuantityKindType"];
+        };
+        /** MeasurementRequirement */
+        MeasurementRequirement: {
+            /** Description */
+            description: string;
+            /**
+             * Example Units
+             * @description Units that suit this measurement. Any unit with the same dimension is accepted.
+             * @example [
+             *       "cm",
+             *       "m"
+             *     ]
+             */
+            example_units: string[];
+            measurement_property: components["schemas"]["MeasurementProperty"];
+            /** Required */
+            required: boolean;
         };
         /** MeasurementSample */
         MeasurementSample: {
@@ -3240,6 +4761,38 @@ export interface components {
             /** Start Cursor */
             start_cursor: string | null;
         };
+        /** PaginatedListResource[ActivityToActivityLink] */
+        PaginatedListResource_ActivityToActivityLink_: {
+            /** Nodes */
+            nodes: components["schemas"]["ActivityToActivityLink"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[ActivityToMaterialLink] */
+        PaginatedListResource_ActivityToMaterialLink_: {
+            /** Nodes */
+            nodes: components["schemas"]["ActivityToMaterialLink"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[ActivityToSiteLink] */
+        PaginatedListResource_ActivityToSiteLink_: {
+            /** Nodes */
+            nodes: components["schemas"]["ActivityToSiteLink"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[Activity] */
+        PaginatedListResource_Activity_: {
+            /** Nodes */
+            nodes: components["schemas"]["Activity"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
         /** PaginatedListResource[BiocharApplication] */
         PaginatedListResource_BiocharApplication_: {
             /** Nodes */
@@ -3336,6 +4889,14 @@ export interface components {
             /** Total Count */
             total_count: number;
         };
+        /** PaginatedListResource[Material] */
+        PaginatedListResource_Material_: {
+            /** Nodes */
+            nodes: components["schemas"]["Material"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
         /** PaginatedListResource[MeasurementLocation] */
         PaginatedListResource_MeasurementLocation_: {
             /** Nodes */
@@ -3424,6 +4985,22 @@ export interface components {
             /** Total Count */
             total_count: number;
         };
+        /** PaginatedListResource[SiteToSiteLink] */
+        PaginatedListResource_SiteToSiteLink_: {
+            /** Nodes */
+            nodes: components["schemas"]["SiteToSiteLink"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[Site] */
+        PaginatedListResource_Site_: {
+            /** Nodes */
+            nodes: components["schemas"]["Site"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
         /** PaginatedListResource[Source] */
         PaginatedListResource_Source_: {
             /** Nodes */
@@ -3447,6 +5024,57 @@ export interface components {
             page_info: components["schemas"]["PageInfo"];
             /** Total Count */
             total_count: number;
+        };
+        /** PatchActivityRequest */
+        PatchActivityRequest: {
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Description
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            description: string | components["schemas"]["Undefined"] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Name
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            name: string | components["schemas"]["Undefined"];
+            /**
+             * Supplier Reference Id
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            supplier_reference_id: string | components["schemas"]["Undefined"];
+            /**
+             * Time
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            time: ((components["schemas"]["ActivityDate"] | components["schemas"]["ActivityDatetime"] | components["schemas"]["ActivityDateRange"] | components["schemas"]["ActivityDatetimeRange"]) | null) | components["schemas"]["Undefined"];
         };
         /** PatchComponentRequest */
         PatchComponentRequest: {
@@ -3591,6 +5219,50 @@ export interface components {
              */
             started_on: string | components["schemas"]["Undefined"];
         };
+        /** PatchMaterialRequest */
+        PatchMaterialRequest: {
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Description
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            description: string | components["schemas"]["Undefined"] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Name
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            name: string | components["schemas"]["Undefined"];
+            /**
+             * Supplier Reference Id
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            supplier_reference_id: string | components["schemas"]["Undefined"];
+        };
         /** PatchRemovalComponentAttributionsRequest */
         PatchRemovalComponentAttributionsRequest: {
             /**
@@ -3652,6 +5324,65 @@ export interface components {
              * @description The date at which activities related to this removal started.
              */
             started_on?: string | null;
+        };
+        /** PatchSiteRequest */
+        PatchSiteRequest: {
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Address
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            address: (string | null) | components["schemas"]["Undefined"];
+            /**
+             * Deprecation
+             * @description Excludes the site from future use, such as crediting, while keeping it in history. Deprecation is permanent: you can't undo it, and you can't deprecate a site twice.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            deprecation: components["schemas"]["Deprecation"] | components["schemas"]["Undefined"];
+            /**
+             * Description
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            description: string | components["schemas"]["Undefined"] | null;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type. Each key you send replaces that key on the asset. Other keys stay unchanged.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Input"];
+            } | components["schemas"]["Undefined"];
+            /**
+             * Name
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            name: string | components["schemas"]["Undefined"];
+            /**
+             * Supplier Reference Id
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            supplier_reference_id: string | components["schemas"]["Undefined"];
         };
         /** PatchSourceRequest */
         PatchSourceRequest: {
@@ -3736,6 +5467,36 @@ export interface components {
              *     }
              */
             supplier_reference_id: string | components["schemas"]["Undefined"];
+        };
+        /** Point */
+        Point: {
+            /**
+             * Id
+             * @example pnt_1EB3TQR391S03FKH
+             * @example pnt_1EB3TQR391S03FKH
+             * @example pnt_1DH24JAYKSBX0TH3
+             */
+            id: string;
+            /**
+             * Latitude
+             * @description The latitude of the location.
+             * @example 51.5074
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description The longitude of the location.
+             * @example -0.1278
+             */
+            longitude: number;
+        };
+        /** PointGeography */
+        PointGeography: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "point";
         };
         /** Process */
         Process: {
@@ -3879,6 +5640,18 @@ export interface components {
          * @enum {string}
          */
         QuantityKindType: "acidity" | "activity_concentration" | "amount_of_substance" | "amount_of_substance_concentration" | "amount_of_substance_per_mass" | "area" | "area_carbon_emission_factor" | "buffer_ph" | "bulk_density" | "count" | "currency" | "currency_carbon_emission_factor" | "depth" | "diameter" | "diameter_at_breast_height" | "dimensionless" | "dimensionless_ratio" | "distance" | "distance_carbon_emission_factor" | "dose_equivalent_rate" | "electric_current" | "electrical_conductivity" | "elevation" | "energy" | "energy_carbon_emission_factor" | "energy_density" | "exchangeable_amount_of_substance_per_mass" | "fuel_economy" | "height" | "ionic_strength" | "latitude" | "longitude" | "mass" | "mass_carbon" | "mass_carbon_emission_factor" | "mass_cdr_potential" | "mass_concentration" | "mass_density" | "mass_distance" | "mass_distance_carbon_emission_factor" | "mass_energy_density" | "mass_flow_rate" | "mass_fraction" | "mass_fraction_dry_basis" | "mass_fraction_wet_basis" | "mass_per_area" | "mass_per_area_per_time" | "mass_ratio" | "molality_of_solute" | "molar_mass" | "mole_fraction" | "partial_pressure" | "particle_diameter" | "particle_mass_density" | "power" | "pressure" | "specific_surface_area" | "specific_volume" | "temperature" | "time" | "time_emission_factor" | "voltage" | "volume" | "volume_carbon_emission_factor" | "volume_distance_carbon_emission_factor" | "volume_flow_rate" | "volume_fraction" | "volume_per_area";
+        /**
+         * RelatedTypes
+         * @description Types linked to a type, directly or through other links.
+         */
+        RelatedTypes: {
+            /** Activity Types */
+            activity_types: components["schemas"]["ActivityTypeReference"][];
+            /** Material Types */
+            material_types: components["schemas"]["MaterialTypeReference"][];
+            /** Site Types */
+            site_types: components["schemas"]["SiteTypeReference"][];
+        };
         /** Removal */
         Removal: {
             /**
@@ -4102,6 +5875,237 @@ export interface components {
              */
             content_type: string;
         };
+        /** Site */
+        Site: {
+            /**
+             * Additional Metadata
+             * @description Metadata fields that the project's protocol does not define for this asset type.
+             */
+            additional_metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Address
+             * @description A postal address.
+             * @example 123 Example Street, London
+             */
+            address: string | null;
+            /** @description Set when the supplier has deprecated the site, which excludes it from future use, such as crediting. Deprecation is permanent. */
+            deprecation: components["schemas"]["Deprecation"] | null;
+            /** Description */
+            description: string | null;
+            /** @description The site's geography, if it has one. Use `GET /projects/{project_id}/supported_site_types` to discover which geography is supported for this site type. */
+            geography: components["schemas"]["SiteGeography"] | null;
+            /**
+             * Id
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            id: string;
+            /**
+             * Metadata
+             * @description Metadata fields that the project's protocol defines for this asset type.
+             */
+            metadata: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @description The name of the site. Must be at most 100 characters long.
+             */
+            name: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
+        };
+        SiteGeography: components["schemas"]["Area"] | components["schemas"]["Point"];
+        /** SitePointRequest */
+        SitePointRequest: {
+            /**
+             * Latitude
+             * @description The latitude of the location.
+             * @example 51.5074
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description The longitude of the location.
+             * @example -0.1278
+             */
+            longitude: number;
+        };
+        /** SiteToSiteLink */
+        SiteToSiteLink: {
+            /**
+             * Id
+             * @example sts_1F2RV47XW1S0GFMP
+             * @example sts_1F2RV47XW1S0GFMP
+             * @example sts_1E0MQPFNYSBXEXW4
+             */
+            id: string;
+            /** @description The way the link was created. */
+            link_creation: components["schemas"]["LinkCreationType"];
+            /**
+             * Link Type
+             * @description The type of the site-to-site link. Use `GET /projects/{project_id}/supported_site_types` to discover which site types can link to each other in your project.
+             * @example parent_of
+             */
+            link_type: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Source Site Id
+             * @description The ID of the source site in a site-to-site link. For a `parent_of` link, this is the parent site.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            source_site_id: string;
+            /**
+             * Target Site Id
+             * @description The ID of the target site in a site-to-site link. For a `parent_of` link, this is the child site.
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1G5775S5R1S0MGA9
+             * @example ste_1E21KYYG3SBX13Q7
+             */
+            target_site_id: string;
+        };
+        /** SiteToSiteTypeReference */
+        SiteToSiteTypeReference: {
+            /** @description How links of this type are created. `spatial_matching` links are created automatically based on whether the geometry of a site is contained within another site, so API clients don't create them. */
+            link_creation: components["schemas"]["LinkCreationType"];
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+        };
+        /**
+         * SiteTypeDefinition
+         * @description A site type in the `full` view.
+         */
+        SiteTypeDefinition: {
+            /**
+             * Activities Happening At
+             * @description Activity types that can happen at a site of this type.
+             */
+            activities_happening_at: components["schemas"]["ActivityTypeReference"][];
+            /**
+             * Children
+             * @description Site types that can belong to a site of this type.
+             */
+            children: components["schemas"]["SiteToSiteTypeReference"][];
+            /**
+             * Description
+             * @example An agricultural field where rock or mineral feedstock is applied.
+             */
+            description: string;
+            /**
+             * Geography
+             * @description The geography that sites of this type need. Null means sites of this type have no geography.
+             * @example {
+             *       "allow_overlaps": false,
+             *       "type": "area"
+             *     }
+             */
+            geography: (components["schemas"]["AreaGeography"] | components["schemas"]["PointGeography"]) | null;
+            /**
+             * Metadata Schema
+             * @description JSON Schema for the `metadata` object of sites of this type.
+             * @example {
+             *       "additionalProperties": false,
+             *       "properties": {
+             *         "plot_type": {
+             *           "description": "Whether the field is a treatment plot or a control plot.",
+             *           "enum": [
+             *             "control",
+             *             "treatment"
+             *           ],
+             *           "title": "Plot type",
+             *           "type": "string"
+             *         }
+             *       },
+             *       "required": [
+             *         "plot_type"
+             *       ],
+             *       "type": "object"
+             *     }
+             */
+            metadata_schema: {
+                [key: string]: components["schemas"]["JsonValue-Output"];
+            };
+            /**
+             * Name
+             * @example Field
+             */
+            name: string;
+            /**
+             * Parents
+             * @description Site types that a site of this type can belong to.
+             */
+            parents: components["schemas"]["SiteToSiteTypeReference"][];
+            /** @description Types that `GET /projects/{project_id}/sites` accepts in its `related_site_type`, `related_activity_type` and `related_material_type` filters when it lists sites of this type. */
+            related_types: components["schemas"]["RelatedTypes"];
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+        };
+        /** SiteTypeReference */
+        SiteTypeReference: {
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+        };
+        /**
+         * SiteTypeSummary
+         * @description A site type in the `basic` view.
+         */
+        SiteTypeSummary: {
+            /**
+             * Description
+             * @example An agricultural field where rock or mineral feedstock is applied.
+             */
+            description: string;
+            /**
+             * Name
+             * @example Field
+             */
+            name: string;
+            /**
+             * Site Type
+             * @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project.
+             * @example enhanced_weathering_field
+             */
+            site_type: string;
+        };
         /** Source */
         Source: {
             /** Description */
@@ -4285,11 +6289,71 @@ export interface components {
             ghg_statement_report_url: string;
         };
         /**
+         * SupportedAssetTypeDefinitions
+         * @description The types that a project supports, in the `full` view.
+         */
+        SupportedAssetTypeDefinitions: {
+            /** Activity Types */
+            activity_types: components["schemas"]["ActivityTypeDefinition"][];
+            /** Material Types */
+            material_types: components["schemas"]["MaterialTypeDefinition"][];
+            /**
+             * Module Versions
+             * @description The project's module versions. The supported types change when they change.
+             * @example [
+             *       "module:cropland-management:1.0",
+             *       "module:grazing-lands-management:1.0"
+             *     ]
+             */
+            module_versions: string[];
+            /**
+             * Protocol Version
+             * @description The project's protocol version. The supported types change when it changes.
+             * @example protocol:improved-soil-management:1.1
+             */
+            protocol_version: string | null;
+            /** Site Types */
+            site_types: components["schemas"]["SiteTypeDefinition"][];
+        };
+        /**
+         * SupportedAssetTypeSummaries
+         * @description The types that a project supports, in the `basic` view.
+         */
+        SupportedAssetTypeSummaries: {
+            /** Activity Types */
+            activity_types: components["schemas"]["ActivityTypeSummary"][];
+            /** Material Types */
+            material_types: components["schemas"]["MaterialTypeSummary"][];
+            /**
+             * Module Versions
+             * @description The project's module versions. The supported types change when they change.
+             * @example [
+             *       "module:cropland-management:1.0",
+             *       "module:grazing-lands-management:1.0"
+             *     ]
+             */
+            module_versions: string[];
+            /**
+             * Protocol Version
+             * @description The project's protocol version. The supported types change when it changes.
+             * @example protocol:improved-soil-management:1.1
+             */
+            protocol_version: string | null;
+            /** Site Types */
+            site_types: components["schemas"]["SiteTypeSummary"][];
+        };
+        /**
          * SupportedFileUploadContentType
          * @description Supported HTTP content types for file uploads.
          * @enum {string}
          */
         SupportedFileUploadContentType: "application/vnd.apache.parquet" | "application/geo+json";
+        /**
+         * TypeDefinitionView
+         * @description How much of each type definition to return, following Google AIP-157.
+         * @enum {string}
+         */
+        TypeDefinitionView: "basic" | "full";
         /**
          * Undefined
          * @description An explicit representation of an undefined value in the Isometric REST API. Used, for example, to distinguish between explicit null inputs that clear a property, and not provided inputs which leave the property as is.
@@ -4365,6 +6429,384 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_activity_activities__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Activity_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_activity_activities__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Activity_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The activity is locked and can't be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_activity_activities__id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Activity_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchActivityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_activity_sources_activities__id__sources_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Activity_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSourcesToActivityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_activity_source_activities__id__sources__source_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Activity_"];
+                source_id: components["schemas"]["IsometricIDPathParam_Source_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_activity_link_activity_to_activity_links__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToActivity_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToActivityLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_activity_to_activity_link_activity_to_activity_links__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToActivity_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_material_link_activity_to_material_links__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToMaterial_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToMaterialLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_activity_to_material_link_activity_to_material_links__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToMaterial_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_site_link_activity_to_site_links__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToSite_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToSiteLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_activity_to_site_link_activity_to_site_links__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_ActivityToSite_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_biochar_applications_biochar_applications_get: {
         parameters: {
             query?: {
@@ -5981,6 +8423,117 @@ export interface operations {
             };
         };
     };
+    get_material_materials__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Material_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Material"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_material_materials__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Material_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The material is locked and can't be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_material_materials__id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Material_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchMaterialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Material"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_measurement_locations_measurement_locations_get: {
         parameters: {
             query?: {
@@ -6788,6 +9341,340 @@ export interface operations {
             };
         };
     };
+    get_activities_projects__project_id__activities_get: {
+        parameters: {
+            query?: {
+                activity_type?: string | null;
+                supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+                /** @description Return only activities related to this site. Repeat the parameter to match any of several sites, which must all have the same site type. */
+                related_site_id?: components["schemas"]["IsometricIDRequestParam_Site_"][] | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_Activity_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_activity_projects__project_id__activities_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActivityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_activity_links_projects__project_id__activity_to_activity_links_get: {
+        parameters: {
+            query?: {
+                source_activity_id?: components["schemas"]["IsometricIDQueryParam_Activity_"] | null;
+                target_activity_id?: components["schemas"]["IsometricIDQueryParam_Activity_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_ActivityToActivityLink_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_activity_to_activity_link_projects__project_id__activity_to_activity_links_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActivityToActivityLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToActivityLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_material_links_projects__project_id__activity_to_material_links_get: {
+        parameters: {
+            query?: {
+                source_activity_id?: components["schemas"]["IsometricIDQueryParam_Activity_"] | null;
+                target_material_id?: components["schemas"]["IsometricIDQueryParam_Material_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_ActivityToMaterialLink_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_activity_to_material_link_projects__project_id__activity_to_material_links_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActivityToMaterialLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToMaterialLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_activity_to_site_links_projects__project_id__activity_to_site_links_get: {
+        parameters: {
+            query?: {
+                source_activity_id?: components["schemas"]["IsometricIDQueryParam_Activity_"] | null;
+                target_site_id?: components["schemas"]["IsometricIDQueryParam_Site_"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_ActivityToSiteLink_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_activity_to_site_link_projects__project_id__activity_to_site_links_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActivityToSiteLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityToSiteLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_ghg_entry_templates_projects__project_id__ghg_entry_templates_get: {
         parameters: {
             query?: {
@@ -6853,6 +9740,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GhgEntryTemplate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_materials_projects__project_id__materials_get: {
+        parameters: {
+            query?: {
+                material_type?: string | null;
+                supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_Material_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_material_projects__project_id__materials_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMaterialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Material"];
                 };
             };
             /** @description Validation Error */
@@ -7044,6 +10014,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemovalTemplate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_site_to_site_links_projects__project_id__site_to_site_links_get: {
+        parameters: {
+            query?: {
+                source_site_type?: string | null;
+                target_site_type?: string | null;
+                source_site_id?: components["schemas"]["IsometricIDQueryParam_Site_"] | null;
+                target_site_id?: components["schemas"]["IsometricIDQueryParam_Site_"] | null;
+                link_creation?: components["schemas"]["LinkCreationType"] | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_SiteToSiteLink_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_site_to_site_link_projects__project_id__site_to_site_links_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteToSiteLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteToSiteLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sites_projects__project_id__sites_get: {
+        parameters: {
+            query?: {
+                site_type?: string | null;
+                supplier_reference_id?: string | null;
+                /** @description An integer number of items to retrieve before the item represented by the cursor passed in the before parameter. Defaults to 10 with a maximum value of 50. */
+                last?: number;
+                /** @description An opaque cursor representing the first item in the previously requested page to select items ordered before it. Submit the previously requested page’s start_cursor here when paginated backwards. */
+                before?: string | null;
+                /** @description An integer number of items to retrieve after the item represented by the cursor passed in the after parameter. Defaults to 10 with a maximum value of 50. */
+                first?: number;
+                /** @description An opaque cursor representing the last item in the previously requested page to select items ordered after it. Submit the previously requested page’s end_cursor here when paginated forwards. */
+                after?: string | null;
+                /** @description Return only assets related to this site. Repeat the parameter to match any of several sites, which must all have the same site type. */
+                related_site_id?: components["schemas"]["IsometricIDRequestParam_Site_"][] | null;
+                /** @description Return only assets related to this activity. Repeat the parameter to match any of several activities, which must all have the same activity type. */
+                related_activity_id?: components["schemas"]["IsometricIDRequestParam_Activity_"][] | null;
+                /** @description Return only assets related to this material. Repeat the parameter to match any of several materials, which must all have the same material type. */
+                related_material_id?: components["schemas"]["IsometricIDRequestParam_Material_"][] | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_Site_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_site_projects__project_id__sites_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_sites_from_geojson_projects__project_id__sites_geojson_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSitesFromGeojsonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"][];
                 };
             };
             /** @description Validation Error */
@@ -7276,6 +10459,271 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedListResource_ProjectMonitoringRequirement_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_activity_types_projects__project_id__supported_activity_types_get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListResource_ActivityTypeDefinition_"] | components["schemas"]["ListResource_ActivityTypeSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_activity_type_projects__project_id__supported_activity_types__activity_type__get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+                /** @description The type of the activity. Use `GET /projects/{project_id}/supported_activity_types` to discover which types are valid for your project. */
+                activity_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityTypeDefinition"] | components["schemas"]["ActivityTypeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_asset_types_projects__project_id__supported_asset_types_get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportedAssetTypeDefinitions"] | components["schemas"]["SupportedAssetTypeSummaries"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_material_types_projects__project_id__supported_material_types_get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListResource_MaterialTypeDefinition_"] | components["schemas"]["ListResource_MaterialTypeSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_material_type_projects__project_id__supported_material_types__material_type__get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+                /** @description The type of the material. Use `GET /projects/{project_id}/supported_material_types` to discover which types are valid for your project. */
+                material_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialTypeDefinition"] | components["schemas"]["MaterialTypeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_site_types_projects__project_id__supported_site_types_get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListResource_SiteTypeDefinition_"] | components["schemas"]["ListResource_SiteTypeSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_supported_site_type_projects__project_id__supported_site_types__site_type__get: {
+        parameters: {
+            query?: {
+                /** @description `basic` returns each type's key, name and description. `full` adds the rest of the definition, such as its metadata schema and links. */
+                view?: components["schemas"]["TypeDefinitionView"];
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+                /** @description The type of the site. Use `GET /projects/{project_id}/supported_site_types` to discover which types are valid for your project. */
+                site_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteTypeDefinition"] | components["schemas"]["SiteTypeSummary"];
                 };
             };
             /** @description Validation Error */
@@ -7652,6 +11100,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Sensor"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_site_to_site_link_site_to_site_links__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_SiteToSite_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteToSiteLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_site_to_site_link_site_to_site_links__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_SiteToSite_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_site_sites__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Site_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_site_sites__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Site_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The site is locked and can't be deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_site_sites__id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Site_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
                 };
             };
             /** @description Validation Error */
