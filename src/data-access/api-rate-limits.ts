@@ -63,6 +63,20 @@ export async function consumeRateLimit(
   };
 }
 
+/** Return a debit without resetting elapsed refill time or creating a bucket. */
+// org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
+export async function refundRateLimit(bucket: RateLimitBucket, cost = 1): Promise<void> {
+  const { key, capacity, refillPerMinute } = bucket;
+  if (![capacity, refillPerMinute, cost].every((value) => Number.isFinite(value) && value > 0) || cost > capacity) {
+    throw new Error("Invalid rate-limit bucket or cost.");
+  }
+  await db.execute(sql`
+    update api_rate_limit_buckets
+    set tokens = least(${capacity}::double precision, tokens + ${cost}::double precision)
+    where bucket_key = ${key}
+  `);
+}
+
 // org-scope-ok: authenticated cron removes idle system buckets across all principals.
 export async function purgeIdleRateLimitBuckets(now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - RATE_LIMIT_IDLE_RETENTION_MS);

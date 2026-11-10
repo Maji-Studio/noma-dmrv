@@ -11,6 +11,8 @@ vi.mock("@/lib/log", () => ({
 const mockReadState = vi.fn();
 const mockCreateAccount = vi.fn();
 const mockConsumeSetPasswordRateLimit = vi.fn();
+const mockRefundSetPasswordRateLimit = vi.fn();
+const RATE_LIMIT_RESERVATION = { refund: mockRefundSetPasswordRateLimit };
 const mockRequestPasswordReset = vi.fn();
 const mockGetSession = vi.fn();
 
@@ -50,7 +52,9 @@ describe("bootstrapInvitationAccountAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSession.mockResolvedValue(null);
-    mockConsumeSetPasswordRateLimit.mockResolvedValue(true);
+    mockConsumeSetPasswordRateLimit.mockResolvedValue(RATE_LIMIT_RESERVATION);
+    mockRefundSetPasswordRateLimit.mockResolvedValue(undefined);
+    mockRequestPasswordReset.mockResolvedValue(undefined);
     mockReadState.mockResolvedValue({
       invitationId: INVITATION_ID,
       organizationId: ORGANIZATION_ID,
@@ -173,12 +177,13 @@ describe("bootstrapInvitationAccountAction", () => {
 
   it.each([false, true])("retries pending setup without changing the user, sending allowed=%s", async allowed => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, organizationId: ORGANIZATION_ID, email: EMAIL, account: "pending" });
-    mockConsumeSetPasswordRateLimit.mockResolvedValue(allowed);
+    mockConsumeSetPasswordRateLimit.mockResolvedValue(allowed ? RATE_LIMIT_RESERVATION : false);
     expect(await bootstrapInvitationAccountAction({ ...VALID_INPUT, name: "Ignored name" }))
       .toEqual({ success: true, data: { emailSent: true } });
     expect(mockCreateAccount).not.toHaveBeenCalled();
     expect(mockRequestPasswordReset).toHaveBeenCalledTimes(allowed ? 1 : 0);
     expect(mockConsumeSetPasswordRateLimit).toHaveBeenCalledWith(INVITATION_ID);
+    expect(mockRefundSetPasswordRateLimit).not.toHaveBeenCalled();
   });
 
   it("resends pending setup using only the invitation id", async () => {
@@ -214,6 +219,57 @@ describe("bootstrapInvitationAccountAction", () => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
     mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
     expect(await action(VALID_INPUT)).toEqual({ success: false, error: "The link was not sent. Try again." });
+  });
+
+  it.each([bootstrapInvitationAccountAction, resendInvitationSetPasswordAction])("refunds a failed send so an immediate resend sends again", async action => {
+    let available = true;
+    mockConsumeSetPasswordRateLimit.mockImplementation(async () => {
+      if (!available) return false;
+      available = false;
+      return RATE_LIMIT_RESERVATION;
+    });
+    mockRefundSetPasswordRateLimit.mockImplementation(async () => { available = true; });
+    mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
+    mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
+
+    expect(await action(VALID_INPUT)).toEqual({ success: false, error: "The link was not sent. Try again." });
+    expect(mockRefundSetPasswordRateLimit).toHaveBeenCalledExactlyOnceWith();
+    expect(logError).toHaveBeenCalledWith(expect.any(Object), "invitation password setup email failed");
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
+      .toEqual({ success: true, data: { emailSent: true } });
+    expect(mockRequestPasswordReset).toHaveBeenCalledTimes(2);
+    expect(mockRefundSetPasswordRateLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("acknowledges a resend during cooldown without sending or refunding", async () => {
+    mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
+    mockConsumeSetPasswordRateLimit.mockResolvedValue(false);
+
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
+      .toEqual({ success: true, data: { emailSent: true } });
+    expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+    expect(mockRefundSetPasswordRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("preserves the send refusal and logs when the refund also fails", async () => {
+    mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
+    mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
+    mockRefundSetPasswordRateLimit.mockRejectedValueOnce(new Error("refund failed"));
+
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
+      .toEqual({ success: false, error: "The link was not sent. Try again." });
+    expect(mockRefundSetPasswordRateLimit).toHaveBeenCalledExactlyOnceWith();
+    expect(logError).toHaveBeenCalledWith(expect.any(Object), "invitation password setup cooldown refund failed");
+  });
+
+  it("does not refund when consuming the cooldown fails", async () => {
+    mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
+    mockConsumeSetPasswordRateLimit.mockRejectedValueOnce(new Error("consume failed"));
+
+    expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
+      .toEqual({ success: false, error: "The link was not sent. Try again." });
+    expect(mockRequestPasswordReset).not.toHaveBeenCalled();
+    expect(mockRefundSetPasswordRateLimit).not.toHaveBeenCalled();
   });
 
   it("uses link wording when resend cannot read the invitation", async () => {

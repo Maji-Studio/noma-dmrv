@@ -6,9 +6,11 @@ import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 const mockSelect = vi.fn();
 const mockCreateUser = vi.fn();
 const mockConsumeRateLimit = vi.fn();
+const mockRefundRateLimit = vi.fn();
 
 vi.mock("@/data-access/api-rate-limits", () => ({
   consumeRateLimit: (...args: unknown[]) => mockConsumeRateLimit(...args),
+  refundRateLimit: (...args: unknown[]) => mockRefundRateLimit(...args),
 }));
 
 vi.mock("@/db", () => ({
@@ -145,11 +147,25 @@ describe("invitation account state", () => {
   it("consumes the password setup bucket for the invited user", async () => {
     queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
     mockConsumeRateLimit.mockResolvedValue({ allowed: true });
-    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(true);
-    expect(mockConsumeRateLimit).toHaveBeenCalledExactlyOnceWith({
+    const reservation = await consumeInvitationSetPasswordRateLimit(INVITATION_ID);
+    const bucket = {
       key: `invitation-set-password:${USER_ID}`,
       ...INVITATION_SET_PASSWORD_RATE_LIMIT,
-    });
+    };
+    expect(mockConsumeRateLimit).toHaveBeenCalledExactlyOnceWith(bucket);
+    expect(reservation).not.toBe(false);
+    if (!reservation) throw new Error("Expected a password setup reservation.");
+    const readsBeforeRefund = mockSelect.mock.calls.length;
+    await reservation.refund();
+    expect(mockRefundRateLimit).toHaveBeenCalledExactlyOnceWith(bucket);
+    expect(mockSelect).toHaveBeenCalledTimes(readsBeforeRefund);
+  });
+  it("returns no refund handle when the cooldown refuses a debit", async () => {
+    queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
+    mockConsumeRateLimit.mockResolvedValue({ allowed: false });
+    mockRefundRateLimit.mockClear();
+    expect(await consumeInvitationSetPasswordRateLimit(INVITATION_ID)).toBe(false);
+    expect(mockRefundRateLimit).not.toHaveBeenCalled();
   });
   it("does not allow sending for an invited address without a user", async () => {
     queueSelectResults([validInvitation()], []);

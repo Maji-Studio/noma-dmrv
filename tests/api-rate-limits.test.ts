@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 vi.hoisted(() => { process.env.DB_POOL_MAX = "8"; });
 import { db } from "@/db";
 import { apiRateLimitBuckets } from "@/db/schema";
-import { consumeRateLimit } from "@/data-access/api-rate-limits";
+import { consumeRateLimit, refundRateLimit } from "@/data-access/api-rate-limits";
 import { clientIpBucketKey } from "@/lib/api/client-ip";
 
 const keys: string[] = [];
@@ -43,6 +43,36 @@ it("concurrent debits on parallel pool connections never overspend", async () =>
   expect(results.every((result) => result.remaining >= 0)).toBe(true);
   const [row] = await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key));
   expect(row.tokens).toBe(0);
+});
+it("refunds an empty bucket so an immediate consume is allowed", async () => {
+  const target = bucket();
+  await consumeRateLimit(target, CAPACITY, NOW);
+  expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: false });
+
+  await refundRateLimit(target);
+
+  const [row] = await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key));
+  expect(row.tokens).toBe(1);
+  expect(row.refilledAt).toEqual(NOW);
+  expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: true, remaining: 0 });
+});
+it("caps refunds at capacity, including concurrent refunds on a full bucket", async () => {
+  const target = bucket();
+  await consumeRateLimit(target, CAPACITY, NOW);
+  await refundRateLimit(target, CAPACITY);
+
+  await Promise.all(Array.from({ length: CONCURRENT_DEBITS }, () => refundRateLimit(target)));
+
+  const [row] = await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key));
+  expect(row.tokens).toBe(CAPACITY);
+  expect(row.refilledAt).toEqual(NOW);
+});
+it("does not create a missing bucket when refunding", async () => {
+  const target = bucket();
+
+  await refundRateLimit(target);
+
+  expect(await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key))).toEqual([]);
 });
 it("stores a hash and never the raw client IP", async () => {
   const ip = "192.0.2.123";
