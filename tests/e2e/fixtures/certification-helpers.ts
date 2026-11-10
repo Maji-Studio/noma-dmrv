@@ -418,6 +418,8 @@ export interface SeededReadyBatch {
   code: string;
   applicationId: string;
   applicationCode: string;
+  /** Exact documents owned by this seed, including the unchanged readings CSV. */
+  documentIds: string[];
   cleanup: () => Promise<void>;
 }
 
@@ -838,6 +840,9 @@ export async function seedUngroupedReadyBatchWithChain(
     code: creditBatchCode,
     applicationId: id.application,
     applicationCode,
+    documentIds: [id.productionReadingsDocument, id.deliveryReceiptDocument,
+      ...id.applicationDocuments, ...(options.transportEvidence !== false
+        ? [id.feedstockTransportDocument, id.biocharTransportDocument] : [])],
     cleanup: async () => {
       const conn = createDbConnection();
       try {

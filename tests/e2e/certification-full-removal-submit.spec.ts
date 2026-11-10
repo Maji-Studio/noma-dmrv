@@ -1,5 +1,5 @@
 /**
- * Certification — full New-Removal happy path (create → requirements → submit).
+ * Certification — full New-Removal happy path (create → review → submit).
  *
  * Unlike `certification-new-removal-wizard.spec.ts` (which proves the wizard
  * chrome with a throwaway project id and NO creds), this spec drives a
@@ -7,16 +7,22 @@
  * sandbox project, so the deferred-create and the facility-level requirements
  * actually resolve.
  *
- * Two-phase by design (see the handoff decision):
+ * Two-phase by design:
  *   • COMMITTED (always, when sandbox creds are present): select the ready
- *     batch → Confirm (deferred-create) → land on the Requirements step with
- *     every facility check met and the "Submit" button enabled. NO external
+ *     batch → Continue (deferred-create) → record empty components as zero
+ *     when prompted → Review & submit with every facility check met and the
+ *     "Submit" button enabled. NO external
  *     writes — the assertion stops at the registry boundary.
- *   • LIVE (opt-in, `E2E_LIVE_SUBMIT=1` only): additionally click through to a
- *     real sandbox submit and assert the success state shows the external
- *     removal id + the "View on Isometric" deep link. This POSTs real records
+ *   • LIVE (opt-in, `E2E_LIVE_SUBMIT=1` only): store this seed's URL-only
+ *     supporting documents as PDFs (retain the production readings CSV), use
+ *     the sandbox feedstock type, then submit to the sandbox and assert the
+ *     success state, "View on Isometric" deep link with an external ID, and
+ *     submitted list row. This POSTs real records
  *     to the Isometric sandbox registry on every run, so it never fires in CI
  *     or by accident — it's a manual verification switch.
+ *     Requires local-fs storage and E2E_LIVE_SUBMIT_STORAGE_ROOT set to the
+ *     SERVER's absolute storage root; authenticated readback verifies it.
+ *     Other configured storage providers skip the live branch with a note.
  *
  * Gated on `SANDBOX_PROJECT_ID`: without sandbox creds the certifier loaders
  * list empty, the default template can't resolve, and the batch can never be
@@ -35,6 +41,10 @@ import {
   setFacilityDurabilityTier,
   teardownWizardRemovalForBatch,
 } from "./fixtures/certification-helpers";
+import {
+  liveSubmitStorageSkipReason,
+  prepareLiveSubmitEvidence,
+} from "./fixtures/live-submit-evidence";
 
 // First navigation to a not-yet-compiled certification route can take 10-30s in
 // dev (Turbopack cold compile); the select + requirements steps ALSO wait on
@@ -97,6 +107,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
     await setFacilityDurabilityTier(facilityId, "1000_year");
 
     let batch: SeededReadyBatch | undefined;
+    let cleanupLiveEvidence: (() => Promise<void>) | undefined;
     try {
       batch = await seedUngroupedReadyBatchWithChain(
         {
@@ -220,6 +231,12 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       }
 
       // ── LIVE (opt-in): real sandbox submit + success-state assertions ───
+      const storageSkipReason = await liveSubmitStorageSkipReason(page.request);
+      if (storageSkipReason) {
+        test.info().annotations.push({ type: "note", description: storageSkipReason });
+        return;
+      }
+      cleanupLiveEvidence = await prepareLiveSubmitEvidence(batch, page.request);
       await submitButton.click();
 
       // Success block: confirmation copy + external id + the verified deep link.
@@ -249,16 +266,23 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await expect(removalRow).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
     } finally {
       // The wizard's deferred-create grouped the batch into a fresh removal (and,
-      // on the live path, wrote a submission row); tear those down before the
+      // on the live path, wrote registry mirrors); tear those down before the
       // seed's own batch + chain cleanup.
-      if (batch) {
-        try {
-          await teardownWizardRemovalForBatch(batch.creditBatchId);
-        } finally {
-          await batch.cleanup();
+      try {
+        if (batch) {
+          try {
+            await teardownWizardRemovalForBatch(batch.creditBatchId, batch.documentIds);
+          } finally {
+            try {
+              await batch.cleanup();
+            } finally {
+              await cleanupLiveEvidence?.();
+            }
+          }
         }
+      } finally {
+        await mapping.cleanup();
       }
-      await mapping.cleanup();
     }
   });
 });
