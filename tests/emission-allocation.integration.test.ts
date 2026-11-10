@@ -56,7 +56,7 @@ describe("allocation transport parity with the Emissions tab (real database)", (
       await expect(db.transaction(async tx => {
         const org = { organizationId: TEST_ORG_ID };
         const site = { ...org, facilityId: fixture.facilityId };
-        await tx.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+        await tx.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
           .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, fixture.productionRunId)));
         await tx.update(productionRunFeedstocks).set({ wetMassUsedKg: FIRST_DRAW_KG })
           .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(productionRunFeedstocks.productionRunId, fixture.productionRunId)));
@@ -64,7 +64,7 @@ describe("allocation transport parity with the Emissions tab (real database)", (
           .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId)));
         const [laterRun] = await tx.insert(productionRuns).values({ ...site, reactorId: fixture.reactorId,
           code: `E2E-ALLOC-PR-${crypto.randomUUID()}`, startTime: new Date("2026-06-14T08:00:00Z"), endTime: new Date("2026-06-14T12:00:00Z"),
-          status: "complete", feedstockWetMassKg: SECOND_DRAW_KG, feedstockMassDryKg: SECOND_DRAW_KG,
+          status: "complete", outputPostedAt: new Date("2026-06-14T12:00:00Z"), feedstockWetMassKg: SECOND_DRAW_KG, feedstockMassDryKg: SECOND_DRAW_KG,
           biocharStorageLocationId: fixture.biocharBinId, biocharOutputKg: HALF_LOAD_WET_KG,
           biocharMoisturePercent: 5, biocharDryMassKg: HALF_LOAD_DRY_KG }).returning();
         const [laterBatch] = await tx.insert(creditBatches).values({ ...site, code: `E2E-ALLOC-CB-${crypto.randomUUID()}`,
@@ -182,7 +182,7 @@ describe("Removal allocation parity with submission (real database)", () => {
         expect(batch.productionEmissionsClaimReservedBySubmissionId).toBeNull();
         await tx.insert(transportLegs).values({ organizationId: ctx.organizationId, entityType: "feedstock",
           entityId: fixture.feedstockId, distanceKm: DISTANCE_KM, loadMassKg: FEEDSTOCK_KG, transportMethodType: "road" });
-        await tx.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+        await tx.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
           .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, fixture.productionRunId)));
         const allocation = await getEmissionAllocation(ctx, { removalId: fixture.removalId }, tx);
         for (const id of [fixture.productionRunId, fixture.feedstockId]) {
@@ -226,7 +226,7 @@ describe("Removal allocation parity with submission (real database)", () => {
           .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, fixture.deliveryId)));
         await tx.insert(transportLegs).values({ ...org, entityType: "feedstock", entityId: fixture.feedstockId,
           distanceKm: DISTANCE_KM, loadMassKg: FEEDSTOCK_KG, transportMethodType: "road" });
-        await tx.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+        await tx.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
           .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, fixture.productionRunId)));
         const allocation = await getEmissionAllocation(ctx, { removalId: followup.id }, tx);
         const record = allocation.records.find(record => record.id === fixture.deliveryId)!;

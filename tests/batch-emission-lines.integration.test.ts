@@ -51,7 +51,7 @@ beforeAll(async () => {
     enrichment: await loadTemplateEnrichment(registryClient, template, blueprints) });
   observationId = observation.id;
   await db.update(creditBatches).set({ removalTemplateId: template.id }).where(and(eq(creditBatches.organizationId, TEST_ORG_ID), eq(creditBatches.id, lineage.batchId)));
-  const [run] = await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z"), electricityKwh: 12 })
+  const [run] = await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z"), electricityKwh: 12 })
     .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, lineage.productionRunId))).returning();
   // A second run on the same reactor needs its own start time and posting sequence.
   const [unapplied] = await db.insert(productionRuns).values({ ...run, stockPostingSequence: undefined, id: crypto.randomUUID(), code: `PR-EL-${crypto.randomUUID()}`, electricityKwh: 8,

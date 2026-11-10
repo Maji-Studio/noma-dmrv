@@ -78,6 +78,7 @@ beforeAll(async () => {
         reactorId: reactor.id,
         code: `PR-UNRES-${tag}`,
         status: COMPLETED_PRODUCTION_RUN_STATUS,
+        outputPostedAt: new Date("2026-06-01T12:00:00Z"),
         startTime: new Date("2026-06-01T08:00:00Z"),
         endTime: new Date("2026-06-01T12:00:00Z"),
         biocharStorageLocationId: bin.id,

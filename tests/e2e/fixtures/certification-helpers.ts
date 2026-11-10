@@ -166,7 +166,7 @@ export async function seedGroupedRemovalWithChain(
         code: `E2E-PRD-${testRunId}`,
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
-        status: "complete",
+        status: "complete", outputPostedAt: productionEndTime,
         // A closed run must lie in the PAST: the submit pipeline stamps the
         // run window's latest end as the durability datapoints' measured_at,
         // and the registry rejects a measured_at in the future (live 400,
@@ -576,7 +576,7 @@ export async function seedUngroupedReadyBatchWithChain(
         code: `E2E-PRD-RDY-${testRunId}`,
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
-        status: "complete",
+        status: "complete", outputPostedAt: productionEndTime,
         // A closed run must lie in the PAST: the submit pipeline stamps the
         // run window's latest end as the durability datapoints' measured_at,
         // and the registry rejects a measured_at in the future (live 400,

@@ -135,6 +135,10 @@ export const productionRuns = pgTable(
       sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
     ),
     check(
+      'production_runs_complete_has_output_posted_at',
+      sql`${table.status} <> 'complete' or ${table.outputPostedAt} is not null`
+    ),
+    check(
       'production_runs_complete_has_output',
       // `is not null` on the output too: a CHECK passes when it evaluates to null, so `null > 0` alone would let it through.
       sql`${table.status} <> 'complete' or (${table.biocharMoisturePercent} is not null and ${table.biocharOutputKg} is not null and ${table.biocharOutputKg} > 0 and ${table.biocharStorageLocationId} is not null)`

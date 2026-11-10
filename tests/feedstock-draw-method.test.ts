@@ -33,7 +33,7 @@ async function fixture(tx: DbTransaction) {
     deliveryDate: day(index), massWetKg: 10, massDryKg: 10, moistureContentPercent: 0, status: 'complete' as const,
   })))).returning();
   const runs = await tx.insert(productionRuns).values([4, 6].map(index => ({ ...site, code: `DM-PR-${index}-${tag}`, reactorId: reactor.id,
-    startTime: day(index), endTime: day(index + 1), status: 'complete' as const, feedstockWetMassKg: 10, feedstockMassDryKg: 10,
+    startTime: day(index), endTime: day(index + 1), status: 'complete' as const, outputPostedAt: day(index + 1), feedstockWetMassKg: 10, feedstockMassDryKg: 10,
     biocharOutputKg: 1, biocharMoisturePercent: 0, biocharStorageLocationId: output.id }))).returning();
   const batches = await tx.insert(creditBatches).values([4, 6].map(index => ({ ...site, code: `DM-CB-${index}-${tag}`,
     feedstockTypeId: type.id, productionProcessId: process.id, startDate: `2026-01-0${index}`, endDate: `2026-01-0${index + 1}` }))).returning();

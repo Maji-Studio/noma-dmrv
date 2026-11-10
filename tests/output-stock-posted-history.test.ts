@@ -12,7 +12,8 @@ const ctx = { organizationId: 'org', userId: 'user', orgRole: 'admin' as const, 
 const LAYER_A = '00000000-0000-4000-8000-00000000000a';
 const time = '2026-09-14T12:00:00.000Z';
 
-it.each([new Date('2026-09-13'), null])('keeps replay stable after an unrelated run edit (posting %s)', async (outputPostedAt) => {
+it('keeps replay stable after an unrelated run edit', async () => {
+  const outputPostedAt = new Date('2026-09-13');
   const rows = new Map<unknown, unknown[]>([
     [storageLocations, [{ id: 'bin', type: 'biochar_bin', facilityId: 'facility' }]],
   ]);
@@ -40,9 +41,9 @@ it.each([new Date('2026-09-13'), null])('keeps replay stable after an unrelated 
   });
   const history = () => getOutputStockHistory(ctx, 'bin', undefined, { recomputeWet: false });
   const before = replayStock(await history());
-  expect(before.at(-1)?.after.wetKg).toBe(outputPostedAt ? 250 : null);
+  expect(before.at(-1)?.after.wetKg).toBe(250);
   run.updatedAt = new Date('2026-09-20');
   expect(replayStock(await history())).toEqual(before);
   expect((await history()).find(entry => entry.id === LAYER_A)?.recordedAt)
-    .toBe(outputPostedAt?.toISOString() ?? "");
+    .toBe(outputPostedAt.toISOString());
 });

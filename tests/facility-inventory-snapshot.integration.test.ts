@@ -158,9 +158,10 @@ describe("facility inventory snapshot", { timeout: TIMEOUT_MS }, () => {
     const before = await inventory(f);
     const FUTURE_MS = 365 * 24 * 60 * 60 * 1000;
     const start = new Date(Date.now() + FUTURE_MS);
+    const outputPostedAt = new Date(start.getTime() + 4 * 60 * 60 * 1000);
     await db.insert(productionRuns).values({
       organizationId: f.ctx.organizationId, facilityId: f.facility.id, reactorId: f.runs[0].reactorId,
-      code: `E2E-SNAPSHOT-FUTURE-${f.tag}`, status: "complete", startTime: start, endTime: new Date(start.getTime() + 4 * 60 * 60 * 1000),
+      code: `E2E-SNAPSHOT-FUTURE-${f.tag}`, status: "complete", outputPostedAt, startTime: start, endTime: outputPostedAt,
       biocharStorageLocationId: f.source.id, biocharOutputKg: SECOND_BIN_WET_KG, biocharMoisturePercent: MOISTURE_PERCENT,
       biocharDryMassKg: SECOND_BIN_DRY_BIOCHAR_KG,
     });

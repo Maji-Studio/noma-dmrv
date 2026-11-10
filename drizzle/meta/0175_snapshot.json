@@ -1,5 +1,5 @@
 {
-  "id": "f9bac055-ed44-46d5-a006-26866fdf67ea",
+  "id": "45927d94-d882-4455-b6f1-c0b9f33e3eff",
   "prevId": "8ab56226-ca73-4e9c-8b82-48d1a5ba0a31",
   "version": "7",
   "dialect": "postgresql",
@@ -11180,6 +11180,10 @@
         "production_runs_biochar_dry_lte_wet": {
           "name": "production_runs_biochar_dry_lte_wet",
           "value": "\"production_runs\".\"biochar_output_kg\" is null or \"production_runs\".\"biochar_dry_mass_kg\" is null or \"production_runs\".\"biochar_dry_mass_kg\" <= \"production_runs\".\"biochar_output_kg\""
+        },
+        "production_runs_complete_has_output_posted_at": {
+          "name": "production_runs_complete_has_output_posted_at",
+          "value": "\"production_runs\".\"status\" <> 'complete' or \"production_runs\".\"output_posted_at\" is not null"
         },
         "production_runs_complete_has_output": {
           "name": "production_runs_complete_has_output",

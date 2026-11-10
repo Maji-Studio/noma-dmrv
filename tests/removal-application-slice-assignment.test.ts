@@ -106,7 +106,7 @@ describe("Removal Application-slice assignment", () => {
           facilityId: facility.id,
           reactorId: reactor.id,
           code: `RAS-PR${number}-${tag}`,
-          status: "complete" as const,
+          status: "complete" as const, outputPostedAt: new Date(`2026-04-0${number}T12:00:00Z`),
           biocharStorageLocationId: sourceBin.id, biocharMoisturePercent: 0,
           startTime: new Date(`2026-04-0${number}T08:00:00Z`),
           endTime: new Date(`2026-04-0${number}T12:00:00Z`),

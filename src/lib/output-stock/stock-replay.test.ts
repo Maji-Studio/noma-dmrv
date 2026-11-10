@@ -176,11 +176,3 @@ it.each(['mix', 'split'] as const)('keeps wet unknown after a %s loss posted aft
   ];
   expect(last(history)).toMatchObject({ dryKg: 64, solidsKg: 64, wetKg: null });
 });
-
-it("refuses frozen and recomputed after-balances after an undatable intake", () => {
-  const intake = { ...measured, recordedAt: "" };
-  const count = entry({ id: "count", kind: "count", occurredAt: AT(12), recordedAt: AT(12),
-    dryMassKg: 0, wetDeltaKg: null, solidsDeltaKg: null,
-    afterWetKg: 100, currentAfterWetKg: 120, afterSolidsKg: 80 });
-  expect(last([intake, count])).toMatchObject({ dryKg: 80, wetKg: null, solidsKg: null });
-});

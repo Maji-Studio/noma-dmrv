@@ -47,7 +47,7 @@ describe("feedstock transport ownership data access", () => {
         });
         const [early, later] = await tx.insert(productionRuns).values(["02", "03"].map((month, index) => ({
           ...site, reactorId: reactor.id, code: `TO-PR-${month}-${tag}`, startTime: new Date(`2026-${month}-10T00:00:00Z`),
-          endTime: new Date(`2026-${month}-11T00:00:00Z`), status: "complete" as const, feedstockMassDryKg: LEG_MASS_KG,
+          endTime: new Date(`2026-${month}-11T00:00:00Z`), status: "complete" as const, outputPostedAt: new Date(`2026-${month}-11T00:00:00Z`), feedstockMassDryKg: LEG_MASS_KG,
           biocharOutputKg: LEG_MASS_KG, biocharMoisturePercent: 0, biocharStorageLocationId: biocharBin.id,
           archivedAt: index === 0 && earlierState === "archived run" ? new Date("2026-04-01") : null,
         }))).returning();
@@ -107,7 +107,7 @@ describe("feedstock transport ownership data access", () => {
       const months = ["02", "03", "04"];
       const runs = await tx.insert(productionRuns).values(months.map((month) => ({
         ...site, reactorId: reactor.id, code: `TO-PR-${month}-${tag}`, startTime: new Date(`2026-${month}-10T00:00:00Z`),
-        endTime: new Date(`2026-${month}-11T00:00:00Z`), status: "complete" as const, feedstockMassDryKg: LEG_MASS_KG,
+        endTime: new Date(`2026-${month}-11T00:00:00Z`), status: "complete" as const, outputPostedAt: new Date(`2026-${month}-11T00:00:00Z`), feedstockMassDryKg: LEG_MASS_KG,
         biocharOutputKg: LEG_MASS_KG, biocharMoisturePercent: 0, biocharStorageLocationId: biocharBin.id,
       }))).returning();
       const batches = await tx.insert(creditBatches).values(months.map((month) => ({

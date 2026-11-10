@@ -150,7 +150,7 @@ export async function createLineageFixture(
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
-        status: blockingVia === "none" ? "running" : "complete",
+        status: blockingVia === "none" ? "running" : "complete", outputPostedAt: blockingVia === "none" ? null : new Date("2026-06-13T12:00:00Z"),
       })
       .returning({ id: productionRuns.id });
 

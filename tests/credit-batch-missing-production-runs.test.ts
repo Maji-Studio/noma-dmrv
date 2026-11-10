@@ -87,7 +87,7 @@ describe("missing production run detection (real DB)", () => {
     feedstockIds = [main.feedstockId]) {
     const [row] = await db.insert(productionRuns).values({
       organizationId: ctx.organizationId, facilityId: main.facilityId, reactorId: main.reactorId,
-      code: `PR-LATE-${label}-${crypto.randomUUID()}`, status: "complete",
+      code: `PR-LATE-${label}-${crypto.randomUUID()}`, status: "complete", outputPostedAt: RUN_CREATED_AT,
       startTime: new Date(START), endTime: new Date(END), createdAt: RUN_CREATED_AT,
       biocharStorageLocationId: main.biocharBinId,
       biocharOutputKg: BIOCHAR_OUTPUT_KG, biocharMoisturePercent: MOISTURE_PERCENT,

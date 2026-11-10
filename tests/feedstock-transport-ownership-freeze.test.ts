@@ -52,7 +52,7 @@ async function withPair(mode: Mode, test: (a: LineageFixture, b: LineageFixture)
       await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, a.deliveryId));
       await deleteOutputOrderFixtures(tx, eq(orders.id, a.orderId));
       await deleteOutputProductFixtures(tx, eq(biocharProducts.id, a.productId));
-      await tx.update(productionRuns).set({ status: "complete", startTime: EARLY, endTime: EARLY_END })
+      await tx.update(productionRuns).set({ status: "complete", outputPostedAt: EARLY_END, startTime: EARLY, endTime: EARLY_END })
         .where(eq(productionRuns.id, a.productionRunId));
     });
     await db.update(creditBatches).set({ endDate: "2026-06-15" }).where(eq(creditBatches.id, a.batchId));
@@ -68,7 +68,7 @@ async function withPair(mode: Mode, test: (a: LineageFixture, b: LineageFixture)
           name: sql`${storageLocations.name} || ' ' || ${storageLocations.id}` }).where(eq(storageLocations.facilityId, b.facilityId));
         await tx.update(storageLocations).set({ feedstockTypeId: a.feedstockTypeId }).where(eq(storageLocations.id, b.feedstockBinId));
         await tx.update(feedstocks).set({ facilityId: a.facilityId, feedstockTypeId: a.feedstockTypeId }).where(eq(feedstocks.id, b.feedstockId));
-        await tx.update(productionRuns).set({ facilityId: a.facilityId, status: "complete",
+        await tx.update(productionRuns).set({ facilityId: a.facilityId, status: "complete", outputPostedAt: new Date("2026-06-16T12:00:00Z"),
           feedstockWetMassKg: 1_001, feedstockMassDryKg: 900.9, endTime: new Date("2026-06-16T12:00:00Z") })
           .where(eq(productionRuns.id, b.productionRunId));
         await tx.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,

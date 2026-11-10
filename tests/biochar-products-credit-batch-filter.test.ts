@@ -60,7 +60,7 @@ describe("biochar product credit batch filter (real database)", () => {
       const endTime = new Date(`${window.startDate}T09:00:00Z`);
       const [run] = await db.insert(productionRuns).values({
         ...org, facilityId: facility.id, reactorId: reactor.id,
-        code: `E2E-PR-${window.label}-${tag}`, status: "complete",
+        code: `E2E-PR-${window.label}-${tag}`, status: "complete", outputPostedAt: endTime,
         startTime: new Date(`${window.startDate}T08:00:00Z`), endTime,
         biocharStorageLocationId: outputBin.id, biocharOutputKg: MASS_KG,
         biocharDryMassKg: MASS_KG, biocharMoisturePercent: 0,

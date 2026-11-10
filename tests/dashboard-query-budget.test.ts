@@ -101,7 +101,7 @@ beforeAll(async () => {
         facilityId: facility.id,
         reactorId: reactor.id,
         code: `QB-PR${n}-${tag}`,
-        status: "complete" as const,
+        status: "complete" as const, outputPostedAt: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         startTime: new Date(`2026-07-0${n + 1}T08:00:00Z`),
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),

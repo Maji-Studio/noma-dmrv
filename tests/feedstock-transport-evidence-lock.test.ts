@@ -47,10 +47,10 @@ it("keeps the full transport lineage locked when no eligible owner exists", asyn
 it("keeps transport views and BoL writes open until the owner Removal is sent, and excludes other owners' Sources", async () => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async owner => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-12T12:00:00Z"), startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, owner.productionRunId)));
     await withLineageFixture(async later => {
-      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       await db.insert(certificationSubmissions).values({ organizationId: TEST_ORG_ID, provider: "isometric", submissionType: "removal",
         localEntityType: "removal", localEntityId: later.removalId, externalId: `ext_${later.removalId}`, version: 1,
@@ -123,7 +123,7 @@ it('creating a draft for a later batch leaves every delivery owner unchanged', a
   await withLineageFixture(async earlier => {
     await withLineageFixture(async later => {
       for (const [fixture, day] of [[earlier, '12'], [later, '13']] as const) {
-        await db.update(productionRuns).set({ status: 'complete', startTime: new Date(`2026-06-${day}T08:00:00Z`), endTime: new Date(`2026-06-${day}T12:00:00Z`) })
+        await db.update(productionRuns).set({ status: 'complete', outputPostedAt: new Date(`2026-06-${day}T12:00:00Z`), startTime: new Date(`2026-06-${day}T08:00:00Z`), endTime: new Date(`2026-06-${day}T12:00:00Z`) })
           .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId)));
       }
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,

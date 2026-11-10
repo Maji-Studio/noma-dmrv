@@ -57,10 +57,10 @@ describe('output stock event times in PostgreSQL', () => {
   it('dates a run intake by when its output was posted, not when the run was created', async () => {
     const f = await fixture();
     const [run] = f.runs;
-    // Created while running, completed days later: the completion saves the run, so updatedAt is the posting time.
+    // Created while running, completed days later: the completion saves the run, so outputPostedAt is the posting time.
     const createdAt = new Date('2026-09-09T08:00:00.000Z');
     const completedAt = new Date('2026-09-20T10:00:00.000Z');
-    await db.update(productionRuns).set({ createdAt, updatedAt: completedAt })
+    await db.update(productionRuns).set({ createdAt, updatedAt: completedAt, outputPostedAt: completedAt })
       .where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, f.ctx.organizationId)));
     const intake = (await getOutputStockHistory(f.ctx, f.source.id)).find(e => e.kind === 'intake' && e.id === run.id)!;
     expect(intake.recordedAt).toBe(completedAt.toISOString());

@@ -85,16 +85,12 @@ export function replayStock(entries: readonly OutputStockHistoryEntry[]): StockS
   let state = EMPTY_STOCK;
   // The latest recording among the counting entries so far; one later than an entry's own means a back-dated entry it never saw.
   let latestRecordedAt = "";
-  let hasUndatedIntake = false;
   return [...entries].sort(stockOrder).map((entry) => {
     const before = state;
     const isLive = live.has(entry.id);
     const moves = isLive && !NO_STOCK_KINDS.has(entry.kind);
     if (moves) {
-      // Missing output_posted_at is corrupt intake provenance, never a reason
-      // to trust a saved balance that may predate that intake.
-      hasUndatedIntake ||= entry.kind === "intake" && !entry.recordedAt;
-      state = applyStockEntry(state, entry, !hasUndatedIntake && latestRecordedAt <= entry.recordedAt);
+      state = applyStockEntry(state, entry, latestRecordedAt <= entry.recordedAt);
       if (entry.recordedAt > latestRecordedAt) latestRecordedAt = entry.recordedAt;
     }
     return { entry, live: isLive, moves, before, after: state };

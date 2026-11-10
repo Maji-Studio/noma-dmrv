@@ -28,7 +28,7 @@ it("requires only uploaded sensor-data CSV evidence with zero parsed readings", 
       eq(productionRunReadings.productionRunId, fixture.productionRunId),
     );
     await db.update(productionRuns).set({
-      status: "complete",
+      status: "complete", outputPostedAt: RUN_END,
       endTime: RUN_END,
       dieselOperationLiters: 0,
       dieselGensetLiters: 0,

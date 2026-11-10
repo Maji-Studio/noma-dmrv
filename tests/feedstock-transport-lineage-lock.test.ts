@@ -17,12 +17,12 @@ beforeAll(() => ensureTestOrg());
 it.each(["sent", "reserved"] as const)("locks only owned feedstock transport for a %s Removal, but locks every linked record's mass", async state => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-12T12:00:00Z"), startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
     await withLineageFixture(async later => {
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
-      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       await insertSubmission(later.removalId, { transportFeedstockIds: [later.feedstockId] }, state);
       const legInput = { entityType: "feedstock" as const, entityId: earlier.feedstockId,
@@ -82,12 +82,12 @@ async function insertSubmission(removalId: string, payloadSnapshot: Record<strin
 it("releases transport listed only by a rejected attempt with no registry mutation", async () => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-12T12:00:00Z"), startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
     await withLineageFixture(async later => {
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
-      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       await insertSubmission(later.removalId, { transportFeedstockIds: [earlier.feedstockId] }, "rejected");
       await insertSubmission(later.removalId, { transportFeedstockIds: [later.feedstockId] }, "sent", { version: 2 });
@@ -105,12 +105,12 @@ it("releases transport listed only by a rejected attempt with no registry mutati
 it.each(["externalId", "possible", "confirmed", "lockedAt"] as const)("keeps transport locked when a rejected attempt has %s remote-effect evidence", async remoteEffect => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-12T12:00:00Z"), startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
     await withLineageFixture(async later => {
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
-      await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-06-13T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       await insertSubmission(later.removalId, { transportFeedstockIds: [earlier.feedstockId] }, "rejected",
         remoteEffect === "externalId" ? { externalId: `ext_rejected_${later.removalId}` }
@@ -127,11 +127,11 @@ it.each(["externalId", "possible", "confirmed", "lockedAt"] as const)("keeps tra
 it.each([["counted", "sent"], ["legacy", "sent"], ["counted", "reserved"]] as const)("keeps %s %s transport locked after an earlier run becomes batched", async (snapshotKind, state) => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-02-12T08:00:00Z"), endTime: new Date("2026-02-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-02-12T12:00:00Z"), startTime: new Date("2026-02-12T08:00:00Z"), endTime: new Date("2026-02-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
     await db.delete(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.organizationId, TEST_ORG_ID), eq(creditBatchProductionRuns.creditBatchId, earlier.batchId)));
     await withLineageFixture(async march => {
-      await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-03-12T08:00:00Z"), endTime: new Date("2026-03-12T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-03-12T12:00:00Z"), startTime: new Date("2026-03-12T08:00:00Z"), endTime: new Date("2026-03-12T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, march.productionRunId)));
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: march.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
@@ -156,12 +156,12 @@ it.each([["counted", "sent"], ["legacy", "sent"], ["counted", "reserved"]] as co
 it("names the credit batch that counts a feedstock record's transport, scoped to the organization", async () => {
   const ctx = makeTestOrgContext();
   await withLineageFixture(async earlier => {
-    await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-12T12:00:00Z"), startTime: new Date("2026-06-12T08:00:00Z"), endTime: new Date("2026-06-12T12:00:00Z") })
       .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, earlier.productionRunId)));
     await withLineageFixture(async later => {
       await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
         productionRunId: later.productionRunId, feedstockId: earlier.feedstockId, wetMassUsedKg: 1 });
-      await db.update(productionRuns).set({ status: "complete", startTime: new Date("2026-06-13T08:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
+      await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), startTime: new Date("2026-06-13T08:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z") })
         .where(and(eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, later.productionRunId)));
       const owners = await getFeedstockTransportOwnerBatches(ctx, [earlier.feedstockId, later.feedstockId]);
       const [batch] = await db.select({ code: creditBatches.code }).from(creditBatches)
