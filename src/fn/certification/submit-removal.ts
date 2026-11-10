@@ -81,7 +81,7 @@ import {
   compileRemovalSubmission,
   materializeRemovalSubmissionSnapshot,
 } from "@/lib/certification/removal-submission-build";
-import { assertClaimedRemovalPayloadFresh } from "./removal-submission-freshness";
+import { assertClaimedRemovalPayloadFresh, assertRemovalPreflightBlockers } from "./removal-submission-freshness";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import {
   performRegistryCreate,
@@ -261,10 +261,10 @@ async function submitRemovalCore(
   // Preserve the user-input confirmation boundary between the context prefix
   // and the member/tier/build checks. Both passes use the same pure collector.
   const contextBlockers = collectContextRemovalBlockers(ctx, { beforeConfirmation: true });
-  if (contextBlockers.length) throw new SafeError(contextBlockers[0].message);
+  assertRemovalPreflightBlockers(ctx.latestSubmission, contextBlockers);
   assertProductionConfirmed(confirmProduction);
   const blockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
-  if (blockers.length) throw new SafeError(blockers[0].message);
+  assertRemovalPreflightBlockers(ctx.latestSubmission, blockers);
   const prepared = requirePreparedRemovalSubmission(ctx);
   const { removalTemplate, blueprintsByKey, externalProjectId, hasDurabilityComponents } = prepared;
   // The gate refuses an unresolved tier; this narrows the mapping claim guard.

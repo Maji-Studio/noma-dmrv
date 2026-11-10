@@ -6,13 +6,17 @@ import { getDashboardAttentionItems, getDashboardOverview, KPI_HINTS } from "./d
 import { ATTENTION_PER_CHECK } from "./dashboard-attention";
 import { EXACT_ID_FILTER_MAX } from "@/lib/exact-id-filter";
 import type { RemovalAttentionRows } from "@/lib/certification/removal-attention";
+import { REMOVAL_INTERRUPTED_ATTENTION_TITLE } from "@/lib/certification/removal-attention";
+import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   previews: vi.fn(),
   union: vi.fn(async (): Promise<unknown[]> => []),
   returned: vi.fn(async (): Promise<Set<string>> => new Set()),
+  changedAttempts: vi.fn(async (): Promise<Set<string>> => new Set()),
 }));
+vi.mock("./removal-latest-attempt", () => ({ getRemovalIdsWithChangedLatestAttempt: mocks.changedAttempts }));
 vi.mock("./dashboard-returned-removals", () => ({ loadReturnedRemovalIds: mocks.returned }));
 // Batch rows carry already-derived Removal displays in these tests.
 vi.mock("./credit-batch-removal-display", () => ({
@@ -77,6 +81,8 @@ type Row = Record<string, unknown>;
 let rowsByTable: Record<string, Row[]>;
 
 beforeEach(() => {
+  mocks.changedAttempts.mockClear();
+  mocks.changedAttempts.mockResolvedValue(new Set());
   mocks.union.mockResolvedValue([]);
   mocks.returned.mockResolvedValue(new Set());
   rowsByTable = { facilities: [{ timezone: "UTC" }] };
@@ -244,6 +250,7 @@ describe("needs attention rows", () => {
     mocks.union.mockResolvedValue([...interrupted, ...returned]);
     mocks.returned.mockResolvedValue(new Set(returned.map((row) => row.removals[0].id)));
     const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+    expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, interrupted.map((row) => row.removals[0].id));
     expect(items.find((item) => item.id === "removal-interrupted-group")?.recordIds).toEqual(interrupted.map((row) => row.removals[0].id));
     expect(items.find((item) => item.id === "batch-returned-group")?.recordIds).toEqual(returned.map((row) => row.id));
   });
@@ -291,6 +298,31 @@ describe("needs attention rows", () => {
       kind: "batch-pending", id: "cb-i", code: "CB-I", dateDay: "2026-09-30", dateMs: null, ord: 1, total: 1, allIds: [],
       removals: [{ id: "rm-i", code: "RM-I", ghgStatementId: null, status: { kind: "interrupted" }, phase: "draft" }],
     };
+
+    it.each([
+      { outcome: "latest changed summary", changed: true },
+      { outcome: "later failure superseding changed", changed: false },
+      { outcome: "no attempt summary", changed: false },
+    ])("routes the interrupted outcome: $outcome", async ({ changed }) => {
+      mocks.changedAttempts.mockResolvedValue(new Set(changed ? ["rm-i"] : []));
+      mocks.union.mockResolvedValue([interruptedBatch, { ...interruptedBatch, id: "cb-2", code: "CB-2" }]);
+      const { items } = await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, ["rm-i"]);
+      expect(items).toContainEqual(expect.objectContaining({
+        id: "removal-interrupted-rm-i", entityCode: "RM-I · CB-I · CB-2",
+        title: changed ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: `/removals?facility=${FACILITY_ID}&${changed ? "removal" : "resume"}=rm-i`,
+      }));
+    });
+
+    it("passes no ids to the attempt lookup when no Removal is interrupted", async () => {
+      mocks.union.mockResolvedValue([{
+        ...interruptedBatch,
+        removals: [{ ...interruptedBatch.removals[0], status: { kind: "submitted" }, phase: "submitted" }],
+      }]);
+      await getDashboardAttentionItems(CTX, FACILITY_ID, TODAY);
+      expect(mocks.changedAttempts).toHaveBeenCalledExactlyOnceWith(CTX, []);
+    });
 
     it("puts draft rows after the interrupted rows, groups them past the cap, and counts every Removal", async () => {
       mocks.union.mockResolvedValue([interruptedBatch, ...runRows(["run-0"])]);

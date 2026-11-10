@@ -13,6 +13,7 @@
  * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
 import { removalResubmitHref } from "@/lib/removal-correction-copy";
+import { CHANGED_SINCE_REVIEW_LABEL } from "@/lib/certification/interrupted-removal-copy";
 import { RECORD_LINKS, recordHref } from "@/lib/record-links";
 import { db } from "@/db";
 import {
@@ -85,6 +86,7 @@ import {
 } from "./dashboard-structural-gaps";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
+import { getRemovalIdsWithChangedLatestAttempt } from "./removal-latest-attempt";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
@@ -775,6 +777,9 @@ export async function getDashboardAttentionItems(
   let returnedBatchCount = 0;
   let notSubmittedBatchCount = 0;
   const interrupted = new Map<string, DashboardAttentionItem>();
+  const interruptedIds = new Set(batchRows.flatMap(({ removals }) =>
+    removals.filter((removal) => removal.status.kind === "interrupted").map((removal) => removal.id)));
+  const changedRemovalIds = await getRemovalIdsWithChangedLatestAttempt(ctx, [...interruptedIds]);
   // Only periods waiting on the operator; one awaiting verification waits on the verifier.
   const notSubmitted: DashboardAttentionItem[] = [];
   const returned: DashboardAttentionItem[] = [];
@@ -789,8 +794,8 @@ export async function getDashboardAttentionItems(
         recordIds: [removal.id],
         entityCode: `${existing?.entityCode ?? removal.code} · ${row.code}`,
         date: null,
-        title: REMOVAL_INTERRUPTED_ATTENTION_TITLE,
-        href: removalResubmitHref(removal.id, facilityId),
+        title: changedRemovalIds.has(removal.id) ? CHANGED_SINCE_REVIEW_LABEL : REMOVAL_INTERRUPTED_ATTENTION_TITLE,
+        href: changedRemovalIds.has(removal.id) ? recordHref("removal", removal.id, { facilityId }) : removalResubmitHref(removal.id, facilityId),
       });
     }
     const returnedHere = removals.filter((removal) => returnedRemovalIds.has(removal.id));
