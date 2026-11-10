@@ -721,7 +721,7 @@ is in an Application another Removal holds get a late-run style Check pointing t
 the Emissions tab, cleared by a later same-day entry. Sent batches keep the same
 hide rule for late runs. Unheld batches attach matching runs automatically and get
 no such Check. The list projects only Blocking and Check counts, health state and lines to decide from
-this core, plus whether any holding Removal has a submitted version; the newest holder still supplies the list action's Removal status and GHG Statement, with lock fields loaded there.
+this core, plus whether any holding Removal has a submitted version. The newest holder supplies the list action's Removal status, with lock fields loaded there. The pure `credit-batch-statements` module aggregates statement status across all holders (verification failure, then issued, then verified, else the newest holder with a statement; holder ties use createdAt descending, nulls last, then id descending). The page lists every linked statement with this batch's dry mass, ordered by effective reporting-period end, start and id descending, with null dates last.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
 reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
 on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting

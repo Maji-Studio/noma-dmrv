@@ -22,9 +22,9 @@ import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { requireOrgScope } from "./utils";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { getLatestSubmissionsForEntities } from "./certification";
-import { listCreditBatchCertificationLinks } from "./credit-batch-certification-links";
+import { aggregateBatchStatements } from "@/lib/certification/credit-batch-statements";
 import {
-  getCertifierGhgStatementById,
+  getCertifierGhgStatementsByIds,
   getEffectiveReportingPeriodEndOn,
   hasMissingRemotePeriod,
 } from "./certifier-ghg-statements";
@@ -43,6 +43,7 @@ export interface CreditBatchPageGhgStatement {
   status: ReturnType<typeof deriveSubmissionStatus>;
   submittedToVerifierAt: string | null;
   creditsIssuedAt: string | null;
+  dryKg: number;
 }
 
 function sumDryGrams(rows: readonly { dryKg: number }[]): number {
@@ -61,43 +62,40 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
   const rollup = (await loadCreditBatchRollups(ctx, [creditBatchId], undefined, tx))[creditBatchId];
   if (!rollup) throw new DomainError("not_found", "Credit batch not found.");
 
-  const [sliceRows, links] = await Promise.all([
-    tx.select({
-      applicationId: applications.id,
-      applicationCode: applications.code,
-      applicationDate: applications.applicationDate,
-      deliveryId: deliveries.id,
-      deliveryCode: deliveries.code,
-      field: applications.fieldIdentifier,
-      location: customerLocations.name,
-      wetKg: creditBatchApplications.allocatedWetMassKg,
-      dryKg: creditBatchApplications.allocatedDryMassKg,
-      removalId: creditBatchApplications.removalId,
-    })
-      .from(creditBatchApplications)
-      .innerJoin(applications, and(
-        eq(applications.id, creditBatchApplications.applicationId),
-        eq(applications.organizationId, ctx.organizationId),
-      ))
-      .innerJoin(deliveries, and(
-        eq(deliveries.id, applications.deliveryId),
-        eq(deliveries.organizationId, ctx.organizationId),
-      ))
-      .leftJoin(orders, and(
-        eq(orders.id, deliveries.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ))
-      .leftJoin(customerLocations, and(
-        eq(customerLocations.id, orders.customerLocationId),
-        eq(customerLocations.organizationId, ctx.organizationId),
-      ))
-      .where(and(
-        eq(creditBatchApplications.creditBatchId, creditBatchId),
-        eq(creditBatchApplications.organizationId, ctx.organizationId),
-      ))
-      .orderBy(asc(applications.applicationDate), asc(applications.id)),
-    listCreditBatchCertificationLinks(ctx, [creditBatchId], tx),
-  ]);
+  const sliceRows = await tx.select({
+    applicationId: applications.id,
+    applicationCode: applications.code,
+    applicationDate: applications.applicationDate,
+    deliveryId: deliveries.id,
+    deliveryCode: deliveries.code,
+    field: applications.fieldIdentifier,
+    location: customerLocations.name,
+    wetKg: creditBatchApplications.allocatedWetMassKg,
+    dryKg: creditBatchApplications.allocatedDryMassKg,
+    removalId: creditBatchApplications.removalId,
+  })
+    .from(creditBatchApplications)
+    .innerJoin(applications, and(
+      eq(applications.id, creditBatchApplications.applicationId),
+      eq(applications.organizationId, ctx.organizationId),
+    ))
+    .innerJoin(deliveries, and(
+      eq(deliveries.id, applications.deliveryId),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ))
+    .leftJoin(orders, and(
+      eq(orders.id, deliveries.orderId),
+      eq(orders.organizationId, ctx.organizationId),
+    ))
+    .leftJoin(customerLocations, and(
+      eq(customerLocations.id, orders.customerLocationId),
+      eq(customerLocations.organizationId, ctx.organizationId),
+    ))
+    .where(and(
+      eq(creditBatchApplications.creditBatchId, creditBatchId),
+      eq(creditBatchApplications.organizationId, ctx.organizationId),
+    ))
+    .orderBy(asc(applications.applicationDate), asc(applications.id));
   const slices = sliceRows.map(({ field, location, ...slice }) => {
     const destinationLabel = field?.trim() || location?.trim();
     return {
@@ -173,22 +171,22 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
     .filter(row => row.phase === "submitted" && row.submittedAt)
     .sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime())
     .at(0);
-  // Match CreditBatchHealthSummary: the newest holding Removal (createdAt,
-  // then id descending), even when an older Removal has a statement and it doesn't.
-  const statementId = links.find(link => link.removalId !== null)?.ghgStatementId;
-  const statement = statementId ? await getCertifierGhgStatementById(ctx, statementId, tx) : null;
-  let ghgStatement: CreditBatchPageGhgStatement | null = null;
-  if (statement) {
-    const statementSubmissions = await getLatestSubmissionsForEntities(ctx, {
+  // Include every linked statement, summing this batch's holder mass in reporting-period order.
+  const statementIds = [...new Set(removals.flatMap(row => row.ghgStatementId ? [row.ghgStatementId] : []))];
+  const [statements, statementSubmissions] = await Promise.all([
+    getCertifierGhgStatementsByIds(ctx, statementIds, tx),
+    getLatestSubmissionsForEntities(ctx, {
       provider: "isometric",
       submissionType: "ghg_statement",
       localEntityType: "ghgStatement",
-      localEntityIds: [statement.id],
-    }, rollup.batch.facilityId, tx);
+      localEntityIds: statementIds,
+    }, rollup.batch.facilityId, tx),
+  ]);
+  const ghgStatements: CreditBatchPageGhgStatement[] = aggregateBatchStatements(removals, statements.map(statement => {
     const latest = statementSubmissions.get(statement.id) ?? null;
     const submittedToVerifierAt = getMetadataValue(latest?.metadata, "submittedToVerifierAt");
     const creditsIssuedAt = getMetadataValue(latest?.metadata, "creditsIssuedAt");
-    ghgStatement = {
+    return {
       id: statement.id,
       reportingPeriodStartOn: statement.reportingPeriodStartOn,
       reportingPeriodEndOn: getEffectiveReportingPeriodEndOn(statement),
@@ -206,7 +204,7 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
         ? creditsIssuedAt
         : null,
     };
-  }
+  }));
   return {
     creditBatchId,
     facilityId: rollup.batch.facilityId,
@@ -221,7 +219,7 @@ async function loadCreditBatchPageModel(ctx: OrgContext, creditBatchId: string, 
     milestones: {
       firstRemovalSubmittedAt: firstSubmitted?.submittedAt ?? null,
       firstRemovalSubmittedCode: firstSubmitted?.code ?? null,
-      ghgStatement,
+      ghgStatements,
     },
   };
 }

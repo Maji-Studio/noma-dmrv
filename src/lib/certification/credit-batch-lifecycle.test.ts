@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
+import { batchStatementStatus } from "./credit-batch-statements";
+import type { DerivedStatusKind } from "./status";
 import { deriveCreditBatchLifecycle } from "./credit-batch-lifecycle";
 
 function summary(
@@ -134,6 +136,23 @@ describe("deriveCreditBatchLifecycle", () => {
 
     expect(lifecycle.label).toBe("In verification");
     expect(lifecycle.currentStep).toBe("removal-submitted");
+  });
+
+  it.each([
+    { kinds: [null, "issued"], label: "Credits issued", step: "credits-issued", failed: false },
+    { kinds: ["in-verification", "issued"], label: "Credits issued", step: "credits-issued", failed: false },
+    { kinds: ["issued", "verification-failed"], label: "Verification failed", step: "verified", failed: true },
+    { kinds: ["pending-changes", "verified"], label: "Verified", step: "verified", failed: false },
+  ] satisfies { kinds: (DerivedStatusKind | null)[]; label: string; step: string; failed: boolean }[])("uses the aggregate across holders: $kinds", ({ kinds, label, step, failed }) => {
+    const statement = batchStatementStatus(kinds.map((kind, index) => ({
+      id: `holder-${index}`, createdAt: new Date(index === 0 ? "2026-07-02" : "2026-07-01"),
+      ghgStatementId: kind ? `statement-${index}` : null,
+      ghgStatementStatus: kind ? { kind, value: "pending" as const, label: kind, isActionable: false, isTerminal: false } : null,
+    })));
+    const aggregated = summary({ ghgStatementId: statement?.id ?? null, ghgStatementStatus: statement?.status ?? null });
+    expect(deriveCreditBatchLifecycle(aggregated)).toMatchObject({ label, currentStep: step, currentStepFailed: failed });
+    expect(deriveCreditBatchLifecycle({ ...aggregated, removalInterrupted: true }))
+      .toMatchObject({ label: "Submission interrupted", currentStep: "open", currentStepFailed: true });
   });
 
   it("reserves the final success milestone for issued credits", () => {

@@ -68,11 +68,12 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
 
 function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
-  const statement = model.milestones.ghgStatement;
-  if (!statement) return null;
+  const statements = model.milestones.ghgStatements;
+  if (statements.length === 0) return null;
   return (
     <PagePanel title="GHG Statement" labelledBy="credit-batch-ghg-statement">
-      <Link
+      {statements.map(statement => <Link
+        key={statement.id}
         href={recordHref("ghgStatement", statement.id, { facilityId: batch.facilityId })}
         className={cn("group flex min-h-44 flex-wrap items-center justify-between gap-12", FOCUS_RING)}
       >
@@ -80,7 +81,7 @@ function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
           GHG Statement {ghgStatementPeriodLabel(statement)}
         </span>
         <StatusBadge status={statement.status.value} label={statement.status.label} />
-      </Link>
+      </Link>)}
     </PagePanel>
   );
 }

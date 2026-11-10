@@ -71,6 +71,79 @@ describe("credit batch page model", () => {
     }
   });
 
+  it("lists two holders' statements by effective period with only this batch's dry mass", async () => {
+    const fixture = await createLineageFixture("none");
+    let extraRemovalId: string | undefined;
+    let extraApplicationId: string | undefined;
+    const statementIds: string[] = [];
+    try {
+      const [extraRemoval] = await insertRemovalFixture(db, {
+        organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+        startedOn: "2026-07-01", completedOn: "2026-07-31",
+      });
+      extraRemovalId = extraRemoval.id;
+      const [extraApplication] = await insertOutputApplicationFixture(db, [{
+        organizationId: TEST_ORG_ID, deliveryId: fixture.deliveryId,
+        code: `PAGE-SPLIT-${fixture.batchId}`, applicationDate: new Date("2026-06-17"),
+        fieldSizeHa: 1, biocharAppliedTons: 0.1, biocharAppliedDryTons: 0.05,
+      }], row => row);
+      extraApplicationId = extraApplication.id;
+      await db.insert(creditBatchApplications).values({
+        organizationId: TEST_ORG_ID, creditBatchId: fixture.batchId,
+        applicationId: extraApplication.id, allocatedWetMassKg: 100, allocatedDryMassKg: 50,
+        removalId: extraRemoval.id,
+      });
+      const statements = await db.insert(certifierGhgStatements).values([
+        { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+          reportingPeriodStartOn: "2026-06-01", reportingPeriodEndOn: "2026-06-30",
+          metadata: { [REMOTE_PERIOD_END_ON_METADATA_KEY]: "2026-08-31" } },
+        { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+          reportingPeriodStartOn: "2026-07-01", reportingPeriodEndOn: "2026-07-31" },
+      ]).returning();
+      statementIds.push(...statements.map(row => row.id));
+      for (const [index, removalId] of [fixture.removalId, extraRemoval.id].entries()) {
+        await db.update(certifierRemovals).set({ ghgStatementId: statements[index].id })
+          .where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, removalId)));
+      }
+      await db.insert(certificationSubmissions).values(statements.flatMap(statement => [
+        { organizationId: TEST_ORG_ID, provider: "isometric" as const, submissionType: "ghg_statement",
+          localEntityType: "ghgStatement", localEntityId: statement.id, version: 1,
+          status: "submitted" as const, payloadHash: "older", payloadSnapshot: {}, metadata: { remoteStatus: "AWAITING_VERIFICATION" } },
+        { organizationId: TEST_ORG_ID, provider: "isometric" as const, submissionType: "ghg_statement",
+          localEntityType: "ghgStatement", localEntityId: statement.id, version: 2,
+          status: "submitted" as const, payloadHash: "latest", payloadSnapshot: {}, metadata: { remoteStatus: "VERIFIED" } },
+      ]));
+      const model = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
+      expect(model.milestones.ghgStatements).toEqual([
+        expect.objectContaining({ id: statements[0].id, reportingPeriodEndOn: "2026-08-31", dryKg: 190, status: expect.objectContaining({ kind: "verified" }) }),
+        expect.objectContaining({ id: statements[1].id, reportingPeriodEndOn: "2026-07-31", dryKg: 50, status: expect.objectContaining({ kind: "verified" }) }),
+      ]);
+    } finally {
+      const removalIds = [fixture.removalId, ...(extraRemovalId ? [extraRemovalId] : [])];
+      await db.update(certifierRemovals).set({ ghgStatementId: null })
+        .where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), inArray(certifierRemovals.id, removalIds)));
+      if (statementIds.length) {
+        await db.delete(certificationSubmissions).where(and(
+          eq(certificationSubmissions.organizationId, TEST_ORG_ID),
+          eq(certificationSubmissions.localEntityType, "ghgStatement"),
+          inArray(certificationSubmissions.localEntityId, statementIds),
+        ));
+        await db.delete(certifierGhgStatements).where(and(
+          eq(certifierGhgStatements.organizationId, TEST_ORG_ID), inArray(certifierGhgStatements.id, statementIds),
+        ));
+      }
+      if (extraApplicationId) {
+        await db.delete(creditBatchApplications).where(and(
+          eq(creditBatchApplications.organizationId, TEST_ORG_ID), eq(creditBatchApplications.applicationId, extraApplicationId),
+        ));
+        await deleteOutputApplicationFixtures(db, eq(applications.id, extraApplicationId));
+      }
+      if (extraRemovalId) await db.delete(certifierRemovals)
+        .where(and(eq(certifierRemovals.organizationId, TEST_ORG_ID), eq(certifierRemovals.id, extraRemovalId)));
+      await cleanupLineageFixture(fixture);
+    }
+  });
+
   it("excludes an interrupted submitted Removal from the first-submitted milestone", async () => {
     const fixture = await createLineageFixture("none");
     try {
@@ -242,7 +315,7 @@ describe("credit batch page model", () => {
       expect(model.milestones).toEqual({
         firstRemovalSubmittedAt: submittedAt,
         firstRemovalSubmittedCode: submitted.code,
-        ghgStatement: null,
+        ghgStatements: [],
       });
 
       const [resubmission] = await db.insert(certificationSubmissions).values({
@@ -314,15 +387,16 @@ describe("credit batch page model", () => {
         metadata: { remoteStatus: "AWAITING_VERIFICATION", submittedToVerifierAt },
       });
       const statementModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
-      expect(statementModel.milestones.ghgStatement).toEqual({
+      expect(statementModel.milestones.ghgStatements).toEqual([{
         id: statement.id,
+        dryKg: 0.1,
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
         status: expect.objectContaining({ kind: "in-verification", value: "pending", label: "In verification" }),
         submittedToVerifierAt,
         creditsIssuedAt: null,
-      });
+      }]);
 
       await db.update(certifierGhgStatements).set({
         reportingPeriodStartOn: "2026-06-01",
@@ -332,11 +406,11 @@ describe("credit batch page model", () => {
         },
       }).where(eq(certifierGhgStatements.id, statement.id));
       const updatedModel = await getCreditBatchPageModel(makeTestOrgContext(), fixture.batchId);
-      expect(updatedModel.milestones.ghgStatement).toMatchObject({
+      expect(updatedModel.milestones.ghgStatements).toMatchObject([{
         reportingPeriodStartOn: "2026-06-01",
         reportingPeriodEndOn: "2026-07-31",
         hasMissingPeriod: true,
-      });
+      }]);
       await expect(getCreditBatchPageModel({
         ...makeTestOrgContext(),
         organizationId: "another-org",

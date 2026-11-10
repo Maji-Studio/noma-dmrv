@@ -105,6 +105,20 @@ export async function getCertifierGhgStatementById(
   return row ?? null;
 }
 
+export async function getCertifierGhgStatementsByIds(
+  ctx: OrgContext,
+  ids: string[],
+  executor: GhgStatementExecutor = db,
+): Promise<CertifierGhgStatementRow[]> {
+  requireOrgScope(ctx);
+  if (ids.length === 0) return [];
+  return executor.select().from(certifierGhgStatements)
+    .where(and(
+      inArray(certifierGhgStatements.id, ids),
+      eq(certifierGhgStatements.organizationId, ctx.organizationId),
+    ));
+}
+
 export async function listGhgStatementsForFacility(
   ctx: OrgContext,
   facilityId: string,

@@ -452,8 +452,8 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
 /** Items the batch is waiting on. They need the page model and never count as to-dos. */
 export function buildCreditBatchWaitingItems(pageModel: CreditBatchPageModel | undefined): CreditBatchOpenItem[] {
   const waiting: CreditBatchOpenItem[] = [];
-  const statement = pageModel?.milestones.ghgStatement;
-  if (statement?.status.kind === "in-verification") {
+  for (const statement of pageModel?.milestones.ghgStatements ?? []) {
+    if (statement.status.kind !== "in-verification") continue;
     waiting.push({
       id: `verification:${statement.id}`,
       title: `GHG Statement ${ghgStatementPeriodLabel(statement)}: In verification`,
