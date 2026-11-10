@@ -1,7 +1,10 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { API_RECORD_PURGE_BATCH_SIZE } from "@/config/operations";
 import { RATE_LIMIT_IDLE_RETENTION_MS, RATE_LIMIT_SECONDS_PER_MINUTE } from "@/config/api-rate-limits";
+
+// Allow floating-point rounding across refused-consume accrual snapshots.
+const REFUND_TOKEN_TOLERANCE = 1e-9;
 
 export interface RateLimitBucket {
   key: string;
@@ -12,6 +15,8 @@ export interface RateLimitResult {
   allowed: boolean;
   /** Exact database timestamp text preserves sub-millisecond precision for refunds. */
   debitRefilledAt: string;
+  /** Exact post-consume balance, before rounding, for refund projections. */
+  debitTokens: number;
   limit: number;
   remaining: number;
   /** Seconds until the bucket is full again. */
@@ -27,6 +32,13 @@ function assertValidBucket(bucket: RateLimitBucket, cost: number): void {
   }
 }
 
+function availableTokens(bucket: RateLimitBucket, tokens: SQL, refilledAt: SQL, instant: SQL): SQL {
+  return sql`
+    least(${bucket.capacity}::double precision, ${tokens} +
+      greatest(0, extract(epoch from (${instant} - ${refilledAt}))) *
+      ${bucket.refillPerMinute}::double precision / ${RATE_LIMIT_SECONDS_PER_MINUTE})`;
+}
+
 // org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
 export async function consumeRateLimit(
   bucket: RateLimitBucket,
@@ -37,10 +49,9 @@ export async function consumeRateLimit(
   const { key, capacity, refillPerMinute } = bucket;
   // Production uses the database clock; tests inject a clock without sleeping.
   const instant = now ? sql`${now.toISOString()}::timestamptz` : sql`statement_timestamp()`;
-  const available = (row: "api_rate_limit_buckets" | "previous") => sql`
-    least(${capacity}::double precision, ${sql.raw(`${row}.tokens`)} +
-      greatest(0, extract(epoch from (${instant} - ${sql.raw(`${row}.refilled_at`)}))) *
-      ${refillPerMinute}::double precision / ${RATE_LIMIT_SECONDS_PER_MINUTE})`;
+  const available = (row: "api_rate_limit_buckets" | "previous") => availableTokens(
+    bucket, sql.raw(`${row}.tokens`), sql.raw(`${row}.refilled_at`), instant,
+  );
   // PostgreSQL 18's OLD/NEW RETURNING aliases expose the row locked by the
   // upsert, including after a concurrent debit. No snapshot pre-read can race.
   const result = await db.execute<{
@@ -66,6 +77,7 @@ export async function consumeRateLimit(
   return {
     allowed: row.allowed,
     debitRefilledAt: row.debit_refilled_at,
+    debitTokens: row.tokens,
     limit: capacity,
     remaining: Math.floor(row.tokens),
     resetSeconds: Math.ceil(
@@ -78,17 +90,27 @@ export async function consumeRateLimit(
 }
 
 /**
- * Return only the matching debit without resetting refill time or creating a bucket.
- * An intervening refused consume can advance refilled_at and cancel the refund (fail closed).
+ * Refund a debit across refused consumes without resetting refill time or creating a bucket.
+ * A newer admitted debit blocks the refund while the balance is below the original projection.
  */
 // org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
-export async function refundRateLimit(bucket: RateLimitBucket, debitRefilledAt: string, cost = 1): Promise<void> {
+export async function refundRateLimit(
+  bucket: RateLimitBucket,
+  debit: { refilledAt: string; tokens: number },
+  cost = 1,
+  now?: Date,
+): Promise<void> {
   assertValidBucket(bucket, cost);
   const { key, capacity } = bucket;
+  const instant = now ? sql`${now.toISOString()}::timestamptz` : sql`statement_timestamp()`;
+  const available = availableTokens(bucket, sql`tokens`, sql`refilled_at`, instant);
+  const projected = availableTokens(
+    bucket, sql`${debit.tokens}::double precision`, sql`${debit.refilledAt}::timestamptz`, instant,
+  );
   await db.execute(sql`
     update api_rate_limit_buckets
     set tokens = least(${capacity}::double precision, tokens + ${cost}::double precision)
-    where bucket_key = ${key} and refilled_at = ${debitRefilledAt}::timestamptz
+    where bucket_key = ${key} and ${available} >= ${projected} - ${REFUND_TOKEN_TOLERANCE}::double precision
   `);
 }
 

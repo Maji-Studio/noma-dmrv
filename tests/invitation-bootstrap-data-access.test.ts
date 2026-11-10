@@ -35,6 +35,7 @@ const INVITATION_ID = "invitation-123";
 const ORGANIZATION_ID = "organization-123";
 const USER_ID = "user-123";
 const DEBIT_REFILLED_AT = "2026-10-08 12:00:00.123456+00";
+const DEBIT_TOKENS = 0;
 
 function queueSelectResults(...results: unknown[][]) {
   for (const result of results) {
@@ -147,7 +148,7 @@ describe("invitation account state", () => {
   });
   it("consumes the password setup bucket for the invited user", async () => {
     queueSelectResults([validInvitation()], [{ id: USER_ID, emailVerified: false }]);
-    mockConsumeRateLimit.mockResolvedValue({ allowed: true, debitRefilledAt: DEBIT_REFILLED_AT });
+    mockConsumeRateLimit.mockResolvedValue({ allowed: true, debitRefilledAt: DEBIT_REFILLED_AT, debitTokens: DEBIT_TOKENS });
     const reservation = await consumeInvitationSetPasswordRateLimit(INVITATION_ID);
     const bucket = {
       key: `invitation-set-password:${USER_ID}`,
@@ -158,7 +159,7 @@ describe("invitation account state", () => {
     if (!reservation) throw new Error("Expected a password setup reservation.");
     const readsBeforeRefund = mockSelect.mock.calls.length;
     await reservation.refund();
-    expect(mockRefundRateLimit).toHaveBeenCalledExactlyOnceWith(bucket, DEBIT_REFILLED_AT);
+    expect(mockRefundRateLimit).toHaveBeenCalledExactlyOnceWith(bucket, { refilledAt: DEBIT_REFILLED_AT, tokens: DEBIT_TOKENS });
     expect(mockSelect).toHaveBeenCalledTimes(readsBeforeRefund);
   });
   it("returns no refund handle when the cooldown refuses a debit", async () => {
