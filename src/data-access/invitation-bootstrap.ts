@@ -126,7 +126,7 @@ export async function consumeInvitationSetPasswordRateLimit(
     ...INVITATION_SET_PASSWORD_RATE_LIMIT,
   };
   const result = await consumeRateLimit(bucket);
-  return result.allowed ? { refund: () => refundRateLimit(bucket) } : false;
+  return result.allowed ? { refund: () => refundRateLimit(bucket, result.debitRefilledAt) } : false;
 }
 
 // org-scope-ok: pre-sign-in lookup validates the invitation id, status and expiry.

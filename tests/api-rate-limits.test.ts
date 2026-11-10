@@ -11,6 +11,8 @@ const keys: string[] = [];
 const NOW = new Date("2026-10-08T12:00:00Z");
 const CAPACITY = 3;
 const CONCURRENT_DEBITS = 12;
+const COOLDOWN_MS = 60_000;
+const AFTER_COOLDOWN_MS = COOLDOWN_MS + 1_000;
 function bucket() {
   const key = `credential:${crypto.randomUUID()}:write`;
   keys.push(key);
@@ -24,7 +26,7 @@ it("allows capacity, refuses without debiting, then refills with an injected clo
   for (let remaining = CAPACITY - 1; remaining >= 0; remaining--) {
     expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: true, remaining, limit: CAPACITY });
   }
-  expect(await consumeRateLimit(target, 1, NOW)).toEqual({ allowed: false, remaining: 0, limit: CAPACITY, resetSeconds: 60, retryAfterSeconds: 20 });
+  expect(await consumeRateLimit(target, 1, NOW)).toEqual({ allowed: false, debitRefilledAt: expect.any(String), remaining: 0, limit: CAPACITY, resetSeconds: 60, retryAfterSeconds: 20 });
   expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + 20_000))).toMatchObject({ allowed: true, remaining: 0 });
   expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + 120_000))).toMatchObject({ allowed: true, remaining: 2 });
 });
@@ -46,10 +48,10 @@ it("concurrent debits on parallel pool connections never overspend", async () =>
 });
 it("refunds an empty bucket so an immediate consume is allowed", async () => {
   const target = bucket();
-  await consumeRateLimit(target, CAPACITY, NOW);
+  const debit = await consumeRateLimit(target, CAPACITY, NOW);
   expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: false });
 
-  await refundRateLimit(target);
+  await refundRateLimit(target, debit.debitRefilledAt);
 
   const [row] = await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key));
   expect(row.tokens).toBe(1);
@@ -58,10 +60,10 @@ it("refunds an empty bucket so an immediate consume is allowed", async () => {
 });
 it("caps refunds at capacity, including concurrent refunds on a full bucket", async () => {
   const target = bucket();
-  await consumeRateLimit(target, CAPACITY, NOW);
-  await refundRateLimit(target, CAPACITY);
+  const debit = await consumeRateLimit(target, CAPACITY, NOW);
+  await refundRateLimit(target, debit.debitRefilledAt, CAPACITY);
 
-  await Promise.all(Array.from({ length: CONCURRENT_DEBITS }, () => refundRateLimit(target)));
+  await Promise.all(Array.from({ length: CONCURRENT_DEBITS }, () => refundRateLimit(target, debit.debitRefilledAt)));
 
   const [row] = await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key));
   expect(row.tokens).toBe(CAPACITY);
@@ -70,9 +72,21 @@ it("caps refunds at capacity, including concurrent refunds on a full bucket", as
 it("does not create a missing bucket when refunding", async () => {
   const target = bucket();
 
-  await refundRateLimit(target);
+  await refundRateLimit(target, NOW.toISOString());
 
   expect(await db.select().from(apiRateLimitBuckets).where(eq(apiRateLimitBuckets.bucketKey, target.key))).toEqual([]);
+});
+it("does not refund an older debit after a refilled bucket is consumed again", async () => {
+  const target = { ...bucket(), capacity: 1, refillPerMinute: 1 };
+  const firstDebit = await consumeRateLimit(target, 1, NOW);
+  expect(firstDebit.allowed).toBe(true);
+  expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + COOLDOWN_MS)))
+    .toMatchObject({ allowed: true, remaining: 0 });
+
+  await refundRateLimit(target, firstDebit.debitRefilledAt);
+
+  expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + AFTER_COOLDOWN_MS)))
+    .toMatchObject({ allowed: false, remaining: 0 });
 });
 it("stores a hash and never the raw client IP", async () => {
   const ip = "192.0.2.123";
