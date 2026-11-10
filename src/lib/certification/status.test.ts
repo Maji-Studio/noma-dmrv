@@ -3,9 +3,22 @@ import {
   deriveRemovalStatus,
   deriveRemovalWorkflowStatus,
   deriveStatementStatus,
+  hasSubmittedRemoval,
   type LocalSubmissionStatus,
   type RemoteGhgStatus,
 } from "./status";
+
+describe("hasSubmittedRemoval", () => {
+  it("returns false for undefined, empty or draft-only holders", () => {
+    expect(hasSubmittedRemoval(undefined)).toBe(false);
+    expect(hasSubmittedRemoval([])).toBe(false);
+    expect(hasSubmittedRemoval([{ phase: "draft" }])).toBe(false);
+  });
+
+  it("returns true when any holder is submitted", () => {
+    expect(hasSubmittedRemoval([{ phase: "draft" }, { phase: "submitted" }])).toBe(true);
+  });
+});
 
 describe("deriveRemovalStatus", () => {
   it("reports an in-flight lock above any local status", () => {

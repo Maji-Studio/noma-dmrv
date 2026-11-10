@@ -144,6 +144,11 @@ export function findInterruptedRemoval<T extends { status: Pick<DerivedStatus, "
   return removals?.find((removal) => removal.status.kind === "interrupted");
 }
 
+/** Any Removal holding a credit batch counts as submitted (its phase): the batch-level rule the list, batch page and dashboard share. */
+export function hasSubmittedRemoval(removals: readonly { phase: "draft" | "submitted" }[] | undefined): boolean {
+  return removals?.some((removal) => removal.phase === "submitted") ?? false;
+}
+
 export interface RemovalReportingWindowDates {
   startedOn: string | null;
   completedOn: string | null;

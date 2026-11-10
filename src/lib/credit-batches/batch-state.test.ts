@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import { creditBatchStateOf } from "./batch-state";
+import { deriveCreditBatchLifecycle } from "@/lib/certification/credit-batch-lifecycle";
+import { deriveRemovalStatus, type LocalSubmissionStatus } from "@/lib/certification/status";
 
 const open: CreditBatchHealthSummary = {
   state: "incomplete",
@@ -12,11 +14,50 @@ const open: CreditBatchHealthSummary = {
   productionEmissionsClaimedByRemovalCode: null,
   removalStatus: null,
   removalInterrupted: false,
+  hasSubmittedRemoval: false,
   ghgStatementId: null,
   ghgStatementStatus: null,
 };
 
 describe("creditBatchStateOf", () => {
+  it.each<{
+    holder: string;
+    newest: LocalSubmissionStatus;
+    hasSubmittedRemoval: boolean;
+    inFlight?: boolean;
+    interrupted?: boolean;
+    ready?: boolean;
+  }>([
+    { holder: "only newest submitted", newest: "submitted", hasSubmittedRemoval: true },
+    { holder: "older submitted and newer draft", newest: "draft", hasSubmittedRemoval: true },
+    { holder: "older submitted and newer rejected", newest: "rejected", hasSubmittedRemoval: true },
+    { holder: "older submitted and newer superseded", newest: "superseded", hasSubmittedRemoval: true },
+    { holder: "older submitted and newer in progress", newest: "draft", inFlight: true, hasSubmittedRemoval: true },
+    { holder: "interrupted and submitted holders", newest: "submitted", hasSubmittedRemoval: true, interrupted: true },
+    { holder: "no submitted holder, ready", newest: "draft", hasSubmittedRemoval: false, ready: true },
+    { holder: "no submitted holder, incomplete", newest: "draft", hasSubmittedRemoval: false },
+  ])("uses the batch phase for $holder", ({ newest, hasSubmittedRemoval, inFlight = false, interrupted = false, ready = false }) => {
+    const input: CreditBatchHealthSummary = {
+      ...open,
+      state: ready ? "ready" : "incomplete",
+      issueCount: ready ? 0 : open.issueCount,
+      removalId: "newest-holder",
+      removalStatus: deriveRemovalStatus({ local: newest, lockInFlight: inFlight }),
+      removalInterrupted: interrupted,
+      hasSubmittedRemoval,
+    };
+    expect(creditBatchStateOf(input)).toEqual({
+      state: interrupted ? "interrupted" : hasSubmittedRemoval ? "submitted" : ready ? "ready" : "blocking",
+      blockingCount: interrupted || !hasSubmittedRemoval && !ready ? open.issueCount : 0,
+      openTodoCount: interrupted || !hasSubmittedRemoval && !ready ? open.issueCount + open.checkCount : 0,
+    });
+    expect(deriveCreditBatchLifecycle(input)).toMatchObject({
+      currentStep: interrupted || !hasSubmittedRemoval ? "open" : "removal-submitted",
+      currentStepFailed: interrupted,
+      label: interrupted ? "Submission interrupted" : hasSubmittedRemoval ? "Removal submitted" : ready ? "Batch data ready" : "Open",
+    });
+  });
+
   it("has no state before readiness loads", () => {
     expect(creditBatchStateOf(undefined)).toEqual({ state: null, blockingCount: 0, openTodoCount: 0 });
   });

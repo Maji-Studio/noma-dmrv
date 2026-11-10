@@ -6,7 +6,7 @@ import { CreditBatchTimeline } from "./credit-batch-timeline";
 vi.mock("@/hooks/use-certification", () => ({
   useCreditBatchHealthSummaries: () => ({ data: { batch: {
     state: "incomplete", issueCount: 2, checkCount: 1, linesToDecide: 0,
-    removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true,
+    removalId: "interrupted", removalCode: "RM-26-001", removalStatus: null, removalInterrupted: true, hasSubmittedRemoval: false,
     productionEmissionsClaimedByRemovalCode: null, ghgStatementId: null, ghgStatementStatus: null,
   } } }),
 }));

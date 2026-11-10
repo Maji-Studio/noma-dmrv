@@ -128,27 +128,27 @@ describe("deriveTimelineState", () => {
     expect(deriveTimelineState(null)).toBeNull();
   });
   it("is blocking when readiness has unmet checks", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0, healthState: "incomplete", blockingCount: 2 })).toBe("blocking");
+    expect(deriveTimelineState({ ...base, currentStep: "open", healthState: "incomplete", blockingCount: 2 })).toBe("blocking");
   });
   it("is ready with nothing blocking", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0 })).toBe("ready");
+    expect(deriveTimelineState({ ...base, currentStep: "open" })).toBe("ready");
   });
   it("is submitted once a Removal is submitted, even with open items", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 1, healthState: "incomplete", blockingCount: 1 })).toBe("submitted");
+    expect(deriveTimelineState({ ...base, currentStep: "removal-submitted", healthState: "incomplete", blockingCount: 1 })).toBe("submitted");
   });
   it("is issued when credits are issued", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 3 })).toBe("issued");
+    expect(deriveTimelineState({ ...base, currentStep: "credits-issued" })).toBe("issued");
   });
   it("is open when verification failed, even with no missing data", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 2, lifecycleFailed: true })).toBe("blocking");
+    expect(deriveTimelineState({ ...base, currentStep: "verified", lifecycleFailed: true })).toBe("blocking");
   });
   it("is interrupted when any holding Removal is, over every other state", () => {
-    expect(deriveTimelineState({ ...base, removalInterrupted: true, lifecycleStepIndex: 1 })).toBe("interrupted");
-    expect(deriveTimelineState({ ...base, removalInterrupted: true, lifecycleStepIndex: 0, healthState: "incomplete", blockingCount: 2 })).toBe("interrupted");
+    expect(deriveTimelineState({ ...base, removalInterrupted: true, currentStep: "removal-submitted" })).toBe("interrupted");
+    expect(deriveTimelineState({ ...base, removalInterrupted: true, currentStep: "open", healthState: "incomplete", blockingCount: 2 })).toBe("interrupted");
   });
   it("keeps the data readiness for a rejected Removal", () => {
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0, lifecycleFailed: true })).toBe("ready");
-    expect(deriveTimelineState({ ...base, lifecycleStepIndex: 0, lifecycleFailed: true, healthState: "incomplete", blockingCount: 1 })).toBe("blocking");
+    expect(deriveTimelineState({ ...base, currentStep: "open", lifecycleFailed: true })).toBe("ready");
+    expect(deriveTimelineState({ ...base, currentStep: "open", lifecycleFailed: true, healthState: "incomplete", blockingCount: 1 })).toBe("blocking");
   });
 });
 
