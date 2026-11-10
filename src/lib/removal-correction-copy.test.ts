@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { changedComponentNames, correctionStatementHref, correctionStatementLabel, correctionStatus, joinWithAnd, removalResubmitHref, returnedStatementPhrase } from "./removal-correction-copy";
+import { changedComponentNames, correctionStatementHref, correctionStatementLabel, joinWithAnd, removalResubmitHref, returnedStatementPhrase } from "./removal-correction-copy";
 
 const correction = (overrides: Partial<RemovalCorrection> = {}): RemovalCorrection => ({
   removalId: "removal-1", removalCode: "RM-26-001", windowOpen: true, resubmitNeeded: false,
@@ -9,11 +9,6 @@ const correction = (overrides: Partial<RemovalCorrection> = {}): RemovalCorrecti
 });
 
 describe("removal correction copy", () => {
-  it("names the status by whether a sent fact changed", () => {
-    expect(correctionStatus(correction())).toEqual({ value: "pending", label: "Correction needed" });
-    expect(correctionStatus(correction({ resubmitNeeded: true }))).toEqual({ value: "pending", label: "Resubmit needed" });
-  });
-
   it("words the statement from its period, or its end alone before the start is known", () => {
     expect(correctionStatementLabel(correction().statement)).toBe("GHG Statement Jul 1 to Sep 30, 2026");
     expect(correctionStatementLabel({ ...correction().statement, reportingPeriodStartOn: null })).toBe("GHG Statement ending Sep 30, 2026");

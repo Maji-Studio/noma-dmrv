@@ -4,7 +4,6 @@ import type { RemovalPreflightSummary } from "@/fn/certification/overview";
 import {
   buildRemovalListRows,
   canDeleteRemovalRow,
-  listStatusLabel,
   removalDeletionTouchesRegistry,
 } from "./removal-list-state";
 
@@ -269,21 +268,5 @@ describe("removalDeletionTouchesRegistry", () => {
     expect(removalDeletionTouchesRegistry(LOCAL_ROW, { hasRegisteredProductionBatches: true })).toBe(true);
     expect(removalDeletionTouchesRegistry({ ...LOCAL_ROW, registryBoundaryOpened: true })).toBe(true);
     expect(removalDeletionTouchesRegistry({ ...LOCAL_ROW, local: "rejected" })).toBe(true);
-  });
-});
-
-describe("listStatusLabel", () => {
-  it("counts a blocked draft's reasons as what to fix", () => {
-    expect(listStatusLabel({ kind: "blocked", label: "Needs attention", reasons: ["A.", "B.", "C."] })).toBe("3 to fix");
-    expect(listStatusLabel({ kind: "blocked", label: "Needs attention", reasons: ["A."] })).toBe("1 to fix");
-  });
-
-  it("reads the fix count the review lists when it differs from the reasons", () => {
-    expect(listStatusLabel({ kind: "blocked", label: "Needs attention", reasons: ["A.", "B.", "C.", "D.", "E."], fixCount: 1 })).toBe("1 to fix");
-  });
-
-  it("keeps every other state's own label", () => {
-    expect(listStatusLabel({ kind: "ready", label: "Ready to submit", reasons: [] })).toBe("Ready to submit");
-    expect(listStatusLabel({ kind: "interrupted", label: "Submission interrupted", reasons: ["Retry."] })).toBe("Submission interrupted");
   });
 });

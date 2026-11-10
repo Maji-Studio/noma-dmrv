@@ -179,3 +179,7 @@ A PR is done when its local review rounds are recorded under `## Reviewed before
 4. Send the link in your report. On a permission denial at merge, give Kenji the exact `! <command>`.
 
 When a merge batch ends and no subagent is running, propose `/handoff`.
+
+## Commands for Kenji
+
+Before handing Kenji a command or script, run that exact invocation in its dry form (`--dry-run`, `--check`, or `--help` when nothing drier exists) from the checkout he will run it in, and read the output. The run catches what `bash -n` cannot: a script that exists only on an unmerged branch, imports that resolve only from your cwd, a dry run that exits non-zero. Scripts for him live in the repo's `.scratchpad/` (gitignored), where the repo's modules resolve.

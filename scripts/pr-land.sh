@@ -19,18 +19,18 @@ EMPTY_CHECK_GRACE_SECONDS=120
 QUEUE_POLL_INTERVAL_SECONDS="${PR_LAND_POLL_INTERVAL_SECONDS:-30}"
 QUEUE_TIMEOUT_SECONDS=3600
 QUEUE_APPEARANCE_GRACE_POLLS=2
-GH_CHECKS_FAILURE_STATUS=1
-GH_CHECKS_PENDING_STATUS=8
 EXIT_FAILURE=1
 EXIT_USAGE=2
 EXIT_HEAD_MOVED=3
 EXIT_TIMEOUT=4
+EXIT_TEARDOWN_FAILED=5
 PR_NUMBER_PATTERN='^[1-9][0-9]*$'
 POSITIVE_INTEGER_PATTERN='^[1-9][0-9]*$'
 WORKTREE_NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
 QUEUE_QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){state isInMergeQueue mergeCommit{oid} timelineItems(itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT],last:1){nodes{... on RemovedFromMergeQueueEvent{reason createdAt}}}}}}'
 ENQUEUE_MUTATION='mutation($id:ID!,$sha:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha}){mergeQueueEntry{state position}}}'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/pr-checks.sh"
 MAIN_CHECKOUT="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
 
 usage() {
@@ -43,7 +43,8 @@ head and CI wait, then enqueue. Watch for MERGED. Already queued PRs go
 straight to watching, without merging or pushing. Never runs tests or deletes
 branches itself. Open dependent PRs produce a warning to retarget them to staging.
 
-  --teardown <name>  Run scripts/worktree.sh teardown <name> only after MERGED.
+  --teardown <name>  Run scripts/worktree.sh teardown <name> only after MERGED,
+                     including reruns on an already-merged PR.
   --dry-run          Read current state and print proposed actions, then exit 0.
                      Does not fetch, merge, push, enqueue, watch, or tear down.
                      Uses GitHub's merge state and the current local SHA;
@@ -55,11 +56,11 @@ The queue watch and CI wait each time out after 60 minutes.
 
 Exit codes:
   0  MERGED, or a completed dry-run/help request
-  1  Closed/merged input, failed CI, conflict, queue removal, or command failure
+  1  Closed input, merged input without teardown, failed CI, conflict, queue removal, or command failure
   2  Invalid arguments, configuration, or missing dependency
   3  Head changed while waiting or preparing to enqueue
   4  Merge state, head sync, checks, missing-check grace, or queue watch timed out
-Teardown failures are reported as exit 1, after printing the merge commit.
+  5  MERGED, but requested teardown is still owed (any cause)
 EOF
 }
 
@@ -67,17 +68,17 @@ die() { printf 'pr-land: %s\n' "$2" >&2; exit "$1"; }
 info() { printf 'pr-land: %s\n' "$*"; }
 
 read_queue() {
-  local response
+  local response failure_code="${1:-$EXIT_FAILURE}"
   # gh api has no --repo flag. Scope GraphQL explicitly from REPO instead.
   response="$(GH_REPO="$REPO" gh api graphql -f query="$QUEUE_QUERY" \
     -f owner="$OWNER" -f name="$NAME" -F number="$PR")" ||
-    die "$EXIT_FAILURE" "could not read #$PR queue state"
+    die "$failure_code" "could not read #$PR queue state"
   QUEUE_JSON="$(printf '%s\n' "$response" | jq -ce '
     if (.errors | length) > 0 then error("GraphQL errors")
     else .data.repository.pullRequest |
       select((.state == "OPEN" or .state == "CLOSED" or .state == "MERGED") and
         (.isInMergeQueue == true or .isInMergeQueue == false)) end')" ||
-    die "$EXIT_FAILURE" "invalid queue response for #$PR"
+    die "$failure_code" "invalid queue response for #$PR"
 }
 
 read_pr() {
@@ -87,21 +88,8 @@ read_pr() {
 }
 
 read_checks() {
-  local status=0
-  CHECKS_JSON="$(gh pr checks "$PR" --repo "$REPO" --required --json name,bucket,state 2>&1)" || status=$?
-  case "$status" in
-    0|"$GH_CHECKS_FAILURE_STATUS"|"$GH_CHECKS_PENDING_STATUS") ;;
-    *) die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON" ;;
-  esac
-  # gh prints a message instead of [] before checks exist (with --required: "no required checks ...").
-  case "$CHECKS_JSON" in
-    'no checks reported on '*|'no required checks reported on '*) CHECKS_JSON='[]' ;;
-  esac
-  printf '%s\n' "$CHECKS_JSON" | jq -e '
-    type == "array" and all(.[];
-      (.bucket == "pass" or .bucket == "fail" or .bucket == "pending" or
-       .bucket == "skipping" or .bucket == "cancel"))' >/dev/null ||
-    die "$EXIT_FAILURE" "could not read checks for #$PR: $CHECKS_JSON"
+  CHECKS_JSON="$(read_required_checks "$PR" "$REPO")" ||
+    die "$EXIT_FAILURE" "could not read checks for #$PR"
 }
 
 checks_summary() {
@@ -115,9 +103,37 @@ print_failures() {
     .[] | select(.bucket == "fail" or .bucket == "cancel") | "  \(.name) (\(.bucket))"'
 }
 
+finish_merged() {
+  local oid
+  oid="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.mergeCommit.oid // empty')"
+  if [ "$DRY_RUN" = 1 ]; then
+    info "#$PR MERGED: ${oid:-merge commit oid unavailable}"
+    info "would tear down $TEARDOWN from $MAIN_CHECKOUT after reading the merge commit oid"
+    return 0
+  fi
+  if [ -z "$oid" ]; then
+    if [ -n "$TEARDOWN" ]; then
+      die "$EXIT_TEARDOWN_FAILED" "#$PR merged but its merge commit oid is unavailable; teardown of $TEARDOWN is still owed"
+    fi
+    die "$EXIT_FAILURE" "#$PR is MERGED but its merge commit oid is unavailable"
+  fi
+  info "#$PR MERGED: $oid"
+  if [ -n "$TEARDOWN" ]; then
+    # worktree.sh refuses to run from inside its target, so run it from the main checkout.
+    (cd "$MAIN_CHECKOUT" && "$SCRIPT_DIR/worktree.sh" teardown "$TEARDOWN") ||
+      die "$EXIT_TEARDOWN_FAILED" "#$PR merged at $oid, but teardown of $TEARDOWN failed"
+  fi
+}
+
 refuse_closed() {
   local state
-  state="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.state')"
+  state="${1:-$(printf '%s\n' "$QUEUE_JSON" | jq -r '.state')}"
+  if [ "$state" = MERGED ] && [ -n "$TEARDOWN" ]; then
+    # PR reads omit mergeCommit; refresh queue details when called with PR state.
+    if [ "$#" -gt 0 ]; then read_queue "$EXIT_TEARDOWN_FAILED"; fi
+    finish_merged
+    exit 0
+  fi
   [ "$state" = OPEN ] || die "$EXIT_FAILURE" "#$PR state is $state; refusing to land it"
 }
 
@@ -144,21 +160,14 @@ wait_for_merge_state() {
 }
 
 watch_queue() {
-  local grace_polls="$1" deadline state queued reason created_at oid
+  local grace_polls="$1" deadline state queued reason created_at
   deadline=$((SECONDS + QUEUE_TIMEOUT_SECONDS))
   while true; do
     read_queue
     state="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.state')"
     queued="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.isInMergeQueue')"
     if [ "$state" = MERGED ]; then
-      oid="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.mergeCommit.oid // empty')"
-      [ -n "$oid" ] || die "$EXIT_FAILURE" "#$PR is MERGED but its merge commit oid is unavailable; teardown skipped"
-      info "#$PR MERGED: $oid"
-      if [ -n "$TEARDOWN" ]; then
-        # worktree.sh refuses to run from inside its target, so run it from the main checkout.
-        (cd "$MAIN_CHECKOUT" && "$SCRIPT_DIR/worktree.sh" teardown "$TEARDOWN") ||
-          die "$EXIT_FAILURE" "#$PR merged at $oid, but teardown of $TEARDOWN failed"
-      fi
+      finish_merged
       return 0
     fi
     if [ "$queued" = true ]; then
@@ -226,7 +235,7 @@ ensure_pr_head() {
   read_pr
   head="$(printf '%s\n' "$PR_JSON" | jq -r '.headRefOid')"
   state="$(printf '%s\n' "$PR_JSON" | jq -r '.state')"
-  [ "$state" = OPEN ] || die "$EXIT_FAILURE" "#$PR state is $state; stopping"
+  refuse_closed "$state"
   [ "$head" = "$LOCAL_HEAD" ] ||
     die "$EXIT_HEAD_MOVED" "#$PR head moved to $head; expected $LOCAL_HEAD; stopping"
 }
@@ -275,7 +284,7 @@ wait_for_head() {
     ensure_local_head
     read_pr
     state="$(printf '%s\n' "$PR_JSON" | jq -r '.state')"
-    [ "$state" = OPEN ] || die "$EXIT_FAILURE" "#$PR state is $state; stopping"
+    refuse_closed "$state"
     head="$(printf '%s\n' "$PR_JSON" | jq -r '.headRefOid')"
     [ "$head" != "$LOCAL_HEAD" ] || return 0
     [ "$SECONDS" -lt "$deadline" ] ||

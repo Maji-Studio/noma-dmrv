@@ -13,7 +13,19 @@ import { parseArgs, run } from "./review-runtime.mjs";
 import { discoverSpec } from "./review-spec.mjs";
 import { checkLocalWorktree, resolveLocalTarget, verifyLocalHead } from "./review-target.mjs";
 
+const LOCAL_TIMEOUT_MINUTES = 40;
+const PR_TIMEOUT_MINUTES = 20;
+const OVERRIDE_TIMEOUT_MINUTES = 7;
+
 function testArgsAndProfiles() {
+  equal(parseArgs(["--local", "--plan"]).timeoutMinutes, LOCAL_TIMEOUT_MINUTES);
+  equal(parseArgs(["--pr", "123", "--plan"]).timeoutMinutes, PR_TIMEOUT_MINUTES);
+  for (const target of [["--local"], ["--pr", "123"]]) {
+    for (const args of [
+      ["--timeout-minutes", String(OVERRIDE_TIMEOUT_MINUTES), ...target, "--plan"],
+      [...target, "--plan", "--timeout-minutes", String(OVERRIDE_TIMEOUT_MINUTES)],
+    ]) equal(parseArgs(args).timeoutMinutes, OVERRIDE_TIMEOUT_MINUTES);
+  }
   for (const mode of ["--plan", "--dry-run"]) {
     const options = parseArgs(["--local", mode, "--issue", "123", "--prior", "one.json", "--prior", "two.json"]);
     equal(options.local, true);

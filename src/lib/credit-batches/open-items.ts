@@ -1,3 +1,4 @@
+import { ASK_ADMIN_TO_DELETE, CHANGED_FACT, CHANGED_SINCE_REVIEW_LABEL, FINALIZED_NO_DELETE, OPEN_REMOVAL_TO_DELETE, REMOVAL_BEING_DELETED } from "@/lib/certification/interrupted-removal-copy";
 import { recordHref } from "@/lib/record-links";
 import { MIN_VISIBLE_NOT_APPLIED_DRY_KG } from "./application-mass";
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
@@ -78,12 +79,17 @@ export interface CreditBatchOpenItemsInput {
   facilityId: string;
   creditBatchId: string;
   health?: BatchHealth;
-  removals?: readonly Pick<CreditBatchPageModel["removals"][number], "id" | "code" | "status">[];
+  removals?: readonly (Pick<CreditBatchPageModel["removals"][number], "id" | "code" | "status"> & {
+    finalized?: true;
+    changedSinceReview?: true;
+    deletionInProgress?: true;
+  })[];
   durability?: DurabilityBatchSummary;
   emissionLines?: readonly BatchEmissionLine[];
   missingProductionRuns?: CreditBatchMissingProductionRuns;
   /** Admin. Members get no link to decide components, which only Admins can do. */
   canManage: boolean;
+  canDeleteRegistryRemovals?: boolean;
 }
 
 function outlierTitle(replicate: DurabilitySummaryReplicate): string {
@@ -415,6 +421,19 @@ export function buildCreditBatchOpenItems(input: CreditBatchOpenItemsInput) {
 
   for (const removal of input.removals ?? []) {
     if (removal.status.kind !== "interrupted") continue;
+    if (removal.changedSinceReview) {
+      check.push({
+        id: `interrupted:${removal.id}`,
+        title: `${removal.code}: ${CHANGED_SINCE_REVIEW_LABEL}`,
+        detail: CHANGED_FACT,
+        instruction: removal.finalized ? FINALIZED_NO_DELETE
+          : removal.deletionInProgress ? REMOVAL_BEING_DELETED
+          : input.canDeleteRegistryRemovals ? OPEN_REMOVAL_TO_DELETE
+          : ASK_ADMIN_TO_DELETE,
+        target: { href: recordHref("removal", removal.id, { facilityId: input.facilityId }) },
+      });
+      continue;
+    }
     check.push({
       id: `interrupted:${removal.id}`,
       title: `${removal.code}: ${REMOVAL_SUBMISSION_INTERRUPTED_LABEL}`,

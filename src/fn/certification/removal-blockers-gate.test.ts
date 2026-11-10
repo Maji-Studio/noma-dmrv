@@ -121,7 +121,7 @@ describe("Removal preflight", () => {
       entityReadinessIssues: [{ key: "sampleMoisture", label: "Sample moisture", fixTarget: "labSamples", affectedRecords: [] }],
       batchesWithSamples: [],
     }));
-    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityTier"]);
+    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityUnresolved"]);
     expect(blockers[1].fixTarget).toBe("labSamples");
   });
 
@@ -153,18 +153,37 @@ describe("Removal preflight", () => {
     const detail = "Delivery DL-1 has no proof of delivery.";
     const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "", fact: detail, detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
-      { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
+      { code: "buildRefused", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
     ]);
+  });
+
+  it.each([
+    ["shared targets", ["deliveryEvidence", "deliveryEvidence"], "deliveryEvidence"],
+    ["mixed targets", ["deliveryEvidence", "deliveryDistances"], null],
+  ] as const)("uses only the refused lineage blockers for %s", async (_label, targets, fixTarget) => {
+    const ctx = makeContext(undefined, { submissionLineageBlockers: targets.map((target, index) => ({
+      kind: "deliveryProof", instruction: "Attach evidence.", fact: "Missing evidence.",
+      detail: `Delivery DL-${index} needs attention.`, fixTarget: target,
+      record: { id: `delivery-${index}`, code: `DL-${index}` },
+    })) });
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(SafeError);
+    expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(build.SubmissionLineageError);
+    expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{
+      code: "buildRefused", fixTarget,
+      message: `Removal submission blocked:\n${ctx.submissionLineageBlockers.map(blocker => blocker.detail).join("\n")}`,
+    }]);
   });
 
   it.each([
     ["mass", "Removal submission blocked:\nProduction run PR-1 has no dry mass."],
     ["window", "The Removal reporting window is inverted."],
+    ["coincidentally equal lineage detail", "Delivery DL-1 has no proof of delivery."],
+    ["coincidentally equal aggregate", "Removal submission blocked:\nDelivery DL-1 has no proof of delivery."],
   ])("does not attribute a %s build error to an unrelated lineage blocker", async (_label, message) => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {
       const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.", fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
-      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
+      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "buildRefused", message, fixTarget: null }]);
     } finally { spy.mockRestore(); }
   });
 

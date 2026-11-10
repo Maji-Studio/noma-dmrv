@@ -3,7 +3,7 @@ import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { rpc, rpcBody } from "./helpers/mcp";
 /** Real keys and handlers. Not run by the implementation agent; needs the supervisor. */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { apiKeys, drivers, facilities, feedstocks, feedstockTypes, organizationApiAccess, storageLocations, supplierLocations, suppliers, vehicles } from "@/db/schema";
@@ -78,12 +78,19 @@ const collections = [
 
 describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
   it("matches whoami to REST with the same key", async () => {
-    const response = await ME(lookupRequest("me", "", a.key));
-    expect(response.status).toBe(200);
-    const rest = await response.json();
-    const { result } = await call("whoami");
-    expect(result.structuredContent).toEqual(rest);
-    expect(result.content).toEqual([{ type: "text", text: toolText(`Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.`, rest) }]);
+    const now = new Date();
+    // Keep facility clocks identical while preserving real auth time and pg timers.
+    vi.useFakeTimers({ now, toFake: ["Date"] });
+    try {
+      const response = await ME(lookupRequest("me", "", a.key));
+      expect(response.status).toBe(200);
+      const rest = await response.json();
+      const { result } = await call("whoami");
+      expect(result.structuredContent).toEqual(rest);
+      expect(result.content).toEqual([{ type: "text", text: toolText(`Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.`, rest) }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get, summary }) => {
     const args = { q: PREFIX, limit: PAGE_SIZE };

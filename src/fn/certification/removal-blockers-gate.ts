@@ -10,7 +10,7 @@ import { durabilityConfigurationBlockers } from "@/lib/certification/submission-
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import type { RemovalSubmissionContext } from "@/lib/certification/certify-context-types";
 import { prepareRemovalSubmission, REMOVAL_PREPARATION_BLOCKERS, type RemovalPreparationBlocker } from "@/lib/certification/removal-submission-prepare";
-import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild } from "@/lib/certification/removal-submission-build";
+import { assertEntityReadinessGapsResolved, buildRemovalSubmissionBuild, SubmissionLineageError } from "@/lib/certification/removal-submission-build";
 
 function preparationBlocker(blocker: RemovalPreparationBlocker): RemovalBlocker {
   if (blocker.code === "noTemplate") {
@@ -43,7 +43,7 @@ export function collectContextRemovalBlockers(
   } catch (error) {
     if (!(error instanceof SafeError)) throw error;
     const targets = new Set(ctx.entityReadinessIssues?.map((issue) => issue.fixTarget));
-    blockers.push({ code: "entityReadiness", message: error.message, fixTarget: targets.size === 1 ? [...targets][0] : null });
+    blockers.push({ code: ctx.entityReadinessGaps === undefined ? "reviewIncomplete" : "entityReadiness", message: error.message, fixTarget: targets.size === 1 ? [...targets][0] : null });
   }
   const { prepared } = preparation;
   if (!prepared) {
@@ -59,7 +59,7 @@ export function collectContextRemovalBlockers(
   }
   if (options.beforeConfirmation) return blockers;
   if (!ctx.memberBatches.length) blockers.push(legacyBlocker("This Removal has no credit batches.", "batchDetails"));
-  if (!ctx.batchesWithSamples[0]?.durabilityOption) blockers.push({ code: "durabilityTier", message: "Facility durability tier could not be resolved. Reload and retry.", fixTarget: "certificationTemplates" });
+  if (!ctx.batchesWithSamples[0]?.durabilityOption) blockers.push({ code: "durabilityUnresolved", message: "Facility durability tier could not be resolved. Reload and retry.", fixTarget: "certificationTemplates" });
   return blockers;
 }
 
@@ -90,13 +90,11 @@ export async function evaluateRemovalBlockers(args: {
     await buildRemovalSubmissionBuild({ ...args, prepared, sourceIds: [] });
   } catch (error) {
     if (!(error instanceof SafeError)) throw error;
-    const lineage = args.ctx.submissionLineageBlockers;
-    // The build joins exactly these details for its lineage refusal. Other
-    // build errors must never inherit an unrelated lineage repair target.
-    const matchingLineage = lineage?.filter((blocker) => blocker.detail === error.message);
-    const matchesAggregate = lineage?.length && error.message === `Removal submission blocked:\n${lineage.map((blocker) => blocker.detail).join("\n")}`;
-    const targets = new Set((matchesAggregate ? lineage : matchingLineage)?.map((blocker) => blocker.fixTarget));
-    blockers.push(legacyBlocker(error.message, targets.size === 1 ? [...targets][0] : null));
+    // Other build errors must never inherit an unrelated lineage repair target.
+    const targets = new Set(error instanceof SubmissionLineageError
+      ? error.blockers.map((blocker) => blocker.fixTarget)
+      : []);
+    blockers.push({ code: "buildRefused", message: error.message, fixTarget: targets.size === 1 ? [...targets][0] : null });
   }
   return blockers;
 }
