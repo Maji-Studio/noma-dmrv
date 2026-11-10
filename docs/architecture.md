@@ -967,6 +967,17 @@ CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
 plain Actions secret. See [security.md](./security.md) → Secrets Management.
 
+### Vercel builds
+
+Vercel builds only `staging` (the staging deployment) and `main` (Production).
+The root `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore-build.sh`,
+which skips every other branch; feature-branch previews were most of the build
+bill and nothing consumed them. To get a preview for one branch, push a commit
+whose message contains `[preview]` (an empty commit works). Vercel reads the
+config from the commit it deploys, so a branch cut before this rule keeps
+building until it merges `staging`. The orphan `issue-assets` branch carries its
+own `vercel.json` with `git.deploymentEnabled: false`.
+
 ### Health failure response
 
 The Maji product owner owns triage of `storage-health.yml`, `isometric-health.yml` and
