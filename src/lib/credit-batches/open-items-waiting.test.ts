@@ -19,15 +19,16 @@ function pageModel(): CreditBatchPageModel {
     milestones: {
       firstRemovalSubmittedAt: null,
       firstRemovalSubmittedCode: null,
-      ghgStatement: {
+      ghgStatements: [{
         id: "statement",
+        dryKg: 50,
         reportingPeriodStartOn: null,
         reportingPeriodEndOn: "2026-06-30",
         hasMissingPeriod: false,
         status: { kind: "in-verification", value: "pending", label: "In verification", isActionable: false, isTerminal: false },
         submittedToVerifierAt: null,
         creditsIssuedAt: null,
-      },
+      }],
     },
   };
 }
@@ -51,8 +52,23 @@ describe("buildCreditBatchWaitingItems", () => {
       },
     ]);
     model.mass.notAppliedDryKg = null;
-    model.milestones.ghgStatement!.status = { kind: "verified", value: "verified", label: "Verified", isActionable: false, isTerminal: true };
+    model.milestones.ghgStatements[0].status = { kind: "verified", value: "verified", label: "Verified", isActionable: false, isTerminal: true };
     expect(buildCreditBatchWaitingItems(model)).toEqual([]);
+  });
+
+  it("lists every statement in verification in page-model order", () => {
+    const model = pageModel();
+    const base = model.milestones.ghgStatements[0];
+    model.mass.notAppliedDryKg = 0;
+    model.milestones.ghgStatements = [
+      { ...base, id: "newest", reportingPeriodEndOn: "2026-09-30" },
+      { ...base, id: "verified", status: { ...base.status, kind: "verified" } },
+      { ...base, id: "oldest" },
+    ];
+    expect(buildCreditBatchWaitingItems(model)).toEqual([
+      { id: "verification:newest", title: "GHG Statement Ends Sep 30, 2026: In verification", target: { tab: "removals" } },
+      { id: "verification:oldest", title: "GHG Statement Ends Jun 30, 2026: In verification", target: { tab: "removals" } },
+    ]);
   });
 
   it("is empty before the page model loads", () => {
@@ -62,14 +78,14 @@ describe("buildCreditBatchWaitingItems", () => {
   it.each([null, 0, 0.001, 4.999])("omits the unapplied item for %s dry kg", notAppliedDryKg => {
     const model = pageModel();
     model.mass.notAppliedDryKg = notAppliedDryKg;
-    model.milestones.ghgStatement = null;
+    model.milestones.ghgStatements = [];
     expect(buildCreditBatchWaitingItems(model)).toEqual([]);
   });
 
   it.each([5, 5.001])("shows the unapplied item at the visible threshold for %s dry kg", notAppliedDryKg => {
     const model = pageModel();
     model.mass.notAppliedDryKg = notAppliedDryKg;
-    model.milestones.ghgStatement = null;
+    model.milestones.ghgStatements = [];
     expect(buildCreditBatchWaitingItems(model)).toEqual([{
       id: "not-applied",
       title: "0.01 t produced but not applied yet",
@@ -93,7 +109,7 @@ describe("buildCreditBatchWaitingItems", () => {
     },
   ])("formats the waiting period: $title", ({ title, ...period }) => {
     const model = pageModel();
-    Object.assign(model.milestones.ghgStatement!, period);
+    Object.assign(model.milestones.ghgStatements[0], period);
     expect(buildCreditBatchWaitingItems(model)[0].title).toBe(title);
   });
 });

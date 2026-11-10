@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { batchStatementStatus } from "@/lib/certification/credit-batch-statements";
+import { deriveCreditBatchLifecycle } from "@/lib/certification/credit-batch-lifecycle";
+import type { CreditBatchHealthSummary } from "@/fn/certification";
+import type { DerivedStatusKind } from "@/lib/certification/status";
 import {
   dayPercentOfYear,
   daysInMonths,
@@ -145,6 +149,28 @@ describe("deriveTimelineState", () => {
   it("is interrupted when any holding Removal is, over every other state", () => {
     expect(deriveTimelineState({ ...base, removalInterrupted: true, currentStep: "removal-submitted" })).toBe("interrupted");
     expect(deriveTimelineState({ ...base, removalInterrupted: true, currentStep: "open", healthState: "incomplete", blockingCount: 2 })).toBe("interrupted");
+  });
+  it.each([
+    { kinds: [null, "issued"], expected: "issued" },
+    { kinds: ["in-verification", "issued"], expected: "issued" },
+    { kinds: ["issued", "verification-failed"], expected: "blocking" },
+    { kinds: ["pending-changes", "verified"], expected: "submitted" },
+  ] satisfies { kinds: (DerivedStatusKind | null)[]; expected: string }[])("follows the aggregated lifecycle for $kinds", ({ kinds, expected }) => {
+    const statement = batchStatementStatus(kinds.map((kind, index) => ({
+      id: `holder-${index}`, createdAt: new Date(index === 0 ? "2026-07-02" : "2026-07-01"),
+      ghgStatementId: kind ? `statement-${index}` : null,
+      ghgStatementStatus: kind ? { kind, value: "pending" as const, label: kind, isActionable: false, isTerminal: false } : null,
+    })));
+    const summary: CreditBatchHealthSummary = {
+      state: "ready", issueCount: 0, linesToDecide: 0, checkCount: 0,
+      removalId: null, removalCode: null, removalStatus: null, productionEmissionsClaimedByRemovalCode: null,
+      removalInterrupted: false, hasSubmittedRemoval: true,
+      ghgStatementId: statement?.id ?? null, ghgStatementStatus: statement?.status ?? null,
+    };
+    const lifecycle = deriveCreditBatchLifecycle(summary);
+    const input = { ...base, currentStep: lifecycle.currentStep, lifecycleFailed: lifecycle.currentStepFailed };
+    expect(deriveTimelineState(input)).toBe(expected);
+    expect(deriveTimelineState({ ...input, removalInterrupted: true })).toBe("interrupted");
   });
   it("keeps the data readiness for a rejected Removal", () => {
     expect(deriveTimelineState({ ...base, currentStep: "open", lifecycleFailed: true })).toBe("ready");

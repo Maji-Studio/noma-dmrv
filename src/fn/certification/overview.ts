@@ -10,6 +10,7 @@ import { getRecordLocksForTargets } from "@/data-access/record-certification-loc
 import type { RecordLock } from "@/lib/record-lock";
 import { env } from "@/config/env";
 import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
+import { batchStatementStatus } from "@/lib/certification/credit-batch-statements";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
@@ -106,9 +107,9 @@ export interface CreditBatchHealthSummary {
   /** Any holder has a submitted version, even when its newest attempt is a draft. */
   hasSubmittedRemoval: boolean;
   recordLock?: RecordLock;
-  /** The downstream GHG Statement, once the submitted Removal is rolled up. */
+  /** The statement deciding the batch's aggregate verifier status. */
   ghgStatementId: string | null;
-  /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
+  /** Aggregate across all holders: failed, issued, verified, else newest linked holder. */
   ghgStatementStatus: DerivedStatus | null;
 }
 
@@ -439,13 +440,22 @@ export async function loadCreditBatchHealthSummaries(
       const todos = todosByBatch.get(batchId)!;
       const batchRow = batchRowById.get(batchId);
       const removalId = batchRow?.removalId ?? null;
-      const ghgStatementId = batchRow?.ghgStatementId ?? null;
       const removalSubmission = removalId
         ? (removalSubmissions.get(removalId) ?? null)
         : null;
-      const ghgStatementSubmission = ghgStatementId
-        ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
-        : null;
+      const statement = batchStatementStatus(batchFacilityRows
+        .filter(row => row.id === batchId && row.removalId !== null)
+        .map(row => {
+          const latest = row.ghgStatementId ? ghgStatementSubmissions.get(row.ghgStatementId) ?? null : null;
+          return {
+            id: row.removalId!,
+            createdAt: row.removalCreatedAt,
+            ghgStatementId: row.ghgStatementId,
+            ghgStatementStatus: row.ghgStatementId
+              ? deriveSubmissionStatus(latest, latest ? isLockedInFlight(latest) : false, "ghgStatement", "unknown")
+              : null,
+          };
+        }));
       summaries[batchId] = {
         recordLock: locksById.get(batchId)!,
         state: todos.state,
@@ -470,17 +480,8 @@ export async function loadCreditBatchHealthSummaries(
               },
             )
           : null,
-        ghgStatementId,
-        ghgStatementStatus: ghgStatementId
-          ? deriveSubmissionStatus(
-              ghgStatementSubmission,
-              ghgStatementSubmission
-                ? isLockedInFlight(ghgStatementSubmission)
-                : false,
-              "ghgStatement",
-              "unknown",
-            )
-          : null,
+        ghgStatementId: statement?.id ?? null,
+        ghgStatementStatus: statement?.status ?? null,
       };
     }
     return summaries;

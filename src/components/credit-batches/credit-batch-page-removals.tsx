@@ -66,21 +66,28 @@ function DeliveryList({ model }: { model: CreditBatchPageModel }) {
   );
 }
 
-function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
+export function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
   const { batch } = useCreditBatchPage();
-  const statement = model.milestones.ghgStatement;
-  if (!statement) return null;
+  const statements = model.milestones.ghgStatements;
+  if (statements.length === 0) return null;
   return (
-    <PagePanel title="GHG Statement" labelledBy="credit-batch-ghg-statement">
-      <Link
-        href={recordHref("ghgStatement", statement.id, { facilityId: batch.facilityId })}
-        className={cn("group flex min-h-44 flex-wrap items-center justify-between gap-12", FOCUS_RING)}
-      >
-        <span className="body-medium font-medium underline-offset-2 group-hover:underline">
-          GHG Statement {ghgStatementPeriodLabel(statement)}
-        </span>
-        <StatusBadge status={statement.status.value} label={statement.status.label} />
-      </Link>
+    <PagePanel title={statements.length > 1 ? "GHG Statements" : "GHG Statement"} labelledBy="credit-batch-ghg-statement">
+      <ul className="flex flex-col">
+        {statements.map((statement) => (
+          <li key={statement.id} className={ROW_RULE}>
+            <Link
+              href={recordHref("ghgStatement", statement.id, { facilityId: batch.facilityId })}
+              className={cn("group flex min-h-44 flex-wrap items-center justify-between gap-12 py-4", FOCUS_RING)}
+            >
+              <span className="body-medium underline-offset-2 group-hover:underline">
+                <span className="font-medium">GHG Statement {ghgStatementPeriodLabel(statement)}</span>
+                <span className={cn("whitespace-nowrap tabular-nums", MUTED_TEXT)}> · {tonnesFromKg(statement.dryKg)} dry</span>
+              </span>
+              <StatusBadge status={statement.status.value} label={statement.status.label} />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </PagePanel>
   );
 }

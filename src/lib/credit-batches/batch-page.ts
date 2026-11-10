@@ -4,6 +4,7 @@
  * header action. Components render these; nothing here fetches.
  */
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
+import { GRAMS_PER_KG, massGrams } from "@/lib/calculations/gram-allocation";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { findInterruptedRemoval, hasSubmittedRemoval, type DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
@@ -146,6 +147,12 @@ function sentRemovalCaption(model: CreditBatchPageModel, timeZone: string): stri
   return `${name}, ${formatFacilityDay(firstRemovalSubmittedAt, timeZone)}`;
 }
 
+function statementShareCaption(dryKg: number, appliedDryKg: number): string | null {
+  return massGrams(appliedDryKg) - massGrams(dryKg) > SAME_MASS_TOLERANCE_KG * GRAMS_PER_KG
+    ? `${formatTonnes(kgToTonnes(dryKg))} of ${formatTonnes(kgToTonnes(appliedDryKg))}`
+    : null;
+}
+
 /**
  * The four milestones, each named for what has happened. The first reads
  * "Open to-dos" with the Overview badge count until no blocking item remains,
@@ -153,7 +160,17 @@ function sentRemovalCaption(model: CreditBatchPageModel, timeZone: string): stri
  * "Ready for submission" and "Verified" carry no date: none is stored.
  */
 export function creditBatchMilestones({ blockingCount, openCount, pageModel, timeZone }: CreditBatchMilestoneInput): CreditBatchMilestone[] {
-  const statement = pageModel?.milestones.ghgStatement ?? null;
+  const statements = pageModel?.milestones.ghgStatements ?? [];
+  const failedStatement = statements.find(statement => statement.status.kind === "verification-failed");
+  const verified = statements.filter(statement => VERIFIED_KINDS.includes(statement.status.kind));
+  const issued = statements.filter(statement => statement.status.kind === "issued");
+  const verifiedDone = !failedStatement && verified.length > 0;
+  const decidingStatement = failedStatement ?? statements.find(statement => STATEMENT_STEP_CAPTION_KINDS.includes(statement.status.kind));
+  const appliedDryKg = pageModel?.mass.appliedDryKg ?? 0;
+  const verifiedShare = statementShareCaption(verified.reduce((sum, statement) => sum + statement.dryKg, 0), appliedDryKg);
+  const issuedShare = statementShareCaption(issued.reduce((sum, statement) => sum + statement.dryKg, 0), appliedDryKg);
+  const latestIssuedAt = issued.flatMap(statement => statement.creditsIssuedAt ? [statement.creditsIssuedAt] : [])
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()).at(0);
   const missing = blockingCount != null && blockingCount > 0;
   const interruptedHolder = findInterruptedRemoval(pageModel?.removals);
   const steps: { key: CreditBatchMilestoneKey; label: string; done: boolean; failed?: boolean; caption: string | null; count?: number; keepCaption?: boolean }[] = [
@@ -177,15 +194,16 @@ export function creditBatchMilestones({ blockingCount, openCount, pageModel, tim
     {
       key: "verified",
       label: "Verified",
-      done: !!statement && VERIFIED_KINDS.includes(statement.status.kind),
-      failed: statement?.status.kind === "verification-failed",
-      caption: statement && STATEMENT_STEP_CAPTION_KINDS.includes(statement.status.kind) ? statement.status.label : null,
+      done: verifiedDone,
+      failed: !!failedStatement,
+      caption: verifiedDone ? verifiedShare : decidingStatement?.status.label ?? null,
+      keepCaption: !!failedStatement,
     },
     {
       key: "issued",
       label: "Credits issued",
-      done: statement?.status.kind === "issued",
-      caption: statement?.status.kind === "issued" && statement.creditsIssuedAt ? formatFacilityDay(statement.creditsIssuedAt, timeZone) : null,
+      done: issued.length > 0,
+      caption: issued.length > 0 ? issuedShare ?? (latestIssuedAt ? formatFacilityDay(latestIssuedAt, timeZone) : null) : null,
     },
   ];
   const currentIndex = steps.findIndex((step) => !step.done);

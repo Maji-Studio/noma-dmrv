@@ -15,6 +15,7 @@ export interface CreditBatchCertificationLink {
   ghgStatementId: string | null;
   removalStartedOn: string | null;
   removalCompletedOn: string | null;
+  removalCreatedAt: Date | null;
 }
 
 export async function listCreditBatchCertificationLinks(
@@ -74,5 +75,6 @@ export async function listCreditBatchCertificationLinks(
     ghgStatementId: row.ghgStatementId,
     removalStartedOn: row.removalStartedOn,
     removalCompletedOn: row.removalCompletedOn,
+    removalCreatedAt: row.removalCreatedAt,
   }));
 }
