@@ -12,7 +12,7 @@ import type { CreateOrderData } from "@/schemas/orders";
 const { create, createApplication } = vi.hoisted(() => ({ create: vi.fn(), createApplication: vi.fn() }));
 vi.mock("@/fn/applications", () => ({ createApplicationFn: createApplication }));
 vi.mock("./use-credit-batches", async () => import("./credit-batch-query-keys"));
-vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
+vi.mock("./stale-reads", () => ({ invalidateCertificationReadiness: vi.fn() }));
 vi.mock("@/fn/chain-of-custody", () => ({}));
 vi.mock("@/fn/orders", () => ({ createOrderFn: create }));
 afterEach(cleanup);

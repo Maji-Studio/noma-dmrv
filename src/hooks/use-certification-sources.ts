@@ -18,7 +18,7 @@ import {
 import type {
   MirrorDocumentToSourceInput,
 } from "@/schemas/certification-sources";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { unwrap } from "@/hooks/types";
 
 const SOURCES_STALE_MS = 30_000;

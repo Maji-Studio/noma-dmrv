@@ -17,10 +17,6 @@ vi.mock("@/fn/feedstock-types", () => ({
   getFeedstockTypeLinkLockFn: actions.read,
   updateFeedstockTypeFn: actions.update,
 }));
-vi.mock("./use-certification", async (original) => {
-  const { invalidateCertificationReadiness } = await original<typeof import("./use-certification")>();
-  return { invalidateCertificationReadiness };
-});
 
 const TYPE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const OPEN = { locked: false, removals: [] };

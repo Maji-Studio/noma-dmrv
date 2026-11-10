@@ -9,7 +9,7 @@ import {
 } from "@/fn/production-run-reading-imports";
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import { productionRunReadingKeys } from "@/hooks/use-production-run-readings";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 import { unwrap } from "@/hooks/types";
 
 export function useImportProductionRunReadings() {

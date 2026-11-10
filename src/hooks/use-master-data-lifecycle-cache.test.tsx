@@ -3,8 +3,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
 // Keep readiness invalidation observable without importing unrelated server actions.
-vi.mock("./use-certification", () => ({
-  certificationKeys: { all: ["certification"] },
+vi.mock("./stale-reads", () => ({
   invalidateCertificationReadiness: (queryClient: QueryClient) =>
     queryClient.invalidateQueries({ queryKey: ["certification"] }),
 }));

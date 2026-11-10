@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { applyRemovalTemplateSetup, loadRemovalTemplateSetup } from "@/fn/certification/removal-template-setup";
 import type { ApplyRemovalTemplateSetupInput } from "@/schemas/removal-template-setup";
-import { certificationKeys, invalidateCertificationReadiness } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { activityKeys } from "./activity-query-keys";
 import { invalidateOnboardingProgress } from "./use-onboarding";

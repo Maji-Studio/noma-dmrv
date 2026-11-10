@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { loadRecordCertificationLock } from "@/fn/record-certification-lock";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { unwrap } from "./types";
-import { certificationKeys } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 
 /**
  * Whether the record's lineage holds a submitted Removal or GHG statement, so

@@ -12,7 +12,8 @@ vi.mock("@tanstack/react-query", async (original) => ({
 }));
 vi.mock("./use-create-intent-key", () => ({ useIntentMutation: mocks.useMutation }));
 
-import { certificationKeys, useSaveFacilityCertifierMapping, useSaveFacilityEmissionConfig } from "./use-certification";
+import { useSaveFacilityCertifierMapping, useSaveFacilityEmissionConfig } from "./use-certification";
+import { certificationKeys } from "./certification-query-keys";
 import { useSetOrgCertifierCredentials } from "./use-certifier-credentials";
 import { useApplyRemovalTemplateSetup } from "./use-removal-template-setup";
 import {

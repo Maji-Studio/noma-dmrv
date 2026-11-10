@@ -27,13 +27,8 @@ import {
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
 import { useLatchedSubmit } from "@/hooks/use-latched-submit";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
-import {
-  useCreateEmissionEntry,
-  useReplaceEmissionEntry,
-  useUpdateEmissionEntry,
-  type EmissionBatchScope,
-  invalidateEmissionEntryReads,
-} from "@/hooks/use-emission-entries";
+import { useCreateEmissionEntry, useReplaceEmissionEntry, useUpdateEmissionEntry, type EmissionBatchScope } from "@/hooks/use-emission-entries";
+import { invalidateEmissionEntryReads } from "@/hooks/stale-reads";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { CreditBatchLine } from "@/components/credit-batches/credit-batch-line";
 import { describeEmissionEntryCreditBatchLine } from "./emission-entry-credit-batch-line-copy";

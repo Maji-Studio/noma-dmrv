@@ -22,7 +22,7 @@ import type {
 import type { TransportLeg } from "@/db/schema";
 import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 
 // ============================================

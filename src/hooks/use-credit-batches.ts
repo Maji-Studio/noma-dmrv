@@ -30,7 +30,7 @@ import type { CreditBatchTimelineFacts } from "@/data-access/credit-batch-timeli
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
 import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { unwrap } from "@/hooks/types";
 

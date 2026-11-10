@@ -10,7 +10,8 @@ import { FileIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { useDocumentsForEntity } from "@/hooks/use-documents";
 import { pluralize } from "@/lib/copy-utils";
-import { invalidateEmissionEntryReads, type EmissionBatchScope } from "@/hooks/use-emission-entries";
+import { type EmissionBatchScope } from "@/hooks/use-emission-entries";
+import { invalidateEmissionEntryReads } from "@/hooks/stale-reads";
 import { ENTRY_FILE_ACCEPT, entryDocumentType, type EmissionEntry } from "./emission-line-display";
 
 export const ENTRY_ENTITY_TYPE = "emission_entry";

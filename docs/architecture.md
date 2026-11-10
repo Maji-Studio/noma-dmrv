@@ -419,6 +419,10 @@ runtime.
   an inline `useQuery` when a hook already covers the server action.
 - Query keys come from typed factories per hook (e.g.
   `facilityKeys.detailWithRelations(facilityId)`), not hand-built arrays.
+  Certification keys live in `src/hooks/certification-query-keys.ts`. A kind of
+  change that makes several reads stale gets one named function in
+  `src/hooks/stale-reads.ts`. Put new kinds there rather than hand-listing
+  keys in a mutation hook.
 - `src/app/providers.tsx` sets global query defaults:
   `staleTime: 30_000` and `refetchOnWindowFocus: false`. Hooks override
   `staleTime` deliberately where the data needs a different freshness window

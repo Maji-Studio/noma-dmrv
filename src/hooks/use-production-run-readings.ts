@@ -12,7 +12,7 @@ import {
   getProductionRunReadingsListFn,
   deleteAllProductionRunReadingsFn,
 } from "@/fn/production-run-readings";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 import { unwrap, type MutationCallbacks } from "./types";
 
 // ============================================

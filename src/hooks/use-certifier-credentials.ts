@@ -4,7 +4,7 @@ import {
   setOrgCertifierCredentialsFn,
 } from "@/fn/certifier-credentials";
 import type { CertifierCredentialsFormInput } from "@/schemas/organizations";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/stale-reads";
 import { organizationKeys } from "@/hooks/use-organizations";
 import { unwrap } from "@/hooks/types";
 

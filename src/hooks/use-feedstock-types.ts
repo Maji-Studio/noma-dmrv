@@ -23,7 +23,7 @@ import type {
   ImportIsometricFeedstockTypeData,
   UpdateFeedstockTypeData,
 } from "@/schemas/feedstock-types";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 import { recordLockKeys } from "./record-lock-query-keys";
 
 export const feedstockTypeKeys = {

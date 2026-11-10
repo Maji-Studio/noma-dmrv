@@ -11,7 +11,7 @@ import { transportLegKeys } from "./use-transport-legs";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { activityKeys } from "./activity-query-keys";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { invalidateCertificationReadiness } from "./use-certification";
+import { invalidateCertificationReadiness } from "./stale-reads";
 
 export { transportDistanceKeys } from "./transport-distance-query-keys";
 import { transportDistanceKeys } from "./transport-distance-query-keys";

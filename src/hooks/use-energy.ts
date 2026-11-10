@@ -5,13 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { getEnergyBreakdown } from "@/fn/energy";
 import { unwrap } from "@/hooks/types";
 import type { EnergyBreakdownInput } from "@/schemas/energy";
+import { energyKeys } from "./energy-query-keys";
 
-export const energyKeys = {
-  all: ["energy"] as const,
-  breakdowns: () => [...energyKeys.all, "breakdown"] as const,
-  breakdown: (input: EnergyBreakdownInput) =>
-    [...energyKeys.breakdowns(), input.facilityId, input.from, input.to] as const,
-};
+export { energyKeys };
+
 
 export function useEnergyBreakdown(input: EnergyBreakdownInput | null) {
   return useQuery({
