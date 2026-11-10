@@ -107,6 +107,7 @@ export interface OutputStockHistoryEntry {
   eventKind?: 'delivery' | 'loss' | 'count' | 'production_draw';
   /** ISO 8601 UTC instant the event physically happened. */
   occurredAt: string;
+  /** Empty when a run intake has no output posting timestamp; replay cannot trust later after-balances. */
   recordedAt: string;
   actorName: string | null;
   reason: string;

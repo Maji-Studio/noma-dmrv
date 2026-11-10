@@ -48,6 +48,7 @@ export const productionRuns = pgTable(
     // NULL = the run has started but not ended yet (an "open" run). A closed
     // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
     endTime: timestamp('end_time'),
+    outputPostedAt: timestamp('output_posted_at', { withTimezone: true }),
     stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
     reactorId: uuid('reactor_id')
       .notNull()

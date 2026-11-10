@@ -70,6 +70,7 @@ describe("updateProductionRun terminal to running", () => {
           reactorId: reactor.id,
           code: `PR-REOPEN-${tag}`,
           status,
+          outputPostedAt: status === "complete" ? new Date("2026-07-01T10:00:00Z") : null,
           biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0, biocharOutputKg: 100,
           startTime: new Date("2026-07-01T08:00:00Z"),
           endTime: new Date("2026-07-01T10:00:00Z"),
@@ -84,6 +85,9 @@ describe("updateProductionRun terminal to running", () => {
 
       expect(reopened.status).toBe("running");
       expect(reopened.endTime).toBeNull();
+      const [stored] = await db.select({ outputPostedAt: productionRuns.outputPostedAt })
+        .from(productionRuns).where(inArray(productionRuns.id, [run.id]));
+      expect(stored.outputPostedAt).toBeNull();
     },
   );
 });
