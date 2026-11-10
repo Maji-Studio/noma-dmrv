@@ -102,7 +102,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       dry,
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
   }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime && r.outputPostedAt).map(r => ({
-    // A product posts its stock when it is created; a run posts its output when it is completed, independently of later edits.
+    // A product posts its stock when created; a run uses outputPostedAt, set on completion and moved when posted output changes.
     solids: r.biocharDryMassKg === null ? null : Number(r.biocharDryMassKg), id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), recordedAt: r.outputPostedAt!,
     wet: Number(r.biocharOutputKg ?? 0), moisture: r.biocharMoisturePercent, dry: Number(r.biocharDryMassKg ?? 0),
     runs: [{ productionRunId: r.id, code: r.code, dryMassKg: Number(r.biocharDryMassKg ?? 0) }],
