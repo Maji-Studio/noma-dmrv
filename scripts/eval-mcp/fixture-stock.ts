@@ -31,7 +31,7 @@ export async function seedStockFixture(caseId: string): Promise<StockEvalFixture
       code: STOCK_BIN_CODE, name: STOCK_BIN_CODE, type: "biochar_bin", stockMode: "split" }).returning({ id: storageLocations.id });
     const reactorId = await addFixtureReactor(fixture, caseId);
     const runs = await db.insert(productionRuns).values(STOCK_RUNS.map((run) => ({
-      organizationId: org, facilityId: fixture.facilityId, reactorId, code: run.code, status: "complete" as const,
+      organizationId: org, facilityId: fixture.facilityId, reactorId, code: run.code, status: "complete" as const, outputPostedAt: new Date(run.end),
       startTime: new Date(run.start), endTime: new Date(run.end), biocharStorageLocationId: bin.id,
       biocharOutputKg: run.wetKg, biocharMoisturePercent: run.moisturePercent, biocharDryMassKg: run.dryKg,
     }))).returning({ id: productionRuns.id, code: productionRuns.code });

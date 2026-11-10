@@ -50,7 +50,7 @@ export async function seedLateRun(seededData: SeededChainData, tag: string): Pro
     const [sourceFeedstock] = await db.select().from(schema.productionRunFeedstocks)
       .where(eq(schema.productionRunFeedstocks.productionRunId, source.id));
     await db.insert(schema.productionRuns).values({
-      ...source, id: runId, code: runCode, startTime: RUN_START, endTime: RUN_END, createdAt: new Date(), updatedAt: new Date(),
+      ...source, id: runId, code: runCode, startTime: RUN_START, endTime: RUN_END, createdAt: new Date(), updatedAt: new Date(), outputPostedAt: new Date(),
     });
     await db.insert(schema.productionRunFeedstocks).values({
       ...sourceFeedstock, id: crypto.randomUUID(), productionRunId: runId, wetMassUsedKg: FEEDSTOCK_USED_KG,

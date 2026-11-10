@@ -53,7 +53,7 @@ export function facilityCalendarFixture(prefix: string) {
     const startTime = new Date(start);
     const [row] = await db.insert(productionRuns).values({
       organizationId, facilityId, code: `PR-${code}`, reactorId: reactor.id,
-      status: "complete", startTime,
+      status: "complete", outputPostedAt: new Date(startTime.getTime() + RUN_DURATION_MS), startTime,
       biocharStorageLocationId: outputBin.id,
       biocharOutputKg: RUN_OUTPUT_KG, biocharMoisturePercent: RUN_OUTPUT_MOISTURE_PERCENT,
       endTime: new Date(startTime.getTime() + RUN_DURATION_MS),

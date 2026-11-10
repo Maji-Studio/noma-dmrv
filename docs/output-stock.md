@@ -195,8 +195,12 @@ Water is display only; no balance, guard, preview or posting reads it. The
 replay re-bases an unknown wet or solids figure on a movement's saved or
 recomputed (`currentAfterWetKg`) after-balance only while no earlier-dated entry
 was recorded after that balance was saved; a stale value is refused and wet stays
-unknown (`src/lib/output-stock/stock-replay.ts`). A run intake counts as recorded when its output was posted (the
-run's last save as complete, `updatedAt`), not when the run was created. Bay, pile-band and chart
+unknown (`src/lib/output-stock/stock-replay.ts`). A run intake's recording time is
+`production_runs.output_posted_at`. It is set when the run becomes complete,
+moved when a complete run's posted output changes (wet mass, moisture, dry mass,
+bin or end time), cleared when the run leaves complete, and untouched by other
+edits. Check `production_runs_complete_has_output_posted_at` requires it on
+complete runs. Bay, pile-band and chart
 point details open on hover, keyboard focus or tap. A product bin's bays and
 pile bands name their parts as the product composition does (dry biochar,
 "<ingredient> solids", estimated water): `getOutputSubBins` splits each layer's

@@ -48,6 +48,7 @@ export const productionRuns = pgTable(
     // NULL = the run has started but not ended yet (an "open" run). A closed
     // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
     endTime: timestamp('end_time'),
+    outputPostedAt: timestamp('output_posted_at', { withTimezone: true }),
     stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
     reactorId: uuid('reactor_id')
       .notNull()
@@ -132,6 +133,10 @@ export const productionRuns = pgTable(
     check(
       'production_runs_biochar_dry_lte_wet',
       sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
+    ),
+    check(
+      'production_runs_complete_has_output_posted_at',
+      sql`${table.status} <> 'complete' or ${table.outputPostedAt} is not null`
     ),
     check(
       'production_runs_complete_has_output',

@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/server", async (original) => ({
   ...await original<typeof import("@/lib/auth/server")>(), requireOrgContext: auth.requireOrgContext,
 }));
 const TIMEOUT_MS = 30_000;
+const EDITED_OUTPUT_MOISTURE_PERCENT = 10;
 const TRANSPORTS = ["action", "rest", "mcp"] as const;
 const REQUIREMENTS = [
   { field: "biocharStorageLocationId", message: "Select a biochar output bin for a complete run." },
@@ -83,3 +84,44 @@ describe.each(TRANSPORTS)("complete output through %s", (transport) => {
     expect((await edited.json()).data).toMatchObject({ status: "complete", biocharStorageLocationId: fixture.outputBinId, biocharMoisturePercent: 0 });
   }, TIMEOUT_MS);
 });
+
+it.each(["running", "complete"] as const)("dates output posted by %s creation and subsequent transitions", async (status) => {
+  const saved = await seedApiProductionRun(fixture, {
+    ...productionRunInput(fixture), ...(status === "complete" ? completionPatch(fixture) : {}),
+  });
+  const stored = async () => (await captureProductionRunState(fixture)).runs.find(run => run.id === saved.row.id)!;
+  if (status === "running") {
+    expect((await stored()).outputPostedAt).toBeNull();
+    const response = await patchProductionRun(fixture, saved.row, saved.etag, completionPatch(fixture));
+    expect(response.status).toBe(200);
+  }
+  const postedAt = (await stored()).outputPostedAt;
+  expect(postedAt).toBeInstanceOf(Date);
+  const complete = await readProductionRun(fixture, saved.row.id);
+  // Runs have no note field; energy is an unrelated editable run field.
+  const edited = await patchProductionRun(fixture, complete.row, complete.etag, { electricityKwh: 12 });
+  expect(edited.status).toBe(200);
+  expect((await stored()).outputPostedAt).toEqual(postedAt);
+  // This run has no downstream stock observations, products or locked lineage.
+  const beforeOutputEdit = await readProductionRun(fixture, saved.row.id);
+  const outputEdited = await patchProductionRun(fixture, beforeOutputEdit.row, beforeOutputEdit.etag, {
+    biocharMoisturePercent: EDITED_OUTPUT_MOISTURE_PERCENT,
+  });
+  expect(outputEdited.status).toBe(200);
+  const outputPostedAt = (await stored()).outputPostedAt;
+  expect(outputPostedAt!.getTime()).toBeGreaterThan(postedAt!.getTime());
+  const beforeRepeat = await readProductionRun(fixture, saved.row.id);
+  const repeated = await patchProductionRun(fixture, beforeRepeat.row, beforeRepeat.etag, {
+    ...completionPatch(fixture), biocharMoisturePercent: EDITED_OUTPUT_MOISTURE_PERCENT,
+  });
+  expect(repeated.status).toBe(200);
+  expect((await stored()).outputPostedAt).toEqual(outputPostedAt);
+  const current = await readProductionRun(fixture, saved.row.id);
+  const reopened = await patchProductionRun(fixture, current.row, current.etag, { status: "running", endTime: null });
+  expect(reopened.status).toBe(200);
+  expect((await stored()).outputPostedAt).toBeNull();
+  const open = await readProductionRun(fixture, saved.row.id);
+  const recompleted = await patchProductionRun(fixture, open.row, open.etag, completionPatch(fixture));
+  expect(recompleted.status).toBe(200);
+  expect((await stored()).outputPostedAt!.getTime()).toBeGreaterThanOrEqual(postedAt!.getTime());
+}, TIMEOUT_MS);

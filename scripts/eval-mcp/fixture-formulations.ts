@@ -55,7 +55,7 @@ export async function seedFormulationFixture(caseId: FormulationCaseId): Promise
         facilityId: fixture.facilityId, type: "product_bin", stockMode: "mix", formulationId: formulation.id }));
       const reactorId = await addFixtureReactor(fixture, caseId);
       await db.insert(productionRuns).values({ organizationId: ctx.organizationId, facilityId: fixture.facilityId,
-        reactorId, code: "PR-EVAL", status: "complete", startTime: new Date(SOURCE_START), endTime: new Date(SOURCE_END),
+        reactorId, code: "PR-EVAL", status: "complete", outputPostedAt: new Date(SOURCE_END), startTime: new Date(SOURCE_START), endTime: new Date(SOURCE_END),
         biocharStorageLocationId: source.id, biocharOutputKg: SOURCE_WET_KG,
         biocharMoisturePercent: SOURCE_MOISTURE_PERCENT, biocharDryMassKg: SOURCE_DRY_KG });
     }

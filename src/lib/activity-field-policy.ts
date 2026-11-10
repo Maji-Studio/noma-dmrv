@@ -108,6 +108,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     cancellationReason: "name",
     startTime: "value",
     endTime: "value",
+    outputPostedAt: "ignore",
     stockPostingSequence: "ignore",
     reactorId: { link: "reactor" },
     operatorId: { link: "operator" },

@@ -104,7 +104,7 @@ it('4: a late run cancels a mix re-estimate; history and balance both end at 250
   expect((await previewOutputStock(f.ctx, input)).afterEstimatedWetKg).toBe(110);
   const posted = await postMeasurement(f, input);
   await db.update(binMovements).set({ createdAt: new Date(COUNT_AT) }).where(and(eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, posted.movementId)));
-  await db.update(productionRuns).set({ status: 'complete', endTime: placedAt, updatedAt: new Date('2026-09-17T12:00:00.000Z'),
+  await db.update(productionRuns).set({ status: 'complete', outputPostedAt: new Date('2026-09-17T12:00:00.000Z'), endTime: placedAt, updatedAt: new Date('2026-09-17T12:00:00.000Z'),
     biocharOutputKg: 200, biocharDryMassKg: 80, biocharMoisturePercent: 60 })
     .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.runs[1].id)));
   const { end, history, balance } = await parity(f, f.source.id);

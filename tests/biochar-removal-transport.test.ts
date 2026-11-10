@@ -119,7 +119,7 @@ describe("Removal delivery transport", () => {
     await withLineageFixture(async (fixture) => {
       // Leave stock for a later posting while retaining the original owned slice.
       await db.update(productionRuns).set({
-        status: "complete", endTime: new Date("2026-06-13T12:00:00Z"),
+        status: "complete", outputPostedAt: new Date("2026-06-13T12:00:00Z"), endTime: new Date("2026-06-13T12:00:00Z"),
         biocharOutputKg: PRODUCT_WET_KG, biocharDryMassKg: PRODUCT_DRY_KG,
       }).where(eq(productionRuns.id, fixture.productionRunId));
       await db.update(biocharProducts).set({

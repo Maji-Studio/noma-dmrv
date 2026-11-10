@@ -408,7 +408,7 @@ it("projects a late run Check through the shared page and list read without addi
     vi.mocked(requireOrgContext).mockResolvedValue(lineageCtx);
     const [lateRun] = await db.insert(productionRuns).values({
       organizationId: lineageCtx.organizationId, facilityId: lineage.facilityId, reactorId: lineage.reactorId,
-      code: `PR-LATE-TODO-${crypto.randomUUID()}`, status: "complete",
+      code: `PR-LATE-TODO-${crypto.randomUUID()}`, status: "complete", outputPostedAt: new Date("2026-06-18T12:00:00Z"),
       startTime: new Date("2026-06-18T08:00:00Z"), endTime: new Date("2026-06-18T12:00:00Z"),
       biocharStorageLocationId: lineage.biocharBinId, biocharOutputKg: LATE_RUN_BIOCHAR_OUTPUT_KG,
       biocharMoisturePercent: LATE_RUN_MOISTURE_PERCENT,

@@ -193,7 +193,7 @@ async function seedGeoLineage(
         id: ids.productionRun,
         code: codes.productionRun,
         facilityId: seededData.facility.id,
-        status: "complete",
+        status: "complete", outputPostedAt: new Date("2026-02-10T13:00:00.000Z"),
         startTime: new Date("2026-02-10T07:00:00.000Z"),
         endTime: new Date("2026-02-10T13:00:00.000Z"),
         reactorId: seededData.reactor.id,

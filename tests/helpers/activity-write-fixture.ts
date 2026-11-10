@@ -44,7 +44,7 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
       storageLocationId: inputBin.id, code: "ACT-FS", massWetKg: FIXTURE_WET_KG, massDryKg: FIXTURE_DRY_KG,
     }).returning();
     const [run] = await tx.insert(schema.productionRuns).values({
-      organizationId, facilityId: facility.id, reactorId: reactor.id, code: "ACT-RUN", status: "complete",
+      organizationId, facilityId: facility.id, reactorId: reactor.id, code: "ACT-RUN", status: "complete", outputPostedAt: ACTIVITY_FIXTURE_DATE,
       startTime: FIXTURE_RUN_START, endTime: ACTIVITY_FIXTURE_DATE,
       biocharStorageLocationId: outputBin.id, biocharOutputKg: FIXTURE_WET_KG,
       biocharDryMassKg: FIXTURE_DRY_KG, biocharMoisturePercent: FIXTURE_MOISTURE_PERCENT,

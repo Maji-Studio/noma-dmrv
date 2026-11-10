@@ -288,7 +288,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
 
   it.each([{ biocharOutputKg: 300 }, { feedingRateKgHr: 100 }])("refuses edits to terminal runs without feedstock: %j", async (body) => {
     const saved = await create({ ...productionRunInput(a), feedstockDraws: [], feedstockMoisturePercent: null });
-    await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-10-06T11:00:00Z"),
+    await db.update(productionRuns).set({ status: "complete", outputPostedAt: new Date("2026-10-06T11:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),
       biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId }).where(eq(productionRuns.id, saved.row.id));
     const refusal = await problem(await patch(saved.row.id, body, saved.etag), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws" }));

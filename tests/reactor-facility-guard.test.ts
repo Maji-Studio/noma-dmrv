@@ -67,6 +67,7 @@ describe("reactor facility changes", () => {
     await db.insert(productionRuns).values({
       organizationId: ctx.organizationId, code: "PR-1", facilityId: source.id,
       reactorId: reactor.id, status, startTime,
+      outputPostedAt: status === "complete" ? new Date("2026-01-01T01:00:00Z") : null,
       cancellationReason: status === "cancelled" ? "Recorded in error" : null,
       ...(outputBinId ? { biocharStorageLocationId: outputBinId, biocharOutputKg: 100, biocharMoisturePercent: 0 } : {}),
       endTime: status === "running" ? null : new Date("2026-01-01T01:00:00Z"),

@@ -77,7 +77,7 @@ describe.skipIf(!available)("dashboard batch scope PostgreSQL queries", () => {
       ["foreignChildRun", "facility", OTHER_ORG],
     ].map(([key, facility, organizationId]) => ({
       organizationId, id: ids[key], facilityId: ids[facility], code: key,
-      reactorId: ids.reactor, startTime: new Date("2026-01-01T08:00:00Z"), endTime: new Date("2026-01-01T16:00:00Z"), status: "complete" as const,
+      reactorId: ids.reactor, startTime: new Date("2026-01-01T08:00:00Z"), endTime: new Date("2026-01-01T16:00:00Z"), status: "complete" as const, outputPostedAt: new Date("2026-01-01T16:00:00Z"),
       biocharStorageLocationId: ids.outputBin, biocharMoisturePercent: 0,
       feedstockMassDryKg: key === "runA" ? 2_000 : 1_000, biocharDryMassKg: 500, biocharOutputKg: 500,
     })));
