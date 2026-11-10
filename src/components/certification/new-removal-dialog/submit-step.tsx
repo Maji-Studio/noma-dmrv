@@ -510,14 +510,15 @@ export function SubmitStep({
     </Button>
   );
   // Blocked, the fixes are the only job: no Submit and no Discard (the X and Esc close it).
+  // Preparing follows the same rule, as nothing can be submitted or judged until it finishes.
   // The way back to Empty components stays, as a footer holding only that button.
-  const blocked = submissionFacts.state === "blocked";
+  const fixesOnly = submissionFacts.state === "blocked" || submissionFacts.state === "loading";
   const backToEmpty = onBackToEmpty ? (
     <Button variant="weak" className={PHONE_TOUCH_TARGET} onClick={onBackToEmpty} data-phone-back>
       {BACK_TO_EMPTY_LABEL}
     </Button>
   ) : null;
-  const showFooter = !blocked || backToEmpty !== null;
+  const showFooter = !fixesOnly || backToEmpty !== null;
 
   return (
     <div className="flex flex-col gap-24">
@@ -579,9 +580,9 @@ export function SubmitStep({
       {showFooter && (
         <div className="sticky bottom-0 z-10 -mx-20 -mb-20 flex flex-wrap items-center justify-start gap-12 border-t border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
           {/* Under the changed-since-review stop Submit again only refuses again (#1114). */}
-          {!blocked && submitError !== INTERRUPTED_REMOVAL_CHANGED_MESSAGE && submitButton}
+          {!fixesOnly && submitError !== INTERRUPTED_REMOVAL_CHANGED_MESSAGE && submitButton}
           {backToEmpty}
-          {!blocked && canDeleteRemoval ? (
+          {!fixesOnly && canDeleteRemoval ? (
             <Button
               variant="weak"
               className={PHONE_TOUCH_TARGET}
