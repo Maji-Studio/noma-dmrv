@@ -9,7 +9,11 @@ import type { Page } from "@playwright/test";
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
+import { SWIFTSHADER_ARGS } from "./fixtures/swiftshader";
 import { test, expect, type SeededChainData } from "./fixtures";
+
+// SwiftShader gives headless Chromium the WebGL context the Map views need.
+test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
 
 const TRAIL_MEASUREMENT_TIMESTAMP = "2026-03-02T12:00:00.000Z";
 
@@ -492,8 +496,8 @@ test.describe("Traceability Visualization", () => {
     }
 
     const edges = adminPage.locator(".react-flow__edge");
-    const edgeCount = await edges.count();
-    expect(edgeCount).toBeGreaterThanOrEqual(6);
+    // Edges mount after the nodes measure: poll instead of counting once.
+    await expect.poll(() => edges.count()).toBeGreaterThanOrEqual(6);
   });
 
   test("application query param opens the lineage directly", async ({
@@ -857,4 +861,61 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
         .filter({ hasText: measurementTime })
     ).toBeVisible();
   });
+});
+
+const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+const PHONE_VIEWPORTS = [
+  { width: 320, height: 568 },
+  { width: 390, height: 844 },
+];
+// FIT carries a per-map label ("Fit map to ..."), so match its start.
+const MAP_CONTROL_NAMES = [/^Zoom in$/, /^Zoom out$/, /^Fit /, /^Toggle satellite imagery$/];
+const MAP_READY_TIMEOUT_MS = 45_000;
+
+test.describe("Traceability Map controls on short phones (#1553)", () => {
+  for (const anchor of ["batch", "application"] as const) {
+    test(`${anchor} Map keeps its controls inside the map pane`, async ({
+      adminPage,
+      seededData,
+      cleanupTestData,
+    }) => {
+      void cleanupTestData;
+      const seeded = await seedBatchChain(seededData);
+      // Hydrate at desktop width, then resize: the layout breakpoints are CSS, the map frames once.
+      await adminPage.setViewportSize(DESKTOP_VIEWPORT);
+      await adminPage.goto(
+        traceabilityUrl(
+          seededData.facility.id,
+          anchor === "batch"
+            ? { batch: seeded.ids.creditBatch, view: "map" }
+            : { application: seeded.ids.applicationA, view: "map" }
+        )
+      );
+      const controls = MAP_CONTROL_NAMES.map((name) => adminPage.getByRole("button", { name }));
+      await expect(controls[0]).toBeVisible({ timeout: MAP_READY_TIMEOUT_MS });
+
+      for (const viewport of PHONE_VIEWPORTS) {
+        await adminPage.setViewportSize(viewport);
+        const mapPane = adminPage.locator(".cvm-map");
+        await expect(mapPane).toBeVisible();
+        const pane = await mapPane.boundingBox();
+        // The Traceability page header (batch selector, view switch), not the app's mobile nav bar.
+        const header = await adminPage
+          .locator("header")
+          .filter({ has: adminPage.getByTestId("chain-view-segment") })
+          .boundingBox();
+        expect(pane).not.toBeNull();
+        expect(header).not.toBeNull();
+        for (const control of controls) {
+          const box = await control.boundingBox();
+          expect(box).not.toBeNull();
+          expect(box!.y).toBeGreaterThanOrEqual(pane!.y);
+          expect(box!.y + box!.height).toBeLessThanOrEqual(pane!.y + pane!.height);
+          expect(box!.x).toBeGreaterThanOrEqual(pane!.x);
+          expect(box!.x + box!.width).toBeLessThanOrEqual(pane!.x + pane!.width);
+          expect(box!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+        }
+      }
+    });
+  }
 });
