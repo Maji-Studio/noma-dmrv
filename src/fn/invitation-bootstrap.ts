@@ -22,7 +22,10 @@ import type { ActionResult } from "@/types/actions";
 
 const INVITATION_LOAD_FALLBACK = "Failed to load invitation.";
 const INVITATION_BOOTSTRAP_FALLBACK = "Your account could not be set up. Try again.";
-const INVITATION_RESEND_FALLBACK = "The link was not sent. Try again.";
+/** Shown under the "Email me a link" form, which has no title of its own. */
+const INVITATION_LINK_FALLBACK = "The link was not sent. Try again.";
+/** Shown under the "Link not sent" title, next to Send again, so it gives the next step instead. */
+const INVITATION_RESEND_FALLBACK = "Send again. If that fails too, ask your Admin for a new invitation.";
 
 async function toResult<T>(
   work: () => Promise<T>,
@@ -75,7 +78,7 @@ export async function bootstrapInvitationAccountAction(
         if (state.account !== "pending") throw error;
       }
     }
-    return sendInvitationSetPassword(state);
+    return sendInvitationSetPassword(state, INVITATION_LINK_FALLBACK);
   }, INVITATION_BOOTSTRAP_FALLBACK);
 }
 
@@ -91,7 +94,7 @@ export async function resendInvitationSetPasswordAction(
     if (state.account !== "pending") {
       throw new SafeError("Enter your name to start account setup.");
     }
-    return sendInvitationSetPassword(state);
+    return sendInvitationSetPassword(state, INVITATION_RESEND_FALLBACK);
   }, INVITATION_RESEND_FALLBACK);
 }
 
@@ -109,7 +112,10 @@ function refuseConfirmedAccount(state: InvitationBootstrapState): void {
   }
 }
 
-async function sendInvitationSetPassword(state: InvitationBootstrapState): Promise<{ emailSent: true }> {
+async function sendInvitationSetPassword(
+  state: InvitationBootstrapState,
+  fallback: string,
+): Promise<{ emailSent: true }> {
   let reservation: Awaited<ReturnType<typeof consumeInvitationSetPasswordRateLimit>> = false;
   try {
     reservation = await consumeInvitationSetPasswordRateLimit(state.invitationId);
@@ -128,7 +134,7 @@ async function sendInvitationSetPassword(state: InvitationBootstrapState): Promi
         logActionError(refundError, { message: "invitation password setup cooldown refund failed" });
       }
     }
-    throw new SafeError(toActionError(error, INVITATION_RESEND_FALLBACK));
+    throw new SafeError(toActionError(error, fallback));
   }
   // A cooldown has the same acknowledgement as a send. So does a provider
   // failure: Better Auth logs a failed sender and answers success, so only a

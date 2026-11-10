@@ -48,6 +48,9 @@ const VALID_INPUT = {
   name: "Invitee",
 };
 
+const LINK_FALLBACK = "The link was not sent. Try again.";
+const RESEND_FALLBACK = "Send again. If that fails too, ask your Admin for a new invitation.";
+
 describe("bootstrapInvitationAccountAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -215,13 +218,19 @@ describe("bootstrapInvitationAccountAction", () => {
     });
   });
 
-  it.each([bootstrapInvitationAccountAction, resendInvitationSetPasswordAction])("uses link wording when the email step fails", async action => {
+  it.each([
+    [bootstrapInvitationAccountAction, LINK_FALLBACK],
+    [resendInvitationSetPasswordAction, RESEND_FALLBACK],
+  ] as const)("uses link wording when the email step fails", async (action, error) => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
     mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
-    expect(await action(VALID_INPUT)).toEqual({ success: false, error: "The link was not sent. Try again." });
+    expect(await action(VALID_INPUT)).toEqual({ success: false, error });
   });
 
-  it.each([bootstrapInvitationAccountAction, resendInvitationSetPasswordAction])("refunds a failed send so an immediate resend sends again", async action => {
+  it.each([
+    [bootstrapInvitationAccountAction, LINK_FALLBACK],
+    [resendInvitationSetPasswordAction, RESEND_FALLBACK],
+  ] as const)("refunds a failed send so an immediate resend sends again", async (action, error) => {
     let available = true;
     mockConsumeSetPasswordRateLimit.mockImplementation(async () => {
       if (!available) return false;
@@ -232,7 +241,7 @@ describe("bootstrapInvitationAccountAction", () => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
     mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
 
-    expect(await action(VALID_INPUT)).toEqual({ success: false, error: "The link was not sent. Try again." });
+    expect(await action(VALID_INPUT)).toEqual({ success: false, error });
     expect(mockRefundSetPasswordRateLimit).toHaveBeenCalledExactlyOnceWith();
     expect(logError).toHaveBeenCalledWith(expect.any(Object), "invitation password setup email failed");
     expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
@@ -257,7 +266,7 @@ describe("bootstrapInvitationAccountAction", () => {
     mockRefundSetPasswordRateLimit.mockRejectedValueOnce(new Error("refund failed"));
 
     expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
-      .toEqual({ success: false, error: "The link was not sent. Try again." });
+      .toEqual({ success: false, error: RESEND_FALLBACK });
     expect(mockRefundSetPasswordRateLimit).toHaveBeenCalledExactlyOnceWith();
     expect(logError).toHaveBeenCalledWith(expect.any(Object), "invitation password setup cooldown refund failed");
   });
@@ -267,7 +276,7 @@ describe("bootstrapInvitationAccountAction", () => {
     mockConsumeSetPasswordRateLimit.mockRejectedValueOnce(new Error("consume failed"));
 
     expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
-      .toEqual({ success: false, error: "The link was not sent. Try again." });
+      .toEqual({ success: false, error: RESEND_FALLBACK });
     expect(mockRequestPasswordReset).not.toHaveBeenCalled();
     expect(mockRefundSetPasswordRateLimit).not.toHaveBeenCalled();
   });
@@ -275,7 +284,7 @@ describe("bootstrapInvitationAccountAction", () => {
   it("uses link wording when resend cannot read the invitation", async () => {
     mockReadState.mockRejectedValueOnce(new Error("read failed"));
     expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
-      .toEqual({ success: false, error: "The link was not sent. Try again." });
+      .toEqual({ success: false, error: RESEND_FALLBACK });
   });
 
 });
