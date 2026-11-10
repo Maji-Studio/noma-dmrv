@@ -16,6 +16,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { cn } from "@/lib/utils";
 
 export type AuthResultTone = "pending" | "info" | "success" | "error";
@@ -112,7 +113,7 @@ export function AuthPrimaryLink({
   return (
     <Link
       href={href}
-      className={buttonVariants({ variant: "primary", width: "full" })}
+      className={cn(buttonVariants({ variant: "primary", width: "full" }), PHONE_TOUCH_TARGET)}
     >
       {children}
     </Link>

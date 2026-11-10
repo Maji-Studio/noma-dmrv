@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import { INVITATION_SET_PASSWORD_RATE_LIMIT } from "@/config/auth";
 import { invitations, users } from "@/db/schema";
-import { consumeRateLimit } from "@/data-access/api-rate-limits";
+import { consumeRateLimit, refundRateLimit } from "@/data-access/api-rate-limits";
 import { InvitationAccountExistsError } from "@/data-access/invitation-bootstrap-errors";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError } from "@/lib/errors";
@@ -115,15 +115,20 @@ export async function createInvitedAccount(input: {
 
 /** Atomically reserve a password setup email across invitations for the mailbox. */
 // org-scope-ok: pre-sign-in cooldown derives the user from a pending, unexpired invitation id.
-export async function consumeInvitationSetPasswordRateLimit(invitationId: string): Promise<boolean> {
+export async function consumeInvitationSetPasswordRateLimit(
+  invitationId: string
+): Promise<false | { refund: () => Promise<void> }> {
   const invitation = await readValidInvitation(invitationId);
   const user = await findUserByEmail(db, invitation.email);
   if (!user) return false;
-  const result = await consumeRateLimit({
+  const bucket = {
     key: `invitation-set-password:${user.id}`,
     ...INVITATION_SET_PASSWORD_RATE_LIMIT,
-  });
-  return result.allowed;
+  };
+  const result = await consumeRateLimit(bucket);
+  return result.allowed ? {
+    refund: () => refundRateLimit(bucket, { refilledAt: result.debitRefilledAt, tokens: result.debitTokens }),
+  } : false;
 }
 
 // org-scope-ok: pre-sign-in lookup validates the invitation id, status and expiry.

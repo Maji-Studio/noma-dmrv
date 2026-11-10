@@ -136,7 +136,7 @@ function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvita
       {success ? (
         <div className="space-y-24">
           <Notice tone="success" title="Password set">
-            Your password is set. You are being taken to login.
+            Taking you to sign in.
           </Notice>
         </div>
       ) : (

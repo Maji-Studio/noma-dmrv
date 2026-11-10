@@ -141,6 +141,9 @@ user fields. Bootstrap and resend share a 60-second cooldown, enforced atomicall
 by a one-token bucket keyed by user ID across invitations. Requests during the
 cooldown still succeed. The action's `emailSent: true` acknowledges the request; it does
 not promise provider delivery or that a new message was sent during the cooldown.
+When the reset request itself fails, the action refunds the cooldown, so an immediate retry
+sends. A provider failure does not reach the action (Better Auth logs it and answers success),
+so it keeps the cooldown.
 
 The invited mailbox opens Better Auth's reset link, which redirects to
 `/set-password?invitation=<id>&token=<token>`. Setting the first password through

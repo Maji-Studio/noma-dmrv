@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
@@ -11,9 +10,8 @@ import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
-import { cn } from "@/lib/utils";
-import { AuthResult } from "@/components/auth/auth-result";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
+import { AuthPrimaryLink, AuthResult } from "@/components/auth/auth-result";
 import {
   bootstrapInvitationAccountAction,
   resendInvitationSetPasswordAction,
@@ -136,11 +134,28 @@ function CheckEmail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (accountExists) {
+    return (
+      <AuthResult
+        framed={false}
+        tone="success"
+        title="Account already set up"
+        actions={
+          <AuthPrimaryLink href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}>
+            Sign in
+          </AuthPrimaryLink>
+        }
+      >
+        {email} already has a password. Sign in to join.
+      </AuthResult>
+    );
+  }
+
   return (
     <AuthResult
       framed={false}
-      tone="info"
-      title="Check your email"
+      tone={error ? "error" : "info"}
+      title={error ? "Link not sent" : "Check your email"}
       actions={
         <>
           {resent && (
@@ -148,28 +163,20 @@ function CheckEmail({
               Link requested. Check your spam folder too.
             </Notice>
           )}
-          {error && (
-            <Notice
-              tone="error"
-              action={accountExists ? (
-                <Link
-                  href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
-                  className={cn("underline", INLINE_HIT_AREA)}
-                >
-                  Sign in
-                </Link>
-              ) : undefined}
-            >
-              {error}
-            </Notice>
-          )}
-          <Button type="button" variant="default" width="full" busy={resending} onClick={() => resend(true)}>
+          <Button
+            type="button"
+            variant="default"
+            width="full"
+            className={PHONE_TOUCH_TARGET}
+            busy={resending}
+            onClick={() => resend(true)}
+          >
             Send again
           </Button>
         </>
       }
     >
-      Check {email} for a link to set your password and join. It can take a few minutes to arrive.
+      {error ? error : <>Check {email} for a link to set your password and join. It can take a few minutes to arrive.</>}
     </AuthResult>
   );
 }

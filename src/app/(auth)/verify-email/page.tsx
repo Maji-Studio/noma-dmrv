@@ -8,6 +8,7 @@ import { useState } from "react";
 import { AuthLink, AuthResult } from "@/components/auth/auth-result";
 import { useAuth } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { Notice } from "@/components/ui/notice";
 
 export default function VerifyEmailPage() {
@@ -60,6 +61,7 @@ export default function VerifyEmailPage() {
             type="button"
             variant="default"
             width="full"
+            className={PHONE_TOUCH_TARGET}
             onClick={handleResendVerification}
             disabled={!email}
             busy={resending}

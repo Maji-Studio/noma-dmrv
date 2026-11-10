@@ -110,8 +110,10 @@ function refuseConfirmedAccount(state: InvitationBootstrapState): void {
 }
 
 async function sendInvitationSetPassword(state: InvitationBootstrapState): Promise<{ emailSent: true }> {
+  let reservation: Awaited<ReturnType<typeof consumeInvitationSetPasswordRateLimit>> = false;
   try {
-    if (await consumeInvitationSetPasswordRateLimit(state.invitationId)) {
+    reservation = await consumeInvitationSetPasswordRateLimit(state.invitationId);
+    if (reservation) {
       await auth.api.requestPasswordReset({ body: {
         email: state.email,
         redirectTo: `/set-password?invitation=${encodeURIComponent(state.invitationId)}`,
@@ -119,8 +121,17 @@ async function sendInvitationSetPassword(state: InvitationBootstrapState): Promi
     }
   } catch (error) {
     logActionError(error, { message: "invitation password setup email failed" });
+    if (reservation) {
+      try {
+        await reservation.refund();
+      } catch (refundError) {
+        logActionError(refundError, { message: "invitation password setup cooldown refund failed" });
+      }
+    }
     throw new SafeError(toActionError(error, INVITATION_RESEND_FALLBACK));
   }
-  // A cooldown or provider failure has the same public acknowledgement.
+  // A cooldown has the same acknowledgement as a send. So does a provider
+  // failure: Better Auth logs a failed sender and answers success, so only a
+  // failed reset request (not a failed delivery) reaches the refund above.
   return { emailSent: true };
 }
