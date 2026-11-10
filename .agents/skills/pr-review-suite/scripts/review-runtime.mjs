@@ -6,6 +6,7 @@ import { MODEL_PROFILES } from "./review-models.mjs";
 export const DEFAULT_MODELS = ["codex", "opus"];
 export const DEFAULT_PRACTICES = ["standards", "spec", "deep-correctness", "design"];
 export const DEFAULT_TIMEOUT_MINUTES = 20;
+export const DEFAULT_LOCAL_TIMEOUT_MINUTES = 40;
 export const DEFAULT_CONCURRENCY = 2;
 export const DEFAULT_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const SIGKILL_GRACE_MS = 5000;
@@ -19,7 +20,7 @@ Usage:
   run-pr-review-suite.mjs [--pr <number|url|branch> | --local [--base <branch>]]
     [--spec <path> | --issue <number>] [--prior <report.json>]... [--profile full|light]
     [--models codex,opus] [--practices standards,spec,deep-correctness,design]
-    [--timeout-minutes 20] [--concurrency 2]
+    [--timeout-minutes N] [--concurrency 2]
     [--artifact-dir <path>] (--publish | --dry-run | --plan)
   run-pr-review-suite.mjs --self-test
 
@@ -34,6 +35,7 @@ Options:
   --base      Local base branch (default staging); fetch origin, then use merge-base.
   --issue     Explicit issue spec source; cannot be combined with --spec.
   --prior     Earlier report.json with fixed/declined findings; repeat in round order.
+  --timeout-minutes  Per reviewer: default ${DEFAULT_LOCAL_TIMEOUT_MINUTES} locally, ${DEFAULT_TIMEOUT_MINUTES} for PR reviews.
   --profile   full (default) or light, with cheaper Codex and lower Opus effort.
 `.trim();
 }
@@ -49,7 +51,7 @@ export function parseArgs(argv) {
     profile: "full",
     models: [...DEFAULT_MODELS],
     practices: [...DEFAULT_PRACTICES],
-    timeoutMinutes: DEFAULT_TIMEOUT_MINUTES,
+    timeoutMinutes: undefined,
     concurrency: DEFAULT_CONCURRENCY,
     artifactDir: undefined,
     mode: undefined,
@@ -95,6 +97,8 @@ export function parseArgs(argv) {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
+
+  options.timeoutMinutes ??= options.local ? DEFAULT_LOCAL_TIMEOUT_MINUTES : DEFAULT_TIMEOUT_MINUTES;
 
   if (!options.mode) {
     throw new Error(

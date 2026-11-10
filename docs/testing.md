@@ -414,7 +414,13 @@ through GraphQL, and watches until MERGED. A drop from the queue prints the
 `teardown` from `scripts/worktree.sh` only after MERGED; `--dry-run` reads state and mutates
 nothing. `scripts/ci-failures.sh <pr>` lists failing checks and prints the Vitest and
 Playwright failing test names with their error lines from the failed Actions logs.
-Neither script runs tests or deletes branches itself; `--teardown` delegates to `teardown`, which deletes the branch once merged.
+`scripts/pr-status.sh <pr> [<pr>...]` reads PR state, required checks, merge queue
+position and local worktrees without changing anything. Each line labels the check
+buckets (`checks=pass=4,pending=6` or `checks=none`), merge state
+(`merge-state=BLOCKED`), and queue (`queue=3/QUEUED` or `queue=no`). Merged PRs
+also include `merge=<short-sha>` or `merge=unavailable` when GitHub has not provided the commit.
+A merged PR with a worktree still listed needs teardown; `pr-land.sh` exits 5 when the PR merged but requested teardown is still owed, for any cause (including an unavailable merge commit).
+These scripts do not run tests or delete branches themselves; `--teardown` delegates to `teardown`, which deletes the branch once merged.
 
 ## Stale mocks: lint rule and pre-push hook
 
