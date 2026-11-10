@@ -90,7 +90,7 @@ export function InvitationBootstrapForm({
         getForm={() => document.getElementById(formId)}
         message={serverError}
       />
-      <Button type="submit" variant="primary" width="full" busy={busy}>
+      <Button type="submit" variant="primary" width="full" className={PHONE_TOUCH_TARGET} busy={busy}>
         Email me a link
       </Button>
     </form>

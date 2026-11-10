@@ -52,7 +52,8 @@ Read these first. Each one fails quietly rather than loudly.
   `shrink-0`; row menus, location rows; keep 12px between neighbours). `CENTRED_HIT_AREA` (`::before`) for chips and badges.
   `INLINE_HIT_AREA` (`::after`, `_FROM_SM` variant) for inline links.
   `PHONE_TOUCH_TARGET` for a footer button or a select that must be 44px tall
-  on a phone. A `<select>` cannot take a pseudo-element, so it grows instead.
+  on a phone, and for every full-width action on the auth pages (form submits
+  such as Sign in and Set password, outcome actions, Accept invitation). A `<select>` cannot take a pseudo-element, so it grows instead.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
