@@ -52,8 +52,9 @@ provider error text and addresses must never be logged.
 - Invitations are saved before sending. Settings member invites (including
   Platform Admin overrides) and Platform Organizations creation share one
   invitation helper and return `emailSent` with the accept link. Delivery
-  failure keeps the invitation and the action succeeds. Existing-account first
-  Admins are added directly and receive no invitation.
+  failure keeps the invitation and the action succeeds. A first Admin whose
+  account has a confirmed email is added directly and receives no invitation;
+  an unconfirmed account gets the Admin invitation like a new address.
 
 Better Auth's invitation hook handles direct HTTP calls only; server actions
 send after creation so they can return delivery status without double-sending.
