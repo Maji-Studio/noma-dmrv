@@ -721,7 +721,7 @@ is in an Application another Removal holds get a late-run style Check pointing t
 the Emissions tab, cleared by a later same-day entry. Sent batches keep the same
 hide rule for late runs. Unheld batches attach matching runs automatically and get
 no such Check. The list projects only Blocking and Check counts, health state and lines to decide from
-this core; its Removal, GHG Statement and lock fields remain in the list action.
+this core, plus whether any holding Removal has a submitted version; the newest holder still supplies the list action's Removal status and GHG Statement, with lock fields loaded there.
 `loadCreditBatchTodosFn` reads one batch through the same core; the batch page
 reads it through `useCreditBatchTodos` (`certificationKeys.batchTodos`, refetched
 on every mount, `staleTime: 0`) and shows no to-dos at all when it fails. Waiting

@@ -11,6 +11,8 @@ export const CREDIT_BATCH_LIFECYCLE_STEPS = [
   { key: "credits-issued", label: "Credits issued" },
 ] as const;
 
+export type CreditBatchLifecycleStep = typeof CREDIT_BATCH_LIFECYCLE_STEPS[number]["key"];
+
 export type CreditBatchLifecycleStepState =
   | "active"
   | "success"
@@ -20,27 +22,32 @@ export type CreditBatchLifecycleStepState =
 export interface CreditBatchLifecycle {
   badgeStatus: StatusValue;
   label: string;
-  currentStepIndex: number;
+  currentStep: CreditBatchLifecycleStep;
+  currentStepFailed: boolean;
   stepStates: CreditBatchLifecycleStepState[];
 }
 
-function buildStepStates(
-  currentStepIndex: number,
+function lifecycleAtStep(
+  badgeStatus: StatusValue,
+  label: string,
+  currentStep: CreditBatchLifecycleStep,
   currentState: "active" | "success" | "failed" = "active",
-): CreditBatchLifecycleStepState[] {
-  return CREDIT_BATCH_LIFECYCLE_STEPS.map((_, index) => {
-    if (index < currentStepIndex) return "success";
-    return index === currentStepIndex ? currentState : "inactive";
-  });
+): CreditBatchLifecycle {
+  const currentStepIndex = CREDIT_BATCH_LIFECYCLE_STEPS.findIndex((step) => step.key === currentStep);
+  return {
+    badgeStatus,
+    label,
+    currentStep,
+    currentStepFailed: currentState === "failed",
+    stepStates: CREDIT_BATCH_LIFECYCLE_STEPS.map((_, index) => {
+      if (index < currentStepIndex) return "success";
+      return index === currentStepIndex ? currentState : "inactive";
+    }),
+  };
 }
 
 function readyToSubmitLifecycle(): CreditBatchLifecycle {
-  return {
-    badgeStatus: "ready",
-    label: CREDIT_BATCH_READY_LABEL,
-    currentStepIndex: 0,
-    stepStates: buildStepStates(0, "success"),
-  };
+  return lifecycleAtStep("ready", CREDIT_BATCH_READY_LABEL, "open", "success");
 }
 
 function statementLifecycle(
@@ -51,80 +58,30 @@ function statementLifecycle(
 
   switch (status.kind) {
     case "in-progress":
-      return {
-        badgeStatus: "running",
-        label: "Updating statement",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("running", "Updating statement", "removal-submitted");
     case "draft":
-      return {
-        badgeStatus: "running",
-        label: "Removal submitted",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("running", "Removal submitted", "removal-submitted");
     case "in-registry":
-      return {
-        badgeStatus: "running",
-        label: "Removal submitted",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("running", "Removal submitted", "removal-submitted");
     case "pending-changes":
-      return {
-        badgeStatus: "pending",
-        label: "Statement pending changes",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("pending", "Statement pending changes", "removal-submitted");
     case "in-verification":
-      return {
-        badgeStatus: "pending",
-        label: "In verification",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("pending", "In verification", "removal-submitted");
     case "verified":
-      return {
-        badgeStatus: "verified",
-        label: "Verified",
-        currentStepIndex: 2,
-        stepStates: buildStepStates(2, "success"),
-      };
+      return lifecycleAtStep("verified", "Verified", "verified", "success");
     case "issued":
-      return {
-        badgeStatus: "issued",
-        label: "Credits issued",
-        currentStepIndex: 3,
-        stepStates: buildStepStates(3, "success"),
-      };
+      return lifecycleAtStep("issued", "Credits issued", "credits-issued", "success");
     case "verification-failed":
-      return {
-        badgeStatus: "rejected",
-        label: "Verification failed",
-        currentStepIndex: 2,
-        stepStates: buildStepStates(2, "failed"),
-      };
+      return lifecycleAtStep("rejected", "Verification failed", "verified", "failed");
     case "superseded":
-      return {
-        badgeStatus: "superseded",
-        label: "Statement superseded",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("superseded", "Statement superseded", "removal-submitted");
     default:
       return null;
   }
 }
 
 function interruptedLifecycle(): CreditBatchLifecycle {
-  return {
-    badgeStatus: "failed",
-    label: REMOVAL_SUBMISSION_INTERRUPTED_LABEL,
-    currentStepIndex: 0,
-    stepStates: buildStepStates(0, "failed"),
-  };
+  return lifecycleAtStep("failed", REMOVAL_SUBMISSION_INTERRUPTED_LABEL, "open", "failed");
 }
 
 function removalLifecycle(
@@ -137,42 +94,17 @@ function removalLifecycle(
     case "not-submitted":
       return summary.state === "ready"
         ? readyToSubmitLifecycle()
-        : {
-            badgeStatus: "draft",
-            label: "Open",
-            currentStepIndex: 0,
-            stepStates: buildStepStates(0),
-          };
+        : lifecycleAtStep("draft", "Open", "open");
     case "in-progress":
-      return {
-        badgeStatus: "running",
-        label: "Submitting Removal",
-        currentStepIndex: 0,
-        stepStates: buildStepStates(0),
-      };
+      return lifecycleAtStep("running", "Submitting Removal", "open");
     case "interrupted":
       return interruptedLifecycle();
     case "submitted":
-      return {
-        badgeStatus: "running",
-        label: "Removal submitted",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("running", "Removal submitted", "removal-submitted");
     case "rejected":
-      return {
-        badgeStatus: "rejected",
-        label: "Removal rejected",
-        currentStepIndex: 0,
-        stepStates: buildStepStates(0, "failed"),
-      };
+      return lifecycleAtStep("rejected", "Removal rejected", "open", "failed");
     case "superseded":
-      return {
-        badgeStatus: "superseded",
-        label: "Removal superseded",
-        currentStepIndex: 1,
-        stepStates: buildStepStates(1),
-      };
+      return lifecycleAtStep("superseded", "Removal superseded", "removal-submitted");
     default:
       return null;
   }
@@ -186,6 +118,10 @@ export function deriveCreditBatchLifecycle(
   const statement = statementLifecycle(summary);
   if (statement) return statement;
 
+  if (summary.hasSubmittedRemoval) {
+    return lifecycleAtStep("running", "Removal submitted", "removal-submitted");
+  }
+
   const removal = removalLifecycle(summary);
   if (removal) return removal;
 
@@ -193,10 +129,5 @@ export function deriveCreditBatchLifecycle(
     return readyToSubmitLifecycle();
   }
 
-  return {
-    badgeStatus: "pending",
-    label: "Open",
-    currentStepIndex: 0,
-    stepStates: buildStepStates(0),
-  };
+  return lifecycleAtStep("pending", "Open", "open");
 }

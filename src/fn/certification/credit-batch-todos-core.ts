@@ -23,6 +23,8 @@ export interface CreditBatchTodos {
   check: CreditBatchOpenItem[];
   /** Any holding Removal interrupted: the batch-level rule every surface reads. */
   removalInterrupted: boolean;
+  /** Any holder has a submitted version, using the batch page phase rule. */
+  hasSubmittedRemoval: boolean;
 }
 
 /** Shared read for batches whose organization and facility the caller authorized. */
@@ -85,6 +87,7 @@ export async function loadCreditBatchTodos(
     return [id, {
       state: health.state, linesToDecide: batchLinesToDecide(health), blocking, check,
       removalInterrupted: findInterruptedRemoval(removals) !== undefined,
+      hasSubmittedRemoval: removals?.some((removal) => removal.phase === "submitted") ?? false,
     }];
   }));
 }

@@ -15,6 +15,7 @@ function summary(
     productionEmissionsClaimedByRemovalCode: null,
     removalStatus: null,
     removalInterrupted: false,
+    hasSubmittedRemoval: false,
     ghgStatementId: null,
     ghgStatementStatus: null,
     ...overrides,
@@ -59,7 +60,7 @@ describe("deriveCreditBatchLifecycle", () => {
   });
 
   it("surfaces pending Statement changes on the batch", () => {
-    expect(deriveCreditBatchLifecycle(summary({ ghgStatementStatus: { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false } }))).toMatchObject({ label: "Statement pending changes", currentStepIndex: 1, badgeStatus: "pending" });
+    expect(deriveCreditBatchLifecycle(summary({ ghgStatementStatus: { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false } }))).toMatchObject({ label: "Statement pending changes", currentStep: "removal-submitted", badgeStatus: "pending" });
   });
 
   it("reports the removal state after grouping", () => {
@@ -77,7 +78,7 @@ describe("deriveCreditBatchLifecycle", () => {
     );
 
     expect(lifecycle.label).toBe("Removal submitted");
-    expect(lifecycle.currentStepIndex).toBe(1);
+    expect(lifecycle.currentStep).toBe("removal-submitted");
     expect(lifecycle.stepStates).toEqual([
       "success",
       "active",
@@ -103,7 +104,7 @@ describe("deriveCreditBatchLifecycle", () => {
     expect(lifecycle).toMatchObject({
       badgeStatus: "failed",
       label: "Submission interrupted",
-      currentStepIndex: 0,
+      currentStep: "open",
       stepStates: ["failed", "inactive", "inactive", "inactive"],
     });
   });
@@ -120,6 +121,7 @@ describe("deriveCreditBatchLifecycle", () => {
           isTerminal: true,
         },
         ghgStatementId: "statement-1",
+        hasSubmittedRemoval: true,
         ghgStatementStatus: {
           kind: "in-verification",
           value: "pending",
@@ -131,7 +133,7 @@ describe("deriveCreditBatchLifecycle", () => {
     );
 
     expect(lifecycle.label).toBe("In verification");
-    expect(lifecycle.currentStepIndex).toBe(1);
+    expect(lifecycle.currentStep).toBe("removal-submitted");
   });
 
   it("reserves the final success milestone for issued credits", () => {
@@ -174,13 +176,32 @@ describe("deriveCreditBatchLifecycle", () => {
     );
 
     expect(lifecycle.label).toBe("Verified");
-    expect(lifecycle.currentStepIndex).toBe(2);
+    expect(lifecycle.currentStep).toBe("verified");
   });
   it("reads interrupted when an older holder is, even with the newest submitted", () => {
     expect(deriveCreditBatchLifecycle(summary({
       removalId: "newest",
       removalStatus: { kind: "submitted", value: "issued", label: "Submitted", isActionable: false, isTerminal: false },
       removalInterrupted: true,
-    }))).toMatchObject({ badgeStatus: "failed", label: "Submission interrupted", currentStepIndex: 0 });
+      hasSubmittedRemoval: true,
+    }))).toMatchObject({ badgeStatus: "failed", label: "Submission interrupted", currentStep: "open" });
+  });
+
+  it("keeps an interrupted holder ahead of the newest holder's issued statement", () => {
+    expect(deriveCreditBatchLifecycle(summary({
+      hasSubmittedRemoval: true,
+      removalInterrupted: true,
+      ghgStatementStatus: { kind: "issued", value: "issued", label: "Issued", isActionable: false, isTerminal: true },
+    }))).toMatchObject({ currentStep: "open", currentStepFailed: true, label: "Submission interrupted" });
+  });
+
+  it("exposes verification failure by step key and flag", () => {
+    expect(deriveCreditBatchLifecycle(summary({
+      hasSubmittedRemoval: true,
+      ghgStatementStatus: { kind: "verification-failed", value: "rejected", label: "Verification failed", isActionable: true, isTerminal: true },
+    }))).toMatchObject({
+      currentStep: "verified", currentStepFailed: true,
+      stepStates: ["success", "success", "failed", "inactive"],
+    });
   });
 });

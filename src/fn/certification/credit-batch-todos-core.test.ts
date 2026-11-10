@@ -45,6 +45,23 @@ describe("loadCreditBatchTodos interrupted attempt outcomes", () => {
     vi.mocked(getDeletionLeasedRemovalIds).mockResolvedValue(new Set());
   });
 
+  it.each<{ phases: RemovalDisplay["phase"][]; submitted: boolean }>([
+    { phases: ["draft", "submitted"], submitted: true },
+    { phases: ["submitted", "draft"], submitted: true },
+    { phases: ["draft", "draft"], submitted: false },
+    { phases: [], submitted: false },
+  ])("projects any submitted holder from phases $phases", async ({ phases, submitted }) => {
+    const removals: RemovalDisplay[] = phases.map((phase, index) => ({
+      id: `holder-${index}`, code: `RM-FX-${index}`, phase,
+      status: { kind: "not-submitted", value: "draft", label: "Not submitted", isActionable: true, isTerminal: false },
+    }));
+    vi.mocked(loadCreditBatchRemovalDisplays).mockResolvedValue(new Map([["batch-1", removals]]));
+    const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
+    expect(result.get("batch-1")?.hasSubmittedRemoval).toBe(submitted);
+    expect(result.get("batch-2")?.hasSubmittedRemoval).toBe(false);
+    expect(loadCreditBatchRemovalDisplays).toHaveBeenCalledExactlyOnceWith(ORG_CTX, ["batch-1", "batch-2"]);
+  });
+
   it("refuses deletion after a superseded finalized version even when the changed draft phase is draft", async () => {
     vi.mocked(hasFinalizedSubmission).mockResolvedValue(true);
     const result = await loadCreditBatchTodos(ORG_CTX, "facility", BATCHES);
