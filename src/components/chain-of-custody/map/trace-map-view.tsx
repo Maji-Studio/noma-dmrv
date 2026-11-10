@@ -61,16 +61,18 @@ const PHONE_CONTROL_SIZE_CLASS = "max-lg:[&_button]:h-44 max-lg:[&_button]:w-44"
 /**
  * Phone: the pane never shrinks below its control stack (four 44px controls,
  * the 32px bottom inset, 16px above), so a short phone scrolls the page instead
- * of squeezing the map to a strip the controls spill out of (#1553). Written as
- * literal classes because Tailwind scans for them; keep the pane in step with
- * PHONE_CONTROL_SIZE_CLASS and the controls' bottom-32 inset.
+ * of squeezing the map to a strip the controls spill out of (#1553). Each value
+ * is defined once as a custom property on the view root; the root, the pane and
+ * the panel read them. Literal classes because Tailwind scans for them; keep the
+ * stack in step with PHONE_CONTROL_SIZE_CLASS and the controls' bottom-32 inset.
  */
-const MAP_PANE_MIN_HEIGHT_CLASS = "max-lg:min-h-[calc(var(--spacing-44)*4+var(--spacing-32)+var(--spacing-16))]";
-/** Phone: the panel under the map keeps room for its heading and a couple of rows. */
-const PANEL_MIN_HEIGHT_CLASS = "max-lg:min-h-[var(--spacing-256)]";
-/** Phone: the root is at least pane plus panel tall, so the shell around it scrolls. */
-const VIEW_MIN_HEIGHT_CLASS =
-  "max-lg:min-h-[calc(var(--spacing-44)*4+var(--spacing-32)+var(--spacing-16)+var(--spacing-256))]";
+const PHONE_MIN_VARS_CLASS =
+  "max-lg:[--trace-map-pane-min:calc(var(--spacing-44)*4+var(--spacing-32)+var(--spacing-16))] max-lg:[--trace-map-panel-min:var(--spacing-256)]";
+/** The root is at least pane plus panel tall, so the shell around it scrolls. */
+const VIEW_MIN_HEIGHT_CLASS = "max-lg:min-h-[calc(var(--trace-map-pane-min)+var(--trace-map-panel-min))]";
+const MAP_PANE_MIN_HEIGHT_CLASS = "max-lg:min-h-[var(--trace-map-pane-min)]";
+/** The panel under the map keeps room for its heading and a couple of rows. */
+const PANEL_MIN_HEIGHT_CLASS = "max-lg:min-h-[var(--trace-map-panel-min)]";
 const EMPTY_STATE_RIGHT_PADDING_CLASS = "lg:pr-[416px]";
 /** The map frames inside the room the panel leaves: top bar, panel, controls, gutter. */
 const DESKTOP_PADDING = { top: 72, right: PANEL_CLEARANCE_PX + 144, bottom: 56, left: 64 };
@@ -196,7 +198,7 @@ export function TraceMapView({
     );
 
   return (
-    <div className={cn("flex flex-col", column ? "h-full" : cn("lg:relative lg:block", PAGE_HEIGHT_CLASS, VIEW_MIN_HEIGHT_CLASS))}>
+    <div className={cn("flex flex-col", column ? "h-full" : cn("lg:relative lg:block", PAGE_HEIGHT_CLASS, PHONE_MIN_VARS_CLASS, VIEW_MIN_HEIGHT_CLASS))}>
       {mapPane}
 
       <aside

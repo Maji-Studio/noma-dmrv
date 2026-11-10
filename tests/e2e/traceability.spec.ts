@@ -872,9 +872,6 @@ const PHONE_VIEWPORTS = [
 // FIT carries a per-map label ("Fit map to ..."), so match its start.
 const MAP_CONTROL_NAMES = [/^Zoom in$/, /^Zoom out$/, /^Fit /, /^Toggle satellite imagery$/];
 const MAP_READY_TIMEOUT_MS = 45_000;
-// Optional: set to a folder to keep a screenshot per viewport (before/after evidence).
-const SHOT_SETTLE_MS = 3000;
-const SHOTS_DIR = process.env.TRACE_MAP_SHOTS_DIR;
 
 test.describe("Traceability Map controls on short phones (#1553)", () => {
   for (const anchor of ["batch", "application"] as const) {
@@ -898,16 +895,9 @@ test.describe("Traceability Map controls on short phones (#1553)", () => {
       );
       const controls = MAP_CONTROL_NAMES.map((name) => adminPage.getByRole("button", { name }));
       await expect(controls[0]).toBeVisible({ timeout: MAP_READY_TIMEOUT_MS });
-      if (SHOTS_DIR) {
-        await adminPage.waitForTimeout(SHOT_SETTLE_MS); // let the markers and routes draw
-        await adminPage.screenshot({ path: `${SHOTS_DIR}/${anchor}-1440x900.png` });
-      }
 
       for (const viewport of PHONE_VIEWPORTS) {
         await adminPage.setViewportSize(viewport);
-        if (SHOTS_DIR) {
-          await adminPage.screenshot({ path: `${SHOTS_DIR}/${anchor}-${viewport.width}x${viewport.height}.png` });
-        }
         const mapPane = adminPage.locator(".cvm-map");
         await expect(mapPane).toBeVisible();
         const pane = await mapPane.boundingBox();
