@@ -182,4 +182,26 @@ describe("Review & submit on first open", () => {
     expect(rowStates(renderer)).toEqual(["fixed"]);
     expect(text(renderer)).not.toContain("Preparing the submission");
   });
+
+  describe("footer while preparing", () => {
+    const buttons = (renderer: ReactTestRenderer) =>
+      renderer.root.findAllByType("button").map((node) => node.children.join(""));
+    const renderWithBack = () => (
+      <SubmitStep removalId="removal-1" facilityId="facility-1" ctx={CTX} onDone={vi.fn()} onBackToEmpty={vi.fn()} submitMutation={IDLE as never} />
+    );
+
+    it("keeps only Back to Empty components, with no Submit and no delete action", async () => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(renderWithBack()); });
+      expect(text(renderer)).toContain("Preparing the submission");
+      expect(buttons(renderer)).toEqual(["Back to Empty components"]);
+    });
+
+    it("renders no footer at all when there is no way back", async () => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => { renderer = create(render()); });
+      expect(text(renderer)).toContain("Preparing the submission");
+      expect(buttons(renderer)).toEqual([]);
+    });
+  });
 });
