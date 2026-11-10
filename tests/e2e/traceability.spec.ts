@@ -11,7 +11,6 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { SWIFTSHADER_ARGS } from "./fixtures/swiftshader";
 import { test, expect, type SeededChainData } from "./fixtures";
-import { stubBasemap } from "./helpers/basemap-route";
 
 // SwiftShader gives headless Chromium the WebGL context the Map views need.
 test.use({ launchOptions: { args: SWIFTSHADER_ARGS } });
@@ -881,7 +880,6 @@ test.describe("Traceability Map controls on short phones (#1553)", () => {
       cleanupTestData,
     }) => {
       void cleanupTestData;
-      await stubBasemap(adminPage);
       const seeded = await seedBatchChain(seededData);
       // Hydrate at desktop width, then resize: the layout breakpoints are CSS, the map frames once.
       await adminPage.setViewportSize(DESKTOP_VIEWPORT);
@@ -901,8 +899,13 @@ test.describe("Traceability Map controls on short phones (#1553)", () => {
         const mapPane = adminPage.locator(".cvm-map");
         await expect(mapPane).toBeVisible();
         const pane = await mapPane.boundingBox();
-        const header = await adminPage.locator("header").first().boundingBox();
+        // The Traceability page header (batch selector, view switch), not the app's mobile nav bar.
+        const header = await adminPage
+          .locator("header")
+          .filter({ has: adminPage.getByTestId("chain-view-segment") })
+          .boundingBox();
         expect(pane).not.toBeNull();
+        expect(header).not.toBeNull();
         for (const control of controls) {
           const box = await control.boundingBox();
           expect(box).not.toBeNull();
@@ -910,7 +913,7 @@ test.describe("Traceability Map controls on short phones (#1553)", () => {
           expect(box!.y + box!.height).toBeLessThanOrEqual(pane!.y + pane!.height);
           expect(box!.x).toBeGreaterThanOrEqual(pane!.x);
           expect(box!.x + box!.width).toBeLessThanOrEqual(pane!.x + pane!.width);
-          if (header) expect(box!.y).toBeGreaterThanOrEqual(header.y + header.height);
+          expect(box!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
         }
       }
     });
