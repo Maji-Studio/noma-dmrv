@@ -121,7 +121,7 @@ describe("Removal preflight", () => {
       entityReadinessIssues: [{ key: "sampleMoisture", label: "Sample moisture", fixTarget: "labSamples", affectedRecords: [] }],
       batchesWithSamples: [],
     }));
-    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityTier"]);
+    expect(blockers.map(({ code }) => code)).toEqual(["feedstockTypeMapping", "entityReadiness", "durabilityUnresolved"]);
     expect(blockers[1].fixTarget).toBe("labSamples");
   });
 
@@ -153,7 +153,7 @@ describe("Removal preflight", () => {
     const detail = "Delivery DL-1 has no proof of delivery.";
     const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "", fact: detail, detail, fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([
-      { code: "legacy", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
+      { code: "buildRefused", message: `Removal submission blocked:\n${detail}`, fixTarget: "deliveryEvidence" },
     ]);
   });
 
@@ -169,7 +169,7 @@ describe("Removal preflight", () => {
     expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(SafeError);
     expect(() => build.assertSubmissionLineageResolved(ctx.submissionLineageBlockers)).toThrow(build.SubmissionLineageError);
     expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{
-      code: "legacy", fixTarget,
+      code: "buildRefused", fixTarget,
       message: `Removal submission blocked:\n${ctx.submissionLineageBlockers.map(blocker => blocker.detail).join("\n")}`,
     }]);
   });
@@ -183,7 +183,7 @@ describe("Removal preflight", () => {
     const spy = vi.spyOn(build, "buildRemovalSubmissionBuild").mockRejectedValue(new SafeError(message));
     try {
       const ctx = makeContext(undefined, { submissionLineageBlockers: [{ kind: "deliveryProof", instruction: "Attach a delivery receipt, bill of lading or delivery photo before submitting.", fact: "Delivery DL-1 has no proof of delivery.", detail: "Delivery DL-1 has no proof of delivery.", fixTarget: "deliveryEvidence", record: { id: "delivery", code: "DL-1" } }] });
-      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "legacy", message, fixTarget: null }]);
+      expect(await evaluateRemovalBlockers({ orgCtx, removalId: REMOVAL_ID, ctx })).toEqual([{ code: "buildRefused", message, fixTarget: null }]);
     } finally { spy.mockRestore(); }
   });
 

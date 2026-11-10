@@ -149,6 +149,13 @@ and a short reason when it cannot parse it ("Unreadable date"). A formatter
 for a value the app derives (CO₂e, aggregated tonnes, file size) takes a number
 only, so the caller decides where the figure goes when there is none.
 
+**The dashboard KPI band is the one place an unknown figure shows no words**
+(Kenji, 2026-11-09): its four figures show a short muted bar instead, with the
+accessible name "No value", and the (i) keeps explaining what the figure
+measures, not why it is missing. Four big figures side by side make a gap plain
+on its own. A real zero still reads "0 t dry". Everywhere else the rule above
+holds.
+
 Three rules follow:
 
 - **Do not invent a new token.** "Missing", "Unassigned", "Not linked", "Not

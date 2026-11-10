@@ -12,6 +12,7 @@ import { recordApplicationApi } from "@/lib/operations/application-api";
 import { runOperation } from "@/lib/operations/runner";
 import { applicationEtag } from "@/lib/api/representation-etags";
 import { formatFacilityDate } from "@/lib/date-utils";
+import { MS_PER_HOUR, OUTPUT_RUN_START_HOURS_AGO, seedIntakeDate } from "./seed-dates";
 
 const FEEDSTOCK_WET_MASS_KG = 300;
 const FEEDSTOCK_MOISTURE_PERCENT = 20;
@@ -20,23 +21,24 @@ const BIOCHAR_MOISTURE_PERCENT = 10;
 const DELIVERY_WET_MASS_KG = 50;
 const APPLICATION_WET_MASS_KG = 1;
 const FIELD_SIZE_HA = 1;
-const RUN_START_HOURS_AGO = 6;
 const RUN_END_HOURS_AGO = 5;
 const PLACED_HOURS_AGO = 4;
 const DELIVERED_HOURS_AGO = 1;
-const MS_PER_HOUR = 3_600_000;
 const SCRIPT_OPTIONS = { activitySource: "script" } as const;
 // A small WGS 84 field around the fixture site's GPS pair.
 const BOUNDARY = { type: "Polygon", coordinates: [[[35.3, -8.3], [35.301, -8.3], [35.301, -8.301], [35.3, -8.301], [35.3, -8.3]]] };
 
 /** Independent supply leaves every pre-existing fuzz record and stock unchanged. */
 export async function seedApplications(ctx: OrgContext, input: {
+  now: number;
   facilityId: string; supplierId: string; formulationId: string;
   customerId: string; customerLocationId: string; gpsLatitude: number; gpsLongitude: number; timeZone: string;
 }) {
-  const now = Date.now();
+  const { now } = input;
   const instant = (hoursAgo: number) => new Date(now - hoursAgo * MS_PER_HOUR).toISOString();
   const applicationDate = formatFacilityDate(new Date(now), input.timeZone);
+  const intakeDate = seedIntakeDate(now, input.timeZone);
+  const orderDate = formatFacilityDate(new Date(instant(DELIVERED_HOURS_AGO)), input.timeZone);
   const feedstockType = await db.transaction((tx) => createFeedstockTypeInTransaction(ctx, tx, {
     code: "FUZZ-APP-WOOD", name: "API fuzz application wood", category: "forestry", usage: "pyrolysis",
   }));
@@ -55,12 +57,12 @@ export async function seedApplications(ctx: OrgContext, input: {
   }));
   await runOperation(logFeedstockDelivery, ctx, {
     facilityId: input.facilityId, supplierId: input.supplierId, feedstockTypeId: feedstockType.id,
-    deliveryDate: applicationDate, totalWetMassKg: FEEDSTOCK_WET_MASS_KG, moisturePercent: FEEDSTOCK_MOISTURE_PERCENT,
+    deliveryDate: intakeDate, totalWetMassKg: FEEDSTOCK_WET_MASS_KG, moisturePercent: FEEDSTOCK_MOISTURE_PERCENT,
     allocations: [{ storageLocationId: feedstockBin.id, allocatedWetMassKg: FEEDSTOCK_WET_MASS_KG }],
   }, SCRIPT_OPTIONS);
   await runOperation(startProductionRun, ctx, {
     facilityId: input.facilityId, reactorId: reactor.id, status: "complete",
-    startTime: instant(RUN_START_HOURS_AGO), endTime: instant(RUN_END_HOURS_AGO),
+    startTime: instant(OUTPUT_RUN_START_HOURS_AGO), endTime: instant(RUN_END_HOURS_AGO),
     feedstockDraws: [{ storageLocationId: feedstockBin.id, wetMassKg: FEEDSTOCK_WET_MASS_KG }],
     feedstockMoisturePercent: FEEDSTOCK_MOISTURE_PERCENT, biocharStorageLocationId: biocharBin.id,
     biocharOutputKg: BIOCHAR_WET_MASS_KG, biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT,
@@ -72,7 +74,7 @@ export async function seedApplications(ctx: OrgContext, input: {
   }, SCRIPT_OPTIONS);
   const order = (await runOperation(recordOrder, ctx, {
     facilityId: input.facilityId, customerId: input.customerId, customerLocationId: input.customerLocationId,
-    formulationId: input.formulationId, orderDate: applicationDate, quantityKg: DELIVERY_WET_MASS_KG, packaging: "loose",
+    formulationId: input.formulationId, orderDate, quantityKg: DELIVERY_WET_MASS_KG, packaging: "loose",
   }, SCRIPT_OPTIONS)).data;
   const delivery = (await runOperation(recordDelivery, ctx, {
     orderId: order.id, storageLocationId: productBin.id, deliveredAt: instant(DELIVERED_HOURS_AGO),

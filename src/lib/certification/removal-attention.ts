@@ -1,29 +1,22 @@
 /**
  * What the dashboard's "Needs attention" list says about a Removal (#1554).
  * One row per Removal that needs the operator, in the label form of the other
- * rows: a draft reads "N to fix" or "Ready to submit"; a rejected one reads as
- * the Removals list calls it ("Submission failed"); a returned one reads
+ * rows: a draft reads "N to fix", "Ready to submit" or "Couldn't check";
+ * a rejected one reads as the Removals list calls it ("Submission failed");
+ * a returned one reads
  * "Correction needed" or "Resubmit needed"; a submitted Removal has no row.
  * Pure, so the list and its tests share one source. The data-access aggregate
  * (`getDashboardOverview`) takes these rows and owns ordering, caps and totals.
  */
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { RemovalReadiness } from "@/lib/certification/readiness";
-import { REMOVAL_SUBMISSION_FAILED } from "@/lib/certification/status";
 import type { RemovalCorrection } from "@/lib/certification/removal-entry-correction";
-import { RETURNED_BY_ISOMETRIC_LABEL } from "@/lib/certification/emission-entry-messages";
-import { correctionStatus } from "@/lib/removal-correction-copy";
+import { removalAttentionTitle, REMOVAL_REJECTED_ATTENTION_TITLE } from "@/lib/certification/removal-shown-status";
 import { recordHref } from "@/lib/record-links";
 
-export const REMOVAL_INTERRUPTED_ATTENTION_TITLE = "Submission interrupted";
-export const REMOVAL_REJECTED_ATTENTION_TITLE = REMOVAL_SUBMISSION_FAILED.label;
+export { REMOVAL_REJECTED_ATTENTION_TITLE };
 
-/** A draft's title, or null when it needs nothing from the operator right now (a submission is running). */
-export function draftRemovalAttentionTitle(readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount">): string | null {
-  if (readiness.state === "ready") return "Ready to submit";
-  if (readiness.state === "blocked") return `${readiness.fixCount ?? readiness.reasons.length} to fix`;
-  return null;
-}
+export const REMOVAL_INTERRUPTED_ATTENTION_TITLE = "Submission interrupted";
 
 interface RemovalAttentionBase {
   removalId: string;
@@ -32,7 +25,8 @@ interface RemovalAttentionBase {
 }
 
 export type DraftRemovalReadiness = RemovalAttentionBase & {
-  readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount">;
+  /** Null means readiness failed to load; the draft still needs an operator row. */
+  readiness: Pick<RemovalReadiness, "state" | "reasons" | "fixCount"> | null;
 };
 
 /** A Removal whose last submission was rejected: it stays with the operator. */
@@ -61,6 +55,7 @@ export const NO_REMOVAL_ATTENTION: RemovalAttentionRows = { drafts: [], rejected
 function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string): DashboardAttentionItem {
   return {
     id: `removal-draft-${removal.removalId}`,
+    recordIds: [removal.removalId],
     entityCode: removal.code,
     date: removal.createdAt,
     title,
@@ -69,15 +64,18 @@ function rowFor(removal: RemovalAttentionBase, title: string, facilityId: string
 }
 
 export function removalAttentionRows(sources: RemovalAttentionSources, facilityId: string): RemovalAttentionRows {
-  const drafts = sources.drafts.filter((draft) => draftRemovalAttentionTitle(draft.readiness) !== null);
+  const drafts = sources.drafts.flatMap((draft) => {
+    const title = removalAttentionTitle({ kind: "draft", readiness: draft.readiness });
+    return title === null ? [] : [{ draft, title }];
+  });
   return {
-    drafts: drafts.map((draft) => rowFor(draft, draftRemovalAttentionTitle(draft.readiness) ?? "", facilityId)),
-    rejected: sources.rejected.map((removal) => rowFor(removal, REMOVAL_REJECTED_ATTENTION_TITLE, facilityId)),
-    covered: new Set([...drafts, ...sources.rejected].map((removal) => removal.removalId)),
+    drafts: drafts.map(({ draft, title }) => rowFor(draft, title, facilityId)),
+    rejected: sources.rejected.map((removal) => rowFor(removal, removalAttentionTitle({ kind: "rejected" }), facilityId)),
+    covered: new Set([...drafts.map(({ draft }) => draft), ...sources.rejected].map((removal) => removal.removalId)),
     returned: sources.returned.map((removal) => ({
       removalId: removal.removalId,
       item: {
-        ...rowFor(removal, removal.correction ? correctionStatus(removal.correction).label : RETURNED_BY_ISOMETRIC_LABEL, facilityId),
+        ...rowFor(removal, removalAttentionTitle({ kind: "returned", correction: removal.correction }), facilityId),
         id: `removal-returned-${removal.removalId}`,
       },
     })),

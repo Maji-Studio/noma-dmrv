@@ -249,7 +249,7 @@ Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
-- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Every other link button keeps mono uppercase.
+- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason. One exception: an inline text action on a field's hint line beside a value (first use: "Refresh from location" on the one-way distance) is `body-caption`, sentence case, underlined, with a 14px icon before it, so it fits the hint line. Pick the label by hierarchy, not by habit (Kenji, 2026-11-09): an action that follows the content it belongs to and must not outrank it can be a quiet link, `body-small font-medium`, sentence case, no outline, with a trailing 14px arrow (first use: the dashboard's stage actions under each stage's figures). An action that is what the surface is for stays a mono caps button. Every other link button keeps mono uppercase.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
 - **20px:** `.body-lead`; with `font-medium` it is the title of every read sheet and form section (`SectionLabel`, shared by `DetailSection` and `FormSection`; #1554)
@@ -721,7 +721,7 @@ bin, reactor, facility, delivery, customer, supplier, feedstock, order, biochar
 product, credit batch, sample, members, invitations). They are decoration
 (`aria-hidden`); the text next to them carries the meaning.
 
-**Where they go.** Three places, nowhere else.
+**Where they go.** Three places, nowhere else, plus the dashboard scene below.
 
 - Choice cards (`ChoiceCardGroup` `art`), at the default card size (56px wide).
   If one card in a group has a drawing, all of them do.
@@ -732,6 +732,12 @@ product, credit batch, sample, members, invitations). They are decoration
   its Phosphor icon, so the `icon` prop switches with the title. Error states,
   filtered states and nested `padding="sm"` empties never get a drawing.
 - Onboarding: the setup-in-progress state. The dashboard guide carries welcome copy in its header.
+
+The dashboard stage band has its own drawing, not one from the set: a landscape
+from supplier to field (`components/dashboard/scene-landscape*`), drawn in the
+same monoline style at band size, `aria-hidden`. Each stage owns a ground lot
+(`data-art-lot`) that lights in `--clr-purple-5` with its column; the stations
+never move and nothing covers the drawing. Phones get no scene.
 
 Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
 
@@ -1046,11 +1052,15 @@ bands, traceability, and schema explorer surfaces retain the canonical page
 width. Never constrain all `<form>` elements globally.
 
 **The one sanctioned exception is the Dashboard**: it keeps the container/gap
-shell but opens with a display headline ("Dashboard" as `title-heading-2` under
-a mono facility eyebrow) instead of `PageHeader`, its KPI strip is the 4-cell
-**HeroKpiBand** (one ink-bordered strip, not iconed StatCards), and its hero is
-the isometric traceability scene (`components/dashboard/flow-hero*`). No other
-page gets a display headline.
+shell but opens with a display headline ("Dashboard" as `title-heading-2`, an
+"Updated 18:37" line, no eyebrow) instead of `PageHeader`, with the credit
+batch filter (`DataTable.FilterSelect`) top right. Its KPI strip is the 4-cell
+**HeroKpiBand** (one ink-bordered strip, not iconed StatCards), then the stage
+band (`components/dashboard/stage-band.tsx` over the landscape scene). No other
+page gets a display headline. Its To do, Bins and Recent activity rows are one
+line each, except that a Bins row carries a second caption line with the bin
+kind and what it holds ("Feedstock bin · Forestry waste"), dropped when it
+repeats the kind or the name.
 
 ### List-page idiom — copy `order-list.tsx:120-349`
 
