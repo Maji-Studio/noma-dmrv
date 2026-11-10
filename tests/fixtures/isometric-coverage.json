@@ -1,10 +1,14 @@
 {
-  "_doc": "Read-only sandbox inventory for `pnpm isometric:coverage-check -- --source=fixture` (ADR 0032). Live template lines use the same contracts as readiness and submission. Entry-only operating lines warn; lines without a settled contract, forbidden lines and unmapped inputs fail.",
+  "_doc": "Read-only sandbox inventory for `pnpm isometric:coverage-check -- --source=fixture` (ADR 0032). Each facility may supply reviewedLineSources keyed by live component ID (scope, entryPolicy, optional automaticSource). These explicit reviews override proposed contracts and use readiness/submission validation. Unknown fixture IDs fail; new live lines without a settled contract still need review. Entry-only operating lines warn; forbidden lines and unmapped inputs fail.",
   "facilities": [
     {
       "label": "Dark Earth sandbox demo",
       "externalProjectId": "prj_1K9YJ33RKSBX9FFF",
-      "removalTemplateId": "rvt_1KS4S43VPSBXA26X"
+      "removalTemplateId": "rvt_1KS4S43VPSBXA26X",
+      "reviewedLineSources": {
+        "rtc_1M6NMG60MSBXQ6VN": { "scope": "operating", "entryPolicy": "additive" },
+        "rtc_1M6NM8QWWSBX8KD1": { "scope": "operating", "entryPolicy": "additive" }
+      }
     }
   ]
 }

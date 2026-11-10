@@ -94,6 +94,10 @@ are distinct checks. See [integration contract](./integration-plan.md#immutable-
 
 1. Inspect the saved template with the command above.
 2. Update `tests/fixtures/isometric-coverage.json` if its selected contract changes.
+   Each facility can record explicit `reviewedLineSources` keyed by live component
+   ID, with `scope`, `entryPolicy` and optional `automaticSource`. These override
+   proposals and pass through shared contract validation. Unknown fixture IDs
+   fail; new live lines without a settled contract still need review.
 3. Run the live compatibility check:
 
    ```bash

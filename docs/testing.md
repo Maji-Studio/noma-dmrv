@@ -624,7 +624,10 @@ Run the script after changing the Removal compile, comparison or submit checks.
 `isometric-health.yml` runs API read health, live template input coverage via
 `pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI drift
 independently after setup. Fixture source selects local project/template IDs and
-sandbox period-input exceptions; it still fetches live templates. It does not
+optional per-facility `reviewedLineSources` contracts keyed by component ID in
+`tests/fixtures/isometric-coverage.json`; it still fetches live templates. Reviews
+override proposals and pass through shared contract validation. Unknown fixture
+IDs fail, and new live lines without a settled contract still need review. It does not
 check Project Components. OpenAPI checking does not require sandbox credentials
 and still runs if credential loading or another health check fails. The coverage
 step needs only the registry credential pair and `ISOMETRIC_ENVIRONMENT`, because
