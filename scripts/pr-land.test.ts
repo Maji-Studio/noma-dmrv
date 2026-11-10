@@ -11,10 +11,16 @@ const EXIT_TEARDOWN_FAILED = 5;
 const HEAD = "abcdef1234567890";
 const MERGE = "1234567890abcdef";
 const QUEUE_EXIT_GRACE_POLLS = 4;
-const STALE_REMOVAL_AT = "2026-11-09T12:00:00Z";
-const CURRENT_REMOVAL_AT = "2026-11-10T12:00:00Z";
-const QUEUE_EXIT_SCENARIOS = ["queue-exit-merged", "queue-exit-removed", "queue-exit-stale", "queue-exit-open"];
+const STALE_QUEUE_REMOVAL_AT = "2026-11-09T12:00:00Z";
+const CURRENT_QUEUE_REMOVAL_AT = "2026-11-10T12:00:00Z";
+const QUEUE_EXIT_SCENARIOS = [
+  "queue-exit-merged", "queue-exit-removed", "queue-exit-stale", "queue-exit-open",
+  "queue-exit-merged-event", "queue-exit-merged-event-open", "enqueue-queue-exit-stale",
+];
 const MERGED_PR_READS = { head: 3, checks: 4, "final-head": 6 };
+const QUEUE_EXIT_QUEUED_READS = 2;
+const QUEUE_EXIT_FIRST_UNQUEUED_READ = QUEUE_EXIT_QUEUED_READS + 1;
+const QUEUE_EXIT_MERGED_READS = QUEUE_EXIT_FIRST_UNQUEUED_READ + 1;
 let directory: string;
 
 // Run a script copy with fake gh, git, and worktree.sh. No real teardown or mutations.
@@ -24,6 +30,8 @@ const args = process.argv.slice(2);
 const scenario = process.env.SCENARIO;
 const mergedPrReads = ${JSON.stringify(MERGED_PR_READS)};
 const queueExitScenarios = ${JSON.stringify(QUEUE_EXIT_SCENARIOS)};
+const queueExitQueuedReads = ${QUEUE_EXIT_QUEUED_READS};
+const queueExitMergedReads = ${QUEUE_EXIT_MERGED_READS};
 function count(name) {
   const marker = process.env.STUB_DIRECTORY + "/" + name;
   const value = existsSync(marker) ? Number(readFileSync(marker, "utf8")) + 1 : 1;
@@ -38,15 +46,21 @@ if (args[0] === "api" && args[1] === "graphql" && args.includes("number=1")) {
     || (scenario === "final-head" && existsSync(process.env.STUB_DIRECTORY + "/pr-reads")
       && Number(readFileSync(process.env.STUB_DIRECTORY + "/pr-reads", "utf8")) >= mergedPrReads[scenario]);
   if (queueExitScenarios.includes(scenario)) {
-    const removal = scenario === "queue-exit-stale"
-      ? {reason: "failed_checks", createdAt: "${STALE_REMOVAL_AT}"}
-      : scenario === "queue-exit-removed" && reads > 2
-        ? {reason: "failed_checks", createdAt: "${CURRENT_REMOVAL_AT}"} : null;
+    const postEnqueue = scenario === "enqueue-queue-exit-stale";
+    const queueReads = postEnqueue
+      ? existsSync(process.env.STUB_DIRECTORY + "/enqueue-calls") ? count("post-enqueue-queue-reads") : 0
+      : reads;
+    const mergedEvent = scenario.startsWith("queue-exit-merged-event");
+    const queueRemoval = ["queue-exit-stale", "enqueue-queue-exit-stale"].includes(scenario)
+      ? {reason: "failed_checks", createdAt: "${STALE_QUEUE_REMOVAL_AT}"}
+      : (scenario === "queue-exit-removed" || mergedEvent) && queueReads > queueExitQueuedReads
+        ? {reason: mergedEvent ? "merged" : "failed_checks", createdAt: "${CURRENT_QUEUE_REMOVAL_AT}"} : null;
     console.log(JSON.stringify({data: {repository: {pullRequest: {
-      state: ["queue-exit-merged", "queue-exit-stale"].includes(scenario) && reads > 3 ? "MERGED" : "OPEN",
-      isInMergeQueue: reads <= 2,
+      state: ["queue-exit-merged", "queue-exit-stale", "queue-exit-merged-event", "enqueue-queue-exit-stale"]
+        .includes(scenario) && queueReads >= queueExitMergedReads ? "MERGED" : "OPEN",
+      isInMergeQueue: queueReads > 0 && queueReads <= queueExitQueuedReads,
       mergeCommit: {oid: "${MERGE}"},
-      timelineItems: {nodes: removal ? [removal] : []}
+      timelineItems: {nodes: queueRemoval ? [queueRemoval] : []}
     }}}}));
     process.exit(0);
   }
@@ -55,6 +69,10 @@ if (args[0] === "api" && args[1] === "graphql" && args.includes("number=1")) {
     isInMergeQueue: scenario === "queued" && !merged,
     mergeCommit: process.env.MERGE_OID ? {oid: process.env.MERGE_OID} : null
   }}}}));
+} else if (scenario === "enqueue-queue-exit-stale" && args[0] === "api" && args[1] === "graphql"
+  && args.some(arg => arg.includes("enqueuePullRequest")) && args.includes("id=PR_1") && args.includes("sha=${HEAD}")) {
+  count("enqueue-calls");
+  console.log(JSON.stringify({data: {enqueuePullRequest: {mergeQueueEntry: {state: "QUEUED", position: 1}}}}));
 } else if (args[0] === "pr" && args[1] === "view") {
   const reads = count("pr-reads");
   const merged = reads >= mergedPrReads[scenario];
@@ -190,7 +208,7 @@ describe("pr-land merged teardown", () => {
 });
 
 describe("pr-land queue exit grace", () => {
-  it.each(["queue-exit-merged", "queue-exit-stale"])("finishes teardown after a delayed merge from %s", (scenario) => {
+  it.each(["queue-exit-merged", "queue-exit-stale", "queue-exit-merged-event"])("finishes teardown after a delayed merge with or without a queue removal event from %s", (scenario) => {
     const result = run(["--teardown", "review-worktree"], scenario);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain(`#1 MERGED: ${MERGE}`);
@@ -198,24 +216,46 @@ describe("pr-land queue exit grace", () => {
     expect(JSON.parse(readFileSync(join(directory, "teardown-call"), "utf8"))).toEqual({
       cwd: join(directory, "main"), args: ["teardown", "review-worktree"],
     });
-    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(4);
+    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(QUEUE_EXIT_MERGED_READS);
   });
 
-  it("fails immediately for a removal created during the watch", () => {
-    const result = run(["--teardown", "review-worktree"], "queue-exit-removed");
+  it("finishes teardown after enqueueing despite a stale queue removal event", () => {
+    const result = run(["--teardown", "review-worktree"], "enqueue-queue-exit-stale");
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(`#1 MERGED: ${MERGE}`);
+    expect(result.stdout).not.toContain("left the queue unmerged");
+    expect(result.stdout).not.toContain(STALE_QUEUE_REMOVAL_AT);
+    expect(Number(readFileSync(join(directory, "enqueue-calls"), "utf8"))).toBe(1);
+    expect(Number(readFileSync(join(directory, "post-enqueue-queue-reads"), "utf8"))).toBe(QUEUE_EXIT_MERGED_READS);
+    expect(JSON.parse(readFileSync(join(directory, "teardown-call"), "utf8"))).toEqual({
+      cwd: join(directory, "main"), args: ["teardown", "review-worktree"],
+    });
+  });
+
+  it("fails after the exit grace expires with a merged queue removal event while still open", () => {
+    const result = run(["--teardown", "review-worktree"], "queue-exit-merged-event-open");
     expect(result.status, result.stderr).toBe(EXIT_FAILURE);
-    expect(result.stdout).toContain(`left the queue unmerged: failed_checks (${CURRENT_REMOVAL_AT})`);
-    expect(result.stdout).toContain("Run scripts/ci-failures.sh 1 for head CI");
-    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(3);
+    expect(result.stdout).toContain("Removal reason is merged, but state is OPEN.");
+    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8")))
+      .toBe(QUEUE_EXIT_GRACE_POLLS + QUEUE_EXIT_FIRST_UNQUEUED_READ);
     expect(existsSync(join(directory, "teardown-call"))).toBe(false);
   });
 
-  it("fails after the exit grace expires while still open without a removal", () => {
+  it("fails immediately for a queue removal event created during the watch", () => {
+    const result = run(["--teardown", "review-worktree"], "queue-exit-removed");
+    expect(result.status, result.stderr).toBe(EXIT_FAILURE);
+    expect(result.stdout).toContain(`left the queue unmerged: failed_checks (${CURRENT_QUEUE_REMOVAL_AT})`);
+    expect(result.stdout).toContain("Run scripts/ci-failures.sh 1 for head CI");
+    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(QUEUE_EXIT_FIRST_UNQUEUED_READ);
+    expect(existsSync(join(directory, "teardown-call"))).toBe(false);
+  });
+
+  it("fails after the exit grace expires while still open without a queue removal event", () => {
     const result = run(["--teardown", "review-worktree"], "queue-exit-open");
     expect(result.status, result.stderr).toBe(EXIT_FAILURE);
     expect(result.stdout).toContain("left the queue unmerged: unknown (unknown time)");
     // Initial queued read, queued watch poll, grace polls, then the failure poll.
-    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(QUEUE_EXIT_GRACE_POLLS + 3);
+    expect(Number(readFileSync(join(directory, "queue-reads"), "utf8"))).toBe(QUEUE_EXIT_GRACE_POLLS + QUEUE_EXIT_FIRST_UNQUEUED_READ);
     expect(existsSync(join(directory, "teardown-call"))).toBe(false);
   });
 });

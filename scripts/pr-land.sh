@@ -162,9 +162,9 @@ wait_for_merge_state() {
 
 watch_queue() {
   local grace_polls="$1" exit_grace_polls="$QUEUE_EXIT_GRACE_POLLS"
-  local deadline state queued reason created_at removal_baseline seen_queued=0
-  # Only a timestamp different from the pre-watch/last queued snapshot is a current removal.
-  removal_baseline="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].createdAt // empty')"
+  local deadline state queued reason created_at queue_removal_baseline seen_queued=0
+  # Only a timestamp different from the pre-watch/last queued snapshot is a current queue removal event.
+  queue_removal_baseline="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].createdAt // empty')"
   [ "$grace_polls" -gt 0 ] || seen_queued=1
   deadline=$((SECONDS + QUEUE_TIMEOUT_SECONDS))
   while true; do
@@ -180,9 +180,13 @@ watch_queue() {
       grace_polls=0
       seen_queued=1
       exit_grace_polls="$QUEUE_EXIT_GRACE_POLLS"
-      removal_baseline="$created_at"
-    elif [ -n "$created_at" ] && [ "$created_at" != "$removal_baseline" ]; then
+      queue_removal_baseline="$created_at"
+    elif [ -n "$created_at" ] && [ "$created_at" != "$queue_removal_baseline" ]; then
       reason="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].reason // "unknown"')"
+      if [ "$reason" = merged ] && [ "$state" = OPEN ] && [ "$exit_grace_polls" -gt 0 ]; then
+        exit_grace_polls=$((exit_grace_polls - 1))
+        reason=""
+      fi
     elif [ "$grace_polls" -gt 0 ]; then
       grace_polls=$((grace_polls - 1))
     elif [ "$state" = OPEN ] && [ "$seen_queued" = 1 ] && [ "$exit_grace_polls" -gt 0 ]; then
