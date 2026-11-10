@@ -34,8 +34,6 @@ import {
   buildTransportCoverage,
   EMPTY_TRANSPORT_COVERAGE,
 } from "./certify-transport-coverage";
-import { blockerMessage } from "./blocker-message";
-import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./durability-measurement-samples";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { loadEvidenceMirrorSummaryForScope } from "./evidence-mirror-summary";
 import { type FacilityCertifierFacts } from "./facility-certifier-facts";
@@ -220,11 +218,7 @@ export async function buildRemovalContext(
           })),
   });
   const durabilityConfigBlockers = hasDurabilityMeasurementComponents(templateFacts.removalTemplate)
-    ? [
-        ...(!DURABILITY_MEASUREMENT_SAMPLES_ENABLED
-          ? [blockerMessage(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE)] : []),
-        ...durabilityConfigurationBlockerMessages(batchesWithSamples),
-      ] : [];
+    ? durabilityConfigurationBlockerMessages(batchesWithSamples) : [];
   const templateTierBlocker = templateFacts.removalTemplate
     ? removalTemplateTierCompatibilityBlocker({ batchesWithSamples }, templateFacts.removalTemplate)
     : null;

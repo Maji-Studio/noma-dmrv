@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeContext, setDurabilityMeasurementSamplesEnabled } from "../../../tests/fixtures/submit-removal-orchestrator";
 import { make1000YearSequestrationTemplate, makeSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
@@ -12,18 +12,10 @@ import { REMOVAL_PREPARATION_BLOCKERS, removalSubmissionBindingOptions } from "@
 import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
 import type { BatchEmissionContext } from "@/lib/certification/batch-emission-context";
 import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
-import { buildRemovalContext } from "@/lib/certification/removal-context-build";
-import { loadDurabilityBatchData } from "@/lib/certification/durability-readiness";
-import type { RemovalScope } from "@/lib/certification/removal-scope";
-import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import { collectContextRemovalBlockers } from "./removal-blockers-gate";
 
-vi.mock("@/lib/certification/batch-emission-context", () => ({ loadBatchEmissionContext: vi.fn(async () => ({ batchFacts: {} })) }));
-vi.mock("@/data-access/removal-codes", () => ({ getRemovalCodes: vi.fn(async () => new Map()) }));
-vi.mock("@/lib/certification/durability-readiness", () => ({ loadDurabilityBatchData: vi.fn() }));
-
 type Context = ReturnType<typeof makeContext>;
-type Fixture = () => Context | Promise<Context>;
+type Fixture = () => Context;
 
 beforeEach(() => setDurabilityMeasurementSamplesEnabled(false));
 afterEach(() => setDurabilityMeasurementSamplesEnabled(false));
@@ -59,24 +51,6 @@ function durabilityContext(): Context {
   return ctx;
 }
 
-async function contextDurabilityBlockers(ctx: Context): Promise<Context> {
-  vi.mocked(loadDurabilityBatchData).mockResolvedValue({
-    batchesWithSamples: ctx.batchesWithSamples, blockers: [], warnings: [],
-    blockersByBatchId: {}, blockerFactsByBatchId: {},
-  });
-  const scope: RemovalScope = {
-    facilityId: ctx.facilityId, removalId: null, removal: null, lineages: [], feedstockCodes: {},
-    memberBatches: ctx.memberBatches.map(batch => ({
-      ...batch, productionRunIds: [], completedProductionRunIds: [], productionFeedstockIds: [],
-      applicationIds: [], applicationSlices: [], productionEmissionsClaimedByRemovalId: null,
-    })),
-  };
-  // Use the real producer, including its no-application return, rather than inventing readiness facts.
-  const built = await buildRemovalContext(makeTestOrgContext(), scope, facilityFacts(ctx), { correctionRead: true });
-  ctx.durabilityConfigurationBlockers = built.durabilityConfigurationBlockers;
-  return ctx;
-}
-
 function verdict(ctx: Context) {
   // buildRemovalContext supplies these derived fields; the UI and Overview use this exact adapter.
   return {
@@ -88,10 +62,11 @@ function verdict(ctx: Context) {
 const agreement: Array<[string, Fixture, string[], string?]> = [
   ["ready", () => makeContext(), []],
   ["empty template", () => resolveTemplateFacts(makeContext(undefined, { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } })), ["legacy"], REMOVAL_PREPARATION_BLOCKERS.emptyTemplate],
-  ["durability unavailable", async () => {
+  ["durability unavailable", () => {
     const ctx = durabilityContext();
     setDurabilityMeasurementSamplesEnabled(false);
-    return contextDurabilityBlockers(resolveTemplateFacts(ctx));
+    ctx.isProduction = true;
+    return ctx;
   }, ["legacy"], REMOVAL_PREPARATION_BLOCKERS.durabilityUnavailable],
   ["no mapping", () => makeContext(undefined, { mapping: null }), ["legacy"]],
   ["no credentials", () => makeContext(undefined, { hasOrgCredentials: false }), ["legacy"]],
@@ -157,8 +132,8 @@ const agreement: Array<[string, Fixture, string[], string?]> = [
 ];
 
 describe("Removal readiness and the before-confirmation gate agree", () => {
-  it.each(agreement)("%s", async (_label, fixture, codes, message) => {
-    const ctx = await fixture();
+  it.each(agreement)("%s", (_label, fixture, codes, message) => {
+    const ctx = fixture();
     const { readiness, blockers } = verdict(ctx);
     expect(blockers.map(blocker => blocker.code)).toEqual(codes);
     expect(readiness.state === "ready").toBe(blockers.length === 0);
@@ -195,8 +170,8 @@ const knownDrift: Array<[string, Fixture, "ready" | "blocked", string[]]> = [
 ];
 
 describe("Known readiness versus before-confirmation gate drift", () => {
-  it.each(knownDrift)("%s", async (_label, fixture, state, codes) => {
-    const { readiness, blockers } = verdict(await fixture());
+  it.each(knownDrift)("%s", (_label, fixture, state, codes) => {
+    const { readiness, blockers } = verdict(fixture());
     expect(readiness.state).toBe(state);
     expect(blockers.map(blocker => blocker.code)).toEqual(codes);
     expect(readiness.state === "ready").not.toBe(blockers.length === 0);

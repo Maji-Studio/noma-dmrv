@@ -25,6 +25,7 @@ import type {
 } from "@/lib/isometric";
 import { hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import type { RemovalSubmissionContext } from "./certify-context-core";
+import { isDurabilitySubmissionUnavailable, isEmptyRemovalTemplate } from "./removal-submission-conditions";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
   DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
@@ -151,12 +152,12 @@ export function prepareRemovalSubmission(
   if (unbindable.length > 0) {
     blockers.push({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(unbindable) });
   }
-  if (removalTemplate.groups.length === 0) {
+  if (isEmptyRemovalTemplate(removalTemplate)) {
     blockers.push(blocker("emptyTemplate"));
   }
   // Without the evidence step the required sequestration sources cannot be
   // bound, and an emissions-only GHG entry is forbidden.
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
+  if (isDurabilitySubmissionUnavailable(removalTemplate, DURABILITY_MEASUREMENT_SAMPLES_ENABLED)) {
     blockers.push(blocker("durabilityUnavailable"));
   }
   return {

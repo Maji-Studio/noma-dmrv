@@ -1,5 +1,6 @@
 import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
 import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
+import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
 import {
   EMPTY_REMOVAL_TEMPLATE_MESSAGE,
   REMOVAL_TEMPLATE_BLOCKERS,
@@ -76,6 +77,8 @@ export interface RemovalReadinessFacts {
   hasRemovalTemplate: boolean;
   /** A resolved template with no groups is refused by submission preparation. */
   emptyRemovalTemplate?: boolean;
+  /** Durability components require the sandbox-only measurement-sample step. */
+  durabilitySubmissionUnavailable?: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
@@ -215,6 +218,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
     return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
   if (facts.emptyRemovalTemplate) return EMPTY_REMOVAL_TEMPLATE_MESSAGE;
+  if (facts.durabilitySubmissionUnavailable) return DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE;
   // Coverage derives from the same line decision, so this only catches line
   // blockers coverage has no wording for.
   if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
@@ -225,6 +229,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
     !facts.emptyRemovalTemplate &&
+    !facts.durabilitySubmissionUnavailable &&
     !facts.templateBlockers?.length &&
     !facts.emissionLineBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&

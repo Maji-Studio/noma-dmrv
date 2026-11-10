@@ -6,6 +6,7 @@ import {
 } from "./readiness";
 import { certCheckLabel } from "./requirement-labels";
 import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, removalTemplateBlocker } from "./removal-template-blockers";
+import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
 import type { RemovalBlocker } from "./removal-blockers";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 
@@ -101,6 +102,14 @@ describe("Removal template requirement split", () => {
     expect(set).toMatchObject({ key: "templateSet", status: "unmet", detail: EMPTY_REMOVAL_TEMPLATE_MESSAGE });
     expect(lines.status).toBe("skipped");
     expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [EMPTY_REMOVAL_TEMPLATE_MESSAGE] });
+  });
+
+  it("blocks unavailable durability submission with the preparation message and skips its lines", () => {
+    const input = facts({ durabilitySubmissionUnavailable: true });
+    const [set, lines] = templateChecks(input);
+    expect(set).toMatchObject({ key: "templateSet", status: "unmet", detail: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE });
+    expect(lines.status).toBe("skipped");
+    expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE] });
   });
 
   it.each(["hasMapping", "hasOrgCredentials"] as const)("skips both checks without %s", (key) => {
