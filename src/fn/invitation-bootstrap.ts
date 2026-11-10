@@ -25,7 +25,7 @@ const INVITATION_BOOTSTRAP_FALLBACK = "Your account could not be set up. Try aga
 /** Shown under the "Email me a link" form, which has no title of its own. */
 const INVITATION_LINK_FALLBACK = "The link was not sent. Try again.";
 /** Shown under the "Link not sent" title, next to Send again, so it gives the next step instead. */
-const INVITATION_RESEND_FALLBACK = "Send again. If that fails too, ask your Admin for a new invitation.";
+const INVITATION_RESEND_FALLBACK = "If Send again fails too, ask your Admin to send the invitation again.";
 
 async function toResult<T>(
   work: () => Promise<T>,

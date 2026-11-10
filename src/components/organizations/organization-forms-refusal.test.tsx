@@ -87,12 +87,12 @@ describe("InvitationBootstrapForm", () => {
   });
 
   it("shows a refused resend without a sign-in action when signing in does not help", async () => {
-    mocks.resend.mockResolvedValue({ success: false, error: "Send again. If that fails too, ask your Admin for a new invitation." });
+    mocks.resend.mockResolvedValue({ success: false, error: "If Send again fails too, ask your Admin to send the invitation again." });
     render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
     fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     expect(await screen.findByText("Link not sent")).toBeTruthy();
     expect(screen.getAllByText(/not sent/i)).toHaveLength(1);
-    expect(screen.getByText("Send again. If that fails too, ask your Admin for a new invitation.")).toBeTruthy();
+    expect(screen.getByText("If Send again fails too, ask your Admin to send the invitation again.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send again" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });

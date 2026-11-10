@@ -49,7 +49,7 @@ const VALID_INPUT = {
 };
 
 const LINK_FALLBACK = "The link was not sent. Try again.";
-const RESEND_FALLBACK = "Send again. If that fails too, ask your Admin for a new invitation.";
+const RESEND_FALLBACK = "If Send again fails too, ask your Admin to send the invitation again.";
 
 describe("bootstrapInvitationAccountAction", () => {
   beforeEach(() => {
@@ -221,7 +221,7 @@ describe("bootstrapInvitationAccountAction", () => {
   it.each([
     [bootstrapInvitationAccountAction, LINK_FALLBACK],
     [resendInvitationSetPasswordAction, RESEND_FALLBACK],
-  ] as const)("uses link wording when the email step fails", async (action, error) => {
+  ] as const)("uses the fallback for its screen when the email step fails", async (action, error) => {
     mockReadState.mockResolvedValue({ invitationId: INVITATION_ID, email: EMAIL, account: "pending" });
     mockRequestPasswordReset.mockRejectedValueOnce(new Error("request failed"));
     expect(await action(VALID_INPUT)).toEqual({ success: false, error });
@@ -281,7 +281,7 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(mockRefundSetPasswordRateLimit).not.toHaveBeenCalled();
   });
 
-  it("uses link wording when resend cannot read the invitation", async () => {
+  it("gives the resend next step when resend cannot read the invitation", async () => {
     mockReadState.mockRejectedValueOnce(new Error("read failed"));
     expect(await resendInvitationSetPasswordAction({ invitationId: INVITATION_ID }))
       .toEqual({ success: false, error: RESEND_FALLBACK });
