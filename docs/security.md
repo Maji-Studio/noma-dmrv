@@ -476,7 +476,8 @@ server-only; their HTTP routes return Forbidden for Members and Admins.
   major versions, which break the map worker under Turbopack; see
   [`maps/maplibre-v6`](./open-questions-toolchain.md#maplibre-gl-v6-upgrade-mapsmaplibre-v6-opened-2026-10-02).
   A security fix that exists only in a new major is never merged on green CI
-  alone: read the changelog and check the Vercel preview first.
+  alone: read the changelog and check a Vercel preview first (push a
+  `[preview]` commit, see [architecture.md](./architecture.md#vercel-builds)).
 
 
 ## API write audit
