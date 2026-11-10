@@ -89,12 +89,20 @@ export async function prepareLiveSubmitEvidence(
     try {
       for (const key of [...keys, ...generatedStorageKeys]) await provider.deleteObject(key);
     } finally {
-      // The seed must restore its own type first, releasing the sandbox ID.
       if (displacedFeedstockTypeId) {
+        const holderId = displacedFeedstockTypeId;
         const { db, pool } = createDbConnection();
         try {
-          await db.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: SANDBOX_FEEDSTOCK_TYPE_ID })
-            .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, displacedFeedstockTypeId)));
+          await db.transaction(async (tx) => {
+            await tx.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: null })
+              .where(and(
+                eq(schema.feedstockTypes.organizationId, organizationId),
+                eq(schema.feedstockTypes.isometricFeedstockTypeId, SANDBOX_FEEDSTOCK_TYPE_ID),
+                ne(schema.feedstockTypes.id, holderId),
+              ));
+            await tx.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: SANDBOX_FEEDSTOCK_TYPE_ID })
+              .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, holderId)));
+          });
         } finally {
           await pool.end();
         }

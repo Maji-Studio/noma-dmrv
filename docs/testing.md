@@ -612,7 +612,10 @@ credentials. Only `local-fs` storage is supported. Set
 `E2E_LIVE_SUBMIT_STORAGE_ROOT` to the absolute server storage root, normally
 `<worktree>/.storage` for a local `next dev` using the default storage root.
 The fixture verifies server readback before submitting. The committed spec skips
-while the sandbox template has unsettled components.
+unless `fetchSubmittableSandboxRemovalTemplate` finds a template with every fixed
+input bound and every component contract settled (none `proposed`), so it compiles
+on first read. It also skips unless `sandboxTemplateSupportsCurrent1000YearComponent`
+confirms support for the current 1,000-year component.
 
 ## Returned Removal screen specs (local only)
 
