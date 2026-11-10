@@ -1,3 +1,4 @@
+import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "@/lib/certification/durability-measurement-samples";
 import { insertRemovalFixture } from "./helpers/removal-fixture";
 import {
   cleanupLineageFixture,
@@ -459,6 +460,7 @@ function makeContext(
     deletionInProgress: false,
     linkedGhgStatement: null,
     isProduction: false,
+    durabilityMeasurementSamplesEnabled: DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
     lineages: [
       {
         facility: { id: fixture.facilityId, code: "F", name: "F" },

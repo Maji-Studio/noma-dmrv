@@ -30,6 +30,7 @@ import {
   type IsometricGhgEntryTemplate,
   type IsometricClient,
 } from "@/lib/isometric";
+import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "@/lib/certification/removal-submission-conditions";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
@@ -38,7 +39,6 @@ import {
 import { loadRemovalSubmissionContext } from "@/lib/certification/certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "@/lib/certification/durability-measurement-samples";

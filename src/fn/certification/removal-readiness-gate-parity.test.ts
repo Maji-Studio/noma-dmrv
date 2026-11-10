@@ -3,12 +3,12 @@ import { makeContext, setDurabilityMeasurementSamplesEnabled } from "../../../te
 import { make1000YearSequestrationTemplate, makeSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
 import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import { deriveRemovalReadiness } from "@/lib/certification/readiness";
+import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { REMOVAL_TEMPLATE_BLOCKERS, removalTemplateBlocker, type RemovalTemplateBlockerCode } from "@/lib/certification/removal-template-blockers";
 import { durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
-import { removalSubmissionBindingOptions } from "@/lib/certification/removal-submission-prepare";
+import { REMOVAL_PREPARATION_BLOCKERS, removalSubmissionBindingOptions } from "@/lib/certification/removal-submission-prepare";
 import { resolveRemovalTemplate } from "@/lib/certification/resolve-removal-template";
 import type { BatchEmissionContext } from "@/lib/certification/batch-emission-context";
 import type { FacilityCertifierFacts } from "@/lib/certification/facility-certifier-facts";
@@ -20,15 +20,18 @@ type Fixture = () => Context;
 beforeEach(() => setDurabilityMeasurementSamplesEnabled(false));
 afterEach(() => setDurabilityMeasurementSamplesEnabled(false));
 
-function resolveTemplateFacts(ctx: Context, batchFacts: BatchEmissionContext = {}): Context {
+function facilityFacts(ctx: Context): FacilityCertifierFacts {
   const template = ctx.removalTemplate!;
-  const facilityFacts = { templatesById: { [template.id]: {
+  return { facilityTimezone: ctx.facilityTimezone, hasOrgCredentials: ctx.hasOrgCredentials, mapping: ctx.mapping, templatesById: { [template.id]: {
     template, observation: { lineSources: ctx.lineSources },
     enrichmentProblems: [], lineSourceProblems: [],
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
   } } } as unknown as FacilityCertifierFacts;
-  return Object.assign(ctx, resolveRemovalTemplate(ctx.memberBatches, facilityFacts, batchFacts, ctx.removalEntryContext?.contributions));
+}
+
+function resolveTemplateFacts(ctx: Context, batchFacts: BatchEmissionContext = {}): Context {
+  return Object.assign(ctx, resolveRemovalTemplate(ctx.memberBatches, facilityFacts(ctx), batchFacts, ctx.removalEntryContext?.contributions));
 }
 
 function entryContext(): Context {
@@ -56,8 +59,15 @@ function verdict(ctx: Context) {
   };
 }
 
-const agreement: Array<[string, Fixture, string[]]> = [
+const agreement: Array<[string, Fixture, string[], string?]> = [
   ["ready", () => makeContext(), []],
+  ["empty template", () => resolveTemplateFacts(makeContext(undefined, { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } })), ["legacy"], REMOVAL_PREPARATION_BLOCKERS.emptyTemplate],
+  ["durability unavailable", () => {
+    const ctx = durabilityContext();
+    setDurabilityMeasurementSamplesEnabled(false);
+    ctx.isProduction = true;
+    return ctx;
+  }, ["legacy"], REMOVAL_PREPARATION_BLOCKERS.durabilityUnavailable],
   ["no mapping", () => makeContext(undefined, { mapping: null }), ["legacy"]],
   ["no credentials", () => makeContext(undefined, { hasOrgCredentials: false }), ["legacy"]],
   ["feedstock type mapping", () => makeContext(undefined, { feedstockTypeMappingGaps: [{ creditBatchId: "batch", creditBatchCode: "CB-1", feedstockTypeId: "type", feedstockTypeName: "Wood" }] }), ["feedstockTypeMapping"]],
@@ -122,24 +132,28 @@ const agreement: Array<[string, Fixture, string[]]> = [
 ];
 
 describe("Removal readiness and the before-confirmation gate agree", () => {
-  it.each(agreement)("%s", (_label, fixture, codes) => {
-    const { readiness, blockers } = verdict(fixture());
+  it.each(agreement)("%s", (_label, fixture, codes, message) => {
+    const ctx = fixture();
+    const { readiness, blockers } = verdict(ctx);
     expect(blockers.map(blocker => blocker.code)).toEqual(codes);
     expect(readiness.state === "ready").toBe(blockers.length === 0);
+    if (message) {
+      expect(readiness).toMatchObject({ state: "blocked", reasons: [message] });
+      expect(blockers.map(blocker => blocker.message)).toEqual([message]);
+      expect(blockers[0].fixTarget).toBeNull();
+      expect(buildRemovalRequirementsChecklist(toRemovalReadinessFacts(ctx))).toContainEqual(
+        expect.objectContaining({
+          key: message === REMOVAL_PREPARATION_BLOCKERS.durabilityUnavailable ? "durability" : "templateSet",
+          status: "unmet", detail: message,
+        }),
+      );
+    }
   });
 });
 
 // Tracked in docs/open-questions.md (certification/readiness-gate-drift), #1639.
 // When a row is fixed, move it to the agreement table.
 const knownDrift: Array<[string, Fixture, "ready" | "blocked", string[]]> = [
-  // Preparation checks empty groups; readiness only sees template presence and supplied blockers.
-  ["empty template", () => resolveTemplateFacts(makeContext(undefined, { removalTemplate: { ...make1000YearSequestrationTemplate(), groups: [] } })), "ready", ["legacy"]],
-  // Readiness has no fact for the measurement-sample feature flag.
-  ["durability unavailable", () => {
-    const ctx = durabilityContext();
-    setDurabilityMeasurementSamplesEnabled(false);
-    return resolveTemplateFacts(ctx);
-  }, "ready", ["legacy"]],
   // Coverage is checked by readiness and later compilation, outside the context prefix.
   ["missing transport", () => makeContext(undefined, { requiredTransportCategories: ["feedstock"] }), "blocked", []],
   // Positive leg count does not make an aggregation warning safe to submit.

@@ -94,6 +94,7 @@ export function projectUiContext(
     deletionInProgress: ctx.deletionInProgress,
     linkedGhgStatement: ctx.linkedGhgStatement,
     isProduction: ctx.isProduction,
+    durabilityMeasurementSamplesEnabled: ctx.durabilityMeasurementSamplesEnabled,
   };
 }
 

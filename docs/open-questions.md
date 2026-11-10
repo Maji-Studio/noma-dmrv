@@ -42,15 +42,6 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
 
 ## Review step and submit gate disagree (`certification/readiness-gate-drift`, #1639)
 
-- Two states say ready in the review step but the submit gate refuses them
-  (#1639). A pinned template has no groups:
-  `src/lib/certification/removal-submission-prepare.ts:prepareRemovalSubmission`
-  rejects it. The pinned verdict from
-  `src/lib/certification/removal-template-verdict.ts:removalTemplateVerdict`,
-  used by `src/lib/certification/resolve-removal-template.ts:resolveRemovalTemplate`,
-  does not. Durability measurement samples are switched off while the template
-  has durability components. Preparation checks the flag. The durability fields
-  in `src/lib/certification/removal-context-build.ts:buildRemovalContext` do not.
 - Six states block the review step while the before-confirmation prefix returns
   nothing in `src/fn/certification/removal-blockers-gate.ts:collectContextRemovalBlockers`:
   missing transport, incomplete transport, production gap, future dated
@@ -60,6 +51,17 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
 - Pinned in the known drift table at
   `src/fn/certification/removal-readiness-gate-parity.test.ts:knownDrift`.
   When a state is fixed, move its row to the agreement table.
+- A credit batch whose pinned Removal template has no groups still reads healthy
+  and can be picked for a Removal in
+  `src/lib/certification/batch-health-facts.ts:toBatchHealthFacts`.
+  The Removal then reads blocked in
+  `src/lib/certification/readiness-facts.ts:toRemovalReadinessFacts`.
+  The submit gate refuses it via
+  `src/lib/certification/removal-submission-conditions.ts:isEmptyRemovalTemplate`.
+  No change is planned until an empty production template is seen in practice.
+  The durability-unavailable block is also a Removal readiness block only,
+  by decision in #1639's review
+  (`src/lib/certification/removal-submission-conditions.ts:isDurabilitySubmissionUnavailable`).
 - The larger "one blocker list" refactor was out of scope for #1635 because
   facts are computed once in
   `src/lib/certification/removal-context-build.ts:buildRemovalContext`

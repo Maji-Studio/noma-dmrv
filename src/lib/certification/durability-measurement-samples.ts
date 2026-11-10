@@ -80,9 +80,6 @@ import {
 export const DURABILITY_MEASUREMENT_SAMPLES_ENABLED =
   env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
-export const DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE =
-  "Durability submission is not available in the production registry yet. Wait for support to confirm availability before submitting this Removal.";
-
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {
   /** Stable business identities; operation keys are audit labels only. */

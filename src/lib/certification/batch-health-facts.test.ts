@@ -8,13 +8,15 @@ import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "./rea
 import { toRemovalReadinessFacts } from "./readiness-facts";
 import { collectFeedstockTypeMappingGaps } from "./feedstock-type-mapping";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
+import { make1000YearSequestrationTemplate } from "../../../tests/fixtures/submit-removal-templates";
+import { DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE } from "./removal-submission-conditions";
 
 describe("toBatchHealthFacts", () => {
   const readyContext = {
     submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
     memberBatches: [{ id: "batch-1", durabilityGateBlockers: [], facilityEmissionsGateBlockers: [] }],
     latestSubmission: null, hasOrgCredentials: true, supportingDocuments: { total: 0, mirrored: 0 },
-    mapping: {}, removalTemplate: {}, emissionLines: [],
+    mapping: {}, removalTemplate: { groups: [{ id: "group-1", key: "test", display_name: "Test", description: "", components: [] }] }, emissionLines: [],
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
     hasSubmittableRuns: true, entityReadinessGaps: [], entityReadinessIssues: [],
     requiredTransportCategories: ["feedstock"],
@@ -59,6 +61,22 @@ describe("toBatchHealthFacts", () => {
     expect(toBatchHealthFacts(context, "absent").warnings).toEqual([]);
     expect(readiness.state).toBe("ready");
     expect(readiness.advisories).toEqual([]);
+  });
+
+  it("keeps a ready batch on a durability template ready when measurement samples are unavailable", () => {
+    const sandbox = { ...readyContext, isProduction: false, durabilityMeasurementSamplesEnabled: true, removalTemplate: make1000YearSequestrationTemplate() };
+    const production = { ...sandbox, isProduction: true, durabilityMeasurementSamplesEnabled: false };
+    const batchFacts = toBatchHealthFacts(sandbox, "batch-1");
+    const health = deriveBatchHealth(batchFacts);
+    expect(health.state).toBe("ready");
+    expect(toBatchHealthFacts(production, "batch-1")).toEqual(batchFacts);
+    expect(deriveBatchHealth(toBatchHealthFacts(production, "batch-1"))).toEqual(health);
+    expect(batchFacts).not.toHaveProperty("durabilitySubmissionUnavailable");
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(sandbox)).state).toBe("ready");
+    expect(toRemovalReadinessFacts(production)).toMatchObject({ emptyRemovalTemplate: false, durabilitySubmissionUnavailable: true });
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(production))).toMatchObject({
+      state: "blocked", reasons: [DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE],
+    });
   });
 
   it("includes durability configuration blockers in batch health", () => {
@@ -135,7 +153,7 @@ describe("toBatchHealthFacts", () => {
       entityReadinessGaps: [],
       entityReadinessIssues: [],
       mapping: {},
-      removalTemplate: {},
+      removalTemplate: { groups: [{ id: "group-1", key: "test", display_name: "Test", description: "", components: [] }] },
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
@@ -197,7 +215,7 @@ describe("toBatchHealthFacts", () => {
       futureDatedMeasurements: [],
       supportingDocuments: { total: 0, mirrored: 0 },
       mapping: {},
-      removalTemplate: {},
+      removalTemplate: { groups: [{ id: "group-1", key: "test", display_name: "Test", description: "", components: [] }] },
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
@@ -247,7 +265,7 @@ describe("toBatchHealthFacts", () => {
       hasSubmittableRuns: true,
       productionReadinessGap: null,
       mapping: {},
-      removalTemplate: {},
+      removalTemplate: { groups: [{ id: "group-1", key: "test", display_name: "Test", description: "", components: [] }] },
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
@@ -318,7 +336,7 @@ describe("toBatchHealthFacts", () => {
       feedstockTypeMappingGaps: [],
       hasOrgCredentials: true,
       mapping: {},
-      removalTemplate: {},
+      removalTemplate: { groups: [{ id: "group-1", key: "test", display_name: "Test", description: "", components: [] }] },
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,

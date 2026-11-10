@@ -25,9 +25,9 @@ import type {
 } from "@/lib/isometric";
 import { hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import type { RemovalSubmissionContext } from "./certify-context-core";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE, isDurabilitySubmissionUnavailable, isEmptyRemovalTemplate } from "./removal-submission-conditions";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
 } from "./durability-measurement-samples";
 
 export const REMOVAL_PREPARATION_BLOCKERS = {
@@ -40,8 +40,7 @@ export const REMOVAL_PREPARATION_BLOCKERS = {
     "The registry template is out of date. Refresh the facility link in settings before submitting.",
   // Detailed guidance comes from formatUnbindableTemplateInputs.
   templateUnbindable: "The Removal template has components noma cannot submit.",
-  emptyTemplate:
-    "The Removal template has no fields to submit. Choose another template for this credit batch.",
+  emptyTemplate: EMPTY_REMOVAL_TEMPLATE_MESSAGE,
   durabilityUnavailable: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
 } as const;
 
@@ -152,12 +151,12 @@ export function prepareRemovalSubmission(
   if (unbindable.length > 0) {
     blockers.push({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(unbindable) });
   }
-  if (removalTemplate.groups.length === 0) {
+  if (isEmptyRemovalTemplate(removalTemplate)) {
     blockers.push(blocker("emptyTemplate"));
   }
   // Without the evidence step the required sequestration sources cannot be
   // bound, and an emissions-only GHG entry is forbidden.
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
+  if (isDurabilitySubmissionUnavailable(removalTemplate, DURABILITY_MEASUREMENT_SAMPLES_ENABLED)) {
     blockers.push(blocker("durabilityUnavailable"));
   }
   return {

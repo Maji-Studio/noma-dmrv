@@ -15,7 +15,7 @@ import { deriveRequiredTransportCategories } from "@/lib/certification/certify-t
 import type { TransportLegsByCategory } from "@/lib/certification/shared";
 
 vi.mock("@/lib/certification/durability-measurement-samples", () => ({
-  DURABILITY_MEASUREMENT_SAMPLES_ENABLED: true, DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE: "Unavailable.",
+  DURABILITY_MEASUREMENT_SAMPLES_ENABLED: true,
 }));
 
 const sandbox = sandboxFixture as GhgEntryTemplate;

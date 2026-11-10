@@ -1,5 +1,6 @@
 import type { CoveredContenders } from "@/lib/certification/covered-contenders";
 import { env } from "@/config/env";
+import { DURABILITY_MEASUREMENT_SAMPLES_ENABLED } from "./durability-measurement-samples";
 import {
   getLatestSubmission,
   hasFinalizedSubmission,
@@ -275,6 +276,7 @@ export async function buildRemovalContext(
       deletionInProgress,
       linkedGhgStatement,
       isProduction,
+      durabilityMeasurementSamplesEnabled: DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
       lineages: [],
       runs: [],
       batchesWithSamples,
@@ -416,6 +418,7 @@ export async function buildRemovalContext(
     deletionInProgress,
     linkedGhgStatement,
     isProduction,
+    durabilityMeasurementSamplesEnabled: DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
     lineages,
     runs,
     batchesWithSamples,

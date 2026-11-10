@@ -13,7 +13,6 @@ vi.mock("./durability-measurement-samples", () => ({
   get DURABILITY_MEASUREMENT_SAMPLES_ENABLED() {
     return flags.durabilityEnabled;
   },
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE: "Durability submission is unavailable.",
 }));
 
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";

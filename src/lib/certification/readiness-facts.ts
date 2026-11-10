@@ -14,6 +14,7 @@ import type { RemovalCertifyContext } from "@/lib/certification/certify-context-
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { canReclaimInterruptedSubmission } from "./submission-metadata";
 import type { RemovalReadinessFacts } from "./readiness";
+import { isDurabilitySubmissionUnavailable, isEmptyRemovalTemplate } from "./removal-submission-conditions";
 
 export function toRemovalReadinessFacts(
   ctx: Omit<RemovalCertifyContext, "emissionsLedger">,
@@ -32,6 +33,8 @@ export function toRemovalReadinessFacts(
     hasOrgCredentials: ctx.hasOrgCredentials,
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
+    emptyRemovalTemplate: isEmptyRemovalTemplate(ctx.removalTemplate),
+    durabilitySubmissionUnavailable: isDurabilitySubmissionUnavailable(ctx.removalTemplate, ctx.durabilityMeasurementSamplesEnabled),
     templateBlockers: ctx.templateBlockers,
     undecidedLineIds: ctx.undecidedLineIds,
     emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
