@@ -19,6 +19,7 @@ EMPTY_CHECK_GRACE_SECONDS=120
 QUEUE_POLL_INTERVAL_SECONDS="${PR_LAND_POLL_INTERVAL_SECONDS:-30}"
 QUEUE_TIMEOUT_SECONDS=3600
 QUEUE_APPEARANCE_GRACE_POLLS=2
+QUEUE_EXIT_GRACE_POLLS=4
 EXIT_FAILURE=1
 EXIT_USAGE=2
 EXIT_HEAD_MOVED=3
@@ -160,7 +161,11 @@ wait_for_merge_state() {
 }
 
 watch_queue() {
-  local grace_polls="$1" deadline state queued reason created_at
+  local grace_polls="$1" exit_grace_polls="$QUEUE_EXIT_GRACE_POLLS"
+  local deadline state queued reason created_at removal_baseline seen_queued=0
+  # Only a timestamp different from the pre-watch/last queued snapshot is a current removal.
+  removal_baseline="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].createdAt // empty')"
+  [ "$grace_polls" -gt 0 ] || seen_queued=1
   deadline=$((SECONDS + QUEUE_TIMEOUT_SECONDS))
   while true; do
     read_queue
@@ -170,13 +175,23 @@ watch_queue() {
       finish_merged
       return 0
     fi
+    created_at="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].createdAt // empty')"
     if [ "$queued" = true ]; then
       grace_polls=0
+      seen_queued=1
+      exit_grace_polls="$QUEUE_EXIT_GRACE_POLLS"
+      removal_baseline="$created_at"
+    elif [ -n "$created_at" ] && [ "$created_at" != "$removal_baseline" ]; then
+      reason="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].reason // "unknown"')"
     elif [ "$grace_polls" -gt 0 ]; then
       grace_polls=$((grace_polls - 1))
+    elif [ "$state" = OPEN ] && [ "$seen_queued" = 1 ] && [ "$exit_grace_polls" -gt 0 ]; then
+      exit_grace_polls=$((exit_grace_polls - 1))
     else
-      reason="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].reason // "unknown"')"
-      created_at="$(printf '%s\n' "$QUEUE_JSON" | jq -r '.timelineItems.nodes[0].createdAt // "unknown time"')"
+      reason=unknown
+      created_at="unknown time"
+    fi
+    if [ -n "${reason:-}" ]; then
       info "#$PR left the queue unmerged: $reason ($created_at)"
       case "$reason" in
         failed_checks)
