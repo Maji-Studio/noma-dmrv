@@ -6,11 +6,9 @@ import { fieldRefusal } from "../../../tests/helpers/refusal-form-parent";
 import { InvitationBootstrapForm } from "./invitation-bootstrap-form";
 import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
 
-const mocks = vi.hoisted(() => ({ bootstrap: vi.fn(), set: vi.fn() }));
-vi.mock("@/fn/invitation-bootstrap", () => ({ bootstrapInvitationAccountAction: mocks.bootstrap }));
-vi.mock("@/hooks/use-busy-until-unload", () => ({ useBusyUntilUnload: () => ({ held: false, hold: vi.fn() }) }));
-vi.mock("@/lib/pending-warning", () => ({ stashPendingWarning: vi.fn() }));
-vi.mock("@/lib/org-switch-notice", () => ({ stashOrgSwitchNotice: vi.fn() }));
+const mocks = vi.hoisted(() => ({ bootstrap: vi.fn(), resend: vi.fn(), set: vi.fn() }));
+vi.mock("next/link", () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
+vi.mock("@/fn/invitation-bootstrap", () => ({ bootstrapInvitationAccountAction: mocks.bootstrap, resendInvitationSetPasswordAction: mocks.resend }));
 vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ isLoading: false, data: { configured: false, accessTokenLast4: null } }),
   useSetOrgCertifierCredentials: () => ({ mutateAsync: mocks.set, isPending: false }),
@@ -22,29 +20,76 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("InvitationBootstrapForm refused save", () => {
-  it("keeps the issues of a failed result and marks the password field", async () => {
-    mocks.bootstrap.mockResolvedValue({
-      success: false, error: "Password is too weak.", code: "validation_failed",
-      issues: [{ path: ["password"], code: "validation_failed", message: "Password is too weak." }],
-    });
-    render(<InvitationBootstrapForm invitationId="11111111-1111-4111-8111-111111111111" email="a@example.com" />);
-    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
-    const password = screen.getByLabelText(/Password/);
-    fireEvent.change(password, { target: { value: "longenoughpassword" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create account and join" }));
+const INVITATION_ID = "11111111-1111-4111-8111-111111111111";
 
-    await waitFor(() => expect(document.getElementById("invite-password-error")?.textContent).toContain("Password is too weak."));
-    await waitFor(() => expect(document.activeElement).toBe(password));
+describe("InvitationBootstrapForm", () => {
+  it("keeps the issues of a failed result and marks the name field", async () => {
+    mocks.bootstrap.mockResolvedValue({
+      success: false, error: "Name is too long.", code: "validation_failed",
+      issues: [{ path: ["name"], code: "validation_failed", message: "Name is too long." }],
+    });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" />);
+    const name = screen.getByLabelText(/Name/);
+    expect(screen.queryByLabelText(/Password/)).toBeNull();
+    fireEvent.change(name, { target: { value: "Ada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
+
+    await waitFor(() => expect(document.getElementById("invite-name-error")?.textContent).toContain("Name is too long."));
+    await waitFor(() => expect(document.activeElement).toBe(name));
   });
 
   it("shows a result with no issues as the form error", async () => {
     mocks.bootstrap.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead." });
-    render(<InvitationBootstrapForm invitationId="11111111-1111-4111-8111-111111111111" email="a@example.com" />);
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" />);
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
-    fireEvent.change(screen.getByLabelText(/Password/), { target: { value: "longenoughpassword" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create account and join" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
     await waitFor(() => expect(document.body.textContent).toContain("An account already exists for this invitation. Sign in instead."));
+  });
+
+  it("switches to the check-your-email state after the name is sent", async () => {
+    mocks.bootstrap.mockResolvedValue({ success: true, data: { emailSent: true } });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" />);
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "Ada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Email me a link" }));
+    expect(await screen.findByText("Check your email")).toBeTruthy();
+    expect(document.body.textContent).toContain("Check a@example.com for a link");
+    expect(document.body.textContent).not.toContain("We sent");
+    expect(mocks.resend).not.toHaveBeenCalled();
+  });
+
+  it("asks for a fresh link once when a pending invitation is reopened", async () => {
+    mocks.resend.mockResolvedValue({ success: true, data: { emailSent: true } });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    expect(screen.getByText("Check your email")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send again" })).toBeTruthy();
+    await waitFor(() => expect(mocks.resend).toHaveBeenCalledTimes(1));
+    expect(mocks.resend).toHaveBeenCalledWith({ invitationId: INVITATION_ID });
+    expect(mocks.bootstrap).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Link requested/)).toBeNull();
+  });
+
+  it("shows a refused on-mount resend with a way to sign in", async () => {
+    mocks.resend.mockResolvedValue({ success: false, error: "An account already exists for this invitation. Sign in instead.", code: "account_exists" });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    expect(await screen.findByText("An account already exists for this invitation. Sign in instead.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(`/login?from=${encodeURIComponent(`/accept-invitation/${INVITATION_ID}`)}`);
+  });
+
+  it("sends the link again and confirms it", async () => {
+    mocks.resend.mockResolvedValue({ success: true, data: { emailSent: true } });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    await waitFor(() => expect(mocks.resend).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    await waitFor(() => expect(mocks.resend).toHaveBeenCalledWith({ invitationId: INVITATION_ID }));
+    expect(await screen.findByText(/Link requested/)).toBeTruthy();
+  });
+
+  it("shows a refused resend without a sign-in action when signing in does not help", async () => {
+    mocks.resend.mockResolvedValue({ success: false, error: "The link was not sent. Try again." });
+    render(<InvitationBootstrapForm invitationId={INVITATION_ID} email="a@example.com" account="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    expect(await screen.findByText("The link was not sent. Try again.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
 });
 

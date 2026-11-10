@@ -54,8 +54,8 @@ export const ACTION_BOUNDARY_ALLOWLIST: readonly ActionBoundaryException[] = [
   },
   {
     file: "src/fn/invitation-bootstrap.ts",
-    function: "toWarnableResult",
-    sites: { "catch-failure": 2 },
+    function: "toResult",
+    sites: { "action-failure": 1 },
     reason: "Invitation bootstrap runs before an account or active organization exists.",
   },
   {

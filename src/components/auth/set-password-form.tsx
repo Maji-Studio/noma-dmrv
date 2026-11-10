@@ -15,16 +15,29 @@ import {
   ServerError,
 } from "@/components/forms";
 import { Notice } from "@/components/ui/notice";
+import { AuthPrimaryLink, AuthResult } from "./auth-result";
 
-function SetPasswordFormContent() {
+export interface SetPasswordInvitation {
+  id: string;
+  email: string;
+}
+
+function SetPasswordFormContent({ invitation }: { invitation?: SetPasswordInvitation }) {
   const [success, setSuccess] = useState(false);
+  // Stays busy through the sign-in and the navigation to the accept page.
+  const [joining, setJoining] = useState(false);
+  const [linkRefused, setLinkRefused] = useState(false);
   const [serverError, setServerError] = useState("");
 
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { resetPassword, getCurrentUserEmail } = useAuth();
+  const { resetPassword, signIn } = useAuth();
 
   const token = searchParams.get("token");
+  const linkFailed = Boolean(searchParams.get("error"));
+  const acceptPath = invitation
+    ? `/accept-invitation/${encodeURIComponent(invitation.id)}`
+    : null;
 
   const {
     register,
@@ -51,24 +64,50 @@ function SetPasswordFormContent() {
 
     const result = await resetPassword(token, data.password);
 
+    if (result.success && invitation && acceptPath) {
+      setJoining(true);
+      // The link confirms the mailbox but starts no session: sign in with
+      // the password just set, then accept through the signed-in path.
+      const signedIn = await signIn(invitation.email, data.password);
+      router.push(
+        signedIn.success
+          ? acceptPath
+          : `/login?from=${encodeURIComponent(acceptPath)}`,
+      );
+      return;
+    }
+
+    if (!result.success && invitation) {
+      // A refused token on the invitation path has one way forward: a new link.
+      setLinkRefused(true);
+      return;
+    }
+
     if (result.success) {
       setSuccess(true);
 
-      // Get user email and store it for the verify-email page
-      const email = await getCurrentUserEmail();
-      if (email) {
-        sessionStorage.setItem("pendingVerificationEmail", email);
-      }
-
-      // Redirect to verify-email page after 2 seconds
+      // The token confirmed the email, so sign-in is the next step.
       setTimeout(() => {
-        router.push("/verify-email");
+        router.push("/login");
       }, 2000);
     } else {
       setServerError(
         result.error || "The password was not set. Check the form and try again.",
       );
     }
+  }
+
+  if (invitation && acceptPath && (!token || linkFailed || linkRefused)) {
+    return (
+      <AuthResult
+        framed={false}
+        tone="error"
+        title="Link no longer works"
+        actions={<AuthPrimaryLink href={acceptPath}>Open invitation</AuthPrimaryLink>}
+      >
+        Open your invitation to send a new link to {invitation.email}.
+      </AuthResult>
+    );
   }
 
   // Show error if no token in URL
@@ -97,7 +136,7 @@ function SetPasswordFormContent() {
       {success ? (
         <div className="space-y-24">
           <Notice tone="success" title="Password set">
-            Your password is set. Verify your email address to complete your account setup. You are being redirected.
+            Your password is set. You are being taken to login.
           </Notice>
         </div>
       ) : (
@@ -106,6 +145,14 @@ function SetPasswordFormContent() {
             <h2 className="body-large-bold text-[var(--color-text-primary)]">
               Set your password
             </h2>
+            {invitation && (
+              <div className="mt-16">
+                <p className="body-small text-[var(--color-text-secondary)] mb-6">
+                  Email
+                </p>
+                <p className="body-medium text-[var(--color-text-primary)]">{invitation.email}</p>
+              </div>
+            )}
           </div>
 
           <FormField
@@ -147,9 +194,9 @@ function SetPasswordFormContent() {
             type="submit"
             variant="primary"
             width="full"
-            busy={isSubmitting}
+            busy={isSubmitting || joining}
           >
-            Set password
+            {invitation ? "Set password and continue" : "Set password"}
           </Button>
         </>
       )}
@@ -161,6 +208,6 @@ function SetPasswordFormContent() {
  * SetPasswordForm component for new user invitations
  * Must be wrapped in Suspense boundary when used in a page
  */
-export function SetPasswordForm() {
-  return <SetPasswordFormContent />;
+export function SetPasswordForm({ invitation }: { invitation?: SetPasswordInvitation } = {}) {
+  return <SetPasswordFormContent invitation={invitation} />;
 }

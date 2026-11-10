@@ -375,10 +375,16 @@ export async function resetPassword(
   newPassword: string
 ): Promise<AuthResult> {
   try {
-    await authClient.resetPassword({
+    const result = await authClient.resetPassword({
       newPassword,
       token,
     });
+    if (result.error) {
+      return {
+        success: false,
+        error: mapBetterAuthError(result.error),
+      };
+    }
     return { success: true };
   } catch (error) {
     return {

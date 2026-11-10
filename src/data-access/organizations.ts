@@ -108,6 +108,9 @@ export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
   requireOrgScope(ctx);
+  if (!hasOrgRole(ctx, "admin")) {
+    throw new SafeError("Only organization Admins can list invitations.");
+  }
   const rows = await db
     .select({
       id: invitations.id,
@@ -525,10 +528,10 @@ export async function createOrganizationWithAdmin(input: {
           }
         }
         const slug = await allocateOrganizationSlug(tx, organizationSlugBase(input.name));
-        const [adminUser] = await tx.select({ id: users.id }).from(users)
+        const [adminUser] = await tx.select({ id: users.id, emailVerified: users.emailVerified }).from(users)
           .where(sql`lower(${users.email}) = ${email}`).limit(1);
         await tx.insert(organizations).values({ id: organizationId, name: input.name, slug });
-        if (adminUser) {
+        if (adminUser?.emailVerified) {
           await tx.insert(members).values({
             id: randomUUID(), organizationId, userId: adminUser.id, role: "admin",
           });
@@ -555,13 +558,16 @@ export async function createOrganizationWithAdmin(input: {
   return created;
 }
 
-/** Look up a user id by email (for the create-org admin picker). */
+/** Look up a confirmed user id by email for direct create-org Admin membership. */
 export async function findUserIdByEmail(email: string): Promise<string | null> {
   await requirePlatformAdmin();
   const [row] = await db
     .select({ id: users.id })
     .from(users)
-    .where(sql`lower(${users.email}) = ${email.toLowerCase().trim()}`)
+    .where(and(
+      sql`lower(${users.email}) = ${email.toLowerCase().trim()}`,
+      eq(users.emailVerified, true),
+    ))
     .limit(1);
   return row?.id ?? null;
 }

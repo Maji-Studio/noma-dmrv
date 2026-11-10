@@ -130,6 +130,32 @@ Signup is invite-only: public signup is off in code (`disableSignUp: true` in `s
 
 Organization Admins invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. Invitations and membership management live in Settings, Members (`/settings/members`).
 
+The invitation bootstrap takes only a name. It creates an unverified user with
+no credential account and sends a set-password link to the address stored on the
+pending, unexpired invitation. It does not sign in, create a session, accept the
+invitation or choose an active organization. Account state is `none`, `pending`
+(unverified user) or `confirmed` (verified user).
+
+A pending user can request another email without changing their name or other
+user fields. Bootstrap and resend share a 60-second cooldown, enforced atomically
+by a one-token bucket keyed by user ID across invitations. Requests during the
+cooldown still succeed. The action's `emailSent: true` acknowledges the request; it does
+not promise provider delivery or that a new message was sent during the cooldown.
+
+The invited mailbox opens Better Auth's reset link, which redirects to
+`/set-password?invitation=<id>&token=<token>`. Setting the first password through
+the emailed link creates the credential and confirms the email in the same
+transaction. Resetting an existing credential leaves email verification unchanged.
+Invitation acceptance requires verified email; the signed-in invitee then accepts
+in the invited role. Confirmed users keep their
+existing sign-in path. First-time setup omits the password-changed notice.
+
+Invitation lists in Settings are Admin only. HTTP calls to
+`/api/auth/organization/list-invitations` and
+`/api/auth/organization/get-full-organization` return Forbidden, including for
+Admins. Server-side `auth.api` calls remain available; the app reads invitations
+through its guarded data-access query. `list-user-invitations` remains available.
+
 ## Profile: name, password and email
 
 Settings, Profile (`src/fn/profile.ts`) changes only the caller's own user, through Better Auth with the request's session headers. `changePasswordFn` checks the current password with `changePassword` (`revokeOtherSessions: false`), then calls `revokeOtherSessions`, keeping this device's session. Better Auth's own `revokeOtherSessions: true` creates a replacement session inside its transaction, and the session-create hook in `better-auth.ts` then waits for a second pool connection, so the two calls stay separate. Other devices stop working within `SESSION_COOKIE_CACHE_SECONDS` (5 minutes), because each browser trusts its signed session snapshot that long. The change is limited to 5 attempts per 15 minutes per user.
@@ -155,8 +181,8 @@ Drizzle relations describe the auth tables, but native joins remain disabled.
 Better Auth signs in only with a credential account whose `account_id`
 equals the user id (`accountId === userId`). Every credential creation path
 writes this identity: the account-create hook sets it for Better Auth,
-including the atomic invitation bootstrap, once the generated user ID is
-available; the admin CLI, seeds and direct test fixtures write it directly.
+including the credential created when an invited mailbox sets its first
+password; the admin CLI, seeds and direct test fixtures write it directly.
 
 A database whose credential accounts predate this rule must be reset and
 reseeded: `pnpm db:reset` then `pnpm db:seed` locally, the

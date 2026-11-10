@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useSaveRefusal } from "@/components/forms/use-save-refusal";
@@ -9,10 +10,14 @@ import { FormField, FormInput } from "@/components/forms";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
 import { readFieldDirectory, type FieldDirectory } from "@/components/forms/form-error-summary-dom";
 import { Button } from "@/components/ui/button";
-import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
-import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
-import { stashPendingWarning } from "@/lib/pending-warning";
-import { stashOrgSwitchNotice } from "@/lib/org-switch-notice";
+import { Notice } from "@/components/ui/notice";
+import { INLINE_HIT_AREA } from "@/components/ui/touch-target";
+import { cn } from "@/lib/utils";
+import { AuthResult } from "@/components/auth/auth-result";
+import {
+  bootstrapInvitationAccountAction,
+  resendInvitationSetPasswordAction,
+} from "@/fn/invitation-bootstrap";
 import {
   invitationBootstrapSchema,
   type InvitationBootstrapInput,
@@ -21,16 +26,18 @@ import {
 export function InvitationBootstrapForm({
   invitationId,
   email,
+  account = "none",
 }: {
   invitationId: string;
   email: string;
+  /** "pending": the account exists and only waits for the emailed link. */
+  account?: "none" | "pending";
 }) {
+  const [sent, setSent] = useState(account === "pending");
   const formId = useId();
   // Read on every submit, so the error summary can name and order the fields.
   const [directory, setDirectory] = useState<FieldDirectory | null>(null);
   const [serverError, setServerError] = useState("");
-  // The page reloads into the dashboard after the action returns; stay busy through that.
-  const leaving = useBusyUntilUnload();
   const {
     register,
     control,
@@ -40,7 +47,7 @@ export function InvitationBootstrapForm({
     formState: { errors, isSubmitting },
   } = useForm<InvitationBootstrapInput>({
     resolver: zodResolver(invitationBootstrapSchema),
-    defaultValues: { invitationId, name: "", password: "" },
+    defaultValues: { invitationId, name: "" },
   });
 
   const refuseSave = useSaveRefusal({ control, setError, resetField, formId });
@@ -53,15 +60,13 @@ export function InvitationBootstrapForm({
       setServerError(refuseSave(new ActionError(result), result.error) ?? "");
       return;
     }
-    // The account exists and the invitation is accepted. A warning says only
-    // that the organization was not remembered as the default, so it is handed
-    // to the dashboard rather than lost to this reload.
-    stashPendingWarning(result.warning);
-    stashOrgSwitchNotice();
-    leaving.hold(true);
-    window.location.assign("/dashboard");
+    setSent(true);
   }
-  const busy = isSubmitting || !!leaving.held;
+  const busy = isSubmitting;
+
+  if (sent) {
+    return <CheckEmail invitationId={invitationId} email={email} sendOnMount={account === "pending"} />;
+  }
 
   return (
     <form id={formId} onSubmit={handleSubmit(submit)} onSubmitCapture={(event) => setDirectory(readFieldDirectory(event.currentTarget))} className="space-y-24">
@@ -81,20 +86,6 @@ export function InvitationBootstrapForm({
           {...register("name")}
         />
       </FormField>
-      <FormField
-        id="invite-password"
-        label="Password"
-        error={errors.password?.message}
-      >
-        <FormInput
-          id="invite-password"
-          type="password"
-          autoComplete="new-password"
-          disabled={busy}
-          error={Boolean(errors.password)}
-          {...register("password")}
-        />
-      </FormField>
       <FormErrorSummary
         control={control}
         directory={directory}
@@ -102,8 +93,83 @@ export function InvitationBootstrapForm({
         message={serverError}
       />
       <Button type="submit" variant="primary" width="full" busy={busy}>
-        Create account and join
+        Email me a link
       </Button>
     </form>
+  );
+}
+
+function CheckEmail({
+  invitationId,
+  email,
+  sendOnMount,
+}: {
+  invitationId: string;
+  email: string;
+  /** Reopening a pending invitation asks for a fresh link (the server paces repeats). */
+  sendOnMount: boolean;
+}) {
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [error, setError] = useState("");
+  // Only a confirmed account is cleared by signing in.
+  const [accountExists, setAccountExists] = useState(false);
+  const mounted = useRef(false);
+
+  async function resend(isRetry: boolean) {
+    setResending(true);
+    setError("");
+    setAccountExists(false);
+    setResent(false);
+    const result = await resendInvitationSetPasswordAction({ invitationId });
+    setResending(false);
+    if (!result.success) {
+      setError(result.error);
+      setAccountExists(result.code === "account_exists");
+    } else if (isRetry) setResent(true);
+  }
+
+  useEffect(() => {
+    if (!sendOnMount || mounted.current) return;
+    mounted.current = true;
+    void resend(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <AuthResult
+      framed={false}
+      tone="info"
+      title="Check your email"
+      actions={
+        <>
+          {resent && (
+            <Notice tone="success">
+              Link requested. Check your spam folder too.
+            </Notice>
+          )}
+          {error && (
+            <Notice
+              tone="error"
+              action={accountExists ? (
+                <Link
+                  href={`/login?from=${encodeURIComponent(`/accept-invitation/${invitationId}`)}`}
+                  className={cn("underline", INLINE_HIT_AREA)}
+                >
+                  Sign in
+                </Link>
+              ) : undefined}
+            >
+              {error}
+            </Notice>
+          )}
+          <Button type="button" variant="default" width="full" busy={resending} onClick={() => resend(true)}>
+            Send again
+          </Button>
+        </>
+      }
+    >
+      Check {email} for a link to set your password and join. It can take a few minutes to arrive.
+    </AuthResult>
   );
 }

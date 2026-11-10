@@ -26,7 +26,7 @@ export default async function AcceptInvitationPage({
 
   const invitation = invitationResult.data;
   const user = await getUser();
-  if (invitation.accountExists && !user) {
+  if (invitation.account === "confirmed" && !user) {
     redirect(`/login?from=${encodeURIComponent(`/accept-invitation/${id}`)}`);
   }
 
@@ -50,12 +50,13 @@ export default async function AcceptInvitationPage({
 
   return (
     <InvitationCard>
-      {invitation.accountExists && user ? (
+      {invitation.account !== "none" && user ? (
         <AcceptInvitation invitationId={id} userEmail={user.email} />
       ) : (
         <InvitationBootstrapForm
           invitationId={id}
           email={invitation.email}
+          account={invitation.account === "pending" ? "pending" : "none"}
         />
       )}
     </InvitationCard>

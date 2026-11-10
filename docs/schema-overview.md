@@ -208,9 +208,10 @@ and `provider_id`; nullable text `access_token`, `refresh_token`, `id_token`,
 `scope` and `password`; nullable timestamps `access_token_expires_at` and
 `refresh_token_expires_at`; and required timestamps `created_at` and
 `updated_at`. See [auth.md](./auth.md) for the Better Auth version and credential
-identity rule. Credential `account_id` equals `user_id`. Indexes cover account
-and session `user_id` and verification `identifier`, alongside the membership
-and invitation indexes.
+identity rule. Credential `account_id` equals `user_id`. The partial unique index
+`account_user_credential_unique` allows one `credential` account per `user_id`.
+Indexes cover account and session `user_id` and verification `identifier`,
+alongside the membership and invitation indexes.
 Application table names, extra columns, membership uniqueness and the partial
 pending-invitation uniqueness constraint are preserved.
 
