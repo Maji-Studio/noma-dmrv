@@ -11,15 +11,16 @@ import { fixtureOrgId } from "./fixture-org";
  * cleanup: it releases the batch's application slices, drops any submission
  * rows, then the Removal. A no-op when "Confirm" never ran. Live callers pass
  * their exact seed-owned document IDs to retire Source mappings as well.
+ * Returns deleted generated-document keys for live callers to remove from storage.
  */
 export async function teardownWizardRemovalForBatch(
   creditBatchId: string,
   seededDocumentIds: readonly string[] = [],
-): Promise<void> {
+): Promise<string[]> {
   const { db, pool } = createDbConnection();
   const organizationId = fixtureOrgId();
   try {
-    await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       const [row] = await tx
         .select({ removalId: schema.creditBatchApplications.removalId })
         .from(schema.creditBatchApplications)
@@ -40,7 +41,7 @@ export async function teardownWizardRemovalForBatch(
           desc(schema.certifierRemovals.id),
         );
       const removalId = row?.removalId;
-      if (!removalId) return;
+      if (!removalId) return [];
 
       const members = await tx.select({ id: schema.creditBatchApplications.creditBatchId })
         .from(schema.creditBatchApplications).where(and(
@@ -90,11 +91,23 @@ export async function teardownWizardRemovalForBatch(
       );
       const sites = await tx.select({ id: schema.certifierBiocharApplications.storageLocationRegistrationId })
         .from(schema.certifierBiocharApplications).where(applicationJournals);
+      // Registration can succeed before its application journal is written.
+      const fixtureProjects = tx.select({ id: schema.certifierProjects.id })
+        .from(schema.certifierProjects).innerJoin(schema.creditBatches,
+          eq(schema.creditBatches.facilityId, schema.certifierProjects.facilityId))
+        .where(and(
+          eq(schema.certifierProjects.organizationId, organizationId),
+          eq(schema.creditBatches.organizationId, organizationId),
+          eq(schema.creditBatches.id, creditBatchId),
+        ));
       await tx.delete(schema.certifierBiocharApplications).where(applicationJournals);
       // Retain site registrations still referenced by another application journal.
-      if (sites.length) await tx.delete(schema.certifierStorageLocations).where(and(
+      await tx.delete(schema.certifierStorageLocations).where(and(
         eq(schema.certifierStorageLocations.organizationId, organizationId),
-        inArray(schema.certifierStorageLocations.id, sites.map((site) => site.id)),
+        or(
+          inArray(schema.certifierStorageLocations.certifierProjectId, fixtureProjects),
+          sites.length ? inArray(schema.certifierStorageLocations.id, sites.map((site) => site.id)) : undefined,
+        ),
         notInArray(schema.certifierStorageLocations.id, tx.select({ id: schema.certifierBiocharApplications.storageLocationRegistrationId })
           .from(schema.certifierBiocharApplications).where(eq(schema.certifierBiocharApplications.organizationId, organizationId))),
       ));
@@ -117,7 +130,9 @@ export async function teardownWizardRemovalForBatch(
         eq(schema.certifierDocumentUploads.organizationId, organizationId),
         inArray(schema.certifierDocumentUploads.documentId, documents),
       ));
-      await tx.delete(schema.documents).where(and(eq(schema.documents.organizationId, organizationId), generatedDocuments));
+      const deletedDocuments = await tx.delete(schema.documents)
+        .where(and(eq(schema.documents.organizationId, organizationId), generatedDocuments))
+        .returning({ storageKey: schema.documents.storageKey });
 
       await tx
         .update(schema.creditBatchApplications)
@@ -150,6 +165,7 @@ export async function teardownWizardRemovalForBatch(
       await tx
         .delete(schema.certifierRemovals)
         .where(and(eq(schema.certifierRemovals.organizationId, organizationId), eq(schema.certifierRemovals.id, removalId)));
+      return deletedDocuments.flatMap(({ storageKey }) => storageKey ? [storageKey] : []);
     });
   } finally {
     await pool.end();

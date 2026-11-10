@@ -606,6 +606,14 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
   (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
   Don't push all new certification coverage behind the nightly.
 
+For the full sandbox submit in `certification-full-removal-submit.spec.ts`, set
+`E2E_LIVE_SUBMIT=1` and `ISOMETRIC_DEMO_FACILITY_ID` alongside the sandbox project
+credentials. Only `local-fs` storage is supported. Set
+`E2E_LIVE_SUBMIT_STORAGE_ROOT` to the absolute server storage root, normally
+`<worktree>/.storage` for a local `next dev` using the default storage root.
+The fixture verifies server readback before submitting. The committed spec skips
+while the sandbox template has unsettled components.
+
 ## Returned Removal screen specs (local only)
 
 `removal-correction-screen`, `removal-comparison-unavailable-screen` and

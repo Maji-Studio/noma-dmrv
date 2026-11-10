@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { APIRequestContext } from "@playwright/test";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import { buildFinalStorageKey } from "../../../src/lib/storage/keys";
 import { LocalFsProvider } from "../../../src/lib/storage/local-fs";
@@ -69,7 +69,7 @@ export async function liveSubmitStorageSkipReason(request: APIRequestContext): P
 export async function prepareLiveSubmitEvidence(
   batch: SeededReadyBatch,
   request: APIRequestContext,
-): Promise<() => Promise<void>> {
+): Promise<(generatedStorageKeys?: readonly string[]) => Promise<void>> {
   const root = process.env.E2E_LIVE_SUBMIT_STORAGE_ROOT;
   if (!root || !path.isAbsolute(root)) {
     throw new Error(
@@ -83,12 +83,26 @@ export async function prepareLiveSubmitEvidence(
     signingSecret: FIXTURE_SIGNING_SECRET,
   });
   const keys: string[] = [];
-  const cleanup = async () => {
-    for (const key of keys) await provider.deleteObject(key);
+  const organizationId = fixtureOrgId();
+  let displacedFeedstockTypeId: string | undefined;
+  const cleanup = async (generatedStorageKeys: readonly string[] = []) => {
+    try {
+      for (const key of [...keys, ...generatedStorageKeys]) await provider.deleteObject(key);
+    } finally {
+      // The seed must restore its own type first, releasing the sandbox ID.
+      if (displacedFeedstockTypeId) {
+        const { db, pool } = createDbConnection();
+        try {
+          await db.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: SANDBOX_FEEDSTOCK_TYPE_ID })
+            .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, displacedFeedstockTypeId)));
+        } finally {
+          await pool.end();
+        }
+      }
+    }
   };
   const { db, pool } = createDbConnection();
   try {
-    const organizationId = fixtureOrgId();
     if (!batch.documentIds.length) throw new Error("Live submit fixture has no seed-owned document IDs.");
     const documents = await db.select().from(schema.documents).where(and(
       eq(schema.documents.organizationId, organizationId),
@@ -134,8 +148,19 @@ export async function prepareLiveSubmitEvidence(
       ));
     if (!creditBatch) throw new Error("Live submit fixture credit batch is missing.");
     // The seed's cleanup retains responsibility for restoring the original ID.
-    await db.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: SANDBOX_FEEDSTOCK_TYPE_ID })
-      .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, creditBatch.feedstockTypeId)));
+    displacedFeedstockTypeId = await db.transaction(async (tx) => {
+      const [holder] = await tx.select({ id: schema.feedstockTypes.id })
+        .from(schema.feedstockTypes).where(and(
+          eq(schema.feedstockTypes.organizationId, organizationId),
+          eq(schema.feedstockTypes.isometricFeedstockTypeId, SANDBOX_FEEDSTOCK_TYPE_ID),
+          ne(schema.feedstockTypes.id, creditBatch.feedstockTypeId),
+        ));
+      if (holder) await tx.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: null })
+        .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, holder.id)));
+      await tx.update(schema.feedstockTypes).set({ isometricFeedstockTypeId: SANDBOX_FEEDSTOCK_TYPE_ID })
+        .where(and(eq(schema.feedstockTypes.organizationId, organizationId), eq(schema.feedstockTypes.id, creditBatch.feedstockTypeId)));
+      return holder?.id;
+    });
     return cleanup;
   } catch (error) {
     await cleanup();

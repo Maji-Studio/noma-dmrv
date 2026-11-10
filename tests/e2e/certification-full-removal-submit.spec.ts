@@ -22,7 +22,7 @@
  *     or by accident — it's a manual verification switch.
  *     Requires local-fs storage and E2E_LIVE_SUBMIT_STORAGE_ROOT set to the
  *     SERVER's absolute storage root; authenticated readback verifies it.
- *     Other configured storage providers skip the live branch with a note.
+ *     Other configured storage providers skip the test with a reason.
  *
  * Gated on `SANDBOX_PROJECT_ID`: without sandbox creds the certifier loaders
  * list empty, the default template can't resolve, and the batch can never be
@@ -107,7 +107,8 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
     await setFacilityDurabilityTier(facilityId, "1000_year");
 
     let batch: SeededReadyBatch | undefined;
-    let cleanupLiveEvidence: (() => Promise<void>) | undefined;
+    let cleanupLiveEvidence: Awaited<ReturnType<typeof prepareLiveSubmitEvidence>> | undefined;
+    let generatedStorageKeys: string[] = [];
     try {
       batch = await seedUngroupedReadyBatchWithChain(
         {
@@ -233,8 +234,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // ── LIVE (opt-in): real sandbox submit + success-state assertions ───
       const storageSkipReason = await liveSubmitStorageSkipReason(page.request);
       if (storageSkipReason) {
-        test.info().annotations.push({ type: "note", description: storageSkipReason });
-        return;
+        test.skip(true, storageSkipReason);
       }
       cleanupLiveEvidence = await prepareLiveSubmitEvidence(batch, page.request);
       await submitButton.click();
@@ -271,12 +271,12 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       try {
         if (batch) {
           try {
-            await teardownWizardRemovalForBatch(batch.creditBatchId, batch.documentIds);
+            generatedStorageKeys = await teardownWizardRemovalForBatch(batch.creditBatchId, batch.documentIds);
           } finally {
             try {
               await batch.cleanup();
             } finally {
-              await cleanupLiveEvidence?.();
+              await cleanupLiveEvidence?.(generatedStorageKeys);
             }
           }
         }

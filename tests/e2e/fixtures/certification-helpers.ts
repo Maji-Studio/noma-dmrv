@@ -727,8 +727,8 @@ export async function seedUngroupedReadyBatchWithChain(
       // Since PR #700 readiness requires the batch's feedstock type to be
       // linked to an Isometric feedstock type. The column is unique per org and
       // every E2E worker shares fixtureOrgId(), so use a per-run placeholder. It is
-      // never sent anywhere on the committed (no-submit) path; a real
-      // E2E_LIVE_SUBMIT=1 run would need a sandbox catalogue id here instead.
+      // never sent anywhere on the committed (no-submit) path.
+      // The live branch swaps in the sandbox ID in live-submit-evidence.ts.
       const [priorType] = await tx
         .select({ isometricFeedstockTypeId: schema.feedstockTypes.isometricFeedstockTypeId })
         .from(schema.feedstockTypes)
