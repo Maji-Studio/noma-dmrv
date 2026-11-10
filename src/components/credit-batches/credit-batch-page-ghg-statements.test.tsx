@@ -44,9 +44,9 @@ describe("GhgStatementPanel", () => {
     expect(screen.getByText("GHG Statements")).toBeTruthy();
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain("GHG Statement Jul 1 to Sep 30, 2026 · 2.00 t");
+    expect(rows[0].textContent).toContain("GHG Statement Jul 1 to Sep 30, 2026 · 2.00 t dry");
     expect(within(rows[0]).getByText("Submitted")).toBeTruthy();
-    expect(rows[1].textContent).toContain("GHG Statement Apr 1 to Jun 30, 2026 · 0.50 t");
+    expect(rows[1].textContent).toContain("GHG Statement Apr 1 to Jun 30, 2026 · 0.50 t dry");
     expect(within(rows[1]).getByText("Draft")).toBeTruthy();
     expect(within(rows[0]).getByRole("link").getAttribute("href")).toContain("s2");
   });

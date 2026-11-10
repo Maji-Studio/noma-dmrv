@@ -81,7 +81,7 @@ export function GhgStatementPanel({ model }: { model: CreditBatchPageModel }) {
             >
               <span className="body-medium underline-offset-2 group-hover:underline">
                 <span className="font-medium">GHG Statement {ghgStatementPeriodLabel(statement)}</span>
-                <span className={cn("whitespace-nowrap tabular-nums", MUTED_TEXT)}> · {tonnesFromKg(statement.dryKg)}</span>
+                <span className={cn("whitespace-nowrap tabular-nums", MUTED_TEXT)}> · {tonnesFromKg(statement.dryKg)} dry</span>
               </span>
               <StatusBadge status={statement.status.value} label={statement.status.label} />
             </Link>
