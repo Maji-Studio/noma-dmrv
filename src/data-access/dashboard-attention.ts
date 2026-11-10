@@ -23,7 +23,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
-import { findInterruptedRemoval, type DerivedStatus } from "@/lib/certification/status";
+import { findInterruptedRemoval, hasSubmittedRemoval, type DerivedStatus } from "@/lib/certification/status";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
 /** Complete production runs missing either mass reading. */
@@ -116,7 +116,7 @@ export function creditBatchAttention(
     return { interrupted: true, period: null };
   }
   if (!batch.endDate || batch.endDate >= todayStr) return { interrupted: false, period: null };
-  if (!removals.some((removal) => removal.phase === "submitted")) return { interrupted: false, period: "notSubmitted" };
+  if (!hasSubmittedRemoval(removals)) return { interrupted: false, period: "notSubmitted" };
   const returned = removals.some((removal) => removal.id != null && returnedRemovalIds.has(removal.id));
   return { interrupted: false, period: returned ? "returned" : "submitted" };
 }

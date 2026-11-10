@@ -5,7 +5,7 @@
  */
 import type { CreditBatchPageModel } from "@/data-access/credit-batch-page-model";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
-import { findInterruptedRemoval, type DerivedStatusKind } from "@/lib/certification/status";
+import { findInterruptedRemoval, hasSubmittedRemoval, type DerivedStatusKind } from "@/lib/certification/status";
 import { formatFacilityDay, formatTonnes } from "@/lib/format-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import { CREDIT_BATCH_DETAILS_ROW, type CreditBatchOpenItem } from "./open-items";
@@ -217,7 +217,7 @@ export interface CreditBatchPrimaryActionInput {
  * submitted. The primary action and the header's Edit button both stop here.
  */
 export function isCreditBatchSent({ pageModel, lock }: { pageModel: CreditBatchPageModel | undefined; lock: RecordLockView | undefined }): boolean {
-  return lock?.level === "sent" || !!pageModel?.removals.some((removal) => removal.phase === "submitted");
+  return lock?.level === "sent" || hasSubmittedRemoval(pageModel?.removals);
 }
 
 /**

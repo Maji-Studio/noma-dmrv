@@ -7,7 +7,7 @@ import { loadCreditBatchRemovalDisplays } from "@/data-access/credit-batch-remov
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { loadCreditBatchesMissingProductionRuns } from "@/data-access/credit-batch-missing-production-runs";
 import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
-import { findInterruptedRemoval } from "@/lib/certification/status";
+import { findInterruptedRemoval, hasSubmittedRemoval } from "@/lib/certification/status";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthState } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { buildDurabilityBatchSummaries } from "@/lib/certification/durability-batch-summary";
@@ -87,7 +87,7 @@ export async function loadCreditBatchTodos(
     return [id, {
       state: health.state, linesToDecide: batchLinesToDecide(health), blocking, check,
       removalInterrupted: findInterruptedRemoval(removals) !== undefined,
-      hasSubmittedRemoval: removals?.some((removal) => removal.phase === "submitted") ?? false,
+      hasSubmittedRemoval: hasSubmittedRemoval(removals),
     }];
   }));
 }
