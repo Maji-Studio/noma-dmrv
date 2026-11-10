@@ -51,6 +51,17 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
 - Pinned in the known drift table at
   `src/fn/certification/removal-readiness-gate-parity.test.ts:knownDrift`.
   When a state is fixed, move its row to the agreement table.
+- A credit batch whose pinned Removal template has no groups still reads healthy
+  and can be picked for a Removal in
+  `src/lib/certification/batch-health-facts.ts:toBatchHealthFacts`.
+  The Removal then reads blocked in
+  `src/lib/certification/readiness-facts.ts:toRemovalReadinessFacts`.
+  The submit gate refuses it via
+  `src/lib/certification/removal-submission-conditions.ts:isEmptyRemovalTemplate`.
+  No change is planned until an empty production template is seen in practice.
+  The durability-unavailable block is also a Removal readiness block only,
+  by decision in #1639's review
+  (`src/lib/certification/removal-submission-conditions.ts:isDurabilitySubmissionUnavailable`).
 - The larger "one blocker list" refactor was out of scope for #1635 because
   facts are computed once in
   `src/lib/certification/removal-context-build.ts:buildRemovalContext`

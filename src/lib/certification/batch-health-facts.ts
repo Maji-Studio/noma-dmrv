@@ -63,7 +63,8 @@ function carbonMissingInputs(
 
 // The facility project and batch-pinned template resolve cleanly. Transport
 // requirements come from the template, so transport is only evaluable once true
-// (mirrors `templateResolvesCleanly` in readiness.ts, plus the mapping gate).
+// (similar to `templateResolvesCleanly` in readiness.ts, plus the mapping gate).
+// An empty template is a Removal readiness block only, not a batch-health block.
 function isFacilitySetupComplete(ctx: RemovalCertifyContext): boolean {
   return (
     !!ctx.mapping &&

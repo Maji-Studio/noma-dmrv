@@ -107,7 +107,10 @@ export interface RemovalCertifyContext {
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
   isProduction: boolean;
-  /** Serialized submission feature switch, shared with preparation. */
+  /**
+   * Server-side context builder's copy of DURABILITY_MEASUREMENT_SAMPLES_ENABLED
+   * for readiness. Preparation remains authoritative and reads the constant directly.
+   */
   durabilityMeasurementSamplesEnabled: boolean;
 }
 
