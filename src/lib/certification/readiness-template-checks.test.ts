@@ -5,7 +5,7 @@ import {
   type RemovalReadinessFacts,
 } from "./readiness";
 import { certCheckLabel } from "./requirement-labels";
-import { removalTemplateBlocker } from "./removal-template-blockers";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, removalTemplateBlocker } from "./removal-template-blockers";
 import type { RemovalBlocker } from "./removal-blockers";
 import { batchLinesToDecide, deriveBatchHealth, type BatchHealthFacts } from "./batch-health";
 
@@ -93,6 +93,14 @@ describe("Removal template requirement split", () => {
       ["templateLines", "met", "Components decided"],
     ]);
     expect(deriveRemovalReadiness(input).state).toBe("ready");
+  });
+
+  it("blocks an empty template with the preparation message and skips its lines", () => {
+    const input = facts({ emptyRemovalTemplate: true });
+    const [set, lines] = templateChecks(input);
+    expect(set).toMatchObject({ key: "templateSet", status: "unmet", detail: EMPTY_REMOVAL_TEMPLATE_MESSAGE });
+    expect(lines.status).toBe("skipped");
+    expect(deriveRemovalReadiness(input)).toMatchObject({ state: "blocked", reasons: [EMPTY_REMOVAL_TEMPLATE_MESSAGE] });
   });
 
   it.each(["hasMapping", "hasOrgCredentials"] as const)("skips both checks without %s", (key) => {

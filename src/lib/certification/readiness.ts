@@ -1,6 +1,7 @@
 import { templateLineFixTarget, templateCoverageFixTarget, type TemplateFixTarget } from "./template-fix-targets";
 import type { RemovalBlocker, RemovalBlockerCode } from "./removal-blockers";
 import {
+  EMPTY_REMOVAL_TEMPLATE_MESSAGE,
   REMOVAL_TEMPLATE_BLOCKERS,
   removalTemplateBlockerDestination,
   type RemovalTemplateBlocker,
@@ -73,6 +74,8 @@ export interface RemovalReadinessFacts {
   hasOrgCredentials: boolean;
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
+  /** A resolved template with no groups is refused by submission preparation. */
+  emptyRemovalTemplate?: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
   /** Current template components without a saved, unambiguous decision. */
   undecidedLineIds?: readonly string[];
@@ -211,6 +214,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
   if (facts.unbindableTemplateInputs.length > 0) {
     return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
+  if (facts.emptyRemovalTemplate) return EMPTY_REMOVAL_TEMPLATE_MESSAGE;
   // Coverage derives from the same line decision, so this only catches line
   // blockers coverage has no wording for.
   if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
@@ -220,6 +224,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
 function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
+    !facts.emptyRemovalTemplate &&
     !facts.templateBlockers?.length &&
     !facts.emissionLineBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&

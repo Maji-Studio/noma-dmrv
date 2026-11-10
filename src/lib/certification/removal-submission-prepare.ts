@@ -1,6 +1,6 @@
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { removalTemplateTypeBlocker } from "@/lib/certification/listed-removal-template";
-import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { EMPTY_REMOVAL_TEMPLATE_MESSAGE, REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal submission preparation: the template and registry-connection gates
  * that Review, submit and the claimed-draft freshness check all share.
@@ -40,8 +40,7 @@ export const REMOVAL_PREPARATION_BLOCKERS = {
     "The registry template is out of date. Refresh the facility link in settings before submitting.",
   // Detailed guidance comes from formatUnbindableTemplateInputs.
   templateUnbindable: "The Removal template has components noma cannot submit.",
-  emptyTemplate:
-    "The Removal template has no fields to submit. Choose another template for this credit batch.",
+  emptyTemplate: EMPTY_REMOVAL_TEMPLATE_MESSAGE,
   durabilityUnavailable: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
 } as const;
 

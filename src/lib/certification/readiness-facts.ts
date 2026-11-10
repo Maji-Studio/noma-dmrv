@@ -32,6 +32,7 @@ export function toRemovalReadinessFacts(
     hasOrgCredentials: ctx.hasOrgCredentials,
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
+    emptyRemovalTemplate: ctx.removalTemplate?.groups.length === 0,
     templateBlockers: ctx.templateBlockers,
     undecidedLineIds: ctx.undecidedLineIds,
     emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),

@@ -42,15 +42,6 @@ MCP, stock adjustments (lost mass and stock counts) and multi-bin runs are not r
 
 ## Review step and submit gate disagree (`certification/readiness-gate-drift`, #1639)
 
-- Two states say ready in the review step but the submit gate refuses them
-  (#1639). A pinned template has no groups:
-  `src/lib/certification/removal-submission-prepare.ts:prepareRemovalSubmission`
-  rejects it. The pinned verdict from
-  `src/lib/certification/removal-template-verdict.ts:removalTemplateVerdict`,
-  used by `src/lib/certification/resolve-removal-template.ts:resolveRemovalTemplate`,
-  does not. Durability measurement samples are switched off while the template
-  has durability components. Preparation checks the flag. The durability fields
-  in `src/lib/certification/removal-context-build.ts:buildRemovalContext` do not.
 - Six states block the review step while the before-confirmation prefix returns
   nothing in `src/fn/certification/removal-blockers-gate.ts:collectContextRemovalBlockers`:
   missing transport, incomplete transport, production gap, future dated
