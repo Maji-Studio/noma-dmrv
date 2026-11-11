@@ -63,7 +63,9 @@ Read these first. Each one fails quietly rather than loudly.
   `PHONE_TOUCH_TARGET`. Button size props are outside this static check.
   `scripts/touch-target-allowlist.ts` records narrow exceptions with reasons,
   including the sanctioned 24px glyphs. Runtime layout and spacing still need
-  visual review.
+  visual review. The check deliberately does not accept `INLINE_HIT_AREA_FROM_SM`
+  (no pseudo area on phones) or `ROW_ACTION_HIT_AREA` on the element itself (only
+  on its slot or row), and `aria-hidden` controls are not exempt.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

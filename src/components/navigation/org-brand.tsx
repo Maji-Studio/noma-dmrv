@@ -14,6 +14,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CaretDownIcon, CheckIcon, CircleNotchIcon } from "@phosphor-icons/react/dist/ssr";
+import { PHONE_TOUCH_TARGET } from "@/components/ui/touch-target";
 import { authClient } from "@/lib/auth/client";
 import { useToast } from "@/components/ui/toast";
 import { useBusyUntilUnload } from "@/hooks/use-busy-until-unload";
@@ -247,7 +248,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
                     aria-busy={isOpening || undefined}
                     onClick={() => handleSelect(org.id, org.name)}
                     disabled={isSwitching}
-                    className={`w-full h-44 md:h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
+                    className={`${PHONE_TOUCH_TARGET} w-full h-40 px-16 flex items-center justify-between gap-8 body-caption text-left transition-colors duration-150 disabled:cursor-default ${isOpening ? "" : "disabled:opacity-40"} ${
                       isSelected
                         ? "text-white bg-[var(--color-white-100)]/[0.08]"
                         : isOpening

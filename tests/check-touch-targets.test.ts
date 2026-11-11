@@ -32,7 +32,7 @@ describe("touch-target scanner", () => {
     expect(scan('<button className="h-44 max-sm:h-32" />')).toHaveLength(1);
     expect(scan('<a className="h-32 sm:after:h-44" />')).toHaveLength(1);
     expect(scan('<a className={cn("h-32", INLINE_HIT_AREA_FROM_SM)} />')).toHaveLength(1);
-    expect(scan('<Link aria-hidden tabIndex={-1} className="h-32" />')).toEqual([]);
+    expect(scan('<Link aria-hidden tabIndex={-1} className="h-32" />')).toHaveLength(1);
     expect(scan('<Link aria-hidden className="h-32" />')).toHaveLength(1);
     expect(scan('<Link aria-hidden="false" tabIndex={-1} className="h-32" />')).toHaveLength(1);
     expect(scan('<Link aria-hidden tabIndex={0} className="h-32" />')).toHaveLength(1);

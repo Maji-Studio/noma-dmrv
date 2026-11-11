@@ -33,4 +33,6 @@ export const TOUCH_TARGET_ALLOWLIST: ReadonlyArray<{
     reason: "Info glyph sits 8px from the label and Move up control; a 44px hit area would overlap both. 24px meets WCAG 2.5.8." },
   { file: "src/components/storage-locations/sub-bin-card.tsx", tag: "Button", utility: "min-h-24",
     reason: "Same info glyph as its h-24 entry." },
+  { file: "src/components/credit-batches/credit-batch-removal-bar.tsx", tag: "Link", utility: "h-18",
+    reason: "Duplicate label above a proportional bar segment, aria-hidden and out of the tab order; the row below carries the same link at full size. A 44px area would overlap the bar." },
 ];

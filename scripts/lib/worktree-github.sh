@@ -2,18 +2,22 @@
 # Sourced by worktree.sh; no repository or database writes.
 WORKTREE_PR_PAGE_SIZE=100
 WORKTREE_ISSUE_PAGE_SIZE=100
+WORKTREE_NESTED_PAGE_SIZE=100
+REPO="Maji-Studio/noma-dmrv"
+REPO_OWNER="${REPO%%/*}"
+REPO_NAME="${REPO##*/}"
 
 read_worktree_github() {
   local branches="$1" refs query branch_names
   command -v gh >/dev/null && command -v jq >/dev/null || return 1
   branch_names="$(printf '%s\n' "$branches" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique')"
   # Search PR heads rather than remote refs: merged PRs survive branch deletion.
-  refs="$(printf '%s' "$branch_names" | jq -rc --argjson count "$WORKTREE_PR_PAGE_SIZE" '
-    to_entries | map("branch\(.key):search(type:ISSUE,query:\("repo:Maji-Studio/noma-dmrv is:pr sort:created-desc head:" + (.value | tojson) | tojson),first:\($count)){nodes{... on PullRequest{number state createdAt headRefName closingIssuesReferences(first:100){nodes{number}}}}}") | join(" ")')"
+  refs="$(printf '%s' "$branch_names" | jq -rc --argjson count "$WORKTREE_PR_PAGE_SIZE" --argjson nested "$WORKTREE_NESTED_PAGE_SIZE" --arg repo "$REPO" '
+    to_entries | map("branch\(.key):search(type:ISSUE,query:\("repo:" + $repo + " is:pr sort:created-desc head:" + (.value | tojson) | tojson),first:\($count)){nodes{... on PullRequest{number state createdAt headRefName closingIssuesReferences(first:\($nested)){nodes{number}}}}}") | join(" ")')"
   query="query(\$endCursor:String){
     $refs
-    repository(owner:\"Maji-Studio\",name:\"noma-dmrv\"){
-      issues(first:$WORKTREE_ISSUE_PAGE_SIZE,after:\$endCursor){nodes{number linkedBranches(first:100){nodes{ref{name}}}} pageInfo{hasNextPage endCursor}}
+    repository(owner:\"$REPO_OWNER\",name:\"$REPO_NAME\"){
+      issues(first:$WORKTREE_ISSUE_PAGE_SIZE,after:\$endCursor){nodes{number linkedBranches(first:$WORKTREE_NESTED_PAGE_SIZE){nodes{ref{name}}}} pageInfo{hasNextPage endCursor}}
     }
   }"
   gh api graphql --paginate -f query="$query" 2>/dev/null | jq -src --argjson branches "$branch_names" '

@@ -642,7 +642,7 @@ function DataTableSearch({
         onChange={(event) => setSearch(event.target.value)}
         placeholder={placeholder}
         className={cn(
-          "w-full h-40 pl-36 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
+          PHONE_TOUCH_TARGET, "w-full h-40 pl-36 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
           value ? "pr-40" : "pr-12",
         )}
         aria-label={ariaLabel}
@@ -675,7 +675,7 @@ function DataTableControls({ children, className }: DataTableControlsProps) {
   return (
     <div
       className={cn(
-        "flex w-full flex-col gap-8 [&>button]:h-40 [&>button]:w-full sm:w-auto sm:flex-row sm:items-center sm:flex-wrap sm:[&>button]:w-auto",
+        "flex w-full flex-col gap-8 [&>button]:h-40 max-sm:[&>button]:h-auto max-sm:[&>button]:min-h-44 [&>button]:w-full sm:w-auto sm:flex-row sm:items-center sm:flex-wrap sm:[&>button]:w-auto",
         className,
       )}
     >
