@@ -4,12 +4,18 @@ import { publishedJsonSchemas } from "./published-json-schema";
 
 const EVENT_INSTANT_GUIDANCE = "Add an explicit offset (Z or +hh:mm), or send { date, time }.";
 
-/** Zod's ISO date-time also takes HH:MM; RFC 3339 requires the seconds. */
-const RFC3339_SECONDS_PATTERN = /T\d{2}:\d{2}:\d{2}/;
+/** An offset instant that stops at the minute. RFC 3339 requires the seconds, and Zod refuses it. */
+const MINUTE_PRECISION_INSTANT_PATTERN = /T\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/;
+const SECONDS_REQUIRED_MESSAGE = "Include seconds, as in 2026-10-12T09:30:00Z.";
 
 /** An RFC 3339 instant with an explicit offset and seconds, as the published `date-time` format requires. */
 export function offsetInstantSchema(message?: string) {
-  return z.iso.datetime({ offset: true, message }).refine((value) => RFC3339_SECONDS_PATTERN.test(value), { message: "Include seconds, as in 2026-10-12T09:30:00Z." });
+  return z.iso.datetime({
+    offset: true,
+    error: (issue) => typeof issue.input === "string" && MINUTE_PRECISION_INSTANT_PATTERN.test(issue.input)
+      ? SECONDS_REQUIRED_MESSAGE
+      : message,
+  });
 }
 
 const offsetInstant = offsetInstantSchema(EVENT_INSTANT_GUIDANCE);

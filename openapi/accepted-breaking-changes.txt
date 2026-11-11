@@ -157,3 +157,13 @@ GET /me added the new `member` enum value to the `data/role` response property f
 # Issue #1252: draw moisture can re-estimate remaining stock; v1 clients must handle source "draw".
 GET /storage-locations/{idOrCode}/stock added the new `draw` enum value to the `data/subBins/items/moistureBasis/anyOf[subschema #1]/source` response property for the response status `200` [response-property-enum-value-added]. The server may now return a value the previous contract excluded, so a client written against it may not handle the response. If the value set is meant to grow, declare it with x-extensible-enum.
 GET /storage-locations/{idOrCode}/stock added the new `draw` enum value to the `data/totals/anyOf[subschema #1]/moistureBasis/anyOf[subschema #1]/source` response property for the response status `200` [response-property-enum-value-added]. The server may now return a value the previous contract excluded, so a client written against it may not handle the response. If the value set is meant to grow, declare it with x-extensible-enum.
+
+# zod 4.6 upgrade: the generated contract changes shape, the server does not.
+# - date-time patterns now require seconds. Every API instant input already
+#   refused a minute-precision instant at runtime (offsetInstantSchema), so the
+#   published pattern now matches the server. Client impact: none.
+# - a nullable primitive is published as `type: [T, "null"]` instead of
+#   `anyOf: [T, null]`, and a tuple gains `items: false`, `minItems` and
+#   `maxItems`. Same meaning in OpenAPI 3.1. Client impact: a generator that
+#   only reads a single `type` string must handle the list form.
+# No ERR suppression is needed. Remove once this contract reaches the base branch.
