@@ -11,7 +11,7 @@
  * mass per delivery, so no global applied-share scaling is needed.
  */
 import { SafeError } from "@/lib/errors";
-import { transportLedgerInput } from "./input-selection";
+import { selectTransportLedgerRows, type TransportLedgerRow, type LedgerRowOrder } from "./input-selection";
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
@@ -30,6 +30,7 @@ import type {
 
 export interface BuildLedgerModelArgs {
   legsByCategory: TransportLegsByCategory;
+  rowOrder?: LedgerRowOrder;
   memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
@@ -75,8 +76,7 @@ function basisOf(leg: TransportLeg): LedgerDistanceBasis {
   }
 }
 
-function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
-  const input = transportLedgerInput(leg);
+function buildLeg({ leg, input }: TransportLedgerRow, ref: string): LedgerLeg {
   const { loadMassKg } = input;
   const massMissing = loadMassKg === 0;
   // Every leg counts its round trip (issue #852), so the row carries the
@@ -107,12 +107,13 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
 
 function buildCategory(
   key: LedgerCategoryKey,
-  legs: TransportLeg[],
+  rows: TransportLedgerRow[],
   transportOwnedElsewhere = false,
 ): LedgerCategory {
   const meta = CATEGORY_META[key];
-  const builtLegs = legs.map((leg, i) =>
-    buildLeg(leg, `${meta.refPrefix}-${String(i + 1).padStart(2, "0")}`),
+  const legs = rows.map(row => row.leg);
+  const builtLegs = rows.map((row, i) =>
+    buildLeg(row, `${meta.refPrefix}-${String(i + 1).padStart(2, "0")}`),
   );
   const canonical = key === "biochar"
     ? aggregateBiocharTransportMassDistance(legs)
@@ -140,12 +141,10 @@ function buildCategory(
 }
 
 export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
-  const { legsByCategory } = args;
-  const categories: LedgerCategory[] = [
-    buildCategory("feedstock", legsByCategory.feedstock, legsByCategory.feedstockTransportOwnedElsewhere),
-    buildCategory("biochar", legsByCategory.biochar),
-    buildCategory("sample", legsByCategory.sample),
-  ];
+  const rows = selectTransportLedgerRows(args.legsByCategory, args.rowOrder);
+  const categories = rows.map(category =>
+    buildCategory(category.key, category.rows, category.transportOwnedElsewhere),
+  );
   const totalTkm = round2(
     categories.reduce((sum, c) => sum + c.subtotalTkm, 0),
   );

@@ -3,9 +3,7 @@ import { z } from "zod";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "@/lib/certification/evidence-ledger/durability-types";
-import { attributedProductMassKg } from "@/lib/isometric/utils/durability-aggregation";
-import { orderedTransportLedgerLegs, selectThousandYearLedgerSamples, selectTwoHundredYearLedgerSamples, transportLedgerInput } from "@/lib/certification/evidence-ledger/input-selection";
-import { orderedDurabilityBatches } from "./evidence-ledger-models";
+import { selectTransportLedgerRows, selectThousandYearLedgerRows, selectTwoHundredYearLedgerRows } from "@/lib/certification/evidence-ledger/input-selection";
 
 // A format discriminator, not a formula/mapping revision. Model-hash baselines
 // cannot be compared to input hashes and must remain unknown.
@@ -23,17 +21,13 @@ function durabilityInputs(ctx: RemovalSubmissionContext) {
   if (!tier || !ctx.batchesWithSamples.every(batch => batch.durabilityOption === tier)
     || (tier === "200_year" && !ctx.facilityReferenceSoilTemperature)) return null;
 
-  const batches = orderedDurabilityBatches(ctx).flatMap(batch => {
-    const selected = tier === "1000_year"
-      ? selectThousandYearLedgerSamples(batch.samples, batch.facilityTimezone)
-      : selectTwoHundredYearLedgerSamples(batch.samples, batch.facilityTimezone).samples;
-    if (!selected.length) return [];
-    const samples = selected.map(row => row.input);
-    return [{
-      samples,
-      productMassKg: attributedProductMassKg(batch.runs, ctx.attributionByRunId),
-    }];
-  });
+  const selected = tier === "1000_year"
+    ? selectThousandYearLedgerRows(ctx.batchesWithSamples, ctx.attributionByRunId, "canonical")
+    : selectTwoHundredYearLedgerRows(ctx.batchesWithSamples, ctx.attributionByRunId, "canonical");
+  const batches = selected.map(row => ({
+    samples: row.samples.map(sample => sample.input),
+    productMassKg: row.productMassKg,
+  }));
   if (!batches.length) return null;
   return {
     tier,
@@ -53,8 +47,8 @@ function durabilityInputs(ctx: RemovalSubmissionContext) {
 export function generatedEvidenceFacts(ctx: RemovalSubmissionContext): GeneratedEvidenceFacts {
   const empty: GeneratedEvidenceFacts = { format: "ledger-inputs-v2", transport: null, durability: null };
   if (!ctx.mapping || !ctx.memberBatches.length) return empty;
-  const legs = orderedTransportLedgerLegs(ctx.transportLegs);
-  const categories = [legs.feedstock, legs.biochar, legs.sample].map(category => category.map(transportLedgerInput));
+  const categories = selectTransportLedgerRows(ctx.transportLegs, "canonical")
+    .map(category => category.rows.map(row => row.input));
   const durability = durabilityInputs(ctx);
   return {
     ...empty,

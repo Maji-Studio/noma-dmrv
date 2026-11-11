@@ -1,4 +1,3 @@
-import { orderedTransportLedgerLegs } from "@/lib/certification/evidence-ledger/input-selection";
 import { createHash } from "node:crypto";
 import type { RemovalSubmissionContext } from "./certify-context-types";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
@@ -14,14 +13,6 @@ export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
   return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
 }
 
-export function orderedDurabilityBatches(ctx: RemovalSubmissionContext) {
-  return [...ctx.batchesWithSamples].sort((a, b) => a.creditBatchId.localeCompare(b.creditBatchId)).map(batch => ({
-    ...batch,
-    samples: [...batch.samples].sort((a, b) => a.id.localeCompare(b.id)),
-    runs: [...batch.runs].sort((a, b) => a.id.localeCompare(b.id)),
-  }));
-}
-
 function memberCodes(ctx: RemovalSubmissionContext) {
   return [...ctx.memberBatches].sort((a, b) => a.id.localeCompare(b.id)).map(b => b.code).join(" · ") || null;
 }
@@ -31,7 +22,8 @@ export function transportLedgerModel(ctx: RemovalSubmissionContext, facilityName
   const memberBatchCodes = memberCodes(ctx);
 
   return buildLedgerModel({
-    legsByCategory: orderedTransportLedgerLegs(ctx.transportLegs),
+    legsByCategory: ctx.transportLegs,
+    rowOrder: "canonical",
     memberBatchCodes,
     facilityName,
     externalProjectId: ctx.mapping!.externalProjectId,
@@ -43,7 +35,8 @@ export function durabilityLedgerModel(ctx: RemovalSubmissionContext, facilityNam
   const memberBatchCodes = memberCodes(ctx);
 
   const commonModelArgs = {
-    batches: orderedDurabilityBatches(ctx),
+    batches: ctx.batchesWithSamples,
+    rowOrder: "canonical" as const,
     attributionByRunId: ctx.attributionByRunId,
     memberBatchCodes,
     facilityName,
