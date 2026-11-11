@@ -1,3 +1,4 @@
+import { realColumn } from './real-column';
 import {
   boolean,
   check,
@@ -7,7 +8,6 @@ import {
   integer,
   jsonb,
   pgTable,
-  real,
   text,
   timestamp,
   unique,
@@ -101,7 +101,7 @@ export const certifierProjects = pgTable(
     // rounding are applied at resolve time (`resolveFacilityReferenceSoilTemperature`).
     // It also remains the last-resort fallback for an application's per-site
     // default when neither the application nor its customer location declares one.
-    defaultSoilTemperatureC: real('default_soil_temperature_c'),
+    defaultSoilTemperatureC: realColumn('default_soil_temperature_c'),
     // Dataset / region citation for the reference soil temperature above —
     // free text recorded for the PDD audit trail (e.g. "Lembrechts et al. 2022
     // SoilTemp, 0–5 cm, <region>"). The Isometric `CreateMeasurementSampleRequest`

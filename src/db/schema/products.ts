@@ -1,3 +1,4 @@
+import { realColumn } from './real-column';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import {
   bigserial,
@@ -8,7 +9,6 @@ import {
   integer,
   jsonb,
   pgTable,
-  real,
   text,
   timestamp,
   unique,
@@ -127,7 +127,7 @@ export const biocharProducts = pgTable('biochar_products', {
   // --- Measurements ---
   massKg: massKg('mass_kg').notNull(),
   moistureContentPercent: percent('moisture_content_percent').notNull(),
-  densityKgM3: real('density_kg_m3'),
+  densityKgM3: realColumn('density_kg_m3'),
   waterAddedKg: massKg('water_added_kg').notNull(),
 
   // --- Location ---

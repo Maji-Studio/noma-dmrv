@@ -1,3 +1,4 @@
+import { realColumn } from './real-column';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import {
   bigserial,
@@ -7,7 +8,6 @@ import {
   index,
   integer,
   pgTable,
-  real,
   text,
   timestamp,
   unique,
@@ -56,14 +56,14 @@ export const productionRuns = pgTable(
     operatorId: uuid('operator_id').references(() => operators.id),
 
     // --- Processing Parameters (Isometric Protocol Section 9) ---
-    feedingRateKgHr: real('feeding_rate_kg_hr'),
+    feedingRateKgHr: realColumn('feeding_rate_kg_hr'),
     residenceTimeMinutes: integer('residence_time_minutes'),
 
     // --- Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6) ---
-    dieselOperationLiters: real('diesel_operation_liters'),
-    dieselGensetLiters: real('diesel_genset_liters'),
-    preprocessingFuelLiters: real('preprocessing_fuel_liters'),
-    electricityKwh: real('electricity_kwh'),
+    dieselOperationLiters: realColumn('diesel_operation_liters'),
+    dieselGensetLiters: realColumn('diesel_genset_liters'),
+    preprocessingFuelLiters: realColumn('preprocessing_fuel_liters'),
+    electricityKwh: realColumn('electricity_kwh'),
 
     // --- Biochar Output ---
     biocharOutputKg: massKg('biochar_output_kg'), // Wet mass (recorded value)
@@ -166,17 +166,17 @@ export const productionRunReadings = pgTable(
     timestamp: timestamp('timestamp').notNull(),
 
     // Optional parsed temperature; this column does not identify the sensor channel.
-    temperatureC: real('temperature_c'),
+    temperatureC: realColumn('temperature_c'),
 
     // Optional parsed pressure; the Readings file is the project evidence.
-    pressureBar: real('pressure_bar'),
+    pressureBar: realColumn('pressure_bar'),
 
-    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent — retained for legacy imports; not in the canonical CSV format
+    gasFlowRate: realColumn('gas_flow_rate'), // m³/s or equivalent — retained for legacy imports; not in the canonical CSV format
 
     // Drive (VFD) frequencies — operator telemetry, internal-only (not
     // published to Isometric). Optional columns in the canonical readings CSV.
-    dryerFrequencyHz: real('dryer_frequency_hz'),
-    reactorFrequencyHz: real('reactor_frequency_hz'),
+    dryerFrequencyHz: realColumn('dryer_frequency_hz'),
+    reactorFrequencyHz: realColumn('reactor_frequency_hz'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -225,8 +225,8 @@ export const samples = pgTable('samples', {
   // creates can't duplicate a code within a tenant.
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
-  weightGrams: real('weight_grams'),
-  volumeMl: real('volume_ml'),
+  weightGrams: realColumn('weight_grams'),
+  volumeMl: realColumn('volume_ml'),
 
   // --- Lab ---
   labName: text('lab_name'),
@@ -234,41 +234,41 @@ export const samples = pgTable('samples', {
   analysisDate: date('analysis_date'),
 
   // --- Carbon ---
-  totalCarbonPercent: real('total_carbon_percent').notNull(),
-  inorganicCarbonPercent: real('inorganic_carbon_percent'),
-  organicCarbonPercent: real('organic_carbon_percent').notNull(),
+  totalCarbonPercent: realColumn('total_carbon_percent').notNull(),
+  inorganicCarbonPercent: realColumn('inorganic_carbon_percent'),
+  organicCarbonPercent: realColumn('organic_carbon_percent').notNull(),
 
   // --- Elemental ---
-  totalHydrogenPercent: real('total_hydrogen_percent'),
-  totalNitrogenPercent: real('total_nitrogen_percent'),
-  totalOxygenPercent: real('total_oxygen_percent'),
-  totalSulfurPercent: real('total_sulfur_percent'),
+  totalHydrogenPercent: realColumn('total_hydrogen_percent'),
+  totalNitrogenPercent: realColumn('total_nitrogen_percent'),
+  totalOxygenPercent: realColumn('total_oxygen_percent'),
+  totalSulfurPercent: realColumn('total_sulfur_percent'),
 
   // --- Proximate ---
-  ashContentPercent: real('ash_content_percent'),
-  moistureContentPercent: real('moisture_content_percent'),
+  ashContentPercent: realColumn('ash_content_percent'),
+  moistureContentPercent: realColumn('moisture_content_percent'),
 
   // --- Physical Properties (Isometric: Table 2) ---
-  ph: real('ph'),
-  bulkDensityKgPerM3: real('bulk_density_kg_per_m3'),
-  saltContentGPerKg: real('salt_content_g_per_kg'),
+  ph: realColumn('ph'),
+  bulkDensityKgPerM3: realColumn('bulk_density_kg_per_m3'),
+  saltContentGPerKg: realColumn('salt_content_g_per_kg'),
 
   // --- Stability Ratios ---
   hToCOrgRatio: fraction('h_to_c_org_ratio'),
   oToCOrgRatio: fraction('o_to_c_org_ratio'),
 
   // --- Nutrients (%) ---
-  phosphorusPercent: real('phosphorus_percent'),
-  potassiumPercent: real('potassium_percent'),
-  magnesiumPercent: real('magnesium_percent'),
-  calciumPercent: real('calcium_percent'),
-  ironPercent: real('iron_percent'),
+  phosphorusPercent: realColumn('phosphorus_percent'),
+  potassiumPercent: realColumn('potassium_percent'),
+  magnesiumPercent: realColumn('magnesium_percent'),
+  calciumPercent: realColumn('calcium_percent'),
+  ironPercent: realColumn('iron_percent'),
 
   // --- 1000-Year Durability ---
-  randomReflectanceR0Percent: real('random_reflectance_r0_percent'),
+  randomReflectanceR0Percent: realColumn('random_reflectance_r0_percent'),
   r0MeasurementCount: integer('r0_measurement_count'),
-  reactiveCarbonPercent: real('reactive_carbon_percent'),
-  residualCarbonPercent: real('residual_carbon_percent'),
+  reactiveCarbonPercent: realColumn('reactive_carbon_percent'),
+  residualCarbonPercent: realColumn('residual_carbon_percent'),
   // Per-sample `s_fraction` for the current sampled 1,000-year component
   // blueprint (ADR 0021): the proportion (0–1) of THIS sample's R₀ readings
   // ≥ 2% — the inertinite fraction from the ISO 7404-5:2009 histogram. The
@@ -277,7 +277,7 @@ export const samples = pgTable('samples', {
   // to a batch mean. Nullable (lab-supplied; not yet a form input — #348).
   // ⚠️ Whether the registry wants this computed proportion vs. the raw R₀
   // reading set is an open Isometric confirm (docs/open-questions.md).
-  sReflectanceFraction: real('s_reflectance_fraction'),
+  sReflectanceFraction: realColumn('s_reflectance_fraction'),
   tgaAnalysisDate: date('tga_analysis_date'),
   r0AnalysisDate: date('r0_analysis_date'),
 
@@ -412,13 +412,13 @@ export const productionSamples = pgTable('production_samples', {
   productionRunId: uuid('production_run_id')
     .notNull(),
   timestamp: timestamp('timestamp').notNull(),
-  weightGrams: real('weight_grams'),
-  volumeMl: real('volume_ml'),
-  temperatureC: real('temperature_c'),
-  moistureContentPercent: real('moisture_content_percent'),
-  fixedCarbonPercent: real('fixed_carbon_percent'),
-  volatileMatterPercent: real('volatile_matter_percent'),
-  ashContentPercent: real('ash_content_percent'),
+  weightGrams: realColumn('weight_grams'),
+  volumeMl: realColumn('volume_ml'),
+  temperatureC: realColumn('temperature_c'),
+  moistureContentPercent: realColumn('moisture_content_percent'),
+  fixedCarbonPercent: realColumn('fixed_carbon_percent'),
+  volatileMatterPercent: realColumn('volatile_matter_percent'),
+  ashContentPercent: realColumn('ash_content_percent'),
   photoUrl: text('photo_url'),
   sampledById: uuid('sampled_by_id').references(() => operators.id),
   notes: text('notes'),

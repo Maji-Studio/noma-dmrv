@@ -1,6 +1,7 @@
+import { realColumn } from './real-column';
 import type { FacilityDistance } from "@/schemas/facility-distances";
 import { relations, sql } from 'drizzle-orm';
-import { integer, boolean, check, doublePrecision, index, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { integer, boolean, check, doublePrecision, index, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
 
 // ============================================
@@ -98,7 +99,7 @@ export const customerLocations = pgTable(
     address: text('address'),
     // Conservative default for the Isometric 200-year soil durability equation.
     // New applications can prefill from this site value while staying editable.
-    defaultSoilTemperatureC: real('default_soil_temperature_c'),
+    defaultSoilTemperatureC: realColumn('default_soil_temperature_c'),
     // Marks the customer's primary destination. At most one per customer
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),

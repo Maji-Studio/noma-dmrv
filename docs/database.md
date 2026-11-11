@@ -337,6 +337,8 @@ and status resets. Only the `journaled` recovery key remains mutable.
 
 - **Credit-bearing values** — masses, CO2e, contaminant ppm, ratios, percents — MUST use these helpers. Never `real()`; float rounding drifts verifier-facing figures.
 - Telemetry, in-process QC, and lab characterization columns stay `real`.
+  Declare them with `realColumn` from `src/db/schema/real-column.ts`: its driver mapping stores a non-zero number as plain `0` when `Math.fround(value) === 0`, avoiding float4 underflow.
+  All other values pass through unchanged, including representable denormals and values that overflow float4.
 - Over-precision now fails loudly with a Postgres `numeric field overflow` rather than rounding silently.
 
 ## Schema Shape

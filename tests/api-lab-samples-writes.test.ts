@@ -17,6 +17,11 @@ import { uppercaseUuids } from "./helpers/uppercase-uuids";
 const TIMEOUT_MS = 60_000;
 const AUGUST_SAMPLED_AT = "2026-08-10T08:00:00.000Z";
 const BEFORE_WINDOW_AT = "2026-08-20T08:00:00.000Z";
+const UNDERFLOW_CARBON = {
+  totalCarbonPercent: 4.0781595846974355e-194,
+  organicCarbonPercent: 2.225073858507203e-309,
+};
+const UNDERFLOW_HYDROGEN = 1e-200;
 const H_TO_C_NOTICE = `H/C_org calculated from hydrogen and organic carbon: ${EXPECTED_H_TO_C.toFixed(4)}`;
 const PRIVATE_FIELDS = ["organizationId", "facilityId", "durabilityOption", "productionRunId", "sampleCode", "hToCOrg", "cursorCreatedAt"];
 let a: ApiLabFixture;
@@ -28,6 +33,49 @@ beforeEach(async () => {
 afterEach(async () => { await removeApiLabFixture(a); await removeApiLabFixture(b); }, TIMEOUT_MS);
 
 describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
+  it("stores float4 carbon underflow as zero in dry runs and saved samples", async () => {
+    // Issue #1671 request: answered 500 with Postgres 22003 before the fix.
+    const input = labSampleBody(a, { ...UNDERFLOW_CARBON, totalHydrogenPercent: undefined });
+    const expectedCarbon = { totalCarbonPercent: 0, organicCarbonPercent: 0 };
+    const preview = await postLabSample(a, input, randomUUID(), "?dryRun=true");
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("dry-run")).toBe("true");
+    expect((await preview.json()).data).toMatchObject(expectedCarbon);
+    await expectNoLabSampleWrite(a);
+
+    const saved = await postLabSample(a, input);
+    expect(saved.status).toBe(201);
+    const { data } = await saved.json();
+    expect(data).toMatchObject(expectedCarbon);
+    expect((await readRestLabSample(a, data.id)).row).toMatchObject(expectedCarbon);
+    expect(await labSampleRows(a)).toMatchObject([{ id: data.id, ...expectedCarbon }]);
+  });
+
+  it("keeps ratios null after underflowing chemistry and an unrelated PATCH", async () => {
+    const input = labSampleBody(a, { ...UNDERFLOW_CARBON, totalHydrogenPercent: UNDERFLOW_HYDROGEN, totalOxygenPercent: UNDERFLOW_HYDROGEN });
+    const expected = { totalCarbonPercent: 0, organicCarbonPercent: 0, totalHydrogenPercent: 0, totalOxygenPercent: 0, hToCOrgRatio: null, oToCOrgRatio: null };
+    const preview = await postLabSample(a, input, randomUUID(), "?dryRun=true");
+    expect(preview.status).toBe(200);
+    const previewBody = await preview.json();
+    expect(previewBody.data).toMatchObject(expected);
+    expect(previewBody.warnings).not.toEqual(expect.arrayContaining([expect.stringContaining("calculated from")]));
+    await expectNoLabSampleWrite(a);
+
+    const saved = await postLabSample(a, input);
+    expect(saved.status).toBe(201);
+    const body = await saved.json();
+    expect(body.data).toMatchObject(expected);
+    expect(body.warnings).not.toEqual(expect.arrayContaining([expect.stringContaining("calculated from")]));
+    expect(await labSampleRows(a)).toMatchObject([{ id: body.data.id, ...expected }]);
+
+    const patched = await patchLabSample(a, body.data.id, { moistureContentPercent: 0 }, requiredEtag(saved));
+    expect(patched.status).toBe(200);
+    const patchedBody = await patched.json();
+    expect(patchedBody.data).toMatchObject(expected);
+    expect(patchedBody.warnings).not.toEqual(expect.arrayContaining([expect.stringContaining("calculated from")]));
+    expect((await readRestLabSample(a, body.data.id)).row).toMatchObject(expected);
+  });
+
   it("creates a sample with Location, a strong ETag, the calculated ratio, one audit row and no values in the audit", async () => {
     const response = await postLabSample(a, labSampleBody(a, { totalOxygenPercent: 8 }));
     expect(response.status).toBe(201);
@@ -182,6 +230,25 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("lab sample update", { timeout: TIMEOUT_MS }, () => {
+  it("normalizes underflowing chemistry before deriving PATCH ratios", async () => {
+    const { row, etag } = await seedRestLabSample(a);
+    const changes = { ...UNDERFLOW_CARBON, totalHydrogenPercent: UNDERFLOW_HYDROGEN, totalOxygenPercent: UNDERFLOW_HYDROGEN };
+    const expected = { totalCarbonPercent: 0, organicCarbonPercent: 0, totalHydrogenPercent: 0, totalOxygenPercent: 0, hToCOrgRatio: null, oToCOrgRatio: null };
+    const preview = await patchLabSample(a, row.id, changes, etag, "?dryRun=true");
+    expect(preview.status).toBe(200);
+    const previewBody = await preview.json();
+    expect(previewBody.data).toMatchObject(expected);
+    expect(previewBody.warnings).not.toEqual(expect.arrayContaining([expect.stringContaining("calculated from")]));
+    expect((await readRestLabSample(a, row.id)).row).toEqual(row);
+
+    const patched = await patchLabSample(a, row.id, changes, etag);
+    expect(patched.status).toBe(200);
+    const body = await patched.json();
+    expect(body.data).toMatchObject(expected);
+    expect(body.warnings).not.toEqual(expect.arrayContaining([expect.stringContaining("calculated from")]));
+    expect(await labSampleRows(a)).toMatchObject([{ id: row.id, ...expected }]);
+  });
+
   it("changes fields with the next ETag, recalculates the ratio, and audits the changed fields only", async () => {
     const saved = await seedRestLabSample(a);
     const response = await patchLabSample(a, saved.row.id, { totalHydrogenPercent: 3, labName: "Edit Lab" }, saved.etag);

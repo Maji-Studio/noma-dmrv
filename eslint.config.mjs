@@ -112,6 +112,19 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    files: ["src/db/schema/**/*.{ts,tsx}"],
+    ignores: ["src/db/schema/real-column.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [{
+          name: "drizzle-orm/pg-core",
+          importNames: ["real"],
+          message: "Use realColumn from './real-column' so float4 underflow is stored as zero.",
+        }],
+      }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
